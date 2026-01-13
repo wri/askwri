@@ -1,0 +1,9 @@
+# Python backend (deployed separately on Railway)
+hybrid-service/
+
+# Local PDF storage
+data/documents/
+
+# Development files
+*.log
+

@@ -1,0 +1,14 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python main.py"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[environment]
+PORT = "8002"
+OPENAI_API_KEY = "$OPENAI_API_KEY"
+
+[service]
+name = "askwri-hybrid-service"
