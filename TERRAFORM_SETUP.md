@@ -34,8 +34,8 @@ cd terraform/backend-setup
 ```
 
 **What this creates:**
-- S3 bucket: `next-ecs-app-terraform-state-shared`
-- DynamoDB table: `next-ecs-app-terraform-locks-shared`
+- S3 bucket: `askwri-app-terraform-state-shared`
+- DynamoDB table: `askwri-app-terraform-locks-shared`
 - Versioning enabled on S3 bucket
 - Encryption enabled
 
@@ -44,10 +44,10 @@ cd terraform/backend-setup
 Backend configuration to use in main Terraform:
 terraform {
   backend "s3" {
-    bucket         = "next-ecs-app-terraform-state-shared"
+    bucket         = "askwri-app-terraform-state-shared"
     key            = "terraform.tfstate"
     region         = "us-east-1"
-    dynamodb_table = "next-ecs-app-terraform-locks-shared"
+    dynamodb_table = "askwri-app-terraform-locks-shared"
     encrypt        = true
   }
 }
@@ -90,8 +90,8 @@ terraform apply -var-file=../environments/qa.tfvars
 - VPC with public/private subnets across 2 AZs
 - Internet Gateway and NAT Gateways
 - Application Load Balancer
-- ECR Repository: `next-ecs-app-qa`
-- ECS Cluster: `next-ecs-app-qa-cluster`
+- ECR Repository: `askwri-app-qa`
+- ECS Cluster: `askwri-app-qa-cluster`
 - ECS Service with Fargate tasks
 - CloudWatch Log Group
 - Security Groups
@@ -149,11 +149,11 @@ After deployment, verify the infrastructure:
 aws ecs list-clusters
 
 # Check ECS services
-aws ecs list-services --cluster next-ecs-app-qa-cluster
+aws ecs list-services --cluster askwri-app-qa-cluster
 
 # Get ALB DNS name
 aws elbv2 describe-load-balancers \
-  --names next-ecs-app-qa-alb \
+  --names askwri-app-qa-alb \
   --query 'LoadBalancers[0].DNSName' \
   --output text
 
@@ -250,7 +250,7 @@ terraform output
 If you have existing AWS resources:
 
 ```bash
-terraform import aws_ecs_cluster.main next-ecs-app-qa-cluster
+terraform import aws_ecs_cluster.main askwri-app-qa-cluster
 ```
 
 ## 🔍 Troubleshooting
@@ -264,8 +264,8 @@ Error: Error acquiring the state lock
 **Solution:** Wait for other operations to complete, or manually release in DynamoDB:
 ```bash
 aws dynamodb delete-item \
-  --table-name next-ecs-app-terraform-locks-shared \
-  --key '{"LockID":{"S":"next-ecs-app-terraform-state-shared/qa/terraform.tfstate-md5"}}'
+  --table-name askwri-app-terraform-locks-shared \
+  --key '{"LockID":{"S":"askwri-app-terraform-state-shared/qa/terraform.tfstate-md5"}}'
 ```
 
 **2. Backend Not Configured:**

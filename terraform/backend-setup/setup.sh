@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Default values
 AWS_REGION="${AWS_REGION:-us-east-1}"
-PROJECT_NAME="${PROJECT_NAME:-next-ecs-app}"
+PROJECT_NAME="${PROJECT_NAME:-askwri-app}"
 ENVIRONMENT="${ENVIRONMENT:-shared}"
 
 echo -e "${GREEN}========================================${NC}"

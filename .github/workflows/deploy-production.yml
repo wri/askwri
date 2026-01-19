@@ -14,7 +14,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  PROJECT_NAME: next-ecs-app
+  PROJECT_NAME: askwri-app
   ENVIRONMENT: production
 
 permissions:
