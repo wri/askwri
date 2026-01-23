@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
+import ChakraProvider from "./Providers/ChakraProvider";
 import "./globals.css";
-import Providers from "./Providers";
-
 export const metadata: Metadata = {
-  title: "Next.js ECS App",
-  description: "A Next.js application deployed on AWS ECS Fargate",
+  title: "Ask WRI",
+  description:
+    "Find relevant publications for your research from across WRI, highlight specific passages, and generate citations in your chosen format.",
 };
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Providers> {children} </Providers>
+        <ChakraProvider> {children} </ChakraProvider>
       </body>
     </html>
   );
