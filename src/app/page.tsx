@@ -1,6 +1,6 @@
 "use client";
 import { Heading } from "@chakra-ui/react";
-import { WriLogoIcon } from "./components/icons/WriLogo";
+import { WriLogoIcon } from "@/app/components/icons/WriLogo";
 
 export default function HomePage() {
   return (
