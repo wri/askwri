@@ -8,12 +8,17 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "test:ci": "jest --ci --coverage"
+    "test:ci": "jest --ci --coverage",
+    "hybrid": "cd hybrid-service && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt && ./venv/bin/python main.py"
   },
   "dependencies": {
+    "@chakra-ui/react": "^3.31.0",
+    "@emotion/react": "^11.14.0",
+    "@worldresources/wri-design-systems": "^2.177.1",
     "next": "14.2.0",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.5.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.2.0",

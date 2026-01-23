@@ -1,9 +1,10 @@
-import type { Metadata } from 'next';
-import './globals.css';
+import type { Metadata } from "next";
+import "./globals.css";
+import Providers from "./Providers";
 
 export const metadata: Metadata = {
-  title: 'Next.js ECS App',
-  description: 'A Next.js application deployed on AWS ECS Fargate',
+  title: "Next.js ECS App",
+  description: "A Next.js application deployed on AWS ECS Fargate",
 };
 
 export default function RootLayout({
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Providers> {children} </Providers>
+      </body>
     </html>
   );
 }
