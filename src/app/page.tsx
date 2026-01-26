@@ -5,7 +5,7 @@ import { WriLogoIcon } from "@/app/components/icons/WriLogo";
 export default function HomePage() {
   return (
     <main>
-      <section style={{ textAlign: "center", marginTop: "100px" }}>
+      <section className="text-center">
         <WriLogoIcon height="100px" />
         <Heading size="4xl">Ask WRI</Heading>
       </section>
