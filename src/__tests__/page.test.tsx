@@ -1,30 +1,17 @@
-import { render, screen } from '@testing-library/react';
-import Home from '@/app/page';
+import { render, screen } from "@testing-library/react";
+import HomePage from "@/app/page";
+import ChakraProvider from "@/app/Providers/ChakraProvider";
 
-describe('Home Page', () => {
-  it('renders the main heading', () => {
-    render(<Home />);
-    
-    const heading = screen.getByRole('heading', {
-      name: /Welcome to Next\.js on ECS Fargate/i,
-    });
-    
-    expect(heading).toBeInTheDocument();
-  });
+describe("Home Page", () => {
+  it("renders the Ask WRI heading", () => {
+    render(
+      <ChakraProvider>
+        <HomePage />
+      </ChakraProvider>
+    );
 
-  it('renders the environment badge', () => {
-    render(<Home />);
-    
-    const badge = screen.getByText(/Environment:/i);
-    expect(badge).toBeInTheDocument();
-  });
-
-  it('renders feature cards', () => {
-    render(<Home />);
-    
-    expect(screen.getByText(/Infrastructure as Code/i)).toBeInTheDocument();
-    expect(screen.getByText(/CI\/CD Pipeline/i)).toBeInTheDocument();
-    expect(screen.getByText(/Multi-Environment/i)).toBeInTheDocument();
-    expect(screen.getByText(/Containerized/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /Ask WRI/i })
+    ).toBeInTheDocument();
   });
 });
