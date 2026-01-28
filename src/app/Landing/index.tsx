@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Heading, Card } from "@chakra-ui/react";
-import { Text } from "@chakra-ui/react";
+import { Heading, Card, Text } from "@chakra-ui/react";
 import {
   Button,
   getThemedColor,
@@ -21,6 +20,7 @@ export default function Landing() {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
+    // add a timer to render the toast after the component mounts
     const handle = window.setTimeout(() => {
       showToast({
         label: "Ask WRI is for staff use only",
@@ -99,6 +99,7 @@ export default function Landing() {
                     size="small"
                     resize="none"
                     value={query}
+                    aria-label="Search query input"
                     onChange={(event) => setQuery(event.target.value)}
                   />
                   <Button

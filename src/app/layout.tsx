@@ -17,7 +17,8 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <ChakraProvider>
-          {children} <Footer />
+          {children}
+          <Footer />
         </ChakraProvider>
       </body>
     </html>

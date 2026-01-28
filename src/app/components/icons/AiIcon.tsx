@@ -32,8 +32,8 @@ export const AiIcon = (props: IconProps) => (
           y2="9.54797"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0.37" stop-color="#F5BF4F" />
-          <stop offset="0.86" stop-color="#855B00" />
+          <stop offset="0.37" stopColor="#F5BF4F" />
+          <stop offset="0.86" stopColor="#855B00" />
         </linearGradient>
         <linearGradient
           id="paint1_linear_4420_32393"
@@ -43,8 +43,8 @@ export const AiIcon = (props: IconProps) => (
           y2="15.9999"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0.37" stop-color="#F5BF4F" />
-          <stop offset="0.86" stop-color="#855B00" />
+          <stop offset="0.37" stopColor="#F5BF4F" />
+          <stop offset="0.86" stopColor="#855B00" />
         </linearGradient>
         <linearGradient
           id="paint2_linear_4420_32393"
@@ -54,8 +54,8 @@ export const AiIcon = (props: IconProps) => (
           y2="11.8787"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0.37" stop-color="#F5BF4F" />
-          <stop offset="0.86" stop-color="#855B00" />
+          <stop offset="0.37" stopColor="#F5BF4F" />
+          <stop offset="0.86" stopColor="#855B00" />
         </linearGradient>
         <clipPath id="clip0_4420_32393">
           <rect width="16" height="16" fill="white" />
