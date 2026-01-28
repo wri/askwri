@@ -112,6 +112,7 @@ export default function Landing() {
                       bottom: "30px",
                     }}
                     type="button"
+                    aria-label="Submit search query"
                   />
                 </div>
                 <Text
