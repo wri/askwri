@@ -82,7 +82,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.6.0
+          terraform_version: 1.13.1
 
       - name: Terraform Format Check
         working-directory: terraform/infrastructure

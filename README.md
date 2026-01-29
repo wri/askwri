@@ -111,9 +111,8 @@ AWS_REGION=us-east-1 PROJECT_NAME=askwri-app ./setup.sh
    - `main` or `production` - Production deployments
    - `qa` - QA deployments
 
-4. Add GitHub Secrets (Settings → Secrets and variables → Actions):
-   - `AWS_ACCESS_KEY_ID` - AWS access key with appropriate permissions
-   - `AWS_SECRET_ACCESS_KEY` - AWS secret access key
+4. Add GitHub variables for AWS permissions (Settings → Secrets and variables → Actions -> Variables):
+   - `OIDC_ROLE` - ARN from AWS console for role GitHubActionsOIDC
 
 ### 4. Required AWS IAM Permissions
 
@@ -277,4 +276,4 @@ desired_count    = 3
 ## 📄 License
 
 MIT
-# gri-restoration-diagnostic
+# askwri

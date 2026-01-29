@@ -19,6 +19,18 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "wri_project" {
+  description = "WRI project name for tagging"
+  type        = string
+  default     = "restoration-diagnostic"
+}
+
+variable "wri_owner" {
+  description = "WRI owner email for tagging"
+  type        = string
+  default     = "kinshuk.govil@wri.org"
+}
+
 # =============================================================================
 # VPC Variables
 # =============================================================================
