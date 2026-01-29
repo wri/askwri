@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ChakraProvider from "./Providers/ChakraProvider";
+import { Footer } from "./components/Footer";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "Ask WRI",
@@ -15,7 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ChakraProvider>{children}</ChakraProvider>
+        <ChakraProvider>
+          {children}
+          <Footer />
+        </ChakraProvider>
       </body>
     </html>
   );

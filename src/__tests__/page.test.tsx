@@ -7,11 +7,11 @@ describe("Home Page", () => {
     render(
       <ChakraProvider>
         <HomePage />
-      </ChakraProvider>
+      </ChakraProvider>,
     );
 
     expect(
-      screen.getByRole("heading", { name: /Ask WRI/i })
+      screen.getByRole("heading", { name: /Discover WRI publications/i }),
     ).toBeInTheDocument();
   });
 });
