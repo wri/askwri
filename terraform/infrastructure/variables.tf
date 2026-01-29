@@ -22,7 +22,7 @@ variable "aws_region" {
 variable "wri_project" {
   description = "WRI project name for tagging"
   type        = string
-  default     = "restoration-diagnostic"
+  default     = "askwri"
 }
 
 variable "wri_owner" {
