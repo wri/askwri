@@ -64,14 +64,14 @@ const ResultsTable = ({ data }: { data: RowData[] }) => {
 
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         return isDesc
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue)
+          ? bValue.localeCompare(aValue)
+          : aValue.localeCompare(bValue)
       }
 
       const aNumber = typeof aValue === 'number' ? aValue : Number(aValue)
       const bNumber = typeof bValue === 'number' ? bValue : Number(bValue)
 
-      return isDesc ? aNumber - bNumber : bNumber - aNumber
+      return isDesc ? bNumber - aNumber : aNumber - bNumber
     })
   }, [data, sortColumn])
 
