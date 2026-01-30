@@ -56,9 +56,21 @@ export const SelectableResultRow = ({
             pointerEvents: isHovered ? "auto" : "none",
           }}
         >
-          <Button variant="borderless" leftIcon={<PiDownloadSimpleBold />} />
-          <Button variant="borderless" leftIcon={<FaThumbsUp />} />
-          <Button variant="borderless" leftIcon={<FaThumbsDown />} />
+          <Button
+            variant="borderless"
+            leftIcon={<PiDownloadSimpleBold />}
+            aria-label="Download publication"
+          />
+          <Button
+            variant="borderless"
+            leftIcon={<FaThumbsUp />}
+            aria-label="Mark as helpful"
+          />
+          <Button
+            variant="borderless"
+            leftIcon={<FaThumbsDown />}
+            aria-label="Mark as not helpful"
+          />
         </div>
       </TableCell>
     </TableRow>
