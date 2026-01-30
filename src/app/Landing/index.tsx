@@ -14,10 +14,14 @@ import { LuRefreshCcw } from "react-icons/lu";
 import { FaArrowRightLong } from "react-icons/fa6";
 import { WriLogoIcon } from "../components/icons/WriLogo";
 import { AiIcon } from "../components/icons/AiIcon";
-import "./landing.css";
+import { SUGGESTION_POOL, getRandomSuggestions } from "./exampleQuestions";
+import "../styles.css";
 
 export default function Landing() {
   const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>(() =>
+    SUGGESTION_POOL.slice(0, 3),
+  );
 
   useEffect(() => {
     // add a timer to render the toast after the component mounts
@@ -39,6 +43,10 @@ export default function Landing() {
 
   const handleExampleClick = (example: string) => {
     setQuery(example);
+  };
+
+  const handleShuffleSuggestions = () => {
+    setSuggestions(getRandomSuggestions());
   };
 
   return (
@@ -125,38 +133,17 @@ export default function Landing() {
                   timeframe in your search.
                 </Text>
               </Card.Description>
-              <section>
-                <Button
-                  variant="borderless"
-                  leftIcon={<AiIcon />}
-                  onClick={() =>
-                    handleExampleClick(
-                      "What has WRI published on land value capture?",
-                    )
-                  }
-                >
-                  What has WRI published on land value capture?
-                </Button>
-                <Button
-                  variant="borderless"
-                  leftIcon={<AiIcon />}
-                  onClick={() =>
-                    handleExampleClick("What has WRI published on Bangalore?")
-                  }
-                >
-                  What has WRI published on Bangalore?
-                </Button>
-                <Button
-                  variant="borderless"
-                  leftIcon={<AiIcon />}
-                  onClick={() =>
-                    handleExampleClick(
-                      "What has WRI published on children and pollution?",
-                    )
-                  }
-                >
-                  What has WRI published on children and pollution?
-                </Button>
+              <section key={suggestions.join("|")} className="suggestions-list">
+                {suggestions.map((item) => (
+                  <Button
+                    key={item}
+                    variant="borderless"
+                    leftIcon={<AiIcon />}
+                    onClick={() => handleExampleClick(item)}
+                  >
+                    {item}
+                  </Button>
+                ))}
               </section>
             </Card.Body>
             <Card.Footer>
@@ -164,6 +151,7 @@ export default function Landing() {
                 variant="secondary"
                 size="small"
                 leftIcon={<LuRefreshCcw />}
+                onClick={handleShuffleSuggestions}
               >
                 More suggestions
               </Button>
