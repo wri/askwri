@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { FiPlus } from 'react-icons/fi'
 import { WriLogoIcon } from '../components/icons/WriLogo'
-import { ROUTES } from '../constants'
 
 const Navbar = () => {
   const pathname = usePathname()
@@ -13,7 +12,7 @@ const Navbar = () => {
   return (
     <WriNavbar
       logo={
-        <Link href={ROUTES.HOME}>
+        <Link href='/'>
           <WriLogoIcon height='32px' width='92px' />
         </Link>
       }
