@@ -8,6 +8,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'plugin:react/jsx-runtime',
     'airbnb-typescript',
+    'next/core-web-vitals',
     'prettier',
   ],
   plugins: ['@typescript-eslint'],
