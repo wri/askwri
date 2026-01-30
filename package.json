@@ -48,5 +48,13 @@
     "prettier": "^3.8.1",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "fdir": {
+      "picomatch": "4.0.3"
+    },
+    "tinyglobby": {
+      "picomatch": "4.0.3"
+    }
   }
 }
