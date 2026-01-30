@@ -37,7 +37,7 @@ const columns = [
   },
 ]
 
-export default function ResultsTable({ data }: { data: RowData[] }) {
+const ResultsTable = ({ data }: { data: RowData[] }) => {
   const totalItems = data.length
   const [selectedRows, setSelectedRows] = useState<RowData[]>([])
   const [pageSize, setPageSize] = useState(10)
@@ -163,3 +163,5 @@ export default function ResultsTable({ data }: { data: RowData[] }) {
     </>
   )
 }
+
+export default ResultsTable

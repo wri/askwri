@@ -13,11 +13,11 @@ import { FaThumbsDown, FaThumbsUp } from "react-icons/fa6";
 import { PiDownloadSimpleBold } from "react-icons/pi";
 import { SelectableResultRowProps } from "./types";
 
-export function SelectableResultRow({
+export const SelectableResultRow = ({
   rowData,
   selected,
   onCheckedChange,
-}: SelectableResultRowProps) {
+}: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false);
 
   const handleOnRowSelected = ({ checked }: { checked: boolean | string }) => {
@@ -63,4 +63,4 @@ export function SelectableResultRow({
       </TableCell>
     </TableRow>
   );
-}
+};

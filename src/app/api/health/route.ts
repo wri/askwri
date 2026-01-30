@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
+  // eslint-disable-next-line no-console -- surface health check requests during development
   console.log('Health check requested', new Date().toISOString());
   return NextResponse.json({
     status: 'healthy',

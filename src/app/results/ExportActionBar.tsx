@@ -5,12 +5,12 @@ import { Button, getThemedColor } from '@worldresources/wri-design-systems'
 import { FaChevronUp } from 'react-icons/fa'
 import { ExportActionBarProps } from './types'
 
-export function ExportActionBar({
+export const ExportActionBar = ({
   selectedCount,
   onSelectAll,
   onExport,
   bottomOffset = '80px',
-}: ExportActionBarProps) {
+}: ExportActionBarProps) => {
   if (!selectedCount) {
     return null
   }

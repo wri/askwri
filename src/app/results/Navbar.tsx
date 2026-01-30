@@ -2,9 +2,9 @@
 
 import { Button, Navbar as WriNavbar } from '@worldresources/wri-design-systems'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { FiPlus } from 'react-icons/fi'
 import { WriLogoIcon } from '../components/icons/WriLogo'
-import { usePathname } from 'next/navigation'
 import { ROUTES } from '../constants'
 
 const Navbar = () => {
