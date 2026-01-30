@@ -49,11 +49,13 @@ export const SelectableResultRow = ({
       <TableCell>{rowData.how_relevant}</TableCell>
       <TableCell width={200}>
         <div
+          onFocus={() => setIsHovered(true)}
+          onBlur={() => setIsHovered(false)}
           style={{
             display: "flex",
             gap: "8px",
-            opacity: isHovered ? 1 : 0,
-            pointerEvents: isHovered ? "auto" : "none",
+            opacity: isHovered ? 1 : 0.1,
+            transition: "opacity 0.2s ease-in-out",
           }}
         >
           <Button

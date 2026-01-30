@@ -85,7 +85,7 @@ const ResultsTable = ({ data }: { data: RowData[] }) => {
 
   const onAllItemsSelected = (checked: boolean) => {
     if (checked) {
-      setSelectedRows(dataByPage)
+      setSelectedRows(sortedData)
     } else {
       setSelectedRows([])
     }
