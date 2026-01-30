@@ -8,7 +8,6 @@ import {
 } from '@worldresources/wri-design-systems'
 import { HiDocumentSearch } from 'react-icons/hi'
 import { MdChat } from 'react-icons/md'
-
 import { ExportActionBar } from './ExportActionBar'
 import { SelectableResultRow } from './SelectableResultRow'
 import { RowData } from './types'
