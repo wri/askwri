@@ -19,7 +19,7 @@ const Navbar = () => {
       linkRouter={Link}
       pathname={pathname}
       utilitySection={[
-        <Button key='new-search' variant='secondary' onClick={() => {}}>
+        <Button key='leave-feedback' variant='secondary' onClick={() => {}}>
           Leave Feedback
         </Button>,
         <Button
