@@ -35,123 +35,131 @@
  *  - ENERGY_JPT_COMPLETION__GPT_4O_MINI=0.70
  */
 
+function toInt(v: any): number | null {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : null
+}
+
 type Factors = {
-  promptJpt: number;      // Joules per prompt token (prefill)
-  completionJpt: number;  // Joules per completion token (decode)
-};
+  promptJpt: number // Joules per prompt token (prefill)
+  completionJpt: number // Joules per completion token (decode)
+}
 
 function numFromEnv(name: string, def: number): number {
-  const v = process.env[name];
-  if (v == null || v === "") return def;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : def;
+  const v = process.env[name]
+  if (v == null || v === '') return def
+  const n = Number(v)
+  return Number.isFinite(n) ? n : def
 }
 
 function strFromEnv(name: string, def: string): string {
-  const v = process.env[name];
-  return (typeof v === "string" && v.trim().length > 0) ? v.trim() : def;
+  const v = process.env[name]
+  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : def
 }
 
 // --- Baseline defaults (grounded mid-cases; override with ENV) ---
-const DEFAULT_PROMPT_JPT     = numFromEnv("ENERGY_JPT_PROMPT_DEFAULT", 1.00);
-const DEFAULT_COMPLETION_JPT = numFromEnv("ENERGY_JPT_COMPLETION_DEFAULT", 2.00);
+const DEFAULT_PROMPT_JPT = numFromEnv('ENERGY_JPT_PROMPT_DEFAULT', 1.0)
+const DEFAULT_COMPLETION_JPT = numFromEnv('ENERGY_JPT_COMPLETION_DEFAULT', 2.0)
 
 // --- Model-specific defaults (tune with real telemetry) ---
 // Keys are normalized (uppercased, non-alphanumeric -> underscores).
 const MODEL_DEFAULTS: Record<string, Factors> = {
   // GPT‑5 class (Blackwell/B200-era): ~1.6× better perf/W than H100 mid-case
-  "GPT_5": {
-    promptJpt:     numFromEnv("ENERGY_JPT_PROMPT__GPT_5", 0.60),
-    completionJpt: numFromEnv("ENERGY_JPT_COMPLETION__GPT_5", 1.40),
+  GPT_5: {
+    promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_5', 0.6),
+    completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_5', 1.4),
   },
 
   // GPT‑4‑class (H100-era)
-  "GPT_4O": {
-    promptJpt:     numFromEnv("ENERGY_JPT_PROMPT__GPT_4O", 1.00),
-    completionJpt: numFromEnv("ENERGY_JPT_COMPLETION__GPT_4O", 2.20),
+  GPT_4O: {
+    promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_4O', 1.0),
+    completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_4O', 2.2),
   },
 
   // Minis (~7–12B)
-  "GPT_5_MINI": {
-    promptJpt:     numFromEnv("ENERGY_JPT_PROMPT__GPT_5_MINI", 0.30),
-    completionJpt: numFromEnv("ENERGY_JPT_COMPLETION__GPT_5_MINI", 0.60),
+  GPT_5_MINI: {
+    promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_5_MINI', 0.3),
+    completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_5_MINI', 0.6),
   },
 
-  "GPT_4O_MINI": {
-    promptJpt:     numFromEnv("ENERGY_JPT_PROMPT__GPT_4O_MINI", 0.35),
-    completionJpt: numFromEnv("ENERGY_JPT_COMPLETION__GPT_4O_MINI", 0.70),
+  GPT_4O_MINI: {
+    promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_4O_MINI', 0.35),
+    completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_4O_MINI', 0.7),
   },
-};
+}
 
 function normalizeModelKey(model: string): string {
-  return (model || "").toUpperCase().replace(/[^A-Z0-9]/g, "_");
+  return (model || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')
 }
 
 function factorsForModel(model: string): Factors {
-  const key = normalizeModelKey(model || process.env.OPENAI_MODEL || "");
-  if (key && MODEL_DEFAULTS[key]) return MODEL_DEFAULTS[key];
-  return { promptJpt: DEFAULT_PROMPT_JPT, completionJpt: DEFAULT_COMPLETION_JPT };
+  const key = normalizeModelKey(model || process.env.OPENAI_MODEL || '')
+  if (key && MODEL_DEFAULTS[key]) return MODEL_DEFAULTS[key]
+  return {
+    promptJpt: DEFAULT_PROMPT_JPT,
+    completionJpt: DEFAULT_COMPLETION_JPT,
+  }
 }
 
 // ---------------- PUE selection ----------------
 // If ENERGY_PUE is set, it overrides everything.
 // Otherwise pick by provider, with Azure geography hint.
 const PROVIDER_PUE_DEFAULTS = {
-  AZURE:  numFromEnv("ENERGY_PUE__AZURE", 1.16), // Microsoft FY23 global
-  AWS:    numFromEnv("ENERGY_PUE__AWS",   1.15),
-  GCP:    numFromEnv("ENERGY_PUE__GCP",   1.09),
-  DEFAULT:numFromEnv("ENERGY_PUE",        1.20), // generic fallback
-} as const;
+  AZURE: numFromEnv('ENERGY_PUE__AZURE', 1.16), // Microsoft FY23 global
+  AWS: numFromEnv('ENERGY_PUE__AWS', 1.15),
+  GCP: numFromEnv('ENERGY_PUE__GCP', 1.09),
+  DEFAULT: numFromEnv('ENERGY_PUE', 1.2), // generic fallback
+} as const
 
 // A few Azure geography examples (override any via ENERGY_PUE__AZURE_<KEY> if you know the site)
 const AZURE_PUE_BY_GEO: Record<string, number> = {
-  GLOBAL: numFromEnv("ENERGY_PUE__AZURE_GLOBAL", PROVIDER_PUE_DEFAULTS.AZURE),
-  US_WY:  numFromEnv("ENERGY_PUE__AZURE_US_WY",  1.11),
-  US_VA:  numFromEnv("ENERGY_PUE__AZURE_US_VA",  1.14),
-  US_IL:  numFromEnv("ENERGY_PUE__AZURE_US_IL",  1.35),
-  US_TX:  numFromEnv("ENERGY_PUE__AZURE_US_TX",  1.28),
-  US_WA:  numFromEnv("ENERGY_PUE__AZURE_US_WA",  1.15),
-  IE:     numFromEnv("ENERGY_PUE__AZURE_IE",     1.19),
-  NL:     numFromEnv("ENERGY_PUE__AZURE_NL",     1.14),
-  SE:     numFromEnv("ENERGY_PUE__AZURE_SE",     1.16),
-  SG:     numFromEnv("ENERGY_PUE__AZURE_SG",     1.34),
-};
+  GLOBAL: numFromEnv('ENERGY_PUE__AZURE_GLOBAL', PROVIDER_PUE_DEFAULTS.AZURE),
+  US_WY: numFromEnv('ENERGY_PUE__AZURE_US_WY', 1.11),
+  US_VA: numFromEnv('ENERGY_PUE__AZURE_US_VA', 1.14),
+  US_IL: numFromEnv('ENERGY_PUE__AZURE_US_IL', 1.35),
+  US_TX: numFromEnv('ENERGY_PUE__AZURE_US_TX', 1.28),
+  US_WA: numFromEnv('ENERGY_PUE__AZURE_US_WA', 1.15),
+  IE: numFromEnv('ENERGY_PUE__AZURE_IE', 1.19),
+  NL: numFromEnv('ENERGY_PUE__AZURE_NL', 1.14),
+  SE: numFromEnv('ENERGY_PUE__AZURE_SE', 1.16),
+  SG: numFromEnv('ENERGY_PUE__AZURE_SG', 1.34),
+}
 
 function pickPUE(): number {
   // Hard override wins
-  const hard = process.env["ENERGY_PUE"];
-  if (hard != null && hard !== "") {
-    const n = Number(hard);
-    if (Number.isFinite(n)) return n;
+  const hard = process.env.ENERGY_PUE
+  if (hard != null && hard !== '') {
+    const n = Number(hard)
+    if (Number.isFinite(n)) return n
   }
 
-  const provider = strFromEnv("ENERGY_PROVIDER", "AZURE").toUpperCase();
-  if (provider === "AZURE") {
-    const geo = normalizeModelKey(strFromEnv("ENERGY_AZURE_GEO", "GLOBAL"));
-    return AZURE_PUE_BY_GEO[geo] ?? AZURE_PUE_BY_GEO.GLOBAL;
+  const provider = strFromEnv('ENERGY_PROVIDER', 'AZURE').toUpperCase()
+  if (provider === 'AZURE') {
+    const geo = normalizeModelKey(strFromEnv('ENERGY_AZURE_GEO', 'GLOBAL'))
+    return AZURE_PUE_BY_GEO[geo] ?? AZURE_PUE_BY_GEO.GLOBAL
   }
-  if (provider === "AWS") return PROVIDER_PUE_DEFAULTS.AWS;
-  if (provider === "GCP") return PROVIDER_PUE_DEFAULTS.GCP;
-  return PROVIDER_PUE_DEFAULTS.DEFAULT;
+  if (provider === 'AWS') return PROVIDER_PUE_DEFAULTS.AWS
+  if (provider === 'GCP') return PROVIDER_PUE_DEFAULTS.GCP
+  return PROVIDER_PUE_DEFAULTS.DEFAULT
 }
 
 // ---------------- Grid intensity selection (gCO₂/kWh) ----------------
 const GRID_DEFAULTS = {
-  US:     numFromEnv("ENERGY_GRID_GCO2_PER_KWH__US",     384), // recent US avg
-  EU:     numFromEnv("ENERGY_GRID_GCO2_PER_KWH__EU",     244), // recent EU avg
-  GLOBAL: numFromEnv("ENERGY_GRID_GCO2_PER_KWH__GLOBAL", 480), // global avg
-};
+  US: numFromEnv('ENERGY_GRID_GCO2_PER_KWH__US', 384), // recent US avg
+  EU: numFromEnv('ENERGY_GRID_GCO2_PER_KWH__EU', 244), // recent EU avg
+  GLOBAL: numFromEnv('ENERGY_GRID_GCO2_PER_KWH__GLOBAL', 480), // global avg
+}
 
 function pickGridGco2PerKwh(): number {
-  const hard = process.env["ENERGY_GRID_GCO2_PER_KWH"];
-  if (hard != null && hard !== "") {
-    const n = Number(hard);
-    if (Number.isFinite(n)) return n;
+  const hard = process.env.ENERGY_GRID_GCO2_PER_KWH
+  if (hard != null && hard !== '') {
+    const n = Number(hard)
+    if (Number.isFinite(n)) return n
   }
-  const region = strFromEnv("ENERGY_GRID_REGION", "GLOBAL").toUpperCase();
-  if (region === "US") return GRID_DEFAULTS.US;
-  if (region === "EU") return GRID_DEFAULTS.EU;
-  return GRID_DEFAULTS.GLOBAL;
+  const region = strFromEnv('ENERGY_GRID_REGION', 'GLOBAL').toUpperCase()
+  if (region === 'US') return GRID_DEFAULTS.US
+  if (region === 'EU') return GRID_DEFAULTS.EU
+  return GRID_DEFAULTS.GLOBAL
 }
 
 /**
@@ -167,42 +175,37 @@ function pickGridGco2PerKwh(): number {
  */
 export function estimateEnergyGCO2e(
   usage: any,
-  modelOverride?: string
+  modelOverride?: string,
 ): number | null {
-  if (!usage) return null;
+  if (!usage) return null
 
-  const model = modelOverride || usage.model || process.env.OPENAI_MODEL || "";
-  const { promptJpt, completionJpt } = factorsForModel(model);
+  const model = modelOverride || usage.model || process.env.OPENAI_MODEL || ''
+  const { promptJpt, completionJpt } = factorsForModel(model)
 
   // Gather tokens with graceful fallback
-  let pt = toInt(usage.prompt_tokens ?? usage.input_tokens);
-  let ct = toInt(usage.completion_tokens ?? usage.output_tokens);
+  let pt = toInt(usage.prompt_tokens ?? usage.input_tokens)
+  let ct = toInt(usage.completion_tokens ?? usage.output_tokens)
 
   if ((pt == null || ct == null) && usage.total_tokens != null) {
     // Split 50/50 if only total is provided (very rough)
-    const tot = toInt(usage.total_tokens) ?? 0;
-    pt = pt ?? Math.floor(tot / 2);
-    ct = ct ?? (tot - pt);
+    const tot = toInt(usage.total_tokens) ?? 0
+    pt = pt ?? Math.floor(tot / 2)
+    ct = ct ?? tot - pt
   }
 
-  if (pt == null && ct == null) return null;
+  if (pt == null && ct == null) return null
 
-  const promptTokens = pt ?? 0;
-  const completionTokens = ct ?? 0;
+  const promptTokens = pt ?? 0
+  const completionTokens = ct ?? 0
 
   // Energy in Joules
-  const joules = promptTokens * promptJpt + completionTokens * completionJpt;
+  const joules = promptTokens * promptJpt + completionTokens * completionJpt
 
   // Convert to kWh and multiply by PUE & grid factor
-  const kWh = joules / 3_600_000;
-  const PUE = pickPUE();
-  const GRID_GCO2_PER_KWH = pickGridGco2PerKwh();
-  const gCO2e = kWh * PUE * GRID_GCO2_PER_KWH;
+  const kWh = joules / 3_600_000
+  const PUE = pickPUE()
+  const GRID_GCO2_PER_KWH = pickGridGco2PerKwh()
+  const gCO2e = kWh * PUE * GRID_GCO2_PER_KWH
 
-  return Number.isFinite(gCO2e) ? +gCO2e.toFixed(2) : null;
-}
-
-function toInt(v: any): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : null;
+  return Number.isFinite(gCO2e) ? +gCO2e.toFixed(2) : null
 }

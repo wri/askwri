@@ -1,3 +1,5 @@
+/* eslint-disable no-param-reassign */
+/* eslint-disable @typescript-eslint/naming-convention */
 /**
  * Multi-query strategy to work around LlamaIndex Cloud's 6-chunk limit
  * Uses parallel execution and smart deduplication for performance
@@ -12,46 +14,6 @@ interface QueryVariation {
   query: string;
   weight: number; // How much to weight results from this variation
   type: 'original' | 'synonym' | 'expanded' | 'focused';
-}
-
-/**
- * Generate query variations for better coverage
- * Keep variations minimal to avoid long response times
- */
-export function generateQueryVariations(originalQuery: string, mode: 'answer' | 'cite'): QueryVariation[] {
-  const variations: QueryVariation[] = [
-    { query: originalQuery, weight: 1.0, type: 'original' }
-  ];
-  
-  // For Cite mode, add more variations since we need comprehensive results
-  if (mode === 'cite') {
-    // Add ONE synonym variation
-    const synonymVariation = applySynonyms(originalQuery);
-    if (synonymVariation !== originalQuery) {
-      variations.push({ 
-        query: synonymVariation, 
-        weight: 0.8, 
-        type: 'synonym' 
-      });
-    }
-    
-    // Add ONE focused variation (more specific)
-    const terms = originalQuery.toLowerCase().split(/\s+/);
-    if (terms.length > 2) {
-      // Focus on key terms
-      const focused = terms.filter(t => t.length > 4).join(' ');
-      if (focused && focused !== originalQuery) {
-        variations.push({ 
-          query: focused, 
-          weight: 0.7, 
-          type: 'focused' 
-        });
-      }
-    }
-  }
-  
-  // Limit to 3 queries max to keep response time reasonable
-  return variations.slice(0, 3);
 }
 
 /**
@@ -71,20 +33,60 @@ function applySynonyms(query: string): string {
     'urban': 'city',
     'climate': 'carbon'
   };
-  
   let modified = query.toLowerCase();
   let changed = false;
-  
-  for (const [term, synonym] of Object.entries(synonymMap)) {
+  Object.entries(synonymMap).some(([term, synonym]) => {
     if (modified.includes(term)) {
       modified = modified.replace(term, synonym);
       changed = true;
-      break; // Only replace one term to keep variations distinct
+      return true;
     }
-  }
-  
+    return false;
+  });
   return changed ? modified : query;
 }
+
+/**
+ * Generate query variations for better coverage
+ * Keep variations minimal to avoid long response times
+ */
+export function generateQueryVariations(originalQuery: string, mode: 'answer' | 'cite'): QueryVariation[] {
+  const variations: QueryVariation[] = [
+    { query: originalQuery, weight: 1.0, type: 'original' }
+  ];
+
+  // For Cite mode, add more variations since we need comprehensive results
+  if (mode === 'cite') {
+    // Add ONE synonym variation
+    const synonymVariation = applySynonyms(originalQuery);
+    if (synonymVariation !== originalQuery) {
+      variations.push({ 
+        query: synonymVariation, 
+        weight: 0.8, 
+        type: 'synonym' 
+      });
+    }
+
+    // Add ONE focused variation (more specific)
+    const terms = originalQuery.toLowerCase().split(/\s+/);
+    if (terms.length > 2) {
+      // Focus on key terms
+      const focused = terms.filter(t => t.length > 4).join(' ');
+      if (focused && focused !== originalQuery) {
+        variations.push({ 
+          query: focused, 
+          weight: 0.7, 
+          type: 'focused' 
+        });
+      }
+    }
+  }
+
+  // Limit to 3 queries max to keep response time reasonable
+  return variations.slice(0, 3);
+}
+
+
 
 /**
  * Execute queries in parallel for speed
@@ -95,24 +97,16 @@ export async function executeParallelQueries(
   queryFunc: QueryFunction
 ): Promise<DocMeta[][]> {
   
-  console.log(`[Multi-Query] Executing ${variations.length} queries in parallel`);
-  
   // Execute all queries in parallel
-  const promises = variations.map(async (v, idx) => {
-    console.log(`[Multi-Query] Query ${idx + 1}: "${v.query}" (type: ${v.type})`);
+  const promises = variations.map(async (v) => {
     try {
       const result = await queryFunc(v.query, { multiQuery: false }); // Prevent recursion
       return result.docs || [];
-    } catch (error) {
-      console.error(`[Multi-Query] Query ${idx + 1} failed:`, error);
+    } catch (_error) {
       return [];
     }
   });
-  
   const results = await Promise.all(promises);
-  
-  console.log(`[Multi-Query] Results: ${results.map(r => r.length).join(', ')} docs`);
-  
   return results;
 }
 
@@ -128,52 +122,46 @@ export function mergeResults(
   
   // Merge results, keeping the best version of each document
   resultSets.forEach((results, setIdx) => {
-    const weight = variations[setIdx].weight;
-    
-    results.forEach(doc => {
-      const existingDoc = docMap.get(doc.doc_id);
-      const weightedScore = (doc.score || 0.5) * weight;
-      
+    const { weight } = variations[setIdx];
+    results.forEach(docItem => {
+      const { doc_id, score = 0.5, url, authors, year, kps } = docItem;
+      const existingDoc = docMap.get(doc_id);
+      const weightedScore = score * weight;
       if (!existingDoc) {
         // First time seeing this document
-        docMap.set(doc.doc_id, doc);
-        docScores.set(doc.doc_id, weightedScore);
+        docMap.set(doc_id, { ...docItem, kps: [...kps] });
+        docScores.set(doc_id, weightedScore);
       } else {
         // Merge KPs from different queries
-        const existingScore = docScores.get(doc.doc_id) || 0;
-        
+        const existingScore = docScores.get(doc_id) || 0;
         // Keep the version with better metadata
-        if (!existingDoc.url && doc.url) existingDoc.url = doc.url;
-        if (!existingDoc.authors?.length && doc.authors?.length) existingDoc.authors = doc.authors;
-        if (!existingDoc.year && doc.year) existingDoc.year = doc.year;
-        
+        if (!existingDoc.url && url) existingDoc.url = url;
+        if (!existingDoc.authors?.length && authors?.length) existingDoc.authors = authors;
+        if (!existingDoc.year && year) existingDoc.year = year;
         // Merge unique KPs
         const existingKpIds = new Set(existingDoc.kps.map(kp => kp.passage_id));
-        const newKps = doc.kps.filter(kp => !existingKpIds.has(kp.passage_id));
-        existingDoc.kps.push(...newKps);
-        
+        const newKps = kps.filter(kp => !existingKpIds.has(kp.passage_id));
+        existingDoc.kps = [...existingDoc.kps, ...newKps];
         // Update score (max of weighted scores)
-        docScores.set(doc.doc_id, Math.max(existingScore, weightedScore));
+        docScores.set(doc_id, Math.max(existingScore, weightedScore));
       }
     });
   });
-  
+
   // Sort KPs within each document and apply caps
   const mergedDocs = Array.from(docMap.values());
   mergedDocs.forEach(doc => {
-    // Sort KPs by relevance
+
     doc.kps.sort((a, b) => b.kp_relevance - a.kp_relevance);
-    // Cap KPs to avoid memory issues
+
     doc.kps = doc.kps.slice(0, 200);
-    // Update document score from our tracking
+
     doc.score = docScores.get(doc.doc_id) || doc.score;
+
   });
-  
-  // Sort documents by score
+
   mergedDocs.sort((a, b) => (b.score || 0) - (a.score || 0));
-  
-  console.log(`[Multi-Query] Merged ${docMap.size} unique documents from ${resultSets.reduce((sum, r) => sum + r.length, 0)} total`);
-  
+
   return mergedDocs;
 }
 
@@ -182,9 +170,9 @@ export function mergeResults(
  */
 export async function multiQuerySearch(
   query: string,
+  queryFunc: QueryFunction,
   mode: 'answer' | 'cite' = 'cite',
-  maxQueries: number = 3,
-  queryFunc: QueryFunction
+  maxQueries: number = 3
 ): Promise<{ docs: DocMeta[]; queryCount: number; timing: number }> {
   const startTime = Date.now();
   
@@ -198,9 +186,7 @@ export async function multiQuerySearch(
   const docs = mergeResults(resultSets, variations);
   
   const timing = Date.now() - startTime;
-  
-  console.log(`[Multi-Query] Completed in ${timing}ms: ${docs.length} unique docs from ${variations.length} queries`);
-  
+
   return {
     docs,
     queryCount: variations.length,
@@ -213,9 +199,9 @@ export async function multiQuerySearch(
  */
 export async function smartMultiQuerySearch(
   query: string,
+  queryFunc: QueryFunction,
   mode: 'answer' | 'cite' = 'cite',
-  targetDocs: number = 10,
-  queryFunc: QueryFunction
+  targetDocs: number = 10
 ): Promise<{ docs: DocMeta[]; queryCount: number; timing: number }> {
   const startTime = Date.now();
   
@@ -224,7 +210,7 @@ export async function smartMultiQuerySearch(
   
   // If we already have enough unique docs, return early
   if (firstResult.docs.length >= targetDocs) {
-    console.log(`[Smart Multi-Query] Got ${firstResult.docs.length} docs from first query, returning early`);
+
     return {
       docs: firstResult.docs,
       queryCount: 1,
@@ -242,9 +228,8 @@ export async function smartMultiQuerySearch(
     { query, weight: 1.0, type: 'original' as const },
     ...variations
   ];
-  
+
   const docs = mergeResults(allResults, allVariations);
-  
   return {
     docs,
     queryCount: allVariations.length,
