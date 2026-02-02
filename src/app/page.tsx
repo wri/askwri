@@ -2,8 +2,6 @@
 
 import Landing from "./Landing";
 
-export default function HomePage() {
-  return (
-    <Landing />
-  );
-}
+const HomePage = () => <Landing />;
+
+export default HomePage;
