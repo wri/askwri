@@ -46,7 +46,7 @@ terraform {
   backend "s3" {
     bucket         = "askwri-app-terraform-state-shared"
     key            = "terraform.tfstate"
-    region         = "us-east-1"
+    region         = "us-east-2"
     dynamodb_table = "askwri-app-terraform-locks-shared"
     encrypt        = true
   }

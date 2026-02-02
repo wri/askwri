@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: us-east-2
   PROJECT_NAME: askwri-app
   ENVIRONMENT: qa
 

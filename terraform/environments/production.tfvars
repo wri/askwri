@@ -4,7 +4,7 @@
 
 project_name = "askwri-app"
 environment  = "production"
-aws_region   = "us-east-1"
+aws_region   = "us-east-2"
 
 # VPC Configuration
 vpc_cidr                 = "10.1.0.0/16"

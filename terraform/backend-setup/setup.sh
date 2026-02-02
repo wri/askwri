@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Default values
-AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_REGION="${AWS_REGION:-us-east-2}"
 PROJECT_NAME="${PROJECT_NAME:-askwri-app}"
 ENVIRONMENT="${ENVIRONMENT:-shared}"
 

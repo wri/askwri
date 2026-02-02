@@ -100,7 +100,7 @@ chmod +x setup.sh
 ./setup.sh
 
 # Or customize with environment variables
-AWS_REGION=us-east-1 PROJECT_NAME=askwri-app ./setup.sh
+AWS_REGION=us-east-2 PROJECT_NAME=askwri-app ./setup.sh
 ```
 
 ### 3. Configure GitHub Repository
