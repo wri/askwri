@@ -305,7 +305,7 @@ export default function AskWriApp() {
 
   useEffect(() => {
     if (!searchQuery) return
-    if (query) return
+    if (query === searchQuery) return
     setQuery(searchQuery)
     runQuery(mode, searchQuery)
   }, [searchQuery, mode, query])
