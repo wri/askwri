@@ -11,7 +11,7 @@ import {
   chatAnswerLlamaIndex,
   chatCiteLlamaIndex,
 } from '@/lib/llamaindex-client'
-import { ANSWER_PRESET, CITE_PRESET } from '@/config/retrieval'
+import { ANSWER_PRESET } from '@/config/retrieval'
 import { estimateCostUSD } from '@/config/costs'
 import { estimateEnergyGCO2e } from '@/config/energy'
 import ResultsPage from '../components/results'
