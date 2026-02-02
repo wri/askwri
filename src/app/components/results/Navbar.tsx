@@ -4,7 +4,7 @@ import { Button, Navbar as WriNavbar } from '@worldresources/wri-design-systems'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { FiPlus } from 'react-icons/fi'
-import { WriLogoIcon } from '../components/icons/WriLogo'
+import { WriLogoIcon } from '../icons/WriLogo'
 
 const Navbar = () => {
   const pathname = usePathname()
