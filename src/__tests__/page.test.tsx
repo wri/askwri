@@ -1,3 +1,8 @@
+
+import { render, screen } from '@testing-library/react'
+import HomePage from '@/app/page'
+import ChakraProvider from '@/app/Providers/ChakraProvider'
+
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -12,10 +17,6 @@ jest.mock('next/navigation', () => ({
     get: () => null,
   }),
 }))
-
-import { render, screen } from '@testing-library/react'
-import HomePage from '@/app/page'
-import ChakraProvider from '@/app/Providers/ChakraProvider'
 
 describe('Home Page', () => {
   it('renders the Ask WRI heading', () => {

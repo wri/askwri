@@ -47,7 +47,9 @@ const Landing = () => {
       })
     }, 0)
 
-    return () => window.clearTimeout(handle)
+    return () => {
+      window.clearTimeout(handle)
+    }
   }, [])
 
   const handleExampleClick = (example: string) => {

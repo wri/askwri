@@ -21,8 +21,7 @@ const ResultsPage = ({ data = [], query, confidence = 0 }: ResultsPageProps) => 
     ...row,
     publication_name: row.publication_name,
   }))
-  console.log({tableData})
-  console.log({confidence})
+
   return (
   <main className='gradient-background' style={{ paddingBottom: '57px' }}>
     <Navbar />
