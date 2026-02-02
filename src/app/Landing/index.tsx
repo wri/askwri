@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Heading, Card, Text } from '@chakra-ui/react'
 import {
@@ -26,32 +26,18 @@ const Landing = () => {
 
   const router = useRouter()
 
-  const toastShownRef = useRef(false)
-
   useEffect(() => {
-    // add a timer to render the toast after the component mounts
-    if (toastShownRef.current) {
-      return
-    }
-    toastShownRef.current = true
-    const handle = window.setTimeout(() => {
-      showToast({
-        label: 'Ask WRI is for staff use only',
-        caption:
-          'This tool is being tested and improved, and is currently only intended for WRI employees and not for external use. Results are generated using AI and may occasionally be incomplete or inaccurate.',
-        type: 'info',
-        placement: 'top-start',
-        closable: true,
-        closableLabel: 'Dismiss',
-        duration: Infinity,
-      })
-    }, 0)
-
-    return () => {
-      window.clearTimeout(handle)
-    }
+    showToast({
+      label: 'Ask WRI is for staff use only',
+      caption:
+        'This tool is being tested and improved, and is currently only intended for WRI employees and not for external use. Results are generated using AI and may occasionally be incomplete or inaccurate.',
+      type: 'info',
+      placement: 'top-start',
+      closable: true,
+      closableLabel: 'Dismiss',
+      duration: Infinity,
+    })
   }, [])
-
   const handleExampleClick = (example: string) => {
     setQuery(example)
   }
