@@ -3,7 +3,7 @@
 /* eslint-disable */
 // WIP it might not be worth linting this file while we are migrating it
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Spinner } from '@chakra-ui/react'
 import { DocMeta as LiveDoc, KP as LiveKP } from '@/lib/llamacloud'
@@ -197,7 +197,7 @@ const chicagoShort = (doc: DocMeta, row?: any) => {
 /* ---------- component ---------- */
 type WhyMeta = { why: string; relation: 'direct' | 'indirect' }
 
-export default function AskWriApp() {
+function AskWriAppInner() {
   const [mode, setMode] = useState<Mode>('answer')
   const [query, setQuery] = useState('')
 
@@ -1165,10 +1165,14 @@ export default function AskWriApp() {
   }
 
   if (searchQuery) {
-    if (resultRows.length > 0) {
+    // Deduplicate resultRows by id
+    const uniqueResultRows = Array.from(
+      new Map(resultRows.map(row => [row.id, row])).values()
+    )
+    if (uniqueResultRows.length > 0) {
       return (
         <ResultsPage
-          data={resultRows}
+          data={uniqueResultRows}
           query={searchQuery}
           confidence={(answer?.confidence ?? 0) * 100}
         />
@@ -1749,6 +1753,14 @@ export default function AskWriApp() {
         </section>
       </main>
     </div>
+  )
+}
+
+export default function AskWriApp() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AskWriAppInner />
+    </Suspense>
   )
 }
 
