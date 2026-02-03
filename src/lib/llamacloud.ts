@@ -623,9 +623,9 @@ export async function chatCite(
     // Pass this function recursively for the multi-query to use
     const { docs, queryCount, timing } = await smartMultiQuerySearch(
       query,
+      (q: string, o?: any) => chatCite(q, { ...o, multiQuery: false }), // QueryFunction
       'cite',
       10,
-      (q: string, o?: any) => chatCite(q, { ...o, multiQuery: false }), // Prevent infinite recursion
     )
     return {
       message: '',
