@@ -5,6 +5,9 @@ export type RowData = {
   summary: string
   relevance: string
   how_relevant: string
+  download_url?: string | null
+  relevance_score?: number
+  confidence?: number
 }
 
 export type SelectableResultRowProps = {

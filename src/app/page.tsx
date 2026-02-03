@@ -1,7 +1,7 @@
-"use client";
+'use client'
 
-import Landing from "./Landing";
+import Landing from './Landing'
 
-const HomePage = () => <Landing />;
+const HomePage = () => <Landing />
 
-export default HomePage;
+export default HomePage

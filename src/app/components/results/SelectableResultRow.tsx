@@ -24,6 +24,11 @@ export const SelectableResultRow = ({
     onCheckedChange(rowData, checked);
   };
 
+  const handleDownload = () => {
+    if (!rowData.download_url) return;
+    window.open(rowData.download_url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <TableRow
       onMouseEnter={() => setIsHovered(true)}
@@ -62,6 +67,8 @@ export const SelectableResultRow = ({
             variant="borderless"
             leftIcon={<PiDownloadSimpleBold />}
             aria-label="Download publication"
+            onClick={handleDownload}
+            disabled={!rowData.download_url}
           />
           <Button
             variant="borderless"
