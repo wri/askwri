@@ -186,7 +186,11 @@ const ResultsTable = ({
         </section>
         <Table
           variant='full-width'
-          columns={columns as any}
+          columns={columns as {
+    key: string
+    label: string
+    sortable?: boolean
+  }[]}
           data={dataByPage}
           renderRow={selectableRenderRow}
           onSortColumn={setSortColumn}
