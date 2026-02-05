@@ -20,11 +20,7 @@ const ResultsPage = ({
   docWhyLoading,
   onOpenPdf,
 }: ResultsPageProps) => {
-  const tableData = data.map((row) => ({
-    ...row,
-    publication_name: row.publication_name,
-  }))
-
+  const tableData = data
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
       <Navbar />
