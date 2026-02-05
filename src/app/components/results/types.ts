@@ -22,3 +22,20 @@ export type ExportActionBarProps = {
   onExport?: () => void
   bottomOffset?: string
 }
+
+export type ResultsTableProps = {
+  data: RowData[]
+  docWhyLoading?: Record<string, boolean>
+  docSummaryLoading?: Record<string, boolean>
+  onToggleSelect?: (id: string, v: boolean) => void
+  onOpenPdf?: (url: string) => void
+}
+
+export type ResultsPageProps = {
+  data?: RowData[]
+  query: string
+  confidence?: number
+  docSummaryLoading?: Record<string, boolean>
+  docWhyLoading?: Record<string, boolean>
+  onOpenPdf?: (url: string) => void
+}

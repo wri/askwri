@@ -9,17 +9,8 @@ import { TfiThought } from 'react-icons/tfi'
 import { AiIcon } from '../icons/AiIcon'
 import Navbar from './Navbar'
 import ResultsTable from './ResultsTable'
-import { RowData } from './types'
+import { ResultsPageProps } from './types'
 import '../../styles.css'
-
-type ResultsPageProps = {
-  data?: RowData[]
-  query: string
-  confidence?: number
-  docSummaryLoading?: Record<string, boolean>
-  docWhyLoading?: Record<string, boolean>
-  onOpenPdf?: (url: string) => void
-}
 
 const ResultsPage = ({
   data = [],

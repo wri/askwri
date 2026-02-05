@@ -10,7 +10,7 @@ import {
 import { MdChat } from 'react-icons/md'
 import { ExportActionBar } from './ExportActionBar'
 import { SelectableResultRow } from './SelectableResultRow'
-import { RowData } from './types'
+import { RowData, ResultsTableProps } from './types'
 import { AiIcon } from '../icons/AiIcon'
 
 const AiGeneratedTag = (
@@ -63,14 +63,6 @@ const columns = [
     label: '',
   },
 ]
-
-type ResultsTableProps = {
-  data: RowData[]
-  docWhyLoading?: Record<string, boolean>
-  docSummaryLoading?: Record<string, boolean>
-  onToggleSelect?: (id: string, v: boolean) => void
-  onOpenPdf?: (url: string) => void
-}
 
 const ResultsTable = ({
   data,
