@@ -115,7 +115,6 @@ const ResultsPage = ({
           style={{
             width: '150px',
             alignItems: 'center',
-
             marginBottom: '16px',
           }}
         >
