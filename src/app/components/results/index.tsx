@@ -41,7 +41,7 @@ const ResultsPage = ({
         <div>
           <Text textStyle='sm'>
             Returned results for publications WRI has published on:
-            <b>{` "${query}."`}</b>
+            <b>{` "${query}"`}</b>
           </Text>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
