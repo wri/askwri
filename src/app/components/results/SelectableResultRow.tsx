@@ -20,11 +20,7 @@ export const SelectableResultRow = ({
   docSummaryLoading,
   docWhyLoading,
   onOpenPdf,
-}: SelectableResultRowProps & {
-  docSummaryLoading?: Record<string, boolean>
-  docWhyLoading?: Record<string, boolean>
-  onOpenPdf?: (url: string) => void
-}) => {
+}: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
 
   const handleOnRowSelected = ({ checked }: { checked: boolean | string }) => {

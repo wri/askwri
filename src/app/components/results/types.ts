@@ -14,6 +14,9 @@ export type SelectableResultRowProps = {
   rowData: RowData
   selected: boolean
   onCheckedChange: (row: RowData, checked: boolean | string) => void
+  docSummaryLoading?: Record<string, boolean>
+  docWhyLoading?: Record<string, boolean>
+  onOpenPdf?: (url: string) => void
 }
 
 export type ExportActionBarProps = {
