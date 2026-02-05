@@ -1,16 +1,28 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { Text } from '@chakra-ui/react'
 import {
   Table,
   getThemedColor,
   Button,
 } from '@worldresources/wri-design-systems'
-import { HiDocumentSearch } from 'react-icons/hi'
 import { MdChat } from 'react-icons/md'
 import { ExportActionBar } from './ExportActionBar'
 import { SelectableResultRow } from './SelectableResultRow'
-import { RowData } from './types'
+import { RowData, ResultsTableProps } from './types'
+import { AiIcon } from '../icons/AiIcon'
+
+const AiGeneratedTag = (
+  <Text
+    textStyle='xs'
+    fontStyle='italic'
+    fontWeight={300}
+    color={getThemedColor('neutral', 700)}
+  >
+    <AiIcon /> AI generated
+  </Text>
+)
 
 const columns = [
   {
@@ -20,16 +32,31 @@ const columns = [
   },
   {
     key: 'summary',
-    label: 'Summary',
+    label: (
+      <div>
+        <div>Summary</div>
+        {AiGeneratedTag}
+      </div>
+    ),
   },
   {
     key: 'relevance',
-    label: 'Relevance',
+    label: (
+      <div>
+        <div>Relevance</div>
+        {AiGeneratedTag}
+      </div>
+    ),
     sortable: true,
   },
   {
     key: 'how_relevant',
-    label: 'How is this relevant?',
+    label: (
+      <div>
+        <div>How is this relevant?</div>
+        {AiGeneratedTag}
+      </div>
+    ),
   },
   {
     key: 'row_actions',
@@ -37,7 +64,13 @@ const columns = [
   },
 ]
 
-const ResultsTable = ({ data }: { data: RowData[] }) => {
+const ResultsTable = ({
+  data,
+  docWhyLoading = {},
+  docSummaryLoading = {},
+  onToggleSelect,
+  onOpenPdf,
+}: ResultsTableProps) => {
   const totalItems = data.length
   const [selectedRows, setSelectedRows] = useState<RowData[]>([])
   const [pageSize, setPageSize] = useState(10)
@@ -95,6 +128,12 @@ const ResultsTable = ({ data }: { data: RowData[] }) => {
     checkedValue: boolean | string,
   ) => {
     const isChecked = checkedValue === true || checkedValue === 'true'
+
+    // Call parent's onToggleSelect if provided
+    if (onToggleSelect) {
+      onToggleSelect(rowData.id.toString(), isChecked)
+    }
+
     setSelectedRows((current = [] as RowData[]) => {
       if (isChecked) {
         if (current.some((item) => item.id === rowData.id)) {
@@ -112,6 +151,9 @@ const ResultsTable = ({ data }: { data: RowData[] }) => {
       rowData={rowData}
       selected={selectedRows?.some((item) => item.id === rowData.id)}
       onCheckedChange={handleRowCheckedChange}
+      docSummaryLoading={docSummaryLoading}
+      docWhyLoading={docWhyLoading}
+      onOpenPdf={onOpenPdf}
     />
   )
   return (
@@ -128,18 +170,27 @@ const ResultsTable = ({ data }: { data: RowData[] }) => {
             gap: '10px',
             padding: '10px',
             justifyContent: 'flex-end',
+            borderTop: `1px solid ${getThemedColor('neutral', 300)}`,
           }}
         >
-          <Button variant='primary' leftIcon={<HiDocumentSearch />}>
-            Extract most relevant excerpts
-          </Button>
-          <Button variant='primary' leftIcon={<MdChat />}>
+          <Button
+            variant='primary'
+            size='small'
+            leftIcon={<MdChat />}
+            onClick={() => {
+              console.log('TODO: implement Ask a research question action')
+            }}
+          >
             Ask a research question
           </Button>
         </section>
         <Table
           variant='full-width'
-          columns={columns}
+          columns={columns as {
+    key: string
+    label: string
+    sortable?: boolean
+  }[]}
           data={dataByPage}
           renderRow={selectableRenderRow}
           onSortColumn={setSortColumn}

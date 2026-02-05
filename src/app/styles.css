@@ -9,7 +9,19 @@
   align-items: flex-start;
   text-align: left;
   animation: suggestionFadeIn 1s ease;
+  width: 100%;
 }
+
+.suggestions-list button {
+  margin-top: 10px;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  text-align: left;
+  justify-content: flex-start;
+}
+
 @keyframes suggestionFadeIn {
   from {
     opacity: 0;

@@ -76,7 +76,7 @@ const Landing = () => {
           }}
         >
           <WriLogoIcon height='100px' />
-          <Tag label='Beta' variant='info-grey' />
+          <Tag label='Alpha' variant='info-grey' />
         </div>
 
         <Heading size='5xl'>Discover WRI publications</Heading>
