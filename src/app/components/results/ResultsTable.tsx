@@ -173,7 +173,14 @@ const ResultsTable = ({
             borderTop: `1px solid ${getThemedColor('neutral', 300)}`,
           }}
         >
-          <Button variant='primary' size='small' leftIcon={<MdChat />}>
+          <Button
+            variant='primary'
+            size='small'
+            leftIcon={<MdChat />}
+            onClick={() => {
+              console.log('TODO: implement Ask a research question action')
+            }}
+          >
             Ask a research question
           </Button>
         </section>
