@@ -178,6 +178,10 @@ resource "aws_ecs_task_definition" "app" {
           {
             name  = "NEXT_PUBLIC_ENVIRONMENT"
             value = var.environment
+          },
+          {
+            name  = "SEARCH_SERVICE_URL"
+            value = "http://search-service.${var.project_name}-${var.environment}.local:${var.search_service_container_port}"
           }
         ],
         [
@@ -293,6 +297,224 @@ resource "aws_appautoscaling_policy" "ecs_memory" {
   resource_id        = aws_appautoscaling_target.ecs.resource_id
   scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
   service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value       = 80.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
+}
+
+# =============================================================================
+# Search Service CloudWatch Log Group
+# =============================================================================
+
+resource "aws_cloudwatch_log_group" "search_service" {
+  name              = "/ecs/${var.project_name}-${var.environment}-search-service"
+  retention_in_days = 30
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-search-service-logs"
+  }
+}
+
+# =============================================================================
+# Search Service ECS Task Definition
+# =============================================================================
+
+resource "aws_ecs_task_definition" "search_service" {
+  family                   = "${var.project_name}-${var.environment}-search-service"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.search_service_container_cpu
+  memory                   = var.search_service_container_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name  = "${var.project_name}-${var.environment}-search-service"
+      image = "${aws_ecr_repository.search_service.repository_url}:latest"
+
+      portMappings = [
+        {
+          containerPort = var.search_service_container_port
+          hostPort      = var.search_service_container_port
+          protocol      = "tcp"
+        }
+      ]
+
+      environment = concat(
+        [
+          {
+            name  = "ENVIRONMENT"
+            value = var.environment
+          },
+          {
+            name  = "PORT"
+            value = tostring(var.search_service_container_port)
+          },
+          {
+            name  = "NEXTJS_BACKEND_URL"
+            value = "http://${aws_lb.main.dns_name}"
+          }
+        ],
+        [
+          for key, value in var.search_service_environment_variables : {
+            name  = key
+            value = value
+          }
+        ]
+      )
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.search_service.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "curl -f http://localhost:${var.search_service_container_port}${var.search_service_health_check_path} || exit 1"]
+        interval    = 30
+        timeout     = 10
+        retries     = 5
+        startPeriod = 120
+      }
+
+      essential = true
+    }
+  ])
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-search-service-task"
+  }
+}
+
+# =============================================================================
+# Search Service ECS Service
+# =============================================================================
+
+resource "aws_ecs_service" "search_service" {
+  name            = "${var.project_name}-${var.environment}-search-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.search_service.arn
+  desired_count   = var.search_service_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = aws_subnet.private[*].id
+    security_groups  = [aws_security_group.search_service.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.search_service.arn
+    container_name   = "${var.project_name}-${var.environment}-search-service"
+    container_port   = var.search_service_container_port
+  }
+
+  # Enable service discovery for internal communication
+  service_registries {
+    registry_arn = aws_service_discovery_service.search_service.arn
+  }
+
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+
+  depends_on = [aws_lb_listener.http, aws_lb_listener_rule.search_service]
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-search-service"
+  }
+}
+
+# =============================================================================
+# Service Discovery for Python Backend (Internal Communication)
+# =============================================================================
+
+resource "aws_service_discovery_private_dns_namespace" "main" {
+  name        = "${var.project_name}-${var.environment}.local"
+  description = "Private DNS namespace for service discovery"
+  vpc         = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-namespace"
+  }
+}
+
+resource "aws_service_discovery_service" "search_service" {
+  name = "search-service"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.main.id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-search-service-discovery"
+  }
+}
+
+# =============================================================================
+# Search Service Auto Scaling
+# =============================================================================
+
+resource "aws_appautoscaling_target" "search_service" {
+  max_capacity       = var.search_service_max_capacity
+  min_capacity       = var.search_service_min_capacity
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.search_service.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "search_service_cpu" {
+  name               = "${var.project_name}-${var.environment}-search-service-cpu-autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.search_service.resource_id
+  scalable_dimension = aws_appautoscaling_target.search_service.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.search_service.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = 70.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
+}
+
+resource "aws_appautoscaling_policy" "search_service_memory" {
+  name               = "${var.project_name}-${var.environment}-search-service-memory-autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.search_service.resource_id
+  scalable_dimension = aws_appautoscaling_target.search_service.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.search_service.service_namespace
 
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
