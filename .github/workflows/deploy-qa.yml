@@ -98,12 +98,57 @@ jobs:
             NEXT_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
 
   # ==========================================================================
+  # Build and Push Search Service Docker Image
+  # ==========================================================================
+  build-and-push-search-service:
+    name: Build and Push Search Service
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.OIDC_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./search-service
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ==========================================================================
   # Deploy Infrastructure with Terraform
   # ==========================================================================
   deploy-infrastructure:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: [build-and-push, build-and-push-search-service]
 
     steps:
       - name: Checkout code
@@ -162,12 +207,16 @@ jobs:
             --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
             --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service \
             --force-new-deployment
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
+            --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service \
+            --force-new-deployment
 
       - name: Wait for service stability
         run: |
           aws ecs wait services-stable \
             --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
-            --services ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service
+            --services ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service
 
       - name: Get Application URL
         run: |
