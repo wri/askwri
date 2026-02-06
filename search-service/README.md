@@ -12,6 +12,9 @@ This service provides search and backend functionality that integrates with the 
 
 ## Architecture
 
+Search service is currently completely internal because there is no listener
+on the ALB for /api/search/* routes.  If this is desired in the future,
+it can be configured as below
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   ALB           │────▶│  Next.js Backend │────▶│ Search Service  │

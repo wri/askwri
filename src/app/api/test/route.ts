@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  const searchServiceUrl = process.env.NEXT_PUBLIC_SEARCH_SERVICE_URL || 'http://localhost:8000';
+  const searchServiceUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:8000';
   const searchHealthUrl = `${searchServiceUrl}/health`;
 
   try {
