@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # Next.js Backend URL for communication
     nextjs_backend_url: str = "http://localhost:3000"
 
+    OPENAI_API_KEY: str = ""
 
 @lru_cache()
 def get_settings() -> Settings:
