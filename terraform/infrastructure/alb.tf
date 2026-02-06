@@ -98,29 +98,3 @@ resource "aws_lb_target_group" "search_service" {
     Name = "${var.project_name}-${var.environment}-search-tg"
   }
 }
-
-# =============================================================================
-# Search Service ALB Listener Rule
-# =============================================================================
-
-# commented out because search service is currently only accessed internally from Next.js, not directly via ALB.
-# We can add this back when we want to expose search service externally.
-# resource "aws_lb_listener_rule" "search_service" {
-#   listener_arn = aws_lb_listener.http.arn
-#   priority     = 100
-
-#   action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.search_service.arn
-#   }
-
-#   condition {
-#     path_pattern {
-#       values = ["/api/search/*", "/api/search"]
-#     }
-#   }
-
-#   tags = {
-#     Name = "${var.project_name}-${var.environment}-search-rule"
-#   }
-# }

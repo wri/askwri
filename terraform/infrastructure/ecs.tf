@@ -442,7 +442,7 @@ resource "aws_ecs_service" "search_service" {
     ignore_changes = [desired_count]
   }
 
-  depends_on = [aws_lb_listener.http, aws_lb_listener_rule.search_service]
+  depends_on = [aws_lb_listener.http]
 
   tags = {
     Name = "${var.project_name}-${var.environment}-search-service"
