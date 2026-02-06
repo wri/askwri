@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class AskWRICache:
-    def __init__(self, cache_dir: str = "./cache"):
+    def __init__(self, cache_dir: str = "/tmp/askWRI_cache"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
 
