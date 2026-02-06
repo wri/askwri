@@ -76,6 +76,7 @@ export const AIResearchModalContent = () => {
                   resize='none'
                   value={query}
                   aria-label='Search query input'
+                  // eslint-disable-next-line no-console
                   onChange={(event) => console.log(event.target.value)}
                 />
                 <Button
@@ -89,6 +90,7 @@ export const AIResearchModalContent = () => {
                   }}
                   type='button'
                   aria-label='Submit search query'
+                  // eslint-disable-next-line no-console
                   onClick={() => console.log('Submit clicked')}
                 />
               </div>

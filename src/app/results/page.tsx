@@ -2,7 +2,7 @@
 
 'use client'
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, Suspense } from 'react'
 import { Spinner } from '@chakra-ui/react'
 import { useSearchParams } from 'next/navigation'
 import { DocMeta as LiveDoc } from '@/lib/llamacloud'
@@ -166,7 +166,7 @@ const chicagoFull = (doc: DocMeta, row?: any) => {
 /* ---------- component ---------- */
 type WhyMeta = { why: string; relation: 'direct' | 'indirect' }
 
-export default function AskWriApp() {
+function AskWriAppContent() {
   const [query, setQuery] = useState('')
   const [history, setHistory] = useState<string[]>([])
   const [retrievalLoading, setRetrievalLoading] = useState(false)
@@ -240,7 +240,7 @@ export default function AskWriApp() {
     if (query.trim() === searchQuery) return
     setQuery(searchQuery)
     runQuery(searchQuery)
-  }, [searchQuery, query])
+  }, [searchQuery, query, runQuery])
 
   function pushHistory(q: string) {
     setHistory((h) => [q, ...h.filter((x) => x !== q)].slice(0, 20))
@@ -858,5 +858,27 @@ function CitePanel({
       onOpenPdf={onOpenPdf}
       onExportBib={exportBib}
     />
+  )
+}
+
+export default function AskWriApp() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+          }}
+        >
+          <Spinner />
+        </div>
+      }
+    >
+      <AskWriAppContent />
+    </Suspense>
   )
 }
