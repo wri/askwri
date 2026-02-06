@@ -1,9 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -49,10 +49,17 @@ app = FastAPI(
     openapi_url="/api/search/openapi.json",
 )
 
+# Configure CORS allowed origins based on environment
+if settings.environment.lower() in {"development", "dev", "test", "qa"}:
+    allowed_origins = ["*"]
+else:
+    # In production-like environments, restrict CORS to the Next.js backend URL
+    allowed_origins = [settings.nextjs_backend_url]
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -67,7 +74,7 @@ async def health_check():
         "status": "healthy",
         "service": "search-service",
         "environment": settings.environment,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 

@@ -1,8 +1,8 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
@@ -61,7 +61,7 @@ async def root():
         "service": "askwri-search-service",
         "version": "1.0.0",
         "status": "running",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -73,7 +73,7 @@ async def api_health(settings: Settings = Depends(get_settings)):
         "service": "search-service",
         "environment": settings.environment,
         "debug": settings.debug,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -119,7 +119,7 @@ async def process_message(
     
     return MessageResponse(
         response=f"Processed: {payload.message}",
-        processed_at=datetime.utcnow().isoformat(),
+        processed_at=datetime.now(timezone.utc).isoformat(),
         metadata={
             "environment": settings.environment,
             "context_provided": payload.context is not None,
@@ -151,7 +151,7 @@ async def process_data(
     return ProcessResponse(
         result=result,
         operation=payload.operation,
-        processed_at=datetime.utcnow().isoformat(),
+        processed_at=datetime.now(timezone.utc).isoformat(),
     )
 
 

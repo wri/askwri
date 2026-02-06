@@ -1,10 +1,12 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     # Application
     environment: str = "development"
     debug: bool = False
@@ -14,10 +16,6 @@ class Settings(BaseSettings):
     
     # Next.js Backend URL for communication
     nextjs_backend_url: str = "http://localhost:3000"
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 @lru_cache()

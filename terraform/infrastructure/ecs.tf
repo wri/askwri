@@ -406,6 +406,7 @@ resource "aws_ecs_service" "search_service" {
   task_definition = aws_ecs_task_definition.search_service.arn
   desired_count   = var.search_service_desired_count
   launch_type     = "FARGATE"
+  enable_execute_command = true
 
   network_configuration {
     subnets          = aws_subnet.private[*].id
@@ -444,7 +445,7 @@ resource "aws_ecs_service" "search_service" {
 }
 
 # =============================================================================
-# Service Discovery for Python Backend (Internal Communication)
+# Service Discovery for Search Service (Internal Communication)
 # =============================================================================
 
 resource "aws_service_discovery_private_dns_namespace" "main" {
