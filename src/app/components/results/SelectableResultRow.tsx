@@ -58,6 +58,14 @@ export const SelectableResultRow = ({
         <Heading
           size='lg'
           onClick={() => onTitleClick?.(rowData)}
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && onTitleClick) {
+              e.preventDefault()
+              onTitleClick(rowData)
+            }
+          }}
+          tabIndex={onTitleClick ? 0 : undefined}
+          role={onTitleClick ? 'button' : undefined}
           style={{
             cursor: onTitleClick ? 'pointer' : 'default',
             textDecoration: onTitleClick && isHovered ? 'underline' : 'none',

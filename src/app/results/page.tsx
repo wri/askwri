@@ -240,7 +240,8 @@ function AskWriAppContent() {
     if (query.trim() === searchQuery) return
     setQuery(searchQuery)
     runQuery(searchQuery)
-  }, [searchQuery, query, runQuery])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery])
 
   function pushHistory(q: string) {
     setHistory((h) => [q, ...h.filter((x) => x !== q)].slice(0, 20))
@@ -259,64 +260,62 @@ function AskWriAppContent() {
       const row = matchCatalogRow(d, index)
       const docTitle = titleFrom(d, row)
 
-      // Document-level explanations via /api/relates
-      if (!docWhy[d.doc_id] && !docWhyLoading[d.doc_id]) {
-        setDocWhyLoading((prev) => ({ ...prev, [d.doc_id]: true }))
-        const best = [...(d.kps || [])].sort(
-          (a, b) => b.kp_relevance - a.kp_relevance,
-        )[0]
+      setDocWhy((prevWhy) => {
+        setDocWhyLoading((prevLoading) => {
+          // Document-level explanations via /api/relates
+          if (!prevWhy[d.doc_id] && !prevLoading[d.doc_id]) {
+            const best = [...(d.kps || [])].sort(
+              (a, b) => b.kp_relevance - a.kp_relevance,
+            )[0]
 
-        fetch('/api/relates', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            query,
-            doc: {
-              title: docTitle,
-              authors: authorsFrom(d, row),
-              year: yearFrom(d, row),
-              snippet: best?.snippet ?? '',
-            },
-          }),
+            fetch('/api/relates', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                query,
+                doc: {
+                  title: docTitle,
+                  authors: authorsFrom(d, row),
+                  year: yearFrom(d, row),
+                  snippet: best?.snippet ?? '',
+                },
+              }),
+            })
+              .then((r) => r.json())
+              .then((j) => {
+                const txt = (
+                  j?.relates ||
+                  j?.why ||
+                  'Document provides relevant context for this query.'
+                ).trim()
+                const rel: 'direct' | 'indirect' =
+                  j?.relation === 'direct' ? 'direct' : 'indirect'
+                setDocWhy((prev) => ({
+                  ...prev,
+                  [d.doc_id]: { why: txt, relation: rel },
+                }))
+              })
+              .catch(() => {
+                setDocWhy((prev) => ({
+                  ...prev,
+                  [d.doc_id]: {
+                    why: 'Document provides relevant context for this query.',
+                    relation: 'indirect' as const,
+                  },
+                }))
+              })
+              .finally(() =>
+                setDocWhyLoading((prev) => ({ ...prev, [d.doc_id]: false })),
+              )
+
+            return { ...prevLoading, [d.doc_id]: true }
+          }
+          return prevLoading
         })
-          .then((r) => r.json())
-          .then((j) => {
-            const txt = (
-              j?.relates ||
-              j?.why ||
-              'Document provides relevant context for this query.'
-            ).trim()
-            const rel: 'direct' | 'indirect' =
-              j?.relation === 'direct' ? 'direct' : 'indirect'
-            setDocWhy((prev) => ({
-              ...prev,
-              [d.doc_id]: { why: txt, relation: rel },
-            }))
-          })
-          .catch(() => {
-            setDocWhy((prev) => ({
-              ...prev,
-              [d.doc_id]: {
-                why: 'Document provides relevant context for this query.',
-                relation: 'indirect' as const,
-              },
-            }))
-          })
-          .finally(() =>
-            setDocWhyLoading((prev) => ({ ...prev, [d.doc_id]: false })),
-          )
-      }
+        return prevWhy
+      })
     })
-  }, [
-    index,
-    pageDocs,
-    query,
-    docWhy,
-    docWhyLoading,
-    authorsFrom,
-    yearFrom,
-    titleFrom,
-  ]) // pageDocs changes when page changes
+  }, [index, pageDocs, query])
 
   const runAlignmentAfterResults = React.useCallback(() => {
     if (
@@ -373,29 +372,30 @@ function AskWriAppContent() {
 
     pageDocs.forEach((d) => {
       const row = matchCatalogRow(d, index)
-      // Summary - Use cached summary from CSV if available
-      if (!docSummary[d.doc_id]) {
+      
+      setDocSummary((prevSummary) => {
+        if (prevSummary[d.doc_id]) return prevSummary
+
         const catalogSummary =
           row?.summary || row?.meta?.summary || row?.raw?.summary
 
         if (catalogSummary) {
-          // Use pre-generated summary from CSV or user-provided summary
-          setDocSummary((prev) => ({ ...prev, [d.doc_id]: catalogSummary }))
+          return { ...prevSummary, [d.doc_id]: catalogSummary }
         } else {
-          // No summary available - use first sentence from best snippet as fallback
           const best = [...(d.kps || [])].sort(
             (a, b) => b.kp_relevance - a.kp_relevance,
           )[0]
           const txt = firstSentence(best?.snippet ?? '').trim()
-          setDocSummary((prev) => ({ ...prev, [d.doc_id]: txt }))
+          return { ...prevSummary, [d.doc_id]: txt }
         }
-      }
-      if (citeSelected[d.doc_id] == null) {
-        setCiteSelected((prev) => ({ ...prev, [d.doc_id]: true }))
-      }
+      })
+
+      setCiteSelected((prevSelected) => {
+        if (prevSelected[d.doc_id] != null) return prevSelected
+        return { ...prevSelected, [d.doc_id]: true }
+      })
     })
-    // eslint-disable-next-line
-  }, [pageDocs, query, supporting, index])
+  }, [pageDocs, index, supporting.length])
 
   // Helper function to get top quality results (top 40% by score)
   function getTopQualityDocs(docs: DocMeta[], maxDocs: number = 8): DocMeta[] {
