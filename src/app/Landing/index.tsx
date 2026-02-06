@@ -10,16 +10,25 @@ import {
   Textarea,
   showToast,
   Toast,
+  Modal,
 } from '@worldresources/wri-design-systems'
 import { LuRefreshCcw } from 'react-icons/lu'
 import { FaArrowRightLong } from 'react-icons/fa6'
 import { WriLogoIcon } from '../components/icons/WriLogo'
 import { AiIcon } from '../components/icons/AiIcon'
-import { SUGGESTION_POOL, getRandomSuggestions } from './exampleQuestions'
+import {
+  AIResearchModalContent,
+  aiResearchModalHeader,
+} from '../components/results/AIResearchModal'
+import {
+  SUGGESTION_POOL,
+  getRandomSuggestions,
+} from '../utils/exampleQuestions'
 import '../styles.css'
 
 const Landing = () => {
   const [query, setQuery] = useState('')
+  const [aiModalOpen, setAiModalOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     SUGGESTION_POOL.slice(0, 3),
   )
@@ -94,7 +103,7 @@ const Landing = () => {
         </Text>
       </section>
       <section>
-        <Card.Root borderRadius={10} maxWidth={640} margin={5}>
+        <Card.Root borderRadius={10} width={640} margin={5}>
           <Card.Body gap='2'>
             <Card.Title mt='2' style={{ fontWeight: 700 }}>
               What has WRI published on...
@@ -165,7 +174,7 @@ const Landing = () => {
         </Card.Root>
       </section>
       <section style={{ marginBottom: '150px' }}>
-        <Card.Root borderRadius={10} maxWidth={640} margin={5}>
+        <Card.Root borderRadius={10} width={640} margin={5}>
           <Card.Body gap='2'>
             <Card.Title
               mt='2'
@@ -174,7 +183,11 @@ const Landing = () => {
               alignItems='center'
             >
               AI assistant [Early release]
-              <Button variant='primary' size='small'>
+              <Button
+                variant='primary'
+                size='small'
+                onClick={() => setAiModalOpen(true)}
+              >
                 Try now
               </Button>
             </Card.Title>
@@ -205,6 +218,14 @@ const Landing = () => {
         </Card.Root>
       </section>
       <Toast />
+      <Modal
+        header={aiResearchModalHeader}
+        content={<AIResearchModalContent />}
+        size='xlarge'
+        blocking={false}
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+      />
     </main>
   )
 }

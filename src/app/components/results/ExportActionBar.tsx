@@ -7,6 +7,7 @@ import { ExportActionBarProps } from './types'
 
 export const ExportActionBar = ({
   selectedCount,
+  allSelected,
   onSelectAll,
   onExport,
   bottomOffset = '80px',
@@ -47,7 +48,7 @@ export const ExportActionBar = ({
             </ActionBar.SelectionTrigger>
             <div style={{ display: 'flex', gap: '12px' }}>
               <Button variant='secondary' onClick={onSelectAll}>
-                Select all
+                {allSelected ? 'Unselect all' : 'Select all'}
               </Button>
               <Button
                 variant='primary'
