@@ -419,12 +419,6 @@ resource "aws_ecs_service" "search_service" {
     assign_public_ip = false
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.search_service.arn
-    container_name   = "${var.project_name}-${var.environment}-search-service"
-    container_port   = var.search_service_container_port
-  }
-
   # Enable service discovery for internal communication
   service_registries {
     registry_arn = aws_service_discovery_service.search_service.arn
@@ -441,8 +435,6 @@ resource "aws_ecs_service" "search_service" {
   lifecycle {
     ignore_changes = [desired_count]
   }
-
-  depends_on = [aws_lb_listener.http]
 
   tags = {
     Name = "${var.project_name}-${var.environment}-search-service"
