@@ -147,6 +147,20 @@ const ResultsPage = ({
               </List.Root>
             </>
           )}
+          {alignment?.coverage && alignment.coverage.length > 0 && (
+            <>
+              <Text fontWeight='bold' marginTop='1rem' marginBottom='0.5rem'>
+                Coverage &amp; correspondence
+              </Text>
+              <List.Root>
+                {alignment.coverage.map((item) => (
+                  <List.Item key={`coverage-${item.trim()[20]}`}>
+                    {item}
+                  </List.Item>
+                ))}
+              </List.Root>
+            </>
+          )}
         </Box>
         <div
           style={{
