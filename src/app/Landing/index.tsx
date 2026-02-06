@@ -103,7 +103,7 @@ const Landing = () => {
         </Text>
       </section>
       <section>
-        <Card.Root borderRadius={10} width={640} maxWidth={640} margin={5}>
+        <Card.Root borderRadius={10} width={640} margin={5}>
           <Card.Body gap='2'>
             <Card.Title mt='2' style={{ fontWeight: 700 }}>
               What has WRI published on...
@@ -174,7 +174,7 @@ const Landing = () => {
         </Card.Root>
       </section>
       <section style={{ marginBottom: '150px' }}>
-        <Card.Root borderRadius={10} maxWidth={640} margin={5}>
+        <Card.Root borderRadius={10} width={640} margin={5}>
           <Card.Body gap='2'>
             <Card.Title
               mt='2'

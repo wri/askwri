@@ -114,7 +114,7 @@ const ResultsPage = ({
               </Text>
               <List.Root>
                 {alignment.caveats.map((caveat) => (
-                  <List.Item key={`caveat-${caveat.trim()[20]}`}>
+                  <List.Item key={`caveat-${caveat}`}>
                     {caveat}
                   </List.Item>
                 ))}
@@ -128,7 +128,7 @@ const ResultsPage = ({
               </Text>
               <List.Root>
                 {alignment.risks.map((risk) => (
-                  <List.Item key={`risk-${risk.trim()[20]}`}>{risk}</List.Item>
+                  <List.Item key={`risk-${risk}`}>{risk}</List.Item>
                 ))}
               </List.Root>
             </>
@@ -140,7 +140,7 @@ const ResultsPage = ({
               </Text>
               <List.Root>
                 {alignment.suggestions.map((suggestion) => (
-                  <List.Item key={`suggestion-${suggestion.trim()[20]}`}>
+                  <List.Item key={`suggestion-${suggestion}`}>
                     {suggestion}
                   </List.Item>
                 ))}

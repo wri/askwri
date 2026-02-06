@@ -11,8 +11,8 @@ export const AIProcessModalContent = ({
       <p>No process information available.</p>
     ) : (
       <ol style={{ paddingLeft: '20px' }}>
-        {transcript.map((item, index) => (
-          <li key={`transcript-${index}`} style={{ marginBottom: '8px' }}>
+        {transcript.map((item) => (
+          <li key={item} style={{ marginBottom: '8px' }}>
             {item}
           </li>
         ))}
