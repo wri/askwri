@@ -1,5 +1,4 @@
 import logging
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import os
 import hashlib
@@ -14,7 +13,6 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -30,8 +28,6 @@ from app.query_expansion import expand_query_conservative
 # LlamaIndex imports
 from llama_index.core import (
     VectorStoreIndex,
-    SimpleDirectoryReader,
-    ServiceContext,
     StorageContext,
     load_index_from_storage
 )
@@ -423,7 +419,6 @@ async def load_documents_and_build_indexes():
 
     # Import PDF processing utilities
     import requests
-    from io import BytesIO
 
     # Get cache reference once at the start
     cache = service_state.get("cache")
