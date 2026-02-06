@@ -8,6 +8,7 @@ import {
   Tag,
   Checkbox,
   Button,
+  getThemedColor,
 } from '@worldresources/wri-design-systems'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { PiDownloadSimpleBold } from 'react-icons/pi'
@@ -16,10 +17,12 @@ import { SelectableResultRowProps } from './types'
 export const SelectableResultRow = ({
   rowData,
   selected,
+  isActive = false,
   onCheckedChange,
   docSummaryLoading,
   docWhyLoading,
   onOpenPdf,
+  onTitleClick,
 }: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
 
@@ -40,6 +43,9 @@ export const SelectableResultRow = ({
     <TableRow
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      style={{
+        backgroundColor: isActive ? getThemedColor('primary', 200) : undefined,
+      }}
     >
       <TableCell>
         <Checkbox
@@ -49,17 +55,46 @@ export const SelectableResultRow = ({
         />
       </TableCell>
       <TableCell width={450}>
-        <Heading size='lg'>{rowData.publication_name}</Heading>
-        {rowData.author}
+        <Heading
+          size='lg'
+          onClick={() => onTitleClick?.(rowData)}
+          style={{
+            cursor: onTitleClick ? 'pointer' : 'default',
+            textDecoration: onTitleClick && isHovered ? 'underline' : 'none',
+          }}
+        >
+          {rowData.publication_name}
+        </Heading>
+        <div
+          style={{
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {rowData.author}
+        </div>
       </TableCell>
       <TableCell width={400}>
         {docSummaryLoading?.[rowData.id.toString()] ? (
           <span>Loading...</span>
         ) : (
-          rowData.summary
+          <div
+            style={{
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {rowData.summary}
+          </div>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell width={140}>
         <div style={{ width: 'fit-content' }}>
           <Tag label={rowData.relevance} variant='success' />
         </div>

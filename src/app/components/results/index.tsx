@@ -1,7 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import { Heading, Box, List, Text } from '@chakra-ui/react'
-import { Button, Tag, getThemedColor } from '@worldresources/wri-design-systems'
+import {
+  Button,
+  Tag,
+  Tooltip,
+  getThemedColor,
+  Modal,
+} from '@worldresources/wri-design-systems'
 import { FaInfoCircle, FaSearch } from 'react-icons/fa'
 import { HiCurrencyDollar } from 'react-icons/hi2'
 import { AiFillThunderbolt } from 'react-icons/ai'
@@ -10,17 +17,24 @@ import { AiIcon } from '../icons/AiIcon'
 import Navbar from './Navbar'
 import ResultsTable from './ResultsTable'
 import { ResultsPageProps } from './types'
+import { AIProcessModalContent, aiProcessModalHeader } from './AIProcessModal'
 import '../../styles.css'
 
 const ResultsPage = ({
   data = [],
   query,
-  confidence = 0,
   docSummaryLoading,
   docWhyLoading,
   onOpenPdf,
+  onExportBib,
+  ops,
+  transcript,
+  alignment,
 }: ResultsPageProps) => {
+  const [aiProcessModalOpen, setAiProcessModalOpen] = useState(false)
   const tableData = data
+
+  const confidence = (alignment?.confidence ?? 0) * 100
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
       <Navbar />
@@ -41,22 +55,26 @@ const ResultsPage = ({
           </Text>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <Button
-            leftIcon={<AiFillThunderbolt />}
-            variant='borderless'
-            size='small'
-            label='2.48 gCO2e'
-            aria-label='Carbon equivalent of search'
-            onClick={() => {}}
-          />
-          <Button
-            leftIcon={<HiCurrencyDollar />}
-            variant='borderless'
-            size='small'
-            label='$0.21'
-            aria-label='Cost of credits used in search'
-            onClick={() => {}}
-          />
+          <Tooltip content='Carbon equivalent of search'>
+            <Button
+              leftIcon={<AiFillThunderbolt />}
+              variant='borderless'
+              size='small'
+              label={`${ops?.energy_gco2e?.toFixed(2) ?? '0'} gCO2e`}
+              aria-label='Carbon equivalent of search'
+              onClick={() => {}}
+            />
+          </Tooltip>
+          <Tooltip content='Cost of credits used in search'>
+            <Button
+              leftIcon={<HiCurrencyDollar />}
+              variant='borderless'
+              size='small'
+              label={`$${ops?.cost_usd?.toFixed(2) ?? '0.00'}`}
+              aria-label='Cost of credits used in search'
+              onClick={() => {}}
+            />
+          </Tooltip>
           <Button
             leftIcon={<FaSearch />}
             variant='secondary'
@@ -72,7 +90,7 @@ const ResultsPage = ({
             size='small'
             label='Explain AI process'
             aria-label='Explain AI process'
-            onClick={() => {}}
+            onClick={() => setAiProcessModalOpen(true)}
           />
         </div>
       </section>
@@ -88,24 +106,47 @@ const ResultsPage = ({
           <AiIcon />
           <Heading size='2xl'>Overview</Heading>
         </div>
-
         <Box style={{ paddingBottom: '1rem' }}>
-          <List.Root>
-            <List.Item>
-              Your search reviewed 500 publications and found 12 highly relevant
-              and 23 moderately relevant results.
-            </List.Item>
-            <List.Item>
-              Overall confidence is 40% because several sources discuss urban
-              growth broadly rather than compact growth in India, with limited
-              coverage from the last five years.
-            </List.Item>
-            <List.Item>
-              You can improve your search by including a timeframe, for example
-              “between 2019–2025”, and a more specific topic, for example
-              interest in policies or outcomes related to compact urban growth
-            </List.Item>
-          </List.Root>
+          {alignment?.caveats && alignment.caveats.length > 0 && (
+            <>
+              <Text fontWeight='bold' marginTop='1rem' marginBottom='0.5rem'>
+                Caveats & reservations
+              </Text>
+              <List.Root>
+                {alignment.caveats.map((caveat) => (
+                  <List.Item key={`caveat-${caveat.trim()[20]}`}>
+                    {caveat}
+                  </List.Item>
+                ))}
+              </List.Root>
+            </>
+          )}
+          {alignment?.risks && alignment.risks.length > 0 && (
+            <>
+              <Text fontWeight='bold' marginTop='1rem' marginBottom='0.5rem'>
+                Risks & failure modes
+              </Text>
+              <List.Root>
+                {alignment.risks.map((risk) => (
+                  <List.Item key={`risk-${risk.trim()[20]}`}>{risk}</List.Item>
+                ))}
+              </List.Root>
+            </>
+          )}
+          {alignment?.suggestions && alignment.suggestions.length > 0 && (
+            <>
+              <Text fontWeight='bold' marginTop='1rem' marginBottom='0.5rem'>
+                Suggestions for query improvement
+              </Text>
+              <List.Root>
+                {alignment.suggestions.map((suggestion) => (
+                  <List.Item key={`suggestion-${suggestion.trim()[20]}`}>
+                    {suggestion}
+                  </List.Item>
+                ))}
+              </List.Root>
+            </>
+          )}
         </Box>
         <div
           style={{
@@ -126,6 +167,15 @@ const ResultsPage = ({
         docSummaryLoading={docSummaryLoading}
         docWhyLoading={docWhyLoading}
         onOpenPdf={onOpenPdf}
+        onExportBib={onExportBib}
+      />
+      <Modal
+        header={aiProcessModalHeader}
+        content={<AIProcessModalContent transcript={transcript} />}
+        size='large'
+        blocking={false}
+        open={aiProcessModalOpen}
+        onClose={() => setAiProcessModalOpen(false)}
       />
     </main>
   )

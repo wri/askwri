@@ -6,12 +6,18 @@ import {
   Table,
   getThemedColor,
   Button,
+  Modal,
 } from '@worldresources/wri-design-systems'
 import { MdChat } from 'react-icons/md'
 import { ExportActionBar } from './ExportActionBar'
 import { SelectableResultRow } from './SelectableResultRow'
 import { RowData, ResultsTableProps } from './types'
 import { AiIcon } from '../icons/AiIcon'
+import { DocumentPreviewModalContent } from './DocumentPreviewModal'
+import {
+  AIResearchModalContent,
+  aiResearchModalHeader,
+} from './AIResearchModal'
 
 const AiGeneratedTag = (
   <Text
@@ -70,11 +76,18 @@ const ResultsTable = ({
   docSummaryLoading = {},
   onToggleSelect,
   onOpenPdf,
+  onExportBib,
 }: ResultsTableProps) => {
   const totalItems = data.length
   const [selectedRows, setSelectedRows] = useState<RowData[]>([])
   const [pageSize, setPageSize] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
+  const [activeRowId, setActiveRowId] = useState<string | number | null>(null)
+  const [modalData, setModalData] = useState<{
+    header?: React.ReactNode
+    content?: React.ReactNode
+  }>({})
+  const [aiModalOpen, setAiModalOpen] = useState(false)
 
   const [sortColumn, setSortColumn] = useState<{ key: string; order: string }>({
     key: '',
@@ -123,6 +136,28 @@ const ResultsTable = ({
       setSelectedRows([])
     }
   }
+  const handleOpenModal = (rowData: RowData) => {
+    setActiveRowId(rowData.id)
+    setModalData({
+      header: (
+        <p
+          style={{
+            fontWeight: 'bold',
+            color: getThemedColor('neutral', 800),
+          }}
+        >
+          Preview
+        </p>
+      ),
+      content: (
+        <DocumentPreviewModalContent
+          rowData={rowData}
+          onExportBib={onExportBib}
+        />
+      ),
+    })
+  }
+
   const handleRowCheckedChange = (
     rowData: RowData,
     checkedValue: boolean | string,
@@ -150,10 +185,12 @@ const ResultsTable = ({
     <SelectableResultRow
       rowData={rowData}
       selected={selectedRows?.some((item) => item.id === rowData.id)}
+      isActive={activeRowId === rowData.id}
       onCheckedChange={handleRowCheckedChange}
       docSummaryLoading={docSummaryLoading}
       docWhyLoading={docWhyLoading}
       onOpenPdf={onOpenPdf}
+      onTitleClick={handleOpenModal}
     />
   )
   return (
@@ -177,20 +214,20 @@ const ResultsTable = ({
             variant='primary'
             size='small'
             leftIcon={<MdChat />}
-            onClick={() => {
-              console.log('TODO: implement Ask a research question action')
-            }}
+            onClick={() => setAiModalOpen(true)}
           >
             Ask a research question
           </Button>
         </section>
         <Table
           variant='full-width'
-          columns={columns as {
-    key: string
-    label: string
-    sortable?: boolean
-  }[]}
+          columns={
+            columns as {
+              key: string
+              label: string
+              sortable?: boolean
+            }[]
+          }
           data={dataByPage}
           renderRow={selectableRenderRow}
           onSortColumn={setSortColumn}
@@ -209,7 +246,34 @@ const ResultsTable = ({
       </div>
       <ExportActionBar
         selectedCount={selectedRows.length}
-        onSelectAll={() => onAllItemsSelected(true)}
+        allSelected={selectedRows.length === sortedData.length}
+        onSelectAll={() =>
+          onAllItemsSelected(selectedRows.length !== sortedData.length)
+        }
+        onExport={() => {
+          const selectedIds = selectedRows.map((row) => row.id.toString())
+          onExportBib?.(selectedIds)
+        }}
+      />
+      <Modal
+        header={modalData?.header}
+        content={modalData?.content}
+        size='large'
+        draggable
+        blocking={false}
+        open={!!modalData?.content}
+        onClose={() => {
+          setModalData({})
+          setActiveRowId(null)
+        }}
+      />
+      <Modal
+        header={aiResearchModalHeader}
+        content={<AIResearchModalContent />}
+        size='xlarge'
+        blocking={false}
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
       />
     </>
   )

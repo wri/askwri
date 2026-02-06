@@ -20,7 +20,7 @@ const Navbar = () => {
       linkRouter={Link}
       pathname={pathname}
       utilitySection={[
-        <Button key='leave-feedback' variant='secondary' onClick={() => {}}>
+        <Button key='leave-feedback' variant='borderless' onClick={() => {}}>
           Leave Feedback
         </Button>,
         <Button
