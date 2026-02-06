@@ -307,7 +307,16 @@ function AskWriAppContent() {
           )
       }
     })
-  }, [index, pageDocs, query]) // pageDocs changes when page changes
+  }, [
+    index,
+    pageDocs,
+    query,
+    docWhy,
+    docWhyLoading,
+    authorsFrom,
+    yearFrom,
+    titleFrom,
+  ]) // pageDocs changes when page changes
 
   const runAlignmentAfterResults = React.useCallback(() => {
     if (
