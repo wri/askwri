@@ -102,3 +102,55 @@ variable "app_environment_variables" {
   type        = map(string)
   default     = {}
 }
+
+# =============================================================================
+# Search Service Variables
+# =============================================================================
+
+variable "search_service_container_port" {
+  description = "Port the Search Service container listens on"
+  type        = number
+  default     = 8000
+}
+
+variable "search_service_container_cpu" {
+  description = "CPU units for the Search Service container (1 vCPU = 1024)"
+  type        = number
+  default     = 256
+}
+
+variable "search_service_container_memory" {
+  description = "Memory for the Search Service container in MB"
+  type        = number
+  default     = 512
+}
+
+variable "search_service_desired_count" {
+  description = "Desired number of Search Service tasks"
+  type        = number
+  default     = 2
+}
+
+variable "search_service_min_capacity" {
+  description = "Minimum number of Search Service tasks for auto-scaling"
+  type        = number
+  default     = 1
+}
+
+variable "search_service_max_capacity" {
+  description = "Maximum number of Search Service tasks for auto-scaling"
+  type        = number
+  default     = 4
+}
+
+variable "search_service_health_check_path" {
+  description = "Health check path for the Search Service ALB target group"
+  type        = string
+  default     = "/health"
+}
+
+variable "search_service_environment_variables" {
+  description = "Environment variables for the Search Service application"
+  type        = map(string)
+  default     = {}
+}

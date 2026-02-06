@@ -60,10 +60,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build Docker image (Next.js)
         uses: docker/build-push-action@v5
         with:
           context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Docker image (Search Service)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./search-service
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max

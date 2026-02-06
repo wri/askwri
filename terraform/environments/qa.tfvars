@@ -25,3 +25,22 @@ health_check_path = "/api/health"
 app_environment_variables = {
   "LOG_LEVEL" = "debug"
 }
+
+# =============================================================================
+# Search Service Configuration (QA)
+# =============================================================================
+
+search_service_container_port   = 8000
+search_service_container_cpu    = 256   # 0.25 vCPU
+search_service_container_memory = 512   # 512 MB
+search_service_desired_count    = 1     # Lower for QA
+search_service_min_capacity     = 1
+search_service_max_capacity     = 2
+search_service_health_check_path = "/health"
+
+# Search Service Environment Variables
+search_service_environment_variables = {
+  "LOG_LEVEL"   = "debug"
+  "DEBUG"       = "true"
+  "WORKERS"     = "1"
+}

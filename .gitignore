@@ -42,6 +42,28 @@ terraform/**/*.tfstate
 terraform/**/*.tfstate.backup
 *.tfplan
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+.env/
+ENV/
+*.egg-info/
+*.egg
+dist/
+.eggs/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
 # OS
 .DS_Store
 Thumbs.db
