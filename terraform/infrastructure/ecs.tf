@@ -242,6 +242,11 @@ resource "aws_ecs_service" "app" {
     container_port   = var.container_port
   }
 
+  # Enable service discovery for internal communication
+  service_registries {
+    registry_arn = aws_service_discovery_service.nextjs.arn
+  }
+
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
 
@@ -359,7 +364,7 @@ resource "aws_ecs_task_definition" "search_service" {
           },
           {
             name  = "NEXTJS_BACKEND_URL"
-            value = "http://${aws_lb.main.dns_name}"
+            value = "http://nextjs.${var.project_name}-${var.environment}.local:${var.container_port}"
           }
         ],
         [
@@ -401,11 +406,11 @@ resource "aws_ecs_task_definition" "search_service" {
 # =============================================================================
 
 resource "aws_ecs_service" "search_service" {
-  name            = "${var.project_name}-${var.environment}-search-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.search_service.arn
-  desired_count   = var.search_service_desired_count
-  launch_type     = "FARGATE"
+  name                   = "${var.project_name}-${var.environment}-search-service"
+  cluster                = aws_ecs_cluster.main.id
+  task_definition        = aws_ecs_task_definition.search_service.arn
+  desired_count          = var.search_service_desired_count
+  launch_type            = "FARGATE"
   enable_execute_command = true
 
   network_configuration {
@@ -445,7 +450,7 @@ resource "aws_ecs_service" "search_service" {
 }
 
 # =============================================================================
-# Service Discovery for Search Service (Internal Communication)
+# Service Discovery for Internal Communication
 # =============================================================================
 
 resource "aws_service_discovery_private_dns_namespace" "main" {
@@ -455,6 +460,29 @@ resource "aws_service_discovery_private_dns_namespace" "main" {
 
   tags = {
     Name = "${var.project_name}-${var.environment}-namespace"
+  }
+}
+
+resource "aws_service_discovery_service" "nextjs" {
+  name = "nextjs"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.main.id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-nextjs-discovery"
   }
 }
 

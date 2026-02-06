@@ -116,3 +116,25 @@ resource "aws_security_group_rule" "ecs_to_search_service" {
   security_group_id        = aws_security_group.ecs.id
   description              = "Allow Next.js to connect to Search Service"
 }
+
+# Add rule to allow Search Service to connect to Next.js
+resource "aws_security_group_rule" "search_service_to_ecs" {
+  type                     = "egress"
+  from_port                = var.container_port
+  to_port                  = var.container_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = aws_security_group.search_service.id
+  description              = "Allow Search Service to connect to Next.js"
+}
+
+# Add ingress rule to allow Search Service to reach Next.js
+resource "aws_security_group_rule" "ecs_from_search_service" {
+  type                     = "ingress"
+  from_port                = var.container_port
+  to_port                  = var.container_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.search_service.id
+  security_group_id        = aws_security_group.ecs.id
+  description              = "Allow traffic from Search Service"
+}

@@ -141,6 +141,11 @@ output "search_service_internal_url" {
   value       = "http://search-service.${var.project_name}-${var.environment}.local:${var.search_service_container_port}"
 }
 
+output "nextjs_internal_url" {
+  description = "Internal URL to access Next.js from Search Service"
+  value       = "http://nextjs.${var.project_name}-${var.environment}.local:${var.container_port}"
+}
+
 output "search_service_url" {
   description = "External URL to access Search Service via ALB"
   value       = "http://${aws_lb.main.dns_name}/api/search"
