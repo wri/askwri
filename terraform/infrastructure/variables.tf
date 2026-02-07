@@ -154,3 +154,10 @@ variable "search_service_environment_variables" {
   type        = map(string)
   default     = {}
 }
+
+variable "search_service_secret_env" {
+  description = "Secret environment variables for Search Service as JSON string (from GitHub Secrets)"
+  type        = string
+  sensitive   = true
+  default     = "{}"
+}
