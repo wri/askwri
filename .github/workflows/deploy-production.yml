@@ -181,6 +181,8 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/infrastructure
+        env:
+          TF_VAR_search_service_secret_env: ${{ secrets.SEARCH_SERVICE_ENV }}
         run: |
           terraform plan \
             -var-file="../environments/${{ env.ENVIRONMENT }}.tfvars" \
@@ -188,6 +190,8 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform/infrastructure
+        env:
+          TF_VAR_search_service_secret_env: ${{ secrets.SEARCH_SERVICE_ENV }}
         run: terraform apply -auto-approve tfplan
 
   # ==========================================================================
