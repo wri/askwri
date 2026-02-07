@@ -375,7 +375,7 @@ resource "aws_ecs_task_definition" "search_service" {
         ],
         # Secret environment variables from GitHub Secrets (JSON decoded)
         [
-          for key, value in jsondecode(var.search_service_secret_env) : {
+          for key, value in try(jsondecode(var.search_service_secret_env), {}) : {
             name  = key
             value = value
           }
