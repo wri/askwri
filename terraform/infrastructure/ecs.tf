@@ -117,23 +117,40 @@ resource "aws_iam_role_policy" "ecs_task_ssm" {
   })
 }
 
-# Add additional policies for your application if needed
-# resource "aws_iam_role_policy" "ecs_task_custom" {
-#   name = "${var.project_name}-${var.environment}-ecs-task-policy"
-#   role = aws_iam_role.ecs_task.id
-#   policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [
-#       {
-#         Effect = "Allow"
-#         Action = [
-#           "s3:GetObject",
-#         ]
-#         Resource = "*"
-#       }
-#     ]
-#   })
-# }
+# S3 permissions for downloading documents
+resource "aws_iam_role_policy" "ecs_task_s3" {
+  count = var.documents_s3_bucket != "" ? 1 : 0
+  name  = "${var.project_name}-${var.environment}-ecs-task-s3-policy"
+  role  = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ListBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_s3_bucket}"
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["${var.documents_s3_prefix}*"]
+          }
+        }
+      },
+      {
+        Sid    = "GetObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.documents_s3_prefix}*"
+      }
+    ]
+  })
+}
 
 # =============================================================================
 # ECS Task Definition

@@ -44,3 +44,10 @@ search_service_environment_variables = {
   "DEBUG"       = "false"
   "WORKERS"     = "4"
 }
+
+# =============================================================================
+# S3 Documents Configuration (Production)
+# =============================================================================
+# Uncomment and set these to enable S3 document downloads
+documents_s3_bucket = "askwri-data"
+documents_s3_prefix = "documents/"

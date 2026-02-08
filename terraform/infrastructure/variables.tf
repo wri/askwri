@@ -161,3 +161,19 @@ variable "search_service_secret_env" {
   sensitive   = true
   default     = "{}"
 }
+
+# =============================================================================
+# S3 Variables
+# =============================================================================
+
+variable "documents_s3_bucket" {
+  description = "S3 bucket name containing documents for the search service"
+  type        = string
+  default     = ""
+}
+
+variable "documents_s3_prefix" {
+  description = "S3 prefix (folder path) for documents within the bucket"
+  type        = string
+  default     = "documents/"
+}

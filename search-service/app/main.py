@@ -345,25 +345,7 @@ async def load_documents_and_build_indexes():
     logger.info("Starting document processing and index building...")
 
     # Load CSV metadata first
-    # Try multiple possible paths for the CSV file
-    # Priority order: Railway volume -> VPS -> Local dev -> Legacy paths
-    possible_paths = [
-        Path("/data/documents.csv"),  # Railway volume mount (production)
-        Path.home() / "askwri" / "data" / "documents.csv",  # VPS deployment
-        Path("../data/documents.csv"),  # Local dev (relative path from hybrid-service/)
-        Path(__file__).parent.parent / "data" / "documents.csv",  # Local dev (absolute path)
-        Path(__file__).parent / "public" / "TransportDecarb_llamacloud_metadata250904.csv",  # Legacy (symlinked)
-        Path("../public/TransportDecarb_llamacloud_metadata250904.csv"),  # Legacy
-        Path(__file__).parent.parent / "public" / "TransportDecarb_llamacloud_metadata250904.csv",  # Legacy
-        Path("../public/TransportDecarb_llamacloud_metadata_with_summaries.csv"),  # Legacy
-        Path(__file__).parent.parent / "public" / "TransportDecarb_llamacloud_metadata_with_summaries.csv"  # Legacy
-    ]
-
-    csv_path = None
-    for path in possible_paths:
-        if path.exists():
-            csv_path = path
-            break
+    csv_path = Path("/tmp/askWRI_docs/documents.csv")  # Docker container (S3 sync destination)
 
     if csv_path and csv_path.exists():
         df = pd.read_csv(csv_path)
@@ -382,22 +364,7 @@ async def load_documents_and_build_indexes():
             file_path = str(row.get('file_path', ''))
             doc_id = file_path.replace('.pdf', '') if file_path else f"doc_{idx}"
 
-            # Determine local file path based on environment
-            # Try Railway volume, VPS, then local dev path
-            possible_doc_paths = [
-                Path(f"/data/documents/{file_path}"),  # Railway volume
-                Path.home() / "askwri" / "data" / "documents" / file_path,  # VPS deployment
-                Path(f"../data/documents/{file_path}")  # Local dev
-            ]
-            local_file_path = None
-            for doc_path in possible_doc_paths:
-                if doc_path.exists():
-                    local_file_path = str(doc_path)
-                    break
-
-            # If neither exists, default to local dev path (will be checked later)
-            if not local_file_path:
-                local_file_path = f"../data/documents/{file_path}"
+            local_file_path = f"/tmp/askWRI_docs/{file_path}"
 
             service_state["documents_metadata"][doc_id] = {
                 "title": metadata_raw.get('Article Title', f'Document {doc_id}'),
