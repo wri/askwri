@@ -344,6 +344,8 @@ async def load_documents_and_build_indexes():
 
     logger.info("Starting document processing and index building...")
 
+    yield "Loading CSV metadata and preparing documents..."  # Yield progress update for diagnostics
+
     # Load CSV metadata first
     csv_path = Path("/tmp/askWRI_docs/documents.csv")  # Docker container (S3 sync destination)
 
@@ -412,6 +414,8 @@ async def load_documents_and_build_indexes():
                 "metadata": meta_with_pages
             })
             continue
+
+        yield f"Processing document {doc_id}..."  # Yield progress update for diagnostics
 
         # Try local file next (if it exists)
         if local_file and Path(local_file).exists():
@@ -834,11 +838,10 @@ async def lifespan(app: FastAPI):
     """Initialize the service on startup"""
     # Startup
     logger.info(f"Starting Search Service - Environment: {settings.environment}")
-    # XXXX temporary for debugging
-    logger.info(f"full settings object: {settings}")
     try:
         logger.info("Initializing AskWRI Search Service...")
-        await load_documents_and_build_indexes()
+        async for value in load_documents_and_build_indexes():
+            logger.info(value)
         logger.info("Service initialization complete")
         yield
     except Exception as e:
@@ -1293,7 +1296,8 @@ async def trigger_reindex():
         service_state["document_texts"] = {}
 
         # Re-run startup logic
-        await load_documents_and_build_indexes()
+        async for value in load_documents_and_build_indexes():
+            logger.info(value)
 
         logger.info("[Reindex] Re-index complete")
 
