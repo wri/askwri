@@ -296,22 +296,23 @@ resource "aws_appautoscaling_target" "ecs" {
   service_namespace  = "ecs"
 }
 
-resource "aws_appautoscaling_policy" "ecs_cpu" {
-  name               = "${var.project_name}-${var.environment}-cpu-autoscaling"
-  policy_type        = "TargetTrackingScaling"
-  resource_id        = aws_appautoscaling_target.ecs.resource_id
-  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
-  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
-
-  target_tracking_scaling_policy_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ECSServiceAverageCPUUtilization"
-    }
-    target_value       = 70.0
-    scale_in_cooldown  = 300
-    scale_out_cooldown = 60
-  }
-}
+# CPU autoscaling disabled - only using memory-based scaling
+# resource "aws_appautoscaling_policy" "ecs_cpu" {
+#   name               = "${var.project_name}-${var.environment}-cpu-autoscaling"
+#   policy_type        = "TargetTrackingScaling"
+#   resource_id        = aws_appautoscaling_target.ecs.resource_id
+#   scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+#   service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+#
+#   target_tracking_scaling_policy_configuration {
+#     predefined_metric_specification {
+#       predefined_metric_type = "ECSServiceAverageCPUUtilization"
+#     }
+#     target_value       = 70.0
+#     scale_in_cooldown  = 300
+#     scale_out_cooldown = 60
+#   }
+# }
 
 resource "aws_appautoscaling_policy" "ecs_memory" {
   name               = "${var.project_name}-${var.environment}-memory-autoscaling"
