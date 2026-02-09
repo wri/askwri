@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timezone
 import os
@@ -71,7 +72,10 @@ service_state = {
     "documents_metadata": {},
     "document_texts": {},
     "evaluation_data": None,
-    "cache": AskWRICache()
+    "cache": AskWRICache(),
+    "indexing_in_progress": False,
+    "indexing_error": None,
+    "indexing_task": None
 }
 
 class QueryRequest(BaseModel):
@@ -335,16 +339,14 @@ def get_passage_with_context(chunk_text: str, full_document_text: str, context_c
 
     return result
 
-async def load_documents_and_build_indexes():
-    """Load documents and build both dense and sparse indexes"""
+def load_documents_and_build_indexes():
+    """Load documents and build both dense and sparse indexes (synchronous, runs in thread pool)"""
     global service_state
 
     # Validate environment before proceeding
     validate_environment()
 
     logger.info("Starting document processing and index building...")
-
-    yield "Loading CSV metadata and preparing documents..."  # Yield progress update for diagnostics
 
     # Load CSV metadata first
     csv_path = Path("/tmp/askWRI_docs/documents.csv")  # Docker container (S3 sync destination)
@@ -414,8 +416,6 @@ async def load_documents_and_build_indexes():
                 "metadata": meta_with_pages
             })
             continue
-
-        yield f"Processing document {doc_id}..."  # Yield progress update for diagnostics
 
         # Try local file next (if it exists)
         if local_file and Path(local_file).exists():
@@ -833,6 +833,23 @@ async def load_documents_and_build_indexes():
 
     logger.info("Successfully built indexes and initialized rerankers")
 
+async def _run_indexing_in_background():
+    """Background task to load documents and build indexes in a thread pool"""
+    global service_state
+    service_state["indexing_in_progress"] = True
+    service_state["indexing_error"] = None
+    try:
+        logger.info("Background indexing started (running in thread pool)...")
+        # Run blocking code in thread pool to avoid blocking the event loop
+        await asyncio.to_thread(load_documents_and_build_indexes)
+        logger.info("Background indexing complete")
+    except Exception as e:
+        logger.error(f"Background indexing failed: {e}")
+        service_state["indexing_error"] = str(e)
+    finally:
+        service_state["indexing_in_progress"] = False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the service on startup"""
@@ -840,14 +857,21 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting Search Service - Environment: {settings.environment}")
     try:
         logger.info("Initializing AskWRI Search Service...")
-        async for value in load_documents_and_build_indexes():
-            logger.info(value)
-        logger.info("Service initialization complete")
+        # Start indexing in background without blocking
+        service_state["indexing_task"] = asyncio.create_task(_run_indexing_in_background())
+        logger.info("Background indexing task started - service is now accepting requests")
         yield
     except Exception as e:
         logger.error(f"Failed to initialize service: {e}")
         raise
     finally:
+        # Cancel indexing task if still running
+        if service_state.get("indexing_task") and not service_state["indexing_task"].done():
+            service_state["indexing_task"].cancel()
+            try:
+                await service_state["indexing_task"]
+            except asyncio.CancelledError:
+                logger.info("Indexing task cancelled during shutdown")
         logger.info("Shutting down service")
 
 app = FastAPI(
@@ -896,12 +920,34 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint for ALB and container health checks."""
+    indexing_in_progress = service_state.get("indexing_in_progress", False)
+    indexing_error = service_state.get("indexing_error")
+    indexes_ready = (
+        service_state["vector_index"] is not None and
+        service_state["bm25_retriever"] is not None
+    )
+
+    # Determine overall status
+    if indexing_error:
+        status = "degraded - indexing error"
+    elif indexing_in_progress:
+        status = "initializing"
+    elif indexes_ready:
+        status = "healthy"
+    else:
+        status = "degraded - indexes not ready"
+
     return {
-        "status": "healthy",
+        "status": status,
         "service": "AskWRI Search Service",
         "environment": settings.environment,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": "2.0.0",
+        "indexing": {
+            "in_progress": indexing_in_progress,
+            "error": indexing_error,
+            "ready": indexes_ready
+        },
         "indexes_loaded": {
             "vector_index": service_state["vector_index"] is not None,
             "bm25_retriever": service_state["bm25_retriever"] is not None,
@@ -1295,9 +1341,8 @@ async def trigger_reindex():
         service_state["documents_metadata"] = {}
         service_state["document_texts"] = {}
 
-        # Re-run startup logic
-        async for value in load_documents_and_build_indexes():
-            logger.info(value)
+        # Re-run startup logic in thread pool
+        await asyncio.to_thread(load_documents_and_build_indexes)
 
         logger.info("[Reindex] Re-index complete")
 
