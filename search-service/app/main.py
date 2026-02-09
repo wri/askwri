@@ -834,6 +834,8 @@ async def lifespan(app: FastAPI):
     """Initialize the service on startup"""
     # Startup
     logger.info(f"Starting Search Service - Environment: {settings.environment}")
+    # XXXX temporary for debugging
+    logger.info(f"full settings object: {settings}")
     try:
         logger.info("Initializing AskWRI Search Service...")
         await load_documents_and_build_indexes()
