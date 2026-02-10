@@ -126,7 +126,7 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
           setPassageWhyLoading((prev) => ({ ...prev, [passageId]: false }))
         })
       })
-  }, [paginatedItems, passageWhy, passageWhyLoading])
+  }, [paginatedItems])
 
   // Set doc summaries from first snippet
   useEffect(() => {
