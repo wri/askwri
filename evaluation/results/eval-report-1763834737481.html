@@ -1,0 +1,674 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AskWRI Cite Mode Evaluation Report</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .header {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 10px 0;
+      color: #333;
+    }
+    .timestamp {
+      color: #666;
+      font-size: 14px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .metric-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .metric-value {
+      font-size: 32px;
+      font-weight: bold;
+      margin-top: 5px;
+    }
+    .metric-value.good { color: #22c55e; }
+    .metric-value.medium { color: #f59e0b; }
+    .metric-value.bad { color: #ef4444; }
+
+    .test-case {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 15px;
+    }
+    .test-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 15px;
+    }
+    .test-question {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      flex: 1;
+    }
+    .test-id {
+      font-size: 12px;
+      color: #666;
+      font-family: monospace;
+    }
+    .test-metrics {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+    }
+    .test-metric {
+      font-size: 14px;
+    }
+    .test-metric strong {
+      color: #333;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge.pass { background: #dcfce7; color: #166534; }
+    .badge.fail { background: #fee2e2; color: #991b1b; }
+
+    .url-section {
+      margin-top: 15px;
+    }
+    .url-section h4 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: #666;
+    }
+    .url-list {
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .url-item {
+      padding: 4px 0;
+      word-break: break-all;
+    }
+    .url-item.matched { color: #22c55e; }
+    .url-item.missed { color: #ef4444; }
+    .url-item.extra { color: #f59e0b; }
+
+    .summary-table {
+      width: 100%;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .summary-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .summary-table th {
+      background: #f9fafb;
+      padding: 12px;
+      text-align: left;
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .summary-table td {
+      padding: 12px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎯 AskWRI Cite Mode Evaluation Report</h1>
+    <div class="timestamp">Generated: 11/22/2025, 10:05:37 AM</div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Pass Rate</div>
+      <div class="metric-value bad">0.0%</div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: 0.0%"></div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Precision</div>
+      <div class="metric-value bad">29.4%</div>
+      <div style="font-size: 12px; color: #666; margin-top: 5px;">Retrieved docs that are correct</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Recall</div>
+      <div class="metric-value medium">68.5%</div>
+      <div style="font-size: 12px; color: #666; margin-top: 5px;">Expected docs that were found</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">F1 Score</div>
+      <div class="metric-value bad">39.5%</div>
+      <div style="font-size: 12px; color: #666; margin-top: 5px;">Harmonic mean of P & R</div>
+    </div>
+  </div>
+
+  <div class="summary-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Query Type</th>
+          <th>Test Cases</th>
+          <th>Avg Precision</th>
+          <th>Avg Recall</th>
+          <th>Avg F1</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td><strong>topic area</strong></td>
+          <td>1</td>
+          <td>27.3%</td>
+          <td>75.0%</td>
+          <td>40.0%</td>
+        </tr>
+
+        <tr>
+          <td><strong>geography</strong></td>
+          <td>1</td>
+          <td>50.0%</td>
+          <td>83.3%</td>
+          <td>62.5%</td>
+        </tr>
+
+        <tr>
+          <td><strong>thematic intersection</strong></td>
+          <td>1</td>
+          <td>16.7%</td>
+          <td>66.7%</td>
+          <td>26.7%</td>
+        </tr>
+
+        <tr>
+          <td><strong>thematic geographic intersection</strong></td>
+          <td>1</td>
+          <td>23.1%</td>
+          <td>100.0%</td>
+          <td>37.5%</td>
+        </tr>
+
+        <tr>
+          <td><strong>fuzzy topic</strong></td>
+          <td>1</td>
+          <td>63.6%</td>
+          <td>87.5%</td>
+          <td>73.7%</td>
+        </tr>
+
+        <tr>
+          <td><strong>intervention impact</strong></td>
+          <td>1</td>
+          <td>25.0%</td>
+          <td>66.7%</td>
+          <td>36.4%</td>
+        </tr>
+
+        <tr>
+          <td><strong>solution focused</strong></td>
+          <td>1</td>
+          <td>0.0%</td>
+          <td>0.0%</td>
+          <td>0.0%</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="margin-top: 30px; margin-bottom: 15px;">Test Case Results</h2>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What have we published on land value capture? (topic area)</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve for papers that take land value capture (a sub-topic of urban planning) as their primary focus. Do not retrieve papers that only mention thematic area – e.g. papers where those words show up in literature review, mentioned in discussion section, etc.</div>
+        <div class="test-id" style="margin-top: 8px;">q1_land_value_capture</div>
+      </div>
+      <span class="badge pass">✓ PASS</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 27.3%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 75.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 40.0%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 11/4
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 55.42s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (3)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations</div>
+        <div class="url-item matched">• https://www.wri.org/research/synergizing-land-value-capture-tod</div>
+        <div class="url-item matched">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (1)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (8)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item extra">• https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-water-resilience-africa</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/developing-prosperous-and-inclusive-cities-in-africa-national-urban-policies-to-the-rescue/</div>
+        <div class="url-item extra">• doc_000153.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/integrating-national-policies-to-deliver-compact-connected-cities-an-overview-of-transport-and-housing/</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What have we published on Bangalore?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about a specific geography as their primary focus. Do not retrieve papers that only mention geography tangentially.</div>
+        <div class="test-id" style="margin-top: 8px;">q2_bangalore_geography</div>
+      </div>
+      <span class="badge pass">✓ PASS</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 50.0%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 83.3%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 62.5%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 10/6
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 73.34s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (5)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru</div>
+        <div class="url-item matched">• https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india</div>
+        <div class="url-item matched">• https://www.wri.org/research/synergizing-land-value-capture-tod</div>
+        <div class="url-item matched">• https://wri-india.org/research/improving-metro-access-india</div>
+        <div class="url-item matched">• https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (1)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (5)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What have we published on children and pollution?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about a thematic intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.</div>
+        <div class="test-id" style="margin-top: 8px;">q3_children_pollution</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 16.7%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 66.7%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 26.7%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 12/3
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 81.41s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (2)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/driving-forward-clean-ride-kids</div>
+        <div class="url-item matched">• https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (1)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (10)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states</div>
+        <div class="url-item extra">• https://www.wri.org/research/dataset-us-school-bus-depots</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/improving-school-infrastructure-healthier-communities.pdf?VersionId=bs5CICF.GFd0Rn7VL317IcJMaDhUsayv</div>
+        <div class="url-item extra">• https://www.wri.org/research/sustainable-urban-mobility-ndcs-essential-role-public-transport</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What have we published on climate adaptation in Brazil?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about a thematic and geographical intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.</div>
+        <div class="test-id" style="margin-top: 8px;">q4_climate_brazil</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 23.1%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 100.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 37.5%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 13/3
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 91.93s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (3)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities</div>
+        <div class="url-item matched">• https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil</div>
+        <div class="url-item matched">• https://www.wri.org/research/prepared-communities</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (10)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/unlocking-potential-transformative-climate-adaptation-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item extra">• doc_000162.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-city-climate-hazards-warming-scenarios</div>
+        <div class="url-item extra">• doc_000166.pdf</div>
+        <div class="url-item extra">• doc_000163.pdf</div>
+        <div class="url-item extra">• doc_000164.pdf</div>
+        <div class="url-item extra">• doc_000159.pdf</div>
+        <div class="url-item extra">• doc_000153.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">How can cities implement micromobility solutions?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about a not well-defined topic area (micromobility encompasses a range of technologies). Do not retrieve papers that clearly are about non 'micro', such as public transit, freight, and other non-mobility solutions.</div>
+        <div class="test-id" style="margin-top: 8px;">q5_micromobility</div>
+      </div>
+      <span class="badge pass">✓ PASS</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 63.6%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 87.5%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 73.7%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 11/8
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 70.85s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (7)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide</div>
+        <div class="url-item matched">• https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india</div>
+        <div class="url-item matched">• https://www.wri.org/research/evolution-bike-sharing</div>
+        <div class="url-item matched">• https://urbantransitions.global/en/publication/mexico-frontrunners/</div>
+        <div class="url-item matched">• https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva</div>
+        <div class="url-item matched">• https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities</div>
+        <div class="url-item matched">• https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (1)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://wri-india.org/research/enabling-shift-electric-auto-rickshaws-guidebook-electrification-auto-rickshaw-fleets</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (4)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.globalroadsafetyfacility.org/publications/guide-safe-speeds-managing-traffic-speeds-save-lives-and-improve-livability</div>
+        <div class="url-item extra">• doc_000152.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/research/safer-streets-mumbai-reflecting-decade-processes-solutions-road-safety</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">Will electrifying school buses be beneficial for children's health outcomes?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about the impact of an intervention on a population? Do not retrieve papers that are about the intervention (school bus electrification) without talking about the specific impact of interest.</div>
+        <div class="test-id" style="margin-top: 8px;">q6_school_bus_health</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 25.0%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 66.7%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 36.4%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 8/4
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 23.58s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (2)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses</div>
+        <div class="url-item matched">• https://www.wri.org/research/driving-forward-clean-ride-kids</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (1)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (6)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electric-school-bus-us-market-study.pdf?VersionId=duRTJFb5G7D7zZnLUfEu_zet5yueS04t</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-school-bus-us-market-study-and-buyers-guide-resource-school-bus-operators</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What can be done to solve the housing crisis in Jakarta?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about solutions to a general thematic problem area within a determined geography. Do not retrieve papers that only cover theme or geography, and only retrieve papers that talk about solutions.</div>
+        <div class="test-id" style="margin-top: 8px;">q7_jakarta_housing</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 0.0%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 0.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 0.0%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 13/0
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 80.22s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (13)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/</div>
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/surabaya-legacy-participatory-upgrading-informal-settlements</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/housing-policies-for-sustainable-and-inclusive-cities/</div>
+        <div class="url-item extra">• https://www.wri.org/research/towards-more-equal-city-framing-challenges-and-opportunities</div>
+        <div class="url-item extra">• doc_000156.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/integrating-national-policies-to-deliver-compact-connected-cities-an-overview-of-transport-and-housing/</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/resilient-and-affordable-housing-for-all-lessons-on-house-building-from-kochi-and-trivandrum-india/</div>
+        <div class="url-item extra">• https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil</div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

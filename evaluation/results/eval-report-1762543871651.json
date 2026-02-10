@@ -1,0 +1,423 @@
+{
+  "timestamp": "2025-11-07T19:31:11.647Z",
+  "test_cases_total": 7,
+  "test_cases_passed": 0,
+  "test_cases_failed": 7,
+  "overall_precision": 0,
+  "overall_recall": 0,
+  "overall_f1": 0,
+  "results": [
+    {
+      "test_case_id": "q1_land_value_capture",
+      "question": "What have we published on land value capture? (topic area)",
+      "task_description": "Retrieve for papers that take land value capture (a sub-topic of urban planning) as their primary focus. Do not retrieve papers that only mention thematic area – e.g. papers where those words show up in literature review, mentioned in discussion section, etc.",
+      "expected_count": 4,
+      "retrieved_count": 17,
+      "expected_urls": [
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty",
+        "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
+        "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen"
+      ],
+      "retrieved_urls": [
+        "https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf",
+        "https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf",
+        "https://files.wri.org/d8/s3fs-public/barriers-to-adopting-electric-buses-executive-summary.pdf",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://wri-india.org/sites/default/files/E-auto-guidebook_WRI-India.pdf",
+        "https://wri-india.org/sites/default/files/e-Bus_Guidebook_22nd%20March.pdf",
+        "https://files.wri.org/d8/s3fs-public/2021-11/electrifying-ride-hailing-vehicles-unites-states-europe-canada.pdf?VersionId=e6PhTmmNWbavTauieNfz4chQG74UsJw0",
+        "https://files.wri.org/d8/s3fs-public/2022-08/developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities.pdf?VersionId=U2XPE7PXtXLWhOl9d7USTPdv0By.naDW",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf"
+      ],
+      "matched_urls": [],
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "false_positives": [
+        "https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf",
+        "https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf",
+        "https://files.wri.org/d8/s3fs-public/barriers-to-adopting-electric-buses-executive-summary.pdf",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://wri-india.org/sites/default/files/E-auto-guidebook_WRI-India.pdf",
+        "https://wri-india.org/sites/default/files/e-Bus_Guidebook_22nd%20March.pdf",
+        "https://files.wri.org/d8/s3fs-public/2021-11/electrifying-ride-hailing-vehicles-unites-states-europe-canada.pdf?VersionId=e6PhTmmNWbavTauieNfz4chQG74UsJw0",
+        "https://files.wri.org/d8/s3fs-public/2022-08/developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities.pdf?VersionId=U2XPE7PXtXLWhOl9d7USTPdv0By.naDW",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf"
+      ],
+      "false_negatives": [
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty",
+        "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
+        "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen"
+      ],
+      "execution_time_ms": 1834
+    },
+    {
+      "test_case_id": "q2_bangalore_geography",
+      "question": "What have we published on Bangalore?",
+      "task_description": "Retrieve papers that are about a specific geography as their primary focus. Do not retrieve papers that only mention geography tangentially.",
+      "expected_count": 6,
+      "retrieved_count": 15,
+      "expected_urls": [
+        "https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru",
+        "https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india",
+        "https://wri-india.org/research/improving-metro-access-india",
+        "https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban"
+      ],
+      "retrieved_urls": [
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/understanding-impact-bus-aggregators-urban-mobility-indias-national-capital-region.pdf",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://files.wri.org/d8/s3fs-public/2025-02/access-climate-finance-low-middle-income-countries.pdf?VersionId=BzzrTqBGKfjFkDh4ipLXkuxeR8PCFhHd",
+        "https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV",
+        "https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf",
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu"
+      ],
+      "matched_urls": [],
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "false_positives": [
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/understanding-impact-bus-aggregators-urban-mobility-indias-national-capital-region.pdf",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://files.wri.org/d8/s3fs-public/2025-02/access-climate-finance-low-middle-income-countries.pdf?VersionId=BzzrTqBGKfjFkDh4ipLXkuxeR8PCFhHd",
+        "https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV",
+        "https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf",
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu"
+      ],
+      "false_negatives": [
+        "https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru",
+        "https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india",
+        "https://wri-india.org/research/improving-metro-access-india",
+        "https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban"
+      ],
+      "execution_time_ms": 608
+    },
+    {
+      "test_case_id": "q3_children_pollution",
+      "question": "What have we published on children and pollution?",
+      "task_description": "Retrieve papers that are about a thematic intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.",
+      "expected_count": 3,
+      "retrieved_count": 14,
+      "expected_urls": [
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "retrieved_urls": [
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi",
+        "https://files.wri.org/d8/s3fs-public/understanding-impact-bus-aggregators-urban-mobility-indias-national-capital-region.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf",
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu"
+      ],
+      "matched_urls": [],
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "false_positives": [
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi",
+        "https://files.wri.org/d8/s3fs-public/understanding-impact-bus-aggregators-urban-mobility-indias-national-capital-region.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf",
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu"
+      ],
+      "false_negatives": [
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "execution_time_ms": 536
+    },
+    {
+      "test_case_id": "q4_climate_brazil",
+      "question": "What have we published on climate adaptation in Brazil?",
+      "task_description": "Retrieve papers that are about a thematic and geographical intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.",
+      "expected_count": 3,
+      "retrieved_count": 14,
+      "expected_urls": [
+        "https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities",
+        "https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil",
+        "https://www.wri.org/research/prepared-communities"
+      ],
+      "retrieved_urls": [
+        "https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf",
+        "https://files.wri.org/d8/s3fs-public/2025-02/access-climate-finance-low-middle-income-countries.pdf?VersionId=BzzrTqBGKfjFkDh4ipLXkuxeR8PCFhHd",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV",
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu"
+      ],
+      "matched_urls": [],
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "false_positives": [
+        "https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf",
+        "https://files.wri.org/d8/s3fs-public/2025-02/access-climate-finance-low-middle-income-countries.pdf?VersionId=BzzrTqBGKfjFkDh4ipLXkuxeR8PCFhHd",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV",
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu"
+      ],
+      "false_negatives": [
+        "https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities",
+        "https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil",
+        "https://www.wri.org/research/prepared-communities"
+      ],
+      "execution_time_ms": 575
+    },
+    {
+      "test_case_id": "q5_micromobility",
+      "question": "How can cities implement micromobility solutions?",
+      "task_description": "Retrieve papers that are about a not well-defined topic area (micromobility encompasses a range of technologies). Do not retrieve papers that clearly are about non 'micro', such as public transit, freight, and other non-mobility solutions.",
+      "expected_count": 8,
+      "retrieved_count": 12,
+      "expected_urls": [
+        "https://urbantransitions.global/en/publication/mexico-frontrunners/",
+        "https://www.wri.org/update/electric-auto-rickshaws-india-guidebook",
+        "https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities",
+        "https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities",
+        "https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide",
+        "https://www.wri.org/research/evolution-bike-sharing",
+        "https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india",
+        "https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva"
+      ],
+      "retrieved_urls": [
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu",
+        "https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO",
+        "https://files.wri.org/d8/s3fs-public/2022-08/developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities.pdf?VersionId=U2XPE7PXtXLWhOl9d7USTPdv0By.naDW",
+        "https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://files.wri.org/d8/s3fs-public/2021-11/electrifying-ride-hailing-vehicles-unites-states-europe-canada.pdf?VersionId=e6PhTmmNWbavTauieNfz4chQG74UsJw0",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://wri-india.org/sites/default/files/e-Bus_Guidebook_22nd%20March.pdf"
+      ],
+      "matched_urls": [],
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "false_positives": [
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu",
+        "https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO",
+        "https://files.wri.org/d8/s3fs-public/2022-08/developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities.pdf?VersionId=U2XPE7PXtXLWhOl9d7USTPdv0By.naDW",
+        "https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://files.wri.org/d8/s3fs-public/2021-11/electrifying-ride-hailing-vehicles-unites-states-europe-canada.pdf?VersionId=e6PhTmmNWbavTauieNfz4chQG74UsJw0",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://wri-india.org/sites/default/files/e-Bus_Guidebook_22nd%20March.pdf"
+      ],
+      "false_negatives": [
+        "https://urbantransitions.global/en/publication/mexico-frontrunners/",
+        "https://www.wri.org/update/electric-auto-rickshaws-india-guidebook",
+        "https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities",
+        "https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities",
+        "https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide",
+        "https://www.wri.org/research/evolution-bike-sharing",
+        "https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india",
+        "https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva"
+      ],
+      "execution_time_ms": 831
+    },
+    {
+      "test_case_id": "q6_school_bus_health",
+      "question": "Will electrifying school buses be beneficial for children's health outcomes?",
+      "task_description": "Retrieve papers that are about the impact of an intervention on a population? Do not retrieve papers that are about the intervention (school bus electrification) without talking about the specific impact of interest.",
+      "expected_count": 4,
+      "retrieved_count": 4,
+      "expected_urls": [
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "retrieved_urls": [
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electric-school-bus-us-market-study.pdf?VersionId=duRTJFb5G7D7zZnLUfEu_zet5yueS04t",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy"
+      ],
+      "matched_urls": [],
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "false_positives": [
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electric-school-bus-us-market-study.pdf?VersionId=duRTJFb5G7D7zZnLUfEu_zet5yueS04t",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy"
+      ],
+      "false_negatives": [
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "execution_time_ms": 581
+    },
+    {
+      "test_case_id": "q7_jakarta_housing",
+      "question": "What can be done to solve the housing crisis in Jakarta?",
+      "task_description": "Retrieve papers that are about solutions to a general thematic problem area within a determined geography. Do not retrieve papers that only cover theme or geography, and only retrieve papers that talk about solutions.",
+      "expected_count": 0,
+      "retrieved_count": 12,
+      "expected_urls": [],
+      "retrieved_urls": [
+        "https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO",
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi",
+        "https://files.wri.org/d8/s3fs-public/2023-04/financial-analysis-charging-station-wri-india.pdf?VersionId=dTwFC6yYQVwFiin6b1SGgg5UpLVZq3iN",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl"
+      ],
+      "matched_urls": [],
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "false_positives": [
+        "https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf",
+        "https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf",
+        "https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO",
+        "https://files.wri.org/d8/s3fs-public/2021-11/pole-mounted-electric-vehicle-charging-preliminary-guidance.pdf?VersionId=xNjP5je_Ohc5WnFVVCbxWGmmk_vMIqpu",
+        "https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P",
+        "https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi",
+        "https://files.wri.org/d8/s3fs-public/2023-04/financial-analysis-charging-station-wri-india.pdf?VersionId=dTwFC6yYQVwFiin6b1SGgg5UpLVZq3iN",
+        "https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl"
+      ],
+      "false_negatives": [],
+      "execution_time_ms": 663
+    }
+  ],
+  "summary_by_query_type": {
+    "topic_area": {
+      "count": 1,
+      "avg_precision": 0,
+      "avg_recall": 0,
+      "avg_f1": 0
+    },
+    "geography": {
+      "count": 1,
+      "avg_precision": 0,
+      "avg_recall": 0,
+      "avg_f1": 0
+    },
+    "thematic_intersection": {
+      "count": 1,
+      "avg_precision": 0,
+      "avg_recall": 0,
+      "avg_f1": 0
+    },
+    "thematic_geographic_intersection": {
+      "count": 1,
+      "avg_precision": 0,
+      "avg_recall": 0,
+      "avg_f1": 0
+    },
+    "fuzzy_topic": {
+      "count": 1,
+      "avg_precision": 0,
+      "avg_recall": 0,
+      "avg_f1": 0
+    },
+    "intervention_impact": {
+      "count": 1,
+      "avg_precision": 0,
+      "avg_recall": 0,
+      "avg_f1": 0
+    },
+    "solution_focused": {
+      "count": 1,
+      "avg_precision": 0,
+      "avg_recall": 0,
+      "avg_f1": 0
+    }
+  }
+}
