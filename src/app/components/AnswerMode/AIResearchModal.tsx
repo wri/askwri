@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import { Spinner, Box } from '@chakra-ui/react'
+import { DocMeta } from '@/lib/llamacloud'
 import { chatAnswerLlamaIndex } from '@/lib/llamaindex-client'
 import {
   getThemedColor,
@@ -18,11 +19,12 @@ import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
 import { AnswerResult } from './types'
 
+
 export const AIResearchModalContent = () => {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)
-  const [supportingDocs, setSupportingDocs] = useState<any[]>([])
+  const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     SUGGESTION_POOL.slice(0, 3),
   )

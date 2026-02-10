@@ -1,7 +1,7 @@
 export interface AnswerResult {
   sentences: string[]
   paragraphs?: string[][]
-  inline?: any[]
+  inline?: { ref: string; page: number }[][]
   confidence?: number
   warning?: string
   warningMessage?: string
