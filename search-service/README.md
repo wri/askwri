@@ -47,11 +47,17 @@ pip install -r requirements.txt
 
 # Copy environment file
 cp .env.example .env
+# Update .env file with openAI key, etc...
+
+# Copy documents from S3 to local directory expected by search service
+aws s3 sync s3://askwri-data/documents/ /tmp/askWRI_docs
 
 # Run the server
 python -m app.main
 # Or with uvicorn directly
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Note that the app may take several minutes to initial setup of the
+# retrieval indexes (both BM25 and vector embeddings)
 ```
 
 ### API Documentation
@@ -65,12 +71,6 @@ Once running, access the API docs at:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check (ALB target) |
-| `/api/search` | GET | API root info |
-| `/api/search/health` | GET | API health check |
-| `/api/search/nextjs-health` | GET | Check Next.js connectivity |
-| `/api/search/message` | POST | Process a message |
-| `/api/search/process` | POST | Process data |
-| `/api/search/config` | GET | Get configuration |
 
 ## Docker
 
