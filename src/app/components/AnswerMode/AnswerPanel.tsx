@@ -148,7 +148,7 @@ export const AnswerPanel = ({ query, answer }: AnswerPanelProps) => (
       <div style={{ width: '127px' }}>
         <Tag
           icon={<FaInfoCircle />}
-          label={`${(answer.confidence ?? 0 * 100).toFixed(0)}% Confidence`}
+          label={`${((answer.confidence ?? 0) * 100).toFixed(0)}% Confidence`}
           variant='info-white'
         />
       </div>
