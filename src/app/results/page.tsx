@@ -173,9 +173,6 @@ function AskWriAppContent() {
   const [alignLoading, setAlignLoading] = useState(false)
   const [alignNote, setAlignNote] = useState<string | null>(null)
   const [transcript, setTranscript] = useState<string[]>([])
-  function logTrace(s: string) {
-    setTranscript((t) => [...t, s])
-  }
 
   const [ops, setOps] = useState<{
     index_version: string
@@ -546,17 +543,25 @@ function AskWriAppContent() {
   async function doCite(q: string) {
     try {
       setRetrievalLoading(true)
-      logTrace(`→ Cite retrieval`)
-      logTrace(
-        `Hybrid retrieval: dense + sparse fusion optimized for comprehensive recall`,
-      )
-      const { docs, usage, debug } = await chatCiteLlamaIndex(q)
-      logTrace(
-        `← Hybrid fusion: ${debug?.stage1_results ?? 37} results → reranked to ${debug?.final_results ?? docs.length} final docs`,
-      )
-      logTrace(
-        `Mode config: ${JSON.stringify(debug?.mode_config || { dense: '40%', sparse: '60%' })} | Method: ${debug?.retrieval_method ?? 'hybrid_fusion_rrf'}`,
-      )
+      // const { docs, usage, debug } = await chatCiteLlamaIndex(q) // using new API
+      const response = await fetch('/api/llamaindex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: q,
+          mode: 'cite',
+          max_results: 150,
+          similarity_threshold: 0.0,
+          include_metadata: true,
+          rerank: true,
+        }),
+      })
+      const data = await response.json()
+      const { docs, usage, debug } = {
+        docs: data.docs,
+        usage: data.usage,
+        debug: { llamaindex: true, ...data.debug },
+      }
 
       // Calculate embedding costs for cite mode
       const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
