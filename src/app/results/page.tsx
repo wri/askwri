@@ -372,7 +372,7 @@ function AskWriAppContent() {
 
     pageDocs.forEach((d) => {
       const row = matchCatalogRow(d, index)
-      
+
       setDocSummary((prevSummary) => {
         if (prevSummary[d.doc_id]) return prevSummary
 
@@ -652,11 +652,7 @@ function AskWriAppContent() {
             setCiteSelected((prev) => ({ ...prev, [id]: v }))
           }
           alignment={alignment}
-          onOpenPdf={(url) => {
-            if (url) {
-              window.open(url, '_blank', 'noopener,noreferrer')
-            }
-          }}
+          alignLoading={alignLoading}
         />
       )
     }
@@ -700,8 +696,8 @@ function CitePanel({
   ops,
   transcript,
   onToggleSelect,
-  onOpenPdf,
   alignment,
+  alignLoading,
 }: {
   query: string
   docs: DocMeta[]
@@ -726,8 +722,8 @@ function CitePanel({
     confidence?: number
     _debugKeys?: string[]
   } | null
+  alignLoading: boolean
   onToggleSelect: (id: string, v: boolean) => void
-  onOpenPdf: (url: string) => void
   transcript: string[]
 }) {
   async function exportBib(selectedIds: string[]) {
@@ -864,7 +860,7 @@ function CitePanel({
       docSummaryLoading={docSummaryLoading}
       docWhyLoading={docWhyLoading}
       alignment={alignment}
-      onOpenPdf={onOpenPdf}
+      alignLoading={alignLoading}
       onExportBib={exportBib}
     />
   )

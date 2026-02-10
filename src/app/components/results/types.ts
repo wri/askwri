@@ -17,7 +17,6 @@ export type SelectableResultRowProps = {
   onCheckedChange: (row: RowData, checked: boolean | string) => void
   docSummaryLoading?: Record<string, boolean>
   docWhyLoading?: Record<string, boolean>
-  onOpenPdf?: (url: string) => void
   onTitleClick?: (row: RowData) => void
 }
 
@@ -34,7 +33,6 @@ export type ResultsTableProps = {
   docWhyLoading?: Record<string, boolean>
   docSummaryLoading?: Record<string, boolean>
   onToggleSelect?: (id: string, v: boolean) => void
-  onOpenPdf?: (url: string) => void
   onExportBib?: (selectedIds: string[]) => void
 }
 
@@ -43,7 +41,6 @@ export type ResultsPageProps = {
   query: string
   docSummaryLoading?: Record<string, boolean>
   docWhyLoading?: Record<string, boolean>
-  onOpenPdf?: (url: string) => void
   onExportBib?: (selectedIds: string[]) => void
   ops: {
     index_version: string
@@ -60,6 +57,7 @@ export type ResultsPageProps = {
     confidence?: number
     _debugKeys?: string[]
   } | null
+  alignLoading?: boolean
 }
 
 export type DocumentPreviewModalContentProps = {

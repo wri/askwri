@@ -19,7 +19,7 @@ import { AiIcon } from '../components/icons/AiIcon'
 import {
   AIResearchModalContent,
   aiResearchModalHeader,
-} from '../components/results/AIResearchModal'
+} from '../components/AnswerMode/AIResearchModal'
 import {
   SUGGESTION_POOL,
   getRandomSuggestions,

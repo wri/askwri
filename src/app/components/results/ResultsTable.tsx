@@ -17,7 +17,7 @@ import { DocumentPreviewModalContent } from './DocumentPreviewModal'
 import {
   AIResearchModalContent,
   aiResearchModalHeader,
-} from './AIResearchModal'
+} from '../AnswerMode/AIResearchModal'
 
 const AiGeneratedTag = (
   <Text
@@ -75,7 +75,6 @@ const ResultsTable = ({
   docWhyLoading = {},
   docSummaryLoading = {},
   onToggleSelect,
-  onOpenPdf,
   onExportBib,
 }: ResultsTableProps) => {
   const totalItems = data.length
@@ -189,7 +188,6 @@ const ResultsTable = ({
       onCheckedChange={handleRowCheckedChange}
       docSummaryLoading={docSummaryLoading}
       docWhyLoading={docWhyLoading}
-      onOpenPdf={onOpenPdf}
       onTitleClick={handleOpenModal}
     />
   )
