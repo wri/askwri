@@ -31,8 +31,8 @@ app_environment_variables = {
 # =============================================================================
 
 search_service_container_port   = 8000
-search_service_container_cpu    = 1024  # 1 vCPU
-search_service_container_memory = 2048  # 2 GB
+search_service_container_cpu    = 2048  # 2 vCPU
+search_service_container_memory = 4096  # 4 GB
 search_service_desired_count    = 1     # Could be raised higher based on usage patterns
 search_service_min_capacity     = 1
 search_service_max_capacity     = 10
