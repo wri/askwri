@@ -135,13 +135,16 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
 
   // Set doc summaries from first snippet
   useEffect(() => {
-    paginatedItems.forEach(({ doc, kp }) => {
-      if (!docSummary[doc.doc_id]) {
-        const summary = firstSentence(kp.snippet)
-        setDocSummary((prev) => ({ ...prev, [doc.doc_id]: summary }))
-      }
+    setDocSummary((prev) => {
+      const next = { ...prev }
+      paginatedItems.forEach(({ doc, kp }) => {
+        if (!next[doc.doc_id]) {
+          next[doc.doc_id] = firstSentence(kp.snippet)
+        }
+      })
+      return next
     })
-  }, [paginatedItems, docSummary])
+  }, [paginatedItems])
 
   if (allItems.length === 0) return null
 
