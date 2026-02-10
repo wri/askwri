@@ -296,7 +296,7 @@ resource "aws_appautoscaling_target" "ecs" {
   service_namespace  = "ecs"
 }
 
-# CPU autoscaling disabled - only using memory-based scaling
+# CPU autoscaling disabled
 # resource "aws_appautoscaling_policy" "ecs_cpu" {
 #   name               = "${var.project_name}-${var.environment}-cpu-autoscaling"
 #   policy_type        = "TargetTrackingScaling"
@@ -314,22 +314,23 @@ resource "aws_appautoscaling_target" "ecs" {
 #   }
 # }
 
-resource "aws_appautoscaling_policy" "ecs_memory" {
-  name               = "${var.project_name}-${var.environment}-memory-autoscaling"
-  policy_type        = "TargetTrackingScaling"
-  resource_id        = aws_appautoscaling_target.ecs.resource_id
-  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
-  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+# Memory autoscaling disabled
+# resource "aws_appautoscaling_policy" "ecs_memory" {
+#   name               = "${var.project_name}-${var.environment}-memory-autoscaling"
+#   policy_type        = "TargetTrackingScaling"
+#   resource_id        = aws_appautoscaling_target.ecs.resource_id
+#   scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+#   service_namespace  = aws_appautoscaling_target.ecs.service_namespace
 
-  target_tracking_scaling_policy_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
-    }
-    target_value       = 80.0
-    scale_in_cooldown  = 300
-    scale_out_cooldown = 60
-  }
-}
+#   target_tracking_scaling_policy_configuration {
+#     predefined_metric_specification {
+#       predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+#     }
+#     target_value       = 80.0
+#     scale_in_cooldown  = 300
+#     scale_out_cooldown = 60
+#   }
+# }
 
 # =============================================================================
 # Search Service CloudWatch Log Group
@@ -538,6 +539,7 @@ resource "aws_appautoscaling_target" "search_service" {
   service_namespace  = "ecs"
 }
 
+# CPU autoscaling disabled
 # resource "aws_appautoscaling_policy" "search_service_cpu" {
 #   name               = "${var.project_name}-${var.environment}-search-service-cpu-autoscaling"
 #   policy_type        = "TargetTrackingScaling"
@@ -555,19 +557,20 @@ resource "aws_appautoscaling_target" "search_service" {
 #   }
 # }
 
-resource "aws_appautoscaling_policy" "search_service_memory" {
-  name               = "${var.project_name}-${var.environment}-search-service-memory-autoscaling"
-  policy_type        = "TargetTrackingScaling"
-  resource_id        = aws_appautoscaling_target.search_service.resource_id
-  scalable_dimension = aws_appautoscaling_target.search_service.scalable_dimension
-  service_namespace  = aws_appautoscaling_target.search_service.service_namespace
+# Memory autoscaling disabled
+# resource "aws_appautoscaling_policy" "search_service_memory" {
+#   name               = "${var.project_name}-${var.environment}-search-service-memory-autoscaling"
+#   policy_type        = "TargetTrackingScaling"
+#   resource_id        = aws_appautoscaling_target.search_service.resource_id
+#   scalable_dimension = aws_appautoscaling_target.search_service.scalable_dimension
+#   service_namespace  = aws_appautoscaling_target.search_service.service_namespace
 
-  target_tracking_scaling_policy_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
-    }
-    target_value       = 80.0
-    scale_in_cooldown  = 300
-    scale_out_cooldown = 60
-  }
-}
+#   target_tracking_scaling_policy_configuration {
+#     predefined_metric_specification {
+#       predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+#     }
+#     target_value       = 80.0
+#     scale_in_cooldown  = 300
+#     scale_out_cooldown = 60
+#   }
+# }
