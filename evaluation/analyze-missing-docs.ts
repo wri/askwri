@@ -22,7 +22,7 @@ const goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
 // Load documents CSV
 const csvPath = path.join(__dirname, '../data/documents.csv');
 const csvContent = fs.readFileSync(csvPath, 'utf-8');
-const documents = parse(csvContent, { columns: true, skip_empty_lines: true });
+const documents: Array<Record<string, string>> = parse(csvContent, { columns: true, skip_empty_lines: true });
 
 interface TestCase {
   id: string;
