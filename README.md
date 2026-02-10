@@ -1,30 +1,32 @@
-# Next.js ECS Fargate Deployment
+# ECS Fargate Deployment
 
-A production-ready Next.js application with CI/CD pipeline for deploying to AWS ECS Fargate using Terraform and GitHub Actions.
+A production-ready Next.js application as well as a python application with CI/CD pipeline for deploying to AWS ECS Fargate using Terraform and GitHub Actions.
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         AWS Cloud                                │
-│  ┌──────────────────────────────────────────────────────────┐  │
+│                         AWS Cloud                               │
+│  ┌───────────────────────────────────────────────────────────┐  │
 │  │                          VPC                              │  │
-│  │  ┌─────────────────────┐    ┌─────────────────────────┐  │  │
-│  │  │   Public Subnets    │    │    Private Subnets      │  │  │
-│  │  │  ┌───────────────┐  │    │  ┌─────────────────┐    │  │  │
-│  │  │  │      ALB      │  │───▶│  │   ECS Fargate   │    │  │  │
-│  │  │  └───────────────┘  │    │  │     Tasks       │    │  │  │
-│  │  │         │           │    │  └─────────────────┘    │  │  │
-│  │  │  ┌───────────────┐  │    │          │              │  │  │
+│  │  ┌─────────────────────┐    ┌──────────────────────────┐  │  │
+│  │  │   Public Subnets    │    │    Private Subnets       │  │  │
+│  │  │  ┌───────────────┐  │    │  ┌──────────────────┐    │  │  │
+│  │  │  │      ALB      │  │───▶│  │   ECS Fargate    │    │  │  │
+│  │  │  └───────────────┘  │    │  │     Tasks        │    │  │  │
+│  │  │         │           │    │  │  NextJS & Python │    │  │  │
+│  │  │         │           │    │  └──────────────────┘    │  │  │
+│  │  │  ┌───────────────┐  │    │          │               │  │  │
 │  │  │  │  NAT Gateway  │  │◀───│──────────┘              │  │  │
-│  │  │  └───────────────┘  │    │                         │  │  │
-│  │  └─────────────────────┘    └─────────────────────────┘  │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐                │
-│  │    ECR     │  │ CloudWatch │  │    S3      │                │
-│  │ Repository │  │    Logs    │  │  (TF State)│                │
-│  └────────────┘  └────────────┘  └────────────┘                │
+│  │  │  └───────────────┘  │    │                          │  │  │
+│  │  └─────────────────────┘    └──────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌────────────┐  ┌────────────┐  ┌─────────────┐                │
+│  │    ECR     │  │ CloudWatch │  │     S3      │                │
+│  │ Repository │  │    Logs    │  │  (TF State, │                │
+│  │            │  │            │  │ askwri-data)│                │
+│  └────────────┘  └────────────┘  └─────────────┘                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -38,6 +40,10 @@ A production-ready Next.js application with CI/CD pipeline for deploying to AWS 
 │       ├── deploy-production.yml   # Production deployment workflow
 │       ├── pr-check.yml            # Pull request validation
 │       └── destroy.yml             # Infrastructure teardown
+├── search-service/
+│   └── app/                        # Python app
+│       ├── README.md               # Detailed description and instructions
+│       └── main.py                 # Retrieval service (BM25 + vector)
 ├── src/
 │   └── app/                        # Next.js App Router
 │       ├── api/health/route.ts     # Health check endpoint
@@ -73,6 +79,7 @@ A production-ready Next.js application with CI/CD pipeline for deploying to AWS 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 20.x or later
+- [Python](https://www.python.org/) 3.12.x or later
 - [Docker](https://www.docker.com/)
 - [Terraform](https://www.terraform.io/) 1.0+
 - [AWS CLI](https://aws.amazon.com/cli/) configured with appropriate credentials
@@ -173,15 +180,17 @@ docker run -p 3000:3000 askwri-app
 
 ### QA Environment
 - VPC CIDR: `10.0.0.0/16`
-- Resources: 256 CPU / 512 MB Memory
+- Resources (nextJS): 256 CPU / 512 MB Memory
+- Resources (python): 1024 CPU / 4096 MB Memory
 - Desired count: 1 task
-- Auto-scaling: 1-2 tasks
+- Auto-scaling: 1-2 tasks (disabled)
 
 ### Production Environment
 - VPC CIDR: `10.1.0.0/16`
-- Resources: 512 CPU / 1024 MB Memory
-- Desired count: 2 tasks
-- Auto-scaling: 2-10 tasks
+- Resources (nextJS): 512 CPU / 1024 MB Memory
+- Resources (python): 1024 CPU / 4096 MB Memory
+- Desired count: 1 tasks
+- Auto-scaling: 1-10 tasks (disabled)
 
 ## 🔄 CI/CD Workflows
 
@@ -246,6 +255,11 @@ app_environment_variables = {
 ```
 
 2. Redeploy
+
+#### Secrets
+Environment secrets for search service are stored in AWS Param Store and copied to github secrets.  Be sure to update both.  Param store key is 
+`SEARCH_SERVICE_ENV` in JSON format.  Github secrets mirror the same key and are expected to be copy/pasted from the AWS Param Store.
+
 
 ### Changing Resources
 
