@@ -87,7 +87,12 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
         })),
       }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to fetch passage explanations: ${res.status}`)
+        }
+        return res.json()
+      })
       .then((data) => {
         if (data.ok && data.explanations) {
           passagesToFetch.forEach(({ doc, kp }, index) => {
