@@ -111,7 +111,12 @@ const ResultsPage = ({
           <Heading size='2xl'>Overview</Heading>
         </div>
         <Box style={{ paddingBottom: '1rem' }}>
-          {alignLoading || !alignment || (!alignment.caveats?.length && !alignment.risks?.length && !alignment.suggestions?.length && !alignment.coverage?.length) ? (
+          {alignLoading ||
+          !alignment ||
+          (!alignment.caveats?.length &&
+            !alignment.risks?.length &&
+            !alignment.suggestions?.length &&
+            !alignment.coverage?.length) ? (
             <div
               style={{
                 display: 'flex',
@@ -188,9 +193,7 @@ const ResultsPage = ({
                   </Text>
                   <List.Root>
                     {alignment.coverage.map((item) => (
-                      <List.Item key={`coverage-${item.trim()[20]}`}>
-                        {item}
-                      </List.Item>
+                      <List.Item key={`coverage-${item}`}>{item}</List.Item>
                     ))}
                   </List.Root>
                 </>
