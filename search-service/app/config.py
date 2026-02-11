@@ -19,6 +19,10 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
 
+    # SSL/Zscaler VPN Workaround
+    use_custom_ssl_client: bool = False
+    custom_ca_bundle: str = ""
+
 @lru_cache()
 def get_settings() -> Settings:
     """Get cached settings instance."""
