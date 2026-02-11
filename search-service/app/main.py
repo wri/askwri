@@ -10,9 +10,60 @@ from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 import json
 from dotenv import load_dotenv
+import certifi
+import httpx
 
 # Load environment variables from .env file
 load_dotenv()
+
+# SSL Certificate workaround for Zscaler VPN
+# This handles corporate proxy/VPN environments that insert custom SSL certificates
+# Reference: https://community.openai.com/t/ssl-certificate-verify-failed/32442/47
+# Only enabled when USE_CUSTOM_SSL_CLIENT=true
+_use_custom_ssl_client = os.getenv("USE_CUSTOM_SSL_CLIENT", "false").lower() == "true"
+_ca_bundle = None
+
+def setup_ssl_certificates():
+    """
+    Configure SSL certificates for environments with custom CA certificates (e.g., Zscaler VPN).
+    Checks for system CA bundle first, falls back to certifi, or allows custom path via env var.
+    """
+    # Check for custom CA bundle path (allows override via environment)
+    custom_ca_bundle = os.getenv("CUSTOM_CA_BUNDLE")
+
+    # Common system CA bundle locations
+    system_ca_paths = [
+        "/etc/ssl/certs/ca-certificates.crt",  # Debian/Ubuntu
+        "/etc/pki/tls/certs/ca-bundle.crt",    # RHEL/CentOS
+        "/etc/ssl/ca-bundle.pem",               # OpenSUSE
+        "/etc/ssl/cert.pem",                    # Alpine/macOS
+    ]
+
+    ca_bundle_path = None
+
+    if custom_ca_bundle and os.path.exists(custom_ca_bundle):
+        ca_bundle_path = custom_ca_bundle
+    else:
+        # Check system paths
+        for path in system_ca_paths:
+            if os.path.exists(path):
+                ca_bundle_path = path
+                break
+
+    # Fall back to certifi if no system bundle found
+    if not ca_bundle_path:
+        ca_bundle_path = certifi.where()
+
+    # Set environment variables that various libraries check
+    os.environ["REQUESTS_CA_BUNDLE"] = ca_bundle_path
+    os.environ["SSL_CERT_FILE"] = ca_bundle_path
+    os.environ["CURL_CA_BUNDLE"] = ca_bundle_path
+
+    return ca_bundle_path
+
+# Initialize SSL certificates before any API calls (only if enabled)
+if _use_custom_ssl_client:
+    _ca_bundle = setup_ssl_certificates()
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -614,10 +665,19 @@ def load_documents_and_build_indexes():
     logger.info(f"Prepared {len(documents)} documents for indexing")
 
     # Build vector index (using existing embeddings approach)
-    embed_model = OpenAIEmbedding(
-        model="text-embedding-3-small",
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Optionally create httpx client with SSL certificates for Zscaler VPN compatibility
+    if _use_custom_ssl_client and _ca_bundle:
+        http_client = httpx.Client(verify=_ca_bundle)
+        embed_model = OpenAIEmbedding(
+            model="text-embedding-3-small",
+            api_key=os.getenv("OPENAI_API_KEY"),
+            http_client=http_client
+        )
+    else:
+        embed_model = OpenAIEmbedding(
+            model="text-embedding-3-small",
+            api_key=os.getenv("OPENAI_API_KEY")
+        )
 
     # Create nodes with proper passage-level chunking for Answer mode
     # Use SimpleNodeParser with proper configuration
