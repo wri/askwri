@@ -10,7 +10,6 @@ from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 import json
 from dotenv import load_dotenv
-import ssl
 import certifi
 import httpx
 
