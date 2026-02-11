@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Heading, Box, List, Text } from '@chakra-ui/react'
+import { Heading, Box, List, Text, Spinner } from '@chakra-ui/react'
 import {
   Button,
   Tag,
@@ -25,11 +25,11 @@ const ResultsPage = ({
   query,
   docSummaryLoading,
   docWhyLoading,
-  onOpenPdf,
   onExportBib,
   ops,
   transcript,
   alignment,
+  alignLoading,
 }: ResultsPageProps) => {
   const [aiProcessModalOpen, setAiProcessModalOpen] = useState(false)
   const tableData = data
@@ -55,26 +55,30 @@ const ResultsPage = ({
           </Text>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <Tooltip content='Carbon equivalent of search'>
-            <Button
-              leftIcon={<AiFillThunderbolt />}
-              variant='borderless'
-              size='small'
-              label={`${ops?.energy_gco2e?.toFixed(2) ?? '0'} gCO2e`}
-              aria-label='Carbon equivalent of search'
-              onClick={() => {}}
-            />
-          </Tooltip>
-          <Tooltip content='Cost of credits used in search'>
-            <Button
-              leftIcon={<HiCurrencyDollar />}
-              variant='borderless'
-              size='small'
-              label={`$${ops?.cost_usd?.toFixed(2) ?? '0.00'}`}
-              aria-label='Cost of credits used in search'
-              onClick={() => {}}
-            />
-          </Tooltip>
+          {!alignLoading && (
+            <>
+              <Tooltip content='Carbon equivalent of search'>
+                <Button
+                  leftIcon={<AiFillThunderbolt />}
+                  variant='borderless'
+                  size='small'
+                  label={`${ops?.energy_gco2e?.toFixed(2) ?? '0'} gCO2e`}
+                  aria-label='Carbon equivalent of search'
+                  onClick={() => {}}
+                />
+              </Tooltip>
+              <Tooltip content='Cost of credits used in search'>
+                <Button
+                  leftIcon={<HiCurrencyDollar />}
+                  variant='borderless'
+                  size='small'
+                  label={`$${ops?.cost_usd?.toFixed(2) ?? '0.00'}`}
+                  aria-label='Cost of credits used in search'
+                  onClick={() => {}}
+                />
+              </Tooltip>
+            </>
+          )}
           <Button
             leftIcon={<FaSearch />}
             variant='secondary'
@@ -107,80 +111,116 @@ const ResultsPage = ({
           <Heading size='2xl'>Overview</Heading>
         </div>
         <Box style={{ paddingBottom: '1rem' }}>
-          {alignment?.caveats && alignment.caveats.length > 0 && (
-            <>
-              <Text fontWeight='bold' marginTop='1rem' marginBottom='0.5rem'>
-                Caveats & reservations
+          {alignLoading ||
+          !alignment ||
+          (!alignment.caveats?.length &&
+            !alignment.risks?.length &&
+            !alignment.suggestions?.length &&
+            !alignment.coverage?.length) ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '20px',
+              }}
+            >
+              <Spinner size='md' color={getThemedColor('primary', 500)} />
+              <Text color={getThemedColor('neutral', 700)}>
+                Analyzing results...
               </Text>
-              <List.Root>
-                {alignment.caveats.map((caveat) => (
-                  <List.Item key={`caveat-${caveat}`}>
-                    {caveat}
-                  </List.Item>
-                ))}
-              </List.Root>
-            </>
-          )}
-          {alignment?.risks && alignment.risks.length > 0 && (
+            </div>
+          ) : (
             <>
-              <Text fontWeight='bold' marginTop='1rem' marginBottom='0.5rem'>
-                Risks & failure modes
-              </Text>
-              <List.Root>
-                {alignment.risks.map((risk) => (
-                  <List.Item key={`risk-${risk}`}>{risk}</List.Item>
-                ))}
-              </List.Root>
-            </>
-          )}
-          {alignment?.suggestions && alignment.suggestions.length > 0 && (
-            <>
-              <Text fontWeight='bold' marginTop='1rem' marginBottom='0.5rem'>
-                Suggestions for query improvement
-              </Text>
-              <List.Root>
-                {alignment.suggestions.map((suggestion) => (
-                  <List.Item key={`suggestion-${suggestion}`}>
-                    {suggestion}
-                  </List.Item>
-                ))}
-              </List.Root>
-            </>
-          )}
-          {alignment?.coverage && alignment.coverage.length > 0 && (
-            <>
-              <Text fontWeight='bold' marginTop='1rem' marginBottom='0.5rem'>
-                Coverage &amp; correspondence
-              </Text>
-              <List.Root>
-                {alignment.coverage.map((item) => (
-                  <List.Item key={`coverage-${item.trim()[20]}`}>
-                    {item}
-                  </List.Item>
-                ))}
-              </List.Root>
+              {alignment?.caveats && alignment.caveats.length > 0 && (
+                <>
+                  <Text
+                    fontWeight='bold'
+                    marginTop='1rem'
+                    marginBottom='0.5rem'
+                  >
+                    Caveats & reservations
+                  </Text>
+                  <List.Root>
+                    {alignment.caveats.map((caveat) => (
+                      <List.Item key={`caveat-${caveat}`}>{caveat}</List.Item>
+                    ))}
+                  </List.Root>
+                </>
+              )}
+              {alignment?.risks && alignment.risks.length > 0 && (
+                <>
+                  <Text
+                    fontWeight='bold'
+                    marginTop='1rem'
+                    marginBottom='0.5rem'
+                  >
+                    Risks & failure modes
+                  </Text>
+                  <List.Root>
+                    {alignment.risks.map((risk) => (
+                      <List.Item key={`risk-${risk}`}>{risk}</List.Item>
+                    ))}
+                  </List.Root>
+                </>
+              )}
+              {alignment?.suggestions && alignment.suggestions.length > 0 && (
+                <>
+                  <Text
+                    fontWeight='bold'
+                    marginTop='1rem'
+                    marginBottom='0.5rem'
+                  >
+                    Suggestions for query improvement
+                  </Text>
+                  <List.Root>
+                    {alignment.suggestions.map((suggestion) => (
+                      <List.Item key={`suggestion-${suggestion}`}>
+                        {suggestion}
+                      </List.Item>
+                    ))}
+                  </List.Root>
+                </>
+              )}
+              {alignment?.coverage && alignment.coverage.length > 0 && (
+                <>
+                  <Text
+                    fontWeight='bold'
+                    marginTop='1rem'
+                    marginBottom='0.5rem'
+                  >
+                    Coverage &amp; correspondence
+                  </Text>
+                  <List.Root>
+                    {alignment.coverage.map((item) => (
+                      <List.Item key={`coverage-${item}`}>{item}</List.Item>
+                    ))}
+                  </List.Root>
+                </>
+              )}
             </>
           )}
         </Box>
-        <div
-          style={{
-            width: '150px',
-            alignItems: 'center',
-            marginBottom: '16px',
-          }}
-        >
-          <Tag
-            icon={<FaInfoCircle />}
-            label={`${confidence}% Confidence`}
-            variant='info-white'
-          />
-        </div>
+        {!alignLoading && alignment?.confidence && (
+          <div
+            style={{
+              width: '150px',
+              alignItems: 'center',
+              marginBottom: '16px',
+            }}
+          >
+            <Tag
+              icon={<FaInfoCircle />}
+              label={`${confidence}% Confidence`}
+              variant='info-white'
+            />
+          </div>
+        )}
       </section>
       <ResultsTable
         data={tableData}
         docSummaryLoading={docSummaryLoading}
         docWhyLoading={docWhyLoading}
-        onOpenPdf={onOpenPdf}
         onExportBib={onExportBib}
       />
       <Modal

@@ -21,7 +21,6 @@ export const SelectableResultRow = ({
   onCheckedChange,
   docSummaryLoading,
   docWhyLoading,
-  onOpenPdf,
   onTitleClick,
 }: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
@@ -32,11 +31,8 @@ export const SelectableResultRow = ({
 
   const handleDownload = () => {
     if (!rowData.download_url) return
-    if (onOpenPdf) {
-      onOpenPdf(rowData.download_url)
-    } else {
-      window.open(rowData.download_url, '_blank', 'noopener,noreferrer')
-    }
+
+    window.open(rowData.download_url, '_blank', 'noopener,noreferrer')
   }
 
   return (
