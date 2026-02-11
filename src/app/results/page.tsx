@@ -543,25 +543,7 @@ function AskWriAppContent() {
   async function doCite(q: string) {
     try {
       setRetrievalLoading(true)
-      // const { docs, usage, debug } = await chatCiteLlamaIndex(q) // using new API
-      const response = await fetch('/api/llamaindex', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: q,
-          mode: 'cite',
-          max_results: 150,
-          similarity_threshold: 0.0,
-          include_metadata: true,
-          rerank: true,
-        }),
-      })
-      const data = await response.json()
-      const { docs, usage, debug } = {
-        docs: data.docs,
-        usage: data.usage,
-        debug: { llamaindex: true, ...data.debug },
-      }
+      const { docs, usage, debug } = await chatCiteLlamaIndex(q)
 
       // Calculate embedding costs for cite mode
       const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
