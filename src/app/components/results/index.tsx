@@ -126,9 +126,6 @@ const ResultsPage = ({
               }}
             >
               <Spinner size='md' color={getThemedColor('primary', 500)} />
-              <Text color={getThemedColor('neutral', 700)}>
-                Analyzing results...
-              </Text>
             </div>
           ) : (
             <>

@@ -5,7 +5,6 @@
 import { useState } from 'react'
 import { Spinner, Box } from '@chakra-ui/react'
 import { DocMeta } from '@/lib/llamacloud'
-import { chatAnswerLlamaIndex } from '@/lib/llamaindex-client'
 import {
   getThemedColor,
   InlineMessage,
@@ -57,15 +56,25 @@ export const AIResearchModalContent = () => {
       )
 
       // Step 1: Call the answer mode API for retrieval
-      const { message, docs, usage, debug } = await chatAnswerLlamaIndex(
-        query.trim(),
-        {
+      const response = await fetch('/api/llamaindex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: query.trim(),
+          mode: 'answer',
           max_results: 100,
           similarity_threshold: 0.05,
           include_metadata: true,
           rerank: true,
-        },
-      )
+        }),
+      })
+      const data = await response.json()
+      const { message, docs, usage, debug } = {
+        message: data.message,
+        docs: data.docs,
+        usage: data.usage,
+        debug: { llamaindex: true, ...data.debug },
+      }
 
       console.log('📊 Retrieved documents:', {
         message,

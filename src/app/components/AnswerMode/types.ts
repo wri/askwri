@@ -27,7 +27,7 @@ export interface KP {
   page?: number
   passage_id?: string
   kp_relevance: number
-  citation_targets?: Array<{ score: number; page: number; passage_id: string }>
+  citation_targets?: Array<{ score: number; page?: number; passage_id: string }>
 }
 
 export interface DocMeta {
