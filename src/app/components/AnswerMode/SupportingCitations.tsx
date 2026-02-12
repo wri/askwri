@@ -144,9 +144,7 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
   }, [paginatedItems])
 
   if (allItems.length === 0) return null
-  console.log('--------')
-  console.log(paginatedItems[0])
-  console.log('--------')
+
   return (
     <Box
       style={{
@@ -378,7 +376,7 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
                 >
                   {docTitle}
                 </Heading>
-                {/* Doc summary (siempre visible) */}
+                {/* Doc summary */}
                 <Box marginTop='1' paddingX='3' paddingBottom='2'>
                   <Text
                     fontSize='xs'

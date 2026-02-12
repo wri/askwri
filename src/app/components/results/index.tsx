@@ -36,7 +36,6 @@ const ResultsPage = ({
 
   const confidence = (alignment?.confidence ?? 0) * 100
 
-  console.log({ ops, transcript, alignment })
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
       <Navbar />
