@@ -21,7 +21,7 @@ import {
   aiResearchModalHeader,
 } from '../components/AnswerMode/AIResearchModal'
 import {
-  SUGGESTION_POOL,
+  CITE_MODE_SUGGESTION_POOL,
   getRandomSuggestions,
 } from '../utils/exampleQuestions'
 import '../styles.css'
@@ -30,7 +30,7 @@ const Landing = () => {
   const [query, setQuery] = useState('')
   const [aiModalOpen, setAiModalOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>(() =>
-    SUGGESTION_POOL.slice(0, 3),
+    CITE_MODE_SUGGESTION_POOL.slice(0, 3),
   )
 
   const router = useRouter()
@@ -52,7 +52,7 @@ const Landing = () => {
   }
 
   const handleShuffleSuggestions = () => {
-    setSuggestions(getRandomSuggestions())
+    setSuggestions(getRandomSuggestions(3, 'cite'))
   }
 
   const handleSubmit = () => {

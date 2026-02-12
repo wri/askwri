@@ -4,9 +4,10 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
-import { getThemedColor, Button } from '@worldresources/wri-design-systems'
-import { FaChevronRight, FaChevronLeft } from 'react-icons/fa6'
+import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
+import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
+import { getRelevanceLevel, getRelevanceColor } from '@/app/utils/relevance'
 import { AiIcon } from '../icons/AiIcon'
 import { DocMeta, KP, WhyMeta, SupportingCitationsProps } from './types'
 
@@ -15,14 +16,6 @@ const firstSentence = (text?: string) => {
   if (!text) return ''
   const match = text.match(/[^.!?]*[.!?]/)
   return match ? match[0].trim() : text
-}
-
-// Helper to get relevance color (green, yellow, red) using theme colors
-const getRelevanceColor = (relevance: number) => {
-  const percent = relevance * 100
-  if (percent >= 70) return getThemedColor('success', 500) // green
-  if (percent >= 40) return getThemedColor('warning', 500) // yellow
-  return getThemedColor('error', 500) // red
 }
 
 export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
@@ -35,6 +28,10 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
   const [docSummary, setDocSummary] = useState<Record<string, string>>({})
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [docSummaryLoading, setDocSummaryLoading] = useState<
+    Record<string, boolean>
+  >({})
+
+  const [expandedSnippets, setExpandedSnippets] = useState<
     Record<string, boolean>
   >({})
 
@@ -147,7 +144,9 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
   }, [paginatedItems])
 
   if (allItems.length === 0) return null
-
+  console.log('--------')
+  console.log(paginatedItems[0])
+  console.log('--------')
   return (
     <Box
       style={{
@@ -182,32 +181,30 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
                 color={getRelevanceColor(paginatedItems[0].kp.kp_relevance)}
                 fontWeight='medium'
               >
-                Relevance:{' '}
-                {(paginatedItems[0].kp.kp_relevance * 100).toFixed(0)}%
+                {`${getRelevanceLevel(paginatedItems[0].kp.kp_relevance)} relevance`}
               </Text>
             </Box>
           )}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Button
-            variant='secondary'
-            size='small'
-            leftIcon={<IoMdOpen />}
-            onClick={
-              () =>
-                console.log('Open document') /* TODO: implement functionality */
-            }
-          >
-            Open document
+          <Button variant='secondary' size='small' leftIcon={<IoMdOpen />}>
+            <a
+              href={`api/pdf/${paginatedItems[0].doc.doc_id}.pdf#page=${paginatedItems[0].kp.page || 1}`}
+              target='_blank'
+              rel='noopener noreferrer'
+            >
+              Open document
+            </a>
           </Button>
           <Button
             variant='secondary'
             size='small'
             leftIcon={<IoIosCopy />}
-            onClick={
-              () =>
-                console.log('Copy citation') /* TODO: implement functionality */
-            }
+            onClick={() => {
+              if (paginatedItems[0]?.kp?.snippet) {
+                navigator.clipboard.writeText(paginatedItems[0].kp.snippet)
+              }
+            }}
           >
             Copy citation
           </Button>
@@ -261,51 +258,112 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
                   )}
                 </Box>
 
-                {/* Doc summary (collapsible) */}
-                <details>
-                  <summary
-                    style={{
-                      fontSize: '14px',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      color: getThemedColor('neutral', 700),
-                    }}
-                  >
-                    Doc summary
-                  </summary>
-                  <Box marginTop='1'>
-                    <Text fontSize='sm' color={getThemedColor('neutral', 700)}>
-                      {docSummaryLoading[doc.doc_id] ? (
-                        <Spinner size='xs' />
-                      ) : (
-                        summary || '—'
-                      )}
-                    </Text>
-                  </Box>
-                </details>
-
                 {/* Snippet preview */}
                 <Box
                   marginTop='3'
                   paddingTop='3'
                   borderTopWidth='1px'
                   borderColor={getThemedColor('neutral', 200)}
+                  position='relative'
                 >
                   <Text
                     fontSize='sm'
                     color={getThemedColor('neutral', 600)}
                     fontStyle='italic'
-                    style={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
+                    style={
+                      expandedSnippets[passageId]
+                        ? {}
+                        : {
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            position: 'relative',
+                          }
+                    }
                   >
                     &rdquo;{kp.snippet}&rdquo;
                   </Text>
+                  {!expandedSnippets[passageId] && kp.snippet.length > 120 && (
+                    <Box
+                      position='absolute'
+                      left={0}
+                      right={0}
+                      bottom={0}
+                      height='2.5em'
+                      bgGradient='linear(to-b, rgba(255,255,255,0) 0%, white 90%)'
+                      display='flex'
+                      alignItems='flex-end'
+                      justifyContent='center'
+                      pointerEvents='none'
+                      zIndex={1}
+                    >
+                      {/* Fade overlay */}
+                    </Box>
+                  )}
+                  {!expandedSnippets[passageId] && kp.snippet.length > 120 && (
+                    <Box
+                      position='absolute'
+                      left={0}
+                      right={0}
+                      bottom={0}
+                      display='flex'
+                      alignItems='flex-end'
+                      justifyContent='center'
+                      zIndex={2}
+                      pointerEvents='auto'
+                    >
+                      <Button
+                        size='small'
+                        variant='borderless'
+                        style={{ margin: '8px 0' }}
+                        onClick={() =>
+                          setExpandedSnippets((prev) => ({
+                            ...prev,
+                            [passageId]: true,
+                          }))
+                        }
+                      >
+                        Show more
+                      </Button>
+                    </Box>
+                  )}
+                  {expandedSnippets[passageId] && kp.snippet.length > 120 && (
+                    <Box
+                      position='absolute'
+                      left={0}
+                      right={0}
+                      bottom={0}
+                      display='flex'
+                      alignItems='flex-end'
+                      justifyContent='center'
+                      zIndex={2}
+                      pointerEvents='auto'
+                    >
+                      <Button
+                        size='small'
+                        variant='borderless'
+                        style={{ margin: '8px 0' }}
+                        onClick={() =>
+                          setExpandedSnippets((prev) => ({
+                            ...prev,
+                            [passageId]: false,
+                          }))
+                        }
+                      >
+                        Show less
+                      </Button>
+                    </Box>
+                  )}
                 </Box>
 
+                <div style={{ width: '100px' }}>
+                  <Tag
+                    icon={<FaQuoteRight />}
+                    label={`Page ${kp.page}`}
+                    variant='info-white'
+                  />
+                </div>
                 {/* Title */}
                 <Heading
                   padding='3'
@@ -320,7 +378,24 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
                 >
                   {docTitle}
                 </Heading>
-
+                {/* Doc summary (siempre visible) */}
+                <Box marginTop='1' paddingX='3' paddingBottom='2'>
+                  <Text
+                    fontSize='xs'
+                    color={getThemedColor('neutral', 700)}
+                    fontWeight='medium'
+                    marginBottom='1'
+                  >
+                    Doc summary
+                  </Text>
+                  <Text fontSize='sm' color={getThemedColor('neutral', 700)}>
+                    {docSummaryLoading[doc.doc_id] ? (
+                      <Spinner size='xs' />
+                    ) : (
+                      summary || '—'
+                    )}
+                  </Text>
+                </Box>
                 {/* Citation info */}
                 <Text
                   padding='3'

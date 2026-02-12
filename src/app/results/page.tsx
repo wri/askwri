@@ -11,6 +11,7 @@ import { estimateCostUSD } from '@/config/costs'
 import { estimateEnergyGCO2e } from '@/config/energy'
 import ResultsPage from '@/app/components/results'
 import { RowData } from '@/app/components/results/types'
+import { getRelevanceLevel } from '@/app/utils/relevance'
 
 /* ---------- types ---------- */
 type DocMeta = LiveDoc
@@ -822,8 +823,7 @@ function CitePanel({
           : 0
 
       // Convert relevance score to High/Medium/Low
-      const relevanceLabel =
-        docRel >= 0.7 ? 'High' : docRel >= 0.4 ? 'Medium' : 'Low'
+      const relevanceLabel = getRelevanceLevel(docRel)
 
       return {
         id: doc.doc_id,
