@@ -35,6 +35,7 @@ const ResultsPage = ({
   const tableData = data
 
   const confidence = (alignment?.confidence ?? 0) * 100
+
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
       <Navbar />
@@ -222,8 +223,10 @@ const ResultsPage = ({
       />
       <Modal
         header={aiProcessModalHeader}
-        content={<AIProcessModalContent transcript={transcript} />}
-        size='large'
+        content={
+          <AIProcessModalContent transcript={transcript} query={query} />
+        }
+        size='xlarge'
         blocking={false}
         open={aiProcessModalOpen}
         onClose={() => setAiProcessModalOpen(false)}

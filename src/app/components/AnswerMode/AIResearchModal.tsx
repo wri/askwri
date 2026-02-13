@@ -10,7 +10,7 @@ import {
   InlineMessage,
 } from '@worldresources/wri-design-systems'
 import {
-  SUGGESTION_POOL,
+  ANSWER_MODE_SUGGESTION_POOL,
   getRandomSuggestions,
 } from '../../utils/exampleQuestions'
 import { AISearchForm } from './AISearchForm'
@@ -18,18 +18,17 @@ import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
 import { AnswerResult } from './types'
 
-
 export const AIResearchModalContent = () => {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)
   const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(() =>
-    SUGGESTION_POOL.slice(0, 3),
+    ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
   )
 
   const handleShuffleSuggestions = () => {
-    setSuggestions(getRandomSuggestions())
+    setSuggestions(getRandomSuggestions(3, 'answer'))
   }
 
   const handleExampleClick = (example: string) => {
@@ -383,7 +382,12 @@ export const AIResearchModalContent = () => {
             display: 'flex',
           }}
         >
-          <AnswerPanel query={query} answer={answer} />
+          <AnswerPanel
+            query={query}
+            answer={answer}
+            setAnswer={setAnswer}
+            setQuery={setQuery}
+          />
           <Box
             style={{
               flex: 1,

@@ -67,4 +67,5 @@ export type DocumentPreviewModalContentProps = {
 
 export type AIProcessModalContentProps = {
   transcript: string[]
+  query: string
 }

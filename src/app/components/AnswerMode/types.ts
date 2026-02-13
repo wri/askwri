@@ -10,6 +10,8 @@ export interface AnswerResult {
 export interface AnswerPanelProps {
   query: string
   answer: AnswerResult
+  setAnswer: (answer: AnswerResult | null) => void
+  setQuery: (query: string) => void
 }
 
 export interface AISearchFormProps {
@@ -38,6 +40,8 @@ export interface DocMeta {
   year?: number
   kps?: KP[]
   score?: number
+  url?: string
+  _url?: string
 }
 
 export interface WhyMeta {
