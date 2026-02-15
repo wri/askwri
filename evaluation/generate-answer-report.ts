@@ -474,59 +474,56 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
     }
 
     html += `
-    <div class="chunk-section">
-      <h4>Documents (${matchedDocs.length} matched, ${extraDocs.length} extra, ${missedDocs.length} missed)</h4>
-      <div>
-${matchedDocs.map(d => `        <span class="doc-tag expected">${escapeHtml(d)}</span>`).join('\n')}
-${extraDocs.map(d => `        <span class="doc-tag extra">${escapeHtml(d)}</span>`).join('\n')}
-${missedDocs.map(d => `        <span class="doc-tag missed">${escapeHtml(d)}</span>`).join('\n')}
-      </div>
-    </div>
+    <div class="retrieved-section">
+      <h3>Retrieved Chunks (${r.retrieved_chunks_detail.length} chunks, sorted by relevance)</h3>
 `;
 
-    if (r.exact_matches.length > 0) {
+    for (const chunk of r.retrieved_chunks_detail) {
+      const isExact = exactSet.has(chunk.chunk_id);
+      const isAdjacent = adjSet.has(chunk.chunk_id);
+
+      let cardClass = 'chunk-card';
+      let matchIndicator = '';
+
+      if (isExact) {
+        cardClass += ' exact-match';
+        matchIndicator = '<span class="match-indicator exact">✓</span>';
+      } else if (isAdjacent) {
+        cardClass += ' adjacent-match';
+        matchIndicator = '<span class="match-indicator adjacent">~</span>';
+      }
+
+      // Score badge color
+      let scoreClass = 'score-badge low';
+      if (chunk.score >= 0.5) scoreClass = 'score-badge high';
+      else if (chunk.score >= 0.3) scoreClass = 'score-badge medium';
+
       html += `
-    <div class="chunk-section">
-      <h4>Exact Chunk Matches (${r.exact_matches.length})</h4>
-      <div class="chunk-list">
-${r.exact_matches.map(c => `        <div class="chunk-item exact">${escapeHtml(c)}</div>`).join('\n')}
+      <div class="${cardClass}">
+        <div class="chunk-header">
+          ${matchIndicator}
+          <span class="${scoreClass}">${chunk.score.toFixed(3)}</span>
+          <span class="chunk-id">${escapeHtml(chunk.chunk_id)}</span>
+          <span class="doc-title">(${escapeHtml(chunk.title)})</span>
+        </div>
+        <div class="chunk-snippet">${escapeHtml(truncateSnippet(chunk.snippet))}</div>
       </div>
-    </div>
 `;
     }
 
-    if (r.adjacent_matches.length > 0) {
-      html += `
-    <div class="chunk-section">
-      <h4>Adjacent Chunk Matches (${r.adjacent_matches.length})</h4>
-      <div class="chunk-list">
-${r.adjacent_matches.map(c => `        <div class="chunk-item adjacent">${escapeHtml(c)}</div>`).join('\n')}
-      </div>
+    html += `
     </div>
+  </div>
 `;
-    }
-
-    if (missedChunks.length > 0) {
-      html += `
-    <div class="chunk-section">
-      <h4>Missed Chunks (${missedChunks.length})</h4>
-      <div class="chunk-list">
-${missedChunks.map(c => `        <div class="chunk-item missed">${escapeHtml(c)}</div>`).join('\n')}
-      </div>
-    </div>
-`;
-    }
 
     if (r.error) {
       html += `
-    <div class="chunk-section">
-      <h4>Error</h4>
+    <div style="background: #fee2e2; padding: 15px; border-radius: 8px; margin-top: 15px;">
+      <h4 style="margin: 0 0 8px 0; color: #991b1b;">Error</h4>
       <div style="color: #ef4444; font-family: monospace; font-size: 13px;">${escapeHtml(r.error)}</div>
     </div>
 `;
     }
-
-    html += `  </div>\n`;
   }
 
   html += `</body>\n</html>`;
