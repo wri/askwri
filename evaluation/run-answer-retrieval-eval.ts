@@ -236,7 +236,8 @@ async function main() {
 
   // Generate HTML report
   const htmlPath = reportPath.replace('.json', '.html');
-  fs.writeFileSync(htmlPath, generateHtmlReport(report));
+  const goldenDataPath = path.join(__dirname, 'answer-golden-dataset.json');
+  fs.writeFileSync(htmlPath, generateHtmlReport(report, goldenDataPath));
   console.log(`HTML report: ${htmlPath}`);
 }
 

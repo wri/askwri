@@ -8,6 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { RetrievalEvalReport, RetrievalTestResult } from './lib/types';
+import type { AnswerGoldenDataset } from './lib/types';
 
 function pct(v: number): string {
   return (v * 100).toFixed(1) + '%';
@@ -19,7 +20,8 @@ function colorClass(value: number, good: number, medium: number): string {
   return 'bad';
 }
 
-function generateHtmlReport(report: RetrievalEvalReport): string {
+function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string): string {
+  const goldenData: AnswerGoldenDataset = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
   const timestamp = new Date(report.timestamp).toLocaleString();
   const agg = report.aggregate;
 
@@ -382,7 +384,8 @@ function generateLatestReport() {
   console.log(`Generating HTML report from: ${reportPath}`);
 
   const report: RetrievalEvalReport = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
-  const html = generateHtmlReport(report);
+  const goldenDataPath = path.join(__dirname, 'answer-golden-dataset.json');
+  const html = generateHtmlReport(report, goldenDataPath);
 
   const htmlPath = reportPath.replace('.json', '.html');
   fs.writeFileSync(htmlPath, html);
