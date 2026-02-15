@@ -20,11 +20,15 @@ function colorClass(value: number, good: number, medium: number): string {
   return 'bad';
 }
 
+function truncateSnippet(text: string, maxLength: number = 250): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + '...';
+}
+
 function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string): string {
   let goldenData: AnswerGoldenDataset;
   try {
     goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
-    // TODO: Use goldenData in Tasks 5-6 to render expected chunks section
   } catch (error: any) {
     throw new Error(`Failed to load golden dataset from ${goldenDataPath}: ${error.message}`);
   }
@@ -401,6 +405,8 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
   html += `\n  <h2>Test Case Results</h2>\n`;
 
   for (const r of report.results) {
+    const testCase = goldenData.test_cases.find(tc => tc.id === r.test_case_id);
+
     const expectedSet = new Set(r.expected_chunk_ids);
     const retrievedSet = new Set(r.retrieved_chunk_ids);
     const exactSet = new Set(r.exact_matches);
@@ -429,7 +435,36 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
       <div><strong>Adj:</strong> P=${pct(r.chunk_precision_adjacent)} R=${pct(r.chunk_recall_adjacent)} F1=${pct(r.chunk_f1_adjacent)}</div>
       <div><strong>Time:</strong> ${(r.execution_time_ms / 1000).toFixed(2)}s</div>
     </div>
+`;
 
+    if (testCase && testCase.retrieval_ground_truth.expected_passages.length > 0) {
+      html += `
+    <div class="expected-section">
+      <h3>Expected Chunks from Golden Set (${testCase.retrieval_ground_truth.expected_passages.length} chunks)</h3>
+`;
+
+      for (const passage of testCase.retrieval_ground_truth.expected_passages) {
+        const wasFound = retrievedSet.has(passage.chunk_id) || adjSet.has(passage.chunk_id);
+        const chunkClass = wasFound ? 'expected-chunk' : 'expected-chunk missed';
+        const icon = wasFound ? '<span class="match-icon found">✓</span>' : '<span class="match-icon missed">✗</span>';
+
+        html += `
+      <div class="${chunkClass}">
+        <div class="expected-chunk-header">
+          ${icon}
+          <span class="expected-chunk-id">${passage.chunk_id}</span>
+        </div>
+        <div class="expected-snippet">${truncateSnippet(passage.text_snippet)}</div>
+      </div>
+`;
+      }
+
+      html += `
+    </div>
+`;
+    }
+
+    html += `
     <div class="chunk-section">
       <h4>Documents (${matchedDocs.length} matched, ${extraDocs.length} extra, ${missedDocs.length} missed)</h4>
       <div>
