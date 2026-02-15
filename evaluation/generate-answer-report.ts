@@ -21,7 +21,13 @@ function colorClass(value: number, good: number, medium: number): string {
 }
 
 function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string): string {
-  const goldenData: AnswerGoldenDataset = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
+  let goldenData: AnswerGoldenDataset;
+  try {
+    goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
+    // TODO: Use goldenData in Tasks 5-6 to render expected chunks section
+  } catch (error: any) {
+    throw new Error(`Failed to load golden dataset from ${goldenDataPath}: ${error.message}`);
+  }
   const timestamp = new Date(report.timestamp).toLocaleString();
   const agg = report.aggregate;
 
