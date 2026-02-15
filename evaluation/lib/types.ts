@@ -57,6 +57,13 @@ export interface RetrievalTestResult {
   retrieved_doc_ids: string[];
   exact_matches: string[];
   adjacent_matches: string[];
+  retrieved_chunks_detail: Array<{
+    chunk_id: string;
+    doc_id: string;
+    title: string;
+    snippet: string;
+    score: number;
+  }>;
   execution_time_ms: number;
   error?: string;
 }
