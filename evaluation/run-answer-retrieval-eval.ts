@@ -18,6 +18,7 @@ import type {
   RetrievalTestResult,
   RetrievalEvalReport,
 } from './lib/types';
+import { generateHtmlReport } from './generate-answer-report';
 
 // --- Config ---
 
@@ -219,6 +220,11 @@ async function main() {
   console.log(`  Recall:    ${(docAgg.avg_recall * 100).toFixed(1)}%`);
   console.log(`  F1:        ${(docAgg.avg_f1 * 100).toFixed(1)}%`);
   console.log(`\nReport saved: ${reportPath}`);
+
+  // Generate HTML report
+  const htmlPath = reportPath.replace('.json', '.html');
+  fs.writeFileSync(htmlPath, generateHtmlReport(report));
+  console.log(`HTML report: ${htmlPath}`);
 }
 
 if (require.main === module) {

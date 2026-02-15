@@ -17,6 +17,7 @@
     "eval:report": "npx tsx evaluation/generate-report.ts",
     "eval:answer-retrieval": "npx tsx evaluation/run-answer-retrieval-eval.ts",
     "eval:answer-synthesis": "npx tsx evaluation/run-answer-synthesis-wrapper.ts",
+    "eval:answer-report": "npx tsx evaluation/generate-answer-report.ts",
     "eval:answer-full": "npm run eval:answer-retrieval && npm run eval:answer-synthesis"
   },
   "dependencies": {
