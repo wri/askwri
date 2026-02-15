@@ -12,7 +12,12 @@
     "test": "jest",
     "test:ci": "jest --ci --coverage",
     "hybrid": "cd hybrid-service && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt && ./venv/bin/python main.py",
-    "hybrid:stop": "bash -c 'if lsof -Pi :8002 -sTCP:LISTEN -t >/dev/null 2>&1; then kill $(lsof -t -i:8002) 2>/dev/null; echo \"✅ Hybrid service stopped\"; else echo \"ℹ️  Hybrid service not running\"; fi'"
+    "hybrid:stop": "bash -c 'if lsof -Pi :8002 -sTCP:LISTEN -t >/dev/null 2>&1; then kill $(lsof -t -i:8002) 2>/dev/null; echo \"✅ Hybrid service stopped\"; else echo \"ℹ️  Hybrid service not running\"; fi'",
+    "eval:cite": "npx tsx evaluation/run-cite-eval.ts",
+    "eval:report": "npx tsx evaluation/generate-report.ts",
+    "eval:answer-retrieval": "npx tsx evaluation/run-answer-retrieval-eval.ts",
+    "eval:answer-synthesis": "npx tsx evaluation/run-answer-synthesis-wrapper.ts",
+    "eval:answer-full": "npm run eval:answer-retrieval && npm run eval:answer-synthesis"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.31.0",

@@ -1,40 +1,48 @@
 ## AskWRI Evaluation System
 
-**Current Status:** Speed optimization complete, recall target met, precision needs work.
-**Last Updated:** 2026-02-05
+**Last Updated:** 2026-02-15
 
 ## Quick Reference
 
-**Run Cite Mode Evaluations:**
+All eval commands are npm scripts. The hybrid service must be running first.
+
 ```bash
-npm run eval:cite        # Full eval (11 queries, ~8 min)
-npm run eval:quick       # Quick eval (3 queries, ~2 min)
-npm run eval:report      # Generate report from latest results
+# Prerequisites: start the hybrid service
+npm run hybrid                              # starts Python service on :8002
 ```
 
-**Run Answer Mode Evaluations:**
+**Cite Mode:**
 ```bash
-# Track 1: Retrieval (requires hybrid service)
-npm run eval:answer-retrieval
+npm run eval:cite                           # Full eval (11 queries, ~8 min)
+npm run eval:report                         # Generate report from latest results
+```
 
-# Track 2: Synthesis (requires Next.js + hybrid service + RAGAS)
+**Answer Mode:**
+```bash
+npm run eval:answer-retrieval               # Track 1: retrieval P/R/F1
+
+# Track 2: synthesis (requires Next.js + RAGAS)
 pip install -r evaluation/requirements-eval.txt   # first time only
-npm run eval:answer-synthesis -- --mode isolated   # golden passages -> synthesis
-npm run eval:answer-synthesis -- --mode end-to-end # full pipeline
+npm run eval:answer-synthesis               # defaults to --mode isolated
+npm run eval:answer-synthesis -- --mode end-to-end
 
-# Both tracks
-npm run eval:answer-full
+npm run eval:answer-full                    # runs retrieval then synthesis
 ```
 
-**Current Performance (Nov 26):**
-- **Precision:** ~16% (target: 35%)
-- **Recall:** ~83% (target: 75%)
-- **Pass Rate:** 6/11 queries (need recall ≥75% AND precision ≥15%)
-- **Speed:** 40% faster evals (parallel batch processing)
+## Prerequisites
 
-## Evaluation Framework
+| Service | Required for | How to start |
+|---------|-------------|-------------|
+| Hybrid service (`:8002`) | All evals | `npm run hybrid` |
+| Next.js (`:3000`) | Answer synthesis only | `npm run dev` |
+| RAGAS Python deps | Answer synthesis only | `pip install -r evaluation/requirements-eval.txt` |
+
+## Cite Mode Evaluation
+
+Tests retrieval recall against a hand-curated golden dataset of 11 queries and 73 expected documents.
 
 ### Test Queries (11 total)
+
 Queries test different retrieval patterns:
 - **Topic area** (Q1): Land value capture
 - **Geography** (Q2): Bangalore
@@ -49,15 +57,79 @@ Queries test different retrieval patterns:
 - **Amorphous + exclusion** (Q11): Urban finance excluding ebuses
 
 ### Pass Criteria
+
 A query passes if **BOTH** conditions are met:
-- **Recall ≥ 80%** (find at least 80% of expected documents)
-- **Precision ≥ 70%** (at least 70% of retrieved docs are relevant)
+- **Recall >= 75%**
+- **Precision >= 15%**
 
 ### Golden Dataset
 - Located: `evaluation/golden-dataset.json`
 - 11 queries, 73 total expected documents
 - Hand-curated by domain experts
-- Each query has expected URLs and metadata
+
+---
+
+## Answer Mode Evaluation
+
+Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
+
+**Design doc:** `docs/plans/2025-01-28-answer-mode-evaluation-design.md`
+
+### Track 1: Retrieval (`npm run eval:answer-retrieval`)
+
+Evaluates whether hybrid retrieval finds the right passages for Answer mode.
+
+- Calls hybrid service with `mode=answer` and ANSWER_PRESET params
+- Compares at two granularities: **chunk-level** (with adjacent tolerance) and **doc-level**
+- Adjacent tolerance: chunk N+/-1 counts as 0.5 partial match
+
+### Track 2: Synthesis (`npm run eval:answer-synthesis`)
+
+Evaluates whether the LLM generates good answers given the retrieved passages. Runs via a TS wrapper (`run-answer-synthesis-wrapper.ts`) that spawns the Python eval script.
+
+**Two modes:**
+- `--mode isolated` (default): Feed golden passages to answer API (isolates LLM quality)
+- `--mode end-to-end`: Actual retrieval -> answer API (full pipeline)
+
+**Metrics:** faithfulness, answer relevancy, answer correctness (via RAGAS) + key facts coverage
+
+### Golden Dataset Status
+
+The answer mode golden dataset (`answer-golden-dataset.json`) is currently a **stub** with synthetic test cases. Replace the stub entries with validated Q&A pairs when available.
+
+---
+
+## Understanding Results
+
+### Precision
+**What it measures:** Of the documents we returned, what % are actually relevant?
+- **Formula:** True Positives / (True Positives + False Positives)
+- **High precision = few false positives** (user doesn't waste time on irrelevant docs)
+
+### Recall
+**What it measures:** Of all relevant documents, what % did we find?
+- **Formula:** True Positives / (True Positives + False Negatives)
+- **High recall = few false negatives** (user doesn't miss important docs)
+
+### Common Tradeoffs
+- **Lower threshold** -> More docs -> Higher recall, lower precision
+- **Stricter filtering** -> Fewer docs -> Higher precision, lower recall
+- **Goal:** Improve both simultaneously by fixing root causes (not just tuning threshold)
+
+---
+
+## Checking Results
+
+```bash
+# Find latest cite report
+ls -lt evaluation/results/eval-report-*.json | head -1
+
+# View cite summary
+cat evaluation/results/eval-report-TIMESTAMP.json | jq '{precision: .overall_precision, recall: .overall_recall, passed: .test_cases_passed}'
+
+# Find latest answer retrieval report
+ls -lt evaluation/results/answer-retrieval-*.json | head -1
+```
 
 ---
 
@@ -84,116 +156,11 @@ evaluation/
 ├── answer-golden-dataset.json             # Answer mode: golden set (STUB)
 ├── run-answer-retrieval-eval.ts           # Track 1: passage/doc-level P/R/F1
 ├── run-answer-synthesis-eval.py           # Track 2: RAGAS faithfulness/relevancy/correctness
+├── run-answer-synthesis-wrapper.ts        # TS wrapper for Track 2 Python script
 ├── requirements-eval.txt                  # Python deps for Track 2 (ragas, etc.)
-│
-├── # Historical
-├── ALTERNATIVE_APPROACHES.md
-├── PHASE_1_RESULTS.md
-├── RECALL_IMPROVEMENT_FRAMEWORK.md
-├── NEXT_STEPS.md
 │
 └── results/
     ├── eval-report-{timestamp}.json       # Cite mode results
     ├── answer-retrieval-{timestamp}.json  # Answer retrieval results
     └── answer-synthesis-{mode}-{ts}.json  # Answer synthesis results
 ```
-
----
-
-## Understanding Results
-
-### Precision
-**What it measures:** Of the documents we returned, what % are actually relevant?
-- **Formula:** True Positives / (True Positives + False Positives)
-- **High precision = few false positives** (user doesn't waste time on irrelevant docs)
-
-### Recall
-**What it measures:** Of all relevant documents, what % did we find?
-- **Formula:** True Positives / (True Positives + False Negatives)
-- **High recall = few false negatives** (user doesn't miss important docs)
-
-### Common Tradeoffs
-- **Lower threshold** → More docs → Higher recall, lower precision
-- **Stricter filtering** → Fewer docs → Higher precision, lower recall
-- **Goal:** Improve both simultaneously by fixing root causes (not just tuning threshold)
-
----
-
-## Quick Start
-
-### Prerequisites
-```bash
-# Start Python hybrid service (required)
-npm run start:all
-# or just: cd hybrid-service && python app.py
-```
-
-### 1. Run Evaluation
-```bash
-npm run eval:cite        # Full (11 queries, ~10 min)
-# or
-npm run eval:quick       # Quick (3 queries, ~2 min)
-```
-
-### 2. Check Results
-```bash
-# Find latest report
-ls -lt evaluation/results/eval-report-*.json | head -1
-
-# View summary
-cat evaluation/results/eval-report-{latest}.json | jq '{precision: .overall_precision, recall: .overall_recall, passed: .test_cases_passed}'
-```
-
-### 3. Try Quick Improvement
-See ALTERNATIVE_APPROACHES.md Option 1 (lower threshold):
-- Edit `src/lib/llm-relevance-filter.ts` line 126
-- Change `confidenceThreshold: number = 0.6` → `0.35`
-- Run `npm run eval:quick` to test
-
-### 4. Explore Next Steps
-- Read ALTERNATIVE_APPROACHES.md
-- Follow recommended action plan
-
----
-
-## Answer Mode Evaluation
-
-Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
-
-**Design doc:** `docs/plans/2025-01-28-answer-mode-evaluation-design.md`
-
-### Track 1: Retrieval Eval (TypeScript)
-
-Evaluates whether hybrid retrieval finds the right passages for Answer mode.
-
-- Calls hybrid service with `mode=answer` and ANSWER_PRESET params
-- Compares at two granularities: **chunk-level** (with adjacent tolerance) and **doc-level**
-- Adjacent tolerance: chunk N+/-1 counts as 0.5 partial match
-
-```bash
-npm run eval:answer-retrieval
-```
-
-### Track 2: Synthesis Eval (Python + RAGAS)
-
-Evaluates whether the LLM generates good answers given the retrieved passages.
-
-**Setup (first time):**
-```bash
-pip install -r evaluation/requirements-eval.txt
-```
-
-**Two modes:**
-- `--mode isolated`: Feed golden passages to answer API (isolates LLM quality)
-- `--mode end-to-end`: Actual retrieval -> answer API (full pipeline)
-
-**Metrics:** faithfulness, answer relevancy, answer correctness (via RAGAS) + key facts coverage
-
-```bash
-npm run eval:answer-synthesis -- --mode isolated
-npm run eval:answer-synthesis -- --mode end-to-end
-```
-
-### Golden Dataset Status
-
-The answer mode golden dataset (`answer-golden-dataset.json`) is currently a **stub** with synthetic test cases. Real golden data is being created in parallel. Replace the stub entries with validated Q&A pairs when available.
