@@ -84,6 +84,129 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
     .metric-value.bad { color: #ef4444; }
     .metric-sub { font-size: 12px; color: #666; margin-top: 5px; }
 
+    .expected-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .expected-section h3 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+      color: #333;
+    }
+    .expected-chunk {
+      background: #f0fdf4;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      border-left: 4px solid #22c55e;
+    }
+    .expected-chunk.missed {
+      border-left-color: #ef4444;
+      background: #fef2f2;
+    }
+    .expected-chunk-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .match-icon {
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .match-icon.found { color: #22c55e; }
+    .match-icon.missed { color: #ef4444; }
+    .expected-chunk-id {
+      font-family: monospace;
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .expected-snippet {
+      font-size: 12px;
+      line-height: 1.6;
+      color: #374151;
+    }
+
+    .retrieved-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .retrieved-section h3 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+      color: #333;
+    }
+    .chunk-card {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-left: 4px solid #9ca3af;
+    }
+    .chunk-card.exact-match {
+      border-left-color: #22c55e;
+    }
+    .chunk-card.adjacent-match {
+      border-left-color: #3b82f6;
+    }
+    .chunk-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .match-indicator {
+      font-size: 14px;
+      font-weight: bold;
+      min-width: 20px;
+    }
+    .match-indicator.exact { color: #22c55e; }
+    .match-indicator.adjacent { color: #3b82f6; }
+    .score-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      min-width: 60px;
+      text-align: center;
+    }
+    .score-badge.high {
+      background: #22c55e;
+      color: #166534;
+    }
+    .score-badge.medium {
+      background: #f59e0b;
+      color: #92400e;
+    }
+    .score-badge.low {
+      background: #9ca3af;
+      color: #374151;
+    }
+    .chunk-id {
+      font-family: monospace;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .doc-title {
+      font-size: 13px;
+      color: #111827;
+    }
+    .chunk-snippet {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #374151;
+      margin-top: 8px;
+    }
+
     .section-label {
       font-size: 13px;
       font-weight: 600;
