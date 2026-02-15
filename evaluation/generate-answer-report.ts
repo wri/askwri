@@ -20,6 +20,15 @@ function colorClass(value: number, good: number, medium: number): string {
   return 'bad';
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function truncateSnippet(text: string, maxLength: number = 250): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + '...';
@@ -424,7 +433,7 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
   <div class="test-case">
     <div class="test-header">
       <div style="flex: 1;">
-        <div class="test-question">${r.question}</div>
+        <div class="test-question">${escapeHtml(r.question)}</div>
         <div class="test-id">${r.test_case_id}</div>
       </div>
     </div>
@@ -452,9 +461,9 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
       <div class="${chunkClass}">
         <div class="expected-chunk-header">
           ${icon}
-          <span class="expected-chunk-id">${passage.chunk_id}</span>
+          <span class="expected-chunk-id">${escapeHtml(passage.chunk_id)}</span>
         </div>
-        <div class="expected-snippet">${truncateSnippet(passage.text_snippet)}</div>
+        <div class="expected-snippet">${escapeHtml(truncateSnippet(passage.text_snippet))}</div>
       </div>
 `;
       }
