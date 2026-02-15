@@ -55,6 +55,17 @@ async function runTestCase(tc: AnswerTestCase): Promise<RetrievalTestResult> {
     }));
     const retrievedDocIds = [...new Set(rawDocs.map(d => d.doc_id))];
 
+    // Build detailed chunk info sorted by score
+    const retrievedChunksDetail = rawDocs
+      .map(d => ({
+        chunk_id: d.metadata?.chunk_id || d.chunk_id || 'unknown',
+        doc_id: d.doc_id,
+        title: d.title,
+        snippet: d.content,
+        score: d.score,
+      }))
+      .sort((a, b) => b.score - a.score); // Sort descending by score
+
     // Expected from golden set
     const expectedChunks = tc.retrieval_ground_truth.expected_passages.map(p => ({
       chunk_id: p.chunk_id,
@@ -91,6 +102,7 @@ async function runTestCase(tc: AnswerTestCase): Promise<RetrievalTestResult> {
       retrieved_doc_ids: retrievedDocIds,
       exact_matches: chunkMetrics.exact_matches,
       adjacent_matches: chunkMetrics.adjacent_matches,
+      retrieved_chunks_detail: retrievedChunksDetail,
       execution_time_ms: elapsed,
     };
   } catch (error: any) {
@@ -107,6 +119,7 @@ async function runTestCase(tc: AnswerTestCase): Promise<RetrievalTestResult> {
       retrieved_doc_ids: [],
       exact_matches: [],
       adjacent_matches: [],
+      retrieved_chunks_detail: [],
       execution_time_ms: Date.now() - start,
       error: error.message,
     };
