@@ -434,7 +434,7 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
     <div class="test-header">
       <div style="flex: 1;">
         <div class="test-question">${escapeHtml(r.question)}</div>
-        <div class="test-id">${r.test_case_id}</div>
+        <div class="test-id">${escapeHtml(r.test_case_id)}</div>
       </div>
     </div>
 
@@ -477,9 +477,9 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
     <div class="chunk-section">
       <h4>Documents (${matchedDocs.length} matched, ${extraDocs.length} extra, ${missedDocs.length} missed)</h4>
       <div>
-${matchedDocs.map(d => `        <span class="doc-tag expected">${d}</span>`).join('\n')}
-${extraDocs.map(d => `        <span class="doc-tag extra">${d}</span>`).join('\n')}
-${missedDocs.map(d => `        <span class="doc-tag missed">${d}</span>`).join('\n')}
+${matchedDocs.map(d => `        <span class="doc-tag expected">${escapeHtml(d)}</span>`).join('\n')}
+${extraDocs.map(d => `        <span class="doc-tag extra">${escapeHtml(d)}</span>`).join('\n')}
+${missedDocs.map(d => `        <span class="doc-tag missed">${escapeHtml(d)}</span>`).join('\n')}
       </div>
     </div>
 `;
@@ -489,7 +489,7 @@ ${missedDocs.map(d => `        <span class="doc-tag missed">${d}</span>`).join('
     <div class="chunk-section">
       <h4>Exact Chunk Matches (${r.exact_matches.length})</h4>
       <div class="chunk-list">
-${r.exact_matches.map(c => `        <div class="chunk-item exact">${c}</div>`).join('\n')}
+${r.exact_matches.map(c => `        <div class="chunk-item exact">${escapeHtml(c)}</div>`).join('\n')}
       </div>
     </div>
 `;
@@ -500,7 +500,7 @@ ${r.exact_matches.map(c => `        <div class="chunk-item exact">${c}</div>`).j
     <div class="chunk-section">
       <h4>Adjacent Chunk Matches (${r.adjacent_matches.length})</h4>
       <div class="chunk-list">
-${r.adjacent_matches.map(c => `        <div class="chunk-item adjacent">${c}</div>`).join('\n')}
+${r.adjacent_matches.map(c => `        <div class="chunk-item adjacent">${escapeHtml(c)}</div>`).join('\n')}
       </div>
     </div>
 `;
@@ -511,7 +511,7 @@ ${r.adjacent_matches.map(c => `        <div class="chunk-item adjacent">${c}</di
     <div class="chunk-section">
       <h4>Missed Chunks (${missedChunks.length})</h4>
       <div class="chunk-list">
-${missedChunks.map(c => `        <div class="chunk-item missed">${c}</div>`).join('\n')}
+${missedChunks.map(c => `        <div class="chunk-item missed">${escapeHtml(c)}</div>`).join('\n')}
       </div>
     </div>
 `;
@@ -521,7 +521,7 @@ ${missedChunks.map(c => `        <div class="chunk-item missed">${c}</div>`).joi
       html += `
     <div class="chunk-section">
       <h4>Error</h4>
-      <div style="color: #ef4444; font-family: monospace; font-size: 13px;">${r.error}</div>
+      <div style="color: #ef4444; font-family: monospace; font-size: 13px;">${escapeHtml(r.error)}</div>
     </div>
 `;
     }
