@@ -24,7 +24,7 @@
     "@chakra-ui/react": "^3.31.0",
     "@emotion/react": "^11.14.0",
     "@tailwindcss/postcss": "^4.1.18",
-    "@worldresources/wri-design-systems": "^2.180.2",
+    "@worldresources/wri-design-systems": "^2.183.1",
     "csv-parse": "^6.1.0",
     "docx": "^9.5.1",
     "next": "14.2.0",
