@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, FC } from 'react'
 import { Heading, Box, List, Text, Spinner } from '@chakra-ui/react'
 import {
   Button,
   Tag,
-  Tooltip,
+  Tooltip as DS_Tooltip,
   getThemedColor,
   Modal,
 } from '@worldresources/wri-design-systems'
@@ -19,6 +19,8 @@ import ResultsTable from './ResultsTable'
 import { ResultsPageProps } from './types'
 import { AIProcessModalContent, aiProcessModalHeader } from './AIProcessModal'
 import '../../styles.css'
+
+const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
 const ResultsPage = ({
   data = [],
