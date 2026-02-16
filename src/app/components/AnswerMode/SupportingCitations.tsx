@@ -152,6 +152,8 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
         flexDirection: 'column',
         flex: 1,
         minHeight: 0,
+        maxHeight: 570,
+        height: 570,
       }}
     >
       <div
@@ -160,6 +162,7 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
           gap: '8px',
           alignItems: 'center',
           justifyContent: 'space-between',
+          padding: '0 8px',
         }}
       >
         <div>
@@ -258,22 +261,21 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
 
                 {/* Snippet preview */}
                 <Box
-                  marginTop='3'
-                  paddingTop='3'
-                  borderTopWidth='1px'
+                  margin='3'
+                  paddingX='3'
+                  borderLeftWidth='5px'
                   borderColor={getThemedColor('neutral', 200)}
                   position='relative'
+                  minHeight={150}
                 >
                   <Text
                     fontSize='sm'
-                    color={getThemedColor('neutral', 600)}
-                    fontStyle='italic'
                     style={
                       expandedSnippets[passageId]
                         ? {}
                         : {
                             display: '-webkit-box',
-                            WebkitLineClamp: 3,
+                            WebkitLineClamp: 6,
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden',
                             position: 'relative',
@@ -288,8 +290,8 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
                       left={0}
                       right={0}
                       bottom={0}
-                      height='2.5em'
-                      bgGradient='linear(to-b, rgba(255,255,255,0) 0%, white 90%)'
+                      height={100}
+                      background='linear-gradient(to bottom, rgba(255,255,255,0) 0%, white 90%)'
                       display='flex'
                       alignItems='flex-end'
                       justifyContent='center'
@@ -310,6 +312,8 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
                       justifyContent='center'
                       zIndex={2}
                       pointerEvents='auto'
+                      minHeight={200}
+                      height={200}
                     >
                       <Button
                         size='small'
@@ -328,7 +332,7 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
                   )}
                   {expandedSnippets[passageId] && kp.snippet.length > 120 && (
                     <Box
-                      position='absolute'
+                      position='relative'
                       left={0}
                       right={0}
                       bottom={0}
@@ -355,7 +359,7 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
                   )}
                 </Box>
 
-                <div style={{ width: '100px' }}>
+                <div style={{ width: '100px', margin: '0 12px' }}>
                   <Tag
                     icon={<FaQuoteRight />}
                     label={`Page ${kp.page}`}
@@ -417,8 +421,9 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
           justifyContent='space-between'
           alignItems='center'
           paddingTop='4'
+          width='55%'
+          padding='0 8px'
           marginTop='4'
-          borderTopWidth='1px'
           borderColor={getThemedColor('neutral', 200)}
           flexShrink={0}
         >
