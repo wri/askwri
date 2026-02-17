@@ -20,7 +20,7 @@ export async function GET(
     }
 
     // Construct path to PDF in data/documents directory
-    const pdfPath = join(process.cwd(), 'data', 'documents', filename)
+    const pdfPath = join("/tmp", "askWRI_docs", filename)
 
     // Check if file exists
     if (!existsSync(pdfPath)) {
