@@ -659,11 +659,6 @@ function AskWriAppContent() {
       </div>
     )
 
-    if (retrievalLoading) {
-      return loader
-    }
-
-    console.error('No results found for query:', searchQuery)
     return loader
   }
 
