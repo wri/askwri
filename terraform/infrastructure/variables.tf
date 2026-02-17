@@ -103,6 +103,13 @@ variable "app_environment_variables" {
   default     = {}
 }
 
+variable "askwri_app_secret_env" {
+  description = "Secret environment variables for Next.js app as JSON string (from GitHub Secrets)"
+  type        = string
+  sensitive   = true
+  default     = "{}"
+}
+
 # =============================================================================
 # Search Service Variables
 # =============================================================================
