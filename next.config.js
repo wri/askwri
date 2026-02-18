@@ -1,13 +1,14 @@
 /** @type {import('next').NextConfig} */
-const path = require('path');
+const path = require('path')
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
-  
+
   // Environment variables that should be available at runtime
   env: {
-    NEXT_PUBLIC_ENVIRONMENT: process.env.NEXT_PUBLIC_ENVIRONMENT || 'development',
+    NEXT_PUBLIC_ENVIRONMENT:
+      process.env.NEXT_PUBLIC_ENVIRONMENT || 'development',
   },
 
   // Headers for security
@@ -18,7 +19,7 @@ const nextConfig = {
         headers: [
           {
             key: 'X-Frame-Options',
-            value: 'DENY',
+            value: 'SAMEORIGIN',
           },
           {
             key: 'X-Content-Type-Options',
@@ -30,8 +31,8 @@ const nextConfig = {
           },
         ],
       },
-    ];
+    ]
   },
-};
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
