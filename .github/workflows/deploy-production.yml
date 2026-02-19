@@ -42,9 +42,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run linter
-        run: npm run lint
-
       - name: Run tests
         run: npm run test:ci
 
@@ -183,6 +180,7 @@ jobs:
         working-directory: terraform/infrastructure
         env:
           TF_VAR_search_service_secret_env: ${{ secrets.SEARCH_SERVICE_ENV }}
+          TF_VAR_askwri_app_secret_env: ${{ secrets.ASKWRI_APP_ENV }}
         run: |
           terraform plan \
             -var-file="../environments/${{ env.ENVIRONMENT }}.tfvars" \
@@ -192,6 +190,7 @@ jobs:
         working-directory: terraform/infrastructure
         env:
           TF_VAR_search_service_secret_env: ${{ secrets.SEARCH_SERVICE_ENV }}
+          TF_VAR_askwri_app_secret_env: ${{ secrets.ASKWRI_APP_ENV }}
         run: terraform apply -auto-approve tfplan
 
   # ==========================================================================

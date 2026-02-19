@@ -206,6 +206,13 @@ resource "aws_ecs_task_definition" "app" {
             name  = key
             value = value
           }
+        ],
+        # Secret environment variables from GitHub Secrets (JSON decoded)
+        [
+          for key, value in try(jsondecode(var.askwri_app_secret_env), {}) : {
+            name  = key
+            value = value
+          }
         ]
       )
 

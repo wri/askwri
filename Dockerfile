@@ -20,8 +20,8 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Install curl for health checks
-RUN apk add --no-cache --no-check-certificate curl
+# Install curl for health checks and AWS CLI for S3 sync
+RUN apk add --no-cache --no-check-certificate curl aws-cli
 
 # Set environment to production
 ENV NODE_ENV=production
@@ -35,6 +35,13 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+
+# Copy and set up start script
+COPY start-app.sh ./
+RUN chmod +x start-app.sh
+
+# Create writable directory for S3 sync
+RUN mkdir -p /tmp/askWRI_docs && chown nextjs:nodejs /tmp/askWRI_docs
 
 # Set correct ownership
 RUN chown -R nextjs:nodejs /app
@@ -50,4 +57,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
   CMD curl -f http://localhost:3000/api/health || exit 1
 
 # Start the application
-CMD ["node", "server.js"]
+CMD ["./start-app.sh"]

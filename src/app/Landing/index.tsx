@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Heading, Card, Text } from '@chakra-ui/react'
 import {
@@ -8,9 +8,9 @@ import {
   getThemedColor,
   Tag,
   Textarea,
-  showToast,
   Toast,
   Modal,
+  InlineMessage,
 } from '@worldresources/wri-design-systems'
 import { LuRefreshCcw } from 'react-icons/lu'
 import { FaArrowRightLong } from 'react-icons/fa6'
@@ -35,18 +35,6 @@ const Landing = () => {
 
   const router = useRouter()
 
-  useEffect(() => {
-    showToast({
-      label: 'Ask WRI is for staff use only',
-      caption:
-        'This tool is being tested and improved, and is currently only intended for WRI employees and not for external use. Results are generated using AI and may occasionally be incomplete or inaccurate.',
-      type: 'info',
-      placement: 'top-start',
-      closable: true,
-      closableLabel: 'Dismiss',
-      duration: Infinity,
-    })
-  }, [])
   const handleExampleClick = (example: string) => {
     setQuery(example)
   }
@@ -74,6 +62,13 @@ const Landing = () => {
         alignItems: 'center',
       }}
     >
+      <InlineMessage
+        size='full-width'
+        variant='warning'
+        label='For WRI staff use only'
+        caption='This tool is under testing and intended for WRI employees only, not for external use. It is currently limited to a selection of knowledge products published by WRI Cities program. Results are generated using AI and may occasionally be incomplete or inaccurate.'
+      />
+
       <section>
         <div
           style={{

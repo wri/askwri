@@ -8,11 +8,7 @@
  *
  * HOW IT FINDS THE FILE:
  *  1) process.env.FILE_METADATA_PATH (absolute or relative to project root)
- *  2) Unified document database: /data/documents.csv (new unified format with import batch tracking)
- *  3) Legacy paths under /public (for backward compatibility):
- *     - /public/TransportDecarb_llamacloud_metadata250904.csv
- *     - /public/metadata/files.csv
- *     - /public/data/files.csv
+ *  2) Unified document database: /tmp/askWRI_docs/documents.csv (new unified format with import batch tracking)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -40,17 +36,12 @@ async function detectCatalogPath(): Promise<string> {
   // Prioritize unified document database, then fall back to legacy paths
   const candidates = [
     envPath,
-    path.join(root, "data", "documents.csv"),  // New unified database (priority)
-    path.join(root, "public", "TransportDecarb_llamacloud_metadata_with_summaries.csv"),
-    path.join(root, "public", "TransportDecarb_llamacloud_metadata250904.csv"),
-    path.join(root, "public", "metadata", "files.csv"),
-    path.join(root, "public", "data", "files.csv"),
-    path.join(root, "public", "files.csv"),
+    path.join("/tmp", "askWRI_docs", "documents.csv"),  // New unified database (priority)
   ].filter(Boolean);
   for (const p of candidates) {
     if (p && await exists(p)) return p;
   }
-  throw new Error("No catalog CSV/JSON found. Define FILE_METADATA_PATH or place a CSV under /public.");
+  throw new Error("No catalog CSV/JSON found. Define FILE_METADATA_PATH or place documents.csv under /tmp/askWRI_docs.");
 }
 
 function parseCSV(text: string): Array<Record<string, string>> {

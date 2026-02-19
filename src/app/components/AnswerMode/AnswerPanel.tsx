@@ -13,6 +13,7 @@ import {
 } from '@worldresources/wri-design-systems'
 import { FaInfoCircle } from 'react-icons/fa'
 import { MdChat } from 'react-icons/md'
+import { IoIosCopy } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
 
@@ -23,7 +24,6 @@ export const AnswerPanel = ({
   setQuery,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
-
   return (
     <>
       <Box
@@ -106,19 +106,20 @@ export const AnswerPanel = ({
                           {sent}{' '}
                           {answer.inline?.[globalSentIdx]?.map(
                             (c: any, j: number) => (
-                              <Text
-                                as='span'
+                              <Button
                                 key={j}
-                                fontSize='11px'
-                                textDecoration='underline'
-                                textDecorationStyle='dotted'
-                                color='blue.600'
-                                cursor='pointer'
-                                _hover={{ opacity: 0.8 }}
+                                size='small'
+                                variant='secondary'
+                                style={{
+                                  fontSize: '9px',
+                                  minWidth: 0,
+                                  height: 'auto',
+                                  lineHeight: 1,
+                                }}
                                 title={`Citation ${globalSentIdx + 1}.${j + 1}`}
                               >
-                                [{globalSentIdx + 1}.{j + 1}]
-                              </Text>
+                                {globalSentIdx + 1}.{j + 1}
+                              </Button>
                             ),
                           )}{' '}
                         </Text>
@@ -131,19 +132,20 @@ export const AnswerPanel = ({
                 <Text as='p' key={i} marginBottom='1' lineHeight='normal'>
                   {sent}{' '}
                   {answer.inline?.[i]?.map((c: any, j: number) => (
-                    <Text
-                      as='span'
+                    <Button
                       key={j}
-                      fontSize='11px'
-                      textDecoration='underline'
-                      textDecorationStyle='dotted'
-                      color='blue.600'
-                      cursor='pointer'
-                      _hover={{ opacity: 0.8 }}
+                      size='small'
+                      variant='secondary'
+                      style={{
+                        fontSize: '9px',
+                        minWidth: 0,
+                        height: 'auto',
+                        lineHeight: 1,
+                      }}
                       title={`Citation ${i + 1}.${j + 1}`}
                     >
-                      [{i + 1}.{j + 1}]
-                    </Text>
+                      {i + 1}.{j + 1}
+                    </Button>
                   ))}
                 </Text>
               ))}
@@ -155,17 +157,35 @@ export const AnswerPanel = ({
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ width: '127px' }}>
+          <div style={{ width: '150px' }}>
             <Tag
               icon={<FaInfoCircle />}
               label={`${((answer.confidence ?? 0) * 100).toFixed(0)}% Confidence`}
               variant='info-white'
             />
           </div>
+          <div>
+            <Button
+              variant='borderless'
+              size='small'
+              leftIcon={<IoIosCopy />}
+              onClick={() => {
+                let text = ''
+                if (answer.paragraphs) {
+                  text = answer.paragraphs.map((p) => p.join(' ')).join('\n\n')
+                } else if (answer.sentences) {
+                  text = answer.sentences.join(' ')
+                }
+                navigator.clipboard.writeText(text)
+              }}
+            >
+              Copy
+            </Button>
+          </div>
         </div>
       </Box>
       <Modal
-        size='xlarge'
+        size='medium'
         header={
           <Text textStyle='md' fontWeight='bold'>
             Ask new question

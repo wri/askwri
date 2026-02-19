@@ -425,10 +425,10 @@ export const AIResearchModalContent = () => {
     <div style={{ margin: '-10px' }}>
       <div>
         <InlineMessage
-          size='large'
+          size='full-width'
           variant='warning'
-          label=''
-          caption='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
+      
+          label='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
         />
       </div>
       {renderContent()}

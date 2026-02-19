@@ -68,4 +68,15 @@ export type DocumentPreviewModalContentProps = {
 export type AIProcessModalContentProps = {
   transcript: string[]
   query: string
+  aiProcessModalOpen: boolean
+  setAiProcessModalOpen: (open: boolean) => void
+}
+
+export type ImproveSearchModalProps = {
+  cost_usd: number
+  energy_gco2e: number
+  suggestions: string[]
+  initialQuery: string
+  improveSearchModalOpen: boolean
+  setImproveSearchModalOpen: (open: boolean) => void
 }

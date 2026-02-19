@@ -1,13 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, FC } from 'react'
 import { Heading, Box, List, Text, Spinner } from '@chakra-ui/react'
 import {
   Button,
   Tag,
-  Tooltip,
+  Tooltip as DS_Tooltip,
   getThemedColor,
-  Modal,
 } from '@worldresources/wri-design-systems'
 import { FaInfoCircle, FaSearch } from 'react-icons/fa'
 import { HiCurrencyDollar } from 'react-icons/hi2'
@@ -17,8 +16,11 @@ import { AiIcon } from '../icons/AiIcon'
 import Navbar from './Navbar'
 import ResultsTable from './ResultsTable'
 import { ResultsPageProps } from './types'
-import { AIProcessModalContent, aiProcessModalHeader } from './AIProcessModal'
+import AIProcessModalContent from './AIProcessModal'
+import ImproveSearchModal from './ImproveSearchModal'
 import '../../styles.css'
+
+const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
 const ResultsPage = ({
   data = [],
@@ -32,6 +34,7 @@ const ResultsPage = ({
   alignLoading,
 }: ResultsPageProps) => {
   const [aiProcessModalOpen, setAiProcessModalOpen] = useState(false)
+  const [improveSearchModalOpen, setImproveSearchModalOpen] = useState(false)
   const tableData = data
 
   const confidence = (alignment?.confidence ?? 0) * 100
@@ -62,6 +65,7 @@ const ResultsPage = ({
                 <Button
                   leftIcon={<AiFillThunderbolt />}
                   variant='borderless'
+                  as='div'
                   size='small'
                   label={`${ops?.energy_gco2e?.toFixed(2) ?? '0'} gCO2e`}
                   aria-label='Carbon equivalent of search'
@@ -70,6 +74,7 @@ const ResultsPage = ({
               </Tooltip>
               <Tooltip content='Cost of credits used in search'>
                 <Button
+                  as='div'
                   leftIcon={<HiCurrencyDollar />}
                   variant='borderless'
                   size='small'
@@ -86,7 +91,7 @@ const ResultsPage = ({
             size='small'
             label='Improve Search'
             aria-label='Improve Search'
-            onClick={() => {}}
+            onClick={() => setImproveSearchModalOpen(true)}
           />
           <Button
             leftIcon={<TfiThought />}
@@ -221,15 +226,19 @@ const ResultsPage = ({
         docWhyLoading={docWhyLoading}
         onExportBib={onExportBib}
       />
-      <Modal
-        header={aiProcessModalHeader}
-        content={
-          <AIProcessModalContent transcript={transcript} query={query} />
-        }
-        size='xlarge'
-        blocking={false}
-        open={aiProcessModalOpen}
-        onClose={() => setAiProcessModalOpen(false)}
+      <AIProcessModalContent
+        transcript={transcript}
+        query={query}
+        aiProcessModalOpen={aiProcessModalOpen}
+        setAiProcessModalOpen={setAiProcessModalOpen}
+      />
+      <ImproveSearchModal
+        cost_usd={ops?.cost_usd ?? 0}
+        energy_gco2e={ops?.energy_gco2e ?? 0}
+        suggestions={alignment?.suggestions || []}
+        initialQuery={query}
+        improveSearchModalOpen={improveSearchModalOpen}
+        setImproveSearchModalOpen={setImproveSearchModalOpen}
       />
     </main>
   )
