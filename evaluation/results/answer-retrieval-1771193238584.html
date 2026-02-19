@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AskWRI Answer Retrieval Evaluation Report</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .header {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 { margin: 0 0 10px 0; color: #333; }
+    h2 { margin-top: 30px; margin-bottom: 15px; }
+    .timestamp { color: #666; font-size: 14px; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .metric-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .metric-value {
+      font-size: 32px;
+      font-weight: bold;
+      margin-top: 5px;
+    }
+    .metric-value.good { color: #22c55e; }
+    .metric-value.medium { color: #f59e0b; }
+    .metric-value.bad { color: #ef4444; }
+    .metric-sub { font-size: 12px; color: #666; margin-top: 5px; }
+
+    .section-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .summary-table {
+      width: 100%;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .summary-table table { width: 100%; border-collapse: collapse; }
+    .summary-table th {
+      background: #f9fafb;
+      padding: 12px;
+      text-align: left;
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .summary-table td {
+      padding: 12px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .test-case {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 15px;
+    }
+    .test-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 15px;
+    }
+    .test-question {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      flex: 1;
+    }
+    .test-id {
+      font-size: 12px;
+      color: #666;
+      font-family: monospace;
+      margin-top: 8px;
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .metric-row strong { color: #333; }
+
+    .chunk-section { margin-top: 15px; }
+    .chunk-section h4 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: #666;
+    }
+    .chunk-list {
+      font-size: 13px;
+      line-height: 1.8;
+      font-family: monospace;
+    }
+    .chunk-item { padding: 2px 0; }
+    .chunk-item.exact { color: #22c55e; }
+    .chunk-item.adjacent { color: #3b82f6; }
+    .chunk-item.missed { color: #ef4444; }
+    .chunk-item.extra { color: #f59e0b; }
+
+    .doc-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: monospace;
+      margin: 2px;
+    }
+    .doc-tag.expected { background: #dcfce7; color: #166534; }
+    .doc-tag.extra { background: #fef3c7; color: #92400e; }
+    .doc-tag.missed { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>AskWRI Answer Retrieval Evaluation Report</h1>
+    <div class="timestamp">Generated: 2/15/2026, 2:07:18 PM</div>
+    <div class="timestamp">Test cases: 2</div>
+  </div>
+
+  <div class="section-label">Doc-Level Metrics (Coarse Grain)</div>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Doc Precision</div>
+      <div class="metric-value bad">13.4%</div>
+      <div class="metric-sub">Retrieved docs that are relevant</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Doc Recall</div>
+      <div class="metric-value good">100.0%</div>
+      <div class="metric-sub">Expected docs that were found</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Doc F1</div>
+      <div class="metric-value bad">23.6%</div>
+      <div class="metric-sub">Harmonic mean of P &amp; R</div>
+    </div>
+  </div>
+
+  <div class="section-label">Chunk-Level Metrics (Strict)</div>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Chunk Precision</div>
+      <div class="metric-value bad">2.0%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Chunk Recall</div>
+      <div class="metric-value good">100.0%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Chunk F1</div>
+      <div class="metric-value bad">3.9%</div>
+    </div>
+  </div>
+
+  <div class="section-label">Chunk-Level Metrics (Adjacent Tolerance)</div>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Adj. Precision</div>
+      <div class="metric-value bad">2.0%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Adj. Recall</div>
+      <div class="metric-value good">100.0%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Adj. F1</div>
+      <div class="metric-value bad">3.9%</div>
+    </div>
+  </div>
+
+  <h2>Summary by Query Type</h2>
+  <div class="summary-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Query Type</th>
+          <th>Count</th>
+          <th>Doc P / R / F1</th>
+          <th>Chunk P / R / F1</th>
+          <th>Adj. P / R / F1</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td><strong>intervention impact</strong></td>
+          <td>1</td>
+          <td>14.3% / 100.0% / 25.0%</td>
+          <td>2.0% / 100.0% / 3.9%</td>
+          <td>2.0% / 100.0% / 3.9%</td>
+        </tr>
+
+        <tr>
+          <td><strong>topic area</strong></td>
+          <td>1</td>
+          <td>12.5% / 100.0% / 22.2%</td>
+          <td>2.0% / 100.0% / 3.9%</td>
+          <td>2.0% / 100.0% / 3.9%</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Test Case Results</h2>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What are the health benefits of electrifying school buses?</div>
+        <div class="test-id">a1_stub_electric_buses</div>
+      </div>
+    </div>
+
+    <div class="metric-row">
+      <div><strong>Doc:</strong> P=14.3% R=100.0% F1=25.0%</div>
+      <div><strong>Chunk:</strong> P=2.0% R=100.0% F1=3.9%</div>
+      <div><strong>Adj:</strong> P=2.0% R=100.0% F1=3.9%</div>
+      <div><strong>Time:</strong> 1.73s</div>
+    </div>
+
+    <div class="chunk-section">
+      <h4>Documents (1 matched, 6 extra, 0 missed)</h4>
+      <div>
+        <span class="doc-tag expected">doc_000109</span>
+        <span class="doc-tag extra">electrifying-us-school-bus-fleets-equitably</span>
+        <span class="doc-tag extra">electric-school-bus-us-market-study</span>
+        <span class="doc-tag extra">needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023</span>
+        <span class="doc-tag extra">doc_000105</span>
+        <span class="doc-tag extra">dataset-us-school-bus-depots-technical-note</span>
+        <span class="doc-tag extra">financing-electric-hybrid-electric-buses_0</span>
+
+      </div>
+    </div>
+
+    <div class="chunk-section">
+      <h4>Exact Chunk Matches (2)</h4>
+      <div class="chunk-list">
+        <div class="chunk-item exact">doc_000109_chunk_4</div>
+        <div class="chunk-item exact">doc_000109_chunk_6</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">How does land value capture support transit-oriented development?</div>
+        <div class="test-id">a2_stub_land_value</div>
+      </div>
+    </div>
+
+    <div class="metric-row">
+      <div><strong>Doc:</strong> P=12.5% R=100.0% F1=22.2%</div>
+      <div><strong>Chunk:</strong> P=2.0% R=100.0% F1=3.9%</div>
+      <div><strong>Adj:</strong> P=2.0% R=100.0% F1=3.9%</div>
+      <div><strong>Time:</strong> 1.31s</div>
+    </div>
+
+    <div class="chunk-section">
+      <h4>Documents (1 matched, 7 extra, 0 missed)</h4>
+      <div>
+        <span class="doc-tag expected">doc_000017</span>
+        <span class="doc-tag extra">doc_000139</span>
+        <span class="doc-tag extra">doc_000058</span>
+        <span class="doc-tag extra">doc_000077</span>
+        <span class="doc-tag extra">doc_000063</span>
+        <span class="doc-tag extra">doc_000029</span>
+        <span class="doc-tag extra">doc_000081</span>
+        <span class="doc-tag extra">doc_000075</span>
+
+      </div>
+    </div>
+
+    <div class="chunk-section">
+      <h4>Exact Chunk Matches (2)</h4>
+      <div class="chunk-list">
+        <div class="chunk-item exact">doc_000017_chunk_4</div>
+        <div class="chunk-item exact">doc_000017_chunk_18</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
