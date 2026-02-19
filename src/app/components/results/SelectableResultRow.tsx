@@ -85,16 +85,10 @@ export const SelectableResultRow = ({
         {docSummaryLoading?.[rowData.id.toString()] ? (
           <span>Loading...</span>
         ) : (
-          <div
-            style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {rowData.summary}
+          <div>
+            {rowData.summary && rowData.summary.length > 240
+              ? `${rowData.summary.slice(0, 240)}...`
+              : rowData.summary}
           </div>
         )}
       </TableCell>
