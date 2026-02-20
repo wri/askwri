@@ -19,6 +19,10 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
 
+    # Document storage paths (override for local dev, e.g. DOCUMENTS_LOCAL_DIR=./data)
+    documents_local_dir: str = "/tmp/askWRI_docs"
+    cache_dir: str = "/tmp/askWRI_cache"
+
     # SSL/Zscaler VPN Workaround
     use_custom_ssl_client: bool = False
     custom_ca_bundle: str = ""
