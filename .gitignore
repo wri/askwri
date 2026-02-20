@@ -67,6 +67,11 @@ pip-delete-this-directory.txt
 # Local document data (search service)
 search-service/data/
 
+# Evaluation intermediates and results
+evaluation/answer-retrieval-raw.json
+evaluation/answer-labels-review.json
+evaluation/results/
+
 # OS
 .DS_Store
 Thumbs.db
