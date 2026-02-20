@@ -95,7 +95,20 @@ Evaluates whether the LLM generates good answers given the retrieved passages. R
 
 ### Golden Dataset Status
 
-The answer mode golden dataset (`answer-golden-dataset.json`) is currently a **stub** with synthetic test cases. Replace the stub entries with validated Q&A pairs when available.
+### Golden Dataset Generation
+
+The answer golden set is generated via a chunk-first pipeline that queries the live index and uses LLM-assisted labeling with human review.
+
+**Regenerating the golden set** (e.g., after re-chunking the index):
+
+```bash
+npm run eval:golden-retrieve    # query hybrid service
+npm run eval:golden-label       # LLM labels each chunk
+npm run eval:golden-review      # open review UI, validate labels
+npm run eval:golden-assemble    # build final golden dataset
+```
+
+**Design doc:** `docs/plans/2026-02-20-answer-golden-set-generation-design.md`
 
 ---
 
