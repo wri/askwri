@@ -14,6 +14,8 @@ import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { PiDownloadSimpleBold } from 'react-icons/pi'
 import { SelectableResultRowProps } from './types'
 
+const SUMMARY_MAX_LENGTH = 240
+
 export const SelectableResultRow = ({
   rowData,
   selected,
@@ -86,8 +88,8 @@ export const SelectableResultRow = ({
           <span>Loading...</span>
         ) : (
           <div>
-            {rowData.summary && rowData.summary.length > 240
-              ? `${rowData.summary.slice(0, 240)}...`
+            {rowData.summary && rowData.summary.length > SUMMARY_MAX_LENGTH
+              ? `${rowData.summary.slice(0, SUMMARY_MAX_LENGTH)}...`
               : rowData.summary}
           </div>
         )}
