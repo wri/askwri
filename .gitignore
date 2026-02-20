@@ -69,7 +69,6 @@ search-service/data/
 
 # Evaluation intermediates and results
 evaluation/answer-retrieval-raw.json
-evaluation/answer-labels-review.json
 evaluation/results/
 
 # OS
