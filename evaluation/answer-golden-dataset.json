@@ -1,79 +1,375 @@
 {
-  "version": "1.0",
-  "description": "Answer mode golden dataset (STUB - 2 test cases with real passages for machinery testing)",
+  "version": "2.0",
+  "description": "Answer mode golden evaluation dataset — retrieval ground truth with LLM-assisted labeling",
   "test_cases": [
     {
-      "id": "a1_stub_electric_buses",
-      "question": "What are the health benefits of electrifying school buses?",
-      "query_type": "intervention_impact",
+      "id": "ans_001",
+      "question": "What role do land value capture mechanisms play in more equitable urban development?",
+      "query_type": "mechanism_role",
       "difficulty": "medium",
       "retrieval_ground_truth": {
         "expected_passages": [
           {
-            "doc_id": "doc_000109",
-            "chunk_id": "doc_000109_chunk_4",
-            "page": 2,
-            "text_snippet": "Diesel exhaust—classified as a carcinogen by the World Health Organization—contains particulate matter, cancer-causing air toxins, nitrogen oxides, and volatile organic compounds. The pollution levels of school buses are closely tied to the age of the bus fleet. Past research has found that a 30-year-old diesel bus produces two to three times more onboard pollution than a three-year-old bus across similar time frames."
+            "doc_id": "doc_000139",
+            "chunk_id": "doc_000139_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Urban Land Value Capture in São Paulo, Addis Ababa, and Hyderabad: Differing Interpretations, Equity Impacts, and Enabling Conditions\n\nThis paper presents analysis of the fiscal and equity impacts of urban land value capture instruments based on three case studies from the global south. These include the Lideta redevelopment in Addis Ababa, Ethiopia; the Outer Ring Road in Hyderabad, India; and Água Espraiada Urban Operation in São Paulo, Brazil. It combines desk research with interviews of local key informants with deep knowledge of the policy and market dynamics in the three cities and representing different perspectives.]**"
           },
           {
-            "doc_id": "doc_000109",
-            "chunk_id": "doc_000109_chunk_6",
-            "page": 2,
-            "text_snippet": "In addition to cancer, exposure to diesel exhaust can lead to increased asthma symptoms and a host of other respiratory illnesses and health impacts such as reduced lung function, more frequent asthma attacks, and impaired cognitive development. Children are especially susceptible to these risks due to their ongoing respiratory development, smaller average lung size, and increased activity levels."
+            "doc_id": "doc_000071",
+            "chunk_id": "doc_000071_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Ahmedabad: Town Planning Schemes for Equitable Development—Glass Half Full or Half Empty?\n\nThis case study in the World Resources Report, “Towards a More Equal City,” examines transformative urban change in Ahmedabad, India, by analyzing the land pooling and readjustment mechanism called Town Planning Scheme (TPS). This paper reviews the evidence on whether the TPS mechanism has enabled transformative change with equitable outcomes in Ahmedabad City—and if so, how.]**"
           }
         ],
         "expected_doc_ids": [
-          "doc_000109"
+          "doc_000139",
+          "doc_000017",
+          "doc_000063",
+          "doc_000072",
+          "doc_000071",
+          "doc_000058"
         ]
       },
       "synthesis_ground_truth": {
-        "canonical_answer": "Electrifying school buses eliminates exposure to diesel exhaust, which the WHO classifies as a carcinogen containing particulate matter, nitrogen oxides, and volatile organic compounds. Children are especially vulnerable to these pollutants due to their developing respiratory systems, and exposure has been linked to increased asthma, reduced lung function, and impaired cognitive development. Older diesel buses produce two to three times more onboard pollution than newer models, making electrification particularly beneficial for fleets with aging vehicles.",
-        "key_facts": [
-          "diesel exhaust classified as carcinogen by WHO",
-          "children especially susceptible due to developing respiratory systems",
-          "older diesel buses produce 2-3x more pollution than newer buses",
-          "exposure linked to asthma, reduced lung function, impaired cognitive development"
-        ]
+        "canonical_answer": "",
+        "key_facts": []
       }
     },
     {
-      "id": "a2_stub_land_value",
-      "question": "How does land value capture support transit-oriented development?",
-      "query_type": "topic_area",
+      "id": "ans_002",
+      "question": "Are denser cities more sustainable? Why?",
+      "query_type": "causal",
+      "difficulty": "hard",
+      "retrieval_ground_truth": {
+        "expected_passages": [
+          {
+            "doc_id": "doc_000063",
+            "chunk_id": "doc_000063_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Upward and Outward Growth: Managing Urban Expansion for More Equitable Cities in the Global South\n\nUrban areas in the Global South are projected to expand significantly, with challenges particularly pronounced in lower-income cities due to weak governance and planning. Analysis of 499 cities reveals that rapid outward growth exacerbates spatial inequities, leading to distorted land markets and inadequate service provision. The authors propose three strategies to manage urban expansion: prioritizing spatial equity through regulations, incrementally increasing serviced land via partnerships, and integrating informal settlements into urban planning. These approaches aim to enhance equitable access to services while promoting economic and environmental sustainability. Urgent public sector action is essential for steering urban growth effectively.]**..."
+          },
+          {
+            "doc_id": "doc_000089",
+            "chunk_id": "doc_000089_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Housing policies for sustainable and inclusive cities: How national governments can deliver affordable housing and compact urban development\n\nTo deliver sustainable and inclusive cities, national housing policies must achieve two objectives at the same time: boost affordable housing supply and deliver compact urban development.]**"
+          },
+          {
+            "doc_id": "doc_000081",
+            "chunk_id": "doc_000081_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Document doc_000081\n\nCities are pivotal in addressing the climate emergency, as they account for over 75% of carbon emissions and host more than half the global population. Implementing low-carbon strategies in urban areas could potentially reduce greenhouse gas emissions by nearly 90% by 2050, yielding an economic benefit of approximately $23.9 trillion. The report emphasizes the necessity for national governments to prioritize urban transformation in their climate strategies, advocating for inclusive, zero-carbon cities that enhance economic growth and social equity. It highlights the urgent need for coordinated policies and investments to realize these goals effectively.]**"
+          },
+          {
+            "doc_id": "doc_000144",
+            "chunk_id": "doc_000144_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Federal Actions For Urban Planning:\n\nMexican cities, generating 90% of the national GDP, face significant challenges such as air quality issues, social inequality, and inadequate urban infrastructure. The report advocates for a 4C+E urban model—compact, coordinated, connected, clean, and equal—requiring reforms in housing, land management, mobility, and risk mitigation. Key recommendations include enhancing affordable housing access for low-income groups, modifying federal mobility funding to prioritize sustainable transport, and establishing a metropolitan governance framework to foster cooperation among municipalities. These changes aim to create more equitable urban environments and improve resilience against climate change.]**"
+          }
+        ],
+        "expected_doc_ids": [
+          "doc_000058",
+          "doc_000063",
+          "doc_000077",
+          "doc_000089",
+          "doc_000075",
+          "doc_000081",
+          "doc_000064",
+          "doc_000144",
+          "doc_000083",
+          "doc_000072"
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "",
+        "key_facts": []
+      }
+    },
+    {
+      "id": "ans_003",
+      "question": "How can national governments better integrate subnational leadership into their NDCs?",
+      "query_type": "policy_integration",
       "difficulty": "medium",
       "retrieval_ground_truth": {
         "expected_passages": [
           {
-            "doc_id": "doc_000017",
-            "chunk_id": "doc_000017_chunk_4",
-            "page": 4,
-            "text_snippet": "Land value capture (LVC) is a public financing strategy that can recover a portion of the real estate value that development along the metro corridor generates for private landowners. Deployed effectively, LVC can help fund the growth of mass transit and allied infrastructure."
-          },
-          {
-            "doc_id": "doc_000017",
-            "chunk_id": "doc_000017_chunk_18",
-            "page": 8,
-            "text_snippet": "Portland (United States) is a notable case. The city strategically invests and offers incentives that foster PPPs to help overcome market barriers. Over the two decades since its inception, the TOD program has invested over $46 million cumulatively. As a result, the 41 TOD projects completed at the time of this writing have leveraged $15.3 million of this investment to support development activities worth more than $684 million"
+            "doc_id": "doc_000108",
+            "chunk_id": "doc_000108_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Stronger NDCs With Cities, States, and Regions: Recommendations for National Governments\n\nCountries can significantly enhance the ambition of their Nationally Determined Contributions (NDCs) through a more collaborative and integrated approach with subnational governments to fully align with the Paris Agreement goals. This document supports national governments in the facilitation of input from subnational governments in the NDC development process.]**"
           }
         ],
         "expected_doc_ids": [
-          "doc_000017"
+          "doc_000108",
+          "doc_000072",
+          "Seizing_the_Urban_Opportunity_WEB-1",
+          "doc_000088",
+          "visioning-to-implementation-executive-summary",
+          "developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities",
+          "doc_000079",
+          "doc_000090"
         ]
       },
       "synthesis_ground_truth": {
-        "canonical_answer": "Land value capture (LVC) is a public financing strategy that recovers a portion of the real estate value generated by transit corridor development for private landowners, redirecting it to fund mass transit and allied infrastructure. When synergized with transit-oriented development, LVC creates a virtuous cycle: transit investment raises land values, which can be partially captured to fund further transit expansion and local area improvements. Portland's TOD program demonstrates this effectively, having invested $46 million over two decades to leverage over $684 million in development activities.",
-        "key_facts": [
-          "LVC recovers real estate value generated by transit corridor development",
-          "LVC revenue can fund mass transit growth and allied infrastructure",
-          "Portland TOD program invested $46 million and leveraged $684 million in development",
-          "synergizing LVC and TOD creates a virtuous cycle of value creation and capture"
+        "canonical_answer": "",
+        "key_facts": []
+      }
+    },
+    {
+      "id": "ans_004",
+      "question": "How do we improve motorcycle safety in cities?",
+      "query_type": "intervention_design",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_passages": [
+          {
+            "doc_id": "doc_000149",
+            "chunk_id": "doc_000149_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Motorcycle safety and urban road infrastructure\n\nThe UN Global Plan of Action on Road Safety aims to reduce global road fatalities by half by 2030, with a focus on vulnerable road users such as motorcyclists, pedestrians, and cyclists, who collectively account for half of all global road deaths. In Latin America, Africa, and Asia, motorized two-wheelers fleets are growing rapidly accompanied by a rise in road fatalities and injuries. Today, motorized two- and three-wheelers account for 30 percent of total traffic fatalities globally- the highest share by road user.]**"
+          }
+        ],
+        "expected_doc_ids": [
+          "doc_000149",
+          "doc_000130",
+          "doc_000154",
+          "doc_000084",
+          "doc_000052"
         ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "",
+        "key_facts": []
+      }
+    },
+    {
+      "id": "ans_005",
+      "question": "How can cities pay for electric buses?",
+      "query_type": "financing",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_passages": [
+          {
+            "doc_id": "financing-electric-hybrid-electric-buses_0",
+            "chunk_id": "financing-electric-hybrid-electric-buses_0_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Electric and Hybrid Electric Buses in Public Fleets: Ten Questions for City Decision-Makers\n\nElectric and hybrid-electric buses present significant environmental and economic benefits for urban transit, including lower emissions and potential cost savings over their lifetime despite higher initial costs. The research identifies ten critical questions for city decision-makers, addressing procurement strategies, financing options, and the roles of various stakeholders, including utility companies. By analyzing 26 case studies from 22 cities, the authors highlight diverse implementation experiences and emphasize the need for flexible financing models and investment incentives to overcome upfront cost barriers. This guidance aims to facilitate informed decision-making for cities considering the adoption of electric bus fleets.]**..."
+          },
+          {
+            "doc_id": "WP_Ebus_Financing_10th_Sep_V2_1",
+            "chunk_id": "WP_Ebus_Financing_10th_Sep_V2_1_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Assessing Financing Challenges for Implementing the Large-scale Electric Bus Program in India\n\nIndia's ambitious plan to deploy 50,000–60,000 electric buses (e-buses) faces significant financing challenges, primarily due to high collateral demands from lenders and the financial instability of public transport agencies (PTAs). This working paper draws on stakeholder interviews and a literature review to identify these constraints and suggests that payment security mechanisms and improved transparency could mitigate risks for private operators. The findings emphasize the need for reforms to enhance PTAs' financial health and operational efficiency to attract private investment. Addressing these challenges is crucial for scaling up e-bus deployment and achieving national climate targets.]**..."
+          }
+        ],
+        "expected_doc_ids": [
+          "barriers-to-adopting-electric-buses-executive-summary",
+          "financing-electric-hybrid-electric-buses_0",
+          "how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary",
+          "e-Bus_Guidebook_22nd_March",
+          "electric-school-bus-us-market-study",
+          "WP_Ebus_Financing_10th_Sep_V2_1",
+          "doc_000040"
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "",
+        "key_facts": []
+      }
+    },
+    {
+      "id": "ans_006",
+      "question": "What are nature-based solutions and how can they improve cities?",
+      "query_type": "conceptual",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_passages": [
+          {
+            "doc_id": "doc_000092",
+            "chunk_id": "doc_000092_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Accelerating Nature-Based Solutions in Brazilian Cities\n\nNature-based solutions (NBS) are essential for enhancing urban resilience in Brazilian cities, yet their implementation is hindered by a lack of robust project structures. The Accelerator of NBS in Cities program successfully guided ten projects through capacity building and mentoring, enabling them to progress from ideation to advanced structuring stages. Key challenges included economic-financial valuation and stakeholder engagement, highlighting the need for multidisciplinary collaboration and political support. The findings underscore the demand for NBS initiatives and suggest that targeted acceleration programs can effectively foster innovative urban solutions to combat climate change impacts.]**"
+          },
+          {
+            "doc_id": "doc_000121",
+            "chunk_id": "doc_000121_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Nature-Based Solutions in Sub-Saharan Africa for Climate and Water Resilience\n\nThis technical note outlines the methodology used to create a region-wide dataset of projects that have implemented NBS for climate- and water-resilience objectives in two multilateral development bank (MDB) portfolios — the World Bank and the African Development Bank.]**"
+          }
+        ],
+        "expected_doc_ids": [
+          "doc_000092",
+          "doc_000042",
+          "doc_000121",
+          "doc_000161",
+          "Seizing_the_Urban_Opportunity_WEB-1",
+          "doc_000001",
+          "doc_000162",
+          "doc_000055"
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "",
+        "key_facts": []
+      }
+    },
+    {
+      "id": "ans_007",
+      "question": "How do slums and informality affect climate resilience in cities?",
+      "query_type": "impact_assessment",
+      "difficulty": "hard",
+      "retrieval_ground_truth": {
+        "expected_passages": [
+          {
+            "doc_id": "doc_000055",
+            "chunk_id": "doc_000055_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Prepared Communities: Implementing the Urban Community Resilience Assessment in Vulnerable Neighborhoods of Three Cities\n\nClimate change affects poor and marginalized communities first and hardest. Particularly in cities, a lack of access to basic services, a long history of unsustainable urban development, and political exclusion render the urban poor one of the most vulnerable groups to climate induced natural hazards and disasters. Yet strategies focused on reducing these people’s vulnerability to climate change often overlook crucial differences in their needs and situations.]**"
+          },
+          {
+            "doc_id": "doc_000065",
+            "chunk_id": "doc_000065_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Surabaya: The Legacy of Participatory Upgrading of Informal Settlements\n\nThis case study in the World Resources Report (WRR), Towards a More Equal City, describes the history of Surabaya, Indonesia’s inclusive housing policy and how the Kampung Improvement Program (KIP) became a model for in situ slum upgrading efforts both nationwide and internationally. KIPs put residents at the heart of upgrading work and brought basic infrastructure and services to traditional urban neighborhoods called kampung.]**"
+          }
+        ],
+        "expected_doc_ids": [
+          "doc_000055",
+          "doc_000165",
+          "doc_000151",
+          "doc_000159",
+          "doc_000153",
+          "doc_000128",
+          "doc_000166",
+          "doc_000162",
+          "doc_000065"
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "",
+        "key_facts": []
+      }
+    },
+    {
+      "id": "ans_008",
+      "question": "What are the key opportunities for enhancing public transport in NDCs?",
+      "query_type": "opportunity_identification",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_passages": [
+          {
+            "doc_id": "doc_000119",
+            "chunk_id": "doc_000119_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Fare-free Bus Travel Scheme for Women: Lessons from Delhi\n\nDelhi's fare-free public transport (FFPT) scheme for women, launched in 2019, has significantly increased female bus ridership from 33% to 42% by 2023, particularly benefiting low-income women who reported saving up to INR 500 monthly. Employing a mixed-methods approach, the study analyzed quantitative data from 2,010 women and qualitative insights from interviews, revealing enhanced access to education and employment opportunities. Despite these gains, challenges such as harassment and overcrowding persist, necessitating improved service quality and staff sensitization. The findings underscore the importance of gender-focused transport policies in promoting women's mobility and empowerment in urban settings.]**"
+          },
+          {
+            "doc_id": "doc_000123",
+            "chunk_id": "doc_000123_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Improving Metro Access in India\n\nPoor access (last-mile connectivity) to metro rail systems in India has contributed to lower-than-planned ridership, causing the underutilization of over US$25 billion in investments in the sector. There is little understanding of what metro commuters seek from their last-mile commute. This paper draws from a three-city survey of 7,200 metro commuters to understand current metro user demographics and last-mile choices and preferences. Our data shows that Indian metro systems attract young, middle-income commuters. Indian metro commuters are highly sensitive to last-mile wait times and costs.]**"
+          },
+          {
+            "doc_id": "Seizing_the_Urban_Opportunity_WEB-1",
+            "chunk_id": "Seizing_the_Urban_Opportunity_WEB-1_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Seizing the Urban Opportunity: How national governments can recover from COVID-19, tackle the climate crisis and secure shared prosperity through cities\n\nNational governments can leverage urban areas to drive economic recovery from COVID-19 while addressing climate change, as cities produce 80% of global GDP and house 56% of the population. The report identifies six emerging economies—China, India, Indonesia, Brazil, Mexico, and South Africa—as critical case studies, highlighting that a low-carbon urban transformation can create millions of jobs and significantly reduce greenhouse gas emissions. Recommended strategies include investing in sustainable transport, enhancing urban resilience, and prioritizing inclusive development. The findings underscore the urgent need for national leadership to mobilize resources and implement policies that foster compact, connected, and clean cities.]**..."
+          },
+          {
+            "doc_id": "doc_000080",
+            "chunk_id": "doc_000080_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Connected Urban Growth: Public-Private Collaborations for Transforming Urban Mobility\n\nNew mobility services could improve the lives of all urban inhabitants. This first ever global survey finds that applying three types of new mobility services – electric, on-demand minibuses, subsidized shared rides, and trip-planning and ticketing apps – can make public transport more affordable, accessible and sustainable, if integrated properly.]**"
+          },
+          {
+            "doc_id": "WP_Ebus_Financing_10th_Sep_V2_1",
+            "chunk_id": "WP_Ebus_Financing_10th_Sep_V2_1_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Assessing Financing Challenges for Implementing the Large-scale Electric Bus Program in India\n\nIndia's ambitious plan to deploy 50,000–60,000 electric buses (e-buses) faces significant financing challenges, primarily due to high collateral demands from lenders and the financial instability of public transport agencies (PTAs). This working paper draws on stakeholder interviews and a literature review to identify these constraints and suggests that payment security mechanisms and improved transparency could mitigate risks for private operators. The findings emphasize the need for reforms to enhance PTAs' financial health and operational efficiency to attract private investment. Addressing these challenges is crucial for scaling up e-bus deployment and achieving national climate targets.]**..."
+          }
+        ],
+        "expected_doc_ids": [
+          "doc_000119",
+          "doc_000113",
+          "doc_000123",
+          "Seizing_the_Urban_Opportunity_WEB-1",
+          "doc_000072",
+          "doc_000080",
+          "WP_Ebus_Financing_10th_Sep_V2_1",
+          "doc_000132"
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "",
+        "key_facts": []
+      }
+    },
+    {
+      "id": "ans_009",
+      "question": "How do we make housing more affordable in cities?",
+      "query_type": "intervention_design",
+      "difficulty": "hard",
+      "retrieval_ground_truth": {
+        "expected_passages": [
+          {
+            "doc_id": "doc_000089",
+            "chunk_id": "doc_000089_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Housing policies for sustainable and inclusive cities: How national governments can deliver affordable housing and compact urban development\n\nTo deliver sustainable and inclusive cities, national housing policies must achieve two objectives at the same time: boost affordable housing supply and deliver compact urban development.]**"
+          },
+          {
+            "doc_id": "doc_000044",
+            "chunk_id": "doc_000044_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Confronting the Urban Housing Crisis in the Global South: Adequate, Secure, and Affordable Housing\n\nWell-located, secure and affordable housing is lacking in many cities and is only projected to get worse – it is estimated that 1.6 billion people will lack adequate housing by 2025. Good housing is fundamental to physical and financial security, economic productivity, healthy communities, and human well-being. Addressing the affordable housing gap should be a priority for cities, as it offers the trifold benefits of improved economic productivity, environmental sustainability and equity for cities.]**"
+          },
+          {
+            "doc_id": "doc_000073",
+            "chunk_id": "doc_000073_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Resilient and affordable housing for all: Lessons on house building from Kochi and Trivandrum, India\n\nThis paper analyses lessons from Kochi and Trivandrum, Kerala, India, where municipal government and community partnerships on house building projects have led to better quality new housing stock while reducing costs and environmental impacts.]**"
+          },
+          {
+            "doc_id": "doc_000086",
+            "chunk_id": "doc_000086_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Mexico Frontrunners | Creating safe, affordable and sustainable housing in cities: Lessons from EcoCasa in Hermosillo\n\nThese policy briefs explore innovative approaches in Mexican cities that are addressing the challenges presented by urbanisation and the climate emergency. Focusing on eco-housing in Hermosillo, sustainable cycling in Mexico City and Guadalajara and climate change adaptation in Xalapa, they offer a blueprint for other urban areas in Mexico and around the world.]**"
+          },
+          {
+            "doc_id": "doc_000144",
+            "chunk_id": "doc_000144_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Federal Actions For Urban Planning:\n\nMexican cities, generating 90% of the national GDP, face significant challenges such as air quality issues, social inequality, and inadequate urban infrastructure. The report advocates for a 4C+E urban model—compact, coordinated, connected, clean, and equal—requiring reforms in housing, land management, mobility, and risk mitigation. Key recommendations include enhancing affordable housing access for low-income groups, modifying federal mobility funding to prioritize sustainable transport, and establishing a metropolitan governance framework to foster cooperation among municipalities. These changes aim to create more equitable urban environments and improve resilience against climate change.]**"
+          }
+        ],
+        "expected_doc_ids": [
+          "doc_000089",
+          "doc_000044",
+          "doc_000073",
+          "doc_000086",
+          "doc_000144",
+          "doc_000058",
+          "doc_000088",
+          "doc_000063"
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "",
+        "key_facts": []
       }
     }
   ],
   "metadata": {
-    "total_test_cases": 2,
-    "status": "test-ready",
-    "note": "Contains real passages from corpus documents for testing eval machinery. chunk_ids are empty — run npm run eval:map-chunks to populate them."
+    "generated_at": "2026-02-20T18:57:51.643Z",
+    "status": "production",
+    "labeling_method": "llm_assisted_human_override",
+    "retrieval_params": {
+      "vector_top_k": 150,
+      "bm25_top_k": 150,
+      "rerank_top_n": 10,
+      "max_results": 10
+    },
+    "source_labels_file": "answer-labels-review.json"
   }
 }
