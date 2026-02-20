@@ -123,7 +123,7 @@ service_state = {
     "documents_metadata": {},
     "document_texts": {},
     "evaluation_data": None,
-    "cache": AskWRICache(),
+    "cache": AskWRICache(cache_dir=settings.cache_dir),
     "indexing_in_progress": False,
     "indexing_error": None,
     "indexing_task": None
@@ -400,7 +400,7 @@ def load_documents_and_build_indexes():
     logger.info("Starting document processing and index building...")
 
     # Load CSV metadata first
-    csv_path = Path("/tmp/askWRI_docs/documents.csv")  # Docker container (S3 sync destination)
+    csv_path = Path(settings.documents_local_dir) / "documents.csv"
 
     if csv_path and csv_path.exists():
         df = pd.read_csv(csv_path)
@@ -419,7 +419,7 @@ def load_documents_and_build_indexes():
             file_path = str(row.get('file_path', ''))
             doc_id = file_path.replace('.pdf', '') if file_path else f"doc_{idx}"
 
-            local_file_path = f"/tmp/askWRI_docs/{file_path}"
+            local_file_path = f"{settings.documents_local_dir}/{file_path}"
 
             service_state["documents_metadata"][doc_id] = {
                 "title": metadata_raw.get('Article Title', f'Document {doc_id}'),
@@ -1081,7 +1081,7 @@ async def hybrid_query(request: QueryRequest):
             if base_reranker:
                 try:
                     # Create reranker with dynamic top_n
-                    from llama_index.postprocessor.rankgpt_rerank import SentenceTransformerRerank
+                    from llama_index.core.postprocessor import SentenceTransformerRerank
                     reranker = SentenceTransformerRerank(
                         model=base_reranker._model,
                         top_n=request.rerank_top_n

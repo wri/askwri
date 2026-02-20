@@ -64,6 +64,9 @@ pip-delete-this-directory.txt
 .pytest_cache/
 .ruff_cache/
 
+# Local document data (search service)
+search-service/data/
+
 # OS
 .DS_Store
 Thumbs.db
