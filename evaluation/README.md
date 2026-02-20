@@ -110,6 +110,39 @@ npm run eval:golden-assemble    # build final golden dataset
 
 **Design doc:** `docs/plans/2026-02-20-answer-golden-set-generation-design.md`
 
+### Reviewer Guide
+
+After running `npm run eval:golden-review`, open **http://localhost:3001/eval/review-labels** in your browser.
+
+**What you're looking at:** For each of 9 research questions, an LLM has labeled the top 20 retrieved text passages as Relevant, Partially Relevant, or Not Relevant. Your job is to check these labels and correct any mistakes.
+
+**What the labels mean:**
+- **Relevant** — This passage contains information directly useful for answering the question. It would belong in a synthesized answer.
+- **Partially Relevant** — From a related document but this specific passage is tangential. It's context, not evidence.
+- **Not Relevant** — Not useful for answering the question.
+
+**How labels affect the evaluation:**
+- **Relevant** passages are expected at both chunk-level and doc-level (strictest match)
+- **Partially Relevant** passages are expected at doc-level only (the right document, not necessarily the right passage)
+- **Not Relevant** passages are excluded from expectations entirely
+
+**What to focus on:**
+1. Start with questions that show an orange "needs review" badge — these have labels the LLM was uncertain about
+2. Expand each question section and review the flagged chunks first
+3. Read the passage text and ask: *"Would I include this in a synthesized answer to this question?"*
+   - **Yes** → click **Relevant**
+   - **It's from the right topic but this passage doesn't directly help** → click **Partial**
+   - **No** → click **Not Relevant**
+4. High-confidence labels (collapsed section) can be spot-checked but are usually correct
+
+**Tips:**
+- Click "Show full text" to see the complete passage — the default view is truncated
+- Every click autosaves immediately. You can close the browser and come back later.
+- The LLM tends to be conservative — many "Partially Relevant" passages may actually be "Relevant." When in doubt, lean toward Relevant.
+- A good answer-mode question should have **3-8 relevant passages** across **2-4 different documents**
+
+**When you're done:** Let the dev team know, then run `npm run eval:golden-assemble` to rebuild the golden set from your reviewed labels.
+
 ---
 
 ## Understanding Results
