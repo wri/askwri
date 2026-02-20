@@ -79,7 +79,7 @@ interface LabelsReview {
 // Config
 // ---------------------------------------------------------------------------
 
-const ANSWER_PARAMS = { vector_top_k: 150, bm25_top_k: 150, rerank_top_n: 10 };
+const ANSWER_PARAMS = { vector_top_k: 150, bm25_top_k: 150, rerank_top_n: 10, max_results: 10 };
 
 const EVAL_DIR = __dirname;
 const QUESTION_BANK_PATH = path.join(EVAL_DIR, 'answer-question-bank.json');
