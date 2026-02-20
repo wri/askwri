@@ -69,7 +69,7 @@ export async function chatCiteLlamaIndex(
   overrides?: Record<string, any>,
 ): Promise<ChatResponse> {
   const options: LlamaIndexQueryOptions = {
-    max_results: 150, // Increased for 203-doc corpus (cite mode: recall)
+    max_results: 40, // Increased for 203-doc corpus (cite mode: recall)
     similarity_threshold: 0.0, // Include all potentially relevant documents
     include_metadata: true,
     rerank: true,

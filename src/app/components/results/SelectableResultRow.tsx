@@ -14,6 +14,8 @@ import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { PiDownloadSimpleBold } from 'react-icons/pi'
 import { SelectableResultRowProps } from './types'
 
+const SUMMARY_MAX_LENGTH = 240
+
 export const SelectableResultRow = ({
   rowData,
   selected,
@@ -85,16 +87,10 @@ export const SelectableResultRow = ({
         {docSummaryLoading?.[rowData.id.toString()] ? (
           <span>Loading...</span>
         ) : (
-          <div
-            style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {rowData.summary}
+          <div>
+            {rowData.summary && rowData.summary.length > SUMMARY_MAX_LENGTH
+              ? `${rowData.summary.slice(0, SUMMARY_MAX_LENGTH)}...`
+              : rowData.summary}
           </div>
         )}
       </TableCell>

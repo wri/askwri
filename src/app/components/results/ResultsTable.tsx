@@ -19,6 +19,8 @@ import {
   aiResearchModalHeader,
 } from '../AnswerMode/AIResearchModal'
 
+const PAGE_SIZE = 20
+
 const AiGeneratedTag = (
   <Text
     textStyle='xs'
@@ -78,8 +80,8 @@ const ResultsTable = ({
   onExportBib,
 }: ResultsTableProps) => {
   const totalItems = data.length
+  const pageSize = PAGE_SIZE
   const [selectedRows, setSelectedRows] = useState<RowData[]>([])
-  const [pageSize, setPageSize] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
   const [activeRowId, setActiveRowId] = useState<string | number | null>(null)
   const [modalData, setModalData] = useState<{
@@ -232,13 +234,12 @@ const ResultsTable = ({
           selectedRows={selectedRows}
           onAllItemsSelected={onAllItemsSelected}
           selectable
-          onPageSizeChange={setPageSize}
           onPageChange={setCurrentPage}
           pagination={{
             totalItems,
             currentPage,
             pageSize,
-            showItemCount: true,
+            showItemCount: false,
           }}
         />
       </div>

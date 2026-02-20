@@ -71,6 +71,15 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
       setPassageWhyLoading((prev) => ({ ...prev, [passageId]: true }))
     })
 
+    setDocSummary((prev) => {
+      const next = { ...prev }
+      paginatedItems.forEach(({ doc, kp }) => {
+        if (!next[doc.doc_id]) {
+          next[doc.doc_id] = firstSentence(kp.snippet)
+        }
+      })
+      return next
+    })
     // Fetch batch explanations
     fetch('/api/batch-why', {
       method: 'POST',
@@ -128,19 +137,6 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
           setPassageWhyLoading((prev) => ({ ...prev, [passageId]: false }))
         })
       })
-  }, [paginatedItems])
-
-  // Set doc summaries from first snippet
-  useEffect(() => {
-    setDocSummary((prev) => {
-      const next = { ...prev }
-      paginatedItems.forEach(({ doc, kp }) => {
-        if (!next[doc.doc_id]) {
-          next[doc.doc_id] = firstSentence(kp.snippet)
-        }
-      })
-      return next
-    })
   }, [paginatedItems])
 
   if (allItems.length === 0) return null

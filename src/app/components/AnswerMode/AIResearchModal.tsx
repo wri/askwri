@@ -49,10 +49,6 @@ export const AIResearchModalContent = () => {
 
     try {
       setLoading(true)
-      console.log('🔍 Starting answer mode query:', query)
-      console.log(
-        '⚙️ Answer: Using hybrid retrieval (dense + sparse) with reranking',
-      )
 
       // Step 1: Call the answer mode API for retrieval
       const response = await fetch('/api/llamaindex', {
@@ -68,39 +64,7 @@ export const AIResearchModalContent = () => {
         }),
       })
       const data = await response.json()
-      const { message, docs, usage, debug } = {
-        message: data.message,
-        docs: data.docs,
-        usage: data.usage,
-        debug: { llamaindex: true, ...data.debug },
-      }
-
-      console.log('📊 Retrieved documents:', {
-        message,
-        docsCount: docs.length,
-        usage,
-        debug,
-        retrievalMethod: debug?.retrieval_method || 'hybrid_fusion_rrf',
-      })
-
-      // Enhanced logging for debugging
-      console.log('📚 Document retrieval summary:', {
-        totalDocs: docs.length,
-        stage1Results: debug?.stage1_results,
-        stage2Results: debug?.stage2_results,
-        finalResults: docs.length,
-      })
-
-      // Log sample of documents
-      docs.slice(0, 3).forEach((doc: any, idx: number) => {
-        console.log(`Document ${idx + 1}:`, {
-          doc_id: doc.doc_id,
-          title: doc.title?.slice(0, 50),
-          score: doc.score,
-          kps_count: doc.kps?.length || 0,
-          has_snippets: doc.kps?.some((kp: any) => kp.snippet?.length > 10),
-        })
-      })
+      const { docs } = data
 
       // IMPORTANT: Save ALL docs immediately (like original implementation)
       setSupportingDocs(docs)
@@ -112,28 +76,6 @@ export const AIResearchModalContent = () => {
           d.kps.length > 0 &&
           d.kps.some((kp: any) => kp.snippet && kp.snippet.length > 10),
       )
-
-      console.log('📚 Document validation for synthesis:', {
-        totalRetrieved: docs.length,
-        validDocs: validDocs.length,
-        docsWithKps: docs.filter((d: any) => d.kps && d.kps.length > 0).length,
-        docsWithSnippets: docs.filter((d: any) =>
-          d.kps?.some((kp: any) => kp.snippet && kp.snippet.length > 10),
-        ).length,
-      })
-
-      // Log validation details for first few docs
-      docs.slice(0, 3).forEach((d: any, idx: number) => {
-        console.log(`Doc ${idx + 1} validation:`, {
-          doc_id: d.doc_id,
-          title: d.title?.slice(0, 30),
-          kpsCount: d.kps?.length,
-          hasValidKPs: d.kps?.some(
-            (kp: any) => kp.snippet && kp.snippet.length > 10,
-          ),
-          firstSnippet: d.kps?.[0]?.snippet?.slice(0, 50),
-        })
-      })
 
       if (validDocs.length === 0) {
         console.warn('⚠️ No valid docs with snippets for synthesis!')
@@ -158,23 +100,6 @@ export const AIResearchModalContent = () => {
       // Step 2: Get top quality docs for synthesis (top 40%, max 6)
       const topQualityDocs = getTopQualityDocs(validDocs, 6)
 
-      console.log('🎯 Top quality docs for synthesis:', {
-        count: topQualityDocs.length,
-        qualityFilter: 'top 40%',
-        maxDocs: 6,
-        titles: topQualityDocs.map((d: any) => d.title?.slice(0, 50)),
-        scores: topQualityDocs.map((d: any) => d.score?.toFixed(3)),
-      })
-
-      // Step 3: Call synthesis API to generate answer
-      console.log('🔄 Calling synthesis API with:', {
-        query: query.trim().slice(0, 50),
-        docsCount: topQualityDocs.length,
-        docsHaveKps: topQualityDocs.every(
-          (d: any) => d.kps && d.kps.length > 0,
-        ),
-      })
-
       const synthesisResponse = await fetch('/api/answer', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -188,25 +113,7 @@ export const AIResearchModalContent = () => {
 
       const synthesisResult = await synthesisResponse.json()
 
-      console.log('💡 Answer synthesis result:', {
-        ok: synthesisResult?.ok,
-        hasSynthesis: !!synthesisResult?.synthesis,
-        sentenceCount: synthesisResult?.synthesis?.sentences?.length,
-        paragraphCount: synthesisResult?.synthesis?.paragraphs?.length,
-        warning: synthesisResult?.synthesis?.warning,
-        warningMessage: synthesisResult?.synthesis?.warningMessage,
-        debug: synthesisResult?.debug,
-      })
-
       if (synthesisResult?.synthesis) {
-        console.log('✅ Synthesis completed successfully')
-        console.log('📝 Answer structure:', {
-          hasSentences: !!synthesisResult.synthesis.sentences,
-          sentenceCount: synthesisResult.synthesis.sentences?.length,
-          hasParagraphs: !!synthesisResult.synthesis.paragraphs,
-          paragraphCount: synthesisResult.synthesis.paragraphs?.length,
-        })
-
         const { sentences, paragraphs, warning, warningMessage } =
           synthesisResult.synthesis
 
@@ -221,13 +128,6 @@ export const AIResearchModalContent = () => {
           return
         }
 
-        // Generate citations for each sentence manually (like the original implementation)
-        console.log('[Citation generation] Starting citation mapping:', {
-          sentenceCount: sentences.length,
-          docsForCitations: validDocs.length,
-          docTitles: validDocs.map((d: any) => d.title?.slice(0, 30)),
-        })
-
         // Collect ALL available chunks/passages from ALL documents
         const allChunks: { doc: any; kp: any }[] = []
         validDocs.forEach((doc: any) => {
@@ -237,10 +137,6 @@ export const AIResearchModalContent = () => {
             }
           })
         })
-
-        console.log(
-          `[Citations] Available chunks: ${allChunks.length} from ${validDocs.length} docs`,
-        )
 
         if (allChunks.length === 0) {
           console.warn('[Citations] No valid chunks available for citations!')
@@ -261,10 +157,6 @@ export const AIResearchModalContent = () => {
             allChunks.length,
           )
 
-          console.log(
-            `[Citations] Sentence ${sentIdx}: distributing chunks ${startIdx}-${endIdx}`,
-          )
-
           for (let i = startIdx; i < endIdx; i++) {
             const chunk = allChunks[i]
             if (chunk && chunk.kp) {
@@ -278,25 +170,14 @@ export const AIResearchModalContent = () => {
           // Fallback: ensure every sentence has at least one citation
           if (refs.length === 0 && allChunks.length > 0) {
             const fallbackChunk = allChunks[sentIdx % allChunks.length]
-            console.log(
-              `[Citations] Using fallback chunk for sentence ${sentIdx}`,
-            )
+
             refs.push({
               ref: fallbackChunk.doc.ref,
               page: fallbackChunk.kp.page ?? 1,
             })
           }
 
-          console.log(
-            `[Citations] Sentence ${sentIdx}: ${refs.length} citations assigned`,
-          )
           return refs
-        })
-
-        console.log('🔗 Citation generation complete:', {
-          totalCitations: inline.reduce((sum, refs) => sum + refs.length, 0),
-          citationsPerSentence: inline.map((refs) => refs.length),
-          uniqueDocs: new Set(inline.flat().map((ref) => ref.ref)).size,
         })
 
         // Calculate confidence based on document coverage
@@ -313,17 +194,6 @@ export const AIResearchModalContent = () => {
         }
 
         setAnswer(answerWithCitations)
-        // Note: supportingDocs already set earlier with ALL docs
-
-        console.log('💾 Answer saved successfully:', {
-          sentenceCount: answerWithCitations.sentences.length,
-          paragraphCount: answerWithCitations.paragraphs?.length || 0,
-          inlineCount: answerWithCitations.inline.length,
-          confidence: answerWithCitations.confidence.toFixed(3),
-          hasWarning: !!warning,
-          totalDocs: docs.length,
-          validDocs: validDocs.length,
-        })
 
         // Log warning if present
         if (warning) {
@@ -427,7 +297,6 @@ export const AIResearchModalContent = () => {
         <InlineMessage
           size='full-width'
           variant='warning'
-      
           label='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
         />
       </div>
