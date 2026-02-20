@@ -28,7 +28,12 @@
           "doc_000063",
           "doc_000072",
           "doc_000071",
-          "doc_000058"
+          "doc_000058",
+          "doc_000144",
+          "doc_000029",
+          "doc_000164",
+          "doc_000157",
+          "doc_000069"
         ]
       },
       "synthesis_ground_truth": {
@@ -66,6 +71,18 @@
             "chunk_id": "doc_000144_chunk_0",
             "page": 1,
             "text_snippet": "**[Federal Actions For Urban Planning:\n\nMexican cities, generating 90% of the national GDP, face significant challenges such as air quality issues, social inequality, and inadequate urban infrastructure. The report advocates for a 4C+E urban model—compact, coordinated, connected, clean, and equal—requiring reforms in housing, land management, mobility, and risk mitigation. Key recommendations include enhancing affordable housing access for low-income groups, modifying federal mobility funding to prioritize sustainable transport, and establishing a metropolitan governance framework to foster cooperation among municipalities. These changes aim to create more equitable urban environments and improve resilience against climate change.]**"
+          },
+          {
+            "doc_id": "doc_000160",
+            "chunk_id": "doc_000160_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Las ciudades mexicanas: tendencias de expansión y sus impactos\n\nUrban expansion in Mexican cities has led to increased emissions and significant social inequality, with lower socioeconomic groups facing limited access to essential urban services. Analyzing data from 2000 to 2018, the study reveals that urban growth has not been justified by population increases, resulting in lower density and higher emissions of certain pollutants. The findings highlight the urgent need for a shift towards a compact and equitable urban model, emphasizing tailored public policies to address diverse urban realities. This research supports the Coalition for Urban Transitions' goal of promoting sustainable urban development and reducing emissions by 2050.]**"
+          },
+          {
+            "doc_id": "doc_000074",
+            "chunk_id": "doc_000074_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Mexican Cities: Expansion trends and their impacts\n\nMexican cities have experienced significant urban sprawl over the past two decades, characterized by reduced density and increased emissions of pollutants, particularly in smaller cities. The analysis reveals a correlation between decreased urban density and rising levels of carbon monoxide, ammonia, and nitrous oxides, necessitating further investigation. Socioeconomic disparities are pronounced, with lower-income groups facing limited access to employment and public services, highlighting the need for tailored public policies. The findings underscore the urgency for a shift towards a compact, connected, and equitable urban model to address environmental and social challenges.]**"
           }
         ],
         "expected_doc_ids": [
@@ -78,7 +95,15 @@
           "doc_000064",
           "doc_000144",
           "doc_000083",
-          "doc_000072"
+          "doc_000072",
+          "doc_000066",
+          "doc_000080",
+          "doc_000159",
+          "doc_000164",
+          "doc_000160",
+          "doc_000154",
+          "doc_000074",
+          "doc_000166"
         ]
       },
       "synthesis_ground_truth": {
@@ -98,6 +123,18 @@
             "chunk_id": "doc_000108_chunk_0",
             "page": 1,
             "text_snippet": "**[Stronger NDCs With Cities, States, and Regions: Recommendations for National Governments\n\nCountries can significantly enhance the ambition of their Nationally Determined Contributions (NDCs) through a more collaborative and integrated approach with subnational governments to fully align with the Paris Agreement goals. This document supports national governments in the facilitation of input from subnational governments in the NDC development process.]**"
+          },
+          {
+            "doc_id": "doc_000157",
+            "chunk_id": "doc_000157_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Acciones federales para la planeación urbana: hacia mejores ciudades para todos\n\nUrban planning in Mexico faces significant challenges, including air quality, water supply, and social inequality, despite cities generating 90% of the national GDP. The report identifies six key areas for federal policy improvement: inclusive housing, land management, sustainable mobility, urban resilience, metropolitan governance, and urban financing. Recommendations emphasize the need for a coordinated approach among government levels, improved legal frameworks, and investment in sustainable infrastructure. By adopting a compact, connected, and equitable urban model, the report aims to enhance quality of life and address climate change effectively.]**"
+          },
+          {
+            "doc_id": "doc_000144",
+            "chunk_id": "doc_000144_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Federal Actions For Urban Planning:\n\nMexican cities, generating 90% of the national GDP, face significant challenges such as air quality issues, social inequality, and inadequate urban infrastructure. The report advocates for a 4C+E urban model—compact, coordinated, connected, clean, and equal—requiring reforms in housing, land management, mobility, and risk mitigation. Key recommendations include enhancing affordable housing access for low-income groups, modifying federal mobility funding to prioritize sustainable transport, and establishing a metropolitan governance framework to foster cooperation among municipalities. These changes aim to create more equitable urban environments and improve resilience against climate change.]**"
           }
         ],
         "expected_doc_ids": [
@@ -107,8 +144,14 @@
           "doc_000088",
           "visioning-to-implementation-executive-summary",
           "developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities",
+          "doc_000089",
           "doc_000079",
-          "doc_000090"
+          "doc_000090",
+          "doc_000150",
+          "doc_000081",
+          "doc_000025",
+          "doc_000157",
+          "doc_000144"
         ]
       },
       "synthesis_ground_truth": {
@@ -135,7 +178,9 @@
           "doc_000130",
           "doc_000154",
           "doc_000084",
-          "doc_000052"
+          "doc_000052",
+          "doc_000043",
+          "doc_000152"
         ]
       },
       "synthesis_ground_truth": {
@@ -170,7 +215,13 @@
           "e-Bus_Guidebook_22nd_March",
           "electric-school-bus-us-market-study",
           "WP_Ebus_Financing_10th_Sep_V2_1",
-          "doc_000040"
+          "doc_000040",
+          "electrifying-us-school-bus-fleets-equitably",
+          "doc_000145",
+          "costs-emissions-appraisal-tool-transit-buses",
+          "Open_E-bus_blueprint_working_paper_web",
+          "needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023",
+          "doc_000132"
         ]
       },
       "synthesis_ground_truth": {
@@ -204,9 +255,10 @@
           "doc_000121",
           "doc_000161",
           "Seizing_the_Urban_Opportunity_WEB-1",
-          "doc_000001",
           "doc_000162",
-          "doc_000055"
+          "doc_000055",
+          "doc_000164",
+          "doc_000058"
         ]
       },
       "synthesis_ground_truth": {
@@ -228,6 +280,12 @@
             "text_snippet": "**[Prepared Communities: Implementing the Urban Community Resilience Assessment in Vulnerable Neighborhoods of Three Cities\n\nClimate change affects poor and marginalized communities first and hardest. Particularly in cities, a lack of access to basic services, a long history of unsustainable urban development, and political exclusion render the urban poor one of the most vulnerable groups to climate induced natural hazards and disasters. Yet strategies focused on reducing these people’s vulnerability to climate change often overlook crucial differences in their needs and situations.]**"
           },
           {
+            "doc_id": "doc_000153",
+            "chunk_id": "doc_000153_chunk_0",
+            "page": 1,
+            "text_snippet": "**[From practice to theory emerging lessons from Asia for building urban climate change resilience\n\nEmerging lessons from the Asian Cities Climate Change Resilience Network (ACCCRN) highlight ten critical action areas for enhancing urban climate resilience in secondary cities across Asia. The initiative identified over 59 resilience-building measures, with 23 currently implemented, focusing on integrated urban planning, emergency management, and ecosystem services. Case studies reveal significant challenges, particularly regarding political economy influences and equitable distribution of resilience benefits. The findings underscore the necessity for multi-stakeholder collaboration and adaptive governance to effectively address climate vulnerabilities in urban settings. This empirical evidence contributes to refining both theory and practice in urban climate resilience.]**..."
+          },
+          {
             "doc_id": "doc_000065",
             "chunk_id": "doc_000065_chunk_0",
             "page": 1,
@@ -243,7 +301,14 @@
           "doc_000128",
           "doc_000166",
           "doc_000162",
-          "doc_000065"
+          "doc_000065",
+          "Seizing_the_Urban_Opportunity_WEB-1",
+          "doc_000164",
+          "doc_000085",
+          "doc_000163",
+          "doc_000092",
+          "doc_000144",
+          "doc_000086"
         ]
       },
       "synthesis_ground_truth": {
@@ -271,12 +336,6 @@
             "text_snippet": "**[Improving Metro Access in India\n\nPoor access (last-mile connectivity) to metro rail systems in India has contributed to lower-than-planned ridership, causing the underutilization of over US$25 billion in investments in the sector. There is little understanding of what metro commuters seek from their last-mile commute. This paper draws from a three-city survey of 7,200 metro commuters to understand current metro user demographics and last-mile choices and preferences. Our data shows that Indian metro systems attract young, middle-income commuters. Indian metro commuters are highly sensitive to last-mile wait times and costs.]**"
           },
           {
-            "doc_id": "Seizing_the_Urban_Opportunity_WEB-1",
-            "chunk_id": "Seizing_the_Urban_Opportunity_WEB-1_chunk_0",
-            "page": 1,
-            "text_snippet": "**[Seizing the Urban Opportunity: How national governments can recover from COVID-19, tackle the climate crisis and secure shared prosperity through cities\n\nNational governments can leverage urban areas to drive economic recovery from COVID-19 while addressing climate change, as cities produce 80% of global GDP and house 56% of the population. The report identifies six emerging economies—China, India, Indonesia, Brazil, Mexico, and South Africa—as critical case studies, highlighting that a low-carbon urban transformation can create millions of jobs and significantly reduce greenhouse gas emissions. Recommended strategies include investing in sustainable transport, enhancing urban resilience, and prioritizing inclusive development. The findings underscore the urgent need for national leadership to mobilize resources and implement policies that foster compact, connected, and clean cities.]**..."
-          },
-          {
             "doc_id": "doc_000080",
             "chunk_id": "doc_000080_chunk_0",
             "page": 1,
@@ -287,6 +346,48 @@
             "chunk_id": "WP_Ebus_Financing_10th_Sep_V2_1_chunk_0",
             "page": 1,
             "text_snippet": "**[Assessing Financing Challenges for Implementing the Large-scale Electric Bus Program in India\n\nIndia's ambitious plan to deploy 50,000–60,000 electric buses (e-buses) faces significant financing challenges, primarily due to high collateral demands from lenders and the financial instability of public transport agencies (PTAs). This working paper draws on stakeholder interviews and a literature review to identify these constraints and suggests that payment security mechanisms and improved transparency could mitigate risks for private operators. The findings emphasize the need for reforms to enhance PTAs' financial health and operational efficiency to attract private investment. Addressing these challenges is crucial for scaling up e-bus deployment and achieving national climate targets.]**..."
+          },
+          {
+            "doc_id": "doc_000132",
+            "chunk_id": "doc_000132_chunk_0",
+            "page": 1,
+            "text_snippet": "**[A Fare Look: Funding Urban Public Transport Operations\n\nThis paper investigates the financial challenges urban public transit systems faced during the COVID-19 pandemic, focusing on operational funding sources across 12 global cities. We highlight how fare revenues, a primary income source, sharply declined during the pandemic, and compare how transit agencies from various geographies filled the funding gap via government subsidies, taxes, or alternative revenue streams. The study categorizes funding instruments as direct, indirect, or general, offering a \"toolbox\" of options to enhance financial resilience.]**"
+          },
+          {
+            "doc_id": "barriers-to-adopting-electric-buses-executive-summary",
+            "chunk_id": "barriers-to-adopting-electric-buses-executive-summary_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Barriers to Adopting Electric Buses Report\n\nElectric buses (e-buses) present a significant opportunity for cities to reduce air pollution and greenhouse gas emissions, yet their adoption faces substantial barriers. A comprehensive analysis of 16 case studies across six continents revealed key obstacles, including technological limitations, rigid financial structures, and inadequate institutional support. The report emphasizes the need for policymakers to understand these barriers to facilitate smoother transitions to e-bus fleets. By learning from both successful and unsuccessful implementations, cities can avoid common pitfalls and accelerate the adoption of electric buses, ultimately contributing to climate goals.]**"
+          },
+          {
+            "doc_id": "doc_000102",
+            "chunk_id": "doc_000102_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Pathways to decarbonize India’s transport sector: Scenario analysis using the Energy Policy Simulator\n\nIndia’s Long-Term Low-Carbon Development Strategy (LT-LEDS), submitted in November 2022, highlights key strategies such as electrification, fuel efficiency improvements, and a modal shift to public transport for passenger transport and toward railways for road freight. An integrated assessment of the decarbonization potential of each of these strategies and their cumulative impact is required to prioritize effective low-carbon transport policy packages.]**"
+          },
+          {
+            "doc_id": "doc_000091",
+            "chunk_id": "doc_000091_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Accessibility to public green areas: case study in Belo Horizonte, Brazil\n\nAccessibility to public green areas (PGAs) in Belo Horizonte, Brazil, reveals significant disparities linked to income levels, with wealthier neighborhoods enjoying better access. The study employed a cumulative opportunities measure to assess accessibility by walking, cycling, and public transport, finding that the poorest 10% can access only one PGA within a 15-minute walk, compared to four for the wealthiest. Recommendations include enhancing public transport connections to PGAs in low-income areas and prioritizing the creation of new green spaces in these regions. The findings underscore the need for equitable urban policies to improve access to recreational areas for marginalized communities.]**"
+          },
+          {
+            "doc_id": "doc_000144",
+            "chunk_id": "doc_000144_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Federal Actions For Urban Planning:\n\nMexican cities, generating 90% of the national GDP, face significant challenges such as air quality issues, social inequality, and inadequate urban infrastructure. The report advocates for a 4C+E urban model—compact, coordinated, connected, clean, and equal—requiring reforms in housing, land management, mobility, and risk mitigation. Key recommendations include enhancing affordable housing access for low-income groups, modifying federal mobility funding to prioritize sustainable transport, and establishing a metropolitan governance framework to foster cooperation among municipalities. These changes aim to create more equitable urban environments and improve resilience against climate change.]**"
+          },
+          {
+            "doc_id": "understanding-impact-bus-aggregators-urban-mobility-indias-national-capital-region",
+            "chunk_id": "understanding-impact-bus-aggregators-urban-mobility-indias-national-capital-region_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Understanding the Impact of Bus Aggregators on Urban Mobility in India's National Capital Region\n\nDemand-responsive bus services, particularly Shuttl in Delhi-NCR, have been shown to significantly reduce urban transportation emissions and congestion by shifting commuters from private vehicles. An intercept survey revealed that 67% of Shuttl users previously relied on car-based modes, indicating a substantial potential for improving air quality and reducing road congestion. The study highlights the distinct market segment targeted by bus aggregators, primarily high-income commuters, and suggests that these services can coexist with public transit by catering to different user needs. Policymakers are encouraged to consider integrating such models into existing transportation frameworks to enhance urban mobility.]**..."
+          },
+          {
+            "doc_id": "completing-the-trip",
+            "chunk_id": "completing-the-trip_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Completing the Trip: Establishing a Global Quantified Climate Goal for the Transport Sector\n\nEstablishing a global quantified climate goal for the transport sector is essential to achieve the Paris Agreement targets, necessitating a 59% reduction in emissions by 2050. The proposed goal includes transitioning to 35% green fuels and a 25% reduction in energy consumption by 2035, emphasizing electrification and modal shifts towards public transport and active mobility. The analysis draws on the International Energy Agency's recommendations and highlights the need for cohesive international commitments to guide national climate strategies. Implementing such targets can enhance accountability and drive investment in sustainable transport solutions, ultimately facilitating a comprehensive decarbonization pathway.]**..."
           }
         ],
         "expected_doc_ids": [
@@ -297,7 +398,17 @@
           "doc_000072",
           "doc_000080",
           "WP_Ebus_Financing_10th_Sep_V2_1",
-          "doc_000132"
+          "doc_000132",
+          "barriers-to-adopting-electric-buses-executive-summary",
+          "doc_000102",
+          "doc_000059",
+          "access-climate-finance-low-middle-income-countries",
+          "doc_000091",
+          "doc_000144",
+          "understanding-impact-bus-aggregators-urban-mobility-indias-national-capital-region",
+          "doc_000161",
+          "completing-the-trip",
+          "doc_000016"
         ]
       },
       "synthesis_ground_truth": {
@@ -341,6 +452,24 @@
             "chunk_id": "doc_000144_chunk_0",
             "page": 1,
             "text_snippet": "**[Federal Actions For Urban Planning:\n\nMexican cities, generating 90% of the national GDP, face significant challenges such as air quality issues, social inequality, and inadequate urban infrastructure. The report advocates for a 4C+E urban model—compact, coordinated, connected, clean, and equal—requiring reforms in housing, land management, mobility, and risk mitigation. Key recommendations include enhancing affordable housing access for low-income groups, modifying federal mobility funding to prioritize sustainable transport, and establishing a metropolitan governance framework to foster cooperation among municipalities. These changes aim to create more equitable urban environments and improve resilience against climate change.]**"
+          },
+          {
+            "doc_id": "doc_000157",
+            "chunk_id": "doc_000157_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Acciones federales para la planeación urbana: hacia mejores ciudades para todos\n\nUrban planning in Mexico faces significant challenges, including air quality, water supply, and social inequality, despite cities generating 90% of the national GDP. The report identifies six key areas for federal policy improvement: inclusive housing, land management, sustainable mobility, urban resilience, metropolitan governance, and urban financing. Recommendations emphasize the need for a coordinated approach among government levels, improved legal frameworks, and investment in sustainable infrastructure. By adopting a compact, connected, and equitable urban model, the report aims to enhance quality of life and address climate change effectively.]**"
+          },
+          {
+            "doc_id": "doc_000155",
+            "chunk_id": "doc_000155_chunk_0",
+            "page": 1,
+            "text_snippet": "**[El costo de la expansión urbana en México\n\nThe report analyzes the economic costs associated with urban expansion in eight Mexican metropolitan areas, revealing that such growth can exceed 1% of the national GDP annually. It employs a model that assesses construction costs, emissions, displacement expenses, and the provision of basic services, highlighting that urban structure significantly influences these costs. The findings indicate that without intervention, cities may face unsustainable financial burdens by 2050, necessitating a 48% to 244% increase in municipal spending to maintain current service levels. Recommendations emphasize the importance of strategic housing localization and densification to mitigate costs and enhance urban sustainability.]**"
+          },
+          {
+            "doc_id": "doc_000065",
+            "chunk_id": "doc_000065_chunk_0",
+            "page": 1,
+            "text_snippet": "**[Surabaya: The Legacy of Participatory Upgrading of Informal Settlements\n\nThis case study in the World Resources Report (WRR), Towards a More Equal City, describes the history of Surabaya, Indonesia’s inclusive housing policy and how the Kampung Improvement Program (KIP) became a model for in situ slum upgrading efforts both nationwide and internationally. KIPs put residents at the heart of upgrading work and brought basic infrastructure and services to traditional urban neighborhoods called kampung.]**"
           }
         ],
         "expected_doc_ids": [
@@ -350,8 +479,12 @@
           "doc_000086",
           "doc_000144",
           "doc_000058",
-          "doc_000088",
-          "doc_000063"
+          "doc_000063",
+          "doc_000157",
+          "doc_000155",
+          "doc_000083",
+          "doc_000065",
+          "doc_000064"
         ]
       },
       "synthesis_ground_truth": {
@@ -361,14 +494,14 @@
     }
   ],
   "metadata": {
-    "generated_at": "2026-02-20T18:57:51.643Z",
+    "generated_at": "2026-02-20T19:16:43.657Z",
     "status": "production",
     "labeling_method": "llm_assisted_human_override",
     "retrieval_params": {
       "vector_top_k": 150,
       "bm25_top_k": 150,
-      "rerank_top_n": 10,
-      "max_results": 10
+      "rerank_top_n": 20,
+      "max_results": 20
     },
     "source_labels_file": "answer-labels-review.json"
   }
