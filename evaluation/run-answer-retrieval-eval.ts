@@ -27,6 +27,7 @@ const ANSWER_PARAMS = {
   vector_top_k: 150,
   bm25_top_k: 150,
   rerank_top_n: 20,
+  max_results: 20,
 };
 
 const ADJACENT_TOLERANCE = 1; // chunk N+/-1 counts as partial match
