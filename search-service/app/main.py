@@ -1080,16 +1080,14 @@ async def hybrid_query(request: QueryRequest):
 
             if base_reranker:
                 try:
-                    # Create reranker with dynamic top_n
-                    from llama_index.core.postprocessor import SentenceTransformerRerank
-                    reranker = SentenceTransformerRerank(
-                        model=base_reranker._model,
-                        top_n=request.rerank_top_n
-                    )
-                    stage2_results = reranker.postprocess_nodes(
+                    # Use base reranker with dynamic top_n
+                    original_top_n = base_reranker.top_n
+                    base_reranker.top_n = request.rerank_top_n
+                    stage2_results = base_reranker.postprocess_nodes(
                         stage1_results,
                         query_bundle
                     )
+                    base_reranker.top_n = original_top_n
                     logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results")
                 except Exception as e:
                     logger.warning(f"Reranking failed: {e}, using Stage 1 results")

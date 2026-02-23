@@ -296,12 +296,17 @@ const REVIEW_HTML = `<!DOCTYPE html>
     return chunk.human_override || chunk.label;
   }
 
+  function wasLabeled(chunk) {
+    return chunk.rationale && !chunk.rationale.startsWith('Not labeled (outside top');
+  }
+
   function needsReview(chunk) {
-    return chunk.confidence !== 'high' && !chunk.human_override;
+    return wasLabeled(chunk) && chunk.confidence !== 'high' && !chunk.human_override;
   }
 
   function isQuestionReviewed(q) {
-    return q.chunks.every(c => c.confidence === 'high' || c.human_override);
+    var labeled = q.chunks.filter(wasLabeled);
+    return labeled.every(c => c.confidence === 'high' || c.human_override);
   }
 
   function updateSummary() {
@@ -311,7 +316,7 @@ const REVIEW_HTML = `<!DOCTYPE html>
     let totalChunks = 0;
     let needReviewCount = 0;
     data.questions.forEach(q => {
-      q.chunks.forEach(c => {
+      q.chunks.filter(wasLabeled).forEach(c => {
         totalChunks++;
         if (needsReview(c)) needReviewCount++;
       });
@@ -392,8 +397,9 @@ const REVIEW_HTML = `<!DOCTYPE html>
 
     const q = data.questions[idx];
     const qSafeId = 'q-' + idx;
-    const reviewChunks = q.chunks.filter(needsReview);
-    const autoChunks = q.chunks.filter(c => !needsReview(c));
+    const labeled = q.chunks.filter(wasLabeled);
+    const reviewChunks = labeled.filter(needsReview);
+    const autoChunks = labeled.filter(c => !needsReview(c));
 
     let html = '';
 
