@@ -1072,6 +1072,12 @@ async def hybrid_query(request: QueryRequest):
 
         logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results")
 
+        # If answer mode and cite_doc_ids provided, filter stage1_results
+        if request.mode == "answer" and request.cite_doc_ids:
+            before_filter = len(stage1_results)
+            stage1_results = [n for n in stage1_results if n.node.metadata.get("doc_id") in request.cite_doc_ids]
+            logger.info(f"Answer mode: Filtered to cite_doc_ids ({before_filter} -> {len(stage1_results)})")
+
         # Stage 2: Local Reranking
         if request.rerank and stage1_results:
             # Get base reranker
@@ -1230,6 +1236,7 @@ async def hybrid_query(request: QueryRequest):
             "total_results": len(docs),
             "query": request.query,
             "mode": request.mode,
+            "cite_doc_ids": request.cite_doc_ids,
             "debug": {
                 "service_version": "2.0.0",
                 "retrieval_method": "hybrid_fusion_rrf",

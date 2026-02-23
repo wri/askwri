@@ -268,7 +268,7 @@ const ResultsTable = ({
       />
       <Modal
         header={aiResearchModalHeader}
-        content={<AIResearchModalContent />}
+        content={<AIResearchModalContent citeDocs={dataByPage} />}
         size='xlarge'
         blocking={false}
         open={aiModalOpen}

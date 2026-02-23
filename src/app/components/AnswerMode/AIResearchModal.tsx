@@ -18,7 +18,7 @@ import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
 import { AnswerResult } from './types'
 
-export const AIResearchModalContent = () => {
+export const AIResearchModalContent = ({ citeDocs }: { citeDocs: any[] }) => {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)
@@ -51,6 +51,12 @@ export const AIResearchModalContent = () => {
       setLoading(true)
 
       // Step 1: Call the answer mode API for retrieval
+      // If citeDocs has docs, send cite_doc_ids (top 20)
+      let citeDocIds
+      if (citeDocs && citeDocs.length > 0) {
+        citeDocIds = citeDocs.map((d) => d.id)
+      }
+
       const response = await fetch('/api/llamaindex', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -61,6 +67,7 @@ export const AIResearchModalContent = () => {
           similarity_threshold: 0.05,
           include_metadata: true,
           rerank: true,
+          ...(citeDocIds ? { cite_doc_ids: citeDocIds } : {}),
         }),
       })
       const data = await response.json()
