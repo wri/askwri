@@ -1,5 +1,6 @@
 /* eslint-disable no-console, no-plusplus */
 import { NextRequest, NextResponse } from 'next/server'
+import { ANSWER_PRESET } from '@/config/retrieval'
 
 const SEARCH_SERVICE_URL =
   process.env.SEARCH_SERVICE_URL || 'http://localhost:8000'
@@ -53,17 +54,22 @@ export async function POST(req: NextRequest) {
     } = {
       query,
       mode,
-      max_results: mode === 'cite' ? 100 : 100, // Request more, filter in post-processing
       similarity_threshold: 0.0, // Use 0.0 threshold - let hybrid fusion handle ranking
       include_metadata: true,
       rerank: true, // Enable reranking for quality results
       ...(mode === 'cite'
         ? {
-            vector_top_k: 800, // Increased from 500 for better semantic recall
-            bm25_top_k: 800, // Increased from 500 for better keyword recall
-            rerank_top_n: 120, // Rerank top 120 candidates
+            max_results: 100,
+            vector_top_k: 800,
+            bm25_top_k: 800,
+            rerank_top_n: 120,
           }
-        : {}),
+        : {
+            max_results: ANSWER_PRESET.maxResults,
+            vector_top_k: ANSWER_PRESET.denseTopK,
+            bm25_top_k: ANSWER_PRESET.sparseTopK,
+            rerank_top_n: ANSWER_PRESET.rerankTopN,
+          }),
       ...options,
     }
 

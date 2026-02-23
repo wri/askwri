@@ -362,22 +362,40 @@ const REVIEW_HTML = `<!DOCTYPE html>
     '</div>';
   }
 
+  // Track which questions have been lazily rendered
+  const renderedQuestions = new Set();
+
   function renderQuestion(q, idx) {
     const reviewChunks = q.chunks.filter(needsReview);
-    const autoChunks = q.chunks.filter(c => !needsReview(c));
     const reviewCount = reviewChunks.length;
     const badgeClass = reviewCount === 0 ? 'needs-review-badge done' : 'needs-review-badge';
     const badgeText = reviewCount === 0 ? 'Done' : reviewCount + ' need review';
     const qSafeId = 'q-' + idx;
 
     let html = '<div class="question-section" id="' + qSafeId + '">';
-    html += '<div class="question-header" data-target="' + qSafeId + '-body">';
+    html += '<div class="question-header" data-target="' + qSafeId + '-body" data-qidx="' + idx + '">';
     html += '<span class="chevron" id="' + qSafeId + '-chev">&#9654;</span>';
     html += '<span class="question-id">' + escapeHtml(q.id) + '</span>';
     html += '<span class="question-text">' + escapeHtml(q.question) + '</span>';
     html += '<span class="' + badgeClass + '" id="' + qSafeId + '-badge">' + badgeText + '</span>';
     html += '</div>';
+    // Body starts empty — chunk cards are lazily rendered on first expand
     html += '<div class="question-body" id="' + qSafeId + '-body">';
+    html += '<div class="empty-state">Click to load chunks...</div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderQuestionBody(idx) {
+    if (renderedQuestions.has(idx)) return;
+    renderedQuestions.add(idx);
+
+    const q = data.questions[idx];
+    const qSafeId = 'q-' + idx;
+    const reviewChunks = q.chunks.filter(needsReview);
+    const autoChunks = q.chunks.filter(c => !needsReview(c));
+
+    let html = '';
 
     // Needs review subsection
     html += '<div class="sub-section">';
@@ -407,41 +425,16 @@ const REVIEW_HTML = `<!DOCTYPE html>
     }
     html += '</div></div>';
 
-    html += '</div></div>';
-    return html;
+    const body = document.getElementById(qSafeId + '-body');
+    body.innerHTML = html;
+
+    // Bind events for newly rendered chunk cards
+    bindChunkEvents(body);
   }
 
-  function render() {
-    if (!data || !data.questions) {
-      document.getElementById('app').innerHTML = '<div class="empty-state">No data loaded</div>';
-      return;
-    }
-    let html = '';
-    data.questions.forEach((q, idx) => { html += renderQuestion(q, idx); });
-    document.getElementById('app').innerHTML = html;
-    updateSummary();
-    bindEvents();
-  }
-
-  function bindEvents() {
-    // Question headers toggle
-    document.querySelectorAll('.question-header').forEach(el => {
-      el.addEventListener('click', function() {
-        const targetId = this.getAttribute('data-target');
-        const body = document.getElementById(targetId);
-        const chev = this.querySelector('.chevron');
-        if (body.classList.contains('open')) {
-          body.classList.remove('open');
-          chev.classList.remove('open');
-        } else {
-          body.classList.add('open');
-          chev.classList.add('open');
-        }
-      });
-    });
-
+  function bindChunkEvents(container) {
     // Sub-section headers toggle
-    document.querySelectorAll('.sub-section-header').forEach(el => {
+    container.querySelectorAll('.sub-section-header').forEach(el => {
       el.addEventListener('click', function() {
         const targetId = this.getAttribute('data-target');
         const body = document.getElementById(targetId);
@@ -457,7 +450,7 @@ const REVIEW_HTML = `<!DOCTYPE html>
     });
 
     // Content toggle
-    document.querySelectorAll('.content-toggle').forEach(el => {
+    container.querySelectorAll('.content-toggle').forEach(el => {
       el.addEventListener('click', function() {
         const cardId = this.getAttribute('data-card');
         const card = document.getElementById(cardId);
@@ -477,12 +470,45 @@ const REVIEW_HTML = `<!DOCTYPE html>
     });
 
     // Label buttons
-    document.querySelectorAll('.label-btn').forEach(el => {
+    container.querySelectorAll('.label-btn').forEach(el => {
       el.addEventListener('click', function() {
         const questionId = this.getAttribute('data-q');
         const chunkId = this.getAttribute('data-c');
         const val = this.getAttribute('data-val');
         handleLabelClick(questionId, chunkId, val, this);
+      });
+    });
+  }
+
+  function render() {
+    if (!data || !data.questions) {
+      document.getElementById('app').innerHTML = '<div class="empty-state">No data loaded</div>';
+      return;
+    }
+    let html = '';
+    data.questions.forEach((q, idx) => { html += renderQuestion(q, idx); });
+    document.getElementById('app').innerHTML = html;
+    updateSummary();
+    bindEvents();
+  }
+
+  function bindEvents() {
+    // Question headers toggle — lazy-render chunk cards on first expand
+    document.querySelectorAll('.question-header').forEach(el => {
+      el.addEventListener('click', function() {
+        const targetId = this.getAttribute('data-target');
+        const qIdx = parseInt(this.getAttribute('data-qidx'), 10);
+        const body = document.getElementById(targetId);
+        const chev = this.querySelector('.chevron');
+        if (body.classList.contains('open')) {
+          body.classList.remove('open');
+          chev.classList.remove('open');
+        } else {
+          // Lazy render on first expand
+          renderQuestionBody(qIdx);
+          body.classList.add('open');
+          chev.classList.add('open');
+        }
       });
     });
   }

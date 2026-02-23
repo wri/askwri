@@ -867,10 +867,10 @@ def load_documents_and_build_indexes():
     logger.info(f"🔄 Loading cross-encoder rerankers (using cached models in offline mode)...")
     step_start = time.time()
 
-    logger.info(f"   [1/2] Loading Answer mode reranker (L-12)...")
+    logger.info(f"   [1/2] Loading Answer mode reranker (bge-reranker-v2-m3)...")
     reranker_start = time.time()
     reranker_answer = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-12-v2",  # High precision for Answer mode
+        model="BAAI/bge-reranker-v2-m3",  # 568M params, better passage discrimination for Answer mode
         top_n=20
     )
     logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
@@ -1098,6 +1098,16 @@ async def hybrid_query(request: QueryRequest):
                 stage2_results = stage1_results
         else:
             stage2_results = stage1_results
+
+        # Stage 2.1: Page-1 demotion for answer mode (abstracts → lower priority)
+        if request.mode == "answer" and stage2_results:
+            for node in stage2_results:
+                chunk_idx = node.node.metadata.get("chunk_index", 0)
+                if chunk_idx == 0:
+                    node.score = node.score * 0.5
+            # Re-sort after demotion
+            stage2_results.sort(key=lambda n: n.score, reverse=True)
+            logger.info(f"Stage 2.1 (Page-1 Demotion): applied to answer mode")
 
         # Stage 2.5: Apply metadata filters (year, program, excluded keywords)
         if (request.min_year or request.max_year or

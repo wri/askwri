@@ -18,6 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { checkPythonService, callPythonService } from './lib/service-client';
 import type { AnswerGoldenDataset, AnswerTestCase, ExpectedPassage } from './lib/types';
+import { ANSWER_PRESET } from '../src/config/retrieval';
 
 // ---------------------------------------------------------------------------
 // Local types
@@ -79,7 +80,13 @@ interface LabelsReview {
 // Config
 // ---------------------------------------------------------------------------
 
-const ANSWER_PARAMS = { vector_top_k: 150, bm25_top_k: 150, rerank_top_n: 20, max_results: 20 };
+// Wider window for golden set generation (more chunks to label)
+const GOLDEN_SET_PARAMS = {
+  vector_top_k: ANSWER_PRESET.denseTopK,
+  bm25_top_k: ANSWER_PRESET.sparseTopK,
+  rerank_top_n: 100,
+  max_results: 100,
+};
 
 const EVAL_DIR = __dirname;
 const QUESTION_BANK_PATH = path.join(EVAL_DIR, 'answer-question-bank.json');
@@ -134,7 +141,7 @@ async function phaseRetrieve(): Promise<void> {
     console.log(`[${i + 1}/${bank.questions.length}] "${q.question}"`);
 
     try {
-      const docs = await callPythonService(q.question, 'answer', ANSWER_PARAMS);
+      const docs = await callPythonService(q.question, 'answer', GOLDEN_SET_PARAMS);
 
       const chunks: RetrievedChunk[] = docs.map((d) => ({
         chunk_id: d.metadata?.chunk_id || d.chunk_id || 'unknown',
@@ -179,13 +186,151 @@ async function phaseRetrieve(): Promise<void> {
 // Phase 2: Label
 // ---------------------------------------------------------------------------
 
+const LABEL_TOP_N = 30; // Label only the top 30 chunks per question (by reranker score)
+const BATCH_SIZE = 15;  // Chunks per LLM call
+
+const SYSTEM_PROMPT = `You are an expert research librarian specializing in the WRI (World Resources Institute) urban sustainability corpus. Your task is to evaluate whether retrieved text chunks are relevant to a given research question.
+
+For each chunk, provide:
+- label: "relevant" (directly answers or provides key evidence), "partially_relevant" (tangentially related or provides background context), or "not_relevant" (unrelated to the question)
+- confidence: "high", "medium", or "low"
+- rationale: Brief explanation of your labeling decision (1-2 sentences)
+
+Respond with a JSON array of objects, one per chunk, in order:
+[
+  { "chunk_index": 1, "label": "relevant", "confidence": "high", "rationale": "..." },
+  ...
+]
+
+Return ONLY the JSON array, no other text.`;
+
+type LabelResult = { chunk_index: number; label: string; confidence: string; rationale: string };
+
+async function callAnthropicLabeler(
+  apiKey: string,
+  question: string,
+  chunks: RetrievedChunk[],
+  startIndex: number,
+): Promise<LabelResult[]> {
+  const chunkDescriptions = chunks.map((c, idx) => {
+    return `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`;
+  });
+
+  const userPrompt = `Question: "${question}"
+
+${chunkDescriptions.join('\n\n---\n\n')}
+
+Label each of the ${chunks.length} chunks above.`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      messages: [
+        {
+          role: 'user',
+          content: `${SYSTEM_PROMPT}\n\n${userPrompt}`,
+        },
+      ],
+      temperature: 0.1,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Anthropic API error ${response.status}: ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data.content?.[0]?.text?.trim();
+  if (!content) throw new Error('Empty response from Anthropic');
+
+  const jsonStr = content.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+  return JSON.parse(jsonStr);
+}
+
+async function callOpenAILabeler(
+  apiKey: string,
+  question: string,
+  chunks: RetrievedChunk[],
+  startIndex: number,
+): Promise<LabelResult[]> {
+  const chunkDescriptions = chunks.map((c, idx) => {
+    return `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`;
+  });
+
+  const userPrompt = `Question: "${question}"
+
+${chunkDescriptions.join('\n\n---\n\n')}
+
+Label each of the ${chunks.length} chunks above.`;
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.1,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI API error ${response.status}: ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content?.trim();
+  if (!content) throw new Error('Empty response from OpenAI');
+
+  const jsonStr = content.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+  return JSON.parse(jsonStr);
+}
+
+async function labelBatch(
+  question: string,
+  chunks: RetrievedChunk[],
+  startIndex: number,
+  anthropicKey: string | undefined,
+  openaiKey: string | undefined,
+): Promise<LabelResult[]> {
+  if (anthropicKey) {
+    return callAnthropicLabeler(anthropicKey, question, chunks, startIndex);
+  }
+  if (openaiKey) {
+    return callOpenAILabeler(openaiKey, question, chunks, startIndex);
+  }
+  throw new Error('No API key available');
+}
+
 async function phaseLabel(): Promise<void> {
   console.log('\n=== Phase: LABEL ===\n');
 
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    console.error('ERROR: OPENAI_API_KEY environment variable is required for labeling.');
+  const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
+  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+
+  if (!anthropicKey && !openaiKey) {
+    console.error('ERROR: ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable is required for labeling.');
     process.exit(1);
+  }
+
+  if (anthropicKey) {
+    console.log('Using Anthropic claude-haiku-4-5-20251001 for labeling.');
+  } else {
+    console.log('ANTHROPIC_API_KEY not set, falling back to OpenAI gpt-4o-mini.');
   }
 
   if (!fs.existsSync(RETRIEVAL_RAW_PATH)) {
@@ -203,9 +348,12 @@ async function phaseLabel(): Promise<void> {
 
   for (let i = 0; i < raw.questions.length; i++) {
     const q = raw.questions[i];
-    console.log(`[${i + 1}/${raw.questions.length}] "${q.question}" (${q.retrieved_chunks.length} chunks)`);
+    const totalChunks = q.retrieved_chunks.length;
+    const chunksToLabel = q.retrieved_chunks.slice(0, LABEL_TOP_N);
+    const unlabeledChunks = q.retrieved_chunks.slice(LABEL_TOP_N);
+    console.log(`[${i + 1}/${raw.questions.length}] "${q.question}" (${totalChunks} chunks, labeling top ${chunksToLabel.length})`);
 
-    if (q.retrieved_chunks.length === 0) {
+    if (chunksToLabel.length === 0) {
       console.log('  → No chunks to label, skipping.');
       review.questions.push({
         id: q.id,
@@ -217,76 +365,32 @@ async function phaseLabel(): Promise<void> {
       continue;
     }
 
-    const chunkDescriptions = q.retrieved_chunks.map((c, idx) => {
-      return `Chunk ${idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`;
-    });
-
-    const systemPrompt = `You are an expert research librarian specializing in the WRI (World Resources Institute) urban sustainability corpus. Your task is to evaluate whether retrieved text chunks are relevant to a given research question.
-
-For each chunk, provide:
-- label: "relevant" (directly answers or provides key evidence), "partially_relevant" (tangentially related or provides background context), or "not_relevant" (unrelated to the question)
-- confidence: "high", "medium", or "low"
-- rationale: Brief explanation of your labeling decision (1-2 sentences)
-
-Respond with a JSON array of objects, one per chunk, in order:
-[
-  { "chunk_index": 1, "label": "relevant", "confidence": "high", "rationale": "..." },
-  ...
-]
-
-Return ONLY the JSON array, no other text.`;
-
-    const userPrompt = `Question: "${q.question}"
-
-${chunkDescriptions.join('\n\n---\n\n')}
-
-Label each of the ${q.retrieved_chunks.length} chunks above.`;
-
     let labeledChunks: LabeledChunk[];
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.1,
-        }),
-      });
+      // Batch the chunks for LLM calls
+      const allLabels = new Map<number, LabelResult>();
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`OpenAI API error ${response.status}: ${errText}`);
+      for (let batchStart = 0; batchStart < chunksToLabel.length; batchStart += BATCH_SIZE) {
+        const batch = chunksToLabel.slice(batchStart, batchStart + BATCH_SIZE);
+        const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(chunksToLabel.length / BATCH_SIZE);
+        console.log(`  → Batch ${batchNum}/${totalBatches} (${batch.length} chunks)`);
+
+        const labels = await labelBatch(q.question, batch, batchStart, anthropicKey, openaiKey);
+
+        for (const l of labels) {
+          allLabels.set(l.chunk_index, l);
+        }
+
+        if (batchStart + BATCH_SIZE < chunksToLabel.length) {
+          await sleep(500);
+        }
       }
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content?.trim();
-      if (!content) throw new Error('Empty response from OpenAI');
-
-      // Parse JSON — strip markdown fences if present
-      const jsonStr = content.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
-      const labels: Array<{
-        chunk_index: number;
-        label: string;
-        confidence: string;
-        rationale: string;
-      }> = JSON.parse(jsonStr);
-
-      // Build a map from 1-based chunk_index to label data
-      const labelMap = new Map<number, (typeof labels)[0]>();
-      for (const l of labels) {
-        labelMap.set(l.chunk_index, l);
-      }
-
-      labeledChunks = q.retrieved_chunks.map((chunk, idx) => {
-        const lbl = labelMap.get(idx + 1);
+      // Build labeled chunks for the top N
+      labeledChunks = chunksToLabel.map((chunk, idx) => {
+        const lbl = allLabels.get(idx + 1);
         return {
           ...chunk,
           label: (lbl?.label as LabeledChunk['label']) || 'not_relevant',
@@ -295,6 +399,17 @@ Label each of the ${q.retrieved_chunks.length} chunks above.`;
           human_override: null,
         };
       });
+
+      // Append unlabeled chunks (stored but not labeled)
+      for (const chunk of unlabeledChunks) {
+        labeledChunks.push({
+          ...chunk,
+          label: 'not_relevant' as const,
+          confidence: 'low' as const,
+          rationale: 'Not labeled (outside top 30 by reranker score)',
+          human_override: null,
+        });
+      }
     } catch (err) {
       console.error(`  ✗ Labeling error: ${err}`);
       console.log('  → Falling back: all chunks marked not_relevant/low');
@@ -399,7 +514,7 @@ async function phaseAssemble(): Promise<void> {
       generated_at: new Date().toISOString(),
       status: 'production',
       labeling_method: 'llm_assisted_human_override',
-      retrieval_params: ANSWER_PARAMS,
+      retrieval_params: GOLDEN_SET_PARAMS,
       source_labels_file: 'answer-labels-review.json',
     },
   };

@@ -5,8 +5,7 @@ export type RetrievalParams = {
   alpha?: number;
   rerank?: boolean;
   rerankTopN?: number;
-//  maxTokens?: number;
-//  temperature?: number;
+  maxResults?: number;
 };
 
 export const ANSWER_PRESET: RetrievalParams = {
@@ -16,6 +15,7 @@ export const ANSWER_PRESET: RetrievalParams = {
   alpha: 0.5,        // Balanced dense/sparse for precision
   rerank: true,      // Enable reranking to filter noisy results
   rerankTopN: 20,    // Top 20 snippets → ~10-15 unique docs for synthesis
+  maxResults: 20,
 };
 
 export const CITE_PRESET: RetrievalParams = {

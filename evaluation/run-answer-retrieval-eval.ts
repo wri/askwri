@@ -19,15 +19,15 @@ import type {
   RetrievalEvalReport,
 } from './lib/types';
 import { generateHtmlReport } from './generate-answer-report';
+import { ANSWER_PRESET } from '../src/config/retrieval';
 
 // --- Config ---
 
-// Match ANSWER_PRESET from src/config/retrieval.ts
 const ANSWER_PARAMS = {
-  vector_top_k: 150,
-  bm25_top_k: 150,
-  rerank_top_n: 20,
-  max_results: 20,
+  vector_top_k: ANSWER_PRESET.denseTopK,
+  bm25_top_k: ANSWER_PRESET.sparseTopK,
+  rerank_top_n: ANSWER_PRESET.rerankTopN,
+  max_results: ANSWER_PRESET.maxResults,
 };
 
 const ADJACENT_TOLERANCE = 1; // chunk N+/-1 counts as partial match
