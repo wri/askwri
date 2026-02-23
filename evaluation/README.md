@@ -1,6 +1,6 @@
 ## AskWRI Evaluation System
 
-**Last Updated:** 2026-02-15
+**Last Updated:** 2026-02-23
 
 ## Quick Reference
 
@@ -29,11 +29,19 @@ npm run eval:answer-synthesis -- --mode end-to-end
 npm run eval:answer-full                    # runs retrieval then synthesis
 ```
 
+**Golden Set Management:**
+```bash
+npm run eval:golden-retrieve                # query hybrid service for chunks
+npm run eval:golden-label                   # LLM labels each retrieved chunk
+npm run eval:golden-review                  # open label review UI at :3001
+npm run eval:golden-assemble                # build final golden dataset from reviewed labels
+```
+
 ## Prerequisites
 
 | Service | Required for | How to start |
 |---------|-------------|-------------|
-| Hybrid service (`:8002`) | All evals | `npm run hybrid` |
+| Hybrid service (`:8002`) | All evals, golden set generation | `npm run hybrid` |
 | Next.js (`:3000`) | Answer synthesis only | `npm run dev` |
 | RAGAS Python deps | Answer synthesis only | `pip install -r evaluation/requirements-eval.txt` |
 
@@ -73,7 +81,9 @@ A query passes if **BOTH** conditions are met:
 
 Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
 
-**Design doc:** `docs/plans/2025-01-28-answer-mode-evaluation-design.md`
+**Design docs:**
+- `docs/plans/2026-02-20-answer-golden-set-generation-design.md` — chunk-first golden set pipeline
+- `docs/plans/2026-02-15-answer-retrieval-html-enhancement.md` — HTML report enhancements
 
 ### Track 1: Retrieval (`npm run eval:answer-retrieval`)
 
@@ -92,8 +102,6 @@ Evaluates whether the LLM generates good answers given the retrieved passages. R
 - `--mode end-to-end`: Actual retrieval -> answer API (full pipeline)
 
 **Metrics:** faithfulness, answer relevancy, answer correctness (via RAGAS) + key facts coverage
-
-### Golden Dataset Status
 
 ### Golden Dataset Generation
 
@@ -198,12 +206,19 @@ evaluation/
 ├── run-cite-eval-quick.ts                 # Quick evaluation runner (3 queries)
 ├── generate-report.ts                     # Report generator
 │
-├── # Answer Mode
-├── answer-golden-dataset.json             # Answer mode: golden set (STUB)
+├── # Answer Mode — Evaluation
+├── answer-golden-dataset.json             # Answer mode: 9 production test cases
 ├── run-answer-retrieval-eval.ts           # Track 1: passage/doc-level P/R/F1
 ├── run-answer-synthesis-eval.py           # Track 2: RAGAS faithfulness/relevancy/correctness
 ├── run-answer-synthesis-wrapper.ts        # TS wrapper for Track 2 Python script
+├── generate-answer-report.ts              # HTML report generator for answer evals
 ├── requirements-eval.txt                  # Python deps for Track 2 (ragas, etc.)
+│
+├── # Answer Mode — Golden Set Pipeline
+├── answer-question-bank.json              # 9 human-written research questions
+├── generate-answer-golden-set.ts          # Chunk-first pipeline (retrieve/label/assemble)
+├── serve-label-review.ts                  # Label review server with autosave UI (:3001)
+├── answer-labels-review.json              # LLM + human-reviewed chunk labels
 │
 └── results/
     ├── eval-report-{timestamp}.json       # Cite mode results
