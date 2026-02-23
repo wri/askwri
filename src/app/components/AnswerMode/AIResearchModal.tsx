@@ -18,7 +18,7 @@ import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
 import { AnswerResult } from './types'
 
-export const AIResearchModalContent = ({ citeDocs }: { citeDocs: any[] }) => {
+export const AIResearchModalContent = ({ citeDocs }: { citeDocs?: any[] }) => {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)
