@@ -148,6 +148,8 @@ class QueryRequest(BaseModel):
     max_year: Optional[int] = None  # Filter documents by maximum publication year
     excluded_keywords: Optional[List[str]] = None  # Keywords to exclude from results
     required_program: Optional[str] = None  # Filter by program_series (e.g., "World Resources Report")
+    # Filtering for answer mode
+    cite_doc_ids: Optional[List[str]] = None  # List of doc_ids to filter results (answer mode)
     # Diagnostic parameter
     return_intermediate_results: bool = False  # Return stage-by-stage results for debugging
 
