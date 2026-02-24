@@ -12,6 +12,7 @@ interface LlamaIndexRequest {
   similarity_threshold?: number
   include_metadata?: boolean
   rerank?: boolean
+  cite_doc_ids?: string[]
 }
 
 interface LlamaIndexResponse {

@@ -268,7 +268,9 @@ const ResultsTable = ({
       />
       <Modal
         header={aiResearchModalHeader}
-        content={<AIResearchModalContent />}
+        content={
+          <AIResearchModalContent citeDocs={selectedRows.slice(0, 20)} />
+        }
         size='xlarge'
         blocking={false}
         open={aiModalOpen}
