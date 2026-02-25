@@ -1,9 +1,9 @@
 import { getThemedColor } from '@worldresources/wri-design-systems'
 
-export type RelevanceLevel = number // 0 to 1, where 1 is most relevant
+export type RelevanceLevel = string // 0 to 1, where 1 is most relevant
 
 export function getRelevanceLevel(score: number): RelevanceLevel {
-  return score
+  return score.toString()
 }
 
 // Helper to get relevance color (green, yellow, red) using theme colors
