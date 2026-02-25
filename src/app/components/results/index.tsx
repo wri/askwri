@@ -8,7 +8,7 @@ import {
   Tooltip as DS_Tooltip,
   getThemedColor,
 } from '@worldresources/wri-design-systems'
-import { FaInfoCircle, FaSearch } from 'react-icons/fa'
+import { FaInfoCircle } from 'react-icons/fa'
 import { HiCurrencyDollar } from 'react-icons/hi2'
 import { AiFillThunderbolt } from 'react-icons/ai'
 import { TfiThought } from 'react-icons/tfi'
@@ -85,6 +85,8 @@ const ResultsPage = ({
               </Tooltip>
             </>
           )}
+          {/*
+          TODO: hidding the "Improve Search" button until we decide on wether to implement this feature.
           <Button
             leftIcon={<FaSearch />}
             variant='secondary'
@@ -92,7 +94,7 @@ const ResultsPage = ({
             label='Improve Search'
             aria-label='Improve Search'
             onClick={() => setImproveSearchModalOpen(true)}
-          />
+          /> */}
           <Button
             leftIcon={<TfiThought />}
             variant='secondary'

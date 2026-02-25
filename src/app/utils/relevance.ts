@@ -1,12 +1,9 @@
 import { getThemedColor } from '@worldresources/wri-design-systems'
 
-export type RelevanceLevel = 'High' | 'Medium' | 'Low'
+export type RelevanceLevel = string // 0 to 1, where 1 is most relevant
 
 export function getRelevanceLevel(score: number): RelevanceLevel {
-  const percent = score * 100
-  if (percent >= 70) return 'High'
-  if (percent >= 40) return 'Medium'
-  return 'Low'
+  return score.toString()
 }
 
 // Helper to get relevance color (green, yellow, red) using theme colors

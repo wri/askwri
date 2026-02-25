@@ -36,7 +36,6 @@ const columns = [
   {
     key: 'publication_name',
     label: 'Publication',
-    sortable: true,
   },
   {
     key: 'summary',
@@ -55,7 +54,6 @@ const columns = [
         {AiGeneratedTag}
       </div>
     ),
-    sortable: true,
   },
   {
     key: 'how_relevant',

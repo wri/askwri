@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Heading } from '@chakra-ui/react'
+import { useState, FC } from 'react'
+import { Heading, Spinner } from '@chakra-ui/react'
 import {
   TableRow,
   TableCell,
@@ -9,10 +9,13 @@ import {
   Checkbox,
   Button,
   getThemedColor,
+  Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { PiDownloadSimpleBold } from 'react-icons/pi'
 import { SelectableResultRowProps } from './types'
+
+const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
 const SUMMARY_MAX_LENGTH = 240
 
@@ -26,6 +29,18 @@ export const SelectableResultRow = ({
   onTitleClick,
 }: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
+  // 0 = no vote, 1 = upvoted, -1 = downvoted
+  const [vote, setVote] = useState<0 | 1 | -1>(0)
+  // logSent: null = not sent, 'loading' = sending, 'success' = sent
+  const [logSent, setLogSent] = useState<null | 'loading' | 'success'>(null)
+
+  // TODO: log feedback to database
+  const sendLog = () => {
+    setLogSent('loading')
+    setTimeout(() => {
+      setLogSent('success')
+    }, 700)
+  }
 
   const handleOnRowSelected = ({ checked }: { checked: boolean | string }) => {
     onCheckedChange(rowData, checked)
@@ -52,7 +67,7 @@ export const SelectableResultRow = ({
           checked={selected}
         />
       </TableCell>
-      <TableCell width={450}>
+      <TableCell width='28%'>
         <Heading
           size='lg'
           onClick={() => onTitleClick?.(rowData)}
@@ -83,7 +98,7 @@ export const SelectableResultRow = ({
           {rowData.author}
         </div>
       </TableCell>
-      <TableCell width={400}>
+      <TableCell width='20%'>
         {docSummaryLoading?.[rowData.id.toString()] ? (
           <span>Loading...</span>
         ) : (
@@ -94,9 +109,11 @@ export const SelectableResultRow = ({
           </div>
         )}
       </TableCell>
-      <TableCell width={140}>
+      <TableCell width={120}>
         <div style={{ width: 'fit-content' }}>
-          <Tag label={rowData.relevance} variant='success' />
+          <Tooltip content='0 to 1, where 1 is most relevant'>
+            <Tag label={rowData.relevance} variant='success' />
+          </Tooltip>
         </div>
       </TableCell>
       <TableCell>
@@ -119,20 +136,78 @@ export const SelectableResultRow = ({
         >
           <Button
             variant='borderless'
-            leftIcon={<PiDownloadSimpleBold />}
+            leftIcon={
+              <Tooltip content='Copy citation to clipboard'>
+                <PiDownloadSimpleBold />
+              </Tooltip>
+            }
             aria-label='Download publication'
             onClick={handleDownload}
             disabled={!rowData.download_url}
           />
           <Button
             variant='borderless'
-            leftIcon={<FaThumbsUp />}
-            aria-label='Mark as helpful'
+            leftIcon={
+              logSent === 'loading' && vote === 1 ? (
+                <Spinner />
+              ) : (
+                <Tooltip content='Mark as good result'>
+                  <FaThumbsUp />
+                </Tooltip>
+              )
+            }
+            aria-label='Mark as good result'
+            onClick={() => {
+              if (vote === 1) {
+                setVote(0)
+                setLogSent(null)
+              } else {
+                setVote(1)
+                sendLog()
+              }
+            }}
+            style={
+              vote === 1
+                ? {
+                    background: getThemedColor('success', 300),
+                    color: getThemedColor('success', 900),
+                    opacity: 0.8,
+                  }
+                : {}
+            }
+            disabled={vote === 1 && logSent === 'loading'}
           />
           <Button
             variant='borderless'
-            leftIcon={<FaThumbsDown />}
-            aria-label='Mark as not helpful'
+            leftIcon={
+              logSent === 'loading' && vote === -1 ? (
+                <Spinner />
+              ) : (
+                <Tooltip content='Mark as poor result'>
+                  <FaThumbsDown />
+                </Tooltip>
+              )
+            }
+            aria-label='Mark as poor result'
+            onClick={() => {
+              if (vote === -1) {
+                setVote(0)
+                setLogSent(null)
+              } else {
+                setVote(-1)
+                sendLog()
+              }
+            }}
+            style={
+              vote === -1
+                ? {
+                    background: getThemedColor('error', 300),
+                    color: getThemedColor('error', 900),
+                    opacity: 0.8,
+                  }
+                : {}
+            }
+            disabled={vote === -1 && logSent === 'loading'}
           />
         </div>
       </TableCell>
