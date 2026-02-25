@@ -19,6 +19,8 @@ import * as path from 'path';
 
 const PORT = 3001;
 const LABELS_PATH = path.join(__dirname, 'answer-labels-review.json');
+const SYNTHESIS_EVAL_PATH = path.join(__dirname, 'answer-synthesis-eval-final.json');
+const SYNTHESIS_RAW_PATH = path.join(__dirname, 'answer-synthesis-raw.json');
 
 // ---------------------------------------------------------------------------
 // HTML template
@@ -632,6 +634,497 @@ const REVIEW_HTML = `<!DOCTYPE html>
 </html>`;
 
 // ---------------------------------------------------------------------------
+// Synthesis Review HTML (Task 6 — will replace this placeholder)
+// ---------------------------------------------------------------------------
+
+const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthesis Review - AskWRI Answer Eval</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f6f8; color: #1a1a1a; line-height: 1.5;
+  }
+  .summary-bar {
+    position: sticky; top: 0; z-index: 100; background: #fff;
+    border-bottom: 1px solid #ddd; padding: 12px 24px;
+    display: flex; gap: 24px; align-items: center; font-size: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08); flex-wrap: wrap;
+  }
+  .summary-bar .title-text { font-weight: 600; font-size: 15px; margin-right: 8px; }
+  .summary-bar .stat { color: #555; }
+  .summary-bar .stat b { color: #1a1a1a; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+  .tc-section {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+    margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .tc-header {
+    padding: 14px 18px; cursor: pointer; display: flex;
+    align-items: center; gap: 12px; user-select: none;
+  }
+  .tc-header:hover { background: #fafafa; }
+  .chevron { font-size: 12px; color: #888; transition: transform 0.15s; flex-shrink: 0; }
+  .chevron.open { transform: rotate(90deg); }
+  .tc-id { font-size: 12px; font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 3px; color: #555; }
+  .tc-question { flex: 1; font-size: 14px; font-weight: 500; }
+  .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; color: #fff; }
+  .badge-pending { background: #f59e0b; }
+  .badge-done { background: #22c55e; }
+  .tc-body { display: none; padding: 0 18px 18px; }
+  .tc-body.open { display: block; }
+
+  .panel { margin-bottom: 16px; }
+  .panel-title {
+    font-size: 13px; font-weight: 600; color: #555; padding: 8px 0;
+    cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid #eee; margin-bottom: 8px;
+  }
+
+  .synthesis-box {
+    background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 6px;
+    padding: 14px 16px; font-size: 14px; line-height: 1.7; margin-bottom: 16px;
+  }
+
+  .passage-card {
+    border: 1px solid #e5e5e5; border-radius: 6px; padding: 10px 12px;
+    margin-bottom: 8px; background: #fafafa; font-size: 12px;
+  }
+  .passage-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .passage-title { font-weight: 600; font-size: 12px; }
+  .passage-meta { font-size: 11px; color: #888; font-family: monospace; }
+  .score-badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; color: #fff; }
+  .score-green { background: #22c55e; }
+  .score-yellow { background: #eab308; }
+  .score-red { background: #ef4444; }
+  .passage-snippet {
+    font-family: monospace; font-size: 11px; line-height: 1.5; color: #333;
+    white-space: pre-wrap; word-break: break-word; background: #fff;
+    border: 1px solid #eee; border-radius: 4px; padding: 6px 8px; max-height: 80px; overflow: hidden;
+  }
+  .passage-snippet.expanded { max-height: none; }
+  .snippet-toggle { font-size: 11px; color: #2563eb; cursor: pointer; user-select: none; display: inline-block; margin-top: 4px; }
+  .snippet-toggle:hover { text-decoration: underline; }
+
+  .scores-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .score-item { display: flex; flex-direction: column; align-items: center; min-width: 80px; }
+  .score-label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 2px; }
+  .score-value { font-size: 18px; font-weight: 700; }
+  .sv-green { color: #22c55e; }
+  .sv-yellow { color: #eab308; }
+  .sv-red { color: #ef4444; }
+
+  .feedback-block { font-size: 13px; color: #444; background: #f9f9f9; border-left: 3px solid #ddd; padding: 8px 12px; margin-bottom: 10px; }
+  .issue-card { font-size: 12px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; }
+  .issue-type { font-weight: 600; color: #92400e; text-transform: uppercase; font-size: 10px; }
+  .key-fact-list { list-style: none; padding: 0; }
+  .key-fact-list li { font-size: 13px; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+
+  .human-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; }
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .slider-label { font-size: 12px; font-weight: 500; width: 120px; flex-shrink: 0; }
+  .slider-row input[type=range] { flex: 1; }
+  .slider-val { font-size: 13px; font-weight: 600; width: 32px; text-align: right; }
+  .feedback-textarea { width: 100%; min-height: 60px; font-size: 13px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-family: inherit; }
+  .kf-check { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; }
+  .kf-check input { margin-top: 3px; }
+  .kf-check label { font-size: 13px; cursor: pointer; }
+  .add-fact-row { display: flex; gap: 6px; margin-top: 8px; }
+  .add-fact-input { flex: 1; font-size: 13px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; }
+  .add-fact-btn { font-size: 12px; padding: 6px 12px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+  .add-fact-btn:hover { background: #1d4ed8; }
+  .reviewed-btn {
+    display: inline-block; margin-top: 12px; padding: 8px 20px; font-size: 13px; font-weight: 600;
+    background: #22c55e; color: #fff; border: none; border-radius: 4px; cursor: pointer;
+  }
+  .reviewed-btn:hover { background: #16a34a; }
+  .reviewed-btn.active { background: #86efac; color: #166534; cursor: default; }
+  .save-flash { font-size: 11px; color: #22c55e; font-weight: 600; opacity: 0; transition: opacity 0.2s; margin-left: 8px; }
+  .save-flash.show { opacity: 1; }
+  .error-banner { background: #fef2f2; color: #dc2626; padding: 12px 18px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; display: none; }
+  .empty-state { text-align: center; color: #aaa; padding: 32px; font-size: 14px; }
+  .section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; margin: 12px 0 6px; }
+</style>
+</head>
+<body>
+<div class="summary-bar">
+  <span class="title-text">Synthesis Review</span>
+  <span class="stat" id="stat-reviewed"><b>0</b>/0 reviewed</span>
+  <span class="stat" id="stat-avg-faith">Faith: <b>-</b></span>
+  <span class="stat" id="stat-avg-compl">Compl: <b>-</b></span>
+  <span class="stat" id="stat-avg-conci">Conci: <b>-</b></span>
+  <span class="stat" id="stat-avg-coher">Coher: <b>-</b></span>
+  <span class="stat" id="stat-avg-cite">Cite: <b>-</b></span>
+</div>
+<div class="container">
+  <div class="error-banner" id="error-banner"></div>
+  <div id="app"><div class="empty-state">Loading...</div></div>
+</div>
+<script>
+(function() {
+  var evalData = null;
+  var rawData = null;
+  var saveTimers = {};
+  var renderedBodies = {};
+
+  function esc(str) {
+    var d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML;
+  }
+
+  function scoreColor(v) { return v > 0.7 ? 'green' : v > 0.4 ? 'yellow' : 'red'; }
+
+  function updateSummary() {
+    if (!evalData) return;
+    var tcs = evalData.test_cases;
+    var total = tcs.length;
+    var reviewed = tcs.filter(function(t) { return t.human_eval.reviewed; }).length;
+    document.getElementById('stat-reviewed').innerHTML = '<b>' + reviewed + '</b>/' + total + ' reviewed';
+
+    var dims = ['faithfulness','completeness','conciseness','coherence','citation_accuracy'];
+    var ids = ['stat-avg-faith','stat-avg-compl','stat-avg-conci','stat-avg-coher','stat-avg-cite'];
+    var labels = ['Faith','Compl','Conci','Coher','Cite'];
+    for (var i = 0; i < dims.length; i++) {
+      var vals = tcs.filter(function(t) { return t.human_eval.reviewed; }).map(function(t) { return t.human_eval.scores[dims[i]] || 0; });
+      var avg = vals.length ? vals.reduce(function(a,b){return a+b;},0) / vals.length : 0;
+      document.getElementById(ids[i]).innerHTML = labels[i] + ': <b>' + (vals.length ? avg.toFixed(2) : '-') + '</b>';
+    }
+  }
+
+  function getHumanEval(tcId) {
+    var tc = evalData.test_cases.find(function(t) { return t.test_case_id === tcId; });
+    return tc ? tc.human_eval : null;
+  }
+
+  function saveHumanEval(tcId) {
+    var tc = evalData.test_cases.find(function(t) { return t.test_case_id === tcId; });
+    if (!tc) return;
+    fetch('/api/synthesis-eval/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ test_case_id: tcId, human_eval: tc.human_eval })
+    }).then(function(r) {
+      if (!r.ok) throw new Error('Save failed: ' + r.status);
+      showFlash(tcId);
+      updateSummary();
+      updateBadge(tcId);
+    }).catch(function(e) { showError(e.message); });
+  }
+
+  function debounceSave(tcId) {
+    if (saveTimers[tcId]) clearTimeout(saveTimers[tcId]);
+    saveTimers[tcId] = setTimeout(function() { saveHumanEval(tcId); }, 300);
+  }
+
+  function showFlash(tcId) {
+    var el = document.getElementById('flash-' + tcId);
+    if (!el) return;
+    el.classList.add('show');
+    setTimeout(function() { el.classList.remove('show'); }, 1200);
+  }
+
+  function showError(msg) {
+    var b = document.getElementById('error-banner');
+    b.textContent = msg; b.style.display = 'block';
+    setTimeout(function() { b.style.display = 'none'; }, 5000);
+  }
+
+  function updateBadge(tcId) {
+    var tc = evalData.test_cases.find(function(t) { return t.test_case_id === tcId; });
+    var idx = evalData.test_cases.indexOf(tc);
+    var badge = document.getElementById('badge-' + idx);
+    if (badge && tc) {
+      badge.className = 'badge ' + (tc.human_eval.reviewed ? 'badge-done' : 'badge-pending');
+      badge.textContent = tc.human_eval.reviewed ? 'Reviewed' : 'Pending';
+    }
+  }
+
+  function renderPassages(tcId) {
+    var raw = rawData ? rawData.test_cases.find(function(t) { return t.test_case_id === tcId; }) : null;
+    if (!raw || !raw.retrieved_passages.length) return '<div class="empty-state">No passage data</div>';
+    var h = '';
+    raw.retrieved_passages.forEach(function(p, i) {
+      var sc = scoreColor(p.score);
+      var snip = p.snippet || '';
+      var truncated = snip.length > 200;
+      var preview = truncated ? snip.slice(0, 200) + '...' : snip;
+      var pid = 'p-' + tcId + '-' + i;
+      h += '<div class="passage-card">';
+      h += '<div class="passage-header">';
+      h += '<span class="passage-title">' + esc(p.title) + '</span>';
+      h += '<span class="passage-meta">' + esc(p.doc_id) + '</span>';
+      h += '<span class="score-badge score-' + sc + '">' + p.score.toFixed(3) + '</span>';
+      h += '<span class="passage-meta">p.' + (p.page || '?') + '</span>';
+      h += '</div>';
+      h += '<div class="passage-snippet" id="' + pid + '">' + esc(preview) + '</div>';
+      if (truncated) {
+        h += '<span class="snippet-toggle" data-pid="' + pid + '" data-full="' + esc(snip).replace(/"/g, '&quot;') + '" data-preview="' + esc(preview).replace(/"/g, '&quot;') + '" data-expanded="false">Show full text</span>';
+      }
+      h += '</div>';
+    });
+    return h;
+  }
+
+  function renderLLMEval(llm) {
+    var dims = ['faithfulness','completeness','conciseness','coherence','citation_accuracy'];
+    var h = '<div class="scores-row">';
+    dims.forEach(function(d) {
+      var v = llm.scores[d] || 0;
+      var c = scoreColor(v);
+      h += '<div class="score-item"><span class="score-label">' + d.replace('_',' ') + '</span><span class="score-value sv-' + c + '">' + v.toFixed(1) + '</span></div>';
+    });
+    h += '</div>';
+    if (llm.qualitative_feedback) {
+      h += '<div class="feedback-block">' + esc(llm.qualitative_feedback) + '</div>';
+    }
+    if (llm.flagged_issues && llm.flagged_issues.length) {
+      llm.flagged_issues.forEach(function(issue) {
+        h += '<div class="issue-card"><span class="issue-type">' + esc(issue.type) + '</span> ' + esc(issue.text) + '<br><small>' + esc(issue.detail) + '</small></div>';
+      });
+    }
+    if (llm.key_facts_extracted && llm.key_facts_extracted.length) {
+      h += '<div class="section-label">Key Facts Extracted</div><ul class="key-fact-list">';
+      llm.key_facts_extracted.forEach(function(f) { h += '<li>' + esc(f) + '</li>'; });
+      h += '</ul>';
+    }
+    return h;
+  }
+
+  function renderHumanPanel(tc, idx) {
+    var he = tc.human_eval;
+    var llm = tc.llm_eval;
+    var tcId = tc.test_case_id;
+    var dims = ['faithfulness','completeness','conciseness','coherence','citation_accuracy'];
+
+    var h = '<div class="human-panel">';
+    h += '<div class="section-label">Your Scores</div>';
+    dims.forEach(function(d) {
+      var val = he.reviewed ? he.scores[d] : llm.scores[d];
+      h += '<div class="slider-row">';
+      h += '<span class="slider-label">' + d.replace('_',' ') + '</span>';
+      h += '<input type="range" min="0" max="1" step="0.1" value="' + val + '" data-tc="' + tcId + '" data-dim="' + d + '" class="human-slider">';
+      h += '<span class="slider-val" id="sv-' + tcId + '-' + d + '">' + val.toFixed(1) + '</span>';
+      h += '</div>';
+    });
+
+    h += '<div class="section-label" style="margin-top:12px">Qualitative Feedback</div>';
+    h += '<textarea class="feedback-textarea" data-tc="' + tcId + '" placeholder="What is good, what needs improvement...">' + esc(he.qualitative_feedback) + '</textarea>';
+
+    // Key facts checkboxes
+    if (llm.key_facts_extracted && llm.key_facts_extracted.length) {
+      h += '<div class="section-label" style="margin-top:12px">Confirm Key Facts</div>';
+      llm.key_facts_extracted.forEach(function(f, fi) {
+        var checked = he.key_facts_confirmed.indexOf(f) >= 0 ? ' checked' : '';
+        h += '<div class="kf-check"><input type="checkbox" id="kf-' + tcId + '-' + fi + '" data-tc="' + tcId + '" data-fact="' + esc(f).replace(/"/g, '&quot;') + '" class="kf-checkbox"' + checked + '><label for="kf-' + tcId + '-' + fi + '">' + esc(f) + '</label></div>';
+      });
+    }
+
+    // Add fact
+    h += '<div class="section-label" style="margin-top:12px">Add Key Facts</div>';
+    if (he.key_facts_added.length) {
+      he.key_facts_added.forEach(function(f, fi) {
+        h += '<div class="kf-check"><span style="color:#22c55e;font-size:12px">+</span> <span style="font-size:13px">' + esc(f) + '</span></div>';
+      });
+    }
+    h += '<div class="add-fact-row"><input type="text" class="add-fact-input" id="addfact-' + tcId + '" placeholder="Type a key fact..."><button class="add-fact-btn" data-tc="' + tcId + '">Add</button></div>';
+
+    h += '<button class="reviewed-btn' + (he.reviewed ? ' active' : '') + '" data-tc="' + tcId + '" id="revbtn-' + tcId + '">' + (he.reviewed ? 'Reviewed' : 'Mark as Reviewed') + '</button>';
+    h += '<span class="save-flash" id="flash-' + tcId + '">Saved &#10003;</span>';
+    h += '</div>';
+    return h;
+  }
+
+  function renderTcBody(idx) {
+    if (renderedBodies[idx]) return;
+    renderedBodies[idx] = true;
+    var tc = evalData.test_cases[idx];
+    var tcId = tc.test_case_id;
+    var body = document.getElementById('body-' + idx);
+
+    var h = '';
+    // Synthesis
+    h += '<div class="synthesis-box">' + esc(tc.synthesis_text) + '</div>';
+
+    // Passages (collapsible)
+    h += '<div class="panel"><div class="panel-title" data-target="passages-' + idx + '"><span class="chevron" id="chev-passages-' + idx + '">&#9654;</span> Source Passages (' + tc.passage_count + ')</div>';
+    h += '<div id="passages-' + idx + '" style="display:none">' + renderPassages(tcId) + '</div></div>';
+
+    // LLM eval
+    h += '<div class="panel"><div class="section-label">LLM Evaluation (' + esc(tc.llm_eval.model) + ')</div>';
+    h += renderLLMEval(tc.llm_eval) + '</div>';
+
+    // Human eval
+    h += '<div class="panel"><div class="section-label">Human Evaluation</div>';
+    h += renderHumanPanel(tc, idx) + '</div>';
+
+    body.innerHTML = h;
+    bindBodyEvents(body, idx);
+  }
+
+  function bindBodyEvents(container, idx) {
+    var tc = evalData.test_cases[idx];
+    var tcId = tc.test_case_id;
+
+    // Panel toggles
+    container.querySelectorAll('.panel-title').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var targetId = this.getAttribute('data-target');
+        var target = document.getElementById(targetId);
+        var chev = this.querySelector('.chevron');
+        if (target.style.display === 'none') {
+          target.style.display = 'block';
+          if (chev) chev.classList.add('open');
+        } else {
+          target.style.display = 'none';
+          if (chev) chev.classList.remove('open');
+        }
+      });
+    });
+
+    // Snippet toggles
+    container.querySelectorAll('.snippet-toggle').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var pid = this.getAttribute('data-pid');
+        var snipEl = document.getElementById(pid);
+        var expanded = this.getAttribute('data-expanded') === 'true';
+        if (expanded) {
+          snipEl.textContent = this.getAttribute('data-preview');
+          snipEl.classList.remove('expanded');
+          this.textContent = 'Show full text';
+          this.setAttribute('data-expanded', 'false');
+        } else {
+          snipEl.textContent = this.getAttribute('data-full');
+          snipEl.classList.add('expanded');
+          this.textContent = 'Hide';
+          this.setAttribute('data-expanded', 'true');
+        }
+      });
+    });
+
+    // Sliders
+    container.querySelectorAll('.human-slider').forEach(function(el) {
+      el.addEventListener('input', function() {
+        var dim = this.getAttribute('data-dim');
+        var val = parseFloat(this.value);
+        document.getElementById('sv-' + tcId + '-' + dim).textContent = val.toFixed(1);
+        tc.human_eval.scores[dim] = val;
+        debounceSave(tcId);
+      });
+    });
+
+    // Feedback textarea
+    container.querySelectorAll('.feedback-textarea').forEach(function(el) {
+      el.addEventListener('blur', function() {
+        tc.human_eval.qualitative_feedback = this.value;
+        saveHumanEval(tcId);
+      });
+    });
+
+    // Key fact checkboxes
+    container.querySelectorAll('.kf-checkbox').forEach(function(el) {
+      el.addEventListener('change', function() {
+        var fact = this.getAttribute('data-fact');
+        var confirmed = tc.human_eval.key_facts_confirmed;
+        var idx = confirmed.indexOf(fact);
+        if (this.checked && idx < 0) confirmed.push(fact);
+        if (!this.checked && idx >= 0) confirmed.splice(idx, 1);
+        saveHumanEval(tcId);
+      });
+    });
+
+    // Add fact button
+    container.querySelectorAll('.add-fact-btn').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var input = document.getElementById('addfact-' + tcId);
+        var val = input.value.trim();
+        if (!val) return;
+        tc.human_eval.key_facts_added.push(val);
+        input.value = '';
+        saveHumanEval(tcId);
+        // Re-render body to show new fact
+        renderedBodies[evalData.test_cases.indexOf(tc)] = false;
+        renderTcBody(evalData.test_cases.indexOf(tc));
+      });
+    });
+
+    // Reviewed button
+    container.querySelectorAll('.reviewed-btn').forEach(function(el) {
+      el.addEventListener('click', function() {
+        if (tc.human_eval.reviewed) return;
+        // Copy LLM scores to human scores if reviewer hasn't moved the sliders
+        var dims = ['faithfulness','completeness','conciseness','coherence','citation_accuracy'];
+        dims.forEach(function(d) {
+          if (tc.human_eval.scores[d] === 0 && tc.llm_eval.scores[d] > 0) {
+            tc.human_eval.scores[d] = tc.llm_eval.scores[d];
+          }
+        });
+        tc.human_eval.reviewed = true;
+        this.classList.add('active');
+        this.textContent = 'Reviewed';
+        saveHumanEval(tcId);
+      });
+    });
+  }
+
+  function render() {
+    if (!evalData || !evalData.test_cases.length) {
+      document.getElementById('app').innerHTML = '<div class="empty-state">No synthesis eval data loaded. Run stages 1-2 first.</div>';
+      return;
+    }
+    var h = '';
+    evalData.test_cases.forEach(function(tc, idx) {
+      var reviewed = tc.human_eval.reviewed;
+      h += '<div class="tc-section">';
+      h += '<div class="tc-header" data-idx="' + idx + '">';
+      h += '<span class="chevron" id="chev-' + idx + '">&#9654;</span>';
+      h += '<span class="tc-id">' + esc(tc.test_case_id) + '</span>';
+      h += '<span class="tc-question">' + esc(tc.question) + '</span>';
+      h += '<span class="badge ' + (reviewed ? 'badge-done' : 'badge-pending') + '" id="badge-' + idx + '">' + (reviewed ? 'Reviewed' : 'Pending') + '</span>';
+      h += '</div>';
+      h += '<div class="tc-body" id="body-' + idx + '"><div class="empty-state">Click to load...</div></div>';
+      h += '</div>';
+    });
+    document.getElementById('app').innerHTML = h;
+    updateSummary();
+
+    // Bind header clicks
+    document.querySelectorAll('.tc-header').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        var body = document.getElementById('body-' + idx);
+        var chev = document.getElementById('chev-' + idx);
+        if (body.classList.contains('open')) {
+          body.classList.remove('open');
+          chev.classList.remove('open');
+        } else {
+          renderTcBody(idx);
+          body.classList.add('open');
+          chev.classList.add('open');
+        }
+      });
+    });
+  }
+
+  // Load both data sources
+  Promise.all([
+    fetch('/api/synthesis-eval').then(function(r) { return r.ok ? r.json() : Promise.reject('No eval data'); }),
+    fetch('/api/synthesis-raw').then(function(r) { return r.ok ? r.json() : null; })
+  ]).then(function(results) {
+    evalData = results[0];
+    rawData = results[1];
+    render();
+  }).catch(function(err) {
+    document.getElementById('app').innerHTML = '<div class="empty-state">Error: ' + esc(String(err)) + '</div>';
+  });
+})();
+</script>
+</body>
+</html>`;
+
+// ---------------------------------------------------------------------------
 // Server
 // ---------------------------------------------------------------------------
 
@@ -644,10 +1137,21 @@ function writeLabels(data: unknown): void {
   fs.writeFileSync(LABELS_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
+const MAX_BODY_BYTES = 1_048_576; // 1 MB
+
 function collectBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    let total = 0;
+    req.on('data', (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > MAX_BODY_BYTES) {
+        reject(new Error('Request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
     req.on('error', reject);
   });
@@ -742,6 +1246,95 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // --- Synthesis Review Routes ---
+
+    // GET /eval/review-synthesis → serve synthesis review HTML page
+    if (req.method === 'GET' && pathname === '/eval/review-synthesis') {
+      html(res, SYNTHESIS_REVIEW_HTML);
+      return;
+    }
+
+    // GET /api/synthesis-eval → return synthesis eval JSON
+    if (req.method === 'GET' && pathname === '/api/synthesis-eval') {
+      if (!fs.existsSync(SYNTHESIS_EVAL_PATH)) {
+        json(res, 404, { error: 'answer-synthesis-eval-final.json not found. Run stages 1-2 first.' });
+        return;
+      }
+      const synthData = JSON.parse(fs.readFileSync(SYNTHESIS_EVAL_PATH, 'utf-8'));
+      json(res, 200, synthData);
+      return;
+    }
+
+    // GET /api/synthesis-raw → return captured passages (optionally filtered by ?id=)
+    if (req.method === 'GET' && pathname === '/api/synthesis-raw') {
+      if (!fs.existsSync(SYNTHESIS_RAW_PATH)) {
+        json(res, 404, { error: 'answer-synthesis-raw.json not found. Run stage 1 first.' });
+        return;
+      }
+      const rawData = JSON.parse(fs.readFileSync(SYNTHESIS_RAW_PATH, 'utf-8'));
+      const testCaseId = url.searchParams.get('id');
+      if (testCaseId) {
+        const tc = rawData.test_cases.find((t: any) => t.test_case_id === testCaseId);
+        json(res, tc ? 200 : 404, tc || { error: 'Test case not found' });
+      } else {
+        json(res, 200, rawData);
+      }
+      return;
+    }
+
+    // POST /api/synthesis-eval/review → update human eval for a test case
+    if (req.method === 'POST' && pathname === '/api/synthesis-eval/review') {
+      const postBody = await collectBody(req);
+      let parsedReview: {
+        test_case_id: string;
+        human_eval: {
+          scores: Record<string, number>;
+          qualitative_feedback: string;
+          key_facts_confirmed: string[];
+          key_facts_added: string[];
+          reviewed: boolean;
+        };
+      };
+      try {
+        parsedReview = JSON.parse(postBody);
+      } catch {
+        json(res, 400, { error: 'Invalid JSON' });
+        return;
+      }
+
+      if (!parsedReview.test_case_id || !parsedReview.human_eval) {
+        json(res, 400, { error: 'Missing test_case_id or human_eval' });
+        return;
+      }
+
+      const he = parsedReview.human_eval;
+      const validDims = ['faithfulness', 'completeness', 'conciseness', 'coherence', 'citation_accuracy'];
+      if (he.scores) {
+        for (const [key, val] of Object.entries(he.scores)) {
+          if (!validDims.includes(key) || typeof val !== 'number' || val < 0 || val > 1) {
+            json(res, 400, { error: `Invalid score: ${key}=${val}` });
+            return;
+          }
+        }
+      }
+      if (typeof he.reviewed !== 'boolean') {
+        json(res, 400, { error: 'reviewed must be a boolean' });
+        return;
+      }
+
+      const synthEvalData = JSON.parse(fs.readFileSync(SYNTHESIS_EVAL_PATH, 'utf-8'));
+      const synthTc = synthEvalData.test_cases.find((t: any) => t.test_case_id === parsedReview.test_case_id);
+      if (!synthTc) {
+        json(res, 404, { error: 'Test case not found' });
+        return;
+      }
+
+      synthTc.human_eval = parsedReview.human_eval;
+      fs.writeFileSync(SYNTHESIS_EVAL_PATH, JSON.stringify(synthEvalData, null, 2) + '\n', 'utf-8');
+      json(res, 200, { ok: true });
+      return;
+    }
+
     // 404
     json(res, 404, { error: 'Not found' });
   } catch (err: unknown) {
@@ -752,5 +1345,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Label review server running at http://localhost:${PORT}/eval/review-labels`);
+  console.log(`Review server running on :${PORT}`);
+  console.log(`  Labels:    http://localhost:${PORT}/eval/review-labels`);
+  console.log(`  Synthesis: http://localhost:${PORT}/eval/review-synthesis`);
 });

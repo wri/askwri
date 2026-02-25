@@ -37,6 +37,15 @@ npm run eval:golden-review                  # open label review UI at :3001
 npm run eval:golden-assemble                # build final golden dataset from reviewed labels
 ```
 
+**Synthesis Evaluation (Track 2 — Human-in-the-loop):**
+```bash
+npm run eval:synthesis-capture              # Stage 1: capture system outputs (needs hybrid + Next.js)
+npm run eval:synthesis-llm-eval             # Stage 2: LLM scoring (needs OPENAI_API_KEY)
+npm run eval:synthesis-prepare-review       # Merge into review format
+npm run eval:golden-review                  # Stage 3: open review UI at :3001/eval/review-synthesis
+npm run eval:synthesis-assemble             # Stage 4: write ground truth to golden dataset
+```
+
 ## Prerequisites
 
 | Service | Required for | How to start |
@@ -93,15 +102,21 @@ Evaluates whether hybrid retrieval finds the right passages for Answer mode.
 - Compares at two granularities: **chunk-level** (with adjacent tolerance) and **doc-level**
 - Adjacent tolerance: chunk N+/-1 counts as 0.5 partial match
 
-### Track 2: Synthesis (`npm run eval:answer-synthesis`)
+### Track 2: Synthesis (Human-in-the-loop)
 
-Evaluates whether the LLM generates good answers given the retrieved passages. Runs via a TS wrapper (`run-answer-synthesis-wrapper.ts`) that spawns the Python eval script.
+Evaluates whether the LLM generates good answers given retrieved passages. Uses a 4-stage pipeline with LLM pre-evaluation and human review.
 
-**Two modes:**
-- `--mode isolated` (default): Feed golden passages to answer API (isolates LLM quality)
-- `--mode end-to-end`: Actual retrieval -> answer API (full pipeline)
+**Stages:**
+1. `npm run eval:synthesis-capture` — Run end-to-end system, capture passages + synthesis for each test case
+2. `npm run eval:synthesis-llm-eval` — External LLM scores each synthesis on 5 dimensions (0-1)
+3. `npm run eval:golden-review` — Human reviewer adjusts scores via web UI at `:3001/eval/review-synthesis`
+4. `npm run eval:synthesis-assemble` — Write qualifying answers to golden dataset
 
-**Metrics:** faithfulness, answer relevancy, answer correctness (via RAGAS) + key facts coverage
+**Scoring dimensions:** faithfulness, completeness, conciseness, coherence, citation_accuracy
+
+**Evaluator model:** Configurable via `SYNTHESIS_EVAL_MODEL` env var (default: `gpt-4o`). Thinking models (gpt-5*, o1*) are auto-detected for correct API params.
+
+**Design doc:** `docs/plans/2026-02-24-answer-synthesis-eval-design.md`
 
 ### Golden Dataset Generation
 
@@ -209,16 +224,21 @@ evaluation/
 ├── # Answer Mode — Evaluation
 ├── answer-golden-dataset.json             # Answer mode: 9 production test cases
 ├── run-answer-retrieval-eval.ts           # Track 1: passage/doc-level P/R/F1
-├── run-answer-synthesis-eval.py           # Track 2: RAGAS faithfulness/relevancy/correctness
-├── run-answer-synthesis-wrapper.ts        # TS wrapper for Track 2 Python script
+├── run-answer-synthesis-capture.ts        # Track 2 Stage 1: capture system outputs
+├── run-answer-synthesis-llm-eval.ts       # Track 2 Stage 2: LLM scoring (5 dimensions)
+├── prepare-synthesis-review.ts            # Track 2: merge capture + LLM eval for review
+├── assemble-synthesis-ground-truth.ts     # Track 2 Stage 4: write to golden dataset
+├── run-answer-synthesis-eval.py           # Legacy: RAGAS-based synthesis eval
+├── run-answer-synthesis-wrapper.ts        # Legacy: TS wrapper for RAGAS eval
 ├── generate-answer-report.ts              # HTML report generator for answer evals
-├── requirements-eval.txt                  # Python deps for Track 2 (ragas, etc.)
+├── requirements-eval.txt                  # Python deps for RAGAS eval
 │
 ├── # Answer Mode — Golden Set Pipeline
 ├── answer-question-bank.json              # 9 human-written research questions
 ├── generate-answer-golden-set.ts          # Chunk-first pipeline (retrieve/label/assemble)
-├── serve-label-review.ts                  # Label review server with autosave UI (:3001)
+├── serve-label-review.ts                  # Label + synthesis review server (:3001)
 ├── answer-labels-review.json              # LLM + human-reviewed chunk labels
+├── answer-synthesis-eval-final.json       # Synthesis eval with human reviews (tracked)
 │
 └── results/
     ├── eval-report-{timestamp}.json       # Cite mode results

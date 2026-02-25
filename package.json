@@ -21,7 +21,11 @@
     "eval:golden-retrieve": "npx tsx evaluation/generate-answer-golden-set.ts --phase retrieve",
     "eval:golden-label": "npx tsx evaluation/generate-answer-golden-set.ts --phase label",
     "eval:golden-assemble": "npx tsx evaluation/generate-answer-golden-set.ts --phase assemble",
-    "eval:golden-review": "npx tsx evaluation/serve-label-review.ts"
+    "eval:golden-review": "npx tsx evaluation/serve-label-review.ts",
+    "eval:synthesis-capture": "npx tsx evaluation/run-answer-synthesis-capture.ts",
+    "eval:synthesis-llm-eval": "npx tsx evaluation/run-answer-synthesis-llm-eval.ts",
+    "eval:synthesis-prepare-review": "npx tsx evaluation/prepare-synthesis-review.ts",
+    "eval:synthesis-assemble": "npx tsx evaluation/assemble-synthesis-ground-truth.ts"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.31.0",
