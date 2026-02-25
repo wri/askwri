@@ -16,7 +16,16 @@ function getS3Client(): S3Client {
   return s3Client;
 }
 
+function sanitizeFilename(filename: string): string {
+  const base = path.basename(filename);
+  if (!base || base !== filename || filename.includes('..')) {
+    throw new Error(`Invalid eval filename: ${filename}`);
+  }
+  return base;
+}
+
 export async function readEvalFile(filename: string): Promise<object | null> {
+  filename = sanitizeFilename(filename);
   if (isProduction) {
     try {
       const client = getS3Client();
@@ -38,6 +47,7 @@ export async function readEvalFile(filename: string): Promise<object | null> {
 }
 
 export async function writeEvalFile(filename: string, data: object): Promise<void> {
+  filename = sanitizeFilename(filename);
   const jsonStr = JSON.stringify(data, null, 2) + '\n';
 
   if (isProduction) {
@@ -56,6 +66,7 @@ export async function writeEvalFile(filename: string, data: object): Promise<voi
 }
 
 export async function evalFileExists(filename: string): Promise<boolean> {
+  filename = sanitizeFilename(filename);
   if (isProduction) {
     try {
       const client = getS3Client();

@@ -149,6 +149,15 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
         Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.documents_s3_prefix}*"
       },
       {
+        Sid    = "GetEvalObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:HeadObject"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/eval-data/*"
+      },
+      {
         Sid    = "PutEvalObjects"
         Effect = "Allow"
         Action = [
