@@ -19,6 +19,8 @@ import * as path from 'path';
 
 const PORT = 3001;
 const LABELS_PATH = path.join(__dirname, 'answer-labels-review.json');
+const SYNTHESIS_EVAL_PATH = path.join(__dirname, 'answer-synthesis-eval-final.json');
+const SYNTHESIS_RAW_PATH = path.join(__dirname, 'answer-synthesis-raw.json');
 
 // ---------------------------------------------------------------------------
 // HTML template
@@ -632,6 +634,15 @@ const REVIEW_HTML = `<!DOCTYPE html>
 </html>`;
 
 // ---------------------------------------------------------------------------
+// Synthesis Review HTML (Task 6 — will replace this placeholder)
+// ---------------------------------------------------------------------------
+
+const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
+<html><head><title>Synthesis Review - Loading</title></head>
+<body><p>Synthesis review UI loading... If you see this, Task 6 has not been implemented yet.</p></body>
+</html>`;
+
+// ---------------------------------------------------------------------------
 // Server
 // ---------------------------------------------------------------------------
 
@@ -742,6 +753,80 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // --- Synthesis Review Routes ---
+
+    // GET /eval/review-synthesis → serve synthesis review HTML page
+    if (req.method === 'GET' && pathname === '/eval/review-synthesis') {
+      html(res, SYNTHESIS_REVIEW_HTML);
+      return;
+    }
+
+    // GET /api/synthesis-eval → return synthesis eval JSON
+    if (req.method === 'GET' && pathname === '/api/synthesis-eval') {
+      if (!fs.existsSync(SYNTHESIS_EVAL_PATH)) {
+        json(res, 404, { error: 'answer-synthesis-eval-final.json not found. Run stages 1-2 first.' });
+        return;
+      }
+      const synthData = JSON.parse(fs.readFileSync(SYNTHESIS_EVAL_PATH, 'utf-8'));
+      json(res, 200, synthData);
+      return;
+    }
+
+    // GET /api/synthesis-raw → return captured passages (optionally filtered by ?id=)
+    if (req.method === 'GET' && pathname === '/api/synthesis-raw') {
+      if (!fs.existsSync(SYNTHESIS_RAW_PATH)) {
+        json(res, 404, { error: 'answer-synthesis-raw.json not found. Run stage 1 first.' });
+        return;
+      }
+      const rawData = JSON.parse(fs.readFileSync(SYNTHESIS_RAW_PATH, 'utf-8'));
+      const testCaseId = url.searchParams.get('id');
+      if (testCaseId) {
+        const tc = rawData.test_cases.find((t: any) => t.test_case_id === testCaseId);
+        json(res, tc ? 200 : 404, tc || { error: 'Test case not found' });
+      } else {
+        json(res, 200, rawData);
+      }
+      return;
+    }
+
+    // POST /api/synthesis-eval/review → update human eval for a test case
+    if (req.method === 'POST' && pathname === '/api/synthesis-eval/review') {
+      const postBody = await collectBody(req);
+      let parsedReview: {
+        test_case_id: string;
+        human_eval: {
+          scores: Record<string, number>;
+          qualitative_feedback: string;
+          key_facts_confirmed: string[];
+          key_facts_added: string[];
+          reviewed: boolean;
+        };
+      };
+      try {
+        parsedReview = JSON.parse(postBody);
+      } catch {
+        json(res, 400, { error: 'Invalid JSON' });
+        return;
+      }
+
+      if (!parsedReview.test_case_id || !parsedReview.human_eval) {
+        json(res, 400, { error: 'Missing test_case_id or human_eval' });
+        return;
+      }
+
+      const synthEvalData = JSON.parse(fs.readFileSync(SYNTHESIS_EVAL_PATH, 'utf-8'));
+      const synthTc = synthEvalData.test_cases.find((t: any) => t.test_case_id === parsedReview.test_case_id);
+      if (!synthTc) {
+        json(res, 404, { error: 'Test case not found' });
+        return;
+      }
+
+      synthTc.human_eval = parsedReview.human_eval;
+      fs.writeFileSync(SYNTHESIS_EVAL_PATH, JSON.stringify(synthEvalData, null, 2) + '\n', 'utf-8');
+      json(res, 200, { ok: true });
+      return;
+    }
+
     // 404
     json(res, 404, { error: 'Not found' });
   } catch (err: unknown) {
@@ -752,5 +837,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Label review server running at http://localhost:${PORT}/eval/review-labels`);
+  console.log(`Review server running on :${PORT}`);
+  console.log(`  Labels:    http://localhost:${PORT}/eval/review-labels`);
+  console.log(`  Synthesis: http://localhost:${PORT}/eval/review-synthesis`);
 });
