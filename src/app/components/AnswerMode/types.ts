@@ -18,6 +18,7 @@ export interface AISearchFormProps {
   query: string
   loading: boolean
   suggestions: string[]
+  numberOfCiteDocs?: number
   onQueryChange: (query: string) => void
   onSubmit: () => void
   onShuffleSuggestions: () => void

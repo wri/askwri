@@ -295,6 +295,7 @@ export const AIResearchModalContent = ({
         query={query}
         loading={loading}
         suggestions={suggestions}
+        numberOfCiteDocs={citeDocs?.length}
         onQueryChange={setQuery}
         onSubmit={handleSubmit}
         onShuffleSuggestions={handleShuffleSuggestions}

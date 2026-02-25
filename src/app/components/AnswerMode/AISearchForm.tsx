@@ -15,6 +15,7 @@ export const AISearchForm = ({
   query,
   loading,
   suggestions,
+  numberOfCiteDocs,
   onQueryChange,
   onSubmit,
   onShuffleSuggestions,
@@ -41,7 +42,15 @@ export const AISearchForm = ({
           paddingBottom: '20px',
         }}
       >
-        Discover insights by asking about WRI knowledge products.
+        {numberOfCiteDocs ? (
+          <>
+            Discover insights by asking about the
+            <strong>{` ${numberOfCiteDocs} publications `}</strong>returned in
+            your search.
+          </>
+        ) : (
+          'Discover insights by asking about WRI knowledge products.'
+        )}
       </Text>
     </section>
 
