@@ -147,6 +147,14 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
           "s3:GetObjectVersion"
         ]
         Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.documents_s3_prefix}*"
+      },
+      {
+        Sid    = "PutEvalObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/eval-data/*"
       }
     ]
   })
@@ -199,6 +207,10 @@ resource "aws_ecs_task_definition" "app" {
           {
             name  = "SEARCH_SERVICE_URL"
             value = "http://search-service.${var.project_name}-${var.environment}.local:${var.search_service_container_port}"
+          },
+          {
+            name  = "EVAL_S3_PREFIX"
+            value = "eval-data/"
           }
         ],
         [
