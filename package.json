@@ -28,6 +28,7 @@
     "eval:synthesis-assemble": "npx tsx evaluation/assemble-synthesis-ground-truth.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.997.0",
     "@chakra-ui/react": "^3.31.0",
     "@emotion/react": "^11.14.0",
     "@tailwindcss/postcss": "^4.1.18",
