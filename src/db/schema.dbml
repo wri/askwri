@@ -1,0 +1,13 @@
+Table user_feedback {
+  id int [pk, increment]
+  mode varchar(16)
+  query text
+  doc_id varchar(64)
+  relevance_score float
+  publication_name varchar(256)
+  row_number int
+  summary text
+  how_relevant text
+  feedback varchar(8)
+  timestamp timestamptz
+}

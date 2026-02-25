@@ -20,7 +20,9 @@ const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues wi
 const SUMMARY_MAX_LENGTH = 240
 
 export const SelectableResultRow = ({
+  query,
   rowData,
+  rowNumber,
   selected,
   isActive = false,
   onCheckedChange,
@@ -35,11 +37,41 @@ export const SelectableResultRow = ({
   const [logSent, setLogSent] = useState<null | 'loading' | 'success'>(null)
 
   // TODO: log feedback to database
-  const sendLog = () => {
+  const sendLog = async () => {
     setLogSent('loading')
-    setTimeout(() => {
-      setLogSent('success')
-    }, 700)
+    try {
+      let feedbackValue
+      if (vote === 1) {
+        feedbackValue = 'positive'
+      } else if (vote === -1) {
+        feedbackValue = 'negative'
+      } else {
+        feedbackValue = undefined
+      }
+      const feedbackData = {
+        docId: rowData.id,
+        feedback: feedbackValue,
+        how_relevant: rowData.how_relevant,
+        mode: 'cite',
+        publication_name: rowData.publication_name,
+        query,
+        relevance_score: rowData.relevance,
+        row_number: rowNumber,
+        summary: rowData.summary,
+      }
+      const res = await fetch('/api/results-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedbackData),
+      })
+      if (res.ok) {
+        setLogSent('success')
+      } else {
+        setLogSent(null)
+      }
+    } catch {
+      setLogSent(null)
+    }
   }
 
   const handleOnRowSelected = ({ checked }: { checked: boolean | string }) => {

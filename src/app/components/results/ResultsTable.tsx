@@ -71,6 +71,7 @@ const columns = [
 ]
 
 const ResultsTable = ({
+  query,
   data,
   docWhyLoading = {},
   docSummaryLoading = {},
@@ -180,9 +181,11 @@ const ResultsTable = ({
     })
   }
 
-  const selectableRenderRow = (rowData: RowData) => (
+  const selectableRenderRow = (rowData: RowData, index: number) => (
     <SelectableResultRow
+      query={query}
       rowData={rowData}
+      rowNumber={1}
       selected={selectedRows?.some((item) => item.id === rowData.id)}
       isActive={activeRowId === rowData.id}
       onCheckedChange={handleRowCheckedChange}

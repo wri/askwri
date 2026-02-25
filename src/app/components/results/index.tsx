@@ -223,6 +223,7 @@ const ResultsPage = ({
         )}
       </section>
       <ResultsTable
+        query={query}
         data={tableData}
         docSummaryLoading={docSummaryLoading}
         docWhyLoading={docWhyLoading}

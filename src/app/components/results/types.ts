@@ -11,7 +11,9 @@ export type RowData = {
 }
 
 export type SelectableResultRowProps = {
+  query: string
   rowData: RowData
+  rowNumber: number
   selected: boolean
   isActive?: boolean
   onCheckedChange: (row: RowData, checked: boolean | string) => void
@@ -29,6 +31,7 @@ export type ExportActionBarProps = {
 }
 
 export type ResultsTableProps = {
+  query: string
   data: RowData[]
   docWhyLoading?: Record<string, boolean>
   docSummaryLoading?: Record<string, boolean>
