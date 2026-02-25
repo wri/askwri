@@ -137,7 +137,6 @@ export interface SynthesisCaptureEntry {
     warning?: string;
   };
   docs_sent_to_api: number;
-  docs_after_filter: number;
   timestamp: string;
   model: string;
 }

@@ -63,44 +63,49 @@ async function main() {
     test_cases: [],
   };
 
+  let failures = 0;
   for (const tc of golden.test_cases) {
     console.log(`Processing: ${tc.id}`);
     console.log(`  Question: ${tc.question.slice(0, 80)}...`);
 
-    const rawDocs = await callPythonService(tc.question, 'answer', ANSWER_PARAMS);
-    console.log(`  Retrieved ${rawDocs.length} chunks`);
+    try {
+      const rawDocs = await callPythonService(tc.question, 'answer', ANSWER_PARAMS);
+      console.log(`  Retrieved ${rawDocs.length} chunks`);
 
-    const docMetas = rawDocs.map(transformToDocMeta);
+      const docMetas = rawDocs.map(transformToDocMeta);
 
-    const synthesis = await callAnswerAPI(tc.question, docMetas);
-    const fullText = synthesis.sentences.join(' ');
-    console.log(`  Synthesis: ${fullText.slice(0, 120)}...`);
+      const synthesis = await callAnswerAPI(tc.question, docMetas);
+      const fullText = synthesis.sentences.join(' ');
+      console.log(`  Synthesis: ${fullText.slice(0, 120)}...`);
 
-    const passages: CapturedPassage[] = rawDocs.map(d => ({
-      doc_id: d.doc_id,
-      chunk_id: d.metadata?.chunk_id || d.chunk_id || 'unknown',
-      title: d.title,
-      snippet: d.content,
-      score: d.score,
-      page: d.page || d.metadata?.page || 1,
-    }));
+      const passages: CapturedPassage[] = rawDocs.map(d => ({
+        doc_id: d.doc_id,
+        chunk_id: d.metadata?.chunk_id || d.chunk_id || 'unknown',
+        title: d.title,
+        snippet: d.content,
+        score: d.score,
+        page: d.page || d.metadata?.page || 1,
+      }));
 
-    const entry: SynthesisCaptureEntry = {
-      test_case_id: tc.id,
-      question: tc.question,
-      retrieved_passages: passages,
-      synthesis: {
-        sentences: synthesis.sentences,
-        full_text: fullText,
-        warning: synthesis.warning,
-      },
-      docs_sent_to_api: docMetas.length,
-      docs_after_filter: docMetas.length,
-      timestamp: new Date().toISOString(),
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-    };
+      const entry: SynthesisCaptureEntry = {
+        test_case_id: tc.id,
+        question: tc.question,
+        retrieved_passages: passages,
+        synthesis: {
+          sentences: synthesis.sentences,
+          full_text: fullText,
+          warning: synthesis.warning,
+        },
+        docs_sent_to_api: docMetas.length,
+        timestamp: new Date().toISOString(),
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      };
 
-    output.test_cases.push(entry);
+      output.test_cases.push(entry);
+    } catch (err) {
+      console.error(`  ERROR: ${err instanceof Error ? err.message : String(err)}`);
+      failures++;
+    }
 
     // Rate limit
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -108,6 +113,7 @@ async function main() {
 
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2));
   console.log(`\nSaved ${output.test_cases.length} test cases to ${OUTPUT_PATH}`);
+  if (failures) console.log(`WARNING: ${failures} test case(s) failed`);
   console.log('\nNext step: npx tsx evaluation/run-answer-synthesis-llm-eval.ts');
 }
 

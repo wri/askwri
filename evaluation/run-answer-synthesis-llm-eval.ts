@@ -146,9 +146,18 @@ async function evaluateWithLLM(
     };
   }
 
+  const requiredDims: (keyof SynthesisScores)[] = ['faithfulness', 'completeness', 'conciseness', 'coherence', 'citation_accuracy'];
+  for (const dim of requiredDims) {
+    if (typeof parsed.scores?.[dim] !== 'number' || parsed.scores[dim] < 0 || parsed.scores[dim] > 1) {
+      console.warn(`  Missing or invalid score for ${dim}, defaulting to 0`);
+      if (!parsed.scores) parsed.scores = {} as SynthesisScores;
+      parsed.scores[dim] = 0;
+    }
+  }
+
   return {
     scores: parsed.scores,
-    qualitative_feedback: parsed.qualitative_feedback,
+    qualitative_feedback: parsed.qualitative_feedback || '',
     flagged_issues: parsed.flagged_issues || [],
     key_facts_extracted: parsed.key_facts_extracted || [],
     model: EVALUATOR_MODEL,
@@ -181,29 +190,35 @@ async function main() {
     test_cases: [],
   };
 
+  let failures = 0;
   for (const tc of captured.test_cases) {
     console.log(`Evaluating: ${tc.test_case_id}`);
     console.log(`  Synthesis: ${tc.synthesis.full_text.slice(0, 100)}...`);
 
-    const passagesText = formatPassages(tc);
-    const result = await evaluateWithLLM(
-      tc.question,
-      passagesText,
-      tc.synthesis.full_text,
-      apiKey,
-    );
+    try {
+      const passagesText = formatPassages(tc);
+      const result = await evaluateWithLLM(
+        tc.question,
+        passagesText,
+        tc.synthesis.full_text,
+        apiKey,
+      );
 
-    const entry: LLMEvalEntry = {
-      test_case_id: tc.test_case_id,
-      ...result,
-    };
+      const entry: LLMEvalEntry = {
+        test_case_id: tc.test_case_id,
+        ...result,
+      };
 
-    const s = entry.scores;
-    const avg = (s.faithfulness + s.completeness + s.conciseness + s.coherence + s.citation_accuracy) / 5;
-    console.log(`  Scores: F=${s.faithfulness} Co=${s.completeness} Cn=${s.conciseness} Ch=${s.coherence} Ci=${s.citation_accuracy} (avg=${avg.toFixed(2)})`);
-    console.log(`  Key facts: ${entry.key_facts_extracted.length}, Issues: ${entry.flagged_issues.length}`);
+      const s = entry.scores;
+      const avg = (s.faithfulness + s.completeness + s.conciseness + s.coherence + s.citation_accuracy) / 5;
+      console.log(`  Scores: F=${s.faithfulness} Co=${s.completeness} Cn=${s.conciseness} Ch=${s.coherence} Ci=${s.citation_accuracy} (avg=${avg.toFixed(2)})`);
+      console.log(`  Key facts: ${entry.key_facts_extracted.length}, Issues: ${entry.flagged_issues.length}`);
 
-    output.test_cases.push(entry);
+      output.test_cases.push(entry);
+    } catch (err) {
+      console.error(`  ERROR: ${err instanceof Error ? err.message : String(err)}`);
+      failures++;
+    }
 
     // Rate limit
     await new Promise(resolve => setTimeout(resolve, 3000));
@@ -211,6 +226,7 @@ async function main() {
 
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2));
   console.log(`\nSaved ${output.test_cases.length} evaluations to ${OUTPUT_PATH}`);
+  if (failures) console.log(`WARNING: ${failures} test case(s) failed`);
 
   // Print summary
   const dims: (keyof SynthesisScores)[] = ['faithfulness', 'completeness', 'conciseness', 'coherence', 'citation_accuracy'];

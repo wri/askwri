@@ -1054,11 +1054,11 @@ const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
     container.querySelectorAll('.reviewed-btn').forEach(function(el) {
       el.addEventListener('click', function() {
         if (tc.human_eval.reviewed) return;
-        // Copy LLM scores to human scores if still at defaults
+        // Copy LLM scores to human scores if reviewer hasn't moved the sliders
         var dims = ['faithfulness','completeness','conciseness','coherence','citation_accuracy'];
         dims.forEach(function(d) {
           if (tc.human_eval.scores[d] === 0 && tc.llm_eval.scores[d] > 0) {
-            // Already set by slider, keep as-is
+            tc.human_eval.scores[d] = tc.llm_eval.scores[d];
           }
         });
         tc.human_eval.reviewed = true;
@@ -1137,10 +1137,21 @@ function writeLabels(data: unknown): void {
   fs.writeFileSync(LABELS_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
+const MAX_BODY_BYTES = 1_048_576; // 1 MB
+
 function collectBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    let total = 0;
+    req.on('data', (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > MAX_BODY_BYTES) {
+        reject(new Error('Request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
     req.on('error', reject);
   });
@@ -1293,6 +1304,21 @@ const server = http.createServer(async (req, res) => {
 
       if (!parsedReview.test_case_id || !parsedReview.human_eval) {
         json(res, 400, { error: 'Missing test_case_id or human_eval' });
+        return;
+      }
+
+      const he = parsedReview.human_eval;
+      const validDims = ['faithfulness', 'completeness', 'conciseness', 'coherence', 'citation_accuracy'];
+      if (he.scores) {
+        for (const [key, val] of Object.entries(he.scores)) {
+          if (!validDims.includes(key) || typeof val !== 'number' || val < 0 || val > 1) {
+            json(res, 400, { error: `Invalid score: ${key}=${val}` });
+            return;
+          }
+        }
+      }
+      if (typeof he.reviewed !== 'boolean') {
+        json(res, 400, { error: 'reviewed must be a boolean' });
         return;
       }
 
