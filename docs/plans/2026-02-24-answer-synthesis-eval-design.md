@@ -2,8 +2,8 @@
 
 **Date:** 2026-02-24
 **Status:** Draft
-**Depends on:** Track 1 retrieval human evals completing (in progress)
 **Scope:** Evaluate synthesis quality using actual system outputs, LLM evaluation, and human review
+**Relationship to Track 1:** Parallel, not dependent. Retrieval eval measures "did we find the right passages?" Synthesis eval measures "given what we found, is the answer good?" Better retrieval feeds better passages to synthesis, but synthesis eval runs independently at any time.
 
 ## Problem
 
@@ -262,6 +262,8 @@ npx tsx evaluation/assemble-synthesis-ground-truth.ts
 
 ## Dependencies
 
-- **Track 1 human evals must complete first** — we need the final retrieval ground truth so that system outputs are evaluated against the production retrieval configuration.
 - GPT-5.2 API access with thinking/reasoning mode.
 - OPENAI_API_KEY environment variable.
+- Hybrid service and Next.js running (for Stage 1 capture).
+
+**Not a dependency:** Track 1 retrieval ground truth. Synthesis eval captures and scores whatever the system produces right now. Running it before retrieval improvements gives a baseline; re-running after improvements tracks whether synthesis quality trends up with retrieval quality.
