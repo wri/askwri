@@ -31,26 +31,17 @@ export const SelectableResultRow = ({
   onTitleClick,
 }: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
-  // 0 = no vote, 1 = upvoted, -1 = downvoted
+  // 0 = no vote, 1 = positive, -1 = negative
   const [vote, setVote] = useState<0 | 1 | -1>(0)
   // logSent: null = not sent, 'loading' = sending, 'success' = sent
   const [logSent, setLogSent] = useState<null | 'loading' | 'success'>(null)
 
-  // TODO: log feedback to database
-  const sendLog = async () => {
+  const sendLog = async (feedbackType: 'positive' | 'negative') => {
     setLogSent('loading')
     try {
-      let feedbackValue
-      if (vote === 1) {
-        feedbackValue = 'positive'
-      } else if (vote === -1) {
-        feedbackValue = 'negative'
-      } else {
-        feedbackValue = undefined
-      }
       const feedbackData = {
         docId: rowData.id,
-        feedback: feedbackValue,
+        feedback: feedbackType,
         how_relevant: rowData.how_relevant,
         mode: 'cite',
         publication_name: rowData.publication_name,
@@ -195,7 +186,7 @@ export const SelectableResultRow = ({
                 setLogSent(null)
               } else {
                 setVote(1)
-                sendLog()
+                sendLog('positive')
               }
             }}
             style={
@@ -227,7 +218,7 @@ export const SelectableResultRow = ({
                 setLogSent(null)
               } else {
                 setVote(-1)
-                sendLog()
+                sendLog('negative')
               }
             }}
             style={

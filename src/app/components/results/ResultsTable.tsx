@@ -89,49 +89,17 @@ const ResultsTable = ({
   }>({})
   const [aiModalOpen, setAiModalOpen] = useState(false)
 
-  const [sortColumn, setSortColumn] = useState<{ key: string; order: string }>({
-    key: '',
-    order: '',
-  })
-
-  const sortedData = useMemo(() => {
-    const fullData = [...data]
-
-    if (!sortColumn.key) {
-      return fullData
-    }
-
-    const { key, order } = sortColumn
-    const isDesc = order === 'desc'
-
-    return fullData.sort((a, b) => {
-      const aValue = a[key as keyof RowData]
-      const bValue = b[key as keyof RowData]
-
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return isDesc
-          ? bValue.localeCompare(aValue)
-          : aValue.localeCompare(bValue)
-      }
-
-      const aNumber = typeof aValue === 'number' ? aValue : Number(aValue)
-      const bNumber = typeof bValue === 'number' ? bValue : Number(bValue)
-
-      return isDesc ? bNumber - aNumber : aNumber - bNumber
-    })
-  }, [data, sortColumn])
-
   const startRange = (currentPage - 1) * pageSize
   const endRange = startRange + pageSize
 
   const dataByPage = useMemo(
-    () => sortedData.slice(startRange, endRange) as RowData[],
-    [sortedData, startRange, endRange],
+    () => data.slice(startRange, endRange) as RowData[],
+    [data, startRange, endRange],
   )
 
   const onAllItemsSelected = (checked: boolean) => {
     if (checked) {
-      setSelectedRows(sortedData)
+      setSelectedRows(data)
     } else {
       setSelectedRows([])
     }
@@ -181,11 +149,11 @@ const ResultsTable = ({
     })
   }
 
-  const selectableRenderRow = (rowData: RowData, index: number) => (
+  const selectableRenderRow = (rowData: RowData) => (
     <SelectableResultRow
       query={query}
       rowData={rowData}
-      rowNumber={1}
+      rowNumber={rowData.row_number ?? 0}
       selected={selectedRows?.some((item) => item.id === rowData.id)}
       isActive={activeRowId === rowData.id}
       onCheckedChange={handleRowCheckedChange}
@@ -231,7 +199,6 @@ const ResultsTable = ({
           }
           data={dataByPage}
           renderRow={selectableRenderRow}
-          onSortColumn={setSortColumn}
           selectedRows={selectedRows}
           onAllItemsSelected={onAllItemsSelected}
           selectable
@@ -246,9 +213,9 @@ const ResultsTable = ({
       </div>
       <ExportActionBar
         selectedCount={selectedRows.length}
-        allSelected={selectedRows.length === sortedData.length}
+        allSelected={selectedRows.length === data.length}
         onSelectAll={() =>
-          onAllItemsSelected(selectedRows.length !== sortedData.length)
+          onAllItemsSelected(selectedRows.length !== data.length)
         }
         onExport={() => {
           const selectedIds = selectedRows.map((row) => row.id.toString())

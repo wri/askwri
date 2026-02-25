@@ -6,13 +6,14 @@ const DATABASE_URL =
   process.env.DATABASE_URL ||
   `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`
 
-export const AppDataSource = new DataSource({
+// Default export for TypeORM CLI
+const MigrationDataSource = new DataSource({
   type: 'postgres',
   url: DATABASE_URL,
   synchronize: false,
   logging: process.env.TYPEORM_LOGGING === 'true',
   entities: [UserFeedback],
-  migrations: [],
+  migrations: ['src/db/migrations/**/*.ts'],
   subscribers: [],
   ssl: {
     rejectUnauthorized:
@@ -20,11 +21,4 @@ export const AppDataSource = new DataSource({
   },
 })
 
-// Initialize connection (for Next.js API routes)
-export const initializeDatabase = async () => {
-  if (!AppDataSource.isInitialized) {
-    await AppDataSource.initialize()
-    console.log('✅ Database connection established')
-  }
-  return AppDataSource
-}
+export default MigrationDataSource

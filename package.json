@@ -21,7 +21,11 @@
     "eval:golden-retrieve": "npx tsx evaluation/generate-answer-golden-set.ts --phase retrieve",
     "eval:golden-label": "npx tsx evaluation/generate-answer-golden-set.ts --phase label",
     "eval:golden-assemble": "npx tsx evaluation/generate-answer-golden-set.ts --phase assemble",
-    "eval:golden-review": "npx tsx evaluation/serve-label-review.ts"
+    "eval:golden-review": "npx tsx evaluation/serve-label-review.ts",
+    "typeorm": "ts-node --project tsconfig.typeorm.json -r dotenv/config ./node_modules/typeorm/cli.js",
+    "migration:generate": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:generate src/db/migrations/Migration -d src/db/migration-data-source.ts",
+    "migration:run": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:run -d src/db/migration-data-source.ts",
+    "migration:revert": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:revert -d src/db/migration-data-source.ts"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.31.0",
@@ -68,6 +72,7 @@
     "picomatch": "^4.0.3",
     "prettier": "^3.8.1",
     "tailwindcss": "^4.1.18",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }
 }

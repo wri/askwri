@@ -8,6 +8,7 @@ export type RowData = {
   download_url?: string | null
   relevance_score?: number
   confidence?: number
+  row_number?: number
 }
 
 export type SelectableResultRowProps = {

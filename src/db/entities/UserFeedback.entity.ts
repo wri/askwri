@@ -34,7 +34,7 @@ export class UserFeedback {
   @Column('text')
   how_relevant!: string
 
-  @Column({ length: 8, nullable: true })
+  @Column({ length: 8 })
   feedback!: string // 'positive' | 'negative'
 
   @CreateDateColumn({ type: 'timestamptz' })
