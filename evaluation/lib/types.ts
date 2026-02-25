@@ -101,3 +101,89 @@ export interface ChunkMetricsResult {
   recall_with_adjacent: number;
   f1_with_adjacent: number;
 }
+
+// --- Synthesis Eval Types ---
+
+export interface SynthesisScores {
+  faithfulness: number;
+  completeness: number;
+  conciseness: number;
+  coherence: number;
+  citation_accuracy: number;
+}
+
+export interface FlaggedIssue {
+  type: 'unsupported_claim' | 'missing_info' | 'verbatim_copy' | 'other';
+  text: string;
+  detail: string;
+}
+
+export interface CapturedPassage {
+  doc_id: string;
+  chunk_id: string;
+  title: string;
+  snippet: string;
+  score: number;
+  page: number;
+}
+
+export interface SynthesisCaptureEntry {
+  test_case_id: string;
+  question: string;
+  retrieved_passages: CapturedPassage[];
+  synthesis: {
+    sentences: string[];
+    full_text: string;
+    warning?: string;
+  };
+  docs_sent_to_api: number;
+  docs_after_filter: number;
+  timestamp: string;
+  model: string;
+}
+
+export interface SynthesisCaptureFile {
+  captured_at: string;
+  system_model: string;
+  test_cases: SynthesisCaptureEntry[];
+}
+
+export interface LLMEvalEntry {
+  test_case_id: string;
+  scores: SynthesisScores;
+  qualitative_feedback: string;
+  flagged_issues: FlaggedIssue[];
+  key_facts_extracted: string[];
+  model: string;
+  reasoning_tokens?: number;
+}
+
+export interface LLMEvalFile {
+  evaluated_at: string;
+  evaluator_model: string;
+  test_cases: LLMEvalEntry[];
+}
+
+export interface HumanEval {
+  scores: SynthesisScores;
+  qualitative_feedback: string;
+  key_facts_confirmed: string[];
+  key_facts_added: string[];
+  reviewed: boolean;
+}
+
+export interface SynthesisEvalFinalEntry {
+  test_case_id: string;
+  question: string;
+  synthesis_text: string;
+  passage_count: number;
+  llm_eval: LLMEvalEntry;
+  human_eval: HumanEval;
+}
+
+export interface SynthesisEvalFinalFile {
+  evaluated_at: string;
+  system_model: string;
+  evaluator_model: string;
+  test_cases: SynthesisEvalFinalEntry[];
+}
