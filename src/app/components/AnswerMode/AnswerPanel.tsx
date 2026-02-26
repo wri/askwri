@@ -18,6 +18,7 @@ import { MdChat } from 'react-icons/md'
 import { IoIosCopy } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
+import { FeedbackType, FeedbackSubmitted } from '../results/types'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
@@ -32,13 +33,17 @@ export const AnswerPanel = ({
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
 
-  // 0 = no vote, 1 = positive, -1 = negative
-  const [vote, setVote] = useState<0 | 1 | -1>(0)
-  // logSent: null = not sent, 'loading' = sending, 'success' = sent
-  const [logSent, setLogSent] = useState<null | 'loading' | 'success'>(null)
+  // 0 = no feedbackState, 1 = positive, -1 = negative
+  const [feedbackState, setFeedbackState] = useState<FeedbackType>(
+    FeedbackType.None,
+  )
+  // feedbackSubmitted: null = not sent, 'loading' = sending, 'success' = sent
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<FeedbackSubmitted>(
+    FeedbackSubmitted.Unsent,
+  )
 
-  const sendLog = async (feedback: 'positive' | 'negative') => {
-    setLogSent('loading')
+  const submitFeedback = async (feedbackType: FeedbackType) => {
+    setFeedbackSubmitted(FeedbackSubmitted.Loading)
     const consultedDocIds = consultedDocs?.map((doc) => doc.id).join(',') || ''
     const supportingDocIds =
       supportingDocs?.map((doc) => doc.doc_id).join(',') || ''
@@ -49,7 +54,8 @@ export const AnswerPanel = ({
       const feedbackData = {
         query,
         answer: answer.sentences.join(' '),
-        feedback,
+        feedback:
+          feedbackType === FeedbackType.Positive ? 'positive' : 'negative',
         consultedDocIds,
         supportingDocIds,
         firstRelevanceScore: firstSupportingDoc?.score?.toString(),
@@ -64,12 +70,22 @@ export const AnswerPanel = ({
         body: JSON.stringify(feedbackData),
       })
       if (res.ok) {
-        setLogSent('success')
+        setFeedbackSubmitted(FeedbackSubmitted.Success)
       } else {
-        setLogSent(null)
+        setFeedbackSubmitted(FeedbackSubmitted.Unsent)
       }
     } catch {
-      setLogSent(null)
+      setFeedbackSubmitted(FeedbackSubmitted.Unsent)
+    }
+  }
+
+  const handleFeedback = (type: FeedbackType) => {
+    if (feedbackState === type) {
+      setFeedbackState(FeedbackType.None)
+      setFeedbackSubmitted(FeedbackSubmitted.Unsent)
+    } else {
+      setFeedbackState(type)
+      submitFeedback(type)
     }
   }
   return (
@@ -232,7 +248,8 @@ export const AnswerPanel = ({
             <Button
               variant='borderless'
               leftIcon={
-                logSent === 'loading' && vote === 1 ? (
+                feedbackSubmitted === FeedbackSubmitted.Loading &&
+                feedbackState === FeedbackType.Positive ? (
                   <Spinner />
                 ) : (
                   <Tooltip content='Mark as good result'>
@@ -241,17 +258,9 @@ export const AnswerPanel = ({
                 )
               }
               aria-label='Mark as good result'
-              onClick={() => {
-                if (vote === 1) {
-                  setVote(0)
-                  setLogSent(null)
-                } else {
-                  setVote(1)
-                  sendLog('positive')
-                }
-              }}
+              onClick={() => handleFeedback(FeedbackType.Positive)}
               style={
-                vote === 1
+                feedbackState === FeedbackType.Positive
                   ? {
                       background: getThemedColor('success', 300),
                       color: getThemedColor('success', 900),
@@ -259,12 +268,16 @@ export const AnswerPanel = ({
                     }
                   : {}
               }
-              disabled={vote === 1 && logSent === 'loading'}
+              disabled={
+                feedbackState === FeedbackType.Positive &&
+                feedbackSubmitted === FeedbackSubmitted.Loading
+              }
             />
             <Button
               variant='borderless'
               leftIcon={
-                logSent === 'loading' && vote === -1 ? (
+                feedbackSubmitted === FeedbackSubmitted.Loading &&
+                feedbackState === FeedbackType.Negative ? (
                   <Spinner />
                 ) : (
                   <Tooltip content='Mark as poor result'>
@@ -273,17 +286,9 @@ export const AnswerPanel = ({
                 )
               }
               aria-label='Mark as poor result'
-              onClick={() => {
-                if (vote === -1) {
-                  setVote(0)
-                  setLogSent(null)
-                } else {
-                  setVote(-1)
-                  sendLog('negative')
-                }
-              }}
+              onClick={() => handleFeedback(FeedbackType.Negative)}
               style={
-                vote === -1
+                feedbackState === FeedbackType.Negative
                   ? {
                       background: getThemedColor('error', 300),
                       color: getThemedColor('error', 900),
@@ -291,7 +296,10 @@ export const AnswerPanel = ({
                     }
                   : {}
               }
-              disabled={vote === -1 && logSent === 'loading'}
+              disabled={
+                feedbackState === FeedbackType.Negative &&
+                feedbackSubmitted === FeedbackSubmitted.Loading
+              }
             />
           </div>
         </div>

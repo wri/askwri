@@ -84,3 +84,15 @@ export type ImproveSearchModalProps = {
   improveSearchModalOpen: boolean
   setImproveSearchModalOpen: (open: boolean) => void
 }
+
+export enum FeedbackType {
+  None = 0, // 0 = no feedback
+  Positive = 1, // 1 = positive
+  Negative = -1, // -1 = negative
+}
+
+export enum FeedbackSubmitted {
+  Unsent = 'unsent', // null = not sent
+  Loading = 'loading', // 'loading' = sending
+  Success = 'success', // 'success' = sent
+}

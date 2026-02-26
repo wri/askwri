@@ -20,6 +20,7 @@ import {
 } from '../AnswerMode/AIResearchModal'
 
 const PAGE_SIZE = 20
+const MAXIMUM_CONSULTED_DOCS = 20
 
 const AiGeneratedTag = (
   <Text
@@ -237,7 +238,9 @@ const ResultsTable = ({
       <Modal
         header={aiResearchModalHeader}
         content={
-          <AIResearchModalContent consultedDocs={selectedRows.slice(0, 20)} />
+          <AIResearchModalContent
+            consultedDocs={selectedRows.slice(0, MAXIMUM_CONSULTED_DOCS)}
+          />
         }
         size='xlarge'
         blocking={false}
