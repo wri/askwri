@@ -44,9 +44,12 @@ export const AnswerPanel = ({
 
   const submitFeedback = async (feedbackType: FeedbackType) => {
     setFeedbackSubmitted(FeedbackSubmitted.Loading)
-    const consultedDocIds = consultedDocs?.map((doc) => doc.id).join(',') || ''
-    const supportingDocIds =
-      supportingDocs?.map((doc) => doc.doc_id).join(',') || ''
+    const consultedDocIds = consultedDocs
+      ? Array.from(new Set(consultedDocs.map((doc) => doc.id))).join(',')
+      : ''
+    const supportingDocIds = supportingDocs
+      ? Array.from(new Set(supportingDocs.map((doc) => doc.doc_id))).join(',')
+      : ''
 
     const firstSupportingDoc = supportingDocs?.[0]
 
