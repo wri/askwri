@@ -46,6 +46,12 @@ npm run eval:golden-review                  # Stage 3: open review UI at :3001/e
 npm run eval:synthesis-assemble             # Stage 4: write ground truth to golden dataset
 ```
 
+**S3 Sync (QA Reviewer Workflow):**
+```bash
+npm run eval:upload                # push eval data to S3 for QA reviewers
+npm run eval:download              # pull reviewed data from S3
+```
+
 ## Prerequisites
 
 | Service | Required for | How to start |
@@ -202,6 +208,38 @@ ls -lt evaluation/results/answer-retrieval-*.json | head -1
 
 ---
 
+## QA Reviewer Access
+
+External reviewers access the evaluation UIs via the QA server — no local setup required.
+
+**Review URLs (QA):**
+- Label review: `http://<qa-alb>/api/eval/review-labels`
+- Synthesis review: `http://<qa-alb>/api/eval/review-synthesis`
+- Cite report: `http://<qa-alb>/api/eval/review-cite`
+
+**Developer workflow:**
+```bash
+# 1. Run evals locally
+npm run eval:cite
+npm run eval:answer-retrieval
+npm run eval:synthesis-capture
+npm run eval:synthesis-llm-eval
+npm run eval:synthesis-prepare-review
+
+# 2. Upload data to S3 for reviewers
+export DOCUMENTS_S3_BUCKET=askwri-data
+npm run eval:upload
+
+# 3. After reviewer completes their work, pull data back
+npm run eval:download
+
+# 4. Continue with assembly
+npm run eval:golden-assemble
+npm run eval:synthesis-assemble
+```
+
+---
+
 ## File Structure
 
 ```
@@ -236,12 +274,33 @@ evaluation/
 ├── # Answer Mode — Golden Set Pipeline
 ├── answer-question-bank.json              # 9 human-written research questions
 ├── generate-answer-golden-set.ts          # Chunk-first pipeline (retrieve/label/assemble)
-├── serve-label-review.ts                  # Label + synthesis review server (:3001)
+├── serve-label-review.ts                  # Label + synthesis review server (:3001, local dev)
 ├── answer-labels-review.json              # LLM + human-reviewed chunk labels
 ├── answer-synthesis-eval-final.json       # Synthesis eval with human reviews (tracked)
+├── upload-eval-to-s3.ts                   # Push eval data to S3 for QA reviewers
+├── download-eval-from-s3.ts               # Pull reviewed data from S3
 │
 └── results/
     ├── eval-report-{timestamp}.json       # Cite mode results
     ├── answer-retrieval-{timestamp}.json  # Answer retrieval results
     └── answer-synthesis-{mode}-{ts}.json  # Answer synthesis results
+```
+
+### Next.js Eval Routes (QA Server)
+
+```
+src/
+├── lib/
+│   ├── eval-storage.ts                    # S3/local eval file storage abstraction
+│   └── eval-html-templates.ts             # HTML templates for review UIs
+└── app/api/eval/
+    ├── labels/route.ts                    # GET labels JSON
+    ├── labels/override/route.ts           # POST label override
+    ├── review-labels/route.ts             # GET label review HTML page
+    ├── synthesis-eval/route.ts            # GET synthesis eval JSON
+    ├── synthesis-eval/review/route.ts     # POST human eval update
+    ├── synthesis-raw/route.ts             # GET captured passages JSON
+    ├── review-synthesis/route.ts          # GET synthesis review HTML page
+    ├── cite-report/route.ts              # GET cite report JSON
+    └── review-cite/route.ts              # GET cite report HTML page
 ```
