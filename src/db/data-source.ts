@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 import { DataSource } from 'typeorm'
-import { UserFeedback } from './entities/UserFeedback.entity'
+import { CiteModeFeedback } from './entities/CiteModeFeedback.entity'
+import { AnswerModeFeedback } from './entities/AnswerModeFeedback.entity'
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -11,7 +12,7 @@ export const AppDataSource = new DataSource({
   url: DATABASE_URL,
   synchronize: false,
   logging: process.env.TYPEORM_LOGGING === 'true',
-  entities: [UserFeedback],
+  entities: [CiteModeFeedback, AnswerModeFeedback],
   migrations: [],
   subscribers: [],
   ssl: {

@@ -18,7 +18,10 @@ const firstSentence = (text?: string) => {
   return match ? match[0].trim() : text
 }
 
-export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
+export const SupportingCitations = ({
+  supportingDocs,
+  setFirstDocHowRelevant,
+}: SupportingCitationsProps) => {
   const [page, setPage] = useState(1)
   const [pageSize] = useState(1)
   const [passageWhy, setPassageWhy] = useState<Record<string, WhyMeta>>({})
@@ -38,7 +41,7 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
   // Flatten all passages and sort by relevance
   const allItems = useMemo(() => {
     const arr: { doc: DocMeta; kp: KP }[] = []
-    for (const d of docs) {
+    for (const d of supportingDocs) {
       if (d.kps) {
         for (const kp of d.kps) {
           arr.push({ doc: d, kp })
@@ -46,11 +49,27 @@ export const SupportingCitations = ({ docs }: SupportingCitationsProps) => {
       }
     }
     return arr.sort((a, b) => b.kp.kp_relevance - a.kp.kp_relevance)
-  }, [docs])
+  }, [supportingDocs])
 
   // Paginate items
   const totalPages = Math.max(1, Math.ceil(allItems.length / pageSize))
   const paginatedItems = allItems.slice((page - 1) * pageSize, page * pageSize)
+
+  // When passageWhy updates, call setFirstDocHowRelevant with first doc why
+  useEffect(() => {
+    // Only call if there is at least one item
+    if (supportingDocs.length === 0 || Object.keys(passageWhy).length === 0)
+      return
+    // Find the first doc/passage id
+    const firstDoc = supportingDocs[0]
+    const firstKP = firstDoc.kps && firstDoc.kps[0]
+    if (!firstDoc || !firstKP) return
+    const passageId = `${firstDoc.doc_id}:${firstKP.passage_id}`
+    const whyMeta = passageWhy[passageId]
+    if (whyMeta && setFirstDocHowRelevant) {
+      setFirstDocHowRelevant(whyMeta.why)
+    }
+  }, [passageWhy, supportingDocs, setFirstDocHowRelevant])
 
   // Fetch "Why it answers" explanations for visible passages
   useEffect(() => {

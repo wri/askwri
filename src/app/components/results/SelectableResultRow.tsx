@@ -42,15 +42,15 @@ export const SelectableResultRow = ({
       const feedbackData = {
         docId: rowData.id,
         feedback: feedbackType,
-        how_relevant: rowData.how_relevant,
+        howRelevant: rowData.how_relevant,
         mode: 'cite',
-        publication_name: rowData.publication_name,
+        publicationName: rowData.publication_name,
         query,
-        relevance_score: rowData.relevance,
-        row_number: rowNumber,
+        relevanceScore: rowData.relevance,
+        rowNumber: rowNumber,
         summary: rowData.summary,
       }
-      const res = await fetch('/api/results-feedback', {
+      const res = await fetch('/api/cite-mode-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(feedbackData),

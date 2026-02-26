@@ -3,27 +3,75 @@
 
 'use client'
 
-import { useState } from 'react'
-import { Text, Box, Heading } from '@chakra-ui/react'
+import { useState, FC } from 'react'
+import { Text, Box, Heading, Spinner } from '@chakra-ui/react'
 import {
   Tag,
   Button,
   getThemedColor,
   Modal,
+  Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
 import { FaInfoCircle } from 'react-icons/fa'
+import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { MdChat } from 'react-icons/md'
 import { IoIosCopy } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
 
+const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
+
 export const AnswerPanel = ({
   query,
   answer,
+  firstDocHowRelevant,
+  consultedDocs,
+  supportingDocs,
   setAnswer,
   setQuery,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
+
+  // 0 = no vote, 1 = positive, -1 = negative
+  const [vote, setVote] = useState<0 | 1 | -1>(0)
+  // logSent: null = not sent, 'loading' = sending, 'success' = sent
+  const [logSent, setLogSent] = useState<null | 'loading' | 'success'>(null)
+
+  const sendLog = async (feedback: 'positive' | 'negative') => {
+    setLogSent('loading')
+    const consultedDocIds = consultedDocs?.map((doc) => doc.id).join(',') || ''
+    const supportingDocIds =
+      supportingDocs?.map((doc) => doc.doc_id).join(',') || ''
+
+    const firstSupportingDoc = supportingDocs?.[0]
+
+    try {
+      const feedbackData = {
+        query,
+        answer: answer.sentences.join(' '),
+        feedback,
+        consultedDocIds,
+        supportingDocIds,
+        firstRelevanceScore: firstSupportingDoc?.score?.toString(),
+        firstPublicationName: firstSupportingDoc?.title,
+        firstDocSummary: firstSupportingDoc?.kps?.[0]?.snippet,
+        firstDocHowRelevant,
+      }
+
+      const res = await fetch('/api/answer-mode-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedbackData),
+      })
+      if (res.ok) {
+        setLogSent('success')
+      } else {
+        setLogSent(null)
+      }
+    } catch {
+      setLogSent(null)
+    }
+  }
   return (
     <>
       <Box
@@ -181,6 +229,70 @@ export const AnswerPanel = ({
             >
               Copy
             </Button>
+            <Button
+              variant='borderless'
+              leftIcon={
+                logSent === 'loading' && vote === 1 ? (
+                  <Spinner />
+                ) : (
+                  <Tooltip content='Mark as good result'>
+                    <FaThumbsUp />
+                  </Tooltip>
+                )
+              }
+              aria-label='Mark as good result'
+              onClick={() => {
+                if (vote === 1) {
+                  setVote(0)
+                  setLogSent(null)
+                } else {
+                  setVote(1)
+                  sendLog('positive')
+                }
+              }}
+              style={
+                vote === 1
+                  ? {
+                      background: getThemedColor('success', 300),
+                      color: getThemedColor('success', 900),
+                      opacity: 0.8,
+                    }
+                  : {}
+              }
+              disabled={vote === 1 && logSent === 'loading'}
+            />
+            <Button
+              variant='borderless'
+              leftIcon={
+                logSent === 'loading' && vote === -1 ? (
+                  <Spinner />
+                ) : (
+                  <Tooltip content='Mark as poor result'>
+                    <FaThumbsDown />
+                  </Tooltip>
+                )
+              }
+              aria-label='Mark as poor result'
+              onClick={() => {
+                if (vote === -1) {
+                  setVote(0)
+                  setLogSent(null)
+                } else {
+                  setVote(-1)
+                  sendLog('negative')
+                }
+              }}
+              style={
+                vote === -1
+                  ? {
+                      background: getThemedColor('error', 300),
+                      color: getThemedColor('error', 900),
+                      opacity: 0.8,
+                    }
+                  : {}
+              }
+              disabled={vote === -1 && logSent === 'loading'}
+            />
           </div>
         </div>
       </Box>

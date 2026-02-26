@@ -5,13 +5,10 @@ import {
   CreateDateColumn,
 } from 'typeorm'
 
-@Entity('user_feedback')
-export class UserFeedback {
+@Entity('cite_mode_feedback')
+export class CiteModeFeedback {
   @PrimaryGeneratedColumn()
   id!: number
-
-  @Column({ length: 16 })
-  mode!: string // 'answer' | 'cite'
 
   @Column('text')
   query!: string
@@ -19,20 +16,20 @@ export class UserFeedback {
   @Column({ name: 'doc_id', length: 64 })
   docId!: string
 
-  @Column('float')
-  relevance_score!: number
+  @Column('text', { name: 'relevance_score' })
+  relevanceScore!: string
 
-  @Column({ length: 256 })
-  publication_name!: string
+  @Column({ name: 'publication_name', length: 256 })
+  publicationName!: string
 
-  @Column()
-  row_number!: number
+  @Column({ name: 'row_number' })
+  rowNumber!: number
 
-  @Column('text')
+  @Column('text', { name: 'summary' })
   summary!: string
 
-  @Column('text')
-  how_relevant!: string
+  @Column('text', { name: 'how_relevant' })
+  howRelevant!: string
 
   @Column({ length: 8 })
   feedback!: string // 'positive' | 'negative'
