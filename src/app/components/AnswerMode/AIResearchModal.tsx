@@ -73,7 +73,7 @@ export const AIResearchModalContent = ({
           similarity_threshold: 0.05,
           include_metadata: true,
           rerank: true,
-          ...(consultedDocIds ? { consulted_doc_ids: consultedDocIds } : {}),
+          ...(consultedDocIds ? { cite_doc_ids: consultedDocIds } : {}),
         }),
       })
       const data = await response.json()
