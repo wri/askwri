@@ -104,7 +104,7 @@ const ImproveSearchModal = ({
                       }}
                     >
                       <Textarea
-                        placeholder='Compact urban growth in India'
+                        placeholder='Compact urban growth in India between 2019 and 2026'
                         size='small'
                         resize='none'
                         value={query}
