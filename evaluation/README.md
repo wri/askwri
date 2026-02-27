@@ -1,25 +1,27 @@
 ## AskWRI Evaluation System
 
-**Last Updated:** 2026-02-23
+**Last Updated:** 2026-02-27
 
 ## Quick Reference
 
 All eval commands are npm scripts. The hybrid service must be running first.
 
 ```bash
-# Prerequisites: start the hybrid service
-npm run hybrid                              # starts Python service on :8002
+# Prerequisites: start the search service
+cd search-service && source venv/bin/activate
+uvicorn app.main:app --port 8002            # starts Python service on :8002
 ```
 
 **Cite Mode:**
 ```bash
 npm run eval:cite                           # Full eval (11 queries, ~8 min)
-npm run eval:report                         # Generate report from latest results
+npm run eval:report                         # Generate HTML report from latest results
 ```
 
 **Answer Mode:**
 ```bash
 npm run eval:answer-retrieval               # Track 1: retrieval P/R/F1
+npm run eval:answer-report                  # Generate HTML report for answer evals
 
 # Track 2: synthesis (requires Next.js + RAGAS)
 pip install -r evaluation/requirements-eval.txt   # first time only
@@ -33,7 +35,7 @@ npm run eval:answer-full                    # runs retrieval then synthesis
 ```bash
 npm run eval:golden-retrieve                # query hybrid service for chunks
 npm run eval:golden-label                   # LLM labels each retrieved chunk
-npm run eval:golden-review                  # open label review UI at :3001
+npm run eval:golden-review                  # open review UI at :3001
 npm run eval:golden-assemble                # build final golden dataset from reviewed labels
 ```
 
@@ -56,38 +58,39 @@ npm run eval:download              # pull reviewed data from S3
 
 | Service | Required for | How to start |
 |---------|-------------|-------------|
-| Hybrid service (`:8002`) | All evals, golden set generation | `npm run hybrid` |
-| Next.js (`:3000`) | Answer synthesis only | `npm run dev` |
-| RAGAS Python deps | Answer synthesis only | `pip install -r evaluation/requirements-eval.txt` |
+| Search service (`:8002`) | All evals, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8002` |
+| Next.js (`:3000`) | Answer synthesis capture | `npm run dev` |
+| RAGAS Python deps | Legacy synthesis eval only | `pip install -r evaluation/requirements-eval.txt` |
 
 ## Cite Mode Evaluation
 
-Tests retrieval recall against a hand-curated golden dataset of 11 queries and 73 expected documents.
+Tests retrieval recall against a hand-curated golden dataset of 11 queries and 64 expected documents.
 
 ### Test Queries (11 total)
 
 Queries test different retrieval patterns:
-- **Topic area** (Q1): Land value capture
-- **Geography** (Q2): Bangalore
-- **Thematic intersection** (Q3): Children and pollution
-- **Thematic + geographic** (Q4): Climate adaptation in Brazil
-- **Fuzzy topic** (Q5): Micromobility solutions
-- **Intervention impact** (Q6): School bus health outcomes
-- **Solution-focused** (Q7): Jakarta housing crisis
-- **Niche technology** (Q8): Hydrogen
-- **Program/corpus** (Q9): World Resources Report papers
-- **Temporal + amorphous** (Q10): Urban finance since 2020
-- **Amorphous + exclusion** (Q11): Urban finance excluding ebuses
+- **Topic area** (Q1): Land value capture (4 docs)
+- **Geography** (Q2): Bangalore (6 docs)
+- **Thematic intersection** (Q3): Children and pollution (3 docs)
+- **Thematic + geographic** (Q4): Climate adaptation in Brazil (3 docs)
+- **Fuzzy topic** (Q5): Micromobility solutions (7 docs)
+- **Intervention impact** (Q6): School bus health outcomes (4 docs)
+- **Solution-focused** (Q7): Jakarta housing crisis (4 docs)
+- **Niche technology** (Q8): Hydrogen (4 docs)
+- **Program/corpus** (Q9): World Resources Report papers (16 docs)
+- **Temporal + amorphous** (Q10): Urban finance since 2020 (4 docs)
+- **Amorphous + exclusion** (Q11): Urban finance excluding ebuses (9 docs)
 
 ### Pass Criteria
 
-A query passes if **BOTH** conditions are met:
+A query passes if **ALL** conditions are met:
 - **Recall >= 75%**
 - **Precision >= 15%**
+- **F1 >= 25%**
 
 ### Golden Dataset
 - Located: `evaluation/golden-dataset.json`
-- 11 queries, 73 total expected documents
+- 11 queries, 64 total expected documents
 - Hand-curated by domain experts
 
 ---
@@ -104,9 +107,9 @@ Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
 
 Evaluates whether hybrid retrieval finds the right passages for Answer mode.
 
-- Calls hybrid service with `mode=answer` and ANSWER_PRESET params
+- Calls hybrid service with `mode=answer` using params from `ANSWER_PRESET` (in `src/config/retrieval`)
 - Compares at two granularities: **chunk-level** (with adjacent tolerance) and **doc-level**
-- Adjacent tolerance: chunk N+/-1 counts as 0.5 partial match
+- Adjacent tolerance: chunk N+/-1 counts as a partial match
 
 ### Track 2: Synthesis (Human-in-the-loop)
 
@@ -217,6 +220,12 @@ External reviewers access the evaluation UIs via the QA server — no local setu
 - Synthesis review: `http://<qa-alb>/api/eval/review-synthesis`
 - Cite report: `http://<qa-alb>/api/eval/review-cite`
 
+**Local dev review server** (`npm run eval:golden-review` on `:3001`):
+- Label review: `http://localhost:3001/eval/review-labels`
+- Synthesis review: `http://localhost:3001/eval/review-synthesis`
+
+Note: The local dev server does not serve cite reports — use the QA server or view JSON directly.
+
 **Developer workflow:**
 ```bash
 # 1. Run evals locally
@@ -254,36 +263,57 @@ evaluation/
 │   └── ragas_adapter.py                   # Golden set -> RAGAS format converter
 │
 ├── # Cite Mode
-├── golden-dataset.json                    # Cite mode: 11 queries, 73 expected docs
+├── golden-dataset.json                    # Cite mode: 11 queries, 64 expected docs
 ├── run-cite-eval.ts                       # Full evaluation runner (11 queries)
-├── run-cite-eval-quick.ts                 # Quick evaluation runner (3 queries)
-├── generate-report.ts                     # Report generator
+├── generate-report.ts                     # HTML report generator for cite results
 │
 ├── # Answer Mode — Evaluation
-├── answer-golden-dataset.json             # Answer mode: 9 production test cases
+├── answer-golden-dataset.json             # Answer mode: 9 test cases with synthesis ground truth
 ├── run-answer-retrieval-eval.ts           # Track 1: passage/doc-level P/R/F1
 ├── run-answer-synthesis-capture.ts        # Track 2 Stage 1: capture system outputs
 ├── run-answer-synthesis-llm-eval.ts       # Track 2 Stage 2: LLM scoring (5 dimensions)
 ├── prepare-synthesis-review.ts            # Track 2: merge capture + LLM eval for review
 ├── assemble-synthesis-ground-truth.ts     # Track 2 Stage 4: write to golden dataset
+├── generate-answer-report.ts              # HTML report generator for answer evals
 ├── run-answer-synthesis-eval.py           # Legacy: RAGAS-based synthesis eval
 ├── run-answer-synthesis-wrapper.ts        # Legacy: TS wrapper for RAGAS eval
-├── generate-answer-report.ts              # HTML report generator for answer evals
-├── requirements-eval.txt                  # Python deps for RAGAS eval
+├── requirements-eval.txt                  # Python deps for legacy RAGAS eval
 │
 ├── # Answer Mode — Golden Set Pipeline
 ├── answer-question-bank.json              # 9 human-written research questions
 ├── generate-answer-golden-set.ts          # Chunk-first pipeline (retrieve/label/assemble)
 ├── serve-label-review.ts                  # Label + synthesis review server (:3001, local dev)
 ├── answer-labels-review.json              # LLM + human-reviewed chunk labels
-├── answer-synthesis-eval-final.json       # Synthesis eval with human reviews (tracked)
+├── answer-retrieval-raw.json              # Raw retrieval results from golden set generation
 ├── upload-eval-to-s3.ts                   # Push eval data to S3 for QA reviewers
-├── download-eval-from-s3.ts               # Pull reviewed data from S3
+├── download-eval-from-s3.ts              # Pull reviewed data from S3
 │
-└── results/
+├── # Diagnostics (ad-hoc debugging tools)
+├── analyze-missing-docs.ts               # Analyze docs missing from retrieval
+├── check-golden-urls.ts                   # Validate golden dataset URLs
+├── cite-recall-diagnostic.ts              # Detailed cite recall analysis
+├── debug-retrieval.ts                     # Debug individual retrieval queries
+├── diagnose-pre-filter-recall.ts          # Pre-filter stage recall analysis
+├── diagnose-retrieval-gaps.ts             # Identify retrieval gap patterns
+├── document-analysis.ts                   # Analyze document-level statistics
+├── map-passages-to-chunks.ts              # Map passage text to chunk IDs
+├── run-cite-eval-no-filter.ts             # Cite eval with filters disabled
+├── test-rerank-topn.ts                    # Test reranker top-N settings
+├── verify-golden-docs.ts                  # Verify golden docs exist in index
+├── verify-golden-docs-simple.ts           # Simplified golden doc verification
+├── diagnostics/
+│   └── diagnostic-runner.ts               # Generic diagnostic runner
+│
+├── # Legacy / superseded
+├── golden-dataset-updated.json            # Older version of cite golden dataset
+│
+└── results/                               # All eval output (gitignored)
     ├── eval-report-{timestamp}.json       # Cite mode results
+    ├── eval-report-{timestamp}.html       # Cite mode HTML reports
     ├── answer-retrieval-{timestamp}.json  # Answer retrieval results
-    └── answer-synthesis-{mode}-{ts}.json  # Answer synthesis results
+    ├── answer-retrieval-{timestamp}.html  # Answer retrieval HTML reports
+    ├── diagnostic-{timestamp}.json        # Diagnostic output
+    └── pre-filter-diagnostic-*.json       # Pre-filter diagnostic output
 ```
 
 ### Next.js Eval Routes (QA Server)
