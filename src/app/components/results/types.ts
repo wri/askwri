@@ -8,10 +8,13 @@ export type RowData = {
   download_url?: string | null
   relevance_score?: number
   confidence?: number
+  row_number?: number
 }
 
 export type SelectableResultRowProps = {
+  query: string
   rowData: RowData
+  rowNumber: number
   selected: boolean
   isActive?: boolean
   onCheckedChange: (row: RowData, checked: boolean | string) => void
@@ -29,6 +32,7 @@ export type ExportActionBarProps = {
 }
 
 export type ResultsTableProps = {
+  query: string
   data: RowData[]
   docWhyLoading?: Record<string, boolean>
   docSummaryLoading?: Record<string, boolean>
@@ -79,4 +83,16 @@ export type ImproveSearchModalProps = {
   initialQuery: string
   improveSearchModalOpen: boolean
   setImproveSearchModalOpen: (open: boolean) => void
+}
+
+export enum FeedbackType {
+  None = 0, // 0 = no feedback
+  Positive = 1, // 1 = positive
+  Negative = -1, // -1 = negative
+}
+
+export enum FeedbackSubmitted {
+  Unsent = 'unsent', // null = not sent
+  Loading = 'loading', // 'loading' = sending
+  Success = 'success', // 'success' = sent
 }

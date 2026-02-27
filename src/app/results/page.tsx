@@ -829,6 +829,7 @@ function CitePanel({
         how_relevant: whyMeta?.why || firstSentence(best?.snippet ?? ''),
         download_url: url,
         relevance_score: docRel,
+        row_number: idx + 1,
       }
     })
   }, [docs, index, docSummary, docWhy])

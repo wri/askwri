@@ -1,3 +1,5 @@
+import { RowData } from '../results/types'
+
 export interface AnswerResult {
   sentences: string[]
   paragraphs?: string[][]
@@ -10,6 +12,9 @@ export interface AnswerResult {
 export interface AnswerPanelProps {
   query: string
   answer: AnswerResult
+  firstDocHowRelevant: string
+  consultedDocs?: RowData[]
+  supportingDocs: DocMeta[]
   setAnswer: (answer: AnswerResult | null) => void
   setQuery: (query: string) => void
 }
@@ -51,5 +56,6 @@ export interface WhyMeta {
 }
 
 export interface SupportingCitationsProps {
-  docs: DocMeta[]
+  supportingDocs: DocMeta[]
+  setFirstDocHowRelevant: (why: string) => void
 }

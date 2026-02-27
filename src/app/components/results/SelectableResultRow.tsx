@@ -13,14 +13,20 @@ import {
 } from '@worldresources/wri-design-systems'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { PiDownloadSimpleBold } from 'react-icons/pi'
-import { SelectableResultRowProps } from './types'
+import {
+  SelectableResultRowProps,
+  FeedbackType,
+  FeedbackSubmitted,
+} from './types'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
 const SUMMARY_MAX_LENGTH = 240
 
 export const SelectableResultRow = ({
+  query,
   rowData,
+  rowNumber,
   selected,
   isActive = false,
   onCheckedChange,
@@ -29,17 +35,54 @@ export const SelectableResultRow = ({
   onTitleClick,
 }: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
-  // 0 = no vote, 1 = upvoted, -1 = downvoted
-  const [vote, setVote] = useState<0 | 1 | -1>(0)
-  // logSent: null = not sent, 'loading' = sending, 'success' = sent
-  const [logSent, setLogSent] = useState<null | 'loading' | 'success'>(null)
 
-  // TODO: log feedback to database
-  const sendLog = () => {
-    setLogSent('loading')
-    setTimeout(() => {
-      setLogSent('success')
-    }, 700)
+  // 0 = no feedbackState, 1 = positive, -1 = negative
+  const [feedbackState, setFeedbackState] = useState<FeedbackType>(
+    FeedbackType.None,
+  )
+  // feedbackSubmitted: null = not sent, 'loading' = sending, 'success' = sent
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<FeedbackSubmitted>(
+    FeedbackSubmitted.Unsent,
+  )
+
+  const submitFeedback = async (feedbackType: FeedbackType) => {
+    setFeedbackSubmitted(FeedbackSubmitted.Loading)
+    try {
+      const feedbackData = {
+        docId: rowData.id,
+        feedback:
+          feedbackType === FeedbackType.Positive ? 'positive' : 'negative',
+        howRelevant: rowData.how_relevant,
+        mode: 'cite',
+        publicationName: rowData.publication_name,
+        query,
+        relevanceScore: rowData.relevance,
+        rowNumber: rowNumber,
+        summary: rowData.summary,
+      }
+      const res = await fetch('/api/cite-mode-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedbackData),
+      })
+      if (res.ok) {
+        setFeedbackSubmitted(FeedbackSubmitted.Success)
+      } else {
+        setFeedbackSubmitted(FeedbackSubmitted.Unsent)
+      }
+    } catch {
+      setFeedbackSubmitted(FeedbackSubmitted.Unsent)
+    }
+  }
+
+  const handleFeedback = (type: FeedbackType) => {
+    if (feedbackState === type) {
+      setFeedbackState(FeedbackType.None)
+      setFeedbackSubmitted(FeedbackSubmitted.Unsent)
+    } else {
+      setFeedbackState(type)
+      submitFeedback(type)
+    }
   }
 
   const handleOnRowSelected = ({ checked }: { checked: boolean | string }) => {
@@ -148,7 +191,8 @@ export const SelectableResultRow = ({
           <Button
             variant='borderless'
             leftIcon={
-              logSent === 'loading' && vote === 1 ? (
+              feedbackSubmitted === FeedbackSubmitted.Loading &&
+              feedbackState === FeedbackType.Positive ? (
                 <Spinner />
               ) : (
                 <Tooltip content='Mark as good result'>
@@ -157,17 +201,9 @@ export const SelectableResultRow = ({
               )
             }
             aria-label='Mark as good result'
-            onClick={() => {
-              if (vote === 1) {
-                setVote(0)
-                setLogSent(null)
-              } else {
-                setVote(1)
-                sendLog()
-              }
-            }}
+            onClick={() => handleFeedback(FeedbackType.Positive)}
             style={
-              vote === 1
+              feedbackState === FeedbackType.Positive
                 ? {
                     background: getThemedColor('success', 300),
                     color: getThemedColor('success', 900),
@@ -175,12 +211,16 @@ export const SelectableResultRow = ({
                   }
                 : {}
             }
-            disabled={vote === 1 && logSent === 'loading'}
+            disabled={
+              feedbackState === FeedbackType.Positive &&
+              feedbackSubmitted === FeedbackSubmitted.Loading
+            }
           />
           <Button
             variant='borderless'
             leftIcon={
-              logSent === 'loading' && vote === -1 ? (
+              feedbackSubmitted === FeedbackSubmitted.Loading &&
+              feedbackState === FeedbackType.Negative ? (
                 <Spinner />
               ) : (
                 <Tooltip content='Mark as poor result'>
@@ -189,17 +229,9 @@ export const SelectableResultRow = ({
               )
             }
             aria-label='Mark as poor result'
-            onClick={() => {
-              if (vote === -1) {
-                setVote(0)
-                setLogSent(null)
-              } else {
-                setVote(-1)
-                sendLog()
-              }
-            }}
+            onClick={() => handleFeedback(FeedbackType.Negative)}
             style={
-              vote === -1
+              feedbackState === FeedbackType.Negative
                 ? {
                     background: getThemedColor('error', 300),
                     color: getThemedColor('error', 900),
@@ -207,7 +239,10 @@ export const SelectableResultRow = ({
                   }
                 : {}
             }
-            disabled={vote === -1 && logSent === 'loading'}
+            disabled={
+              feedbackState === FeedbackType.Negative &&
+              feedbackSubmitted === FeedbackSubmitted.Loading
+            }
           />
         </div>
       </TableCell>

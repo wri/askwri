@@ -3,27 +3,94 @@
 
 'use client'
 
-import { useState } from 'react'
-import { Text, Box, Heading } from '@chakra-ui/react'
+import { useState, FC } from 'react'
+import { Text, Box, Heading, Spinner } from '@chakra-ui/react'
 import {
   Tag,
   Button,
   getThemedColor,
   Modal,
+  Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
 import { FaInfoCircle } from 'react-icons/fa'
+import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { MdChat } from 'react-icons/md'
 import { IoIosCopy } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
+import { FeedbackType, FeedbackSubmitted } from '../results/types'
+
+const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
 export const AnswerPanel = ({
   query,
   answer,
+  firstDocHowRelevant,
+  consultedDocs,
+  supportingDocs,
   setAnswer,
   setQuery,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
+
+  // 0 = no feedbackState, 1 = positive, -1 = negative
+  const [feedbackState, setFeedbackState] = useState<FeedbackType>(
+    FeedbackType.None,
+  )
+  // feedbackSubmitted: null = not sent, 'loading' = sending, 'success' = sent
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<FeedbackSubmitted>(
+    FeedbackSubmitted.Unsent,
+  )
+
+  const submitFeedback = async (feedbackType: FeedbackType) => {
+    setFeedbackSubmitted(FeedbackSubmitted.Loading)
+    const consultedDocIds = consultedDocs
+      ? Array.from(new Set(consultedDocs.map((doc) => doc.id))).join(',')
+      : ''
+    const supportingDocIds = supportingDocs
+      ? Array.from(new Set(supportingDocs.map((doc) => doc.doc_id))).join(',')
+      : ''
+
+    const firstSupportingDoc = supportingDocs?.[0]
+
+    try {
+      const feedbackData = {
+        query,
+        answer: answer.sentences.join(' '),
+        feedback:
+          feedbackType === FeedbackType.Positive ? 'positive' : 'negative',
+        consultedDocIds,
+        supportingDocIds,
+        firstRelevanceScore: firstSupportingDoc?.score?.toString(),
+        firstPublicationName: firstSupportingDoc?.title,
+        firstDocSummary: firstSupportingDoc?.kps?.[0]?.snippet,
+        firstDocHowRelevant,
+      }
+
+      const res = await fetch('/api/answer-mode-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedbackData),
+      })
+      if (res.ok) {
+        setFeedbackSubmitted(FeedbackSubmitted.Success)
+      } else {
+        setFeedbackSubmitted(FeedbackSubmitted.Unsent)
+      }
+    } catch {
+      setFeedbackSubmitted(FeedbackSubmitted.Unsent)
+    }
+  }
+
+  const handleFeedback = (type: FeedbackType) => {
+    if (feedbackState === type) {
+      setFeedbackState(FeedbackType.None)
+      setFeedbackSubmitted(FeedbackSubmitted.Unsent)
+    } else {
+      setFeedbackState(type)
+      submitFeedback(type)
+    }
+  }
   return (
     <>
       <Box
@@ -181,6 +248,62 @@ export const AnswerPanel = ({
             >
               Copy
             </Button>
+            <Button
+              variant='borderless'
+              leftIcon={
+                feedbackSubmitted === FeedbackSubmitted.Loading &&
+                feedbackState === FeedbackType.Positive ? (
+                  <Spinner />
+                ) : (
+                  <Tooltip content='Mark as good result'>
+                    <FaThumbsUp />
+                  </Tooltip>
+                )
+              }
+              aria-label='Mark as good result'
+              onClick={() => handleFeedback(FeedbackType.Positive)}
+              style={
+                feedbackState === FeedbackType.Positive
+                  ? {
+                      background: getThemedColor('success', 300),
+                      color: getThemedColor('success', 900),
+                      opacity: 0.8,
+                    }
+                  : {}
+              }
+              disabled={
+                feedbackState === FeedbackType.Positive &&
+                feedbackSubmitted === FeedbackSubmitted.Loading
+              }
+            />
+            <Button
+              variant='borderless'
+              leftIcon={
+                feedbackSubmitted === FeedbackSubmitted.Loading &&
+                feedbackState === FeedbackType.Negative ? (
+                  <Spinner />
+                ) : (
+                  <Tooltip content='Mark as poor result'>
+                    <FaThumbsDown />
+                  </Tooltip>
+                )
+              }
+              aria-label='Mark as poor result'
+              onClick={() => handleFeedback(FeedbackType.Negative)}
+              style={
+                feedbackState === FeedbackType.Negative
+                  ? {
+                      background: getThemedColor('error', 300),
+                      color: getThemedColor('error', 900),
+                      opacity: 0.8,
+                    }
+                  : {}
+              }
+              disabled={
+                feedbackState === FeedbackType.Negative &&
+                feedbackSubmitted === FeedbackSubmitted.Loading
+              }
+            />
           </div>
         </div>
       </Box>

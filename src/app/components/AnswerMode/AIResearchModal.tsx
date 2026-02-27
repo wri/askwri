@@ -20,13 +20,14 @@ import { AnswerResult } from './types'
 import { RowData } from '../results/types'
 
 export const AIResearchModalContent = ({
-  citeDocs,
+  consultedDocs,
 }: {
-  citeDocs?: RowData[]
+  consultedDocs?: RowData[]
 }) => {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)
+  const [firstDocHowRelevant, setFirstDocHowRelevant] = useState('')
   const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
@@ -57,9 +58,9 @@ export const AIResearchModalContent = ({
 
       // Step 1: Call the answer mode API for retrieval
       // If citeDocs has docs, send cite_doc_ids (top 20)
-      let citeDocIds
-      if (citeDocs && citeDocs.length > 0) {
-        citeDocIds = citeDocs.map((d) => d.id)
+      let consultedDocIds
+      if (consultedDocs && consultedDocs.length > 0) {
+        consultedDocIds = consultedDocs.map((d) => d.id)
       }
 
       const response = await fetch('/api/llamaindex', {
@@ -72,7 +73,7 @@ export const AIResearchModalContent = ({
           similarity_threshold: 0.05,
           include_metadata: true,
           rerank: true,
-          ...(citeDocIds ? { cite_doc_ids: citeDocIds } : {}),
+          ...(consultedDocIds ? { cite_doc_ids: consultedDocIds } : {}),
         }),
       })
       const data = await response.json()
@@ -267,6 +268,9 @@ export const AIResearchModalContent = ({
           <AnswerPanel
             query={query}
             answer={answer}
+            firstDocHowRelevant={firstDocHowRelevant}
+            supportingDocs={supportingDocs}
+            consultedDocs={consultedDocs}
             setAnswer={setAnswer}
             setQuery={setQuery}
           />
@@ -284,7 +288,10 @@ export const AIResearchModalContent = ({
               overflow: 'hidden',
             }}
           >
-            <SupportingCitations docs={supportingDocs} />
+            <SupportingCitations
+              setFirstDocHowRelevant={setFirstDocHowRelevant}
+              supportingDocs={supportingDocs}
+            />
           </Box>
         </Box>
       )
@@ -295,7 +302,7 @@ export const AIResearchModalContent = ({
         query={query}
         loading={loading}
         suggestions={suggestions}
-        numberOfCiteDocs={citeDocs?.length}
+        numberOfCiteDocs={consultedDocs?.length}
         onQueryChange={setQuery}
         onSubmit={handleSubmit}
         onShuffleSuggestions={handleShuffleSuggestions}

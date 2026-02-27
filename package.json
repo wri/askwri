@@ -12,6 +12,10 @@
     "test:ci": "jest --ci --coverage",
     "search-service": "cd search-service && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt && ./venv/bin/python -m app.main",
     "search-service:stop": "bash -c 'if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then kill $(lsof -t -i:8000) 2>/dev/null; echo \"✅ Search service stopped\"; else echo \"ℹ️  Search service not running\"; fi'",
+    "typeorm": "ts-node --project tsconfig.typeorm.json -r dotenv/config ./node_modules/typeorm/cli.js",
+    "migration:generate": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:generate src/db/migrations/Migration -d src/db/migration-data-source.ts",
+    "migration:run": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:run -d src/db/migration-data-source.ts",
+    "migration:revert": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:revert -d src/db/migration-data-source.ts",
     "eval:cite": "npx tsx evaluation/run-cite-eval.ts",
     "eval:report": "npx tsx evaluation/generate-report.ts",
     "eval:answer-retrieval": "npx tsx evaluation/run-answer-retrieval-eval.ts",
@@ -41,10 +45,13 @@
     "lightningcss": "^1.31.1",
     "next": "^16.1.6",
     "openai": "^6.22.0",
+    "pg": "^8.18.0",
     "postcss": "^8.5.6",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-icons": "^5.5.0",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.28",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
@@ -72,6 +79,7 @@
     "picomatch": "^4.0.3",
     "prettier": "^3.8.1",
     "tailwindcss": "^4.1.18",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }
 }
