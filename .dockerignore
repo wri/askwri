@@ -55,6 +55,10 @@ terraform
 *.tfvars
 .terraform
 
+# Python venv
+search-service/venv
+**/venv
+
 # Documentation
 README.md
 docs

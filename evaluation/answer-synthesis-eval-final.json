@@ -42,16 +42,14 @@
       },
       "human_eval": {
         "scores": {
-          "faithfulness": 1,
-          "completeness": 0.8,
-          "conciseness": 0.9,
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
           "coherence": 0,
-          "citation_accuracy": 0.8
+          "citation_accuracy": 0
         },
         "qualitative_feedback": "",
-        "key_facts_confirmed": [
-          "Land value capture mechanisms raise local public revenue that can be used to fund infrastructure and basic services (e.g., roads, water, schools, green infrastructure)."
-        ],
+        "key_facts_confirmed": [],
         "key_facts_added": [],
         "reviewed": false
       }
