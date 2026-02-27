@@ -769,6 +769,28 @@ export const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
   .error-banner { background: #fef2f2; color: #dc2626; padding: 12px 18px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; display: none; }
   .empty-state { text-align: center; color: #aaa; padding: 32px; font-size: 14px; }
   .section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; margin: 12px 0 6px; }
+
+  /* Methodology note */
+  .methodology-toggle {
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+    background: #eef2ff; border-bottom: 1px solid #c7d2fe; cursor: pointer;
+    user-select: none; font-size: 13px; color: #4338ca; font-weight: 500;
+  }
+  .methodology-toggle:hover { background: #e0e7ff; }
+  .methodology-toggle .chevron { font-size: 10px; color: #6366f1; transition: transform 0.15s; }
+  .methodology-toggle .chevron.open { transform: rotate(90deg); }
+  .methodology-note {
+    display: none; max-width: 820px; margin: 0 auto; padding: 20px 24px 16px;
+    background: #fafaff; border-bottom: 1px solid #e0e0e0; font-size: 13px; line-height: 1.65; color: #333;
+  }
+  .methodology-note.open { display: block; }
+  .methodology-note h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #1a1a1a; }
+  .methodology-note p { margin-bottom: 10px; }
+  .methodology-note table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 13px; }
+  .methodology-note td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .methodology-note td:first-child { width: 130px; white-space: nowrap; }
+  .methodology-note ol { padding-left: 20px; margin: 6px 0 12px; }
+  .methodology-note li { margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -781,12 +803,51 @@ export const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
   <span class="stat" id="stat-avg-coher">Coher: <b>-</b></span>
   <span class="stat" id="stat-avg-cite">Cite: <b>-</b></span>
 </div>
+<div class="methodology-toggle" id="methodology-toggle">
+  <span class="chevron" id="methodology-chevron">&#9654;</span> Methodology &amp; Review Guide
+</div>
+<div class="methodology-note" id="methodology-note">
+<h3>Methodology</h3>
+
+<p><strong>How it works.</strong> For each question, the system retrieves source passages from WRI's document corpus through hybrid search (dense and sparse retrieval with cross-encoder reranking). Passages that score above a relevance threshold go to GPT-5.2, which synthesizes a two- to three-sentence answer. A separate GPT-5.2 instance then scores the answer on five dimensions, seeing only the passages the synthesis model received.</p>
+
+<p><strong>What the scores mean.</strong></p>
+<table>
+<tr><td><strong>Faithfulness</strong></td><td>Every claim traces to a source passage. Penalizes hallucinated facts and unsupported causal claims.</td></tr>
+<tr><td><strong>Completeness</strong></td><td>The answer covers key findings from its passages, given the two- to three-sentence limit. Does not penalize for information the model never saw.</td></tr>
+<tr><td><strong>Conciseness</strong></td><td>Every word earns its place. No filler, no repetition, no hedging.</td></tr>
+<tr><td><strong>Coherence</strong></td><td>The answer reads as a unified narrative, not a list of disconnected facts.</td></tr>
+<tr><td><strong>Citation accuracy</strong></td><td>Each claim maps to a specific source passage. A reviewer can point to exactly which passage supports each statement.</td></tr>
+</table>
+
+<p>Scores range from 0.0 to 1.0. Above 0.7 is good; below 0.4 needs attention.</p>
+
+<p><strong>How to review.</strong></p>
+<ol>
+<li>Read the synthesis (blue box) and the source passages.</li>
+<li>Check the LLM scores and flagged issues. Do you agree?</li>
+<li>Adjust sliders to reflect your judgment. LLM scores pre-populate as a starting point.</li>
+<li>Confirm which key facts the synthesis captures. Add any it missed.</li>
+<li>Write brief qualitative feedback if scores alone fail to capture what matters.</li>
+<li>Click "Mark as Reviewed."</li>
+</ol>
+
+<p><strong>What to watch for.</strong> The LLM judge scores faithfulness generously; it rarely catches subtle overclaiming. If a synthesis asserts a causal relationship ("X leads to Y") but the source shows only correlation, flag it. Watch also for optimism bias: answers that omit caveats or risks present in the sources.</p>
+</div>
 <div class="container">
   <div class="error-banner" id="error-banner"></div>
   <div id="app"><div class="empty-state">Loading...</div></div>
 </div>
 <script>
 (function() {
+  // Methodology toggle
+  document.getElementById('methodology-toggle').addEventListener('click', function() {
+    var note = document.getElementById('methodology-note');
+    var chev = document.getElementById('methodology-chevron');
+    var open = note.classList.toggle('open');
+    if (open) { chev.classList.add('open'); } else { chev.classList.remove('open'); }
+  });
+
   var evalData = null;
   var rawData = null;
   var saveTimers = {};
