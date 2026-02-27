@@ -27,13 +27,7 @@ function sanitizeFilename(filename: string): string {
 export async function readEvalFile(filename: string): Promise<object | null> {
   filename = sanitizeFilename(filename);
 
-  // Always try filesystem first (works locally and in Docker with committed data)
-  const filePath = path.join(EVAL_DIR, filename);
-  if (fs.existsSync(filePath)) {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  }
-
-  // Fall back to S3 in production
+  // In production, try S3 first (reviewer edits persist there across deploys)
   if (isProduction && BUCKET) {
     try {
       const client = getS3Client();
@@ -42,11 +36,19 @@ export async function readEvalFile(filename: string): Promise<object | null> {
         Key: `${PREFIX}${filename}`,
       }));
       const body = await resp.Body?.transformToString('utf-8');
-      return body ? JSON.parse(body) : null;
+      if (body) return JSON.parse(body);
     } catch (err: any) {
-      if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) return null;
-      throw err;
+      if (err.name !== 'NoSuchKey' && err.$metadata?.httpStatusCode !== 404) {
+        console.warn(`[eval-storage] S3 read failed for ${filename}:`, err.message);
+      }
+      // Fall through to filesystem
     }
+  }
+
+  // Fall back to filesystem (committed seed data, or local dev)
+  const filePath = path.join(EVAL_DIR, filename);
+  if (fs.existsSync(filePath)) {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   }
 
   return null;
