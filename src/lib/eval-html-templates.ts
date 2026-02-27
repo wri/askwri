@@ -38,7 +38,7 @@ export const REVIEW_HTML = `<!DOCTYPE html>
   }
 
   /* Main container */
-  .container { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px 16px; }
 
   /* Question section */
   .question-section {
@@ -156,7 +156,7 @@ export const REVIEW_HTML = `<!DOCTYPE html>
     font-size: 12px;
     line-height: 1.6;
     color: #333;
-    white-space: pre-wrap;
+    white-space: normal;
     word-break: break-word;
     background: #fff;
     border: 1px solid #eee;
@@ -240,6 +240,28 @@ export const REVIEW_HTML = `<!DOCTYPE html>
     font-size: 13px;
     display: none;
   }
+
+  /* Methodology note */
+  .methodology-toggle {
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+    background: #eef2ff; border-bottom: 1px solid #c7d2fe; cursor: pointer;
+    user-select: none; font-size: 13px; color: #4338ca; font-weight: 500;
+  }
+  .methodology-toggle:hover { background: #e0e7ff; }
+  .methodology-toggle .chevron { font-size: 10px; color: #6366f1; transition: transform 0.15s; }
+  .methodology-toggle .chevron.open { transform: rotate(90deg); }
+  .methodology-note {
+    display: none; max-width: 820px; margin: 0 auto; padding: 20px 24px 16px;
+    background: #fafaff; border-bottom: 1px solid #e0e0e0; font-size: 13px; line-height: 1.65; color: #333;
+  }
+  .methodology-note.open { display: block; }
+  .methodology-note h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #1a1a1a; }
+  .methodology-note p { margin-bottom: 10px; }
+  .methodology-note table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 13px; }
+  .methodology-note td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .methodology-note td:first-child { width: 130px; white-space: nowrap; }
+  .methodology-note ol { padding-left: 20px; margin: 6px 0 12px; }
+  .methodology-note li { margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -251,6 +273,31 @@ export const REVIEW_HTML = `<!DOCTYPE html>
   <span class="stat" id="stat-need-review"><b>0</b> need review</span>
 </div>
 
+<div class="methodology-toggle" id="methodology-toggle">
+  <span class="chevron" id="methodology-chevron">&#9654;</span> Methodology &amp; Review Guide
+</div>
+<div class="methodology-note" id="methodology-note">
+<h3>Methodology</h3>
+
+<p><strong>How it works.</strong> For each test question, the system retrieves passage chunks from WRI's document corpus through hybrid search (dense and sparse retrieval with cross-encoder reranking). An LLM then labels each chunk as <em>relevant</em>, <em>partially relevant</em>, or <em>not relevant</em> to the question, with a brief rationale. Your job is to verify or override these labels.</p>
+
+<p><strong>What the labels mean.</strong></p>
+<table>
+<tr><td><strong>Relevant</strong></td><td>The chunk directly answers or substantially informs the question. A good synthesis would draw on this passage.</td></tr>
+<tr><td><strong>Partial</strong></td><td>The chunk relates to the topic but lacks a direct answer. It provides useful context without being essential.</td></tr>
+<tr><td><strong>Not relevant</strong></td><td>The chunk does not help answer the question, even indirectly.</td></tr>
+</table>
+
+<p><strong>How to review.</strong></p>
+<ol>
+<li>Expand a question to see its retrieved chunks.</li>
+<li>Read each chunk's text and the LLM's rationale.</li>
+<li>If you agree with the label, move on. If not, click the correct label button. Your override takes precedence.</li>
+<li>Focus on chunks the LLM flagged as needing review — these have the lowest confidence.</li>
+</ol>
+
+<p><strong>What to watch for.</strong> The LLM tends to over-label tangentially related passages as "relevant." If a chunk discusses the right topic but does not address the specific question, mark it "partial." Conversely, the LLM sometimes misses chunks with indirect but valuable evidence — a passage about a related city or policy may still inform the answer.</p>
+</div>
 <div class="container">
   <div class="error-banner" id="error-banner"></div>
   <div id="app"><div class="empty-state">Loading...</div></div>
@@ -258,6 +305,14 @@ export const REVIEW_HTML = `<!DOCTYPE html>
 
 <script>
 (function() {
+  // Methodology toggle
+  document.getElementById('methodology-toggle').addEventListener('click', function() {
+    var note = document.getElementById('methodology-note');
+    var chev = document.getElementById('methodology-chevron');
+    var open = note.classList.toggle('open');
+    if (open) { chev.classList.add('open'); } else { chev.classList.remove('open'); }
+  });
+
   let data = null;
 
   function escapeHtml(str) {
@@ -326,11 +381,9 @@ export const REVIEW_HTML = `<!DOCTYPE html>
         '<span class="score-badge ' + scoreBadgeClass(chunk.score) + '">' + (chunk.score != null ? chunk.score.toFixed(3) : '?') + '</span>' +
         '<span class="chunk-page">p.' + (chunk.page != null ? chunk.page : '?') + '</span>' +
       '</div>' +
-      '<div class="chunk-content" data-full="' + escapeHtml(chunk.content) + '" data-preview="' + escapeHtml(preview) + '" data-expanded="false">' +
-        escapeHtml(preview) +
+      '<div class="chunk-content" data-full="' + escapeHtml(chunk.content) + '" data-preview="' + escapeHtml(preview) + '" data-expanded="true">' +
+        escapeHtml(chunk.content) +
       '</div>' +
-      (truncated ?
-        '<span class="content-toggle" data-card="' + escapeHtml(cardId) + '">Show full text &#9660;</span>' : '') +
       '<div class="llm-assessment">LLM: ' + escapeHtml(chunk.label) + ' (confidence: ' + escapeHtml(chunk.confidence) + ') &mdash; ' + escapeHtml(chunk.rationale || '') + '</div>' +
       '<div class="label-buttons">' +
         '<button class="label-btn' + (eff === 'relevant' ? ' ' + activeClass('relevant') : '') + '" data-q="' + escapeHtml(questionId) + '" data-c="' + escapeHtml(chunkId) + '" data-val="relevant">Relevant</button>' +
@@ -626,7 +679,7 @@ export const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
   .summary-bar .title-text { font-weight: 600; font-size: 15px; margin-right: 8px; }
   .summary-bar .stat { color: #555; }
   .summary-bar .stat b { color: #1a1a1a; }
-  .container { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px 16px; }
   .tc-section {
     background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
     margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
@@ -671,8 +724,8 @@ export const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
   .score-red { background: #ef4444; }
   .passage-snippet {
     font-family: monospace; font-size: 11px; line-height: 1.5; color: #333;
-    white-space: pre-wrap; word-break: break-word; background: #fff;
-    border: 1px solid #eee; border-radius: 4px; padding: 6px 8px; max-height: 80px; overflow: hidden;
+    white-space: normal; word-break: break-word; background: #fff;
+    border: 1px solid #eee; border-radius: 4px; padding: 6px 8px; max-height: none;
   }
   .passage-snippet.expanded { max-height: none; }
   .snippet-toggle { font-size: 11px; color: #2563eb; cursor: pointer; user-select: none; display: inline-block; margin-top: 4px; }
@@ -827,10 +880,7 @@ export const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
       h += '<span class="score-badge score-' + sc + '">' + p.score.toFixed(3) + '</span>';
       h += '<span class="passage-meta">p.' + (p.page || '?') + '</span>';
       h += '</div>';
-      h += '<div class="passage-snippet" id="' + pid + '">' + esc(preview) + '</div>';
-      if (truncated) {
-        h += '<span class="snippet-toggle" data-pid="' + pid + '" data-full="' + esc(snip).replace(/"/g, '&quot;') + '" data-preview="' + esc(preview).replace(/"/g, '&quot;') + '" data-expanded="false">Show full text</span>';
-      }
+      h += '<div class="passage-snippet" id="' + pid + '">' + esc(snip) + '</div>';
       h += '</div>';
     });
     return h;
@@ -1101,7 +1151,7 @@ export const CITE_REPORT_HTML = `<!DOCTYPE html>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f6f8; color: #1a1a2e; padding: 24px; }
-  .container { max-width: 1100px; margin: 0 auto; }
+  .container { max-width: 1400px; margin: 0 auto; }
   h1 { font-size: 22px; margin-bottom: 8px; }
   .subtitle { color: #666; font-size: 13px; margin-bottom: 20px; }
   .summary-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; padding: 16px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
