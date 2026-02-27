@@ -1,5 +1,5 @@
 {
-  "labeled_at": "2026-02-23T22:24:46.776Z",
+  "labeled_at": "2026-02-27T17:12:02.075Z",
   "questions": [
     {
       "id": "ans_001",
@@ -40,7 +40,7 @@
           "page": 38,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses equity impacts of LVC mechanisms and notes that fiscal benefits have often resulted in reduced affordability and equity concerns, highlighting the tension between revenue generation and equitable outcomes.",
+          "rationale": "Directly addresses equity impacts of LVC mechanisms and notes that fiscal benefits often result in reduced affordability and equity concerns, highlighting the tension between revenue generation and equitable outcomes.",
           "human_override": null
         },
         {
@@ -52,7 +52,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Examines how LVC mechanisms can create serviced land for development while addressing the dual challenges of maintaining affordability and ensuring equitable reinvestment of revenue in urban areas.",
+          "rationale": "Examines how LVC can address equity challenges by ensuring public investment benefits accrue to public stakeholders rather than private landowners, and discusses maintaining affordability and equitable reinvestment.",
           "human_override": null
         },
         {
@@ -64,7 +64,7 @@
           "page": 174,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides concrete examples of land value capture instruments generating local revenue for infrastructure and services, demonstrating how coordinated land development and transport improvements support equitable urban development.",
+          "rationale": "Provides concrete examples of land value capture mechanisms financing infrastructure and demonstrates how coordinated land development and service provision can support equitable outcomes across multiple cities.",
           "human_override": null
         },
         {
@@ -76,7 +76,7 @@
           "page": 38,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses the challenge of balancing revenue maximization through LVC with maintaining equity in generation and expenditure to avoid displacement, emphasizing the role of strong institutions in managing equitable outcomes.",
+          "rationale": "Directly addresses the challenge of balancing revenue maximization through LVC with equity considerations, noting that strong institutions are required to manage equity and fiscal outcomes and avoid displacement.",
           "human_override": null
         },
         {
@@ -88,7 +88,7 @@
           "page": 174,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains the compelling case for implementing land value capture mechanisms to create a virtuous circle of infrastructure investment and economic development, while acknowledging institutional challenges that can undermine equitable outcomes.",
+          "rationale": "Explains the compelling case for LVC mechanisms to raise public revenues for infrastructure and discusses how weak institutions and subversion by private interests can undermine equitable outcomes.",
           "human_override": null
         },
         {
@@ -100,7 +100,7 @@
           "page": 30,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses how LVC mechanisms can be designed to provide equity benefits for local communities through guidelines requiring affordable housing, while noting weak enforcement challenges that undermine equitable reinvestment.",
+          "rationale": "Discusses how LVC mechanisms can be designed to create equity benefits for local communities through guidelines for low-income housing, while noting weak enforcement undermines equitable reinvestment goals.",
           "human_override": null
         },
         {
@@ -112,7 +112,7 @@
           "page": 5,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses how LVC mechanisms promote social justice by distributing benefits of land value increases equitably and can be used as planning instruments to mandate social housing and improve public spaces.",
+          "rationale": "Directly addresses how LVC mechanisms can promote social justice by distributing benefits of land value increases equitably and discusses equity as both process and outcome in urban development.",
           "human_override": null
         },
         {
@@ -124,7 +124,7 @@
           "page": 2,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Identifies the central challenge that LVC revenues must be invested back into communities to meet public needs and prevent private entities from disproportionately benefiting, which is core to equitable urban development.",
+          "rationale": "Identifies the core challenge that private entities often disproportionately benefit from rising land values while low-income communities are excluded, and frames the research question around fiscal and equity impacts of LVC.",
           "human_override": null
         },
         {
@@ -136,7 +136,7 @@
           "page": 1,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Summarizes key findings on how legal processes, financial instruments, real estate conditions, and government capacity determine whether LVC mechanisms enhance equity in urban development.",
+          "rationale": "Summarizes key findings on how LVC mechanisms can deliver positive equity outcomes when supported by strong institutions and land governance, versus failures in contexts with weaker institutional capacity.",
           "human_override": null
         },
         {
@@ -148,7 +148,7 @@
           "page": 6,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Outlines equity variables for analyzing LVC impacts including access improvements, displacement minimization, community participation, and market conditions, providing a framework for evaluating equitable outcomes.",
+          "rationale": "Outlines equity variables for analyzing LVC impacts including access to services, displacement minimization, community participation, and market conditions, providing a framework for evaluating equitable urban development.",
           "human_override": null
         },
         {
@@ -160,7 +160,7 @@
           "page": 2,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Describes research methodology for evaluating fiscal and equity impacts of LVC mechanisms, including equity indicators capturing benefits and costs for different population groups in urban development.",
+          "rationale": "Describes research methodology for evaluating fiscal and equity impacts of LVC mechanisms and institutional arrangements that influence whether LVC promotes equitable development outcomes.",
           "human_override": null
         },
         {
@@ -172,7 +172,7 @@
           "page": 36,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Analyzes different LVC mechanisms and their equity outcomes across three cities, noting attempts to address equity through housing access and revenue redistribution while acknowledging insufficient efforts to prevent displacement.",
+          "rationale": "Compares different LVC mechanisms across cities and their equity outcomes, noting that explicit targets and links to vulnerable groups are necessary but insufficient to prevent displacement in equitable development.",
           "human_override": null
         },
         {
@@ -184,7 +184,7 @@
           "page": 11,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Establishes that LVC is progressive in theory for producing equity benefits but that broader development context and revenue allocation determine actual equity outcomes, directly addressing the research question.",
+          "rationale": "Establishes that LVC is theoretically progressive for equity but that broader development context and revenue allocation determine actual equity impacts, directly addressing the role of LVC in equitable urban development.",
           "human_override": null
         },
         {
@@ -208,7 +208,7 @@
           "page": 9,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explicitly discusses LVC as a means for achieving greater social equity in cities and reviews international promotion of LVC principles, directly answering the question about LVC's role in equitable development.",
+          "rationale": "Explicitly discusses LVC as a means for achieving greater social equity in cities and reviews international and regional promotion of LVC principles, directly answering the question about LVC's role in equitable development.",
           "human_override": null
         },
         {
@@ -220,7 +220,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains how LVC mechanisms can be optimized for equitable outcomes when linked with visible local area improvements that benefit communities, directly addressing the equity dimension of land value capture.",
+          "rationale": "Explains how LVC mechanisms can be optimized when linked with visible local area improvements that benefit communities, directly addressing the role of LVC in equitable urban development outcomes.",
           "human_override": null
         },
         {
@@ -232,7 +232,7 @@
           "page": 24,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses LVC potential and equity considerations in Addis Ababa, but focuses more on implementation challenges and administrative capacity rather than the broader role of LVC mechanisms in equitable development.",
+          "rationale": "Discusses LVC potential and equity considerations in Addis Ababa context, but focuses more on implementation challenges and administrative capacity rather than the broader role of LVC mechanisms in equitable development.",
           "human_override": null
         },
         {
@@ -280,7 +280,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Defines LVC and emphasizes the New Urban Agenda's equity focus, establishing the conceptual foundation for understanding LVC's role in equitable urban development and the knowledge gap this research addresses.",
+          "rationale": "Defines LVC and emphasizes the New Urban Agenda's strong equity focus, establishing the conceptual foundation for understanding LVC's role in equitable urban development.",
           "human_override": null
         },
         {
@@ -292,7 +292,7 @@
           "page": 18,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses fiscal impacts and equity failures in São Paulo's OUCAE project, showing how LVC revenue generation doesn't guarantee equitable outcomes, but focuses more on implementation failures than mechanisms themselves.",
+          "rationale": "Discusses fiscal impacts and equity failures in São Paulo's OUCAE project, showing how LVC revenue generation doesn't guarantee equitable outcomes without proper implementation and benefit distribution.",
           "human_override": null
         },
         {
@@ -304,7 +304,7 @@
           "page": 3,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Concludes that with proper enabling conditions, LVC can deliver both economic and equity benefits, directly addressing the question about LVC's role in more equitable urban development.",
+          "rationale": "Concludes that with proper enabling conditions, LVC has potential for successful implementation delivering both economic and equity benefits, directly addressing the role of LVC in equitable urban development.",
           "human_override": null
         },
         {
@@ -316,7 +316,7 @@
           "page": 32,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Identifies political will and long-term vision as critical enabling conditions for balancing LVC with equity goals, and discusses how these factors affect the ability to achieve equitable outcomes in land value capture.",
+          "rationale": "Identifies political will and long-term vision as critical enabling conditions for LVC to achieve both equity and revenue goals, emphasizing the need for fair allocation of costs and benefits.",
           "human_override": null
         },
         {
@@ -328,7 +328,7 @@
           "page": 30,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Examines equity impacts of specific LVC mechanisms in Hyderabad, showing how development patterns affect vulnerable groups, but focuses on case-specific outcomes rather than broader mechanisms for equitable development.",
+          "rationale": "Discusses equity impacts of LVC mechanisms in Hyderabad, showing how development concentration in wealthy areas limits equitable redistribution, but focuses on specific case outcomes rather than broader mechanisms.",
           "human_override": null
         },
         {
@@ -340,7 +340,7 @@
           "page": 1,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Establishes that LVC mechanisms exist globally but remain ineffective without strong institutions and governance structures, directly addressing the foundational role of LVC mechanisms in equitable urban development.",
+          "rationale": "Establishes that LVC mechanisms can be ineffective without strong institutions and governance structures, and introduces the paper's focus on examining LVC's fiscal and equity impacts across three cities.",
           "human_override": null
         },
         {
@@ -352,7 +352,7 @@
           "page": 23,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Demonstrates how transparent, place-based reinvestment of LVC funds and inclusive decision-making processes are essential for achieving equity goals and preventing gentrification in urban development.",
+          "rationale": "Demonstrates how lack of transparent, place-based reinvestment of LVC funds undermines equity goals and can exacerbate gentrification, showing the critical importance of transparent processes for equitable LVC outcomes.",
           "human_override": null
         },
         {
@@ -364,7 +364,7 @@
           "page": 5,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Outlines the research framework examining fiscal and equity impacts of LVC schemes, including questions about equitable benefit distribution and mitigation of gentrification, directly framing LVC's role in equitable development.",
+          "rationale": "Outlines research questions explicitly examining equity impacts of LVC schemes and whether benefits are shared equitably across stakeholders, directly framing the investigation of LVC's role in equitable development.",
           "human_override": null
         },
         {
@@ -1248,7 +1248,7 @@
           "page": 54,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses how denser urban form contributes to environmental sustainability and discusses limiting sprawl and car dependency through appropriate building density, which are key sustainability arguments.",
+          "rationale": "Directly addresses denser urban form as an environmental sustainability consideration and discusses how spatial planning contributes to sustainable outcomes through density and mixed-use development.",
           "human_override": null
         },
         {
@@ -1258,9 +1258,9 @@
           "content": "and productive and to capture land \nvalue to invest in public infrastructure \n ▪ Develop regulations and incentives to limit land value speculation, **[encourage transparent land records, \nand promote well-located affordable housing \n ▪ Understand  changes in built form and accessibility needs to inform policies on density and local land-\nuse regulations; consider indicators of density, crowdedness, and access together to prevent misinformed \npolicies and unintended consequences\n ▪ Practice integrated planning  of land and infrastructure to address spatial inequities in line with local \neconomic development, low-carbon development, and climate-resilient plans\n ▪ Utilize vacant land and develop denser mixed-use neighborhoods  within the city while enhancing the \ninfrastructure and services needed to support higher density\n ▪ Plan for urban expansion  with space allocated for core infrastructure and services while protecting vital \necological areas (e.g., green spaces as flooding buffers, wetlands, biodiversity zones) and ensuring new \nhousing and employment centers are accessible by public transit to reduce emissions\n ▪ Upgrade informal settlements  in secure locations  into affordable housing that meets residents’ needs \nand improves living conditions instead of displacing them to housing in the urban periphery\n ▪ Design and implement  flexible planning standards  to make good-quality housing with services available \nfor a range of income groups\n ▪ Incorporate information on climate risks in planning  urban infrastructure and services; build the climate \nresilience of the most vulnerable populations\n ▪ Engage community actors in urban development planning to fully understand the needs of the most \nvulnerable communities\nNational Government  ▪ Establish complete and transparent nationwide urban land records  of ownership, values,]** and \ntransactions, at least in urban areas where land is highly contested and subject to speculatio...",
           "score": 0.8886,
           "page": 180,
-          "label": "partially_relevant",
-          "confidence": "medium",
-          "rationale": "Provides policy recommendations for denser mixed-use neighborhoods with infrastructure support, but focuses on implementation strategies rather than explaining why density improves sustainability.",
+          "label": "relevant",
+          "confidence": "high",
+          "rationale": "Provides policy recommendations for denser mixed-use neighborhoods and discusses how density relates to infrastructure, services, and sustainability outcomes including low-carbon development.",
           "human_override": null
         },
         {
@@ -1272,7 +1272,7 @@
           "page": 176,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Critically examines the relationship between density and sustainability, arguing that 'affordable, livable density' is necessary and that simplistic densification without services can exacerbate inequality, directly addressing the nuances of the question.",
+          "rationale": "Critically examines the relationship between density and sustainability, arguing that 'affordable, livable density' is necessary and that simplistic densification without services and affordability can be counterproductive.",
           "human_override": null
         },
         {
@@ -1284,7 +1284,7 @@
           "page": 168,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses how policies promoting denser development can have unintended consequences regarding affordability and speculation, but does not directly address sustainability benefits of density.",
+          "rationale": "Discusses how density policies can misfire and create affordability issues, providing important caveats about density, but does not comprehensively address sustainability benefits.",
           "human_override": null
         },
         {
@@ -1295,8 +1295,8 @@
           "score": 0.7288,
           "page": 30,
           "label": "partially_relevant",
-          "confidence": "low",
-          "rationale": "Focuses on housing affordability and segregation impacts of density incentives rather than sustainability outcomes of denser cities.",
+          "confidence": "medium",
+          "rationale": "Addresses tax incentives for denser housing and their impacts on affordability and segregation, but does not directly discuss sustainability benefits of density.",
           "human_override": null
         },
         {
@@ -1308,7 +1308,7 @@
           "page": 211,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "This is a bibliography/references section with no substantive content about urban density and sustainability.",
+          "rationale": "This is a bibliography/reference section with no substantive content related to the research question.",
           "human_override": null
         },
         {
@@ -1320,7 +1320,7 @@
           "page": 36,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses national policies for denser, mixed-use development and climate-smart housing, but does not explain the sustainability rationale for density.",
+          "rationale": "Discusses national policies for denser, mixed-use development and climate-smart housing, but focuses on policy frameworks rather than explaining why density contributes to sustainability.",
           "human_override": null
         },
         {
@@ -1332,7 +1332,7 @@
           "page": 163,
           "label": "partially_relevant",
           "confidence": "low",
-          "rationale": "Discusses financing mechanisms for denser neighborhoods and infrastructure, but does not address sustainability benefits of density.",
+          "rationale": "Discusses financing mechanisms for infrastructure in denser neighborhoods, but does not address the sustainability benefits of density itself.",
           "human_override": null
         },
         {
@@ -1344,7 +1344,7 @@
           "page": 32,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Presents a policy table showing that density incentives reduce sprawl and increase housing supply, which relates to sustainability, but lacks explanation of why this is more sustainable.",
+          "rationale": "Presents a policy table showing that density incentives reduce sprawl and increase housing supply, but does not explain broader sustainability benefits or drawbacks.",
           "human_override": null
         },
         {
@@ -1356,7 +1356,7 @@
           "page": 89,
           "label": "partially_relevant",
           "confidence": "low",
-          "rationale": "Describes case studies of urban development projects including transit-oriented development, but does not directly address the sustainability question.",
+          "rationale": "Describes case studies of urban transformations including transit-oriented development and denser growth, but does not directly explain sustainability benefits of density.",
           "human_override": null
         },
         {
@@ -1368,7 +1368,7 @@
           "page": 33,
           "label": "partially_relevant",
           "confidence": "low",
-          "rationale": "Policy table discussing housing affordability and compactness outcomes, but does not explain sustainability rationale for denser development.",
+          "rationale": "Policy table discussing housing instruments and their effects on density and affordability, but does not address sustainability implications of density.",
           "human_override": null
         },
         {
@@ -1380,7 +1380,7 @@
           "page": 175,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses density's advantages including efficient service delivery and accessibility, while cautioning against simplistic densification without considering affordability and quality of life, providing nuanced perspective on density and sustainability.",
+          "rationale": "Directly addresses density and its effects on sustainability, discussing advantages (efficient service delivery, accessibility) and disadvantages (unaffordability, gentrification) of density.",
           "human_override": null
         },
         {
@@ -1392,7 +1392,7 @@
           "page": 34,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Defines 'affordable, livable density' and explains that it enables good quality of life with efficient service delivery, directly addressing why density can support sustainability when properly implemented.",
+          "rationale": "Defines 'affordable, livable density' as essential for sustainability and quality of life, explaining that density must be paired with services and infrastructure to achieve sustainability goals.",
           "human_override": null
         },
         {
@@ -1404,7 +1404,7 @@
           "page": 32,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Mentions that 'complementary policies that allow for denser development must be implemented' but focuses primarily on urban expansion planning and land acquisition rather than directly addressing whether denser cities are more sustainable or why.",
+          "rationale": "Mentions that 'complementary policies that allow for denser development must be implemented' but focuses primarily on urban expansion planning and land acquisition rather than directly addressing whether density increases sustainability.",
           "human_override": null
         },
         {
@@ -1416,7 +1416,7 @@
           "page": 65,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly answers the question by providing empirical evidence that denser cities have lower carbon emissions from transportation and residential energy consumption, with specific quantified comparisons between dense and sprawling areas.",
+          "rationale": "Directly answers the question by providing empirical evidence that higher urban density reduces carbon emissions from transportation and residential energy consumption, with specific quantified comparisons between dense and sprawling areas.",
           "human_override": null
         },
         {
@@ -1428,7 +1428,7 @@
           "page": 63,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses sustainability through economic lens, showing that denser cities have higher productivity, wages, and economic performance, which is a key dimension of sustainability.",
+          "rationale": "Directly addresses sustainability benefits of denser cities by presenting evidence of productivity gains, higher wages, and economic performance associated with increased urban density across multiple countries.",
           "human_override": null
         },
         {
@@ -1438,9 +1438,9 @@
           "content": "**[Large cities and their political leaders \nhave never received more international attention than \nthey do today . \nThe 2015 Paris Agreement recognized cities as crucial to \ncurbing greenhouse gas (GHG) emissions. SDG 11, which 193 \ncountries adopted that same year, commits them to “make \ncities and human settlements inclusive, safe, resilient and \nsustainable.”97 Yet implementation has been spotty . Fewer \nthan two in five countries that adopted SDGs have explicit \nnational strategies for cities, and only a handful tackle both \nhuman development and climate action.98\nNumerous networks have emerged to help cities share \nknowledge, create peer pressure, and grow in more \nsustainable ways, including the C40 Climate Leadership \nGroup, ICLEI, United Cities and Local Governments, and \nothers. The Habitat III conference on cities, held in Quito, \nEcuador promoted “a new model of urban development that \nis able to integrate all facets of sustainable development to \npromote equity , welfare, and shared prosperity .”99 The text \nfrom Habitat III—the New Urban Agenda—lays out a vision \nfor cities for the next 20 years.100 Networks and conferences \nhave showcased problems and solutions, especially for large \ncities that have the staff and capacity to take part. \nHowever, the fastest-growing cities confronting the gravest \nchallenges—which include most small and medium cities \nin the global South—have hardly benefited.]** Between 2018 \nand 2030, medium-sized cities with populations between 1 \nand 5 million will see the ...",
           "score": 0.4884,
           "page": 47,
-          "label": "partially_relevant",
-          "confidence": "low",
-          "rationale": "Discusses international attention to urban sustainability and SDG 11 but does not specifically address the relationship between density and sustainability or provide evidence for why denser cities would be more sustainable.",
+          "label": "not_relevant",
+          "confidence": "high",
+          "rationale": "Discusses international attention to cities and sustainability frameworks but does not address the relationship between urban density and sustainability outcomes.",
           "human_override": null
         },
         {
@@ -1452,7 +1452,7 @@
           "page": 178,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses integrated spatial planning and density policies as tools for sustainable growth, but focuses on implementation strategies rather than directly explaining why density contributes to sustainability.",
+          "rationale": "Discusses spatial planning and density policies as tools for sustainable growth but focuses on implementation strategies rather than explaining why density itself contributes to sustainability.",
           "human_override": null
         },
         {
@@ -1462,9 +1462,9 @@
           "content": "**[The largely outward growth currently under way in these \ncities is therefore either undocumented or occurring through \ninformal transactions, meaning it is unplanned and occurs \nin a weak regulatory environment. Emerging cities are only \nslightly better off.\nOur research identified a host of risk factors and policy \nchoices that can accelerate outward, sprawling growth. High \nsubsidies for fuel and low costs for private vehicles contribute \nby reducing the perceived costs of driving long distances.413 \nRestrictive density or building height regulations in well-\nserviced inner-city areas can push development outward.414 \nThis outward growth typically occurs in areas on the urban \nperiphery with unclear jurisdiction, involving multiple \nlocal (and sometimes regional, state, or rural) authorities \nthat do not coordinate on service provision or land-use \nplanning. As a result, it creates blind spots in some cases \nand confusion in others in the governance of burgeoning \nnew settlements. Outside city limits, developers also find \nbargain land prices, lax record keeping, and fewer land-use \nregulations. This allows them to build many units on large \nland parcels, achieving economies of scale more easily and \nprofitably than building in more central locations. Rapid, \nhaphazard, unplanned sprawl then compounds the challenge \nand raises the cost of providing infrastructure and services. \nAnd limited control over peripheral areas makes it harder for \ncities to channel, or draw value from, land price surges and \nbuilding frenzies.]** Perverse incentives add to these problems....",
           "score": 0.4699,
           "page": 170,
-          "label": "relevant",
-          "confidence": "high",
-          "rationale": "Provides evidence that outward sprawling growth increases resource consumption and infrastructure costs, implicitly supporting that denser development is more sustainable by contrast.",
+          "label": "partially_relevant",
+          "confidence": "medium",
+          "rationale": "Discusses factors that accelerate sprawl and its negative consequences, implicitly supporting density as preferable, but does not directly explain the sustainability benefits of density.",
           "human_override": null
         },
         {
@@ -1476,7 +1476,7 @@
           "page": 178,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses strategic densification methods and their benefits for land efficiency and productivity, but focuses on implementation approaches rather than comprehensively explaining sustainability advantages of density.",
+          "rationale": "Discusses strategic densification and its benefits for land efficiency and productivity, but focuses on implementation methods rather than comprehensive sustainability outcomes.",
           "human_override": null
         },
         {
@@ -1488,7 +1488,7 @@
           "page": 176,
           "label": "partially_relevant",
           "confidence": "low",
-          "rationale": "Mentions the need for 'affordable, livable density' but primarily focuses on service provision in informal settlements rather than explaining the sustainability benefits of density.",
+          "rationale": "Mentions the need for 'affordable, livable density' but primarily discusses informal settlement upgrading rather than explaining why density contributes to sustainability.",
           "human_override": null
         },
         {
@@ -1500,7 +1500,7 @@
           "page": 170,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains that as density declines and city area expands, per capita costs of public services rise and social costs from congestion and pollution increase, directly supporting that denser cities are more sustainable.",
+          "rationale": "Directly explains why sprawl is unsustainable by showing that declining density increases per capita costs of public services and environmental harms from congestion and pollution.",
           "human_override": null
         },
         {
@@ -1512,7 +1512,7 @@
           "page": 5,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides concrete comparative evidence showing that sprawling Pittsburgh generates 5.5 times more greenhouse gas emissions per capita than denser Stockholm despite similar populations, directly answering the question.",
+          "rationale": "Provides concrete evidence that denser cities (Stockholm) generate significantly lower per capita greenhouse gas emissions than sprawling cities (Pittsburgh) with similar populations.",
           "human_override": null
         },
         {
@@ -1524,7 +1524,7 @@
           "page": 35,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses building upward with higher density as 'the most efficient way to use land' and mentions benefits of public transport, but focuses on planning strategies rather than comprehensive sustainability analysis.",
+          "rationale": "Discusses density and land-use policies for sustainable growth but focuses on planning approaches and land efficiency rather than explaining sustainability mechanisms.",
           "human_override": null
         },
         {
@@ -1536,7 +1536,7 @@
           "page": 12,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Addresses urban service inequality and poverty cycles but does not discuss the relationship between urban density and sustainability.",
+          "rationale": "Addresses urban service inequality and poverty cycles but does not discuss the relationship between density and sustainability.",
           "human_override": null
         },
         {
@@ -1548,7 +1548,7 @@
           "page": 124,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Discusses informal service providers and congestion in dense city centers but does not address whether denser cities are overall more sustainable or provide comparative analysis.",
+          "rationale": "Discusses informal service providers and congestion in dense city centers but does not address whether denser cities are more sustainable overall.",
           "human_override": null
         },
         {
@@ -1560,7 +1560,7 @@
           "page": 197,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Mentions that affordable, livable density and well-connected development can reduce sprawl, traffic congestion, and air pollution, but focuses on implementation benefits rather than comprehensive sustainability analysis.",
+          "rationale": "Mentions that affordable, livable density and preventing sprawl can reduce traffic congestion and air pollution, but focuses on implementation strategies rather than comprehensive sustainability analysis.",
           "human_override": null
         },
         {
@@ -1572,7 +1572,7 @@
           "page": 23,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "States that cities offer opportunities to use 'land, materials and energy more efficiently' and account for 80% of GDP, but does not specifically explain the relationship between density and sustainability.",
+          "rationale": "States that cities offer opportunities to use 'land, materials and energy more efficiently' and that changing urban consumption patterns is important for environmental crises, but does not directly address density's role.",
           "human_override": null
         },
         {
@@ -2468,7 +2468,7 @@
           "page": 7,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides a concrete three-stage process (Review, Plan, Develop) for national governments to co-develop NDCs with subnational governments, directly answering how integration can be achieved.",
+          "rationale": "Provides a concrete three-stage process (Review, Plan, Develop) for national governments to co-develop NDCs with subnational governments, directly answering the integration question.",
           "human_override": null
         },
         {
@@ -2480,7 +2480,7 @@
           "page": 8,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Summarizes key recommendations across all three stages for national governments to collaborate with and integrate subnational content, providing actionable guidance for the research question.",
+          "rationale": "Summarizes key recommendations across all three stages for national governments to collaborate with and integrate subnational content, with specific actionable steps for each stage.",
           "human_override": null
         },
         {
@@ -2504,7 +2504,7 @@
           "page": 2,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Details Stage 3 recommendations for developing ambitious NDCs by integrating subnational content into GHG inventories, targets, and actions, providing specific implementation guidance.",
+          "rationale": "Details Stage 3 recommendations for developing ambitious NDCs by integrating subnational content into GHG inventories, targets, and actions, with emphasis on joint implementation.",
           "human_override": null
         },
         {
@@ -2516,7 +2516,7 @@
           "page": 2,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Summarizes all eight recommendations across three stages that national governments should follow to collaborate with and integrate subnational governments into NDC development.",
+          "rationale": "Provides comprehensive summary table of all eight recommendations across three stages for national governments to assess partnerships, plan collaboration, and develop NDCs with subnational integration.",
           "human_override": null
         },
         {
@@ -2528,7 +2528,7 @@
           "page": 11,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides practical steps for Recommendation 2.1 on creating vision and stakeholder engagement plans with subnational governments, including specific methods for engagement and capacity building.",
+          "rationale": "Details Recommendation 2.1 with practical steps for creating vision and stakeholder engagement plans for NDC development in collaboration with subnational governments.",
           "human_override": null
         },
         {
@@ -2540,7 +2540,7 @@
           "page": 7,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Introduces the three-stage framework and Stage 1 (Review) recommendations, emphasizing the need for clear focal points and awareness of domestic governance processes for effective collaboration.",
+          "rationale": "Introduces the three-stage framework and Stage 1 review process, emphasizing the need for clear focal points and awareness of domestic governance processes for effective NDC development.",
           "human_override": null
         },
         {
@@ -2552,7 +2552,7 @@
           "page": 11,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides practical steps for Recommendation 2.2 on developing clear objectives and enhancing visibility of subnational contributions, including examples of national networks facilitating coordination.",
+          "rationale": "Details Recommendation 2.2 with practical steps for developing clear objectives and incorporating strong subnational content while enhancing visibility of subnational contributions in NDCs.",
           "human_override": null
         },
         {
@@ -2564,7 +2564,7 @@
           "page": 12,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains the rationale for Stage 3 recommendations and provides practical steps for integrating subnational data, policies, and actions into national GHG inventories and vulnerability assessments.",
+          "rationale": "Provides rationale for subnational collaboration and details Recommendation 3.1 on enhancing evidence base by integrating subnational data, policies, and actions into national GHG inventories and assessments.",
           "human_override": null
         },
         {
@@ -2576,7 +2576,7 @@
           "page": 2,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Establishes the document's purpose of strengthening subnational content in NDCs and describes the methodology combining literature review and expert consultations on multilevel partnerships.",
+          "rationale": "Establishes that the document supports national governments in strengthening subnational content of NDCs and outlines the methodology combining literature review and expert consultations.",
           "human_override": null
         },
         {
@@ -2588,7 +2588,7 @@
           "page": 8,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides rationale for Stage 1 recommendations, highlighting the gap in national government awareness of subnational capacity and the importance of data collection and transparency for NDC integration.",
+          "rationale": "Explains the rationale for Stage 1 review, highlighting gaps in national government awareness of subnational capacity and the importance of data collection and transparency for effective integration.",
           "human_override": null
         },
         {
@@ -2600,7 +2600,7 @@
           "page": 14,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides practical steps for Stage 3 recommendation on drafting NDCs with subnational content through iterative participatory processes, and references South Africa's institutional structures for multilevel coordination.",
+          "rationale": "Provides practical steps for Stage 3 development, including establishing consensus with subnational governments and iterative participatory processes to draft and validate NDC content.",
           "human_override": null
         },
         {
@@ -2624,7 +2624,7 @@
           "page": 3,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Describes the document's purpose of supporting national governments in facilitating subnational input during NDC development and presents eight recommendations across three stages for strengthening NDCs through subnational collaboration.",
+          "rationale": "Describes the document's purpose of supporting national governments in facilitating subnational input during NDC development and presents eight recommendations across three stages for integrating subnational content.",
           "human_override": null
         },
         {
@@ -2648,7 +2648,7 @@
           "page": 3,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses case study methodology and Colombia as a best practice example of subnational NDC integration, providing contextual background but not directly prescribing integration mechanisms.",
+          "rationale": "Provides methodological context and case study selection rationale (Colombia) but does not directly address integration mechanisms; serves as background on research approach rather than substantive guidance.",
           "human_override": null
         },
         {
@@ -2660,7 +2660,7 @@
           "page": 15,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Describes the research methodology and expert interview process that informed the recommendations, providing background on how the guidance was developed rather than the integration strategies themselves.",
+          "rationale": "Describes the expert interview methodology and five themes (contextualize, connect, develop, finance, deliver) that informed recommendations, providing context but not direct guidance on integration.",
           "human_override": null
         },
         {
@@ -2672,7 +2672,7 @@
           "page": 13,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides practical steps for Recommendation 3.1 on enhancing evidence base by integrating subnational content into GHG inventories and assessments, with concrete examples from Canada and UK.",
+          "rationale": "Provides practical steps for Recommendation 3.1 on enhancing evidence base by integrating subnational content into GHG inventory and assessments, with concrete examples from Canada and UK.",
           "human_override": null
         },
         {
@@ -2684,7 +2684,7 @@
           "page": 13,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Details Recommendation 3.3 on drafting NDCs with strong subnational content and provides practical steps for establishing consensus with subnational governments on how to reflect their contributions.",
+          "rationale": "Details Recommendation 3.3 on drafting NDCs with strong subnational content and provides practical steps for establishing consensus and iterative collaboration with subnational governments.",
           "human_override": null
         },
         {
@@ -2696,7 +2696,7 @@
           "page": 17,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Presents Colombia as a case study demonstrating implementation of the stages and steps, providing practical example but not prescriptive guidance on integration mechanisms.",
+          "rationale": "Provides Colombia as a case study example of NDC development with subnational integration, offering practical illustration but not prescriptive guidance on integration mechanisms.",
           "human_override": null
         },
         {
@@ -2708,7 +2708,7 @@
           "page": 6,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses subnational governments' soft powers and limitations, providing contextual background on why integration is important but not directly addressing how national governments should integrate subnational leadership.",
+          "rationale": "Discusses subnational governments' soft powers and limitations, providing contextual background on why integration matters, but does not directly address how national governments should integrate subnational leadership.",
           "human_override": null
         },
         {
@@ -2720,7 +2720,7 @@
           "page": 3,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Defines subnational content in NDCs and explains how it can be incorporated either as dedicated sections or embedded throughout, directly addressing integration approaches.",
+          "rationale": "Defines subnational content in NDCs and explains two approaches (dedicated section or embedded throughout), directly addressing how national governments can structure integration of subnational leadership.",
           "human_override": null
         },
         {
@@ -2732,7 +2732,7 @@
           "page": 7,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses the document's scope and complementary nature with other climate plans, providing methodological context but not directly addressing integration strategies.",
+          "rationale": "Provides important context on the document's scope and complementary climate plans, but focuses on limitations and broader principles rather than specific integration mechanisms.",
           "human_override": null
         },
         {
@@ -2744,7 +2744,7 @@
           "page": 11,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains the rationale and importance of Stage 2 (Plan) including establishing coordination bodies, stakeholder engagement platforms, and intentional coordination between government levels for effective NDC collaboration.",
+          "rationale": "Explains the rationale and importance of Stage 2 (Plan) including establishing coordination bodies, consultation platforms, and clear vision/objectives for meaningful collaboration with subnational governments.",
           "human_override": null
         },
         {
@@ -2754,9 +2754,9 @@
           "content": "**[Consequently, NDCs can be \nconsidered a benchmarking mechanism to assess progress on \nglobal climate goals (IPES-Food 2023).\nRapidly transforming our collective global systems cannot be \ndone with country-level commitments alone. NDC imple-\nmentation can only be as robust as the collaboration taking \nplace among various government levels and other non-state \nactors. Often overlooked by both national governments and \ninternational climate negotiations, subnational governments \nlike cities, states, and regions fill a significant governance \ngap in climate action and offer a key space for meaningful \ncollaboration and integration among local actors, geogra-\nphies, and contexts.\nCurrent NDCs, however, remain difficult to translate into \nrelevant action at the subnational governance level (Plescia-\nBoyd et al. 2020), while sector-based commitments fall short \nof empowering subnational governments to pursue ambitious \nclimate actions (CUT 2019). Coordination among different \nlevels of government is a key but underutilized mechanism \nfor designing effective NDCs, especially considering the pace \nand scale of transformational change required (Tollin et al. \n2024; UNFCCC 2023).\nThe multilevel partnership opportunity \nAll levels of government have a critical role to play in the \ntransition to a net zero and climate resilient future. An \nestimated 90 percent of global urban GHG emissions can be \ncut by technically feasible and widely available low-carbon \nmeasures (CUT 2019).]** Yet few of these identified measures \nfall exclusively within the sphere of national or subnational...",
           "score": 0.9252,
           "page": 4,
-          "label": "relevant",
-          "confidence": "high",
-          "rationale": "Articulates why multilevel partnership is critical, noting that NDC implementation requires collaboration among government levels and that subnational governments fill governance gaps essential for climate action.",
+          "label": "partially_relevant",
+          "confidence": "medium",
+          "rationale": "Provides background on why multilevel partnerships are critical and the governance gap subnational governments fill, but does not directly address integration mechanisms or practical steps.",
           "human_override": null
         },
         {
@@ -2768,7 +2768,7 @@
           "page": 2,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides Recommendation 1.1 practical steps for assessing multilevel partnerships, identifying barriers, and mainstreaming reporting on multilevel action—concrete mechanisms for national governments to integrate subnational leadership.",
+          "rationale": "Details Recommendation 1.1 with practical steps for assessing multilevel partnerships, identifying barriers, and mainstreaming reporting on multilevel action—directly addressing integration mechanisms.",
           "human_override": null
         },
         {
@@ -2780,7 +2780,7 @@
           "page": 10,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Details practical steps for Recommendation 1.3 on evaluating alignment between national and subnational goals, with examples from Jordan, providing concrete integration approaches.",
+          "rationale": "Provides practical steps for Recommendation 1.3 on evaluating alignment between national and subnational goals, with examples from Jordan, directly addressing how to integrate subnational priorities.",
           "human_override": null
         },
         {
@@ -3640,7 +3640,7 @@
           "page": 10,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly provides five key recommendations for improving motorcycle safety in cities, including speed management, land use considerations, intersection design, and road complexity reduction.",
+          "rationale": "Directly provides five key recommendations for motorcycle safety including speed management, land use considerations, intersection design, and road complexity reduction - core answers to the research question.",
           "human_override": null
         },
         {
@@ -3652,7 +3652,7 @@
           "page": 54,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses evidence-based measures for motorcycle safety including exclusive lanes, speed reduction through traffic calming, and the importance of slowing vehicles at signalized intersections in commercial areas.",
+          "rationale": "Discusses exclusive motorcycle lanes, speed reduction measures, and traffic calming at intersections as evidence-based approaches to improve motorcycle safety in cities.",
           "human_override": null
         },
         {
@@ -3664,7 +3664,7 @@
           "page": 60,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides comprehensive recommendations on speed management plans, alignment with pedestrian safety actions, and infrastructure improvements specifically for improving motorcycle safety in cities.",
+          "rationale": "Provides comprehensive recommendations on speed management plans, alignment with pedestrian safety, and infrastructure improvements specifically designed to improve motorcycle safety in cities.",
           "human_override": null
         },
         {
@@ -3676,7 +3676,7 @@
           "page": 56,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Details specific design interventions to improve motorcycle safety including traffic calming measures, curb extensions, road diets, and intersection design that benefit motorcyclists alongside other road users.",
+          "rationale": "Details specific traffic calming measures and intersection design strategies that improve motorcycle safety, including curb extensions, road diets, and skid-resistant markings.",
           "human_override": null
         },
         {
@@ -3688,7 +3688,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Establishes the foundational argument that comprehensive approaches addressing road design, infrastructure, traffic speeds, and land use patterns are essential for improving motorcycle safety in cities.",
+          "rationale": "Establishes the comprehensive 'Safe System' approach to motorcycle safety addressing road design, infrastructure, traffic speeds, and land use patterns as key improvement strategies.",
           "human_override": null
         },
         {
@@ -3700,7 +3700,7 @@
           "page": 54,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses speed reduction measures at signalized intersections in retail areas and addresses the broader urban mobility context that influences motorcycle use and safety in cities.",
+          "rationale": "Discusses speed reduction before signalized intersections and improved public transport as strategies to improve motorcycle safety and reduce motorcycle dependency in cities.",
           "human_override": null
         },
         {
@@ -3712,7 +3712,7 @@
           "page": 11,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Emphasizes the importance of reducing road speeds and infrastructure improvements, public transport investment, and sustainable mobility systems for long-term motorcycle safety outcomes.",
+          "rationale": "Addresses road design, speed management, public transport investment, and sustainable mobility systems as comprehensive approaches to reduce motorcycle deaths and injuries.",
           "human_override": null
         },
         {
@@ -3724,7 +3724,7 @@
           "page": 57,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Recommends comprehensive speed management, detailed data collection, system-wide infrastructure changes, and a shift toward safer sustainable transport as key strategies for improving motorcycle safety.",
+          "rationale": "Recommends road safety audits, comprehensive speed management, infrastructure changes, and multi-stakeholder dialogue as key strategies for reducing motorcycle fatalities in cities.",
           "human_override": null
         },
         {
@@ -3736,7 +3736,7 @@
           "page": 49,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides specific recommendations for minimizing conflicts in dense urban commercial areas, improving infrastructure in low-income neighborhoods, and incorporating motorcycle safety into road safety action plans.",
+          "rationale": "Provides specific recommendations for minimizing conflicts in dense urban areas, improving low-income neighborhoods, and incorporating motorcycle safety into road safety action plans.",
           "human_override": null
         },
         {
@@ -3748,7 +3748,7 @@
           "page": 19,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains the research methodology linking road environment factors (speed, infrastructure, land use) to motorcycle safety and discusses the mixed results of dedicated motorcycle infrastructure solutions.",
+          "rationale": "Examines the relationship between road infrastructure, speed, and motorcycle safety, providing evidence-based recommendations for improving motorcycle safety through infrastructure design.",
           "human_override": null
         },
         {
@@ -3760,7 +3760,7 @@
           "page": 56,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides specific design recommendations for improving motorcycle safety at pedestrian bridges and intersections through traffic calming, speed management, and careful design of crossing facilities.",
+          "rationale": "Details specific interventions at pedestrian bridges and intersections including traffic calming, speed management, and design measures to improve motorcycle safety.",
           "human_override": null
         },
         {
@@ -3772,7 +3772,7 @@
           "page": 60,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Recommends data-driven approaches, local pilot programs, inclusion of motorcycles in citywide mobility plans, and long-term strategies to reduce motorcycle dependency for sustainable safety improvements.",
+          "rationale": "Recommends data-driven planning, speed reduction strategies, and long-term shift toward sustainable transport to reduce motorcycle dependency and improve safety in cities.",
           "human_override": null
         },
         {
@@ -3784,7 +3784,7 @@
           "page": 5,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Establishes the urgency of addressing motorcycle safety through evidence-based approaches and highlights the importance of understanding traffic speeds and road infrastructure factors.",
+          "rationale": "Emphasizes evidence-based approaches to motorcycle safety including improved crash data collection and addressing traffic speeds and road infrastructure issues.",
           "human_override": null
         },
         {
@@ -3796,7 +3796,7 @@
           "page": 60,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Identifies free-flow traffic speeds as the most important variable for motorcycle safety and recommends reducing speeds, road widths, and intersection complexity through area-wide approaches.",
+          "rationale": "Identifies free-flow traffic speeds as the most critical variable for motorcycle safety and recommends reducing speeds, road widths, and intersection complexity as key interventions.",
           "human_override": null
         },
         {
@@ -3808,7 +3808,7 @@
           "page": 44,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Summarizes five key takeaways for improving motorcycle safety including speed management, land use considerations, intersection design, road width management, and integrated safety actions.",
+          "rationale": "Summarizes five key takeaways for improving motorcycle safety including speed management, land use considerations, intersection design, and integrated safety approaches for all road users.",
           "human_override": null
         },
         {
@@ -3820,7 +3820,7 @@
           "page": 55,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses motorcycle safety improvements through well-designed transit infrastructure, road design, and intersection management. Provides specific evidence on how design of intersections, crossings, and public transport stops can minimize conflicts for motorcyclists.",
+          "rationale": "Directly addresses motorcycle safety improvements through infrastructure design, including transit station design, road design, and intersection management to reduce conflicts and crashes.",
           "human_override": null
         },
         {
@@ -3832,7 +3832,7 @@
           "page": 47,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly answers the question by providing specific speed management strategies for motorcycles in urban areas, including speed cameras, corridor-based enforcement, and evidence from Bogotá showing 21% reduction in fatalities.",
+          "rationale": "Provides specific guidance on speed management for motorcycles in urban areas, including enforcement mechanisms and corridor-based approaches to improve motorcycle safety.",
           "human_override": null
         },
         {
@@ -3844,7 +3844,7 @@
           "page": 11,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides concrete recommendations for improving motorcycle safety through intersection design, reducing speed and complexity, and addressing road geometry issues like wide carriageways and median openings.",
+          "rationale": "Directly addresses motorcycle safety improvements through intersection design, speed reduction, complexity reduction, and considerations of road geometry and median design.",
           "human_override": null
         },
         {
@@ -3856,7 +3856,7 @@
           "page": 61,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Addresses long-term motorcycle safety improvements through mobility strategies, including shifting away from motorcycle dependency and investing in safer alternatives like public transportation and cycling infrastructure.",
+          "rationale": "Discusses long-term motorcycle safety strategies including reducing motorcycle dependency through alternative mobility options and multimodal transportation systems in cities.",
           "human_override": null
         },
         {
@@ -3868,7 +3868,7 @@
           "page": 20,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses dedicated motorcycle lanes and their limitations, providing important context on infrastructure design considerations for motorcycle safety in urban areas, including the need for prioritization measures at junctions.",
+          "rationale": "Addresses dedicated motorcycle lane infrastructure and its limitations for safety, discussing how segregation alone is insufficient without prioritization measures at conflict points.",
           "human_override": null
         },
         {
@@ -3880,7 +3880,7 @@
           "page": 51,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses intersection design and management for motorcyclists, including strategies to analyze conflicts, reduce movements, and use enforcement and education to improve safety at intersections.",
+          "rationale": "Provides specific recommendations for managing motorcycle safety at intersections through conflict analysis, intersection design, enforcement, and education measures.",
           "human_override": null
         },
         {
@@ -3892,7 +3892,7 @@
           "page": 63,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses motorcycle safety in the context of delivery services and gig economy, and lane width considerations. While related to motorcycle safety, it focuses on a specific use case rather than general urban motorcycle safety improvements.",
+          "rationale": "Discusses motorcycle safety in the context of delivery services and gig economy operations, touching on speed and infrastructure but primarily focused on a specific use case rather than general urban motorcycle safety.",
           "human_override": null
         },
         {
@@ -3904,7 +3904,7 @@
           "page": 59,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides comprehensive overview of motorcycle safety as a complex issue and identifies key variables affecting safety including free-flow traffic speeds, road width, intersections, and traffic lights—all relevant to urban improvements.",
+          "rationale": "Provides comprehensive overview of motorcycle safety as complex issue requiring infrastructure and speed management approaches, identifying key variables affecting motorcycle safety in cities.",
           "human_override": null
         },
         {
@@ -3916,7 +3916,7 @@
           "page": 61,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses research gaps and future directions for motorcycle safety studies, including missing infrastructure variables. While relevant to understanding the issue, it focuses more on research needs than actionable improvements.",
+          "rationale": "Discusses research gaps and future directions for motorcycle safety studies, including missing infrastructure variables, but provides limited direct recommendations for improving current safety.",
           "human_override": null
         },
         {
@@ -3928,7 +3928,7 @@
           "page": 45,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses speed management as a key improvement strategy for motorcycle safety, recommending comprehensive speed management policies, road design aligned with safe speeds, and enforcement mechanisms.",
+          "rationale": "Directly addresses speed management as critical for motorcycle safety, recommending comprehensive speed management policies and road design approaches applicable to all vehicles in urban areas.",
           "human_override": null
         },
         {
@@ -3940,7 +3940,7 @@
           "page": 54,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses infrastructure solutions for motorcycle safety including exclusive motorcycle lanes on trunk roads and street design considerations, with examples from Malaysia, Indonesia, and the Philippines.",
+          "rationale": "Discusses infrastructure design solutions for motorcycle safety including exclusive motorcycle lanes and street design considerations, with examples from Malaysia, Indonesia, and Philippines.",
           "human_override": null
         },
         {
@@ -3952,7 +3952,7 @@
           "page": 48,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides recommendations for comprehensive speed management, area-wide approaches, and addressing motorcycle safety in dense urban environments through infrastructure, enforcement, and communication strategies.",
+          "rationale": "Addresses motorcycle safety through comprehensive speed management plans, land use planning, and area-wide approaches to managing conflicts in dense urban environments.",
           "human_override": null
         },
         {
@@ -3964,7 +3964,7 @@
           "page": 41,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Addresses how land use, population density, and income levels affect motorcycle safety, and provides recommendations for implementing safer road infrastructure as part of a Safe System approach.",
+          "rationale": "Discusses how land use, population density, and income levels affect motorcycle safety, recommending infrastructure improvements and maintenance in vulnerable neighborhoods.",
           "human_override": null
         },
         {
@@ -3976,7 +3976,7 @@
           "page": 4,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Provides context on the global motorcycle safety problem and Bloomberg Philanthropies' approach, but is primarily introductory material rather than specific improvement strategies.",
+          "rationale": "Provides context on the global motorcycle safety problem and Bloomberg Philanthropies' approach, but is primarily introductory material rather than specific safety improvement recommendations.",
           "human_override": null
         },
         {
@@ -3988,7 +3988,7 @@
           "page": 5,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Emphasizes the need for comprehensive approaches to managing speeds and road conflicts to prevent motorcycle deaths and injuries, directly addressing the question of how to improve motorcycle safety in cities.",
+          "rationale": "Emphasizes the need for comprehensive approaches to motorcycle safety including road design, planning, and speed management in cities with growing motorcycle use.",
           "human_override": null
         },
         {
@@ -4872,7 +4872,7 @@
           "page": 12,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides detailed explanation of capital leases as a financing mechanism with real-world examples from Shenzhen, and includes a summary table of different funding and financing methods.",
+          "rationale": "Provides detailed explanation of capital leases as a financing mechanism with real-world examples (Shenzhen Bus Company), and includes a summary table of different funding and financing methods.",
           "human_override": null
         },
         {
@@ -4884,7 +4884,7 @@
           "page": 18,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses procurement frameworks and tender evaluation processes that affect financing decisions, but focuses more on procurement bias than direct payment mechanisms.",
+          "rationale": "Discusses procurement frameworks and payment mechanisms (concession contracts) but focuses more on tender evaluation bias rather than direct financing methods for purchasing buses.",
           "human_override": null
         },
         {
@@ -4896,7 +4896,7 @@
           "page": 22,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Frames key financing questions cities should ask but does not provide detailed answers about specific payment mechanisms; serves more as an overview of considerations.",
+          "rationale": "Frames key financing questions cities should ask but does not provide detailed answers about specific payment mechanisms; serves more as an overview of considerations rather than concrete financing solutions.",
           "human_override": null
         },
         {
@@ -4908,7 +4908,7 @@
           "page": 22,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Emphasizes the importance of considering financing questions and institutional frameworks but does not provide specific details about payment methods or funding sources.",
+          "rationale": "Emphasizes the importance of considering financing questions and institutional frameworks but does not provide specific details about actual payment mechanisms or funding sources.",
           "human_override": null
         },
         {
@@ -4920,7 +4920,7 @@
           "page": 11,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Details specific funding sources including local sales taxes and payroll taxes (versement transport), and introduces debt financing options including concessional loans with real-world examples.",
+          "rationale": "Details specific funding sources including local sales taxes and payroll taxes (versement transport), and introduces debt financing options including concessional loans with real-world examples from Curitiba and Bogotá.",
           "human_override": null
         },
         {
@@ -4932,7 +4932,7 @@
           "page": 3,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses procurement models and the role of third-party actors in service delivery, which relates to financing structures but does not directly address payment mechanisms.",
+          "rationale": "Discusses physical assets and procurement models but does not directly address financing mechanisms; provides context about service provision structures rather than payment methods.",
           "human_override": null
         },
         {
@@ -4944,7 +4944,7 @@
           "page": 1,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Highlights multiple financing approaches including leasing options, government grants, tax incentives, and credit guarantees/concessional debt as ways to help cities afford electric buses.",
+          "rationale": "Identifies multiple financing approaches including leasing options, government grants, tax incentives, and credit guarantees/concessional debt as ways to help cities afford electric buses.",
           "human_override": null
         },
         {
@@ -4956,7 +4956,7 @@
           "page": 8,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Describes public provision models and how transit agencies bear costs through government subsidies, but focuses more on procurement structures than specific payment mechanisms.",
+          "rationale": "Describes public provision models and how transit agencies bear costs through government subsidies, but focuses more on procurement structures than specific financing mechanisms.",
           "human_override": null
         },
         {
@@ -4968,7 +4968,7 @@
           "page": 18,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses procurement requirements and payment mechanisms in Santiago's concession model, but primarily addresses procurement policy rather than general financing methods.",
+          "rationale": "Discusses concession payment mechanisms and procurement requirements but focuses on policy frameworks and challenges rather than direct financing solutions for purchasing buses.",
           "human_override": null
         },
         {
@@ -4980,7 +4980,7 @@
           "page": 1,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Executive summary highlights multiple financing approaches including leasing by third parties, government support through grants and tax incentives, and concessional debt as ways cities can afford electric buses.",
+          "rationale": "Highlights multiple financing approaches including government grants, tax incentives, leasing options, and involvement of utility companies as key mechanisms for helping cities afford electric buses.",
           "human_override": null
         },
         {
@@ -4990,9 +4990,9 @@
           "content": "**[In addition, financial planning is another key factor to \nensure a sustainable long-term adoption of electric buses \ngiven the financial needs and uncertainty, especially for \nlarge-scale adoption. The presence of a local innova-\ntion ecosystem and culture of cross-sector collaboration \nenables a diverse set of actors and resources. In cities such \nas Bogotá, Gothenburg, and Pomona Valley, partnerships \nwith utility companies and bus manufacturers have been \nparticularly important. These stakeholders have an inter-\nest in expanding electric mobility and therefore might be \nwilling to take on additional risks or costs to help secure \nlong-term resources for large-scale adoption.\nQ10.2 Formalize a Flexible Procurement Plan \nand Optimize Risk Allocation\nTo embed the total cost of ownership and social benefits \nin bus operations, some cities are switching contracting \npractices from a capital acquisition model to a TCO model. \nThis removes the bias that can exist against technologies \nlike electric buses, which have higher up-front costs but \nlower maintenance expenses and higher environmental \nbenefits (Miller et al. 2017). In practice, this involves \nchanges in contracting practices, such as allowing opera-\ntors to keep the same bus on the road for a longer period, \nwhich, in turn, provide ways to repay the additional up-\nfront costs. In addition, making procurement more flexible \ncan also allow operators to choose between purchasing \nand leasing buses and components, depending on their \nability to take on debt and technical risks.]** The need for a balanced distribution of investment risks \nbetween actors holds true regardless of t...",
           "score": 0.7807,
           "page": 21,
-          "label": "partially_relevant",
-          "confidence": "medium",
-          "rationale": "Discusses financial planning, partnerships, and procurement strategies that support financing decisions, but focuses on implementation approaches rather than specific payment mechanisms.",
+          "label": "relevant",
+          "confidence": "high",
+          "rationale": "Discusses flexible procurement strategies including switching to total cost of ownership models and allowing operators to choose between purchasing and leasing, which are key financing approaches.",
           "human_override": null
         },
         {
@@ -5002,9 +5002,9 @@
           "content": "evelopment cycle.  \nQUESTION 10: WHAT ARE KEY STEPS CITIES \nHAVE TAKEN TO ENSURE GREATER SUCCESS \nWHEN ADOPTING ELECTRIC AND HYBRID-\nELECTRIC BUSES? **[This section outlines some of the emerging success factors \nfrom the financial perspective. For more details about \nenabling conditions from the technical and institutional \npoints of view, please refer to the WRI report How to \nEnable Electric Bus Adoption in Cities Worldwide (Li et \nal. 2019), which identifies key actions that can help cities \nat different development stages to adopt electric buses.\nQ10.1 Perform Cost-Benefit Analyses \nAs discussed in question 1, TCO is the key metric that \ntips the financial decision in favor of investing in electric \nbuses. It is a comprehensive measure of the capital and \noperational expenditures over a specified ownership \nperiod. According to some estimates, electric buses can \nbe cost competitive on a TCO basis with both diesel and \ncompressed natural gas buses (BNEF 2018). Therefore, it \nis important to get a full picture of the potential costs and \nbenefits over the lifetime of an electric bus before making \nthe decision to procure them. The cost-benefit analysis can \nbe revisited with real operational inputs from pilot and \ntesting projects to help make more suitable procurement, \noperation, and financing decisions. \nIn addition, financial planning is another key factor to \nensure a sustainable long-term adoption of electric buses \ngiven the financial needs and uncertainty, especially for \nlarge-scale adoption. The presence of a local innova-\ntion ecosystem and culture of cross-sector collaboration \nenables a diverse set of actors and resources.]** In cities such \nas Bogotá, Gothenburg, and Pomona Valley, partnerships \nwith utility companies and ...",
           "score": 0.7591,
           "page": 21,
-          "label": "partially_relevant",
-          "confidence": "medium",
-          "rationale": "Emphasizes total cost of ownership analysis and flexible procurement as financial success factors, but does not detail specific payment or funding mechanisms.",
+          "label": "relevant",
+          "confidence": "high",
+          "rationale": "Emphasizes total cost of ownership analysis and financial planning as key success factors, and highlights partnerships with utility companies and manufacturers as important for securing long-term financing resources.",
           "human_override": null
         },
         {
@@ -5016,7 +5016,7 @@
           "page": 11,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides detailed explanation of leasing as a financing mechanism including bus leases, battery leases, and lease-to-buy arrangements, with real-world examples from Curitiba and Stockholm.",
+          "rationale": "Details leasing as a major financing innovation including bus leases, battery leases, and lease-to-buy arrangements, and reiterates up-front purchases from public budgets as a primary payment method.",
           "human_override": null
         },
         {
@@ -5028,7 +5028,7 @@
           "page": 10,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses how cities can pay for electric buses through multiple mechanisms: user fares, public transport subsidies, and utility company purchases with leasing arrangements to operators.",
+          "rationale": "Directly addresses how cities can pay for electric buses through a specific example in Santiago where utility companies purchased buses and leased them to operators, with costs covered by user fares and public transport subsidies.",
           "human_override": null
         },
         {
@@ -5040,7 +5040,7 @@
           "page": 13,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides detailed information on various payment and acquisition types (purchase-leaseback, battery lease, operating lease, financial lease) and grants as financing mechanisms for electric buses.",
+          "rationale": "Provides detailed information on different payment and acquisition types (purchase-leaseback, battery lease, operating lease, financial lease) and discusses grants as a primary funding mechanism for electric bus investments.",
           "human_override": null
         },
         {
@@ -5052,7 +5052,7 @@
           "page": 2,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses total cost of ownership and higher up-front costs of electric buses, which provides context for financing needs but does not directly explain payment mechanisms.",
+          "rationale": "Discusses the financial challenge of higher up-front costs for electric buses and mentions total cost of ownership, which is relevant context but does not directly address payment mechanisms or funding sources.",
           "human_override": null
         },
         {
@@ -5064,7 +5064,7 @@
           "page": 17,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Focuses on regulatory approaches (low-emission zones) and emission standards rather than financing mechanisms for purchasing electric buses.",
+          "rationale": "Focuses on regulatory approaches like low-emission zones and emission standards rather than financing mechanisms for purchasing electric buses.",
           "human_override": null
         },
         {
@@ -5076,7 +5076,7 @@
           "page": 14,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses concessional and blended financing mechanisms, including below-market interest rates and development bank funding, with specific example from Bogotá.",
+          "rationale": "Directly addresses financing mechanisms including concessional and blended financing, with a specific example of how Bogotá used Clean Technology Fund grants to unlock additional bank loans for bus acquisition.",
           "human_override": null
         },
         {
@@ -5088,7 +5088,7 @@
           "page": 14,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Comprehensively explains capital expenditure grants as a primary financing mechanism for electric buses, with specific examples from London's Green Bus Fund.",
+          "rationale": "Directly answers the question by explaining capital expenditure grants as a primary funding mechanism, with specific examples of how grants cover up-front costs of buses and charging infrastructure.",
           "human_override": null
         },
         {
@@ -5100,7 +5100,7 @@
           "page": 18,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Addresses the challenge of covering higher up-front capital costs and discusses how funding fluctuations impact procurement, directly relevant to how cities finance electric buses.",
+          "rationale": "Addresses the financial challenge of covering higher up-front capital costs and discusses how funding fluctuations impact cities' ability to purchase electric buses, directly relevant to payment mechanisms.",
           "human_override": null
         },
         {
@@ -5112,7 +5112,7 @@
           "page": 12,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains operating leases and capital leases as financing mechanisms that allow operators to use buses without large upfront purchases, directly addressing payment options.",
+          "rationale": "Explains operating leases and capital leases as payment mechanisms that allow operators to acquire buses without large upfront capital expenditure, with specific examples of how these models work.",
           "human_override": null
         },
         {
@@ -5124,7 +5124,7 @@
           "page": 15,
           "label": "relevant",
           "confidence": "medium",
-          "rationale": "Describes in-kind incentives like public land provision that reduce costs and make investments more attractive, providing alternative financing support mechanisms.",
+          "rationale": "Discusses in-kind incentives like public land provision that reduce capital costs for operators, which indirectly helps cities pay for electric bus infrastructure by reducing operator costs.",
           "human_override": null
         },
         {
@@ -5135,8 +5135,8 @@
           "score": 0.6221,
           "page": 14,
           "label": "relevant",
-          "confidence": "medium",
-          "rationale": "Discusses research and demonstration project funding and preferential pricing mechanisms (electricity tariff rebates) that can reduce costs for electric bus adoption.",
+          "confidence": "high",
+          "rationale": "Addresses research, development, and demonstration grants as a funding mechanism, and discusses preferential pricing including electricity tariff rebates that reduce operating costs for electric buses.",
           "human_override": null
         },
         {
@@ -5148,7 +5148,7 @@
           "page": 22,
           "label": "relevant",
           "confidence": "medium",
-          "rationale": "Describes financial leasing mechanisms and shared funding models (cofunding by EU, public transit authority, manufacturers) that distribute costs among stakeholders.",
+          "rationale": "Discusses financial leasing mechanisms and shared funding models (e.g., Stockholm pilot with EU cofunding) that demonstrate alternative payment arrangements for electric bus procurement.",
           "human_override": null
         },
         {
@@ -5160,7 +5160,7 @@
           "page": 5,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Identifies financial challenges cities face (high capital costs, ensuring financial sustainability) but does not detail specific payment mechanisms or solutions.",
+          "rationale": "Identifies financial challenges cities face when introducing electric buses but does not provide specific payment mechanisms or funding solutions.",
           "human_override": null
         },
         {
@@ -5171,8 +5171,8 @@
           "score": 0.5974,
           "page": 9,
           "label": "relevant",
-          "confidence": "medium",
-          "rationale": "Provides examples of federal funding programs (Low or No Emission Vehicle Program) that cities can access to purchase electric buses.",
+          "confidence": "high",
+          "rationale": "Provides specific examples of federal funding mechanisms (Federal Transit Administration Low or No Emission Vehicle Program) that cities can use to purchase electric buses.",
           "human_override": null
         },
         {
@@ -5184,7 +5184,7 @@
           "page": 9,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Describes contracting arrangements where private operators purchase buses, relevant to understanding payment structures but not comprehensive financing mechanisms.",
+          "rationale": "Describes how private operators purchase buses in Bogotá but does not detail the specific payment mechanisms or funding sources used by the operators.",
           "human_override": null
         },
         {
@@ -5195,8 +5195,8 @@
           "score": 0.5539,
           "page": 9,
           "label": "relevant",
-          "confidence": "medium",
-          "rationale": "Explains leasing arrangements as an alternative to purchasing, where third parties own buses and lease them to operators, reducing upfront payment burden.",
+          "confidence": "high",
+          "rationale": "Explains leasing as a payment mechanism where third parties (manufacturers or financial companies) own buses and lease them to operators, reducing upfront capital requirements for cities.",
           "human_override": null
         },
         {
@@ -6116,7 +6116,7 @@
           "page": 5,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains how nature-based solutions improve cities through water management, cooling effects, flood mitigation, and water supply protection, with a concrete cost-effectiveness example from São Paulo.",
+          "rationale": "Explains how nature-based solutions improve cities through water management, cooling effects, flood mitigation, and provides cost-effectiveness examples, while addressing implementation considerations.",
           "human_override": null
         },
         {
@@ -6126,9 +6126,9 @@
           "content": "**[Implementation\nCapacity Building Session 1:  \nNBS Techniques\nIntroduction\nNature-based solutions (NBS) are actions to protect, \nsustainably manage, and restore natural and modified \necosystems  . NBS are solutions that seek to address \nsocial challenges in an effective and adaptive way, \nsimultaneously providing benefits to human well-\nbeing and biodiversity  . They contribute to overcoming \nchallenges such as climate change, reducing the risk \nof disasters and improving food and water security, in \naddition to being essential for economic development  .\nNBS projects are inspired and sustained by nature  . \nThese projects are multifunctional, and seek to tackle \nmore than one specific problem, with the potential to \ngenerate results and benefits for various urban, social, \nenvironmental and economic agendas  . Learning about the \npotential, main barriers and possibilities offered by NBS is \nan important step towards implementing them  .  \nObjective\nPresent and discuss the basic principles and current \nscenario of NBS in Brazil, as well as fundamental aspects \nfor the implementation and systemic planning of NBS  .  \n3 . Has the team made progress in structuring the project \nsince applying to the Accelerator program in August/\nSeptember 2022?\n4 . If you answered “yes” to the previous question, has the \nteam received support from any external institutions \nfor the project’s advancement?]** Expected results\nParticipants will have the opportunity to improve the \ntechnical aspects of their ...",
           "score": 0.9963,
           "page": 39,
-          "label": "partially_relevant",
-          "confidence": "medium",
-          "rationale": "Provides basic definition of NBS and mentions they are multifunctional and address multiple challenges, but is primarily a capacity building session outline rather than substantive explanation of benefits.",
+          "label": "relevant",
+          "confidence": "high",
+          "rationale": "Defines NBS and emphasizes their multifunctional nature to address multiple urban, social, environmental and economic challenges simultaneously, contributing to climate change mitigation and disaster risk reduction.",
           "human_override": null
         },
         {
@@ -6140,7 +6140,7 @@
           "page": 14,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Provides examples of nature-based solutions in specific cities (tree planting, agricultural communities, greening drainage channels) but focuses on case studies rather than comprehensive explanation of what NBS are or their general benefits.",
+          "rationale": "Provides specific examples of nature-based solutions in African cities (tree planting, agricultural communities, green spaces) but focuses on case studies rather than comprehensive explanation of what NBS are or their general benefits.",
           "human_override": null
         },
         {
@@ -6152,7 +6152,7 @@
           "page": 35,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses NBS as supplements to conventional infrastructure and mentions co-benefits, but primarily focuses on equity issues and vulnerability of disadvantaged groups rather than explaining NBS benefits comprehensively.",
+          "rationale": "Discusses NBS as supplements to conventional infrastructure with co-benefits and mentions specific types like blue-green streets and green roofs, but primarily focuses on equity concerns and vulnerability rather than explaining NBS comprehensively.",
           "human_override": null
         },
         {
@@ -6162,9 +6162,9 @@
           "content": "What is the level of education of each team member? **[22 . Are all team members career officials?\n23 . Did the team members have any previous experience \ndeveloping projects with NBS elements?\n24 . Was any team member designated as primarily \nresponsible for the project during the Acceleration?\n25 . Have any team members participated  \nin other acceleration programs before?  \nIf yes, when/which/why?\n\nPRACTICE NOTE   |  Accelerating Nature-Based Solutions in Brazilian Cities   |  39\nAPPENDIX D – QUESTIONNAIRE FOR NON-SELECTED \nPROJECTS (COUNTERFACTUAL)\nAPPENDIX E – SUMMARY OF CAPACITY BUILDING SESSIONS \n1 . Project name and city\n2 . According to the team’s perception, what stage \nof development is the project currently at? \n(Multiple choice)\na . Concept definition/ideation\nb . Pre-Feasibility\nc . Technical, Economic and Environmental \nFeasibility Study (EVTEA)\nd . Basic Project\ne . Executive Project\nf . Implementation\nCapacity Building Session 1:  \nNBS Techniques\nIntroduction\nNature-based solutions (NBS) are actions to protect, \nsustainably manage, and restore natural and modified \necosystems  . NBS are solutions that seek to address \nsocial challenges in an effective and adaptive way, \nsimultaneously providing benefits to human well-\nbeing and biodiversity  .]** They contribute to overcoming \nchallenges such as climate change, reducing the risk \nof disasters a...",
           "score": 0.9899,
           "page": 38,
-          "label": "not_relevant",
-          "confidence": "high",
-          "rationale": "Contains primarily questionnaire items and appendix content related to a capacity building program; does not substantively explain nature-based solutions or their benefits to cities.",
+          "label": "partially_relevant",
+          "confidence": "low",
+          "rationale": "Contains a brief definition of NBS but is primarily a questionnaire and appendix about an acceleration program, with limited substantive content about how NBS improve cities.",
           "human_override": null
         },
         {
@@ -6176,7 +6176,7 @@
           "page": 31,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses nature-based solutions in context of climate mitigation and pollution control with some urban examples, but focuses more narrowly on energy and emissions rather than comprehensive urban benefits.",
+          "rationale": "Discusses nature-based solutions in the context of climate mitigation and pollution control with some co-benefits mentioned, but focuses more on renewable energy and transportation rather than comprehensively explaining NBS.",
           "human_override": null
         },
         {
@@ -6187,8 +6187,8 @@
           "score": 0.9884,
           "page": 39,
           "label": "partially_relevant",
-          "confidence": "medium",
-          "rationale": "Lists topics covered in a capacity building session including NBS conceptualization, case studies, and implementation challenges, but is primarily a syllabus outline rather than substantive content.",
+          "confidence": "low",
+          "rationale": "Lists topics for a capacity building session on NBS including financing and implementation challenges, but does not substantively explain what NBS are or their benefits to cities.",
           "human_override": null
         },
         {
@@ -6200,7 +6200,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains how NBS improve urban climate resilience and reinforce conventional infrastructure, with specific examples of benefits like rainwater drainage, aquifer recharge, and urban heat island reduction.",
+          "rationale": "Explains how NBS improve urban climate resilience and reinforce infrastructure, with specific examples of benefits like rainwater drainage, aquifer recharge, temperature regulation, and urban heat island reduction.",
           "human_override": null
         },
         {
@@ -6212,7 +6212,7 @@
           "page": 7,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides formal definition of NBS as actions to protect and restore ecosystems addressing societal challenges while providing human well-being and biodiversity benefits, positioning NBS as innovative alternative for climate challenges.",
+          "rationale": "Defines NBS as an innovative and efficient alternative for addressing climate challenges and promoting social equity, with emphasis on ecosystem protection, restoration, and provision of human well-being and biodiversity benefits.",
           "human_override": null
         },
         {
@@ -6224,7 +6224,7 @@
           "page": 58,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains how nature-based solutions like green roofs and community gardens leverage natural ecosystems to build climate-resilient water systems and improve urban resilience with specific African examples.",
+          "rationale": "Explains how nature-based solutions like green roofs and community gardens leverage natural ecosystems to build climate-resilient water systems and improve urban resilience to climate stressors.",
           "human_override": null
         },
         {
@@ -6236,7 +6236,7 @@
           "page": 5,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly defines nature-based solutions and explains how they improve cities by managing water and heat risks through specific examples like green roofs, tree cover, wetlands, and forests.",
+          "rationale": "Directly defines nature-based solutions and explains how they improve cities by managing water and heat risks through examples like green roofs, tree cover, wetlands, and forests.",
           "human_override": null
         },
         {
@@ -6272,7 +6272,7 @@
           "page": 8,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Demonstrates specific NBS benefits for urban improvement with concrete examples (Medellin temperature reduction, Chicago green roofs, Washington D.C. rain gardens) showing temperature regulation and flood mitigation.",
+          "rationale": "Demonstrates specific NBS benefits for urban improvement with concrete examples (Medellin temperature reduction, Chicago green roofs, rain gardens) showing how cities are improved.",
           "human_override": null
         },
         {
@@ -6284,7 +6284,7 @@
           "page": 58,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains how nature-based solutions improve cities through strategic water management approaches addressing flooding, water scarcity, and drought while complementing built infrastructure.",
+          "rationale": "Explains nature-based solutions as strategic approach to improve cities by managing water-related issues and providing blended infrastructure solutions for flooding, scarcity, and drought.",
           "human_override": null
         },
         {
@@ -6296,7 +6296,7 @@
           "page": 49,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Describes specific NBS implementations (rain gardens, bioswales, retention basins) and their multiple urban benefits including flood mitigation, landscape enhancement, and recreational spaces.",
+          "rationale": "Describes specific NBS implementations (rain gardens, bioswales, retention basins) and their multiple urban benefits including flood mitigation, landscape enhancement, and leisure spaces.",
           "human_override": null
         },
         {
@@ -6308,7 +6308,7 @@
           "page": 59,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses nature-based solutions at city and building scales, showing how tree planting and green infrastructure reduce erosion, flooding, and urban heat islands while improving resilience.",
+          "rationale": "Explains how nature-based solutions improve cities through tree planting and green building interventions that address erosion, flooding, heat islands, and water management.",
           "human_override": null
         },
         {
@@ -6344,7 +6344,7 @@
           "page": 50,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Describes NBS implementation (rain gardens, bioswales, wetlands) and their benefits for urban improvement including drainage, heat island mitigation, and community engagement.",
+          "rationale": "Describes NBS implementation (rain gardens, bioswales, wetlands) and their benefits for improving cities through drainage, heat mitigation, resilience, and community engagement.",
           "human_override": null
         },
         {
@@ -6356,7 +6356,7 @@
           "page": 9,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses challenges in implementing NBS projects in cities and describes an acceleration program, but provides limited direct explanation of what NBS are or their specific urban benefits.",
+          "rationale": "Discusses challenges in implementing NBS projects in Brazilian cities and the Accelerator program, providing context about NBS adoption but not directly explaining what NBS are or their benefits.",
           "human_override": null
         },
         {
@@ -6368,7 +6368,7 @@
           "page": 21,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Lists multiple NBS projects with brief descriptions of their purposes (flood mitigation, rainwater management, river revitalization), but lacks detailed explanation of how they improve cities.",
+          "rationale": "Lists specific NBS projects with brief descriptions of their purposes (flood mitigation, leisure spaces, river revitalization), providing examples but limited explanation of how they improve cities.",
           "human_override": null
         },
         {
@@ -6380,7 +6380,7 @@
           "page": 9,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Describes an NBS acceleration program and its goals for making cities more resilient, but focuses on program structure rather than explaining what NBS are or their specific urban benefits.",
+          "rationale": "Discusses the Accelerator program for NBS projects and their role in urban resilience, providing context about NBS implementation but not defining NBS or explaining their specific benefits.",
           "human_override": null
         },
         {
@@ -6392,7 +6392,7 @@
           "page": 6,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses implementation strategies and support mechanisms for NBS projects in cities, but provides limited direct explanation of what NBS are or their specific urban improvement mechanisms.",
+          "rationale": "Discusses implementation strategies and benefits of NBS for climate adaptation and solving socio-environmental problems, but focuses on project development rather than defining NBS or their specific urban improvements.",
           "human_override": null
         },
         {
@@ -6403,8 +6403,8 @@
           "score": 0.9166,
           "page": 35,
           "label": "partially_relevant",
-          "confidence": "low",
-          "rationale": "Contains a diagnostic questionnaire framework for assessing NBS project maturity; provides minimal substantive information about what NBS are or how they improve cities.",
+          "confidence": "medium",
+          "rationale": "Mentions NBS benefits for climate resilience and solving urban problems, but primarily contains a diagnostic questionnaire framework rather than substantive explanation of NBS or their improvements.",
           "human_override": null
         },
         {
@@ -7276,7 +7276,7 @@
           "page": 111,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Comprehensively describes vulnerability characteristics of slum populations in hazard-prone areas, including temporary housing, lack of services, and sensitivity to various hazards, directly addressing the research question.",
+          "rationale": "Comprehensively describes vulnerability characteristics of slum populations in hazard-prone areas, including temporary housing, lack of services, and sensitivity to various hazards, directly answering the research question.",
           "human_override": null
         },
         {
@@ -7300,7 +7300,7 @@
           "page": 112,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Details how slum characteristics (lack of durable housing, unsafe water/sanitation, insecure tenure) reduce resilience and increase sensitivity to climate hazards, directly answering the research question.",
+          "rationale": "Details how slum dwellers lack durable housing, safe water/sanitation, and protective infrastructure, and how insecure tenure prevents access to insurance and government support, reducing climate resilience.",
           "human_override": null
         },
         {
@@ -7312,7 +7312,7 @@
           "page": 99,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides concrete example of landslide preparedness interventions in slum communities and discusses how improving urban service delivery is essential for building long-term resilience in vulnerable settlements.",
+          "rationale": "Provides a case example of landslide impacts on slum communities and discusses resilience-building interventions, demonstrating the relationship between informal settlements and climate vulnerability.",
           "human_override": null
         },
         {
@@ -7336,7 +7336,7 @@
           "page": 41,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Defines slums and informal settlements as among the most vulnerable groups with limited services and temporary structures, and explains why assessing them is essential for understanding exposure and resilience.",
+          "rationale": "Defines slums and informal settlements as among the most vulnerable groups with limited services and temporary structures, and explains why assessing them is essential for understanding climate resilience.",
           "human_override": null
         },
         {
@@ -7348,7 +7348,7 @@
           "page": 125,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Provides data requirements for mapping slum locations and characteristics but is primarily a technical checklist rather than explaining the relationship between informality and climate resilience.",
+          "rationale": "Lists data requirements for slum and informal settlement mapping but does not explain how these settlements affect climate resilience; primarily a methodological checklist.",
           "human_override": null
         },
         {
@@ -7360,7 +7360,7 @@
           "page": 26,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Presents the CHVA framework showing slums and informal settlements as key exposure indicators within hazard-prone areas, directly relevant to understanding vulnerability and resilience assessment.",
+          "rationale": "Presents the CHVA framework identifying slums and informal settlements as key exposure factors in climate hazard and vulnerability assessment, directly relevant to understanding resilience impacts.",
           "human_override": null
         },
         {
@@ -7372,7 +7372,7 @@
           "page": 42,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses how slum dwellers' invisibility in development indicators leads to inadequate policies, and demonstrates the importance of community-led data collection for identifying resilience needs in informal settlements.",
+          "rationale": "Discusses how data gaps on slum communities lead to policies that don't address their needs, and demonstrates the importance of community-led data collection for improving resilience in informal settlements.",
           "human_override": null
         },
         {
@@ -7384,7 +7384,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses building climate resilience in informal settlements through upgrading living conditions, explaining how infrastructure improvements lower disease burden and increase productivity while building resilience.",
+          "rationale": "Directly addresses building climate resilience in informal settlements through upgrading living conditions, explaining how poor infrastructure and lack of political voice reduce adaptive capacity.",
           "human_override": null
         },
         {
@@ -7396,7 +7396,7 @@
           "page": 89,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Emphasizes that informal settlement populations are highly vulnerable to climate impacts and need prioritized climate action for basic services and resilience, with specific Mumbai example showing 42% population in informal settlements.",
+          "rationale": "Emphasizes that informal settlement populations are highly vulnerable to climate impacts and need prioritized climate action for basic services and resilience, with Mumbai example showing 42% population in informal settlements.",
           "human_override": null
         },
         {
@@ -7408,7 +7408,7 @@
           "page": 9,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides concrete evidence that over 70% of Mumbai's landslide-prone areas fall within informal/slum settlements, demonstrating the critical relationship between informality and climate hazard exposure.",
+          "rationale": "Provides evidence that over 70% of Mumbai's landslide-prone areas fall within informal/slum settlements, demonstrating the critical relationship between informality and climate hazard exposure.",
           "human_override": null
         },
         {
@@ -7420,7 +7420,7 @@
           "page": 45,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Lists data sources for assessing slum populations and informal workers but is primarily a methodological reference guide rather than explaining how informality affects resilience.",
+          "rationale": "Lists data sources and indicators for assessing vulnerable populations including slum dwellers but does not explain mechanisms of how informality affects resilience.",
           "human_override": null
         },
         {
@@ -7432,7 +7432,7 @@
           "page": 6,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses institutional factors affecting climate vulnerability and mentions slum clearance/resettlement impacts, but focuses on institutional structures rather than directly addressing how slums affect resilience.",
+          "rationale": "Discusses institutional factors affecting climate vulnerability and mentions slum clearance/resettlement as potentially increasing vulnerability, but focuses on institutional mechanisms rather than direct effects of informality on resilience.",
           "human_override": null
         },
         {
@@ -7456,7 +7456,7 @@
           "page": 40,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Provides a framework for assessing exposure of slums and informal jobs to climate hazards and infrastructure vulnerabilities, but is primarily methodological rather than explaining the causal relationship between informality and resilience.",
+          "rationale": "Provides a framework for assessing exposure of slums and informal jobs to climate hazards and infrastructure vulnerabilities, but is primarily methodological rather than explaining the mechanisms of how informality affects resilience.",
           "human_override": null
         },
         {
@@ -7468,7 +7468,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly explains how informal settlement upgrading with improved infrastructure builds resilience, and discusses barriers to resilience including infrastructure deficits and the need to engage marginalized communities in adaptation strategies.",
+          "rationale": "Directly explains how informal settlement upgrading with improved infrastructure builds resilience, and discusses barriers to resilience-building in informal communities due to infrastructure deficits and marginalization.",
           "human_override": null
         },
         {
@@ -7480,7 +7480,7 @@
           "page": 69,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Provides data collection guidance on slum boundaries and infrastructure exposure to hazards, but is primarily a methodological tool rather than explaining the relationship between slums/informality and climate resilience.",
+          "rationale": "Provides data collection guidance on slum boundaries and infrastructure assessment for climate resilience planning, but is primarily a methodological tool rather than substantive analysis of how informality affects resilience.",
           "human_override": null
         },
         {
@@ -7492,7 +7492,7 @@
           "page": 45,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Lists indicators for measuring limited tenure and inadequate housing conditions in slums, which are vulnerability factors, but does not directly explain how these affect climate resilience outcomes.",
+          "rationale": "Identifies limited tenure and inadequate housing conditions in slums as vulnerability indicators, but focuses on data collection methodology rather than explaining causal relationships with climate resilience.",
           "human_override": null
         },
         {
@@ -7503,8 +7503,8 @@
           "score": 0.7034,
           "page": 88,
           "label": "partially_relevant",
-          "confidence": "low",
-          "rationale": "Mentions data gaps on slum communities in climate vulnerability assessments but does not substantively address how slums and informality affect resilience itself.",
+          "confidence": "medium",
+          "rationale": "Mentions data gaps on slum communities in climate vulnerability assessments and notes they are impacted groups, but does not explain specific mechanisms of how informality affects resilience.",
           "human_override": null
         },
         {
@@ -7516,7 +7516,7 @@
           "page": 74,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Provides definitions of informal settlements and their characteristics (poor housing, inadequate services, overcrowding), which are contextual factors affecting resilience, but does not explicitly explain resilience impacts.",
+          "rationale": "Provides definitions of informal settlements and their characteristics (poor housing, illegal occupation, inadequate services), which are contextual background but not direct analysis of climate resilience impacts.",
           "human_override": null
         },
         {
@@ -7528,7 +7528,7 @@
           "page": 6,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly illustrates how resilience-building interventions in slums can create trade-offs, with adaptation measures for some households reducing resilience for more vulnerable adjacent populations, demonstrating the complex relationship between informality and resilience.",
+          "rationale": "Demonstrates concrete example of how resilience-building interventions in slums can create trade-offs, with wealthier residents' adaptation measures reducing resilience for more vulnerable adjacent households.",
           "human_override": null
         },
         {
@@ -7540,7 +7540,7 @@
           "page": 74,
           "label": "partially_relevant",
           "confidence": "low",
-          "rationale": "Provides data sources and methodological guidance for mapping slums and informal workers in climate assessments, but does not explain how these factors affect resilience.",
+          "rationale": "Lists data sources for slum boundaries and informal worker locations relevant to resilience assessment, but is primarily a methodological reference guide without substantive analysis.",
           "human_override": null
         },
         {
@@ -7552,7 +7552,7 @@
           "page": 99,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Demonstrates that slums and informal settlements face disproportionate climate risks (200 of 287 landslide-prone locations overlap with slums), directly showing how informality affects vulnerability and resilience in cities.",
+          "rationale": "Provides concrete case example showing that 200 of 287 landslide-prone locations overlap with slums/informal settlements, directly demonstrating how informality concentrates climate hazard exposure and vulnerability.",
           "human_override": null
         },
         {
@@ -7564,7 +7564,7 @@
           "page": 18,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explicitly states that building resilience capacities of marginalized groups including slums and informal settlements is necessary, and notes that health, economic, and climate impacts are intertwined with inequality in these areas.",
+          "rationale": "Explicitly states that building resilience capacities of marginalized groups including slums and informal settlements is necessary, and connects pandemic, climate change, and inequality as intertwined factors affecting urban resilience.",
           "human_override": null
         },
         {
@@ -7576,7 +7576,7 @@
           "page": 78,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses overlaying slum data with hazard exposure to identify vulnerable populations and improve emergency response, but is primarily methodological guidance rather than explaining resilience impacts.",
+          "rationale": "Discusses overlaying slum settlement data to identify vulnerable populations and improve emergency response access, but is primarily methodological guidance rather than analysis of informality's effects on resilience.",
           "human_override": null
         },
         {
@@ -7588,7 +7588,7 @@
           "page": 13,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses how inequality and marginalization interact with climate hazards to aggravate climate vulnerability, establishing the foundational relationship between social factors (including informality) and resilience.",
+          "rationale": "Directly addresses how inequality and marginalization interact with climate hazards to aggravate vulnerability, establishing the conceptual framework for understanding how informal/marginalized status affects climate resilience.",
           "human_override": null
         },
         {
@@ -7600,7 +7600,7 @@
           "page": 115,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses how informal residents may lack access to social welfare schemes and early warning systems, which are adaptive measures for resilience, but focuses on governance vulnerabilities rather than direct resilience impacts.",
+          "rationale": "Discusses how informal residents may lack official documents needed for social welfare schemes and early warning system access, which relates to resilience capacity but is part of broader governance discussion.",
           "human_override": null
         },
         {
@@ -7612,7 +7612,7 @@
           "page": 13,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "This chunk contains only bibliographic references and citations without substantive content addressing the relationship between slums/informality and climate resilience.",
+          "rationale": "This chunk contains only bibliographic references and citations without substantive content related to the research question.",
           "human_override": null
         },
         {
@@ -8472,7 +8472,7 @@
           "page": 7,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly identifies 'shift to public transit' as a key GHG reduction target and sectoral opportunity that can be unlocked through multilevel partnerships in NDCs, which is central to the question about enhancing public transport.",
+          "rationale": "Directly identifies 'shift to public transit' as a key GHG reduction target and sectoral opportunity that can be unlocked through multilevel partnerships in NDCs, which directly addresses the question about enhancing public transport opportunities.",
           "human_override": null
         },
         {
@@ -8484,7 +8484,7 @@
           "page": 5,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses transport sector NDC implementation and integration between transport and energy sectors, but focuses primarily on electric vehicles and grid infrastructure rather than public transport opportunities specifically.",
+          "rationale": "Discusses transport sector NDC implementation and mentions integrated planning between transport and energy sectors, but focuses primarily on electric vehicles and grid infrastructure rather than public transport specifically.",
           "human_override": null
         },
         {
@@ -8496,7 +8496,7 @@
           "page": 19,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explicitly lists 'shift to public transit' as a key sectoral GHG reduction opportunity in Table E-1 and emphasizes how multilevel partnerships can unlock this transformation in NDCs.",
+          "rationale": "Explicitly lists 'shift to public transit' as a key sectoral opportunity in Table E-1 for reducing GHG emissions through multilevel partnerships, directly answering the research question about public transport opportunities in NDCs.",
           "human_override": null
         },
         {
@@ -8544,7 +8544,7 @@
           "page": 25,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses NDC enhancement and green recovery programs, but does not specifically address public transport opportunities; mentions transport sector NDCs only in passing.",
+          "rationale": "Discusses NDC enhancement and green recovery programs, mentioning that transport sector NDCs could be enhanced in new ways, but lacks specific details about public transport opportunities.",
           "human_override": null
         },
         {
@@ -8556,7 +8556,7 @@
           "page": 16,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Contains interview methodology and research process information without substantive content on public transport opportunities in NDCs.",
+          "rationale": "Contains interview guide methodology and framework for NDC development stages, but does not address specific opportunities for enhancing public transport.",
           "human_override": null
         },
         {
@@ -8568,7 +8568,7 @@
           "page": 6,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explicitly identifies 'shift to public transit' as a GHG reduction target and high-impact opportunity in cities that can deliver co-benefits, directly addressing the question about enhancing public transport in NDCs.",
+          "rationale": "Identifies 'shift to public transit' as a GHG target example and notes that transport is one of the three largest sources of direct GHGs in cities offering high-impact opportunities, directly relevant to the question.",
           "human_override": null
         },
         {
@@ -8592,7 +8592,7 @@
           "page": 19,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides specific high-impact strategies for transport including 'investing in infrastructure for cycling and walking and an integrated public transit system' and 'e-bus procurement,' directly addressing opportunities for enhancing public transport in NDCs.",
+          "rationale": "Provides specific high-impact strategies for transport including 'investing in infrastructure for cycling and walking and an integrated public transit system, e-bus procurement,' directly addressing key opportunities for enhancing public transport in NDCs.",
           "human_override": null
         },
         {
@@ -8616,7 +8616,7 @@
           "page": 2,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Discusses NDC evaluation and alignment between national and subnational goals, but does not address specific public transport opportunities or enhancement strategies.",
+          "rationale": "Discusses NDC evaluation and alignment between national and subnational goals, but does not address specific opportunities for enhancing public transport.",
           "human_override": null
         },
         {
@@ -8628,7 +8628,7 @@
           "page": 12,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Focuses on NDC governance structures and coordination mechanisms rather than specific public transport opportunities or enhancement strategies.",
+          "rationale": "Addresses NDC political oversight and coordination mechanisms with examples from Uruguay and Argentina, but does not discuss public transport opportunities specifically.",
           "human_override": null
         },
         {
@@ -8640,7 +8640,7 @@
           "page": 9,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Discusses multilevel governance and institutional arrangements for NDC implementation without addressing specific public transport opportunities or enhancement strategies.",
+          "rationale": "Discusses multilevel governance approaches and institutional arrangements for NDC implementation with examples from Kenya and Philippines, but does not address public transport opportunities.",
           "human_override": null
         },
         {
@@ -8652,7 +8652,7 @@
           "page": 17,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Describes the NDC cycle stages (contextualize, connect, develop, finance, deliver) and interview methodology, which provides framework context for NDC development but does not specifically address public transport opportunities.",
+          "rationale": "Describes the NDC cycle stages (contextualize, connect, develop, finance, deliver) and interview methodology, which provides framework context for NDC enhancement but does not specifically address public transport opportunities.",
           "human_override": null
         },
         {
@@ -8664,7 +8664,7 @@
           "page": 2,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Presents key recommendations for national governments on multilevel partnerships and NDC development stages, providing general context for NDC enhancement but lacks specific focus on public transport opportunities.",
+          "rationale": "Presents key recommendations for national governments on NDC development with subnational integration, providing relevant context for NDC enhancement but lacks specific focus on public transport sector.",
           "human_override": null
         },
         {
@@ -8676,7 +8676,7 @@
           "page": 5,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses urban content in NDCs and multilevel partnerships for climate action, providing relevant background on urban integration in NDCs but does not specifically address public transport opportunities.",
+          "rationale": "Discusses urban content in NDCs and multilevel partnerships for climate action, relevant to NDC enhancement but does not specifically address public transport opportunities.",
           "human_override": null
         },
         {
@@ -8688,7 +8688,7 @@
           "page": 11,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Mentions Brazil's National Front of Mayors improving 'urban mobility' alongside other priorities, tangentially touching on transport but not providing detailed analysis of public transport opportunities in NDCs.",
+          "rationale": "Provides recommendations for NDC development with subnational government consultation and mentions urban mobility in Brazil's example, but lacks detailed focus on public transport enhancement opportunities.",
           "human_override": null
         },
         {
@@ -8699,8 +8699,8 @@
           "score": 0.3671,
           "page": 8,
           "label": "partially_relevant",
-          "confidence": "low",
-          "rationale": "Discusses integration of subnational content in NDCs and multilevel collaboration, providing general framework but does not specifically address public transport enhancement opportunities.",
+          "confidence": "medium",
+          "rationale": "Outlines general recommendations for integrating subnational content into NDCs across multiple stages, providing framework context but not specifically addressing public transport opportunities.",
           "human_override": null
         },
         {
@@ -8712,7 +8712,7 @@
           "page": 4,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Notes that 90% of urban GHG emissions can be cut through low-carbon measures and mentions the need for multilevel coordination, providing context for urban climate action but not specifically addressing public transport.",
+          "rationale": "Discusses multilevel partnerships and subnational government roles in climate action with mention of low-carbon measures, but does not specifically focus on public transport opportunities.",
           "human_override": null
         },
         {
@@ -8724,7 +8724,7 @@
           "page": 23,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Contains only bibliographic references and citations without substantive content related to public transport opportunities in NDCs.",
+          "rationale": "Contains only bibliographic references and citations without substantive content related to public transport or NDC opportunities.",
           "human_override": null
         },
         {
@@ -8736,7 +8736,7 @@
           "page": 24,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Contains only bibliographic references and citations without substantive content related to public transport opportunities in NDCs.",
+          "rationale": "Contains only bibliographic references and citations without substantive content related to public transport or NDC opportunities.",
           "human_override": null
         },
         {
@@ -8746,9 +8746,9 @@
           "content": "**[They can help aggregate demand and manage flexibility on both supply and demand sides, capturing synergies from \nsector coupling and from integrated action on mobility, heating, cooling, and storage and supporting infrastructure \nconnectivity. Linking clean energy generation with electric vehicles, for example, can create more flexible energy \nsystems that optimize resource use and reduce emissions across sectors. Similarly, integrating renewable heat \nsolutions with district heating systems can improve energy efficiency and resilience.\nFood system\n(IPES-Food 2023)\nFood systems are responsible for one-third of global GHGs. Despite representing 50% of food system emissions, \nonly 11% of countries have committed to reducing food loss or food waste in their NDCs. Action on the food system \nis critical since 67% of deforestation is driven by agriculture. Subnational governments are leading the way on \nsustainable food strategies, including through increased plant-based food consumption and reducing food loss and \nwaste. Multilevel partnerships are key to further unlocking this critical sustainability opportunity.\nFossil fuel phaseout\n(IEA 2023; UNFCCC 2023)\nThe transition away from a fossil fuel−based economy will have a profound impact on economic performance, \nemployment, and industry practices around the world. Tackling methane emissions, eliminating flaring, and increasing \nelectrification are the three top interventions to realize this transition.]** Subnational governments have a critical role \nto incentivize this shift, through actions like carbo...",
           "score": 0.3378,
           "page": 19,
-          "label": "not_relevant",
+          "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses sectoral opportunities in energy, food systems, and fossil fuel phaseout but does not address public transport specifically.",
+          "rationale": "Explicitly discusses sectoral opportunities in NDCs including mobility/public transit as a key intervention for GHG reduction and mentions subnational government leadership in sustainable transportation strategies.",
           "human_override": null
         },
         {
@@ -8758,9 +8758,9 @@
           "content": "**[For the 2025 NDC revision, the national government is hosting a \nseries of open discussion meetings as well as an open forum on its \ngovernment website for subnational government actors—including \ngovernors, mayors’ offices, and environmental authorities—to share \ninitiatives (Ministry of Environment and Sustainable Development, \nn.d.). Workshops and practical exercises with subnationals are \nbeing conducted to better understand the implications and \noutcomes of proposed climate activities. \nThe national government is offering support to subnationals to draft \nproposals, which require letters of institutional support and other \ndocumentation supporting the proposed climate measures, as \nwell as bilateral meetings to further clarify concerns. Stakeholder \nconsultations can help support scaling implementation by \nidentifying and promoting local climate change solutions that \ncan be replicated in other parts of Colombia (Dixit and O’Connor \n2022). The Colombian Association of Capital Cities (Asocapitales) \nis also facilitating training among city governments on local climate \nactions alongside WRI Colombia.\n\nWORKING PAPER  |  November 2024  |  19\nStronger NDCs with cities, states, and regions: Recommendations for national governments\nAPPENDIX E. KEY SECTORAL \nOPPORTUNITIES\nNational governments can foster a cross-cutting approach to \nclimate action by integrating sectoral targets in their NDCs.]** Countries can accelerate sectoral transformations through \nboth GHG (e.g., shift to public transit)...",
           "score": 0.3246,
           "page": 18,
-          "label": "relevant",
+          "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Explicitly mentions 'shift to public transit' as a GHG reduction measure and discusses sectoral transformations in NDCs, directly addressing public transport as a climate action opportunity.",
+          "rationale": "Discusses sectoral opportunities in NDCs and mentions shift to public transit as a GHG reduction measure, but focuses primarily on Colombia's NDC revision process rather than detailed public transport opportunities.",
           "human_override": null
         },
         {
@@ -8772,7 +8772,7 @@
           "page": 4,
           "label": "partially_relevant",
           "confidence": "medium",
-          "rationale": "Discusses multilevel partnerships and urban abatement potential in NDCs, providing context for urban climate action but does not specifically focus on public transport opportunities.",
+          "rationale": "Addresses multilevel partnerships and urban abatement potential in NDCs, providing context for subnational climate action but not specifically detailing public transport enhancement opportunities.",
           "human_override": null
         },
         {
@@ -8783,8 +8783,8 @@
           "score": 0.3062,
           "page": 14,
           "label": "partially_relevant",
-          "confidence": "low",
-          "rationale": "Describes practical steps for integrating subnational content in NDCs through participatory processes, providing methodological guidance but not specifically addressing public transport opportunities.",
+          "confidence": "medium",
+          "rationale": "Provides practical steps for integrating subnational content into NDCs with institutional examples, relevant to NDC development process but lacks specific focus on public transport sector.",
           "human_override": null
         },
         {
@@ -8795,8 +8795,8 @@
           "score": 0.3023,
           "page": 124,
           "label": "relevant",
-          "confidence": "medium",
-          "rationale": "Explicitly mentions transport as an urban-relevant commitment in NDCs and emphasizes involving local governments in NDC design to drive low-carbon innovation, directly relevant to public transport opportunities.",
+          "confidence": "high",
+          "rationale": "Directly addresses the need to reflect collaborative climate action in cities within NDCs and emphasizes involving local governments in NDC design, with specific mention of transport-related commitments.",
           "human_override": null
         },
         {
@@ -8808,7 +8808,7 @@
           "page": 23,
           "label": "not_relevant",
           "confidence": "high",
-          "rationale": "Contains only bibliographic references and citations without substantive content related to public transport opportunities in NDCs.",
+          "rationale": "Contains only bibliographic references and citations without substantive content related to public transport or NDC opportunities.",
           "human_override": null
         },
         {
@@ -8819,8 +8819,8 @@
           "score": 0.2834,
           "page": 7,
           "label": "partially_relevant",
-          "confidence": "low",
-          "rationale": "Provides document navigation guidance and framework for NDC development recommendations but does not contain specific content about public transport opportunities.",
+          "confidence": "medium",
+          "rationale": "Provides overview of recommendations for NDC development with subnational collaboration and mentions sector-focused considerations, but does not specifically address public transport opportunities.",
           "human_override": null
         },
         {
@@ -9680,7 +9680,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly addresses affordable housing solutions through rental policies, legal frameworks, subsidies, and conversion of underutilized urban land—core strategies for making housing affordable in cities.",
+          "rationale": "Directly addresses affordable housing solutions through rental policies, legal frameworks, subsidies, and conversion of underutilized urban land—core strategies for making housing more affordable in cities.",
           "human_override": null
         },
         {
@@ -9692,7 +9692,7 @@
           "page": 115,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides specific policy mechanisms to make rental housing affordable including formal policies, legal frameworks, subsidies, and diverse rental models with international examples.",
+          "rationale": "Provides specific policy mechanisms to make rental housing affordable including formal policies, legal frameworks, subsidies, and diverse rental models (lump-sum rentals, rent-to-own, cooperatives) with international examples.",
           "human_override": null
         },
         {
@@ -9704,7 +9704,7 @@
           "page": 41,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Outlines key policy interventions for affordable housing including tenant-landlord regulations, social rental housing support, rent subsidies, and national urban policy coordination.",
+          "rationale": "Outlines key policy interventions for affordable housing including tenant-landlord regulations, social rental housing support, rent subsidies, and tenure protection measures essential for affordability.",
           "human_override": null
         },
         {
@@ -9716,7 +9716,7 @@
           "page": 197,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Demonstrates practical approaches cities can implement: upgrading informal settlements, building rental units, converting underutilized land, and improving zoning to increase affordable housing supply.",
+          "rationale": "Identifies concrete approaches to alleviate affordable housing shortages: upgrading informal settlements, building rental units, converting underutilized land, and improving zoning and spatial planning.",
           "human_override": null
         },
         {
@@ -9728,7 +9728,7 @@
           "page": 27,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains policy instruments available to governments including demand-side schemes (housing allowances) and supply-side schemes (developer incentives) to increase affordable housing access.",
+          "rationale": "Explains national policy instruments for affordable housing including demand-side schemes (housing allowances) and supply-side schemes (developer incentives, subsidized land) that directly increase access.",
           "human_override": null
         },
         {
@@ -9740,7 +9740,7 @@
           "page": 35,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Addresses affordable housing through informal settlement upgrading with flexible planning standards and tenure security, providing concrete examples from African cities.",
+          "rationale": "Addresses affordable housing through informal settlement upgrading with flexible planning standards and tenure security measures, providing practical examples from African cities.",
           "human_override": null
         },
         {
@@ -9752,7 +9752,7 @@
           "page": 39,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses the need to align housing supply and demand with appropriate incentives for affordability while considering market segmentation and governance capacity challenges.",
+          "rationale": "Discusses the need to align housing supply and demand with appropriate incentives for affordability while considering market segmentation and context-specific policy design.",
           "human_override": null
         },
         {
@@ -9764,7 +9764,7 @@
           "page": 3,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Frames the dual objectives of affordable housing and compact urban development, identifying policy interventions that can achieve both goals simultaneously.",
+          "rationale": "Frames the dual challenge of achieving housing affordability and compact urban development, emphasizing need for coordinated national policy approaches and context-specific instrument selection.",
           "human_override": null
         },
         {
@@ -9776,7 +9776,7 @@
           "page": 34,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides specific fiscal policy recommendations including property tax redesign and development taxes to incentivize efficient land use and affordable housing development.",
+          "rationale": "Provides specific policy recommendations including property tax redesign, development taxes, and incentives for efficient land use to support affordable housing development.",
           "human_override": null
         },
         {
@@ -9788,7 +9788,7 @@
           "page": 3,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Summarizes three main policy recommendations for national governments: fiscal incentives, rental market development, and institutional frameworks to deliver affordable housing at scale.",
+          "rationale": "Synthesizes three main policy recommendations: fiscal incentives, rental market development, and institutional frameworks—all directly addressing affordable housing provision at scale.",
           "human_override": null
         },
         {
@@ -9800,7 +9800,7 @@
           "page": 8,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses the relationship between housing policy instruments and affordability outcomes, emphasizing that supply-increasing policies lower costs while supply-restricting policies raise them.",
+          "rationale": "Discusses how different policy instruments affect housing affordability and urban form, emphasizing need for coordinated approaches and innovative policy design to manage affordability costs.",
           "human_override": null
         },
         {
@@ -9812,7 +9812,7 @@
           "page": 23,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides concrete strategies for affordable housing including building rental units, converting underutilized land, upgrading informal settlements, and connecting housing to employment centers.",
+          "rationale": "Provides concrete strategies for affordable housing including building rental units, converting underutilized land, upgrading informal settlements, and improving public transport connectivity.",
           "human_override": null
         },
         {
@@ -9824,7 +9824,7 @@
           "page": 174,
           "label": "relevant",
           "confidence": "medium",
-          "rationale": "Discusses land-use mechanisms and land value capture policies relevant to affordable housing, though focuses more on spatial planning and infrastructure financing than direct affordability measures.",
+          "rationale": "Discusses land-use planning mechanisms and informal settlement improvements relevant to affordability, though focuses more on spatial planning and land value capture than direct affordability solutions.",
           "human_override": null
         },
         {
@@ -9836,7 +9836,7 @@
           "page": 39,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Concludes that governments must align housing supply and demand with appropriate incentives for affordability while ensuring compact development and access to jobs and services.",
+          "rationale": "Concludes with emphasis on national government role in aligning housing supply and demand with appropriate incentives to achieve affordability while fostering compact development.",
           "human_override": null
         },
         {
@@ -9860,7 +9860,7 @@
           "page": 33,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Directly presents multiple policy tools for affordable housing including inclusionary zoning, rental allowances, and rent control, with analysis of their impacts on affordability and housing supply.",
+          "rationale": "Directly presents multiple policy tools for making housing affordable in cities, including inclusionary zoning, rental housing allowances, and rent control, with analysis of their impacts on affordability and housing supply.",
           "human_override": null
         },
         {
@@ -9872,7 +9872,7 @@
           "page": 4,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Provides policy recommendations for affordable housing including support for social rental housing, institutional capacity building, and coherent policy frameworks at multiple government levels.",
+          "rationale": "Provides policy recommendations for addressing affordable housing challenges and discusses the importance of institutional capacity, coherent policy frameworks, and social rental housing as core solutions.",
           "human_override": null
         },
         {
@@ -9884,7 +9884,7 @@
           "page": 33,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Outlines three principal policy areas for delivering affordable housing: fiscal incentives, rental market potential, and institutional capacity, directly addressing the research question.",
+          "rationale": "Outlines three principal policy recommendation areas for delivering affordable housing: fiscal incentives, rental market potential, and institutional capacity, directly addressing the research question.",
           "human_override": null
         },
         {
@@ -9896,7 +9896,7 @@
           "page": 115,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Presents concrete examples of housing affordability strategies including community-based upgrading programs and rental housing support across multiple cities.",
+          "rationale": "Presents concrete examples of community-based housing improvement strategies and discusses the importance of supporting diverse rental options to make housing more affordable and accessible.",
           "human_override": null
         },
         {
@@ -9908,7 +9908,7 @@
           "page": 24,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses inclusionary zoning and floor area ratio increases as tools to make housing more affordable, plus the 'right to the city' framework for equitable urban development.",
+          "rationale": "Discusses inclusionary zoning and floor area ratio increases as tools to make housing more affordable, and references Brazil's legal framework for prioritizing social and use value in urban development.",
           "human_override": null
         },
         {
@@ -9920,7 +9920,7 @@
           "page": 1,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Proposes three scalable approaches to affordable housing: in situ upgrading, rental housing promotion, and converting under-utilized land, directly addressing the core question.",
+          "rationale": "Proposes three scalable approaches to affordable housing: in situ participatory upgrading, promoting rental housing, and converting under-utilized urban land, directly addressing the core research question.",
           "human_override": null
         },
         {
@@ -9932,7 +9932,7 @@
           "page": 2,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Establishes the role of national governments in shaping housing markets and addressing the dual challenge of affordable housing and compact urban development.",
+          "rationale": "Establishes the dual challenge of affordable housing and compact urban development, and emphasizes national governments' key role in shaping housing markets through financing, regulations, and incentives.",
           "human_override": null
         },
         {
@@ -9944,7 +9944,7 @@
           "page": 36,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses design of social rental housing programs, tenure protection, and tenant rights as mechanisms to achieve affordability and equity objectives.",
+          "rationale": "Discusses design considerations for social rental housing programs to ensure affordability and equal access, including eligibility criteria, subsidies, and tenant protections as mechanisms for achieving affordability objectives.",
           "human_override": null
         },
         {
@@ -9956,7 +9956,7 @@
           "page": 22,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Explains how rental housing provides affordability benefits and describes policy measures including rent control, inclusionary zoning, and tenant protections.",
+          "rationale": "Explains how rental housing can make housing more affordable and provides greater household mobility, and discusses policy measures including rent control, inclusionary zoning, and tenant protections.",
           "human_override": null
         },
         {
@@ -9968,7 +9968,7 @@
           "page": 7,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Addresses the challenge of balancing affordable housing supply with compact urban development, noting that compact growth can increase prices unless carefully managed.",
+          "rationale": "Addresses the challenge of balancing affordable housing supply with compact urban development, and discusses how housing policies must be carefully managed to prevent affordability problems in compact cities.",
           "human_override": null
         },
         {
@@ -9980,7 +9980,7 @@
           "page": 24,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Presents strategies including reforming development standards, inclusionary zoning, and increasing floor area ratios to make housing more affordable for lower-income populations.",
+          "rationale": "Presents specific regulatory reforms including inclusionary zoning, floor area ratio increases, and differentiated housing standards to make housing more affordable for lower-income populations.",
           "human_override": null
         },
         {
@@ -9992,7 +9992,7 @@
           "page": 5,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Outlines three priority approaches for affordable housing: in situ upgrading, rental housing support, and conversion of under-utilized land, with discussion of market-driven challenges.",
+          "rationale": "Outlines three priority approaches for cities to ensure adequate, secure, and affordable housing: in situ upgrading, rental housing support, and conversion of under-utilized land.",
           "human_override": null
         },
         {
@@ -10004,7 +10004,7 @@
           "page": 40,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Recommends multiple instruments for affordable housing including inclusionary zoning, rental market promotion, tenant protections, and property tax redesign.",
+          "rationale": "Recommends multiple policy instruments including inclusionary zoning, developer incentives, rent subsidies, tenant protections, and property tax redesign to provide affordable housing at scale.",
           "human_override": null
         },
         {
@@ -10016,7 +10016,7 @@
           "page": 23,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Discusses coordinated supply and demand-side solutions for rental housing affordability, including microfinance and subsidies, emphasizing the need for integrated approaches.",
+          "rationale": "Discusses coordinated supply-side and demand-side subsidies, microfinance access, and the importance of reducing financial bias toward ownership to expand affordable rental housing options.",
           "human_override": null
         },
         {
@@ -10028,7 +10028,7 @@
           "page": 6,
           "label": "relevant",
           "confidence": "high",
-          "rationale": "Frames three workable, scalable approaches to affordable housing in the Global South: participatory upgrading, rental housing, and under-utilized land conversion.",
+          "rationale": "Identifies three scalable approaches for ensuring adequate and affordable housing in well-serviced locations: participatory upgrading, rental housing, and under-utilized land conversion.",
           "human_override": null
         },
         {
