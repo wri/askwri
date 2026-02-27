@@ -3,7 +3,7 @@
  * Debug script to see what the hybrid service actually returns
  */
 
-const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8002';
+const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8000';
 
 async function debugQuery() {
   const query = "What have we published on land value capture?";

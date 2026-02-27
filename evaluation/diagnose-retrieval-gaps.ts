@@ -11,7 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8002';
+const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8000';
 
 // Load golden dataset
 const goldenDataPath = path.join(__dirname, 'golden-dataset.json');

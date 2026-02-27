@@ -7,7 +7,7 @@
  *   3. Call /api/answer for synthesis
  *   4. Save question + passages + synthesis to JSON
  *
- * Prerequisites: hybrid service on :8002, Next.js on :3000
+ * Prerequisites: hybrid service on :8000, Next.js on :3000
  *
  * Usage: npx tsx evaluation/run-answer-synthesis-capture.ts
  */

@@ -1,0 +1,417 @@
+{
+  "evaluated_at": "2026-02-27T16:39:32.565Z",
+  "system_model": "gpt-4o-mini",
+  "evaluator_model": "gpt-4o",
+  "test_cases": [
+    {
+      "test_case_id": "ans_001",
+      "question": "What role do land value capture mechanisms play in more equitable urban development?",
+      "synthesis_text": "Land value capture (LVC) mechanisms are crucial for generating local revenue in rapidly growing cities, enabling the financing of essential infrastructure and services like roads and schools. These mechanisms can enhance equity by ensuring that the benefits of urban development are shared, particularly when disaggregated data is used to assess their impact on different populations. Simple forms of LVC, such as property taxes and betterment levies, have proven effective in cities like Bogotá, demonstrating their potential for sustainable urban development.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_001",
+        "scores": {
+          "faithfulness": 0.8,
+          "completeness": 0.7,
+          "conciseness": 0.9,
+          "coherence": 0.9,
+          "citation_accuracy": 0.8
+        },
+        "qualitative_feedback": "The synthesis accurately captures the role of LVC mechanisms in generating revenue for infrastructure and services, as well as their potential to enhance equity. It mentions specific examples like property taxes and betterment levies, which are supported by the sources. However, it lacks detail on the challenges and limitations of LVC, such as the potential for inequitable outcomes if not properly managed, which are discussed in the sources. Additionally, the synthesis could benefit from more specific examples of cities where LVC has been implemented successfully or unsuccessfully.",
+        "flagged_issues": [
+          {
+            "type": "missing_info",
+            "text": "challenges and limitations of LVC",
+            "detail": "The synthesis does not mention the challenges and limitations of LVC, such as the potential for inequitable outcomes if not properly managed, which are discussed in the sources."
+          }
+        ],
+        "key_facts_extracted": [
+          "Land value capture mechanisms are crucial for generating local revenue in rapidly growing cities.",
+          "These mechanisms enable the financing of essential infrastructure and services like roads and schools.",
+          "LVC mechanisms can enhance equity by ensuring that the benefits of urban development are shared.",
+          "Simple forms of LVC, such as property taxes and betterment levies, have proven effective in cities like Bogotá."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    },
+    {
+      "test_case_id": "ans_002",
+      "question": "Are denser cities more sustainable? Why?",
+      "synthesis_text": "Denser cities can enhance sustainability by improving access to essential services and reducing travel distances for lower-income populations, which is crucial for economic vitality. However, current housing policies often prioritize quantity over integration with transport networks, leading to social housing in poorly connected areas. To achieve sustainable urban development, it is essential to create regulations that promote affordable housing in well-located areas and integrate housing with transport policies.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_002",
+        "scores": {
+          "faithfulness": 0.8,
+          "completeness": 0.7,
+          "conciseness": 0.9,
+          "coherence": 0.9,
+          "citation_accuracy": 0.8
+        },
+        "qualitative_feedback": "The synthesis captures the idea that denser cities can improve sustainability by enhancing access to services and reducing travel distances, which is supported by the sources. It also correctly identifies issues with current housing policies that prioritize quantity over integration with transport networks. However, it could be more complete by discussing the potential negative impacts of density, such as overcrowding and inequality, which are mentioned in the sources. Additionally, the synthesis could benefit from more specific examples or data from the sources to strengthen its claims.",
+        "flagged_issues": [
+          {
+            "type": "missing_info",
+            "text": "potential negative impacts of density, such as overcrowding and inequality",
+            "detail": "The synthesis does not mention these aspects, which are discussed in the sources."
+          }
+        ],
+        "key_facts_extracted": [
+          "Denser cities can enhance sustainability by improving access to essential services and reducing travel distances for lower-income populations.",
+          "Current housing policies often prioritize quantity over integration with transport networks, leading to social housing in poorly connected areas.",
+          "To achieve sustainable urban development, it is essential to create regulations that promote affordable housing in well-located areas and integrate housing with transport policies."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    },
+    {
+      "test_case_id": "ans_003",
+      "question": "How can national governments better integrate subnational leadership into their NDCs?",
+      "synthesis_text": "National governments can enhance the ambition and credibility of their Nationally Determined Contributions (NDCs) by actively collaborating with subnational governments during the development process. Incorporating subnational content allows for better alignment with local capabilities and priorities, which is crucial for effective implementation. While national governments hold key policy levers, leveraging the strengths of cities and regions can lead to more comprehensive climate action strategies.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_003",
+        "scores": {
+          "faithfulness": 1,
+          "completeness": 0.8,
+          "conciseness": 1,
+          "coherence": 1,
+          "citation_accuracy": 1
+        },
+        "qualitative_feedback": "The synthesis accurately reflects the information from the source passages, emphasizing the importance of collaboration between national and subnational governments in enhancing NDCs. It captures the essence of integrating subnational content to align with local capabilities and priorities. However, it could have included more specific recommendations or stages mentioned in the sources to improve completeness.",
+        "flagged_issues": [],
+        "key_facts_extracted": [
+          "National governments can enhance the ambition and credibility of their NDCs by collaborating with subnational governments.",
+          "Incorporating subnational content allows for better alignment with local capabilities and priorities.",
+          "Leveraging the strengths of cities and regions can lead to more comprehensive climate action strategies."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    },
+    {
+      "test_case_id": "ans_004",
+      "question": "How do we improve motorcycle safety in cities?",
+      "synthesis_text": "Improving motorcycle safety in urban areas can be achieved by implementing traffic speed calming measures at intersections, which enhance visibility and reduce crash severity. Additionally, creating more public spaces and encouraging helmet use are vital, as they address both the environmental context and personal safety of motorcyclists. While exclusive motorcycle lanes have shown mixed results, a comprehensive approach that includes infrastructure improvements and education is essential to mitigate risks associated with increased motorcycle use.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_004",
+        "scores": {
+          "faithfulness": 0.6,
+          "completeness": 0.5,
+          "conciseness": 0.7,
+          "coherence": 0.8,
+          "citation_accuracy": 0.6
+        },
+        "qualitative_feedback": "The synthesis captures some key points from the source passages, such as the importance of traffic speed calming measures and the mixed results of exclusive motorcycle lanes. However, it introduces claims like 'creating more public spaces' and 'encouraging helmet use' without clear grounding in the provided passages. The synthesis could be more complete by including additional recommendations from the sources, such as addressing land use impacts and improving road design complexity. The narrative is generally coherent but lacks specific citations for each claim.",
+        "flagged_issues": [
+          {
+            "type": "unsupported_claim",
+            "text": "creating more public spaces",
+            "detail": "The synthesis mentions creating more public spaces as a measure to improve motorcycle safety, but this is not directly supported by the source passages."
+          },
+          {
+            "type": "unsupported_claim",
+            "text": "encouraging helmet use",
+            "detail": "The synthesis suggests encouraging helmet use, which is mentioned in the sources but not emphasized as a key strategy in the context of urban infrastructure improvements."
+          }
+        ],
+        "key_facts_extracted": [
+          "Traffic speed calming measures at intersections enhance visibility and reduce crash severity.",
+          "Exclusive motorcycle lanes have shown mixed results.",
+          "A comprehensive approach including infrastructure improvements and education is essential to mitigate risks associated with increased motorcycle use."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    },
+    {
+      "test_case_id": "ans_005",
+      "question": "How can cities pay for electric buses?",
+      "synthesis_text": "Cities can finance electric buses through upfront purchases from public budgets, capital leases, or by leveraging incentives to reduce costs and risks. Existing procurement frameworks may inadvertently favor traditional buses, so cities must consider how to structure tenders to support electric options. A comprehensive understanding of financial sustainability and institutional frameworks is essential for successful investment in electric bus services.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_005",
+        "scores": {
+          "faithfulness": 0.8,
+          "completeness": 0.7,
+          "conciseness": 0.9,
+          "coherence": 0.9,
+          "citation_accuracy": 0.8
+        },
+        "qualitative_feedback": "The synthesis accurately captures several key financing methods for electric buses, such as upfront purchases from public budgets and capital leases. It also correctly notes the importance of structuring procurement frameworks to support electric options. However, it lacks specific details on other financing methods like debt financing and leasing, which are mentioned in the sources. Additionally, the synthesis could have included more about the role of incentives and the involvement of non-traditional actors like utility companies.",
+        "flagged_issues": [
+          {
+            "type": "missing_info",
+            "text": "debt financing and leasing",
+            "detail": "The synthesis does not mention debt financing and leasing, which are important financing options discussed in the sources."
+          }
+        ],
+        "key_facts_extracted": [
+          "Cities can finance electric buses through upfront purchases from public budgets.",
+          "Capital leases are a method to finance electric buses.",
+          "Incentives can be leveraged to reduce costs and risks.",
+          "Existing procurement frameworks may favor traditional buses.",
+          "A comprehensive understanding of financial sustainability and institutional frameworks is essential for successful investment in electric bus services."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    },
+    {
+      "test_case_id": "ans_006",
+      "question": "What are nature-based solutions and how can they improve cities?",
+      "synthesis_text": "Nature-based solutions (NBS) encompass actions that protect and restore ecosystems to address societal challenges, enhancing urban infrastructure and promoting biodiversity. In Brazilian cities, NBS can mitigate climate change impacts by improving access to essential services and managing urban water resources more effectively. Implementing NBS requires tailored planning and collaboration among local governments to maximize their benefits and adapt to specific urban contexts.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_006",
+        "scores": {
+          "faithfulness": 0.8,
+          "completeness": 0.7,
+          "conciseness": 0.9,
+          "coherence": 0.9,
+          "citation_accuracy": 0.8
+        },
+        "qualitative_feedback": "The synthesis accurately describes nature-based solutions (NBS) as actions that protect and restore ecosystems to address societal challenges, which is supported by the sources. It also correctly mentions the role of NBS in enhancing urban infrastructure and promoting biodiversity. However, the claim about improving access to essential services is not directly supported by the sources. The synthesis could be more complete by including specific examples of NBS benefits, such as temperature regulation and flood mitigation, which are mentioned in the sources. Overall, the synthesis is concise and coherent, providing a clear and structured response to the research question.",
+        "flagged_issues": [
+          {
+            "type": "unsupported_claim",
+            "text": "improving access to essential services",
+            "detail": "The sources do not directly support the claim that NBS improve access to essential services."
+          }
+        ],
+        "key_facts_extracted": [
+          "Nature-based solutions (NBS) encompass actions that protect and restore ecosystems to address societal challenges.",
+          "NBS enhance urban infrastructure and promote biodiversity.",
+          "In Brazilian cities, NBS can mitigate climate change impacts by managing urban water resources more effectively.",
+          "Implementing NBS requires tailored planning and collaboration among local governments."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    },
+    {
+      "test_case_id": "ans_007",
+      "question": "How do slums and informality affect climate resilience in cities?",
+      "synthesis_text": "Slum populations are particularly vulnerable to climate hazards due to their proximity to risk-prone areas and the use of inadequate housing materials, which exacerbates their exposure during extreme climate events. In Brazil, over four million people have lost their homes to climate crises, highlighting the urgent need for improved resilience strategies in informal settlements. Enhanced socioeconomic security, such as property ownership, can lead to better resilience outcomes, indicating that addressing housing stability is crucial for climate adaptation efforts.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_007",
+        "scores": {
+          "faithfulness": 0.8,
+          "completeness": 0.7,
+          "conciseness": 0.9,
+          "coherence": 0.9,
+          "citation_accuracy": 0.7
+        },
+        "qualitative_feedback": "The synthesis accurately captures the vulnerability of slum populations to climate hazards due to inadequate housing and proximity to risk-prone areas, as supported by the sources. It also correctly mentions the loss of homes in Brazil due to climate crises. However, the synthesis could be more complete by including additional details from the sources, such as the lack of access to basic services and the role of socioeconomic factors in resilience. The mention of property ownership leading to better resilience outcomes is supported but could be more explicitly linked to the sources.",
+        "flagged_issues": [
+          {
+            "type": "missing_info",
+            "text": "lack of access to basic services",
+            "detail": "The synthesis does not mention the lack of access to basic services, which is a key point in the sources."
+          },
+          {
+            "type": "unsupported_claim",
+            "text": "Enhanced socioeconomic security, such as property ownership, can lead to better resilience outcomes",
+            "detail": "While the sources discuss socioeconomic factors, the specific claim about property ownership leading to better resilience outcomes is not directly supported by the provided passages."
+          }
+        ],
+        "key_facts_extracted": [
+          "Slum populations are vulnerable to climate hazards due to proximity to risk-prone areas and inadequate housing materials.",
+          "In Brazil, over four million people have lost their homes to climate crises.",
+          "Addressing housing stability is crucial for climate adaptation efforts."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    },
+    {
+      "test_case_id": "ans_008",
+      "question": "What are the key opportunities for enhancing public transport in NDCs?",
+      "synthesis_text": "National governments can enhance public transport in NDCs by integrating sectoral targets that promote both GHG reductions and climate resilience, facilitating a shift towards public transit systems. There is a critical need for improved coordination between transport and energy sectors, particularly in upgrading electricity grids to support electric vehicle fleets and exploring innovative solutions like vehicle-to-grid technologies. Utilizing comprehensive data from international energy policy databases can further inform effective decision-making and bolster the implementation of transport decarbonization strategies.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_008",
+        "scores": {
+          "faithfulness": 0.8,
+          "completeness": 0.7,
+          "conciseness": 0.8,
+          "coherence": 0.9,
+          "citation_accuracy": 0.8
+        },
+        "qualitative_feedback": "The synthesis is mostly faithful to the source material, accurately reflecting the emphasis on integrating sectoral targets for GHG reductions and climate resilience, and the need for improved coordination between transport and energy sectors. However, the mention of 'comprehensive data from international energy policy databases' is not directly supported by the passages. The synthesis is concise and coherent, providing a clear narrative on enhancing public transport in NDCs. It could be more complete by including more specific examples or strategies mentioned in the sources, such as multilevel partnerships or specific transport strategies.",
+        "flagged_issues": [
+          {
+            "type": "unsupported_claim",
+            "text": "Utilizing comprehensive data from international energy policy databases can further inform effective decision-making",
+            "detail": "This claim is not directly supported by the provided passages."
+          }
+        ],
+        "key_facts_extracted": [
+          "National governments can enhance public transport in NDCs by integrating sectoral targets that promote both GHG reductions and climate resilience.",
+          "There is a critical need for improved coordination between transport and energy sectors, particularly in upgrading electricity grids to support electric vehicle fleets.",
+          "Exploring innovative solutions like vehicle-to-grid technologies is important."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    },
+    {
+      "test_case_id": "ans_009",
+      "question": "How do we make housing more affordable in cities?",
+      "synthesis_text": "Cities can enhance housing affordability by implementing formal rental policies that support diverse income levels and by establishing clear tenant-landlord regulations to ensure transparency and equal access to legal recourse. Inclusionary zoning can mandate that developers allocate a portion of units for lower-income households, while increasing floor area ratios can help reduce land costs. A spectrum of housing options, including both formal and informal markets, is essential to meet varied needs and alleviate the housing crisis.",
+      "passage_count": 20,
+      "llm_eval": {
+        "test_case_id": "ans_009",
+        "scores": {
+          "faithfulness": 0.8,
+          "completeness": 0.7,
+          "conciseness": 0.9,
+          "coherence": 0.9,
+          "citation_accuracy": 0.8
+        },
+        "qualitative_feedback": "The synthesis accurately captures several key strategies for improving housing affordability, such as implementing formal rental policies, establishing tenant-landlord regulations, and using inclusionary zoning. However, it misses some specific details from the sources, such as the role of financial incentives and the conversion of under-utilized land. The synthesis is concise and coherent, presenting a unified narrative. Most claims can be traced back to the sources, but the mention of floor area ratios is not directly supported by the provided passages.",
+        "flagged_issues": [
+          {
+            "type": "unsupported_claim",
+            "text": "increasing floor area ratios can help reduce land costs",
+            "detail": "This claim is not directly supported by the provided passages."
+          },
+          {
+            "type": "missing_info",
+            "text": "financial incentives and conversion of under-utilized land",
+            "detail": "These important strategies from the sources are not mentioned in the synthesis."
+          }
+        ],
+        "key_facts_extracted": [
+          "Cities can enhance housing affordability by implementing formal rental policies that support diverse income levels.",
+          "Establishing clear tenant-landlord regulations ensures transparency and equal access to legal recourse.",
+          "Inclusionary zoning can mandate that developers allocate a portion of units for lower-income households.",
+          "A spectrum of housing options, including both formal and informal markets, is essential to meet varied needs."
+        ],
+        "model": "gpt-4o",
+        "reasoning_tokens": 0
+      },
+      "human_eval": {
+        "scores": {
+          "faithfulness": 0,
+          "completeness": 0,
+          "conciseness": 0,
+          "coherence": 0,
+          "citation_accuracy": 0
+        },
+        "qualitative_feedback": "",
+        "key_facts_confirmed": [],
+        "key_facts_added": [],
+        "reviewed": false
+      }
+    }
+  ]
+}

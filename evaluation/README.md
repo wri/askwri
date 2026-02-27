@@ -9,7 +9,7 @@ All eval commands are npm scripts. The hybrid service must be running first.
 ```bash
 # Prerequisites: start the search service
 cd search-service && source venv/bin/activate
-uvicorn app.main:app --port 8002            # starts Python service on :8002
+uvicorn app.main:app --port 8000            # starts Python service on :8000
 ```
 
 **Cite Mode:**
@@ -58,7 +58,7 @@ npm run eval:download              # pull reviewed data from S3
 
 | Service | Required for | How to start |
 |---------|-------------|-------------|
-| Search service (`:8002`) | All evals, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8002` |
+| Search service (`:8000`) | All evals, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8000` |
 | Next.js (`:3000`) | Answer synthesis capture | `npm run dev` |
 | RAGAS Python deps | Legacy synthesis eval only | `pip install -r evaluation/requirements-eval.txt` |
 
@@ -285,6 +285,9 @@ evaluation/
 ├── serve-label-review.ts                  # Label + synthesis review server (:3001, local dev)
 ├── answer-labels-review.json              # LLM + human-reviewed chunk labels
 ├── answer-retrieval-raw.json              # Raw retrieval results from golden set generation
+├── answer-synthesis-raw.json              # Stage 1 output: captured passages + synthesis
+├── answer-synthesis-llm-eval.json         # Stage 2 output: LLM scores per test case
+├── answer-synthesis-eval-final.json       # Stage 3 output: merged review-ready data
 ├── upload-eval-to-s3.ts                   # Push eval data to S3 for QA reviewers
 ├── download-eval-from-s3.ts              # Pull reviewed data from S3
 │
