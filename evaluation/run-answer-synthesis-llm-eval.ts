@@ -26,7 +26,7 @@ const EVAL_DIR = __dirname;
 const INPUT_PATH = path.join(EVAL_DIR, 'answer-synthesis-raw.json');
 const OUTPUT_PATH = path.join(EVAL_DIR, 'answer-synthesis-llm-eval.json');
 
-const EVALUATOR_MODEL = process.env.SYNTHESIS_EVAL_MODEL || 'gpt-4o';
+const EVALUATOR_MODEL = process.env.SYNTHESIS_EVAL_MODEL || 'gpt-5.2';
 
 const SYSTEM_PROMPT = `You are an expert evaluator assessing the quality of AI-generated research synthesis. You will be given:
 1. A research question
@@ -36,7 +36,7 @@ const SYSTEM_PROMPT = `You are an expert evaluator assessing the quality of AI-g
 Score each dimension from 0.0 to 1.0 (one decimal place):
 
 - **faithfulness**: Is every claim in the synthesis grounded in the provided passages? 0 = hallucinated claims, 1 = all claims traceable to specific passages.
-- **completeness**: Does the synthesis cover the key information from the passages? 0 = misses major findings, 1 = covers the most important information across passages.
+- **completeness**: Does the synthesis cover the key information from the passages, given the 2-3 sentence constraint? 0 = misses major findings that could fit in 2-3 sentences, 1 = makes excellent use of the limited space to touch on the most important findings. Do NOT penalize for omitting details that would require more than 3 sentences to include.
 - **conciseness**: Is the synthesis appropriately brief without filler? 0 = verbose/repetitive, 1 = every word earns its place (2-3 sentences expected).
 - **coherence**: Does it read as a unified, well-structured answer? 0 = disjointed facts, 1 = smooth narrative that synthesizes rather than concatenates.
 - **citation_accuracy**: Could each claim in the synthesis be attributed to specific source passages? 0 = claims cannot be traced to sources, 1 = each claim clearly maps to passage(s).
@@ -74,10 +74,19 @@ ${synthesis}
 Evaluate the synthesis against the source passages. Respond with JSON only.`;
 }
 
+// Mirror the answer route's filtering so the judge only sees passages the model saw
+const RELEVANCE_THRESHOLD = 0.75;
+const MAX_DOCS = 8;
+const MAX_SNIPPET_LEN = 400;
+
 function formatPassages(entry: SynthesisCaptureFile['test_cases'][0]): string {
-  return entry.retrieved_passages
+  const filtered = entry.retrieved_passages
+    .filter(p => p.score >= RELEVANCE_THRESHOLD)
+    .slice(0, MAX_DOCS);
+
+  return filtered
     .map((p, i) =>
-      `[${i + 1}] "${p.title}" (doc: ${p.doc_id}, score: ${p.score.toFixed(3)})\n${p.snippet}`
+      `[${i + 1}] "${p.title}" (doc: ${p.doc_id}, score: ${p.score.toFixed(3)})\n${p.snippet.slice(0, MAX_SNIPPET_LEN)}`
     )
     .join('\n\n---\n\n');
 }
@@ -102,6 +111,7 @@ async function evaluateWithLLM(
 
   if (isThinking) {
     body.max_completion_tokens = 4000;
+    body.reasoning_effort = 'high';
   } else {
     body.max_tokens = 4000;
     body.temperature = 0.1;
