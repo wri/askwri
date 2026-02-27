@@ -8,7 +8,7 @@
 
 import type { DocMeta } from '../../src/lib/llamacloud';
 
-export const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8000';
+export const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8002';
 export const NEXTJS_SERVER_URL = process.env.NEXTJS_SERVER_URL || 'http://localhost:3000';
 
 // --- Raw response from Python hybrid service ---

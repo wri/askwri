@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.2').trim()
+const MODEL = (process.env.OPENAI_MODEL ?? 'gpt-4o-mini').trim()
 const IS_GPT5 = /^gpt-5/i.test(MODEL)
 // Optimized for concise 2-3 sentence answers
 const DEFAULT_MAX = IS_GPT5 ? 2000 : 1500
@@ -34,15 +34,7 @@ console.log(
 const SYS = IS_GPT5
   ? `
 Synthesize a concise answer from the provided documents. Write exactly 2-3 clear sentences.
-
-Rules:
-- SYNTHESIZE: Combine key information across sources — do NOT copy phrases verbatim
-- PRIORITIZE: Focus on the most relevant and important findings
-- GROUND: Every claim must be traceable to the provided documents
-- ACCURACY: Preserve the meaning and facts from the original sources
-- LIMITATIONS: If sources highlight significant risks, trade-offs, or caveats, include the most important one
-- FAITHFULNESS: Only state causal relationships explicitly supported in the sources; use hedging language (e.g., "is associated with", "may contribute to") for correlations or inferences
-
+Transform language - don't quote directly. Focus on the most important findings.
 Return JSON: {"sentences":["sentence1","sentence2","sentence3"]}
 `.trim()
   : `

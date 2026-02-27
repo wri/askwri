@@ -9,7 +9,7 @@ All eval commands are npm scripts. The hybrid service must be running first.
 ```bash
 # Prerequisites: start the search service
 cd search-service && source venv/bin/activate
-uvicorn app.main:app --port 8000            # starts Python service on :8000
+uvicorn app.main:app --port 8002            # starts Python service on :8002
 ```
 
 **Cite Mode:**
@@ -23,11 +23,12 @@ npm run eval:report                         # Generate HTML report from latest r
 npm run eval:answer-retrieval               # Track 1: retrieval P/R/F1
 npm run eval:answer-report                  # Generate HTML report for answer evals
 
-# Legacy RAGAS-based synthesis eval (requires Python deps)
+# Track 2: synthesis (requires Next.js + RAGAS)
 pip install -r evaluation/requirements-eval.txt   # first time only
 npm run eval:answer-synthesis               # defaults to --mode isolated
+npm run eval:answer-synthesis -- --mode end-to-end
 
-npm run eval:answer-full                    # runs retrieval then legacy synthesis
+npm run eval:answer-full                    # runs retrieval then synthesis
 ```
 
 **Golden Set Management:**
@@ -57,9 +58,9 @@ npm run eval:download              # pull reviewed data from S3
 
 | Service | Required for | How to start |
 |---------|-------------|-------------|
-| Search service (`:8000`) | All evals, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8000` |
+| Search service (`:8002`) | All evals, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8002` |
 | Next.js (`:3000`) | Answer synthesis capture | `npm run dev` |
-| RAGAS Python deps | Legacy `eval:answer-synthesis` only | `pip install -r evaluation/requirements-eval.txt` |
+| RAGAS Python deps | Legacy synthesis eval only | `pip install -r evaluation/requirements-eval.txt` |
 
 ## Cite Mode Evaluation
 
@@ -145,7 +146,7 @@ npm run eval:golden-assemble    # build final golden dataset
 
 After running `npm run eval:golden-review`, open **http://localhost:3001/eval/review-labels** in your browser.
 
-**What you're looking at:** For each of 9 research questions, an LLM has labeled the top 30 retrieved text passages as Relevant, Partially Relevant, or Not Relevant. Your job is to check these labels and correct any mistakes.
+**What you're looking at:** For each of 9 research questions, an LLM has labeled the top 20 retrieved text passages as Relevant, Partially Relevant, or Not Relevant. Your job is to check these labels and correct any mistakes.
 
 **What the labels mean:**
 - **Relevant** — This passage contains information directly useful for answering the question. It would belong in a synthesized answer.
@@ -170,7 +171,7 @@ After running `npm run eval:golden-review`, open **http://localhost:3001/eval/re
 - Click "Show full text" to see the complete passage — the default view is truncated
 - Every click autosaves immediately. You can close the browser and come back later.
 - The LLM tends to be conservative — many "Partially Relevant" passages may actually be "Relevant." When in doubt, lean toward Relevant.
-- A good answer-mode question typically has **15-30 relevant passages** across **1-8 different documents**
+- A good answer-mode question should have **3-8 relevant passages** across **2-4 different documents**
 
 **When you're done:** Let the dev team know, then run `npm run eval:golden-assemble` to rebuild the golden set from your reviewed labels.
 
@@ -234,7 +235,8 @@ npm run eval:synthesis-capture
 npm run eval:synthesis-llm-eval
 npm run eval:synthesis-prepare-review
 
-# 2. Upload data to S3 for reviewers (needs DOCUMENTS_S3_BUCKET and AWS creds in .env)
+# 2. Upload data to S3 for reviewers
+export DOCUMENTS_S3_BUCKET=askwri-data
 npm run eval:upload
 
 # 3. After reviewer completes their work, pull data back
@@ -283,9 +285,6 @@ evaluation/
 ├── serve-label-review.ts                  # Label + synthesis review server (:3001, local dev)
 ├── answer-labels-review.json              # LLM + human-reviewed chunk labels
 ├── answer-retrieval-raw.json              # Raw retrieval results from golden set generation
-├── answer-synthesis-raw.json              # Stage 1 output: captured passages + synthesis
-├── answer-synthesis-llm-eval.json         # Stage 2 output: LLM scores per test case
-├── answer-synthesis-eval-final.json       # Stage 3 output: merged review-ready data
 ├── upload-eval-to-s3.ts                   # Push eval data to S3 for QA reviewers
 ├── download-eval-from-s3.ts              # Pull reviewed data from S3
 │

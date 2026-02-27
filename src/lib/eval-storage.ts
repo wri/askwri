@@ -26,9 +26,7 @@ function sanitizeFilename(filename: string): string {
 
 export async function readEvalFile(filename: string): Promise<object | null> {
   filename = sanitizeFilename(filename);
-
-  // In production, try S3 first (reviewer edits persist there across deploys)
-  if (isProduction && BUCKET) {
+  if (isProduction) {
     try {
       const client = getS3Client();
       const resp = await client.send(new GetObjectCommand({
@@ -36,46 +34,35 @@ export async function readEvalFile(filename: string): Promise<object | null> {
         Key: `${PREFIX}${filename}`,
       }));
       const body = await resp.Body?.transformToString('utf-8');
-      if (body) return JSON.parse(body);
+      return body ? JSON.parse(body) : null;
     } catch (err: any) {
-      if (err.name !== 'NoSuchKey' && err.$metadata?.httpStatusCode !== 404) {
-        console.warn(`[eval-storage] S3 read failed for ${filename}:`, err.message);
-      }
-      // Fall through to filesystem
+      if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) return null;
+      throw err;
     }
   }
 
-  // Fall back to filesystem (committed seed data, or local dev)
   const filePath = path.join(EVAL_DIR, filename);
-  if (fs.existsSync(filePath)) {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  }
-
-  return null;
+  if (!fs.existsSync(filePath)) return null;
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 }
 
 export async function writeEvalFile(filename: string, data: object): Promise<void> {
   filename = sanitizeFilename(filename);
   const jsonStr = JSON.stringify(data, null, 2) + '\n';
 
-  // Always write to filesystem
+  if (isProduction) {
+    const client = getS3Client();
+    await client.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: `${PREFIX}${filename}`,
+      Body: jsonStr,
+      ContentType: 'application/json',
+    }));
+    return;
+  }
+
   const filePath = path.join(EVAL_DIR, filename);
   fs.writeFileSync(filePath, jsonStr, 'utf-8');
-
-  // Also write to S3 if available in production
-  if (isProduction && BUCKET) {
-    try {
-      const client = getS3Client();
-      await client.send(new PutObjectCommand({
-        Bucket: BUCKET,
-        Key: `${PREFIX}${filename}`,
-        Body: jsonStr,
-        ContentType: 'application/json',
-      }));
-    } catch (err: any) {
-      console.warn(`[eval-storage] S3 write failed for ${filename}:`, err.message);
-    }
-  }
 }
 
 export async function evalFileExists(filename: string): Promise<boolean> {

@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent / "lib"))
 from ragas_adapter import load_golden_dataset, to_ragas_dataset, golden_passages_as_contexts
 
 NEXTJS_URL = os.environ.get("NEXTJS_SERVER_URL", "http://localhost:3000")
-PYTHON_URL = os.environ.get("LLAMAINDEX_SERVICE_URL", "http://127.0.0.1:8000")
+PYTHON_URL = os.environ.get("LLAMAINDEX_SERVICE_URL", "http://127.0.0.1:8002")
 
 
 def check_services(mode: str) -> bool:
