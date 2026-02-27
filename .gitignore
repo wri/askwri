@@ -67,10 +67,8 @@ pip-delete-this-directory.txt
 # Local document data (search service)
 search-service/data/
 
-# Evaluation intermediates and results
+# Evaluation intermediates
 evaluation/answer-retrieval-raw.json
-evaluation/answer-synthesis-raw.json
-evaluation/answer-synthesis-llm-eval.json
 evaluation/results/
 
 # OS

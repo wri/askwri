@@ -26,7 +26,15 @@ function sanitizeFilename(filename: string): string {
 
 export async function readEvalFile(filename: string): Promise<object | null> {
   filename = sanitizeFilename(filename);
-  if (isProduction) {
+
+  // Always try filesystem first (works locally and in Docker with committed data)
+  const filePath = path.join(EVAL_DIR, filename);
+  if (fs.existsSync(filePath)) {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  }
+
+  // Fall back to S3 in production
+  if (isProduction && BUCKET) {
     try {
       const client = getS3Client();
       const resp = await client.send(new GetObjectCommand({
@@ -41,28 +49,31 @@ export async function readEvalFile(filename: string): Promise<object | null> {
     }
   }
 
-  const filePath = path.join(EVAL_DIR, filename);
-  if (!fs.existsSync(filePath)) return null;
-  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  return null;
 }
 
 export async function writeEvalFile(filename: string, data: object): Promise<void> {
   filename = sanitizeFilename(filename);
   const jsonStr = JSON.stringify(data, null, 2) + '\n';
 
-  if (isProduction) {
-    const client = getS3Client();
-    await client.send(new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: `${PREFIX}${filename}`,
-      Body: jsonStr,
-      ContentType: 'application/json',
-    }));
-    return;
-  }
-
+  // Always write to filesystem
   const filePath = path.join(EVAL_DIR, filename);
   fs.writeFileSync(filePath, jsonStr, 'utf-8');
+
+  // Also write to S3 if available in production
+  if (isProduction && BUCKET) {
+    try {
+      const client = getS3Client();
+      await client.send(new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: `${PREFIX}${filename}`,
+        Body: jsonStr,
+        ContentType: 'application/json',
+      }));
+    } catch (err: any) {
+      console.warn(`[eval-storage] S3 write failed for ${filename}:`, err.message);
+    }
+  }
 }
 
 export async function evalFileExists(filename: string): Promise<boolean> {
