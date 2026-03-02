@@ -5,11 +5,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
 import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
+import { DocMeta, KP } from '@/lib/llamacloud'
 import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
 import { getRelevanceLevel, getRelevanceColor } from '@/app/utils/relevance'
 import { AiIcon } from '../icons/AiIcon'
-import { DocMeta, KP, WhyMeta, SupportingCitationsProps } from './types'
+import { WhyMeta, SupportingCitationsProps } from './types'
 
 // Helper to get first sentence from text
 const firstSentence = (text?: string) => {
