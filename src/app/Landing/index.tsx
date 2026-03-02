@@ -92,9 +92,8 @@ const Landing = () => {
             paddingBottom: '20px',
           }}
         >
-          Find relevant publications for your research from across WRI,
-          highlight specific passages, and generate citations in your chosen
-          format.
+          Find relevant Knowledge Products for your research, identify insights,
+          and export citations.
         </Text>
       </section>
       <section>
@@ -112,7 +111,7 @@ const Landing = () => {
                 }}
               >
                 <Textarea
-                  placeholder='Compact urban growth in India'
+                  placeholder='Compact urban growth in India between 2019 and 2026'
                   size='small'
                   resize='none'
                   value={query}
@@ -194,8 +193,8 @@ const Landing = () => {
                   color: getThemedColor('neutral', 800),
                 }}
               >
-                Get insights by asking research questions across WRI
-                publications.
+                Get insights by asking research questions across WRI Knowledge
+                Products.
               </Text>
               <Text
                 as='div'

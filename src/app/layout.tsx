@@ -1,17 +1,33 @@
-import type { Metadata } from "next";
-import type { ReactNode } from "react";
-import ChakraProvider from "./Providers/ChakraProvider";
-import { Footer } from "./components/Footer";
-import "./globals.css";
+import type { Metadata } from 'next'
+import Script from 'next/script'
+import type { ReactNode } from 'react'
+import ChakraProvider from './Providers/ChakraProvider'
+import { Footer } from './components/Footer'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: "Ask WRI",
+  title: 'Ask WRI',
   description:
-    "Find relevant publications for your research from across WRI, highlight specific passages, and generate citations in your chosen format.",
-};
+    'Find relevant Knowledge Products for your research, identify insights, and export citations.',
+}
 
 const RootLayout = ({ children }: { children: ReactNode }) => (
-  <html lang="en">
+  <html lang='en'>
+    <head>
+      {/* Hotjar Tracking Code for Ask WRI */}
+      <Script id='hotjar' strategy='afterInteractive'>
+        {`
+          (function(h,o,t,j,a,r){
+            h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};
+            h._hjSettings={hjid:${process.env.HOTJAR_ID},hjsv:6};
+            a=o.getElementsByTagName('head')[0];
+            r=o.createElement('script');r.async=1;
+            r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;
+            a.appendChild(r);
+          })(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');
+        `}
+      </Script>
+    </head>
     <body>
       <ChakraProvider>
         {children}
@@ -19,6 +35,6 @@ const RootLayout = ({ children }: { children: ReactNode }) => (
       </ChakraProvider>
     </body>
   </html>
-);
+)
 
-export default RootLayout;
+export default RootLayout
