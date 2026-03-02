@@ -81,8 +81,8 @@ function normalizeCatalogRow(r: any): any {
       meta['source url'] || meta['other weblink (not doi)'] || undefined,
     articleType: meta['article type'] || undefined,
     subTag: meta['sub-tag'] || undefined,
-    yearAccepted: toYear(meta['year accepted'] ?? meta['year']),
-    dateAccepted: meta['date accepted'] || undefined,
+    yearPublished: toYear(meta['year published'] ?? meta['year']),
+    datePublished: meta['date published'] || undefined,
     office: meta['wri office affiliation (primary)'] || undefined,
     summary: r.meta?.summary || undefined, // Preserve the CSV summary field
     raw: meta,
@@ -140,8 +140,8 @@ function authorsFrom(doc: DocMeta, row?: any) {
 }
 function yearFrom(doc: DocMeta, row?: any) {
   return (
-    row?.yearAccepted ??
-    toYear(row?.dateAccepted) ??
+    row?.yearPublished ??
+    toYear(row?.datePublished) ??
     (typeof doc.year === 'number' ? doc.year : undefined)
   )
 }

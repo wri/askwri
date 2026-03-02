@@ -69,7 +69,7 @@ function findDocumentByUrl(url: string): DocumentMetadata | null {
         file_path: doc.file_path,
         title: metadata['Article Title'] || '',
         authors: metadata['All authors'] || '',
-        year: metadata['YEAR accepted'] || 0,
+        year: metadata['YEAR published'] || 0,
         summary: doc.summary || metadata.summary || '',
         url: docUrl
       };
