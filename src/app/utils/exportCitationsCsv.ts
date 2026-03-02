@@ -79,7 +79,10 @@ export function exportCitationsCsv({
       }
     }
     const doi = row?.raw?.doi || ''
-    const url = `${window.location.origin}/${urlFrom(doc, row)}`
+    const relativeOrAbsoluteUrl = urlFrom(doc, row)
+    const url = relativeOrAbsoluteUrl
+      ? new URL(relativeOrAbsoluteUrl, window.location.origin).toString()
+      : ''
     const office = row?.office || ''
     let summary =
       docSummary[doc.doc_id] || firstSentence(doc.kps?.[0]?.snippet ?? '')
