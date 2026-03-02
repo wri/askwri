@@ -3,12 +3,19 @@
 
 import { DocMeta } from '@/lib/llamacloud'
 
+export interface CatalogMeta {
+  file_path?: string
+  metadata?: string
+  summary?: string
+  [key: string]: any
+}
+
 // Catalog row type for catalog helpers
 export interface RawCatalogInput {
   file_id: string
   external_file_id: string
   file_name: string
-  meta: Record<string, any>
+  meta: CatalogMeta
 }
 
 export interface CatalogRow {
@@ -26,6 +33,7 @@ export interface CatalogRow {
   summary?: string
   raw?: Record<string, any>
   fileName?: string
+  meta?: CatalogMeta
 }
 
 /* ---------- general helpers ---------- */
@@ -63,10 +71,10 @@ const toYear = (x: string) => {
 }
 
 /* ---------- catalog parsing (same as before) ---------- */
-function parseMetaJSON(metaStr?: string): Record<string, any> {
+function parseMetaJSON(metaStr?: string): CatalogMeta {
   try {
     const obj = metaStr ? JSON.parse(metaStr) : {}
-    const out: Record<string, any> = {}
+    const out: CatalogMeta = {}
     for (const [k, v] of Object.entries(obj || {})) out[norm(k)] = v
     if (out['sub-tag (clean1)'] && !out['sub-tag'])
       out['sub-tag'] = out['sub-tag (clean1)']
@@ -155,7 +163,7 @@ export function authorsFrom(doc: DocMeta, row?: CatalogRow) {
 export function yearFrom(doc: DocMeta, row?: CatalogRow) {
   return (
     row?.yearAccepted ??
-    toYear(row?.dateAccepted) ??
+    toYear(row?.dateAccepted ?? '') ??
     (typeof doc.year === 'number' ? doc.year : undefined)
   )
 }
