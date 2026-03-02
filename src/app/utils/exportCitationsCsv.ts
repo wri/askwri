@@ -1,5 +1,13 @@
 import { DocMeta } from '@/lib/llamacloud'
-import { parseAuthors, firstSentence, urlFrom, matchCatalogRow } from './utils'
+import {
+  parseAuthors,
+  firstSentence,
+  urlFrom,
+  matchCatalogRow,
+  buildCatalogIndex,
+  titleFrom,
+  authorsFrom,
+} from './utils'
 
 export function exportCitationsCsv({
   docs,
@@ -9,7 +17,7 @@ export function exportCitationsCsv({
 }: {
   docs: DocMeta[]
   selectedIds: string[]
-  index: any
+  index: ReturnType<typeof buildCatalogIndex> | null
   docSummary: Record<string, string>
 }) {
   const headers = [
@@ -51,14 +59,8 @@ export function exportCitationsCsv({
   )
   const rows = selectedDocs.map((doc: DocMeta) => {
     const row = index ? matchCatalogRow(doc, index) : undefined
-    const title = row?.articleTitle || doc.title || ''
-    let authorsArr: string[] = []
-    if (row?.allAuthors && row.allAuthors !== '—' && row.allAuthors !== '-') {
-      authorsArr = parseAuthors(row.allAuthors)
-    } else if (doc.authors && doc.authors.length) {
-      authorsArr = doc.authors.filter(Boolean)
-    }
-    const authors = authorsArr.join('; ')
+    const title = titleFrom(doc, row)
+    const authors = authorsFrom(doc, row).join('; ')
     let datePublished = ''
     if (row?.raw?.['date published online']) {
       datePublished = formatDate(row.raw['date published online'])
