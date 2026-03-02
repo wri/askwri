@@ -65,7 +65,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            NEXT_PUBLIC_HOTJAR_ID=${{ secrets.NEXT_PUBLIC_HOTJAR_ID }}
+            NEXT_PUBLIC_HOTJAR_ID=${{ secrets.NEXT_PUBLIC_HOTJAR_ID || '0' }}
 
       - name: Build Docker image (Search Service)
         uses: docker/build-push-action@v5
