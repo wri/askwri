@@ -3,6 +3,31 @@
 
 import { DocMeta } from '@/lib/llamacloud'
 
+// Catalog row type for catalog helpers
+export interface RawCatalogInput {
+  file_id: string
+  external_file_id: string
+  file_name: string
+  meta: Record<string, any>
+}
+
+export interface CatalogRow {
+  articleTitle?: string
+  allAuthors?: string
+  baseName?: string
+  noExt?: string
+  titleSlug?: string
+  sourceUrl?: string
+  articleType?: string
+  subTag?: string
+  yearAccepted?: number
+  dateAccepted?: string
+  office?: string
+  summary?: string
+  raw?: Record<string, any>
+  fileName?: string
+}
+
 /* ---------- general helpers ---------- */
 export const norm = (s?: string) => (s || '').trim().toLowerCase()
 export const firstSentence = (t?: string) => {
@@ -27,7 +52,7 @@ export const parseAuthors = (csv?: string) =>
     .split(/;|,/)
     .map((v) => v.trim())
     .filter(Boolean)
-const toYear = (x: any) => {
+const toYear = (x: string) => {
   const n = Number(x)
   if (Number.isFinite(n)) return n
   if (typeof x === 'string') {
@@ -50,7 +75,7 @@ function parseMetaJSON(metaStr?: string): Record<string, any> {
     return {}
   }
 }
-export function normalizeCatalogRow(r: any): any {
+export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
   const fileName = r.file_name || r.external_file_id || r.meta?.file_path || ''
   const baseName = basename(fileName)
   const noExt = stripExt(baseName)
@@ -59,23 +84,23 @@ export function normalizeCatalogRow(r: any): any {
     fileName,
     baseName: baseName.toLowerCase(),
     noExt: noExt.toLowerCase(),
-    titleSlug: slug(meta['article title']),
+    titleSlug: slug(meta['article title']) || undefined,
     articleTitle: meta['article title'] || undefined,
     allAuthors: meta['all authors'] || undefined,
     sourceUrl:
       meta['source url'] || meta['other weblink (not doi)'] || undefined,
     articleType: meta['article type'] || undefined,
     subTag: meta['sub-tag'] || undefined,
-    yearAccepted: toYear(meta['year accepted'] ?? meta.year),
+    yearAccepted: toYear(String(meta['year accepted'] ?? meta.year)),
     dateAccepted: meta['date accepted'] || undefined,
     office: meta['wri office affiliation (primary)'] || undefined,
     summary: r.meta?.summary || undefined, // Preserve the CSV summary field
     raw: meta,
   }
 }
-export function buildCatalogIndex(items: any[]) {
-  const byBase = new Map<string, any>() // basename + noExt
-  const bySlug = new Map<string, any>() // title slug
+export function buildCatalogIndex(items: CatalogRow[]) {
+  const byBase = new Map<string, CatalogRow>() // basename + noExt
+  const bySlug = new Map<string, CatalogRow>() // title slug
   for (const r of items) {
     if (r.baseName) byBase.set(r.baseName, r)
     if (r.noExt) byBase.set(r.noExt, r)
@@ -83,10 +108,14 @@ export function buildCatalogIndex(items: any[]) {
   }
   return { byBase, bySlug }
 }
+
 export function matchCatalogRow(
   doc: DocMeta,
-  index: ReturnType<typeof buildCatalogIndex> | null,
-): any | undefined {
+  index: {
+    byBase: Map<string, CatalogRow>
+    bySlug: Map<string, CatalogRow>
+  } | null,
+): CatalogRow | undefined {
   if (!index) return undefined
   const chunk = (doc.meta as any)?.raw?.chunk || {}
   const candidates = [
@@ -108,14 +137,14 @@ export function matchCatalogRow(
   if (s2 && index.bySlug.has(s2)) return index.bySlug.get(s2)
   return undefined
 }
-export function titleFrom(doc: DocMeta, row?: any) {
+export function titleFrom(doc: DocMeta, row?: CatalogRow) {
   const t = row?.articleTitle || doc.title || ''
   if (t) return t
   const fromName =
     row?.baseName || stripExt(basename(doc._url || '')) || '(untitled)'
   return titleCase(fromName.replace(/[_-]+/g, ' ').trim())
 }
-export function authorsFrom(doc: DocMeta, row?: any) {
+export function authorsFrom(doc: DocMeta, row?: CatalogRow) {
   if (row?.allAuthors && row.allAuthors !== '—' && row.allAuthors !== '-')
     return parseAuthors(row.allAuthors)
   const fn = row?.raw?.['wri lead author - first name']
@@ -123,17 +152,17 @@ export function authorsFrom(doc: DocMeta, row?: any) {
   if (fn || ln) return [`${fn || ''} ${ln || ''}`.trim()]
   return (doc.authors || []).filter(Boolean)
 }
-export function yearFrom(doc: DocMeta, row?: any) {
+export function yearFrom(doc: DocMeta, row?: CatalogRow) {
   return (
     row?.yearAccepted ??
     toYear(row?.dateAccepted) ??
     (typeof doc.year === 'number' ? doc.year : undefined)
   )
 }
-export function typeFrom(row?: any) {
+export function typeFrom(row?: CatalogRow) {
   return row?.articleType || 'Report'
 }
-export function urlFrom(doc: DocMeta, row?: any) {
+export function urlFrom(doc: DocMeta, row?: CatalogRow) {
   if (row?.sourceUrl) return row.sourceUrl
   const fn =
     row?.fileName ||
@@ -141,7 +170,7 @@ export function urlFrom(doc: DocMeta, row?: any) {
     (doc.meta as any)?.raw?.chunk?.external_file_id
   return fn ? `/api/pdf/${basename(fn)}` : doc._url || null
 }
-export const chicagoFull = (doc: DocMeta, row?: any) => {
+export const chicagoFull = (doc: DocMeta, row?: CatalogRow) => {
   const authors = authorsFrom(doc, row).join(', ') || '(author unknown)'
   const title = `"${titleFrom(doc, row)}"`
   const cityPub = 'Washington, DC: WRI'
