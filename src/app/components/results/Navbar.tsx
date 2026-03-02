@@ -6,13 +6,6 @@ import { Button, Navbar as WriNavbar } from '@worldresources/wri-design-systems'
 import { FiPlus } from 'react-icons/fi'
 import { WriLogoIcon } from '../icons/WriLogo'
 
-// Hotjar event typing
-declare global {
-  interface Window {
-    hj?: (...args: any[]) => void
-  }
-}
-
 const Navbar = () => {
   const pathname = usePathname()
   const router = useRouter()
@@ -31,9 +24,11 @@ const Navbar = () => {
           key='leave-feedback'
           variant='borderless'
           onClick={() => {
-            if (typeof window.hj === 'function') {
-              window.hj('event', 'leave_feedback_clicked')
-            }
+            window.open(
+              'https://surveys.hotjar.com/4ba2c242-87ac-44a0-9f6f-6caed18f1cf2',
+              '_blank',
+              'noopener,noreferrer',
+            )
           }}
         >
           Leave Feedback
