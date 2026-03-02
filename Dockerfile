@@ -12,6 +12,9 @@ RUN npm ci
 # Copy source files
 COPY . .
 
+ARG NEXT_PUBLIC_HOTJAR_ID
+ENV NEXT_PUBLIC_HOTJAR_ID=$NEXT_PUBLIC_HOTJAR_ID
+
 # Build the application
 RUN npm run build
 

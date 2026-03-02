@@ -93,6 +93,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             NEXT_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
+            NEXT_PUBLIC_HOTJAR_ID=${{ secrets.NEXT_PUBLIC_HOTJAR_ID }}
 
   # ==========================================================================
   # Build and Push Search Service Docker Image
