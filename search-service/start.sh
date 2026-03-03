@@ -10,7 +10,10 @@ if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
         if aws s3 sync "s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}" /tmp/askWRI_docs \
             --no-progress \
             --only-show-errors; then
-            echo "S3 sync complete"
+            echo "S3 sync complete."
+            echo "S3 source: s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}"
+            echo "Contents of /tmp/askWRI_docs after sync:"
+            ls -lh /tmp/askWRI_docs
             SUCCESS=1
             break
         fi
