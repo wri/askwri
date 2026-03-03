@@ -16,7 +16,7 @@ const AIProcessExplainedExtendableCard = ({ query }: { query: string }) => (
       }
     >
       <Box style={{ padding: '20px' }}>
-        <Heading size='lg' style={{ marginBottom: '12px' }} fontStyle=''>
+        <Heading size='lg' style={{ marginBottom: '12px' }}>
           How results are generated
         </Heading>
         <Text>
