@@ -2,6 +2,8 @@
 set -e
 
 if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
+        echo "Listing S3 contents before sync:"
+        aws s3 ls "s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}"
     echo "Syncing documents from S3..."
     RETRIES=3
     DELAY=5
@@ -11,7 +13,6 @@ if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
             --no-progress \
             --only-show-errors; then
             echo "S3 sync complete."
-            echo "S3 source: s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}"
             echo "Contents of /tmp/askWRI_docs after sync:"
             ls -lh /tmp/askWRI_docs
             SUCCESS=1
