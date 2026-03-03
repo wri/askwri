@@ -3,8 +3,6 @@ import { Icon, IconProps } from '@chakra-ui/react'
 export const ThinkIcon = (props: IconProps) => (
   <Icon viewBox='0 0 15 16' width='15px' height='16px' {...props}>
     <svg
-      width='15'
-      height='16'
       viewBox='0 0 15 16'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
