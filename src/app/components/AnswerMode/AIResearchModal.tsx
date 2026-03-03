@@ -28,6 +28,8 @@ export const AIResearchModalContent = ({
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)
   const [firstDocHowRelevant, setFirstDocHowRelevant] = useState('')
+  // State for SupportingCitations page
+  const [supportingCitationsPage, setSupportingCitationsPage] = useState(1)
   const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
@@ -260,11 +262,7 @@ export const AIResearchModalContent = ({
 
     if (answer) {
       return (
-        <Box
-          style={{
-            display: 'flex',
-          }}
-        >
+        <Box style={{ display: 'flex' }}>
           <AnswerPanel
             query={query}
             answer={answer}
@@ -273,6 +271,7 @@ export const AIResearchModalContent = ({
             consultedDocs={consultedDocs}
             setAnswer={setAnswer}
             setQuery={setQuery}
+            setSupportingCitationsPage={setSupportingCitationsPage}
           />
           <Box
             style={{
@@ -291,6 +290,8 @@ export const AIResearchModalContent = ({
             <SupportingCitations
               setFirstDocHowRelevant={setFirstDocHowRelevant}
               supportingDocs={supportingDocs}
+              page={supportingCitationsPage}
+              setPage={setSupportingCitationsPage}
             />
           </Box>
         </Box>

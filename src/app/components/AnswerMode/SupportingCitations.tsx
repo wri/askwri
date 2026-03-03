@@ -22,8 +22,12 @@ const firstSentence = (text?: string) => {
 export const SupportingCitations = ({
   supportingDocs,
   setFirstDocHowRelevant,
+  page: controlledPage,
+  setPage: setControlledPage,
 }: SupportingCitationsProps) => {
-  const [page, setPage] = useState(1)
+  const [internalPage, setInternalPage] = useState(1)
+  const page = controlledPage ?? internalPage
+  const setPage = setControlledPage ?? setInternalPage
   const [pageSize] = useState(1)
   const [passageWhy, setPassageWhy] = useState<Record<string, WhyMeta>>({})
   const [passageWhyLoading, setPassageWhyLoading] = useState<
