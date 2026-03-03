@@ -450,7 +450,7 @@ export const SupportingCitations = ({
           <Button
             size='small'
             variant='secondary'
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}
             colorScheme='gray'
             leftIcon={<FaChevronLeft size={20} />}
@@ -464,7 +464,7 @@ export const SupportingCitations = ({
             size='small'
             variant='secondary'
             rightIcon={<FaChevronRight size={20} />}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setPage(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}
             colorScheme='gray'
           >
