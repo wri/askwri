@@ -17,6 +17,7 @@ import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { MdChat } from 'react-icons/md'
 import { IoIosCopy } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
+import AIProcessExplainedExtendableCard from './AIProcessExplainedExtendableCard'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
 
@@ -222,6 +223,7 @@ export const AnswerPanel = ({
             paddingTop: '12px',
             display: 'flex',
             justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
           <div style={{ width: '150px' }}>
@@ -306,6 +308,7 @@ export const AnswerPanel = ({
             />
           </div>
         </div>
+        <AIProcessExplainedExtendableCard query={query} />
       </Box>
       <Modal
         size='medium'
