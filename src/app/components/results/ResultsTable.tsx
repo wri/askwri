@@ -239,7 +239,11 @@ const ResultsTable = ({
         header={aiResearchModalHeader}
         content={
           <AIResearchModalContent
-            consultedDocs={selectedRows.slice(0, MAXIMUM_CONSULTED_DOCS)}
+            consultedDocs={
+              selectedRows.length
+                ? selectedRows.slice(0, MAXIMUM_CONSULTED_DOCS)
+                : data.slice(0, MAXIMUM_CONSULTED_DOCS)
+            }
           />
         }
         size='xlarge'
