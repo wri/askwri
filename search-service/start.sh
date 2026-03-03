@@ -2,10 +2,6 @@
 set -e
 
 if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
-    # Ensure the directory exists before sync
-    mkdir -p /tmp/askWRI_docs
-    echo "Listing S3 contents before sync:"
-    aws s3 ls "s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}"
     echo "Syncing documents from S3..."
     RETRIES=3
     DELAY=5
@@ -14,9 +10,7 @@ if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
         if aws s3 sync "s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}" /tmp/askWRI_docs \
             --no-progress \
             --only-show-errors; then
-            echo "S3 sync complete."
-            echo "Contents of /tmp/askWRI_docs after sync:"
-            ls -lh /tmp/askWRI_docs || echo "(Could not list /tmp/askWRI_docs)"
+            echo "S3 sync complete"
             SUCCESS=1
             break
         fi
