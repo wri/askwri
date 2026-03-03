@@ -426,7 +426,7 @@ def load_documents_and_build_indexes():
             service_state["documents_metadata"][doc_id] = {
                 "title": metadata_raw.get('Article Title', f'Document {doc_id}'),
                 "authors": metadata_raw.get('All authors', ''),
-                "year": metadata_raw.get('YEAR accepted', ''),
+                "year": metadata_raw.get('YEAR published', ''),
                 "url": metadata_raw.get('Source URL', metadata_raw.get('URL', metadata_raw.get('Attribution URL', ''))),
                 "summary": row.get('summary', ''),
                 "subtag": metadata_raw.get('Sub-tag', ''),

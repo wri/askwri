@@ -284,7 +284,7 @@ function normalizeOneUnfiltered(raw: any): DocMeta | null {
     md.Allauthors ?? md.authors ?? md.author ?? md.creator,
   )
   const year = toYear(
-    md.YEARaccepted ?? md.year ?? md.pub_year ?? md.Dateaccepted ?? md.date,
+    md.YEARpublished ?? md.year ?? md.pub_year ?? md.Datepublished ?? md.date,
   )
   const source = md.source ?? md.collection ?? md.domain ?? toHost(url)
   const summary = md.Summary ?? md.summary ?? null
@@ -384,10 +384,10 @@ function normalizeOne(raw: any): DocMeta | null {
     md['All authors'] ?? md.authors ?? md.author ?? md.creator,
   )
   const year = toYear(
-    md['YEAR accepted'] ??
+    md['YEAR published'] ??
       md.year ??
       md.pub_year ??
-      md['Date accepted'] ??
+      md['Date published'] ??
       md.date,
   )
   const source = md.source ?? md.collection ?? md.domain ?? toHost(url)
