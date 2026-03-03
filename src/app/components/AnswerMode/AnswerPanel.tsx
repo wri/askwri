@@ -223,6 +223,7 @@ export const AnswerPanel = ({
             paddingTop: '12px',
             display: 'flex',
             justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
           <div style={{ width: '150px' }}>
