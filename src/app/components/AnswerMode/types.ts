@@ -1,3 +1,4 @@
+import { DocMeta } from '@/lib/llamacloud'
 import { RowData } from '../results/types'
 
 export interface AnswerResult {
@@ -30,24 +31,10 @@ export interface AISearchFormProps {
   onExampleClick: (example: string) => void
 }
 
-export interface KP {
-  snippet: string
+export type CitationTarget = {
+  score: number
   page?: number
-  passage_id?: string
-  kp_relevance: number
-  citation_targets?: Array<{ score: number; page?: number; passage_id: string }>
-}
-
-export interface DocMeta {
-  doc_id: string
-  ref: string
-  title?: string
-  authors?: string[]
-  year?: number
-  kps?: KP[]
-  score?: number
-  url?: string
-  _url?: string
+  passage_id: string
 }
 
 export interface WhyMeta {
