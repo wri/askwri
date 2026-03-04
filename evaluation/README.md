@@ -1,6 +1,6 @@
 ## AskWRI Evaluation System
 
-**Last Updated:** 2026-02-27
+**Last Updated:** 2026-03-03
 
 ## Quick Reference
 
@@ -58,27 +58,27 @@ npm run eval:download              # pull reviewed data from S3
 | Service | Required for | How to start |
 |---------|-------------|-------------|
 | Search service (`:8000`) | All evals, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8000` |
-| Next.js (`:3000`) | Answer synthesis capture | `npm run dev` |
+| Next.js (`:3000`) | Answer synthesis capture | `npm run dev` (if running on another port, set `NEXTJS_SERVER_URL=http://localhost:<port>`) |
 | RAGAS Python deps | Legacy `eval:answer-synthesis` only | `pip install -r evaluation/requirements-eval.txt` |
 
 ## Cite Mode Evaluation
 
-Tests retrieval recall against a hand-curated golden dataset of 11 queries and 64 expected documents.
+Tests retrieval recall against a hand-curated golden dataset of 11 queries and 74 expected documents.
 
 ### Test Queries (11 total)
 
 Queries test different retrieval patterns:
 - **Topic area** (Q1): Land value capture (4 docs)
 - **Geography** (Q2): Bangalore (6 docs)
-- **Thematic intersection** (Q3): Children and pollution (3 docs)
-- **Thematic + geographic** (Q4): Climate adaptation in Brazil (3 docs)
+- **Thematic intersection** (Q3): Children and pollution (5 docs)
+- **Thematic + geographic** (Q4): Climate adaptation in Brazil (4 docs)
 - **Fuzzy topic** (Q5): Micromobility solutions (7 docs)
-- **Intervention impact** (Q6): School bus health outcomes (4 docs)
+- **Intervention impact** (Q6): School bus health outcomes (6 docs)
 - **Solution-focused** (Q7): Jakarta housing crisis (4 docs)
-- **Niche technology** (Q8): Hydrogen (4 docs)
+- **Niche technology** (Q8): Hydrogen (3 docs)
 - **Program/corpus** (Q9): World Resources Report papers (16 docs)
-- **Temporal + amorphous** (Q10): Urban finance since 2020 (4 docs)
-- **Amorphous + exclusion** (Q11): Urban finance excluding ebuses (9 docs)
+- **Temporal + amorphous** (Q10): Urban finance since 2020 (6 docs)
+- **Amorphous + exclusion** (Q11): Urban finance excluding ebuses (13 docs)
 
 ### Pass Criteria
 
@@ -89,8 +89,8 @@ A query passes if **ALL** conditions are met:
 
 ### Golden Dataset
 - Located: `evaluation/golden-dataset.json`
-- 11 queries, 64 total expected documents
-- Hand-curated by domain experts
+- 11 queries, 74 total expected documents
+- Hand-curated by domain experts, expanded with high-scoring retrievals (score >= 0.8)
 
 ---
 
@@ -122,7 +122,7 @@ Evaluates whether the LLM generates good answers given retrieved passages. Uses 
 
 **Scoring dimensions:** faithfulness, completeness, conciseness, coherence, citation_accuracy
 
-**Evaluator model:** Configurable via `SYNTHESIS_EVAL_MODEL` env var (default: `gpt-4o`). Thinking models (gpt-5*, o1*) are auto-detected for correct API params.
+**Evaluator model:** Configurable via `SYNTHESIS_EVAL_MODEL` env var (default: `gpt-5.2`). Thinking models (gpt-5*, o1*) are auto-detected for correct API params.
 
 **Design doc:** `docs/plans/2026-02-24-answer-synthesis-eval-design.md`
 
