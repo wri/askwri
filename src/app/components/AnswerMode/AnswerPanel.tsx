@@ -31,6 +31,7 @@ export const AnswerPanel = ({
   supportingDocs,
   setAnswer,
   setQuery,
+  setSupportingCitationsPage,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
 
@@ -159,64 +160,87 @@ export const AnswerPanel = ({
           }}
         >
           {answer.paragraphs
-            ? answer.paragraphs.map((paragraph, pIdx) => {
-                let sentenceOffset = 0
-                for (let p = 0; p < pIdx; p++) {
-                  sentenceOffset += answer.paragraphs![p].length
-                }
-
-                return (
-                  <Box key={pIdx} marginBottom='3'>
-                    {paragraph.map((sent, sIdx) => {
-                      const globalSentIdx = sentenceOffset + sIdx
-                      return (
-                        <Text as='span' key={sIdx}>
-                          {sent}{' '}
-                          {answer.inline?.[globalSentIdx]?.map(
-                            (c: any, j: number) => (
-                              <Button
-                                key={j}
-                                size='small'
-                                variant='secondary'
-                                style={{
-                                  fontSize: '9px',
-                                  minWidth: 0,
-                                  height: 'auto',
-                                  lineHeight: 1,
-                                }}
-                                title={`Citation ${globalSentIdx + 1}.${j + 1}`}
-                              >
-                                {globalSentIdx + 1}.{j + 1}
-                              </Button>
-                            ),
-                          )}{' '}
-                        </Text>
+            ? (() => {
+                let globalCitationIdx = 0
+                return answer.paragraphs.map((paragraph, pIdx) => {
+                  let sentenceOffset = 0
+                  for (let p = 0; p < pIdx; p++) {
+                    sentenceOffset += answer.paragraphs![p].length
+                  }
+                  return (
+                    <Box key={pIdx} marginBottom='3'>
+                      {paragraph.map((sent, sIdx) => {
+                        const globalSentIdx = sentenceOffset + sIdx
+                        return (
+                          <Text as='span' key={sIdx}>
+                            {sent}{' '}
+                            {answer.inline?.[globalSentIdx]?.map(
+                              (c: any, j: number) => {
+                                const citationDisplay = `${globalSentIdx + 1}.${j + 1}`
+                                const citationPage = globalCitationIdx + 1
+                                const btn = (
+                                  <Button
+                                    key={j}
+                                    size='small'
+                                    variant='secondary'
+                                    style={{
+                                      fontSize: '9px',
+                                      minWidth: 0,
+                                      height: 'auto',
+                                      lineHeight: 1,
+                                    }}
+                                    title={`Citation ${globalSentIdx + 1}.${j + 1}`}
+                                    onClick={() =>
+                                      setSupportingCitationsPage?.(citationPage)
+                                    }
+                                  >
+                                    {citationDisplay}
+                                  </Button>
+                                )
+                                globalCitationIdx++
+                                return btn
+                              },
+                            )}{' '}
+                          </Text>
+                        )
+                      })}
+                    </Box>
+                  )
+                })
+              })()
+            : (() => {
+                let globalCitationIdx = 0
+                return answer.sentences.map((sent, i) => (
+                  <Text as='p' key={i} marginBottom='1' lineHeight='normal'>
+                    {sent}{' '}
+                    {answer.inline?.[i]?.map((c: any, j: number) => {
+                      const citationDisplay = `${i + 1}.${j + 1}`
+                      const citationPage = globalCitationIdx + 1
+                      const btn = (
+                        <Button
+                          key={j}
+                          size='small'
+                          variant='secondary'
+                          style={{
+                            fontSize: '9px',
+                            minWidth: 0,
+                            height: 'auto',
+                            lineHeight: 1,
+                          }}
+                          title={`Citation ${i + 1}.${j + 1}`}
+                          onClick={() =>
+                            setSupportingCitationsPage?.(citationPage)
+                          }
+                        >
+                          {citationDisplay}
+                        </Button>
                       )
+                      globalCitationIdx++
+                      return btn
                     })}
-                  </Box>
-                )
-              })
-            : answer.sentences.map((sent, i) => (
-                <Text as='p' key={i} marginBottom='1' lineHeight='normal'>
-                  {sent}{' '}
-                  {answer.inline?.[i]?.map((c: any, j: number) => (
-                    <Button
-                      key={j}
-                      size='small'
-                      variant='secondary'
-                      style={{
-                        fontSize: '9px',
-                        minWidth: 0,
-                        height: 'auto',
-                        lineHeight: 1,
-                      }}
-                      title={`Citation ${i + 1}.${j + 1}`}
-                    >
-                      {i + 1}.{j + 1}
-                    </Button>
-                  ))}
-                </Text>
-              ))}
+                  </Text>
+                ))
+              })()}
         </Box>
         <div
           style={{

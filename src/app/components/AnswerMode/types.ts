@@ -18,6 +18,7 @@ export interface AnswerPanelProps {
   supportingDocs: DocMeta[]
   setAnswer: (answer: AnswerResult | null) => void
   setQuery: (query: string) => void
+  setSupportingCitationsPage?: (page: number) => void
 }
 
 export interface AISearchFormProps {
@@ -45,4 +46,6 @@ export interface WhyMeta {
 export interface SupportingCitationsProps {
   supportingDocs: DocMeta[]
   setFirstDocHowRelevant: (why: string) => void
+  page?: number
+  setPage?: (p: number) => void
 }
