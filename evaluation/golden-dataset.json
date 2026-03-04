@@ -40,10 +40,9 @@
       "task_description": "Retrieve papers that are about a thematic intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.",
       "expected_urls": [
         "https://www.wri.org/research/driving-forward-clean-ride-kids",
-        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
-        "https://www.wri.org/research/improving-school-infrastructure-healthier-communities"
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses"
       ],
-      "expected_count": 3,
+      "expected_count": 2,
       "difficulty": "hard",
       "query_type": "thematic_intersection"
     },
@@ -85,10 +84,9 @@
       "expected_urls": [
         "https://www.wri.org/research/driving-forward-clean-ride-kids",
         "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
-        "https://www.wri.org/research/improving-school-infrastructure-healthier-communities",
         "https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022"
       ],
-      "expected_count": 4,
+      "expected_count": 3,
       "note": "ImpactAr tool covers health impacts of bus fleet electrification, though not school buses specifically",
       "difficulty": "medium",
       "query_type": "intervention_impact"
@@ -115,10 +113,9 @@
       "expected_urls": [
         "https://wri-india.org/research/supporting-energy-transition-addressing-technology-gaps-electrolyzers",
         "https://wri-india.org/research/accelerating-production-and-use-green-hydrogen",
-        "https://wri-india.org/research/pathways-decarbonize-indias-transport-sector-scenario-analysis-using-energy-policy",
-        "https://wri.org.cn/en/report/Pathways-to-Decarbonize-the-Road-Transport-Sector-in-Guangdong"
+        "https://wri-india.org/research/pathways-decarbonize-indias-transport-sector-scenario-analysis-using-energy-policy"
       ],
-      "expected_count": 4,
+      "expected_count": 3,
       "difficulty": "medium",
       "query_type": "niche_technology",
       "note": "First 2 are directly on hydrogen, last 2 include hydrogen in energy analysis. Removed completing-trip (not in catalog)"
@@ -188,9 +185,9 @@
   ],
   "metadata": {
     "total_test_cases": 11,
-    "total_expected_documents": 64,
-    "unique_documents": 44,
-    "note": "8 expected docs removed from original 72 (not in catalog). URL typo fixed: healthier-students-and-communities → healthier-communities",
+    "total_expected_documents": 61,
+    "unique_documents": 42,
+    "note": "11 expected docs removed from original 72 (not in catalog). URL typo fixed: healthier-students-and-communities → healthier-communities. Pruned 3 more URLs missing from current corpus: improving-school-infrastructure-healthier-communities (q3, q6), Pathways-to-Decarbonize-the-Road-Transport-Sector-in-Guangdong (q8)",
     "query_types": [
       "topic_area",
       "geography",
