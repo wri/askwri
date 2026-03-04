@@ -11,7 +11,7 @@ async function main() {
   const goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
 
   // Load documents catalog - parse CSV manually
-  const catalogPath = path.join(__dirname, '../data/documents.csv');
+  const catalogPath = path.join(__dirname, '../search-service/data/documents.csv');
   const catalogCSV = fs.readFileSync(catalogPath, 'utf-8');
 
   // Extract URLs from catalog using simple regex

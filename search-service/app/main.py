@@ -421,7 +421,7 @@ def load_documents_and_build_indexes():
             file_path = str(row.get('file_path', ''))
             doc_id = file_path.replace('.pdf', '') if file_path else f"doc_{idx}"
 
-            local_file_path = f"{settings.documents_local_dir}/{file_path}"
+            local_file_path = f"{settings.documents_local_dir}/documents/{file_path}"
 
             service_state["documents_metadata"][doc_id] = {
                 "title": metadata_raw.get('Article Title', f'Document {doc_id}'),
@@ -429,7 +429,7 @@ def load_documents_and_build_indexes():
                 "year": metadata_raw.get('YEAR published', ''),
                 "url": metadata_raw.get('Source URL', metadata_raw.get('URL', metadata_raw.get('Attribution URL', ''))),
                 "summary": row.get('summary', ''),
-                "subtag": metadata_raw.get('Sub-tag', ''),
+                "subtag": metadata_raw.get('Sub-tag', '') if isinstance(metadata_raw.get('Sub-tag'), str) else '',
                 "program_series": metadata_raw.get('program_series', ''),  # Add program_series for filtering
                 "file_path": file_path,
                 "local_file": local_file_path,
