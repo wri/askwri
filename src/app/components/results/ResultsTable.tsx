@@ -215,6 +215,7 @@ const ResultsTable = ({
             position: 'relative',
             top: -45,
             padding: 20,
+            width: '150px',
             color: getThemedColor('neutral', 700),
           }}
         >

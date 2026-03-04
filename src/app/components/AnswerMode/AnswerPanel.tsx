@@ -274,62 +274,64 @@ export const AnswerPanel = ({
             >
               Copy
             </Button>
-            <Button
-              variant='borderless'
-              leftIcon={
-                feedbackSubmitted === FeedbackSubmitted.Loading &&
-                feedbackState === FeedbackType.Positive ? (
-                  <Spinner />
-                ) : (
-                  <Tooltip content='Mark as good result'>
+            <Tooltip content='Mark as good result'>
+              <Button
+                as='div'
+                variant='borderless'
+                leftIcon={
+                  feedbackSubmitted === FeedbackSubmitted.Loading &&
+                  feedbackState === FeedbackType.Positive ? (
+                    <Spinner />
+                  ) : (
                     <FaThumbsUp />
-                  </Tooltip>
-                )
-              }
-              aria-label='Mark as good result'
-              onClick={() => handleFeedback(FeedbackType.Positive)}
-              style={
-                feedbackState === FeedbackType.Positive
-                  ? {
-                      background: getThemedColor('success', 300),
-                      color: getThemedColor('success', 900),
-                      opacity: 0.8,
-                    }
-                  : {}
-              }
-              disabled={
-                feedbackState === FeedbackType.Positive &&
-                feedbackSubmitted === FeedbackSubmitted.Loading
-              }
-            />
-            <Button
-              variant='borderless'
-              leftIcon={
-                feedbackSubmitted === FeedbackSubmitted.Loading &&
-                feedbackState === FeedbackType.Negative ? (
-                  <Spinner />
-                ) : (
-                  <Tooltip content='Mark as poor result'>
+                  )
+                }
+                aria-label='Mark as good result'
+                onClick={() => handleFeedback(FeedbackType.Positive)}
+                style={
+                  feedbackState === FeedbackType.Positive
+                    ? {
+                        background: getThemedColor('success', 300),
+                        color: getThemedColor('success', 900),
+                        opacity: 0.8,
+                      }
+                    : {}
+                }
+                disabled={
+                  feedbackState === FeedbackType.Positive &&
+                  feedbackSubmitted === FeedbackSubmitted.Loading
+                }
+              />
+            </Tooltip>
+            <Tooltip content='Mark as poor result'>
+              <Button
+                as='div'
+                variant='borderless'
+                leftIcon={
+                  feedbackSubmitted === FeedbackSubmitted.Loading &&
+                  feedbackState === FeedbackType.Negative ? (
+                    <Spinner />
+                  ) : (
                     <FaThumbsDown />
-                  </Tooltip>
-                )
-              }
-              aria-label='Mark as poor result'
-              onClick={() => handleFeedback(FeedbackType.Negative)}
-              style={
-                feedbackState === FeedbackType.Negative
-                  ? {
-                      background: getThemedColor('error', 300),
-                      color: getThemedColor('error', 900),
-                      opacity: 0.8,
-                    }
-                  : {}
-              }
-              disabled={
-                feedbackState === FeedbackType.Negative &&
-                feedbackSubmitted === FeedbackSubmitted.Loading
-              }
-            />
+                  )
+                }
+                aria-label='Mark as poor result'
+                onClick={() => handleFeedback(FeedbackType.Negative)}
+                style={
+                  feedbackState === FeedbackType.Negative
+                    ? {
+                        background: getThemedColor('error', 300),
+                        color: getThemedColor('error', 900),
+                        opacity: 0.8,
+                      }
+                    : {}
+                }
+                disabled={
+                  feedbackState === FeedbackType.Negative &&
+                  feedbackSubmitted === FeedbackSubmitted.Loading
+                }
+              />{' '}
+            </Tooltip>
           </div>
         </div>
         <AIProcessExplainedExtendableCard query={query} />
