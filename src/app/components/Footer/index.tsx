@@ -9,6 +9,8 @@ export const Footer = () => (
     <Link href='https://www.wri.org/about/legal/general-terms-use'>
       Terms of service
     </Link>
-    <Link href='https://www.wri.org/methodology'>Methodology</Link>
+    <Link href='https://gfw.atlassian.net/wiki/pages/resumedraft.action?draftId=2762145800&draftShareId=a970c169-8d79-43c9-a949-bf62acd52855'>
+      Methodology
+    </Link>
   </WriFooter>
 )

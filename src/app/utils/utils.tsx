@@ -179,7 +179,7 @@ export function urlFrom(doc: DocMeta, row?: CatalogRow) {
   return fn ? `/api/pdf/${basename(fn)}` : doc._url || null
 }
 export const chicagoFull = (doc: DocMeta, row?: CatalogRow) => {
-  const authors = authorsFrom(doc, row).join(', ') || '(author unknown)'
+  const authors = authorsFrom(doc, row).join('; ') || '(author unknown)'
   const title = `"${titleFrom(doc, row)}"`
   const cityPub = 'Washington, DC: WRI'
   const year = yearFrom(doc, row) ?? ''

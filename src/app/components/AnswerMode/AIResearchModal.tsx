@@ -19,6 +19,8 @@ import { SupportingCitations } from './SupportingCitations'
 import { AnswerResult } from './types'
 import { RowData } from '../results/types'
 
+const MAX_ANSWER_MODE_RESULTS = 20
+
 export const AIResearchModalContent = ({
   consultedDocs,
 }: {
@@ -71,7 +73,7 @@ export const AIResearchModalContent = ({
         body: JSON.stringify({
           query: query.trim(),
           mode: 'answer',
-          max_results: 100,
+          max_results: MAX_ANSWER_MODE_RESULTS,
           similarity_threshold: 0.05,
           include_metadata: true,
           rerank: true,

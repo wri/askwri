@@ -16,7 +16,16 @@ export const DocumentPreviewModalContent = ({
     <div>
       <Heading size='2xl'>{rowData.publication_name}</Heading>
     </div>
+
     <div>
+      <Text
+        textStyle='md'
+        style={{
+          marginBottom: '8px',
+        }}
+      >
+        {rowData.summary}
+      </Text>
       <Text
         style={{
           color: getThemedColor('neutral', 700),
@@ -119,7 +128,7 @@ export const DocumentPreviewModalContent = ({
           onExportBib?.([rowData.id.toString()])
         }}
       >
-        Export citations (.docx)
+        Export citations (.csv)
       </Button>
     </div>
   </div>
