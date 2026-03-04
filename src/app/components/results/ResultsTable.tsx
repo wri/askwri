@@ -218,7 +218,7 @@ const ResultsTable = ({
             color: getThemedColor('neutral', 700),
           }}
         >
-          20 per page
+          {pageSize} per page
         </Text>
       </div>
       <ExportActionBar
