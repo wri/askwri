@@ -8,7 +8,7 @@ import * as path from 'path';
 import { parse } from 'csv-parse/sync';
 
 const GOLDEN_DATASET_PATH = path.join(__dirname, 'golden-dataset.json');
-const DOCUMENTS_CSV_PATH = path.join(__dirname, '..', 'data', 'documents.csv');
+const DOCUMENTS_CSV_PATH = path.join(__dirname, '..', 'search-service', 'data', 'documents.csv');
 
 interface GoldenTestCase {
   id: string;
