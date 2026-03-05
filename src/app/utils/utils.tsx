@@ -161,11 +161,7 @@ export function authorsFrom(doc: DocMeta, row?: CatalogRow) {
   return (doc.authors || []).filter(Boolean)
 }
 export function yearFrom(doc: DocMeta, row?: CatalogRow) {
-  return (
-    row?.yearAccepted ??
-    toYear(row?.dateAccepted ?? '') ??
-    (typeof doc.year === 'number' ? doc.year : undefined)
-  )
+  return doc?.year ?? row?.yearAccepted ?? toYear(row?.dateAccepted ?? '')
 }
 export function typeFrom(row?: CatalogRow) {
   return row?.articleType || 'Report'
@@ -184,43 +180,4 @@ export const chicagoFull = (doc: DocMeta, row?: CatalogRow) => {
   const cityPub = 'Washington, DC: WRI'
   const year = yearFrom(doc, row) ?? ''
   return `${authors}. ${title}. ${cityPub}, ${year}.`
-}
-
-export function formatChicagoCitation(doc: DocMeta): string {
-  const authorsArray = doc.authors ?? []
-  const year = doc.year ?? ''
-  const title = doc.title ?? ''
-
-  function formatAuthors(authors: string[]): string {
-    if (authors.length === 0) return ''
-
-    const formatted = authors.map((fullName, index) => {
-      const nameParts = fullName.trim().split(' ')
-      const lastName = nameParts.pop()
-      const firstNames = nameParts.join(' ')
-
-      if (!lastName) return fullName
-
-      // First author inverted
-      if (index === 0) {
-        return `${lastName}, ${firstNames}`
-      }
-
-      return `${firstNames} ${lastName}`
-    })
-
-    if (formatted.length === 1) return formatted[0]
-    if (formatted.length === 2) return formatted.join(' and ')
-    return `${formatted.slice(0, -1).join(', ')}, and ${formatted.at(-1)}`
-  }
-
-  const authors = formatAuthors(authorsArray)
-
-  let citation = ''
-
-  if (authors) citation += `${authors}. `
-  if (year) citation += `${year}. `
-  if (title) citation += `${title}. `
-
-  return citation.trim()
 }

@@ -10,7 +10,7 @@ import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
 import { getRelevanceLevel, getRelevanceColor } from '@/app/utils/relevance'
 import { AiIcon } from '../icons/AiIcon'
-import { firstSentence, formatChicagoCitation } from '../../utils/utils'
+import { firstSentence, chicagoFull } from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
 
 export const SupportingCitations = ({
@@ -218,7 +218,7 @@ export const SupportingCitations = ({
             onClick={() => {
               const { doc } = paginatedItems[0] || {}
               if (!doc) return
-              navigator.clipboard.writeText(formatChicagoCitation(doc))
+              navigator.clipboard.writeText(chicagoFull(doc))
             }}
           >
             Copy citation

@@ -13,7 +13,7 @@ import {
 } from '@worldresources/wri-design-systems'
 import { IoIosCopy } from 'react-icons/io'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
-import { formatChicagoCitation } from '../../utils/utils'
+import { chicagoFull } from '../../utils/utils'
 import {
   SelectableResultRowProps,
   FeedbackType,
@@ -180,7 +180,7 @@ export const SelectableResultRow = ({
               aria-label='Copy citation to clipboard'
               onClick={() => {
                 const { fullDoc } = rowData
-                navigator.clipboard.writeText(formatChicagoCitation(fullDoc))
+                navigator.clipboard.writeText(chicagoFull(fullDoc, rowData))
               }}
             />
           </Tooltip>
