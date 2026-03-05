@@ -2,7 +2,6 @@ import { DocMeta } from '@/lib/llamacloud'
 
 export type RowData = {
   id: string | number
-  publication_name: string
   publication_title: string
   author: string
   summary: string
