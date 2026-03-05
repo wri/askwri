@@ -86,7 +86,11 @@ const CitePanel = ({
           publication_title: titleFrom(doc, row),
           author: `${chicagoFull(doc, row)} [${typeFrom(row)}]`,
           summary,
-          short_summary: row?.raw?.shortSummary || summary,
+          short_summary:
+            row?.shortSummary ||
+            row?.raw?.short_summary ||
+            row?.raw?.['short summary'] ||
+            summary,
           relevance: relevanceLabel,
           how_relevant: whyMeta?.why || firstSentence(best?.snippet ?? ''),
           download_url: url,
