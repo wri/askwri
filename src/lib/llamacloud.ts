@@ -272,7 +272,7 @@ function normalizeOneUnfiltered(raw: any): DocMeta | null {
 
   const title = String(
     raw.title ??
-      md.ArticleTitle ??
+      md.PublicationTitle ??
       md.title ??
       md.file_name ??
       md.file_path ??
@@ -372,7 +372,7 @@ function normalizeOne(raw: any): DocMeta | null {
 
   const title = String(
     raw.title ??
-      md['Article Title'] ??
+      md['Publication Title'] ??
       md.title ??
       md.file_name ??
       md.file_path ??

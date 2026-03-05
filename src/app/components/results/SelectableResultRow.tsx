@@ -55,11 +55,11 @@ export const SelectableResultRow = ({
           feedbackType === FeedbackType.Positive ? 'positive' : 'negative',
         howRelevant: rowData.how_relevant,
         mode: 'cite',
-        publicationName: rowData.publication_name,
+        publicationName: rowData.publication_title,
         query,
         relevanceScore: rowData.relevance,
-        rowNumber: rowNumber,
-        summary: rowData.summary,
+        rowNumber,
+        summary: rowData.short_summary,
       }
       const res = await fetch('/api/cite-mode-feedback', {
         method: 'POST',
@@ -122,7 +122,7 @@ export const SelectableResultRow = ({
             textDecoration: onTitleClick && isHovered ? 'underline' : 'none',
           }}
         >
-          {rowData.publication_name}
+          {rowData.publication_title}
         </Heading>
         <div
           style={{
@@ -136,14 +136,15 @@ export const SelectableResultRow = ({
           {rowData.author}
         </div>
       </TableCell>
-      <TableCell width='20%'>
+      <TableCell width='25%'>
         {docSummaryLoading?.[rowData.id.toString()] ? (
           <span>Loading...</span>
         ) : (
           <div>
-            {rowData.summary && rowData.summary.length > SUMMARY_MAX_LENGTH
-              ? `${rowData.summary.slice(0, SUMMARY_MAX_LENGTH)}...`
-              : rowData.summary}
+            {rowData.short_summary &&
+            rowData.short_summary.length > SUMMARY_MAX_LENGTH
+              ? `${rowData.short_summary.slice(0, SUMMARY_MAX_LENGTH)}...`
+              : rowData.short_summary}
           </div>
         )}
       </TableCell>
