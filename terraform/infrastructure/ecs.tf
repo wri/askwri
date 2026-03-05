@@ -438,13 +438,15 @@ resource "aws_ecs_task_definition" "search_service" {
         }
       }
 
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:${var.search_service_container_port}${var.search_service_health_check_path} || exit 1"]
-        interval    = 30
-        timeout     = 10
-        retries     = 5
-        startPeriod = 120
-      }
+      # healthCheck is disabled for search service to prevent ECS from restarting
+      # the container if the search service is not healthy.
+      # healthCheck = {
+      #   command     = ["CMD-SHELL", "curl -f http://localhost:${var.search_service_container_port}${var.search_service_health_check_path} || exit 1"]
+      #   interval    = 30
+      #   timeout     = 10
+      #   retries     = 5
+      #   startPeriod = 120
+      # }
 
       essential = true
     }
