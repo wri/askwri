@@ -12,7 +12,7 @@ export type RowData = {
   confidence?: number
   row_number?: number
   year?: number
-  fullDoc: DocMeta
+  fullDoc?: DocMeta
 }
 
 export type SelectableResultRowProps = {
