@@ -54,10 +54,7 @@ export type ResultsPageProps = {
   } | null
   transcript: string[]
   alignment: {
-    coverage?: string[]
-    caveats?: string[]
-    risks?: string[]
-    suggestions?: string[]
+    insights?: string[]
     confidence?: number
     _debugKeys?: string[]
   } | null

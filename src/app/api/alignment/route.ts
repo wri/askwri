@@ -66,10 +66,7 @@ type Doc = {
   meta?: any
 }
 type Assessment = {
-  coverage: string[]
-  caveats: string[]
-  risks: string[]
-  suggestions: string[]
+  insights: string[]
   confidence: number
 }
 
@@ -232,24 +229,16 @@ function stripMeta(arr: string[], limit: number): string[] {
 }
 
 function sanitizeAssessment(input: Assessment): Assessment {
-  const coverage = stripMeta(input.coverage, 4)
-  const caveats = stripMeta(input.caveats, 4)
-  const risks = stripMeta(input.risks, 4)
-  const suggestions = stripMeta(input.suggestions, 4)
+  const insights = stripMeta(input.insights || [], 5)
   const out: Assessment = {
-    coverage: coverage.length ? coverage : ['Coverage unclear.'],
-    caveats: caveats.length
-      ? caveats
-      : ['Insufficient evidence for a robust assessment.'],
-    risks: risks.length
-      ? risks
-      : ['Findings may be incomplete due to sparse evidence.'],
-    suggestions: suggestions.length
-      ? suggestions
-      : ['Provide 1–3 relevant sources or a draft answer.'],
+    insights: insights.length
+      ? insights
+      : [
+          'Unable to assess alignment. Try providing more sources or refining your query.',
+        ],
     confidence:
-      typeof (input as any).confidence === 'number'
-        ? clamp((input as any).confidence, 0, 1)
+      typeof input.confidence === 'number'
+        ? clamp(input.confidence, 0, 1)
         : 0.5,
   }
   return out
@@ -376,12 +365,14 @@ const ALIGNMENT_SCHEMA = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['coverage', 'caveats', 'risks', 'suggestions', 'confidence'],
+    required: ['insights', 'confidence'],
     properties: {
-      coverage: { type: 'array', items: { type: 'string' }, maxItems: 4 },
-      caveats: { type: 'array', items: { type: 'string' }, maxItems: 4 },
-      risks: { type: 'array', items: { type: 'string' }, maxItems: 4 },
-      suggestions: { type: 'array', items: { type: 'string' }, maxItems: 4 },
+      insights: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 2,
+        maxItems: 5,
+      },
       confidence: { type: 'number', minimum: 0, maximum: 1 },
     },
   },
