@@ -89,7 +89,6 @@ const ResultsTable = ({
     content?: React.ReactNode
   }>({})
   const [aiModalOpen, setAiModalOpen] = useState(false)
-
   const startRange = (currentPage - 1) * pageSize
   const endRange = startRange + pageSize
 
@@ -211,6 +210,17 @@ const ResultsTable = ({
             showItemCount: false,
           }}
         />
+        <Text
+          style={{
+            position: 'relative',
+            top: -45,
+            padding: 20,
+            width: '150px',
+            color: getThemedColor('neutral', 700),
+          }}
+        >
+          {pageSize} per page
+        </Text>
       </div>
       <ExportActionBar
         selectedCount={selectedRows.length}
@@ -226,7 +236,7 @@ const ResultsTable = ({
       <Modal
         header={modalData?.header}
         content={modalData?.content}
-        size='large'
+        size='medium'
         draggable
         blocking={false}
         open={!!modalData?.content}

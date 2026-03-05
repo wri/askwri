@@ -245,7 +245,7 @@ export const SupportingCitations = ({
           {paginatedItems.map(({ doc, kp }, idx) => {
             const docTitle =
               doc.title || `Document ${doc.doc_id?.slice(0, 8) || idx + 1}`
-            const authors = doc.authors?.join(', ') || 'Unknown author'
+            const authors = doc.authors?.join('; ') || 'Unknown author'
             const year = doc.year || ''
             const passageId = `${doc.doc_id}:${kp.passage_id}`
             const whyData = passageWhy[passageId]
