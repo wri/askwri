@@ -1,6 +1,6 @@
-/* eslint-disable no-restricted-syntax */
-
 'use client'
+
+/* eslint-disable no-restricted-syntax */
 
 import { useState, useEffect, useMemo } from 'react'
 import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
@@ -10,14 +10,8 @@ import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
 import { getRelevanceLevel, getRelevanceColor } from '@/app/utils/relevance'
 import { AiIcon } from '../icons/AiIcon'
+import { firstSentence, chicagoFull } from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
-
-// Helper to get first sentence from text
-const firstSentence = (text?: string) => {
-  if (!text) return ''
-  const match = text.match(/[^.!?]*[.!?]/)
-  return match ? match[0].trim() : text
-}
 
 export const SupportingCitations = ({
   supportingDocs,
@@ -222,9 +216,9 @@ export const SupportingCitations = ({
             size='small'
             leftIcon={<IoIosCopy />}
             onClick={() => {
-              if (paginatedItems[0]?.kp?.snippet) {
-                navigator.clipboard.writeText(paginatedItems[0].kp.snippet)
-              }
+              const { doc } = paginatedItems[0] || {}
+              if (!doc) return
+              navigator.clipboard.writeText(chicagoFull(doc))
             }}
           >
             Copy citation

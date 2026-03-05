@@ -161,11 +161,7 @@ export function authorsFrom(doc: DocMeta, row?: CatalogRow) {
   return (doc.authors || []).filter(Boolean)
 }
 export function yearFrom(doc: DocMeta, row?: CatalogRow) {
-  return (
-    row?.yearAccepted ??
-    toYear(row?.dateAccepted ?? '') ??
-    (typeof doc.year === 'number' ? doc.year : undefined)
-  )
+  return doc?.year ?? row?.yearAccepted ?? toYear(row?.dateAccepted ?? '')
 }
 export function typeFrom(row?: CatalogRow) {
   return row?.articleType || 'Report'

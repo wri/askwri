@@ -92,6 +92,7 @@ const CitePanel = ({
           download_url: url,
           relevance_score: docRel,
           row_number: idx + 1,
+          fullDoc: doc,
         }
       }),
     [docs, index, docSummary, docWhy],

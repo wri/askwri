@@ -11,8 +11,9 @@ import {
   getThemedColor,
   Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
+import { IoIosCopy } from 'react-icons/io'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
-import { PiDownloadSimpleBold } from 'react-icons/pi'
+import { chicagoFull } from '../../utils/utils'
 import {
   SelectableResultRowProps,
   FeedbackType,
@@ -87,12 +88,6 @@ export const SelectableResultRow = ({
 
   const handleOnRowSelected = ({ checked }: { checked: boolean | string }) => {
     onCheckedChange(rowData, checked)
-  }
-
-  const handleDownload = () => {
-    if (!rowData.download_url) return
-
-    window.open(rowData.download_url, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -181,10 +176,12 @@ export const SelectableResultRow = ({
             <Button
               as='div'
               variant='borderless'
-              leftIcon={<PiDownloadSimpleBold />}
-              aria-label='Download publication'
-              onClick={handleDownload}
-              disabled={!rowData.download_url}
+              leftIcon={<IoIosCopy />}
+              aria-label='Copy citation to clipboard'
+              onClick={() => {
+                const { fullDoc } = rowData
+                navigator.clipboard.writeText(chicagoFull(fullDoc, rowData))
+              }}
             />
           </Tooltip>
           <Tooltip content='Mark as good result'>
