@@ -81,12 +81,12 @@ const CitePanel = ({
 
         // Convert relevance score to High/Medium/Low
         const relevanceLabel = getRelevanceLevel(docRel)
-
         return {
           id: doc.doc_id,
-          publication_name: titleFrom(doc, row),
+          publication_title: titleFrom(doc, row),
           author: `${chicagoFull(doc, row)} [${typeFrom(row)}]`,
           summary,
+          short_summary: row?.raw?.shortSummary || summary,
           relevance: relevanceLabel,
           how_relevant: whyMeta?.why || firstSentence(best?.snippet ?? ''),
           download_url: url,
@@ -97,7 +97,6 @@ const CitePanel = ({
       }),
     [docs, index, docSummary, docWhy],
   )
-
   return (
     <ResultsPage
       data={tableData}
