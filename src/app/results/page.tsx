@@ -38,10 +38,7 @@ const AskWriAppContent = () => {
   } | null>(null)
   const [supporting, setSupporting] = useState<DocMeta[]>([])
   const [alignment, setAlignment] = useState<{
-    coverage?: string[]
-    caveats?: string[]
-    risks?: string[]
-    suggestions?: string[]
+    insights?: string[]
     confidence?: number
     _debugKeys?: string[]
   } | null>(null)
