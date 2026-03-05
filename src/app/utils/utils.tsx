@@ -20,6 +20,7 @@ export interface RawCatalogInput {
 
 export interface CatalogRow {
   articleTitle?: string
+  publicationTitle?: string
   allAuthors?: string
   baseName?: string
   noExt?: string
@@ -31,6 +32,7 @@ export interface CatalogRow {
   dateAccepted?: string
   office?: string
   summary?: string
+  shortSummary?: string
   raw?: Record<string, any>
   fileName?: string
   meta?: CatalogMeta
@@ -92,8 +94,9 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
     fileName,
     baseName: baseName.toLowerCase(),
     noExt: noExt.toLowerCase(),
-    titleSlug: slug(meta['article title']) || undefined,
+    titleSlug: slug(meta['publication title']) || undefined,
     articleTitle: meta['article title'] || undefined,
+    publicationTitle: meta['publication title'] || undefined,
     allAuthors: meta['all authors'] || undefined,
     sourceUrl:
       meta['source url'] || meta['other weblink (not doi)'] || undefined,
@@ -103,6 +106,11 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
     dateAccepted: meta['date accepted'] || undefined,
     office: meta['wri office affiliation (primary)'] || undefined,
     summary: r.meta?.summary || undefined, // Preserve the CSV summary field
+    shortSummary:
+      r.meta?.short_summary ||
+      meta['short_summary'] ||
+      meta['short summary'] ||
+      undefined,
     raw: meta,
   }
 }
@@ -146,7 +154,7 @@ export function matchCatalogRow(
   return undefined
 }
 export function titleFrom(doc: DocMeta, row?: CatalogRow) {
-  const t = row?.articleTitle || doc.title || ''
+  const t = row?.publicationTitle || doc.title || row?.articleTitle || ''
   if (t) return t
   const fromName =
     row?.baseName || stripExt(basename(doc._url || '')) || '(untitled)'

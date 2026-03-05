@@ -1,10 +1,11 @@
-import { DocMeta } from "@/lib/llamacloud"
+import { DocMeta } from '@/lib/llamacloud'
 
 export type RowData = {
   id: string | number
-  publication_name: string
+  publication_title: string
   author: string
   summary: string
+  short_summary?: string
   relevance: string
   how_relevant: string
   download_url?: string | null

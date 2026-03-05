@@ -14,7 +14,7 @@ export const DocumentPreviewModalContent = ({
       <Tag label={`${rowData.relevance} Relevance`} variant='success' />
     </div>
     <div>
-      <Heading size='2xl'>{rowData.publication_name}</Heading>
+      <Heading size='2xl'>{rowData.publication_title}</Heading>
     </div>
 
     <div>

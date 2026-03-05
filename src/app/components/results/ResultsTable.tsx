@@ -35,11 +35,11 @@ const AiGeneratedTag = (
 
 const columns = [
   {
-    key: 'publication_name',
+    key: 'publication_title',
     label: 'Publication',
   },
   {
-    key: 'summary',
+    key: 'short_summary',
     label: (
       <div>
         <div>Summary</div>
@@ -79,6 +79,7 @@ const ResultsTable = ({
   onToggleSelect,
   onExportBib,
 }: ResultsTableProps) => {
+
   const totalItems = data.length
   const pageSize = PAGE_SIZE
   const [selectedRows, setSelectedRows] = useState<RowData[]>([])
