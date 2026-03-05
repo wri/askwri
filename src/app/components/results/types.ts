@@ -1,3 +1,5 @@
+import { DocMeta } from "@/lib/llamacloud"
+
 export type RowData = {
   id: string | number
   publication_name: string
@@ -9,6 +11,8 @@ export type RowData = {
   relevance_score?: number
   confidence?: number
   row_number?: number
+  year?: number
+  fullDoc: DocMeta
 }
 
 export type SelectableResultRowProps = {

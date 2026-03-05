@@ -330,7 +330,7 @@ export const AnswerPanel = ({
                   feedbackState === FeedbackType.Negative &&
                   feedbackSubmitted === FeedbackSubmitted.Loading
                 }
-              />{' '}
+              />
             </Tooltip>
           </div>
         </div>
