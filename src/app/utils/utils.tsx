@@ -106,7 +106,11 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
     dateAccepted: meta['date accepted'] || undefined,
     office: meta['wri office affiliation (primary)'] || undefined,
     summary: r.meta?.summary || undefined, // Preserve the CSV summary field
-    shortSummary: r.meta?.short_summary || meta['short_summary'] || undefined,
+    shortSummary:
+      r.meta?.short_summary ||
+      meta['short_summary'] ||
+      meta['short summary'] ||
+      undefined,
     raw: meta,
   }
 }
