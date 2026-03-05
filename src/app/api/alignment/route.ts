@@ -417,21 +417,33 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.OPENAI_API_KEY?.trim()
     if (!apiKey) {
-      const coverage = docs
-        .slice(0, 3)
+      const fallbackInsights: string[] = []
+
+      // Add doc snippets if available
+      const docSnippets = docs
+        .slice(0, 2)
         .map((d: Doc) => {
           const t = titleFrom(d)
-          const s = firstSentence(snipFrom(d), 200)
+          const s = firstSentence(snipFrom(d), 100)
           return s ? `${t}: ${s}` : t
         })
         .filter(Boolean)
+
+      if (docSnippets.length > 0) {
+        fallbackInsights.push(docSnippets.join('; '))
+      } else {
+        fallbackInsights.push('No sources provided.')
+      }
+
+      fallbackInsights.push('No API key set; offline heuristic.')
+      fallbackInsights.push(
+        'Set OPENAI_API_KEY and retry for full alignment analysis.',
+      )
+
       return NextResponse.json({
         ok: true,
         assessment: {
-          coverage: coverage.length ? coverage : ['No sources provided.'],
-          caveats: ['No API key set; offline heuristic.'],
-          risks: ['Answer not validated against documents.'],
-          suggestions: ['Set OPENAI_API_KEY.', 'Retry alignment with sources.'],
+          insights: fallbackInsights,
           confidence: 0.4,
         },
         debug: { fallback: true, reason: 'missing_api_key', model: MODEL },
@@ -601,22 +613,27 @@ export async function POST(req: NextRequest) {
     }
 
     /* ---- Deterministic fallback ---- */
-    const coverage = docs
-      .slice(0, 3)
-      .map((d: Doc) => {
-        const t0 = titleFrom(d)
-        const s0 = firstSentence(snipFrom(d), 200)
-        return s0 ? `${t0}: ${s0}` : t0
-      })
-      .filter(Boolean)
+    const fallbackInsights: string[] = []
+
+    if (docs.length > 0) {
+      const topDocs = docs
+        .slice(0, 2)
+        .map((d) => titleFrom(d))
+        .join(', ')
+      fallbackInsights.push(`Sources found: ${topDocs}`)
+    } else {
+      fallbackInsights.push('No sources available for this query.')
+    }
+
+    fallbackInsights.push(
+      'Unable to complete alignment assessment due to server error.',
+    )
+    fallbackInsights.push(
+      'Try reducing prompt size, checking API quota, or retrying.',
+    )
+
     const fallbackAssessment: Assessment = {
-      coverage: coverage.length ? coverage : ['Coverage unclear.'],
-      caveats: [
-        'Exception in alignment route.',
-        'Empty or unparseable model output.',
-      ],
-      risks: ['Unexpected server error.', 'Schema mismatch.'],
-      suggestions: ['Retry.', 'Reduce prompt size.', 'Check API key & quota.'],
+      insights: fallbackInsights,
       confidence: 0.5,
     }
     return NextResponse.json({
@@ -632,19 +649,20 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error(`[Alignment] Fatal error:`, err)
     const isTimeout = String(err?.message || err).includes('abort')
+    const fallbackInsights = isTimeout
+      ? [
+          'Request timed out while processing alignment assessment.',
+          'Try a shorter query or reduce document count.',
+        ]
+      : [
+          'Exception occurred in alignment route.',
+          'Unexpected server error. Please retry.',
+        ]
+
     return NextResponse.json({
       ok: true,
       assessment: {
-        coverage: ['Coverage unclear.'],
-        caveats: isTimeout
-          ? ['Request timed out.']
-          : ['Exception in alignment route.'],
-        risks: isTimeout
-          ? ['Response took too long.']
-          : ['Unexpected server error.'],
-        suggestions: isTimeout
-          ? ['Try a shorter query.', 'Reduce document count.']
-          : ['Retry.'],
+        insights: fallbackInsights,
         confidence: 0.5,
       },
       debug: {
