@@ -138,8 +138,8 @@ const Landing = () => {
                 color={getThemedColor('neutral', 700)}
                 fontWeight='400'
               >
-                For best results, try to include a topic, geography, and
-                timeframe in your search.
+                For best results, ask a direct question and experiment with
+                different levels of specificity, including geography.
               </Text>
             </Card.Description>
             <section key={suggestions.join('|')} className='suggestions-list'>

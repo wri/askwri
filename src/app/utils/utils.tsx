@@ -100,11 +100,14 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
     allAuthors: meta['all authors'] || undefined,
     sourceUrl:
       meta['source url'] || meta['other weblink (not doi)'] || undefined,
-    articleType: meta['article type'] || undefined,
+    articleType: meta['article type'] || meta.article_type || undefined,
     subTag: meta['sub-tag'] || undefined,
     yearAccepted: toYear(String(meta['year accepted'] ?? meta.year)),
     dateAccepted: meta['date accepted'] || undefined,
-    office: meta['wri office affiliation (primary)'] || undefined,
+    office:
+      meta['wri office affiliation (primary)'] ||
+      meta.wri_primary_office ||
+      undefined,
     summary: r.meta?.summary || undefined, // Preserve the CSV summary field
     shortSummary:
       r.meta?.short_summary ||
