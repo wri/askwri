@@ -10,6 +10,11 @@ aws_region   = "us-east-2"
 use_shared_vpc       = true
 shared_vpc_state_key = "qa/terraform.tfstate"
 
+# Domain / SSL
+domain_name            = "www.askwri-app.org"
+certificate_arn        = "arn:aws:acm:us-east-2:905418285725:certificate/a1db6b2a-e11c-4c14-99d3-5437ba37947d"
+listener_rule_priority = 100
+
 # ECS Configuration - Higher resources for production
 container_port   = 3000
 container_cpu    = 512   # 0.5 vCPU

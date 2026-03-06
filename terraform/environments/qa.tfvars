@@ -10,6 +10,11 @@ aws_region   = "us-east-2"
 vpc_cidr                 = "10.0.0.0/16"
 availability_zones_count = 2
 
+# Domain / SSL
+domain_name            = "qa.askwri-app.org"
+certificate_arn        = "arn:aws:acm:us-east-2:905418285725:certificate/2519ada5-98d9-43f5-9b31-e70801862222"
+listener_rule_priority = 200
+
 # ECS Configuration
 container_port   = 3000
 container_cpu    = 256   # 0.25 vCPU

@@ -60,6 +60,25 @@ variable "shared_vpc_state_key" {
 }
 
 # =============================================================================
+# Domain / SSL Variables
+# =============================================================================
+
+variable "domain_name" {
+  description = "Domain name for the application (e.g., qa.askwri-app.org)"
+  type        = string
+}
+
+variable "certificate_arn" {
+  description = "ARN of the ACM certificate for HTTPS"
+  type        = string
+}
+
+variable "listener_rule_priority" {
+  description = "Priority for the host-based ALB listener rule (must be unique per listener)"
+  type        = number
+}
+
+# =============================================================================
 # ECS Variables
 # =============================================================================
 

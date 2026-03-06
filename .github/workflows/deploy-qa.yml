@@ -223,9 +223,5 @@ jobs:
 
       - name: Get Application URL
         run: |
-          ALB_DNS=$(aws elbv2 describe-load-balancers \
-            --names ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-alb \
-            --query 'LoadBalancers[0].DNSName' \
-            --output text)
           echo "🚀 Application deployed successfully!"
-          echo "📍 URL: http://${ALB_DNS}"
+          echo "📍 URL: https://qa.askwri-app.org"
