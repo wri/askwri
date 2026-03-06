@@ -47,6 +47,11 @@ resource "aws_lb_target_group" "app" {
 # ALB Listeners
 # =============================================================================
 
+moved {
+  from = aws_lb_listener.http
+  to   = aws_lb_listener.https
+}
+
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = 443
