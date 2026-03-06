@@ -107,7 +107,7 @@ export function exportCitationsCsv({
       .join(',')
   })
 
-  const csvContent = [headers.join(','), ...rows].join('\r\n')
+  const csvContent = [headers.map(csvEscape).join(','), ...rows].join('\r\n')
   const blob = new Blob([csvContent], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
