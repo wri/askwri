@@ -305,7 +305,7 @@ resource "aws_ecs_service" "app" {
     ignore_changes = [desired_count]
   }
 
-  depends_on = [aws_lb_listener.https]
+  depends_on = [aws_lb_listener_rule.host_based]
 
   tags = {
     Name = "${var.project_name}-${var.environment}-service"
