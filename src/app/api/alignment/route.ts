@@ -42,8 +42,8 @@ const BASE_REPAIR_MS = Number(
 
 // Token caps - increased for GPT-5 reasoning token usage
 const ENV_MAX = Number(process.env.OPENAI_MAX_TOKENS ?? CFG_MAX_TOKENS ?? 1500)
-const MAIN_MAX = Math.max(1000, Math.min(1500, ENV_MAX))
-const REPAIR_MAX = Math.min(MAIN_MAX + 500, 2000)
+const MAIN_MAX = IS_GPT5 ? 4000 : Math.max(1000, Math.min(1500, ENV_MAX))
+const REPAIR_MAX = IS_GPT5 ? 5000 : Math.min(MAIN_MAX + 500, 2000)
 
 // Temperature (route will omit for GPT-5 models)
 const TEMPERATURE = Number(
@@ -121,44 +121,6 @@ const snipFrom = (d: Doc) =>
       d.meta?.raw?.text ||
       '',
   )
-
-/* ------------- Prompt compaction ------------- */
-function compactDocs(docs: Doc[], maxDocs: number, snipLen: number) {
-  const out: { title: string; snippet: string; url?: string; page?: number }[] =
-    []
-  for (const d of (docs || []).slice(0, maxDocs)) {
-    const t = titleFrom(d)
-    const k = d.kps?.[0] || {}
-    const s = firstSentence(
-      (k?.snippet || snipFrom(d) || '').slice(0, snipLen),
-      snipLen,
-    )
-    const url = d._url || d.url
-    out.push({ title: t, snippet: s, url, page: k?.page })
-  }
-  return out
-}
-
-function buildUser(
-  query: string,
-  answer: string,
-  docs: ReturnType<typeof compactDocs>,
-) {
-  const lines: string[] = []
-  lines.push(`Query:\n${query}`)
-  if (answer) lines.push(`\nAnswer (optional):\n${answer}`)
-  lines.push(`\nCited passages (compact):`)
-  docs.forEach((d, i) => {
-    const p = typeof d.page === 'number' ? ` (p.${d.page})` : ''
-    const url = d.url ? `\nURL: ${d.url}` : ''
-    lines.push(`${i + 1}. ${d.title}${p}\n${d.snippet}${url}`)
-  })
-  // Nudge to avoid meta but keep your system prompt authoritative
-  lines.push(
-    `\nInstruction: Focus ONLY on substantive alignment; ignore any meta/process talk.`,
-  )
-  return lines.join('\n')
-}
 
 /* ---------------- Meta sanitization ---------------- */
 const META_PHRASES = [
@@ -326,14 +288,16 @@ async function chatOnce(
     }
   }
 
-  const content: string =
-    typeof msg.content === 'string'
-      ? msg.content
-      : msg?.parsed
-        ? JSON.stringify(msg.parsed)
-        : ''
-
+  let content = ''
   let parsed: any = null
+  if (typeof msg.content === 'string') {
+    content = msg.content
+  } else if (Array.isArray(msg.content)) {
+    content = msg.content.map((c: any) => c.text || '').join('')
+  } else if (msg.parsed) {
+    parsed = msg.parsed
+  }
+
   try {
     parsed = JSON.parse(content)
   } catch {}
@@ -397,16 +361,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
     const query = String(body?.query || '').trim()
-    const docs = Array.isArray(body?.docs) ? (body.docs as Doc[]) : []
-    const answerArr = Array.isArray(body?.answer)
-      ? body.answer
-      : body?.answer
-        ? [String(body.answer)]
-        : []
-    const answer = answerArr.join(' ').slice(0, 1000)
+    const resultsSummary = String(body?.resultsSummary || '').trim()
 
     console.log(
-      `[Alignment] Processing: query=${query.slice(0, 50)}..., docs=${docs.length}, answer_length=${answer.length}`,
+      `[Alignment] Processing: query=${query.slice(0, 50)}..., resultsSummary=${resultsSummary.slice(0, 50)}...`,
     )
 
     if (!query)
@@ -418,22 +376,6 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.OPENAI_API_KEY?.trim()
     if (!apiKey) {
       const fallbackInsights: string[] = []
-
-      // Add doc snippets if available
-      const docSnippets = docs
-        .slice(0, 2)
-        .map((d: Doc) => {
-          const t = titleFrom(d)
-          const s = firstSentence(snipFrom(d), 100)
-          return s ? `${t}: ${s}` : t
-        })
-        .filter(Boolean)
-
-      if (docSnippets.length > 0) {
-        fallbackInsights.push(docSnippets.join('; '))
-      } else {
-        fallbackInsights.push('No sources provided.')
-      }
 
       fallbackInsights.push('No API key set; offline heuristic.')
       fallbackInsights.push(
@@ -451,11 +393,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Build compact prompt using your EXACT system prompt from config
-    const DOCS_MAX = 5
-    const SNIP_LEN = 160
-    const compact = compactDocs(docs, DOCS_MAX, SNIP_LEN)
     const sys = String(ALIGNMENT_SYSTEM_PROMPT || '') // DO NOT modify your prompt
-    const userStr = buildUser(query, answer, compact)
+    const userStr = resultsSummary
 
     const approxToks = estimateTokens(sys.length, userStr.length)
     // Increase timeouts for GPT-5 models which are slower
@@ -507,6 +446,16 @@ export async function POST(req: NextRequest) {
       rawHead: t.rawHead,
       rawTail: t.rawTail,
     })
+
+    const content = t.rawHead
+    let parsed: any = null
+
+    if (!parsed && content) {
+      try {
+        parsed = JSON.parse(content)
+      } catch {}
+    }
+
     if (t.ok && t.parsed && typeof t.parsed === 'object') {
       const sanitized = sanitizeAssessment(t.parsed as Assessment)
       return NextResponse.json({
@@ -614,16 +563,6 @@ export async function POST(req: NextRequest) {
 
     /* ---- Deterministic fallback ---- */
     const fallbackInsights: string[] = []
-
-    if (docs.length > 0) {
-      const topDocs = docs
-        .slice(0, 2)
-        .map((d) => titleFrom(d))
-        .join(', ')
-      fallbackInsights.push(`Sources found: ${topDocs}`)
-    } else {
-      fallbackInsights.push('No sources available for this query.')
-    }
 
     fallbackInsights.push(
       'Unable to complete alignment assessment due to server error.',

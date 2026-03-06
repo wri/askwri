@@ -185,3 +185,27 @@ export const chicagoFull = (doc: DocMeta, row?: CatalogRow) => {
   const year = yearFrom(doc, row) ?? ''
   return `${authors}. ${title}. ${cityPub}, ${year}.`
 }
+
+export function buildAlignmentSummary(query: string, docs: any[]) {
+  const reviewedCount = docs.length
+  const highlyRelevant = docs.filter((d) => d.score >= 0.8).length
+  const moderatelyRelevant = docs.filter(
+    (d) => d.score >= 0.5 && d.score < 0.8,
+  ).length
+
+  const topDocs = [...docs]
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, 5)
+
+  const passages = topDocs
+    .map(
+      (d, i) =>
+        `${i + 1}. ${d.title || d.doc_id || 'Untitled'} (relevance: ${d.score?.toFixed(2) ?? 'N/A'})`,
+    )
+    .join(' ')
+  const resultsRelevanceSummary = `Your search reviewed ${reviewedCount} publications and found ${highlyRelevant} highly relevant and ${moderatelyRelevant} moderately relevant results.`
+
+  const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highhly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}. Sample passages: ${passages}`
+
+  return { resultsRelevanceSummary, resultsSummaryForAlignment }
+}
