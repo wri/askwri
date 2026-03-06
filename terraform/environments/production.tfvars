@@ -6,9 +6,9 @@ project_name = "askwri-app"
 environment  = "production"
 aws_region   = "us-east-2"
 
-# VPC Configuration
-vpc_cidr                 = "10.1.0.0/16"
-availability_zones_count = 2
+# VPC Configuration - Use QA's shared VPC
+use_shared_vpc       = true
+shared_vpc_state_key = "qa/terraform.tfstate"
 
 # ECS Configuration - Higher resources for production
 container_port   = 3000

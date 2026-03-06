@@ -276,7 +276,7 @@ resource "aws_ecs_service" "app" {
   enable_execute_command = true
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = local.private_subnet_ids
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = false
   }
@@ -470,7 +470,7 @@ resource "aws_ecs_service" "search_service" {
   enable_execute_command = true
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = local.private_subnet_ids
     security_groups  = [aws_security_group.search_service.id]
     assign_public_ip = false
   }
@@ -504,7 +504,7 @@ resource "aws_ecs_service" "search_service" {
 resource "aws_service_discovery_private_dns_namespace" "main" {
   name        = "${var.project_name}-${var.environment}.local"
   description = "Private DNS namespace for service discovery"
-  vpc         = aws_vpc.main.id
+  vpc         = local.vpc_id
 
   tags = {
     Name = "${var.project_name}-${var.environment}-namespace"
