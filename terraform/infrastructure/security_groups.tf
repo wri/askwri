@@ -3,7 +3,8 @@
 # =============================================================================
 
 resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-${var.environment}-alb-sg"
+  count       = var.use_shared_vpc ? 0 : 1
+  name        = "${var.project_name}-alb-sg"
   description = "Security group for ALB"
   vpc_id      = local.vpc_id
 
@@ -32,7 +33,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-alb-sg"
+    Name = "${var.project_name}-alb-sg"
   }
 }
 
@@ -50,7 +51,7 @@ resource "aws_security_group" "ecs" {
     from_port       = var.container_port
     to_port         = var.container_port
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    security_groups = [local.alb_security_group_id]
   }
 
   egress {
@@ -81,7 +82,7 @@ resource "aws_security_group" "search_service" {
     from_port       = var.search_service_container_port
     to_port         = var.search_service_container_port
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    security_groups = [local.alb_security_group_id]
   }
 
   # Allow traffic from Next.js ECS service
