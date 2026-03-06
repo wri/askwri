@@ -63,7 +63,8 @@ resource "aws_lb_listener" "https" {
 }
 
 resource "aws_lb_listener" "http_redirect" {
-  load_balancer_arn = aws_lb.main.arn
+  count             = var.use_shared_vpc ? 0 : 1
+  load_balancer_arn = aws_lb.main[0].arn
   port              = 80
   protocol          = "HTTP"
 
