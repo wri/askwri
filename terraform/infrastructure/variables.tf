@@ -47,6 +47,18 @@ variable "availability_zones_count" {
   default     = 2
 }
 
+variable "use_shared_vpc" {
+  description = "Whether to use a shared VPC from another environment's Terraform state"
+  type        = bool
+  default     = false
+}
+
+variable "shared_vpc_state_key" {
+  description = "S3 key for the Terraform state containing the shared VPC (e.g., 'qa/terraform.tfstate')"
+  type        = string
+  default     = ""
+}
+
 # =============================================================================
 # ECS Variables
 # =============================================================================

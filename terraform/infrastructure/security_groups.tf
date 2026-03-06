@@ -5,7 +5,7 @@
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-${var.environment}-alb-sg"
   description = "Security group for ALB"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description = "HTTP from anywhere"
@@ -43,7 +43,7 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "ecs" {
   name        = "${var.project_name}-${var.environment}-ecs-sg"
   description = "Security group for ECS tasks"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description     = "Allow traffic from ALB"
@@ -73,7 +73,7 @@ resource "aws_security_group" "ecs" {
 resource "aws_security_group" "search_service" {
   name        = "${var.project_name}-${var.environment}-search-service-sg"
   description = "Security group for Search Service ECS tasks"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   # Allow traffic from ALB
   ingress {
