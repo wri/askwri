@@ -60,6 +60,20 @@ variable "shared_vpc_state_key" {
 }
 
 # =============================================================================
+# Domain / SSL Variables
+# =============================================================================
+
+variable "domain_name" {
+  description = "Domain name for the application (e.g., qa.askwri-app.org)"
+  type        = string
+}
+
+variable "certificate_arn" {
+  description = "ARN of the ACM certificate for HTTPS"
+  type        = string
+}
+
+# =============================================================================
 # ECS Variables
 # =============================================================================
 
