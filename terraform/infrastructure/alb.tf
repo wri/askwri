@@ -48,6 +48,11 @@ resource "aws_lb_target_group" "app" {
 # ALB Listeners (only created by the ALB-owning environment)
 # =============================================================================
 
+moved {
+  from = aws_lb_listener.http
+  to   = aws_lb_listener.https
+}
+
 resource "aws_lb_listener" "https" {
   count             = var.use_shared_vpc ? 0 : 1
   load_balancer_arn = aws_lb.main[0].arn
