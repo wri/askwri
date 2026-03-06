@@ -85,7 +85,7 @@ resource "aws_lb_listener" "http_redirect" {
 
 resource "aws_lb_listener_rule" "host_based" {
   listener_arn = local.https_listener_arn
-  priority     = var.use_shared_vpc ? 100 : 200
+  priority     = var.listener_rule_priority
 
   action {
     type             = "forward"

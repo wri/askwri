@@ -73,6 +73,11 @@ variable "certificate_arn" {
   type        = string
 }
 
+variable "listener_rule_priority" {
+  description = "Priority for the host-based ALB listener rule (must be unique per listener)"
+  type        = number
+}
+
 # =============================================================================
 # ECS Variables
 # =============================================================================
