@@ -53,8 +53,8 @@ resource "aws_lb_listener" "https" {
   protocol          = "HTTPS"
   # TODO: Upgrade to "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09" after the
   # old http listener state entry is cleaned up (requires a successful deploy first).
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = "arn:aws:acm:us-east-2:905418285725:certificate/2519ada5-98d9-43f5-9b31-e70801862222"
+  ssl_policy      = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn = "arn:aws:acm:us-east-2:905418285725:certificate/2519ada5-98d9-43f5-9b31-e70801862222"
 
   default_action {
     type             = "forward"
