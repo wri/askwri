@@ -51,7 +51,9 @@ resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = 443
   protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+  # TODO: Upgrade to "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09" after the
+  # old http listener state entry is cleaned up (requires a successful deploy first).
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
   certificate_arn   = "arn:aws:acm:us-east-2:905418285725:certificate/2519ada5-98d9-43f5-9b31-e70801862222"
 
   default_action {
@@ -60,7 +62,7 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-resource "aws_lb_listener" "http" {
+resource "aws_lb_listener" "http_redirect" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
