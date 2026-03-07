@@ -76,7 +76,7 @@ resource "aws_security_group" "ecs" {
 # =============================================================================
 
 resource "aws_security_group" "search_service" {
-  name        = "${var.project_name}-search-service-sg"
+  name        = "${var.project_name}-${var.environment}-search-service-sg"
   description = "Security group for Search Service ECS tasks"
   vpc_id      = local.vpc_id
 
@@ -107,11 +107,7 @@ resource "aws_security_group" "search_service" {
   }
 
   tags = {
-    Name = "${var.project_name}-search-service-sg"
-  }
-
-  lifecycle {
-    create_before_destroy = true
+    Name = "${var.project_name}-${var.environment}-search-service-sg"
   }
 }
 
