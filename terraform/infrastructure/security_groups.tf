@@ -35,6 +35,10 @@ resource "aws_security_group" "alb" {
   tags = {
     Name = "${var.project_name}-alb-sg"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # =============================================================================
