@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (skip strict SSL for corporate proxy/Zscaler environments)
-RUN npm ci --strict-ssl=false
+# Install dependencies
+RUN npm ci
 
 # Copy source files
 COPY . .
@@ -25,10 +25,9 @@ RUN apk add --no-cache --no-check-certificate curl aws-cli ca-certificates
 
 # Download AWS RDS combined CA bundle so TLS connections to RDS are trusted
 RUN curl -fsSk https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
-      -o /usr/local/share/ca-certificates/aws-rds-global-bundle.crt && \
-    update-ca-certificates
+      -o /app/aws-rds-global-bundle.pem
 
-ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+ENV NODE_EXTRA_CA_CERTS=/app/aws-rds-global-bundle.pem
 
 # Set environment to production
 ENV NODE_ENV=production
