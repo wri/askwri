@@ -20,8 +20,14 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Install curl for health checks and AWS CLI for S3 sync
-RUN apk add --no-cache --no-check-certificate curl aws-cli
+# Install curl for health checks, AWS CLI for S3 sync, and ca-certificates
+RUN apk add --no-cache --no-check-certificate curl aws-cli ca-certificates
+
+# Download AWS RDS combined CA bundle so TLS connections to RDS are trusted
+RUN curl -fsSk https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+      -o /app/aws-rds-global-bundle.pem
+
+ENV NODE_EXTRA_CA_CERTS=/app/aws-rds-global-bundle.pem
 
 # Set environment to production
 ENV NODE_ENV=production
