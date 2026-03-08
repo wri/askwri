@@ -9,6 +9,7 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb[0].id]
   subnets            = local.public_subnet_ids
+  idle_timeout       = 300 # 5 minutes (longer than max nextJS response time)
 
   enable_deletion_protection = false
 
