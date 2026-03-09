@@ -85,7 +85,7 @@ const CitePanel = ({
         return {
           id: doc.doc_id,
           publication_title: titleFrom(doc, row),
-          author: row?.allAuthors,
+          author: row?.allAuthors || '',
           summary,
           short_summary:
             row?.shortSummary ||
