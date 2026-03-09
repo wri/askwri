@@ -33,6 +33,13 @@ export const DocumentPreviewModalContent = ({
       >
         {rowData.author}
       </Text>
+      <Text
+        style={{
+          color: getThemedColor('neutral', 700),
+        }}
+      >
+        {rowData.fullDoc.year}
+      </Text>
     </div>
     <div
       style={{
