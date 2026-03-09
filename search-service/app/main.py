@@ -869,18 +869,18 @@ def load_documents_and_build_indexes():
     logger.info(f"🔄 Loading cross-encoder rerankers (using cached models in offline mode)...")
     step_start = time.time()
 
-    logger.info(f"   [1/2] Loading Answer mode reranker (bge-reranker-v2-m3)...")
+    logger.info(f"   [1/2] Loading Answer mode reranker (MiniLM-L-6)...")
     reranker_start = time.time()
     reranker_answer = SentenceTransformerRerank(
-        model="BAAI/bge-reranker-v2-m3",  # 568M params, better passage discrimination for Answer mode
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # 22M params, fast on CPU (Fargate)
         top_n=20
     )
     logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
 
-    logger.info(f"   [2/2] Loading Cite mode reranker (L-6)...")
+    logger.info(f"   [2/2] Loading Cite mode reranker (MiniLM-L-6)...")
     reranker_start = time.time()
     reranker_cite = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-6-v2",   # Faster for Cite mode
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # Same lightweight model for Cite mode
         top_n=200  # Increased for better recall - preserves more candidates
     )
     logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
@@ -1057,6 +1057,7 @@ async def hybrid_query(request: QueryRequest):
             logger.info(f"Diagnostic - BM25 only: {len(bm25_only_results)} results")
 
         # Stage 1: Hybrid Fusion Retrieval
+        stage1_start = time.time()
         vector_retriever = VectorIndexRetriever(
             index=service_state["vector_index"],
             similarity_top_k=request.vector_top_k
@@ -1071,8 +1072,9 @@ async def hybrid_query(request: QueryRequest):
 
         # Retrieve with hybrid fusion
         stage1_results = hybrid_retriever.retrieve(query_bundle)
+        stage1_elapsed = time.time() - stage1_start
 
-        logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results")
+        logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results in {stage1_elapsed:.1f}s")
 
         # If answer mode and cite_doc_ids provided, filter stage1_results
         if request.mode == "answer" and request.cite_doc_ids:
@@ -1089,6 +1091,7 @@ async def hybrid_query(request: QueryRequest):
             if base_reranker:
                 try:
                     # Use base reranker with dynamic top_n
+                    stage2_start = time.time()
                     original_top_n = base_reranker.top_n
                     base_reranker.top_n = request.rerank_top_n
                     stage2_results = base_reranker.postprocess_nodes(
@@ -1096,7 +1099,8 @@ async def hybrid_query(request: QueryRequest):
                         query_bundle
                     )
                     base_reranker.top_n = original_top_n
-                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results")
+                    stage2_elapsed = time.time() - stage2_start
+                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
                 except Exception as e:
                     logger.warning(f"Reranking failed: {e}, using Stage 1 results")
                     stage2_results = stage1_results
