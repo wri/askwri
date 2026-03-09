@@ -13,6 +13,11 @@ interface LlamaIndexRequest {
   include_metadata?: boolean
   rerank?: boolean
   cite_doc_ids?: string[]
+  alpha?: number
+  denseTopK?: number
+  sparseTopK?: number
+  rerankTopK?: number
+  retrievalMode?: 'chunks' | 'docs' | 'hybrid'
 }
 
 interface LlamaIndexResponse {
@@ -34,7 +39,16 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
-    const { query: rawQuery, mode = 'cite', ...options } = body
+    const {
+      query: rawQuery,
+      mode = 'cite',
+      alpha,
+      denseTopK,
+      sparseTopK,
+      rerankTopK,
+      retrievalMode,
+      ...options
+    } = body
     const query = rawQuery?.trim()
 
     if (!query) {
@@ -48,17 +62,8 @@ export async function POST(req: NextRequest) {
 
     // Prepare request for embedded service
     // Cite mode: larger retrieval pool (800) for better recall on semantic matches
-    const llamaIndexRequest: LlamaIndexRequest & {
-      vector_top_k?: number
-      bm25_top_k?: number
-      rerank_top_n?: number
-    } = {
-      query,
-      mode,
-      similarity_threshold: 0.0, // Use 0.0 threshold - let hybrid fusion handle ranking
-      include_metadata: true,
-      rerank: true, // Enable reranking for quality results
-      ...(mode === 'cite'
+    const defaults =
+      mode === 'cite'
         ? {
             max_results: 100,
             vector_top_k: 800,
@@ -70,7 +75,25 @@ export async function POST(req: NextRequest) {
             vector_top_k: ANSWER_PRESET.denseTopK,
             bm25_top_k: ANSWER_PRESET.sparseTopK,
             rerank_top_n: ANSWER_PRESET.rerankTopN,
-          }),
+          }
+
+    const llamaIndexRequest: LlamaIndexRequest & {
+      vector_top_k?: number
+      bm25_top_k?: number
+      rerank_top_n?: number
+    } = {
+      query,
+      mode,
+      similarity_threshold: 0.0, // Use 0.0 threshold - let hybrid fusion handle ranking
+      include_metadata: true,
+      rerank: true, // Enable reranking for quality results
+      ...defaults,
+      // Override with client-supplied retrieval params if provided
+      ...(alpha !== undefined && { alpha }),
+      ...(denseTopK !== undefined && { vector_top_k: denseTopK }),
+      ...(sparseTopK !== undefined && { bm25_top_k: sparseTopK }),
+      ...(rerankTopK !== undefined && { rerank_top_n: rerankTopK }),
+      ...(retrievalMode !== undefined && { retrieval_mode: retrievalMode }),
       ...options,
     }
 
