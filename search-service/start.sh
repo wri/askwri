@@ -21,6 +21,26 @@ if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
     if [ $SUCCESS -eq 0 ]; then
         echo "WARNING: S3 sync failed after $RETRIES attempts, continuing anyway"
     fi
+
+    echo "Syncing cache from S3..."
+    RETRIES=3
+    DELAY=5
+    SUCCESS=0
+    for i in $(seq 1 $RETRIES); do
+        if aws s3 sync "s3://${DOCUMENTS_S3_BUCKET}/${CACHE_S3_PREFIX:-}" /tmp/askWRI_cache \
+            --no-progress \
+            --only-show-errors; then
+            echo "S3 cache sync complete"
+            SUCCESS=1
+            break
+        fi
+        echo "S3 cache sync attempt $i failed, retrying in ${DELAY}s..."
+        sleep $DELAY
+        DELAY=$((DELAY * 2))
+    done
+    if [ $SUCCESS -eq 0 ]; then
+        echo "WARNING: S3 cache sync failed after $RETRIES attempts, continuing anyway"
+    fi
 else
     echo "DOCUMENTS_S3_BUCKET not set, skipping S3 sync"
 fi
