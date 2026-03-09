@@ -67,7 +67,7 @@ type Doc = {
 }
 type Assessment = {
   insights: string[]
-  confidence: number
+  alignment: 'High' | 'Moderate' | 'Low' | 'Very Low'
 }
 
 type TryInfo = {
@@ -82,7 +82,6 @@ type TryInfo = {
 }
 
 /* ---------------- Utils ---------------- */
-const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n))
 const estimateTokens = (...lens: number[]) =>
   Math.ceil(lens.reduce((s, v) => s + (v || 0), 0) / 4)
 
@@ -192,16 +191,16 @@ function stripMeta(arr: string[], limit: number): string[] {
 
 function sanitizeAssessment(input: Assessment): Assessment {
   const insights = stripMeta(input.insights || [], 5)
+  const validAlignments = ['High', 'Moderate', 'Low', 'Very Low']
   const out: Assessment = {
     insights: insights.length
       ? insights
       : [
           'Unable to assess alignment. Try providing more sources or refining your query.',
         ],
-    confidence:
-      typeof input.confidence === 'number'
-        ? clamp(input.confidence, 0, 1)
-        : 0.5,
+    alignment: validAlignments.includes(input.alignment)
+      ? input.alignment
+      : 'Moderate',
   }
   return out
 }
@@ -329,7 +328,7 @@ const ALIGNMENT_SCHEMA = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['insights', 'confidence'],
+    required: ['insights', 'alignment'],
     properties: {
       insights: {
         type: 'array',
@@ -337,7 +336,10 @@ const ALIGNMENT_SCHEMA = {
         minItems: 2,
         maxItems: 5,
       },
-      confidence: { type: 'number', minimum: 0, maximum: 1 },
+      alignment: {
+        type: 'string',
+        enum: ['High', 'Moderate', 'Low', 'Very Low'],
+      },
     },
   },
 }
@@ -386,7 +388,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         assessment: {
           insights: fallbackInsights,
-          confidence: 0.4,
+          alignment: 'Low',
         },
         debug: { fallback: true, reason: 'missing_api_key', model: MODEL },
       })
@@ -564,7 +566,7 @@ export async function POST(req: NextRequest) {
 
     const fallbackAssessment: Assessment = {
       insights: fallbackInsights,
-      confidence: 0.5,
+      alignment: 'Moderate',
     }
     return NextResponse.json({
       ok: true,
@@ -593,7 +595,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       assessment: {
         insights: fallbackInsights,
-        confidence: 0.5,
+        alignment: 'Moderate',
       },
       debug: {
         fallback: true,
