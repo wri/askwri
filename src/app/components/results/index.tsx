@@ -144,11 +144,13 @@ const ResultsPage = ({
               marginBottom: '16px',
             }}
           >
-            <Tag
-              icon={<FaInfoCircle />}
-              label={`Alignment: ${alignment.alignment}`}
-              variant='info-white'
-            />
+            <Tooltip content='AI assessment of how well the retrieved sources address the query and whether important gaps or risks remain.'>
+              <Tag
+                icon={<FaInfoCircle />}
+                label={`Alignment: ${alignment.alignment}`}
+                variant='info-white'
+              />
+            </Tooltip>
           </div>
         )}
       </section>
