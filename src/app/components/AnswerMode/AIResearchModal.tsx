@@ -77,6 +77,11 @@ export const AIResearchModalContent = ({
           similarity_threshold: 0.05,
           include_metadata: true,
           rerank: true,
+          alpha: 0.5,
+          denseTopK: 150,
+          rerankTopK: 20,
+          retrievalMode: 'hybrid',
+          sparseTopK: 150,
           ...(consultedDocIds ? { cite_doc_ids: consultedDocIds } : {}),
         }),
       })
