@@ -219,7 +219,7 @@ export const SupportingCitations = ({
               const { doc } = paginatedItems[0] || {}
               if (!doc) return
               navigator.clipboard.writeText(
-                `${paginatedItems[0].kp.snippet} \n\n ${chicagoFull(doc)}`,
+                `${paginatedItems[0].kp.snippet.trim()}\n\n${chicagoFull(doc)}`,
               )
             }}
           >
