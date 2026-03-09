@@ -81,10 +81,11 @@ const CitePanel = ({
 
         // Convert relevance score to High/Medium/Low
         const relevanceLabel = getRelevanceLevel(docRel)
+
         return {
           id: doc.doc_id,
           publication_title: titleFrom(doc, row),
-          author: `${chicagoFull(doc, row)} [${typeFrom(row)}]`,
+          author: row?.allAuthors || '',
           summary,
           short_summary:
             row?.shortSummary ||
