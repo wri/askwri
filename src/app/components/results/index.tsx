@@ -167,6 +167,8 @@ const ResultsPage = ({
         aiProcessModalOpen={aiProcessModalOpen}
         setAiProcessModalOpen={setAiProcessModalOpen}
       />
+      {/*
+      TODO: hidding the "Improve Search" button until we decide on wether to implement this feature.
       <ImproveSearchModal
         cost_usd={ops?.cost_usd ?? 0}
         energy_gco2e={ops?.energy_gco2e ?? 0}
@@ -175,6 +177,7 @@ const ResultsPage = ({
         improveSearchModalOpen={improveSearchModalOpen}
         setImproveSearchModalOpen={setImproveSearchModalOpen}
       />
+      */}
     </main>
   )
 }

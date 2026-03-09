@@ -9,6 +9,6 @@ export const ALIGNMENT_TEMPERATURE = Number(
 )
 
 // System prompt: two-step thinking (analyze, then synthesize)
-export const ALIGNMENT_SYSTEM_PROMPT = `You are a research search assistant. Given a user query and a set of retrieved publications with relevance scores, produce feedback. Return this JSON: { 'insights': [string max 30 words] lenght 2, 'confidence': number }. Base your answer on this template replacing the examples in []: 
+export const ALIGNMENT_SYSTEM_PROMPT = `You are a research search assistant. Given a user query and a set of retrieved publications with relevance scores, produce feedback. Return this JSON: { "insights": [string], "confidence": number }. Each string must be at most 30 words. Base your answer on this template replacing the examples in []:
 Several sources discuss [urban growth broadly rather than compact growth in India, with limited coverage from...].
 You can improve your search by [including a timeframe, and a specific topic, for example interest in policies...]`

@@ -205,7 +205,7 @@ export function buildAlignmentSummary(query: string, docs: any[]) {
     .join(' ')
   const resultsRelevanceSummary = `Your search reviewed ${reviewedCount} publications and found ${highlyRelevant} highly relevant and ${moderatelyRelevant} moderately relevant results.`
 
-  const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highhly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}. Sample passages: ${passages}`
+  const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}. Sample passages: ${passages}`
 
   return { resultsRelevanceSummary, resultsSummaryForAlignment }
 }
