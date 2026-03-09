@@ -60,7 +60,7 @@ export type ResultsPageProps = {
   transcript: string[]
   alignment: {
     insights?: string[]
-    confidence?: number
+    alignment?: 'High' | 'Moderate' | 'Low' | 'Very Low'
     _debugKeys?: string[]
   } | null
   alignLoading?: boolean

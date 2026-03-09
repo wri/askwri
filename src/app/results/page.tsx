@@ -39,7 +39,7 @@ const AskWriAppContent = () => {
   const [supporting, setSupporting] = useState<DocMeta[]>([])
   const [alignment, setAlignment] = useState<{
     insights?: string[]
-    confidence?: number
+    alignment?: 'High' | 'Moderate' | 'Low' | 'Very Low'
     _debugKeys?: string[]
   } | null>(null)
 
@@ -290,11 +290,11 @@ const AskWriAppContent = () => {
       const j = await r.json()
 
       if (j?.ok && j?.assessment) {
-        const { insights, confidence } = j.assessment
+        const { insights, alignment } = j.assessment
 
         const finalAlignment = {
           insights,
-          confidence,
+          alignment,
           _debugKeys: j.debug?.keys || [],
         }
 
