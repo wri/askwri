@@ -37,8 +37,6 @@ const ResultsPage = ({
   const [improveSearchModalOpen, setImproveSearchModalOpen] = useState(false)
   const tableData = data
 
-  const confidence = (alignment?.confidence ?? 0) * 100
-
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
       <Navbar />
@@ -138,7 +136,7 @@ const ResultsPage = ({
             </List.Root>
           )}
         </Box>
-        {!alignLoading && alignment?.confidence && (
+        {!alignLoading && alignment?.alignment && (
           <div
             style={{
               width: '150px',
@@ -148,7 +146,7 @@ const ResultsPage = ({
           >
             <Tag
               icon={<FaInfoCircle />}
-              label={`${confidence}% Confidence`}
+              label={`Alignment: ${alignment.alignment}`}
               variant='info-white'
             />
           </div>
