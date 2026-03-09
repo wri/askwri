@@ -377,25 +377,6 @@ export async function POST(req: NextRequest) {
     if (!apiKey) {
       const fallbackInsights: string[] = []
 
-<<<<<<< HEAD
-=======
-      // Add doc snippets if available
-      const docSnippets = docs
-        .slice(0, 2)
-        .map((d: Doc) => {
-          const t = titleFrom(d)
-          const s = firstSentence(snipFrom(d), 100)
-          return s ? `${t}: ${s}` : t
-        })
-        .filter(Boolean)
-
-      if (docSnippets.length > 0) {
-        fallbackInsights.push(docSnippets.join('; '))
-      } else {
-        fallbackInsights.push('No sources provided.')
-      }
-
->>>>>>> fe880d6 (update fallback logic for new structure)
       fallbackInsights.push('No API key set; offline heuristic.')
       fallbackInsights.push(
         'Set OPENAI_API_KEY and retry for full alignment analysis.',
