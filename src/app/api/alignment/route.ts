@@ -447,15 +447,6 @@ export async function POST(req: NextRequest) {
       rawTail: t.rawTail,
     })
 
-    const content = t.rawHead
-    let parsed: any = null
-
-    if (!parsed && content) {
-      try {
-        parsed = JSON.parse(content)
-      } catch {}
-    }
-
     if (t.ok && t.parsed && typeof t.parsed === 'object') {
       const sanitized = sanitizeAssessment(t.parsed as Assessment)
       return NextResponse.json({
