@@ -335,7 +335,7 @@ const ALIGNMENT_SCHEMA = {
         type: 'array',
         items: { type: 'string' },
         minItems: 2,
-        maxItems: 2,
+        maxItems: 5,
       },
       confidence: { type: 'number', minimum: 0, maximum: 1 },
     },

@@ -277,8 +277,7 @@ const AskWriAppContent = () => {
       }
       setAlignLoading(true)
 
-      const { resultsRelevanceSummary, resultsSummaryForAlignment } =
-        buildAlignmentSummary(q, docs)
+      const resultsSummaryForAlignment = buildAlignmentSummary(q, docs)
 
       const r = await fetch('/api/alignment', {
         method: 'POST',
@@ -294,7 +293,7 @@ const AskWriAppContent = () => {
         const { insights, confidence } = j.assessment
 
         const finalAlignment = {
-          insights: [resultsRelevanceSummary, ...insights],
+          insights,
           confidence,
           _debugKeys: j.debug?.keys || [],
         }

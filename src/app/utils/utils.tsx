@@ -203,9 +203,8 @@ export function buildAlignmentSummary(query: string, docs: any[]) {
         `${i + 1}. ${d.title || d.doc_id || 'Untitled'} (relevance: ${d.score?.toFixed(2) ?? 'N/A'})`,
     )
     .join(' ')
-  const resultsRelevanceSummary = `Your search reviewed ${reviewedCount} publications and found ${highlyRelevant} highly relevant and ${moderatelyRelevant} moderately relevant results.`
 
   const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}. Sample passages: ${passages}`
 
-  return { resultsRelevanceSummary, resultsSummaryForAlignment }
+  return resultsSummaryForAlignment
 }
