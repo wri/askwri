@@ -216,12 +216,13 @@ export const SupportingCitations = ({
             size='small'
             leftIcon={<IoIosCopy />}
             onClick={() => {
-              const { doc } = paginatedItems[0] || {}
-              if (!doc) return
-              navigator.clipboard.writeText(chicagoFull(doc))
+              const { doc, kp } = paginatedItems[0] || {}
+              navigator.clipboard.writeText(
+                `${kp.snippet.trim()}\n\n${chicagoFull(doc)}`,
+              )
             }}
           >
-            Copy citation
+            Copy passage
           </Button>
         </div>
       </div>
