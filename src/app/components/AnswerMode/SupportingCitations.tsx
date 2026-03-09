@@ -216,10 +216,9 @@ export const SupportingCitations = ({
             size='small'
             leftIcon={<IoIosCopy />}
             onClick={() => {
-              const { doc } = paginatedItems[0] || {}
-              if (!doc) return
+              const { doc, kp } = paginatedItems[0] || {}
               navigator.clipboard.writeText(
-                `${paginatedItems[0].kp.snippet.trim()}\n\n${chicagoFull(doc)}`,
+                `${kp.snippet.trim()}\n\n${chicagoFull(doc)}`,
               )
             }}
           >
