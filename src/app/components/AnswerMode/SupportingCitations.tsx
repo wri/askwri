@@ -218,10 +218,12 @@ export const SupportingCitations = ({
             onClick={() => {
               const { doc } = paginatedItems[0] || {}
               if (!doc) return
-              navigator.clipboard.writeText(chicagoFull(doc))
+              navigator.clipboard.writeText(
+                `${paginatedItems[0].kp.snippet} \n\n ${chicagoFull(doc)}`,
+              )
             }}
           >
-            Copy citation
+            Copy passage
           </Button>
         </div>
       </div>
