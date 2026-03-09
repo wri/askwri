@@ -421,7 +421,7 @@ def load_documents_and_build_indexes():
             file_path = str(row.get('file_path', ''))
             doc_id = file_path.replace('.pdf', '') if file_path else f"doc_{idx}"
 
-            local_file_path = f"{settings.documents_local_dir}/documents/{file_path}"
+            local_file_path = f"{settings.documents_local_dir}/{file_path}"
 
             service_state["documents_metadata"][doc_id] = {
                 "title": metadata_raw.get('Publication Title', f'Document {doc_id}'),
