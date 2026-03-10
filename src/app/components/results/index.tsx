@@ -140,7 +140,6 @@ const ResultsPage = ({
           <div
             style={{
               width: '280px',
-              alignItems: 'center',
               marginBottom: '16px',
             }}
           >
