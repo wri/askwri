@@ -248,9 +248,6 @@ export const AIResearchModalContent = ({
           return refs
         })
 
-        // Calculate confidence based on document coverage
-        const confidence = Math.min(0.9, 0.5 + validDocs.length * 0.06)
-
         // Save the answer with generated citations
         const answerWithCitations = {
           sentences,
