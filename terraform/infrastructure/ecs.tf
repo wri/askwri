@@ -135,7 +135,7 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
         Resource = "arn:aws:s3:::${var.documents_s3_bucket}"
         Condition = {
           StringLike = {
-            "s3:prefix" = ["${var.documents_s3_prefix}*"]
+            "s3:prefix" = ["${var.documents_s3_prefix}*", "${var.cache_s3_prefix}*"]
           }
         }
       },
@@ -146,7 +146,10 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
           "s3:GetObject",
           "s3:GetObjectVersion"
         ]
-        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.documents_s3_prefix}*"
+        Resource = [
+          "arn:aws:s3:::${var.documents_s3_bucket}/${var.documents_s3_prefix}*",
+          "arn:aws:s3:::${var.documents_s3_bucket}/${var.cache_s3_prefix}*"
+        ]
       },
       {
         Sid    = "GetEvalObjects"
@@ -220,6 +223,18 @@ resource "aws_ecs_task_definition" "app" {
           {
             name  = "EVAL_S3_PREFIX"
             value = "eval-data/"
+          },
+          {
+            name  = "DOCUMENTS_S3_BUCKET"
+            value = var.documents_s3_bucket
+          },
+          {
+            name  = "DOCUMENTS_S3_PREFIX"
+            value = var.documents_s3_prefix
+          },
+          {
+            name  = "CACHE_S3_PREFIX"
+            value = var.cache_s3_prefix
           }
         ],
         [
@@ -412,6 +427,18 @@ resource "aws_ecs_task_definition" "search_service" {
           {
             name  = "NEXTJS_BACKEND_URL"
             value = "http://nextjs.${var.project_name}-${var.environment}.local:${var.container_port}"
+          },
+          {
+            name  = "DOCUMENTS_S3_BUCKET"
+            value = var.documents_s3_bucket
+          },
+          {
+            name  = "DOCUMENTS_S3_PREFIX"
+            value = var.documents_s3_prefix
+          },
+          {
+            name  = "CACHE_S3_PREFIX"
+            value = var.cache_s3_prefix
           }
         ],
         [

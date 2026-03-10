@@ -215,3 +215,9 @@ variable "documents_s3_prefix" {
   type        = string
   default     = "documents/"
 }
+
+variable "cache_s3_prefix" {
+  description = "S3 prefix (folder path) for cache within the bucket"
+  type        = string
+  default     = "cache/"
+}
