@@ -181,10 +181,11 @@ function escapeRegExp(s: string) {
 const META_RE = new RegExp(META_PHRASES.map(escapeRegExp).join('|'), 'i')
 
 function stripMeta(arr: string[], limit: number): string[] {
+  const metaSet = new Set(META_PHRASES.map((s) => s.trim().toLowerCase()))
   const cleaned = (arr || [])
     .map((s) => String(s || '').trim())
     .filter(Boolean)
-    .filter((s) => !META_RE.test(s))
+    .filter((s) => !metaSet.has(s.toLowerCase()))
   // Return up to 'limit' items, don't truncate the text
   return cleaned.slice(0, limit)
 }
@@ -196,6 +197,15 @@ function sanitizeAssessment(input: any = {}): Assessment {
     typeof input.alignment === 'string' ? input.alignment.trim() : ''
 
   const validAlignments = ['High', 'Moderate', 'Low', 'Very Low']
+
+  if (insights.length === 0 || !validAlignments.includes(alignmentRaw)) {
+    console.warn(
+      '[Alignment] Sanitization fallback triggered. Raw input:',
+      input,
+      insights,
+      alignmentRaw,
+    )
+  }
 
   const out: Assessment = {
     insights: insights.length
