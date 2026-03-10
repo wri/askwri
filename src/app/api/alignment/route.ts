@@ -189,19 +189,25 @@ function stripMeta(arr: string[], limit: number): string[] {
   return cleaned.slice(0, limit)
 }
 
-function sanitizeAssessment(input: Assessment): Assessment {
-  const insights = stripMeta(input.insights || [], 5)
+function sanitizeAssessment(input: any = {}): Assessment {
+  const insightsRaw = Array.isArray(input?.insights) ? input.insights : []
+  const insights = stripMeta(insightsRaw, 5)
+  const alignmentRaw =
+    typeof input.alignment === 'string' ? input.alignment.trim() : ''
+
   const validAlignments = ['High', 'Moderate', 'Low', 'Very Low']
+
   const out: Assessment = {
     insights: insights.length
       ? insights
       : [
           'Unable to assess alignment. Try providing more sources or refining your query.',
         ],
-    alignment: validAlignments.includes(input.alignment)
-      ? input.alignment
+    alignment: validAlignments.includes(alignmentRaw)
+      ? alignmentRaw
       : 'Moderate',
   }
+
   return out
 }
 
