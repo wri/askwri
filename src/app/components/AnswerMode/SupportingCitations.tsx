@@ -2,9 +2,14 @@
 
 /* eslint-disable no-restricted-syntax */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, FC } from 'react'
 import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
-import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
+import {
+  getThemedColor,
+  Button,
+  Tag,
+  Tooltip as DS_Tooltip,
+} from '@worldresources/wri-design-systems'
 import { DocMeta, KP } from '@/lib/llamacloud'
 import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
@@ -12,6 +17,8 @@ import { getRelevanceLevel, getRelevanceColor } from '@/app/utils/relevance'
 import { AiIcon } from '../icons/AiIcon'
 import { firstSentence, chicagoFull } from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
+
+const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
 export const SupportingCitations = ({
   supportingDocs,
@@ -191,13 +198,15 @@ export const SupportingCitations = ({
           {/* Relevance score */}
           {paginatedItems[0] && (
             <Box display='flex' alignItems='center' gap='2' marginBottom='4'>
-              <Text
-                fontSize='xs'
-                color={getRelevanceColor(paginatedItems[0].kp.kp_relevance)}
-                fontWeight='medium'
-              >
-                {`${getRelevanceLevel(paginatedItems[0].kp.kp_relevance)} relevance`}
-              </Text>
+              <Tooltip content='How relevant this document is compared with other results for this query. The top result is scaled to 1.0'>
+                <Text
+                  fontSize='xs'
+                  color={getRelevanceColor(paginatedItems[0].kp.kp_relevance)}
+                  fontWeight='medium'
+                >
+                  {`${getRelevanceLevel(paginatedItems[0].kp.kp_relevance)} relevance`}
+                </Text>
+              </Tooltip>
             </Box>
           )}
         </div>
