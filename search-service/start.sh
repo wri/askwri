@@ -1,26 +1,31 @@
 #!/bin/sh
 set -e
 
-if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
-    echo "Syncing documents from S3..."
-    RETRIES=3
-    DELAY=5
-    SUCCESS=0
-    for i in $(seq 1 $RETRIES); do
-        if aws s3 sync "s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}" /tmp/askWRI_docs \
+sync_from_s3() {
+    label="$1"
+    source="$2"
+    dest="$3"
+    retries=3
+    delay=5
+
+    echo "Syncing ${label} from S3..."
+    for i in $(seq 1 $retries); do
+        if aws s3 sync "$source" "$dest" \
             --no-progress \
             --only-show-errors; then
-            echo "S3 sync complete"
-            SUCCESS=1
-            break
+            echo "S3 ${label} sync complete"
+            return 0
         fi
-        echo "S3 sync attempt $i failed, retrying in ${DELAY}s..."
-        sleep $DELAY
-        DELAY=$((DELAY * 2))
+        echo "S3 ${label} sync attempt $i failed, retrying in ${delay}s..."
+        sleep $delay
+        delay=$((delay * 2))
     done
-    if [ $SUCCESS -eq 0 ]; then
-        echo "WARNING: S3 sync failed after $RETRIES attempts, continuing anyway"
-    fi
+    echo "WARNING: S3 ${label} sync failed after $retries attempts, continuing anyway"
+}
+
+if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
+    sync_from_s3 "documents" "s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}" /tmp/askWRI_docs
+    sync_from_s3 "cache" "s3://${DOCUMENTS_S3_BUCKET}/${CACHE_S3_PREFIX:-}" /tmp/askWRI_cache
 else
     echo "DOCUMENTS_S3_BUCKET not set, skipping S3 sync"
 fi
