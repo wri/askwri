@@ -13,7 +13,7 @@ import {
 import { DocMeta, KP } from '@/lib/llamacloud'
 import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
-import { getRelevanceLevel, getRelevanceColor } from '@/app/utils/relevance'
+import { getRelevanceLevel } from '@/app/utils/relevance'
 import { AiIcon } from '../icons/AiIcon'
 import { firstSentence, chicagoFull } from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
@@ -192,18 +192,14 @@ export const SupportingCitations = ({
             color={getThemedColor('neutral', 900)}
             flexShrink={0}
           >
-            Citation {page} of {allItems.length}
+            Passage
           </Heading>
 
           {/* Relevance score */}
           {paginatedItems[0] && (
             <Box display='flex' alignItems='center' gap='2' marginBottom='4'>
               <Tooltip content='How relevant this document is compared with other results for this query. The top result is scaled to 1.0'>
-                <Text
-                  fontSize='xs'
-                  color={getRelevanceColor(paginatedItems[0].kp.kp_relevance)}
-                  fontWeight='medium'
-                >
+                <Text fontSize='xs' fontWeight='medium'>
                   {`${getRelevanceLevel(paginatedItems[0].kp.kp_relevance)} relevance`}
                 </Text>
               </Tooltip>
