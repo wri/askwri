@@ -67,7 +67,6 @@ export const AIResearchModalContent = ({
       setAlignLoading(true)
 
       const resultsSummaryForAlignment = buildAlignmentSummary(q, docs)
-      console.log({ resultsSummaryForAlignment, q, docs })
       const r = await fetch('/api/alignment', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -152,10 +151,6 @@ export const AIResearchModalContent = ({
             'Unable to synthesize answer: no documents with content found.',
           ],
           inline: [],
-          alignment: {
-            insights: [],
-            alignment: 'Very Low',
-          },
         })
         return
       }
@@ -188,10 +183,6 @@ export const AIResearchModalContent = ({
           setAnswer({
             sentences: ['Synthesis failed: no answer generated.'],
             inline: [],
-            alignment: {
-              insights: [],
-              alignment: 'Very Low',
-            },
           })
           return
         }
@@ -268,10 +259,6 @@ export const AIResearchModalContent = ({
         setAnswer({
           sentences: ['Synthesis failed: invalid response from server.'],
           inline: [],
-          alignment: {
-            insights: [],
-            alignment: 'Very Low',
-          },
         })
       }
     } catch (error) {
@@ -287,17 +274,12 @@ export const AIResearchModalContent = ({
           'An error occurred while processing your request. Please try again.',
         ],
         inline: [],
-        alignment: {
-          insights: [],
-          alignment: 'Very Low',
-        },
       })
     } finally {
       setLoading(false)
     }
   }
 
-  console.log({ alignLoading, alignment })
   const renderContent = () => {
     if (loading) {
       return (
