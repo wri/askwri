@@ -12,7 +12,6 @@ export interface AnswerResult {
   inline?: { ref: string; page: number }[][]
   warning?: string
   warningMessage?: string
-  alignment?: Assessment
 }
 
 export interface AnswerPanelProps {
