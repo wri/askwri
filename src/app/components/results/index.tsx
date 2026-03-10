@@ -37,8 +37,6 @@ const ResultsPage = ({
   const [improveSearchModalOpen, setImproveSearchModalOpen] = useState(false)
   const tableData = data
 
-  const confidence = (alignment?.confidence ?? 0) * 100
-
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
       <Navbar />
@@ -119,12 +117,7 @@ const ResultsPage = ({
           <Heading size='2xl'>Overview</Heading>
         </div>
         <Box style={{ paddingBottom: '1rem' }}>
-          {alignLoading ||
-          !alignment ||
-          (!alignment.caveats?.length &&
-            !alignment.risks?.length &&
-            !alignment.suggestions?.length &&
-            !alignment.coverage?.length) ? (
+          {alignLoading || !alignment || !alignment.insights?.length ? (
             <div
               style={{
                 display: 'flex',
@@ -136,89 +129,27 @@ const ResultsPage = ({
               <Spinner size='md' color={getThemedColor('primary', 500)} />
             </div>
           ) : (
-            <>
-              {alignment?.caveats && alignment.caveats.length > 0 && (
-                <>
-                  <Text
-                    fontWeight='bold'
-                    marginTop='1rem'
-                    marginBottom='0.5rem'
-                  >
-                    Caveats & reservations
-                  </Text>
-                  <List.Root>
-                    {alignment.caveats.map((caveat) => (
-                      <List.Item key={`caveat-${caveat}`}>{caveat}</List.Item>
-                    ))}
-                  </List.Root>
-                </>
-              )}
-              {alignment?.risks && alignment.risks.length > 0 && (
-                <>
-                  <Text
-                    fontWeight='bold'
-                    marginTop='1rem'
-                    marginBottom='0.5rem'
-                  >
-                    Risks & failure modes
-                  </Text>
-                  <List.Root>
-                    {alignment.risks.map((risk) => (
-                      <List.Item key={`risk-${risk}`}>{risk}</List.Item>
-                    ))}
-                  </List.Root>
-                </>
-              )}
-              {alignment?.suggestions && alignment.suggestions.length > 0 && (
-                <>
-                  <Text
-                    fontWeight='bold'
-                    marginTop='1rem'
-                    marginBottom='0.5rem'
-                  >
-                    Suggestions for query improvement
-                  </Text>
-                  <List.Root>
-                    {alignment.suggestions.map((suggestion) => (
-                      <List.Item key={`suggestion-${suggestion}`}>
-                        {suggestion}
-                      </List.Item>
-                    ))}
-                  </List.Root>
-                </>
-              )}
-              {alignment?.coverage && alignment.coverage.length > 0 && (
-                <>
-                  <Text
-                    fontWeight='bold'
-                    marginTop='1rem'
-                    marginBottom='0.5rem'
-                  >
-                    Coverage &amp; correspondence
-                  </Text>
-                  <List.Root>
-                    {alignment.coverage.map((item) => (
-                      <List.Item key={`coverage-${item}`}>{item}</List.Item>
-                    ))}
-                  </List.Root>
-                </>
-              )}
-            </>
+            <List.Root>
+              {alignment.insights.map((insight, idx) => (
+                <List.Item key={`insight-${idx}`}>{insight}</List.Item>
+              ))}
+            </List.Root>
           )}
         </Box>
-        {!alignLoading && alignment?.confidence && (
+        {!alignLoading && alignment?.alignment && (
           <div
             style={{
-              width: '150px',
-              alignItems: 'center',
+              width: '280px',
               marginBottom: '16px',
             }}
           >
-            <Tag
-              icon={<FaInfoCircle />}
-              label={`${confidence}% Confidence`}
-              variant='info-white'
-            />
+            <Tooltip content='AI assessment of how well the retrieved sources address the query and whether important gaps or risks remain.'>
+              <Tag
+                icon={<FaInfoCircle />}
+                label={`Alignment: ${alignment.alignment}`}
+                variant='info-white'
+              />
+            </Tooltip>
           </div>
         )}
       </section>
@@ -235,14 +166,17 @@ const ResultsPage = ({
         aiProcessModalOpen={aiProcessModalOpen}
         setAiProcessModalOpen={setAiProcessModalOpen}
       />
+      {/*
+      TODO: hidding the "Improve Search" button until we decide on wether to implement this feature.
       <ImproveSearchModal
         cost_usd={ops?.cost_usd ?? 0}
         energy_gco2e={ops?.energy_gco2e ?? 0}
-        suggestions={alignment?.suggestions || []}
+        suggestions={alignment?.insights || []}
         initialQuery={query}
         improveSearchModalOpen={improveSearchModalOpen}
         setImproveSearchModalOpen={setImproveSearchModalOpen}
       />
+      */}
     </main>
   )
 }

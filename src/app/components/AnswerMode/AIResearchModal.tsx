@@ -16,8 +16,9 @@ import {
 import { AISearchForm } from './AISearchForm'
 import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
-import { AnswerResult } from './types'
+import { AnswerResult, Assessment } from './types'
 import { RowData } from '../results/types'
+import { buildAlignmentSummary } from '@/app/utils/utils'
 
 const MAX_ANSWER_MODE_RESULTS = 20
 
@@ -36,6 +37,9 @@ export const AIResearchModalContent = ({
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
   )
+  const [alignLoading, setAlignLoading] = useState(false)
+
+  const [alignment, setAlignment] = useState<Assessment | null>(null)
 
   const handleShuffleSuggestions = () => {
     setSuggestions(getRandomSuggestions(3, 'answer'))
@@ -52,6 +56,39 @@ export const AIResearchModalContent = ({
     const top40Percent = Math.max(1, Math.ceil(sortedDocs.length * 0.4))
     const finalCount = Math.min(top40Percent, maxDocs)
     return sortedDocs.slice(0, finalCount)
+  }
+
+  async function runAlignment(q: string, docs: DocMeta[]) {
+    try {
+      if (!docs?.length) {
+        setAlignment(null)
+        return
+      }
+      setAlignLoading(true)
+
+      const resultsSummaryForAlignment = buildAlignmentSummary(q, docs)
+      const r = await fetch('/api/alignment', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          query: q,
+          resultsSummary: resultsSummaryForAlignment,
+        }),
+      })
+      const j = await r.json()
+
+      if (j?.ok && j?.assessment) {
+        const { insights, alignment } = j.assessment
+
+        setAlignment({ insights, alignment })
+      } else {
+        setAlignment(null)
+      }
+    } catch (e: any) {
+      setAlignment(null)
+    } finally {
+      setAlignLoading(false)
+    }
   }
 
   const handleSubmit = async () => {
@@ -77,6 +114,11 @@ export const AIResearchModalContent = ({
           similarity_threshold: 0.05,
           include_metadata: true,
           rerank: true,
+          alpha: 0.5,
+          denseTopK: 150,
+          rerankTopK: 20,
+          retrievalMode: 'hybrid',
+          sparseTopK: 150,
           ...(consultedDocIds ? { cite_doc_ids: consultedDocIds } : {}),
         }),
       })
@@ -109,7 +151,6 @@ export const AIResearchModalContent = ({
             'Unable to synthesize answer: no documents with content found.',
           ],
           inline: [],
-          confidence: 0.1,
         })
         return
       }
@@ -122,6 +163,8 @@ export const AIResearchModalContent = ({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ query: query.trim(), docs: topQualityDocs }),
       })
+
+      runAlignment(query.trim(), validDocs)
 
       if (!synthesisResponse.ok) {
         console.error('❌ Synthesis API error:', synthesisResponse.status)
@@ -140,7 +183,6 @@ export const AIResearchModalContent = ({
           setAnswer({
             sentences: ['Synthesis failed: no answer generated.'],
             inline: [],
-            confidence: 0.1,
           })
           return
         }
@@ -197,15 +239,11 @@ export const AIResearchModalContent = ({
           return refs
         })
 
-        // Calculate confidence based on document coverage
-        const confidence = Math.min(0.9, 0.5 + validDocs.length * 0.06)
-
         // Save the answer with generated citations
         const answerWithCitations = {
           sentences,
           paragraphs,
           inline,
-          confidence,
           warning,
           warningMessage,
         }
@@ -221,7 +259,6 @@ export const AIResearchModalContent = ({
         setAnswer({
           sentences: ['Synthesis failed: invalid response from server.'],
           inline: [],
-          confidence: 0.1,
         })
       }
     } catch (error) {
@@ -237,7 +274,6 @@ export const AIResearchModalContent = ({
           'An error occurred while processing your request. Please try again.',
         ],
         inline: [],
-        confidence: 0,
       })
     } finally {
       setLoading(false)
@@ -273,6 +309,8 @@ export const AIResearchModalContent = ({
             consultedDocs={consultedDocs}
             setAnswer={setAnswer}
             setQuery={setQuery}
+            alignLoading={alignLoading}
+            alignment={alignment}
             setSupportingCitationsPage={setSupportingCitationsPage}
           />
           <Box

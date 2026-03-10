@@ -43,11 +43,8 @@ const CitePanel = ({
     energy_gco2e: number | null
   } | null
   alignment: {
-    coverage?: string[]
-    caveats?: string[]
-    risks?: string[]
-    suggestions?: string[]
-    confidence?: number
+    insights?: string[]
+    alignment?: 'High' | 'Moderate' | 'Low' | 'Very Low'
     _debugKeys?: string[]
   } | null
   alignLoading: boolean
@@ -81,10 +78,11 @@ const CitePanel = ({
 
         // Convert relevance score to High/Medium/Low
         const relevanceLabel = getRelevanceLevel(docRel)
+
         return {
           id: doc.doc_id,
           publication_title: titleFrom(doc, row),
-          author: `${chicagoFull(doc, row)} [${typeFrom(row)}]`,
+          author: row?.allAuthors || '',
           summary,
           short_summary:
             row?.shortSummary ||

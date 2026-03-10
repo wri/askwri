@@ -18,6 +18,7 @@ import {
   yearFrom,
   firstSentence,
   normalizeCatalogRow,
+  buildAlignmentSummary,
 } from '../utils/utils'
 
 /* ---------- component ---------- */
@@ -25,7 +26,6 @@ type WhyMeta = { why: string; relation: 'direct' | 'indirect' }
 
 const AskWriAppContent = () => {
   const [query, setQuery] = useState('')
-  const [history, setHistory] = useState<string[]>([])
   const [retrievalLoading, setRetrievalLoading] = useState(false)
   const [alignLoading, setAlignLoading] = useState(false)
   const [transcript, setTranscript] = useState<string[]>([])
@@ -38,11 +38,8 @@ const AskWriAppContent = () => {
   } | null>(null)
   const [supporting, setSupporting] = useState<DocMeta[]>([])
   const [alignment, setAlignment] = useState<{
-    coverage?: string[]
-    caveats?: string[]
-    risks?: string[]
-    suggestions?: string[]
-    confidence?: number
+    insights?: string[]
+    alignment?: 'High' | 'Moderate' | 'Low' | 'Very Low'
     _debugKeys?: string[]
   } | null>(null)
 
@@ -86,9 +83,6 @@ const AskWriAppContent = () => {
 
   const searchParams = useSearchParams()
   const searchQuery = searchParams?.get('q')?.trim() ?? ''
-  function pushHistory(q: string) {
-    setHistory((h) => [q, ...h.filter((x) => x !== q)].slice(0, 20))
-  }
 
   function approxUsageAndOps(
     q: string,
@@ -193,7 +187,7 @@ const AskWriAppContent = () => {
     setDocSummaryLoading({})
 
     setSupporting([])
-    pushHistory(q.trim())
+
     doCite(q)
   }
 
@@ -275,22 +269,6 @@ const AskWriAppContent = () => {
     })
   }, [index, pageDocs, query])
 
-  // Helper function to get top quality results (top 40% by score)
-  function getTopQualityDocs(docs: DocMeta[], maxDocs: number = 8): DocMeta[] {
-    if (!docs.length) return []
-
-    // Sort by score descending
-    const sortedDocs = [...docs].sort((a, b) => (b.score || 0) - (a.score || 0))
-
-    // Take top 40% but cap at maxDocs
-    const top40Percent = Math.max(1, Math.ceil(sortedDocs.length * 0.4))
-    const finalCount = Math.min(top40Percent, maxDocs)
-
-    const selected = sortedDocs.slice(0, finalCount)
-
-    return selected
-  }
-
   async function runAlignment(q: string, docs: DocMeta[]) {
     try {
       if (!docs?.length) {
@@ -299,30 +277,28 @@ const AskWriAppContent = () => {
       }
       setAlignLoading(true)
 
-      // Use only top 40% quality docs for alignment to improve signal and reduce cost
-      const topQualityDocs = getTopQualityDocs(docs, 8)
-
-      // For alignment analysis, enhance existing docs with more context (avoid extra API call)
-      const docsForAlignment = topQualityDocs.map((doc) => ({
-        ...doc,
-        // Add a flag to indicate this is for alignment analysis
-        _alignmentContext: true,
-        // COST OPTIMIZATION: Reduce KPs from 30 to 5 per doc - alignment still works with less context
-        kps: (doc.kps || []).slice(0, 5), // Fewer passages saves tokens while maintaining quality
-      }))
+      const resultsSummaryForAlignment = buildAlignmentSummary(q, docs)
 
       const r = await fetch('/api/alignment', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           query: q,
-          docs: docsForAlignment,
-          answer: undefined,
+          resultsSummary: resultsSummaryForAlignment,
         }),
       })
       const j = await r.json()
+
       if (j?.ok && j?.assessment) {
-        setAlignment(j.assessment)
+        const { insights, alignment } = j.assessment
+
+        const finalAlignment = {
+          insights,
+          alignment,
+          _debugKeys: j.debug?.keys || [],
+        }
+
+        setAlignment(finalAlignment)
 
         // Cache the alignment result
         const cacheKey = `cite:${q.trim()}`
@@ -330,7 +306,7 @@ const AskWriAppContent = () => {
           ...prev,
           [cacheKey]: {
             ...prev[cacheKey],
-            alignment: j.assessment,
+            alignment: finalAlignment,
             timestamp: Date.now(),
           },
         }))

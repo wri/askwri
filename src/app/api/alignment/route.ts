@@ -42,8 +42,8 @@ const BASE_REPAIR_MS = Number(
 
 // Token caps - increased for GPT-5 reasoning token usage
 const ENV_MAX = Number(process.env.OPENAI_MAX_TOKENS ?? CFG_MAX_TOKENS ?? 1500)
-const MAIN_MAX = Math.max(1000, Math.min(1500, ENV_MAX))
-const REPAIR_MAX = Math.min(MAIN_MAX + 500, 2000)
+const MAIN_MAX = IS_GPT5 ? 4000 : Math.max(1000, Math.min(1500, ENV_MAX))
+const REPAIR_MAX = IS_GPT5 ? 5000 : Math.min(MAIN_MAX + 500, 2000)
 
 // Temperature (route will omit for GPT-5 models)
 const TEMPERATURE = Number(
@@ -66,11 +66,8 @@ type Doc = {
   meta?: any
 }
 type Assessment = {
-  coverage: string[]
-  caveats: string[]
-  risks: string[]
-  suggestions: string[]
-  confidence: number
+  insights: string[]
+  alignment: 'High' | 'Moderate' | 'Low' | 'Very Low'
 }
 
 type TryInfo = {
@@ -85,7 +82,6 @@ type TryInfo = {
 }
 
 /* ---------------- Utils ---------------- */
-const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n))
 const estimateTokens = (...lens: number[]) =>
   Math.ceil(lens.reduce((s, v) => s + (v || 0), 0) / 4)
 
@@ -124,44 +120,6 @@ const snipFrom = (d: Doc) =>
       d.meta?.raw?.text ||
       '',
   )
-
-/* ------------- Prompt compaction ------------- */
-function compactDocs(docs: Doc[], maxDocs: number, snipLen: number) {
-  const out: { title: string; snippet: string; url?: string; page?: number }[] =
-    []
-  for (const d of (docs || []).slice(0, maxDocs)) {
-    const t = titleFrom(d)
-    const k = d.kps?.[0] || {}
-    const s = firstSentence(
-      (k?.snippet || snipFrom(d) || '').slice(0, snipLen),
-      snipLen,
-    )
-    const url = d._url || d.url
-    out.push({ title: t, snippet: s, url, page: k?.page })
-  }
-  return out
-}
-
-function buildUser(
-  query: string,
-  answer: string,
-  docs: ReturnType<typeof compactDocs>,
-) {
-  const lines: string[] = []
-  lines.push(`Query:\n${query}`)
-  if (answer) lines.push(`\nAnswer (optional):\n${answer}`)
-  lines.push(`\nCited passages (compact):`)
-  docs.forEach((d, i) => {
-    const p = typeof d.page === 'number' ? ` (p.${d.page})` : ''
-    const url = d.url ? `\nURL: ${d.url}` : ''
-    lines.push(`${i + 1}. ${d.title}${p}\n${d.snippet}${url}`)
-  })
-  // Nudge to avoid meta but keep your system prompt authoritative
-  lines.push(
-    `\nInstruction: Focus ONLY on substantive alignment; ignore any meta/process talk.`,
-  )
-  return lines.join('\n')
-}
 
 /* ---------------- Meta sanitization ---------------- */
 const META_PHRASES = [
@@ -217,41 +175,47 @@ const META_PHRASES = [
   'numeric scale',
   'confidence value',
 ]
-function escapeRegExp(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-const META_RE = new RegExp(META_PHRASES.map(escapeRegExp).join('|'), 'i')
+
+// Build metaSet once at module level for efficiency
+const META_SET = new Set(META_PHRASES.map((s) => s.trim().toLowerCase()))
 
 function stripMeta(arr: string[], limit: number): string[] {
   const cleaned = (arr || [])
     .map((s) => String(s || '').trim())
     .filter(Boolean)
-    .filter((s) => !META_RE.test(s))
+    .filter((s) => !META_SET.has(s.toLowerCase()))
   // Return up to 'limit' items, don't truncate the text
   return cleaned.slice(0, limit)
 }
 
-function sanitizeAssessment(input: Assessment): Assessment {
-  const coverage = stripMeta(input.coverage, 4)
-  const caveats = stripMeta(input.caveats, 4)
-  const risks = stripMeta(input.risks, 4)
-  const suggestions = stripMeta(input.suggestions, 4)
-  const out: Assessment = {
-    coverage: coverage.length ? coverage : ['Coverage unclear.'],
-    caveats: caveats.length
-      ? caveats
-      : ['Insufficient evidence for a robust assessment.'],
-    risks: risks.length
-      ? risks
-      : ['Findings may be incomplete due to sparse evidence.'],
-    suggestions: suggestions.length
-      ? suggestions
-      : ['Provide 1–3 relevant sources or a draft answer.'],
-    confidence:
-      typeof (input as any).confidence === 'number'
-        ? clamp((input as any).confidence, 0, 1)
-        : 0.5,
+function sanitizeAssessment(input: any = {}): Assessment {
+  const insightsRaw = Array.isArray(input?.insights) ? input.insights : []
+  const insights = stripMeta(insightsRaw, 5)
+  const alignmentRaw =
+    typeof input.alignment === 'string' ? input.alignment.trim() : ''
+
+  const validAlignments = ['High', 'Moderate', 'Low', 'Very Low']
+
+  if (insights.length === 0 || !validAlignments.includes(alignmentRaw)) {
+    console.warn(
+      '[Alignment] Sanitization fallback triggered. Raw input:',
+      input,
+      insights,
+      alignmentRaw,
+    )
   }
+
+  const out: Assessment = {
+    insights: insights.length
+      ? insights
+      : [
+          'Unable to assess alignment. Try providing more sources or refining your query.',
+        ],
+    alignment: validAlignments.includes(alignmentRaw)
+      ? alignmentRaw
+      : 'Moderate',
+  }
+
   return out
 }
 
@@ -337,14 +301,16 @@ async function chatOnce(
     }
   }
 
-  const content: string =
-    typeof msg.content === 'string'
-      ? msg.content
-      : msg?.parsed
-        ? JSON.stringify(msg.parsed)
-        : ''
-
+  let content = ''
   let parsed: any = null
+  if (typeof msg.content === 'string') {
+    content = msg.content
+  } else if (Array.isArray(msg.content)) {
+    content = msg.content.map((c: any) => c.text || '').join('')
+  } else if (msg.parsed) {
+    parsed = msg.parsed
+  }
+
   try {
     parsed = JSON.parse(content)
   } catch {}
@@ -376,13 +342,18 @@ const ALIGNMENT_SCHEMA = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['coverage', 'caveats', 'risks', 'suggestions', 'confidence'],
+    required: ['insights', 'alignment'],
     properties: {
-      coverage: { type: 'array', items: { type: 'string' }, maxItems: 4 },
-      caveats: { type: 'array', items: { type: 'string' }, maxItems: 4 },
-      risks: { type: 'array', items: { type: 'string' }, maxItems: 4 },
-      suggestions: { type: 'array', items: { type: 'string' }, maxItems: 4 },
-      confidence: { type: 'number', minimum: 0, maximum: 1 },
+      insights: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 2,
+        maxItems: 5,
+      },
+      alignment: {
+        type: 'string',
+        enum: ['High', 'Moderate', 'Low', 'Very Low'],
+      },
     },
   },
 }
@@ -406,16 +377,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
     const query = String(body?.query || '').trim()
-    const docs = Array.isArray(body?.docs) ? (body.docs as Doc[]) : []
-    const answerArr = Array.isArray(body?.answer)
-      ? body.answer
-      : body?.answer
-        ? [String(body.answer)]
-        : []
-    const answer = answerArr.join(' ').slice(0, 1000)
+    const resultsSummary = String(body?.resultsSummary || '').trim()
 
     console.log(
-      `[Alignment] Processing: query=${query.slice(0, 50)}..., docs=${docs.length}, answer_length=${answer.length}`,
+      `[Alignment] Processing: query=${query.slice(0, 50)}..., resultsSummary=${resultsSummary.slice(0, 50)}...`,
     )
 
     if (!query)
@@ -426,33 +391,26 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.OPENAI_API_KEY?.trim()
     if (!apiKey) {
-      const coverage = docs
-        .slice(0, 3)
-        .map((d: Doc) => {
-          const t = titleFrom(d)
-          const s = firstSentence(snipFrom(d), 200)
-          return s ? `${t}: ${s}` : t
-        })
-        .filter(Boolean)
+      const fallbackInsights: string[] = []
+
+      fallbackInsights.push('No API key set; offline heuristic.')
+      fallbackInsights.push(
+        'Set OPENAI_API_KEY and retry for full alignment analysis.',
+      )
+
       return NextResponse.json({
         ok: true,
         assessment: {
-          coverage: coverage.length ? coverage : ['No sources provided.'],
-          caveats: ['No API key set; offline heuristic.'],
-          risks: ['Answer not validated against documents.'],
-          suggestions: ['Set OPENAI_API_KEY.', 'Retry alignment with sources.'],
-          confidence: 0.4,
+          insights: fallbackInsights,
+          alignment: 'Low',
         },
         debug: { fallback: true, reason: 'missing_api_key', model: MODEL },
       })
     }
 
     // Build compact prompt using your EXACT system prompt from config
-    const DOCS_MAX = 5
-    const SNIP_LEN = 160
-    const compact = compactDocs(docs, DOCS_MAX, SNIP_LEN)
     const sys = String(ALIGNMENT_SYSTEM_PROMPT || '') // DO NOT modify your prompt
-    const userStr = buildUser(query, answer, compact)
+    const userStr = resultsSummary
 
     const approxToks = estimateTokens(sys.length, userStr.length)
     // Increase timeouts for GPT-5 models which are slower
@@ -504,6 +462,7 @@ export async function POST(req: NextRequest) {
       rawHead: t.rawHead,
       rawTail: t.rawTail,
     })
+
     if (t.ok && t.parsed && typeof t.parsed === 'object') {
       const sanitized = sanitizeAssessment(t.parsed as Assessment)
       return NextResponse.json({
@@ -610,23 +569,18 @@ export async function POST(req: NextRequest) {
     }
 
     /* ---- Deterministic fallback ---- */
-    const coverage = docs
-      .slice(0, 3)
-      .map((d: Doc) => {
-        const t0 = titleFrom(d)
-        const s0 = firstSentence(snipFrom(d), 200)
-        return s0 ? `${t0}: ${s0}` : t0
-      })
-      .filter(Boolean)
+    const fallbackInsights: string[] = []
+
+    fallbackInsights.push(
+      'Unable to complete alignment assessment due to server error.',
+    )
+    fallbackInsights.push(
+      'Try reducing prompt size, checking API quota, or retrying.',
+    )
+
     const fallbackAssessment: Assessment = {
-      coverage: coverage.length ? coverage : ['Coverage unclear.'],
-      caveats: [
-        'Exception in alignment route.',
-        'Empty or unparseable model output.',
-      ],
-      risks: ['Unexpected server error.', 'Schema mismatch.'],
-      suggestions: ['Retry.', 'Reduce prompt size.', 'Check API key & quota.'],
-      confidence: 0.5,
+      insights: fallbackInsights,
+      alignment: 'Moderate',
     }
     return NextResponse.json({
       ok: true,
@@ -641,20 +595,21 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error(`[Alignment] Fatal error:`, err)
     const isTimeout = String(err?.message || err).includes('abort')
+    const fallbackInsights = isTimeout
+      ? [
+          'Request timed out while processing alignment assessment.',
+          'Try a shorter query or reduce document count.',
+        ]
+      : [
+          'Exception occurred in alignment route.',
+          'Unexpected server error. Please retry.',
+        ]
+
     return NextResponse.json({
       ok: true,
       assessment: {
-        coverage: ['Coverage unclear.'],
-        caveats: isTimeout
-          ? ['Request timed out.']
-          : ['Exception in alignment route.'],
-        risks: isTimeout
-          ? ['Response took too long.']
-          : ['Unexpected server error.'],
-        suggestions: isTimeout
-          ? ['Try a shorter query.', 'Reduce document count.']
-          : ['Retry.'],
-        confidence: 0.5,
+        insights: fallbackInsights,
+        alignment: 'Moderate',
       },
       debug: {
         fallback: true,

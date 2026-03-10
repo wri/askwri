@@ -1,11 +1,15 @@
 import { DocMeta } from '@/lib/llamacloud'
 import { RowData } from '../results/types'
 
+export type Assessment = {
+  insights: string[]
+  alignment: 'High' | 'Moderate' | 'Low' | 'Very Low'
+}
+
 export interface AnswerResult {
   sentences: string[]
   paragraphs?: string[][]
   inline?: { ref: string; page: number }[][]
-  confidence?: number
   warning?: string
   warningMessage?: string
 }
@@ -18,6 +22,8 @@ export interface AnswerPanelProps {
   supportingDocs: DocMeta[]
   setAnswer: (answer: AnswerResult | null) => void
   setQuery: (query: string) => void
+  alignLoading?: boolean
+  alignment?: Assessment | null
   setSupportingCitationsPage?: (page: number) => void
 }
 

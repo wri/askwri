@@ -59,7 +59,7 @@ export function exportCitationsCsv({
   const rows = selectedDocs.map((doc: DocMeta) => {
     const row = index ? matchCatalogRow(doc, index) : undefined
     const title = titleFrom(doc, row)
-    const authors = authorsFrom(doc, row).join('; ')
+    const authors = row?.allAuthors || ''
     let datePublished = ''
     if (row?.raw?.['date published']) {
       datePublished = formatDate(row.raw['date published'])
