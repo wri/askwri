@@ -31,6 +31,8 @@ export const AnswerPanel = ({
   supportingDocs,
   setAnswer,
   setQuery,
+  alignLoading,
+  alignment,
   setSupportingCitationsPage,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
@@ -250,12 +252,18 @@ export const AnswerPanel = ({
             alignItems: 'center',
           }}
         >
-          <div style={{ width: '150px' }}>
-            <Tag
-              icon={<FaInfoCircle />}
-              label={`${((answer.confidence ?? 0) * 100).toFixed(0)}% Confidence`}
-              variant='info-white'
-            />
+          <div style={{ width: '280px' }}>
+            {alignLoading ? (
+              <Spinner />
+            ) : alignment ? (
+              <Tooltip content='AI assessment of how well the retrieved sources address the query and whether important gaps or risks remain.'>
+                <Tag
+                  icon={<FaInfoCircle />}
+                  label={`Alignment: ${alignment.alignment}`}
+                  variant='info-white'
+                />
+              </Tooltip>
+            ) : null}
           </div>
           <div>
             <Button
