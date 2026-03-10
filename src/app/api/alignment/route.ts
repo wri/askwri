@@ -175,16 +175,15 @@ const META_PHRASES = [
   'numeric scale',
   'confidence value',
 ]
-function escapeRegExp(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-const META_RE = new RegExp(META_PHRASES.map(escapeRegExp).join('|'), 'i')
+
+// Build metaSet once at module level for efficiency
+const META_SET = new Set(META_PHRASES.map((s) => s.trim().toLowerCase()))
 
 function stripMeta(arr: string[], limit: number): string[] {
   const cleaned = (arr || [])
     .map((s) => String(s || '').trim())
     .filter(Boolean)
-    .filter((s) => !META_RE.test(s))
+    .filter((s) => !META_SET.has(s.toLowerCase()))
   // Return up to 'limit' items, don't truncate the text
   return cleaned.slice(0, limit)
 }
@@ -196,6 +195,15 @@ function sanitizeAssessment(input: any = {}): Assessment {
     typeof input.alignment === 'string' ? input.alignment.trim() : ''
 
   const validAlignments = ['High', 'Moderate', 'Low', 'Very Low']
+
+  if (insights.length === 0 || !validAlignments.includes(alignmentRaw)) {
+    console.warn(
+      '[Alignment] Sanitization fallback triggered. Raw input:',
+      input,
+      insights,
+      alignmentRaw,
+    )
+  }
 
   const out: Assessment = {
     insights: insights.length
