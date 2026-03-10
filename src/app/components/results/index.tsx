@@ -37,8 +37,6 @@ const ResultsPage = ({
   const [improveSearchModalOpen, setImproveSearchModalOpen] = useState(false)
   const tableData = data
 
-  const confidence = (alignment?.confidence ?? 0) * 100
-
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
       <Navbar />
@@ -138,19 +136,20 @@ const ResultsPage = ({
             </List.Root>
           )}
         </Box>
-        {!alignLoading && alignment?.confidence && (
+        {!alignLoading && alignment?.alignment && (
           <div
             style={{
-              width: '150px',
-              alignItems: 'center',
+              width: '280px',
               marginBottom: '16px',
             }}
           >
-            <Tag
-              icon={<FaInfoCircle />}
-              label={`${confidence}% Confidence`}
-              variant='info-white'
-            />
+            <Tooltip content='AI assessment of how well the retrieved sources address the query and whether important gaps or risks remain.'>
+              <Tag
+                icon={<FaInfoCircle />}
+                label={`Alignment: ${alignment.alignment}`}
+                variant='info-white'
+              />
+            </Tooltip>
           </div>
         )}
       </section>
