@@ -56,3 +56,4 @@ search_service_environment_variables = {
 # Uncomment and set these to enable S3 document downloads
 documents_s3_bucket = "askwri-data"
 documents_s3_prefix = "documents/"
+cache_s3_prefix     = "cache/"
