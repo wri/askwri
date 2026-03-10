@@ -139,7 +139,7 @@ const ResultsPage = ({
         {!alignLoading && alignment?.alignment && (
           <div
             style={{
-              width: '150px',
+              width: '280px',
               alignItems: 'center',
               marginBottom: '16px',
             }}
