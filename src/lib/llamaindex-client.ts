@@ -78,38 +78,6 @@ export async function chatCiteLlamaIndex(
 
   const data = await callLlamaIndexService(query, 'cite', options)
 
-  // For cite mode, we want maximum recall, so let's also try some variations
-  if (data.docs.length < 10) {
-    // Try with even lower threshold
-    const broaderOptions = {
-      ...options,
-      similarity_threshold: -0.1, // Very permissive
-      max_results: 100,
-    }
-    try {
-      const broaderData = await callLlamaIndexService(
-        query,
-        'cite',
-        broaderOptions,
-      )
-      if (broaderData.docs.length > data.docs.length) {
-        // Use broader results if we got more documents
-        return {
-          message: '',
-          docs: broaderData.docs,
-          usage: broaderData.usage,
-          debug: {
-            llamaindex: true,
-            broaderSearch: true,
-            ...broaderData.debug,
-          },
-        }
-      }
-    } catch (error: any) {
-      // Swallow broader search error silently
-    }
-  }
-
   return {
     message: '',
     docs: data.docs,
