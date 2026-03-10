@@ -150,7 +150,7 @@ export const SelectableResultRow = ({
       </TableCell>
       <TableCell width={120}>
         <div style={{ width: 'fit-content' }}>
-          <Tooltip content='0 to 1, where 1 is most relevant'>
+          <Tooltip content='How relevant this document is compared with other results for this query. The top result is scaled to 1.0'>
             <Tag label={rowData.relevance} variant='success' />
           </Tooltip>
         </div>
