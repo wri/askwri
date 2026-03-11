@@ -16,9 +16,12 @@ import {
 import { AISearchForm } from './AISearchForm'
 import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
-import { AnswerResult, Assessment } from './types'
+import { AnswerResult, Assessment, Ops } from './types'
 import { RowData } from '../results/types'
-import { buildAlignmentSummary } from '@/app/utils/utils'
+import {
+  buildAlignmentSummary,
+  calculateEmbeddingCost,
+} from '@/app/utils/utils'
 
 const MAX_ANSWER_MODE_RESULTS = 20
 
@@ -38,8 +41,8 @@ export const AIResearchModalContent = ({
     ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
   )
   const [alignLoading, setAlignLoading] = useState(false)
-
   const [alignment, setAlignment] = useState<Assessment | null>(null)
+  const [ops, setOps] = useState<Ops | null>(null)
 
   const handleShuffleSuggestions = () => {
     setSuggestions(getRandomSuggestions(3, 'answer'))
@@ -123,7 +126,17 @@ export const AIResearchModalContent = ({
         }),
       })
       const data = await response.json()
-      const { docs } = data
+      const { docs, usage, debug } = data
+
+      const embeddingCost = calculateEmbeddingCost(
+        query,
+        docs,
+        usage,
+        debug,
+        'ANSv1.3',
+        answer ? answer.sentences.join(' ') : '',
+      )
+      setOps(embeddingCost)
 
       // IMPORTANT: Save ALL docs immediately (like original implementation)
       setSupportingDocs(docs)
@@ -311,6 +324,7 @@ export const AIResearchModalContent = ({
             setQuery={setQuery}
             alignLoading={alignLoading}
             alignment={alignment}
+            ops={ops}
             setSupportingCitationsPage={setSupportingCitationsPage}
           />
           <Box

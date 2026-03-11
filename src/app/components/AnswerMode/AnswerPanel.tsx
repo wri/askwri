@@ -20,6 +20,8 @@ import { AiIcon } from '../icons/AiIcon'
 import AIProcessExplainedExtendableCard from './AIProcessExplainedExtendableCard'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
+import { AiFillThunderbolt } from 'react-icons/ai'
+import { HiCurrencyDollar } from 'react-icons/hi2'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
@@ -33,6 +35,7 @@ export const AnswerPanel = ({
   setQuery,
   alignLoading,
   alignment,
+  ops,
   setSupportingCitationsPage,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
@@ -246,13 +249,13 @@ export const AnswerPanel = ({
         </Box>
         <div
           style={{
-            paddingTop: '12px',
             display: 'flex',
+            paddingTop: '12px',
             justifyContent: 'space-between',
             alignItems: 'center',
           }}
         >
-          <div style={{ width: '280px' }}>
+          <div style={{ flexShrink: 0 }}>
             {alignLoading ? (
               <Spinner />
             ) : alignment ? (
@@ -265,27 +268,57 @@ export const AnswerPanel = ({
               </Tooltip>
             ) : null}
           </div>
-          <div>
-            <Button
-              variant='borderless'
-              size='small'
-              leftIcon={<IoIosCopy />}
-              onClick={() => {
-                let text = ''
-                if (answer.paragraphs) {
-                  text = answer.paragraphs.map((p) => p.join(' ')).join('\n\n')
-                } else if (answer.sentences) {
-                  text = answer.sentences.join(' ')
-                }
-                navigator.clipboard.writeText(text)
-              }}
-            >
-              Copy
-            </Button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {!alignLoading && (
+              <>
+                <Tooltip content='Carbon equivalent of search'>
+                  <Button
+                    leftIcon={<AiFillThunderbolt />}
+                    variant='borderless'
+                    as='div'
+                    size='small'
+                    label={`${ops?.energy_gco2e?.toFixed(2) ?? '0'} gCO2e`}
+                    aria-label='Carbon equivalent of search'
+                    onClick={() => {}}
+                  />
+                </Tooltip>
+                <Tooltip content='Cost of credits used in search'>
+                  <Button
+                    as='div'
+                    leftIcon={<HiCurrencyDollar />}
+                    variant='borderless'
+                    size='small'
+                    label={`$${ops?.cost_usd?.toFixed(2) ?? '0.00'}`}
+                    aria-label='Cost of credits used in search'
+                    onClick={() => {}}
+                  />
+                </Tooltip>
+              </>
+            )}
+            <Tooltip content='Copy answer'>
+              <Button
+                as='div'
+                variant='borderless'
+                size='small'
+                leftIcon={<IoIosCopy />}
+                onClick={() => {
+                  let text = ''
+                  if (answer.paragraphs) {
+                    text = answer.paragraphs
+                      .map((p) => p.join(' '))
+                      .join('\n\n')
+                  } else if (answer.sentences) {
+                    text = answer.sentences.join(' ')
+                  }
+                  navigator.clipboard.writeText(text)
+                }}
+              ></Button>
+            </Tooltip>
             <Tooltip content='Mark as good result'>
               <Button
                 as='div'
                 variant='borderless'
+                size='small'
                 leftIcon={
                   feedbackSubmitted === FeedbackSubmitted.Loading &&
                   feedbackState === FeedbackType.Positive ? (
@@ -315,6 +348,7 @@ export const AnswerPanel = ({
               <Button
                 as='div'
                 variant='borderless'
+                size='small'
                 leftIcon={
                   feedbackSubmitted === FeedbackSubmitted.Loading &&
                   feedbackState === FeedbackType.Negative ? (

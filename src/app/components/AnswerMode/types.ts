@@ -4,6 +4,7 @@ import { RowData } from '../results/types'
 export type Assessment = {
   insights: string[]
   alignment: 'High' | 'Moderate' | 'Low' | 'Very Low'
+  _debugKeys?: string[]
 }
 
 export interface AnswerResult {
@@ -12,6 +13,13 @@ export interface AnswerResult {
   inline?: { ref: string; page: number }[][]
   warning?: string
   warningMessage?: string
+}
+
+export type Ops = {
+  index_version: string
+  prompt_version: string
+  cost_usd: number | null
+  energy_gco2e: number | null
 }
 
 export interface AnswerPanelProps {
@@ -24,6 +32,7 @@ export interface AnswerPanelProps {
   setQuery: (query: string) => void
   alignLoading?: boolean
   alignment?: Assessment | null
+  ops: Ops | null
   setSupportingCitationsPage?: (page: number) => void
 }
 
@@ -54,4 +63,10 @@ export interface SupportingCitationsProps {
   setFirstDocHowRelevant: (why: string) => void
   page?: number
   setPage?: (p: number) => void
+}
+
+export type Usage = {
+  total_tokens: number
+  prompt_tokens: number
+  completion_tokens: number
 }
