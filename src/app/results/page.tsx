@@ -19,7 +19,10 @@ import {
   firstSentence,
   normalizeCatalogRow,
   buildAlignmentSummary,
+  approxUsageAndOps,
+  calculateEmbeddingCost,
 } from '../utils/utils'
+import { Assessment, Ops } from '../components/AnswerMode/types'
 
 /* ---------- component ---------- */
 type WhyMeta = { why: string; relation: 'direct' | 'indirect' }
@@ -30,18 +33,9 @@ const AskWriAppContent = () => {
   const [alignLoading, setAlignLoading] = useState(false)
   const [transcript, setTranscript] = useState<string[]>([])
 
-  const [ops, setOps] = useState<{
-    index_version: string
-    prompt_version: string
-    cost_usd: number | null
-    energy_gco2e: number | null
-  } | null>(null)
+  const [ops, setOps] = useState<Ops | null>(null)
   const [supporting, setSupporting] = useState<DocMeta[]>([])
-  const [alignment, setAlignment] = useState<{
-    insights?: string[]
-    alignment?: 'High' | 'Moderate' | 'Low' | 'Very Low'
-    _debugKeys?: string[]
-  } | null>(null)
+  const [alignment, setAlignment] = useState<Assessment | null>(null)
 
   const [queryCache, setQueryCache] = useState<
     Record<
@@ -84,77 +78,21 @@ const AskWriAppContent = () => {
   const searchParams = useSearchParams()
   const searchQuery = searchParams?.get('q')?.trim() ?? ''
 
-  function approxUsageAndOps(
-    q: string,
-    message: string,
-    docs: DocMeta[],
-    promptVersion: string,
-  ) {
-    const promptChars =
-      q.length +
-      docs
-        .slice(0, 6)
-        .reduce((a, d) => a + (d.kps?.[0]?.snippet?.length ?? 0), 0)
-    const completionChars = message.length
-    const usage = {
-      model: process.env.OPENAI_MODEL || 'unknown',
-      prompt_tokens: Math.max(1, Math.round(promptChars / 4)),
-      completion_tokens: Math.max(1, Math.round(completionChars / 4)),
-    }
-    const total = usage.prompt_tokens + usage.completion_tokens
-    const cost = estimateCostUSD({ ...usage, total_tokens: total })
-    const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
-    setOps({
-      index_version: 'v1.0',
-      prompt_version: promptVersion,
-      cost_usd: cost ?? 0,
-      energy_gco2e: energy ?? 0,
-    })
-  }
-
   async function doCite(q: string) {
     try {
       setRetrievalLoading(true)
       const { docs, usage, debug } = await chatCiteLlamaIndex(q)
 
-      // Calculate embedding costs for cite mode
-      const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
-      const citeEmbeddingCost =
-        estimateCostUSD({
-          model: 'openai/text-embedding-3-small',
-          prompt_tokens: citeEmbeddingTokens,
-          completion_tokens: 0,
-        }) ?? 0.001
-      const citeEmbeddingEnergy =
-        estimateEnergyGCO2e({
-          model: 'text-embedding-3-small',
-          prompt_tokens: citeEmbeddingTokens,
-          completion_tokens: 0,
-        }) ?? 0.01
-
       setSupporting(docs)
       setRetrievalLoading(false)
 
-      if (usage) {
-        const total =
-          (usage.total_tokens ?? 0) ||
-          (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)
-        const cost = estimateCostUSD({ ...usage, total_tokens: total })
-        const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
-
-        // Add embedding costs from retrieval
-        const totalCost = (cost ?? 0) + (citeEmbeddingCost ?? 0)
-        const totalEnergy = (energy ?? 0) + (citeEmbeddingEnergy ?? 0)
-
-        setOps({
-          index_version: 'v1.0',
-          prompt_version: 'CITEv1.3',
-          cost_usd: totalCost,
-          energy_gco2e: totalEnergy,
-        })
-      } else {
-        approxUsageAndOps(q, '', docs, 'CITEv1.3')
-      }
+      const embeddingCost = calculateEmbeddingCost(
+        query,
+        docs,
+        usage,
+        debug ?? {},
+      )
+      setOps(embeddingCost)
     } catch (e: any) {
       setRetrievalLoading(false)
     }
@@ -207,7 +145,6 @@ const AskWriAppContent = () => {
   // Document-level WHY processing
   useEffect(() => {
     if (!index || supporting.length === 0) return
-
     pageDocs.forEach((d) => {
       const row = matchCatalogRow(d, index)
       const docTitle = titleFrom(d, row)

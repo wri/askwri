@@ -1,7 +1,10 @@
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable no-restricted-syntax */
 
-import { DocMeta } from '@/lib/llamacloud'
+import { DocMeta, LlamaCloudDebug } from '@/lib/llamacloud'
+import { estimateCostUSD } from '@/config/costs'
+import { estimateEnergyGCO2e } from '@/config/energy'
+import { Usage } from '../components/AnswerMode/types'
 
 export interface CatalogMeta {
   file_path?: string
@@ -214,4 +217,73 @@ export function buildAlignmentSummary(query: string, docs: any[]) {
   const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}. Sample passages: ${passages}`
 
   return resultsSummaryForAlignment
+}
+
+export function approxUsageAndOps(
+  q: string,
+  message: string,
+  docs: DocMeta[],
+  promptVersion: string,
+) {
+  const promptChars =
+    q.length +
+    docs.slice(0, 6).reduce((a, d) => a + (d.kps?.[0]?.snippet?.length ?? 0), 0)
+  const completionChars = message.length
+  const usage = {
+    model: process.env.OPENAI_MODEL || 'unknown',
+    prompt_tokens: Math.max(1, Math.round(promptChars / 4)),
+    completion_tokens: Math.max(1, Math.round(completionChars / 4)),
+  }
+  const total = usage.prompt_tokens + usage.completion_tokens
+  const cost = estimateCostUSD({ ...usage, total_tokens: total })
+  const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
+  return {
+    index_version: 'v1.0',
+    prompt_version: promptVersion,
+    cost_usd: cost ?? 0,
+    energy_gco2e: energy ?? 0,
+  }
+}
+
+export const calculateEmbeddingCost = (
+  query: string,
+  docs: DocMeta[],
+  usage: Usage,
+  debug: LlamaCloudDebug,
+) => {
+  const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
+  const citeEmbeddingCost =
+    estimateCostUSD({
+      model: 'openai/text-embedding-3-small',
+      prompt_tokens: citeEmbeddingTokens,
+      completion_tokens: 0,
+    }) ?? 0.001
+  const citeEmbeddingEnergy =
+    estimateEnergyGCO2e({
+      model: 'text-embedding-3-small',
+      prompt_tokens: citeEmbeddingTokens,
+      completion_tokens: 0,
+    }) ?? 0.01
+
+  if (usage) {
+    const total =
+      (usage.total_tokens ?? 0) ||
+      (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)
+    const cost = estimateCostUSD({ ...usage, total_tokens: total })
+    const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
+
+    // Add embedding costs from retrieval
+    const totalCost = (cost ?? 0) + (citeEmbeddingCost ?? 0)
+    const totalEnergy = (energy ?? 0) + (citeEmbeddingEnergy ?? 0)
+    return {
+      index_version: 'v1.0',
+      prompt_version: 'CITEv1.3',
+      cost_usd: totalCost,
+      energy_gco2e: totalEnergy,
+    }
+  } else {
+    const ops = approxUsageAndOps(query.trim(), '', docs, 'CITEv1.3')
+
+    return ops
+  }
 }
