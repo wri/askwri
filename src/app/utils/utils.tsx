@@ -250,6 +250,8 @@ export const calculateEmbeddingCost = (
   docs: DocMeta[],
   usage: Usage,
   debug: LlamaCloudDebug,
+  promptVersion: string = 'CITEv1.3',
+  answer: string = '',
 ) => {
   const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
   const citeEmbeddingCost =
@@ -277,12 +279,12 @@ export const calculateEmbeddingCost = (
     const totalEnergy = (energy ?? 0) + (citeEmbeddingEnergy ?? 0)
     return {
       index_version: 'v1.0',
-      prompt_version: 'CITEv1.3',
+      prompt_version: promptVersion,
       cost_usd: totalCost,
       energy_gco2e: totalEnergy,
     }
   } else {
-    const ops = approxUsageAndOps(query.trim(), '', docs, 'CITEv1.3')
+    const ops = approxUsageAndOps(query.trim(), answer, docs, promptVersion)
 
     return ops
   }

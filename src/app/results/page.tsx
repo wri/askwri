@@ -19,7 +19,6 @@ import {
   firstSentence,
   normalizeCatalogRow,
   buildAlignmentSummary,
-  approxUsageAndOps,
   calculateEmbeddingCost,
 } from '../utils/utils'
 import { Assessment, Ops } from '../components/AnswerMode/types'

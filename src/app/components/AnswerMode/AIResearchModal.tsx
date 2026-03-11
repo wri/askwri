@@ -128,7 +128,14 @@ export const AIResearchModalContent = ({
       const data = await response.json()
       const { docs, usage, debug } = data
 
-      const embeddingCost = calculateEmbeddingCost(query, docs, usage, debug)
+      const embeddingCost = calculateEmbeddingCost(
+        query,
+        docs,
+        usage,
+        debug,
+        'ANSv1.3',
+        answer ? answer.sentences.join(' ') : '',
+      )
       setOps(embeddingCost)
 
       // IMPORTANT: Save ALL docs immediately (like original implementation)
