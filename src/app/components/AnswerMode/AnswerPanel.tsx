@@ -295,7 +295,7 @@ export const AnswerPanel = ({
                 </Tooltip>
               </>
             )}
-            <Tooltip content='Copy'>
+            <Tooltip content='Copy answer'>
               <Button
                 as='div'
                 variant='borderless'
