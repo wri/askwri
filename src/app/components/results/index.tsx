@@ -11,13 +11,10 @@ import {
 import { FaInfoCircle } from 'react-icons/fa'
 import { HiCurrencyDollar } from 'react-icons/hi2'
 import { AiFillThunderbolt } from 'react-icons/ai'
-import { TfiThought } from 'react-icons/tfi'
 import { AiIcon } from '../icons/AiIcon'
 import Navbar from './Navbar'
 import ResultsTable from './ResultsTable'
 import { ResultsPageProps } from './types'
-import AIProcessModalContent from './AIProcessModal'
-import ImproveSearchModal from './ImproveSearchModal'
 import '../../styles.css'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
@@ -29,12 +26,9 @@ const ResultsPage = ({
   docWhyLoading,
   onExportBib,
   ops,
-  transcript,
   alignment,
   alignLoading,
 }: ResultsPageProps) => {
-  const [aiProcessModalOpen, setAiProcessModalOpen] = useState(false)
-  const [improveSearchModalOpen, setImproveSearchModalOpen] = useState(false)
   const tableData = data
 
   return (
@@ -83,25 +77,6 @@ const ResultsPage = ({
               </Tooltip>
             </>
           )}
-          {/*
-          TODO: hidding the "Improve Search" button until we decide on wether to implement this feature.
-          <Button
-            leftIcon={<FaSearch />}
-            variant='secondary'
-            size='small'
-            label='Improve Search'
-            aria-label='Improve Search'
-            onClick={() => setImproveSearchModalOpen(true)}
-          /> */}
-          <Button
-            leftIcon={<TfiThought />}
-            variant='secondary'
-            disabled={query.trim() === ''}
-            size='small'
-            label='Explain AI process'
-            aria-label='Explain AI process'
-            onClick={() => setAiProcessModalOpen(true)}
-          />
         </div>
       </section>
       <section style={{ padding: '0 2rem', maxWidth: '800px' }}>
@@ -160,23 +135,6 @@ const ResultsPage = ({
         docWhyLoading={docWhyLoading}
         onExportBib={onExportBib}
       />
-      <AIProcessModalContent
-        transcript={transcript}
-        query={query}
-        aiProcessModalOpen={aiProcessModalOpen}
-        setAiProcessModalOpen={setAiProcessModalOpen}
-      />
-      {/*
-      TODO: hidding the "Improve Search" button until we decide on wether to implement this feature.
-      <ImproveSearchModal
-        cost_usd={ops?.cost_usd ?? 0}
-        energy_gco2e={ops?.energy_gco2e ?? 0}
-        suggestions={alignment?.insights || []}
-        initialQuery={query}
-        improveSearchModalOpen={improveSearchModalOpen}
-        setImproveSearchModalOpen={setImproveSearchModalOpen}
-      />
-      */}
     </main>
   )
 }

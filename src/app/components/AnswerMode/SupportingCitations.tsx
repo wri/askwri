@@ -199,7 +199,11 @@ export const SupportingCitations = ({
           {paginatedItems[0] && (
             <Box display='flex' alignItems='center' gap='2' marginBottom='4'>
               <Tooltip content='How relevant this document is compared with other results for this query. The top result is scaled to 1.0'>
-                <Text fontSize='xs' fontWeight='medium'>
+                <Text
+                  fontSize='xs'
+                  fontWeight='medium'
+                  color={getThemedColor('neutral', 700)}
+                >
                   {`${getRelevanceLevel(paginatedItems[0].kp.kp_relevance)} relevance`}
                 </Text>
               </Tooltip>

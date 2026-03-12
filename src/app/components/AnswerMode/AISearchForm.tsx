@@ -49,7 +49,7 @@ export const AISearchForm = ({
             your search.
           </>
         ) : (
-          'Discover insights by asking about WRI knowledge products.'
+          'Discover insights by asking about WRI Knowledge Products.'
         )}
       </Text>
     </section>
