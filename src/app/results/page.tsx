@@ -30,8 +30,6 @@ const AskWriAppContent = () => {
   const [query, setQuery] = useState('')
   const [retrievalLoading, setRetrievalLoading] = useState(false)
   const [alignLoading, setAlignLoading] = useState(false)
-  const [transcript, setTranscript] = useState<string[]>([])
-
   const [ops, setOps] = useState<Ops | null>(null)
   const [supporting, setSupporting] = useState<DocMeta[]>([])
   const [alignment, setAlignment] = useState<Assessment | null>(null)
@@ -112,10 +110,6 @@ const AskWriAppContent = () => {
       return
     }
 
-    setTranscript([
-      `Interpret query: "${q.trim()}"`,
-      'Plan: CITE → build annotated bibliography.',
-    ])
     setAlignment(null)
 
     setDocWhy({})
@@ -384,7 +378,6 @@ const AskWriAppContent = () => {
           docWhyLoading={docWhyLoading}
           docSummaryLoading={docSummaryLoading}
           ops={ops}
-          transcript={transcript}
           alignment={alignment}
           alignLoading={alignLoading}
         />
