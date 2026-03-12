@@ -70,15 +70,6 @@ export type DocumentPreviewModalContentProps = {
   onExportBib?: (selectedIds: string[]) => void
 }
 
-export type ImproveSearchModalProps = {
-  cost_usd: number
-  energy_gco2e: number
-  suggestions: string[]
-  initialQuery: string
-  improveSearchModalOpen: boolean
-  setImproveSearchModalOpen: (open: boolean) => void
-}
-
 export enum FeedbackType {
   None = 0, // 0 = no feedback
   Positive = 1, // 1 = positive
