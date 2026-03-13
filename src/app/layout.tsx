@@ -47,6 +47,8 @@ const RootLayout = ({ children }: { children: ReactNode }) => (
             right: '3%',
             zIndex: 1000,
             borderRadius: '16px',
+            pointerEvents: 'none',
+            userSelect: 'none',
           }}
         >
           QA
