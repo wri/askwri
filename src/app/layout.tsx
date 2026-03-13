@@ -11,6 +11,8 @@ export const metadata: Metadata = {
     'Find relevant Knowledge Products for your research, identify insights, and export citations.',
 }
 
+const isQa = process.env.NEXT_PUBLIC_ENVIRONMENT === 'qa'
+
 const RootLayout = ({ children }: { children: ReactNode }) => (
   <html lang='en'>
     <head>
@@ -33,6 +35,25 @@ const RootLayout = ({ children }: { children: ReactNode }) => (
         {children}
         <Footer />
       </ChakraProvider>
+      {isQa && (
+        <div
+          style={{
+            backgroundColor: '#C11101',
+            color: 'white',
+            padding: '10px 20px',
+            textAlign: 'center',
+            position: 'fixed',
+            bottom: '3%',
+            right: '3%',
+            zIndex: 1000,
+            borderRadius: '16px',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          QA
+        </div>
+      )}
     </body>
   </html>
 )
