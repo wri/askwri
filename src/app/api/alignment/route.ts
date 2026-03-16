@@ -458,7 +458,7 @@ export async function POST(req: NextRequest) {
       status: t.status,
       durationMs: t.durationMs,
       finishReason: t.finishReason,
-      usage: t.usage,
+      usage: t.usage ? { ...t.usage, model: `openai/${MODEL}` } : null,
       rawHead: t.rawHead,
       rawTail: t.rawTail,
     })
@@ -511,7 +511,7 @@ export async function POST(req: NextRequest) {
         status: t.status,
         durationMs: t.durationMs,
         finishReason: t.finishReason,
-        usage: t.usage,
+        usage: t.usage ? { ...t.usage, model: `openai/${MODEL}` } : null,
         rawHead: t.rawHead,
         rawTail: t.rawTail,
       })
@@ -555,7 +555,7 @@ export async function POST(req: NextRequest) {
       status: t.status,
       durationMs: t.durationMs,
       finishReason: t.finishReason,
-      usage: t.usage,
+      usage: t.usage ? { ...t.usage, model: `openai/${MODEL}` } : null,
       rawHead: t.rawHead,
       rawTail: t.rawTail,
     })

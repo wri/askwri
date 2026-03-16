@@ -220,9 +220,7 @@ export async function POST(req: NextRequest) {
       message: '',
       docs,
       sources: docs, // For compatibility
-      usage: {
-        total_tokens: llamaIndexResponse.total_results * 100, // Rough estimate
-      },
+      usage: null, // Retrieval-only: no LLM tokens consumed
       debug: {
         llamaindex: true,
         service_url: SEARCH_SERVICE_URL,

@@ -1363,9 +1363,7 @@ async def embeddings_query(request: EmbeddingsRequest):
                 "service_version": "2.0.0",
                 **hybrid_results.debug
             },
-            "usage": {
-                "total_tokens": len(docs) * 100  # Rough estimate
-            }
+            "usage": None  # Retrieval-only: no LLM tokens consumed
         }
 
     except Exception as e:
