@@ -253,6 +253,8 @@ export const calculateEmbeddingCost = (
   promptVersion: string = 'CITEv1.3',
   answer: string = '',
 ) => {
+  // Retrieval is vector search + BM25 — no LLM tokens consumed.
+  // Only count the small embedding cost; alignment LLM cost is added later.
   const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
   const citeEmbeddingCost =
     estimateCostUSD({
@@ -267,25 +269,10 @@ export const calculateEmbeddingCost = (
       completion_tokens: 0,
     }) ?? 0.01
 
-  if (usage) {
-    const total =
-      (usage.total_tokens ?? 0) ||
-      (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)
-    const cost = estimateCostUSD({ ...usage, total_tokens: total })
-    const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
-
-    // Add embedding costs from retrieval
-    const totalCost = (cost ?? 0) + (citeEmbeddingCost ?? 0)
-    const totalEnergy = (energy ?? 0) + (citeEmbeddingEnergy ?? 0)
-    return {
-      index_version: 'v1.0',
-      prompt_version: promptVersion,
-      cost_usd: totalCost,
-      energy_gco2e: totalEnergy,
-    }
-  } else {
-    const ops = approxUsageAndOps(query.trim(), answer, docs, promptVersion)
-
-    return ops
+  return {
+    index_version: 'v1.0',
+    prompt_version: promptVersion,
+    cost_usd: citeEmbeddingCost,
+    energy_gco2e: citeEmbeddingEnergy,
   }
 }

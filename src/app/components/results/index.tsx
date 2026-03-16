@@ -70,7 +70,7 @@ const ResultsPage = ({
                   leftIcon={<HiCurrencyDollar />}
                   variant='borderless'
                   size='small'
-                  label={`$${ops?.cost_usd?.toFixed(2) ?? '0.00'}`}
+                  label={`$${ops?.cost_usd?.toFixed(4) ?? '0.0000'}`}
                   aria-label='Cost of credits used in search'
                   onClick={() => {}}
                 />
