@@ -3,7 +3,7 @@ import Script from 'next/script'
 import type { ReactNode } from 'react'
 import ChakraProvider from './Providers/ChakraProvider'
 import { Footer } from './components/Footer'
-import IsQA from './isQA'
+import IsQA from './IsQA'
 import './globals.css'
 
 export const metadata: Metadata = {
