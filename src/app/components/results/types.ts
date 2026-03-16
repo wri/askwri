@@ -57,7 +57,6 @@ export type ResultsPageProps = {
     cost_usd: number | null
     energy_gco2e: number | null
   } | null
-  transcript: string[]
   alignment: {
     insights?: string[]
     alignment?: 'High' | 'Moderate' | 'Low' | 'Very Low'
@@ -69,22 +68,6 @@ export type ResultsPageProps = {
 export type DocumentPreviewModalContentProps = {
   rowData: RowData
   onExportBib?: (selectedIds: string[]) => void
-}
-
-export type AIProcessModalContentProps = {
-  transcript: string[]
-  query: string
-  aiProcessModalOpen: boolean
-  setAiProcessModalOpen: (open: boolean) => void
-}
-
-export type ImproveSearchModalProps = {
-  cost_usd: number
-  energy_gco2e: number
-  suggestions: string[]
-  initialQuery: string
-  improveSearchModalOpen: boolean
-  setImproveSearchModalOpen: (open: boolean) => void
 }
 
 export enum FeedbackType {

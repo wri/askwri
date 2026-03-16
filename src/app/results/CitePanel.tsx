@@ -10,10 +10,8 @@ import {
   buildCatalogIndex,
   matchCatalogRow,
   titleFrom,
-  typeFrom,
   firstSentence,
   urlFrom,
-  chicagoFull,
 } from '../utils/utils'
 
 const CitePanel = ({
@@ -25,7 +23,6 @@ const CitePanel = ({
   docWhyLoading,
   docSummaryLoading,
   ops,
-  transcript,
   alignment,
   alignLoading,
 }: {
@@ -48,7 +45,6 @@ const CitePanel = ({
     _debugKeys?: string[]
   } | null
   alignLoading: boolean
-  transcript: string[]
 }) => {
   const exportBibCsv = (selectedIds: string[]) => {
     exportCitationsCsv({
@@ -104,7 +100,6 @@ const CitePanel = ({
       data={tableData}
       query={query}
       ops={ops}
-      transcript={transcript}
       docSummaryLoading={docSummaryLoading}
       docWhyLoading={docWhyLoading}
       alignment={alignment}
