@@ -11,7 +11,9 @@ export const metadata: Metadata = {
     'Find relevant Knowledge Products for your research, identify insights, and export citations.',
 }
 
-const isQa = process.env.NEXT_PUBLIC_ENVIRONMENT === 'qa'
+const isQa = process.env.DB_NAME === 'qa'
+// eslint-disable-next-line no-console
+console.log('env:', process.env)
 
 const RootLayout = ({ children }: { children: ReactNode }) => (
   <html lang='en'>
