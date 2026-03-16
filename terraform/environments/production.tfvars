@@ -29,6 +29,9 @@ health_check_path = "/api/health"
 # Application Environment Variables
 app_environment_variables = {
   "LOG_LEVEL" = "info"
+  "DB_HOST" = "askwri-db1.cty8g4ssygz9.us-east-2.rds.amazonaws.com"
+  "DB_PORT" = "5432"
+  "DB_NAME" = "production"
 }
 
 # =============================================================================
