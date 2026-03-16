@@ -22,9 +22,6 @@ RUN npm run build
 # Production stage
 FROM node:20-alpine AS runner
 
-ARG NEXT_PUBLIC_ENVIRONMENT
-ENV NEXT_PUBLIC_ENVIRONMENT=$NEXT_PUBLIC_ENVIRONMENT
-
 WORKDIR /app
 
 # Install curl for health checks, AWS CLI for S3 sync, and ca-certificates

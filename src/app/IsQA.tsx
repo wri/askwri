@@ -1,7 +1,9 @@
 'use client'
 
 const IsQA = () => {
-  const isQa = process.env.NEXT_PUBLIC_ENVIRONMENT === 'qa'
+  const isQa =
+    process.env.NEXT_PUBLIC_ENVIRONMENT === 'qa' ||
+    process.env.NEXT_PUBLIC_ENVIRONMENT === 'development'
   if (!isQa) return null
   return (
     <div
