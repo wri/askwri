@@ -3,6 +3,7 @@ import Script from 'next/script'
 import type { ReactNode } from 'react'
 import ChakraProvider from './Providers/ChakraProvider'
 import { Footer } from './components/Footer'
+import IsQA from './IsQA'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -10,10 +11,6 @@ export const metadata: Metadata = {
   description:
     'Find relevant Knowledge Products for your research, identify insights, and export citations.',
 }
-
-const isQa = process.env.DB_NAME === 'qa'
-// eslint-disable-next-line no-console
-console.log('env:', process.env)
 
 const RootLayout = ({ children }: { children: ReactNode }) => (
   <html lang='en'>
@@ -37,25 +34,7 @@ const RootLayout = ({ children }: { children: ReactNode }) => (
         {children}
         <Footer />
       </ChakraProvider>
-      {isQa && (
-        <div
-          style={{
-            backgroundColor: '#C11101',
-            color: 'white',
-            padding: '10px 20px',
-            textAlign: 'center',
-            position: 'fixed',
-            bottom: '3%',
-            right: '3%',
-            zIndex: 1000,
-            borderRadius: '16px',
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          QA
-        </div>
-      )}
+      <IsQA />
     </body>
   </html>
 )
