@@ -12,6 +12,7 @@ import {
   titleFrom,
   firstSentence,
   urlFrom,
+  yearFrom,
 } from '../utils/utils'
 
 const CitePanel = ({
@@ -90,6 +91,7 @@ const CitePanel = ({
           download_url: url,
           relevance_score: docRel,
           row_number: idx + 1,
+          year: yearFrom(doc, row),
           fullDoc: doc,
         }
       }),
