@@ -124,6 +124,7 @@ export const SelectableResultRow = ({
         >
           {rowData.publication_title}
         </Heading>
+        <div>{rowData.year}</div>
         <div
           style={{
             display: '-webkit-box',

@@ -12,7 +12,7 @@ export type RowData = {
   relevance_score?: number
   confidence?: number
   row_number?: number
-  year?: number
+  year?: number | string
   fullDoc: DocMeta
 }
 
