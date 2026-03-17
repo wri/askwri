@@ -111,6 +111,22 @@ resource "aws_security_group" "search_service" {
   }
 }
 
+# =============================================================================
+# RDS Access from Next.js
+# =============================================================================
+
+resource "aws_security_group_rule" "rds_from_ecs" {
+  count = var.rds_security_group_id != "" ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = var.rds_security_group_id
+  description              = "PostgreSQL from ${var.environment} ECS tasks for Next.js"
+}
+
 # Add rule to allow Next.js to connect to Search Service
 resource "aws_security_group_rule" "ecs_to_search_service" {
   type                     = "egress"

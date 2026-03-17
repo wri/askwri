@@ -201,6 +201,16 @@ variable "search_service_secret_env" {
 }
 
 # =============================================================================
+# RDS Variables
+# =============================================================================
+
+variable "rds_security_group_id" {
+  description = "Security group ID of the RDS instance to allow connections from ECS"
+  type        = string
+  default     = ""
+}
+
+# =============================================================================
 # S3 Variables
 # =============================================================================
 
