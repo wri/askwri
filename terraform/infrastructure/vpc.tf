@@ -66,24 +66,24 @@ resource "aws_subnet" "private" {
 # =============================================================================
 
 resource "aws_eip" "nat" {
-  count  = var.use_shared_vpc ? 0 : var.availability_zones_count
+  count  = var.use_shared_vpc ? 0 : 1
   domain = "vpc"
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-nat-eip-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment}-nat-eip"
   }
 
   depends_on = [aws_internet_gateway.main]
 }
 
 resource "aws_nat_gateway" "main" {
-  count = var.use_shared_vpc ? 0 : var.availability_zones_count
+  count = var.use_shared_vpc ? 0 : 1
 
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
+  allocation_id = aws_eip.nat[0].id
+  subnet_id     = aws_subnet.public[0].id
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-nat-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment}-nat"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -123,7 +123,7 @@ resource "aws_route_table" "private" {
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+    nat_gateway_id = aws_nat_gateway.main[0].id
   }
 
   tags = {
