@@ -91,7 +91,7 @@ const CitePanel = ({
           download_url: url,
           relevance_score: docRel,
           row_number: idx + 1,
-          year: yearFrom(doc, row) ?? '',
+          year: yearFrom(doc, row),
           fullDoc: doc,
         }
       }),
