@@ -16,11 +16,11 @@ import { parse } from 'csv-parse/sync';
 const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8000';
 
 // Load golden dataset
-const goldenDataPath = path.join(__dirname, 'golden-dataset.json');
+const goldenDataPath = path.join(__dirname, '../golden-dataset.json');
 const goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
 
 // Load documents CSV
-const csvPath = path.join(__dirname, '../search-service/data/documents.csv');
+const csvPath = path.join(__dirname, '../../search-service/data/documents.csv');
 const csvContent = fs.readFileSync(csvPath, 'utf-8');
 const documents: Array<Record<string, string>> = parse(csvContent, { columns: true, skip_empty_lines: true });
 

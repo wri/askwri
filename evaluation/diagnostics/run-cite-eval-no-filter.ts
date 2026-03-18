@@ -9,7 +9,7 @@ import * as path from 'path';
 
 const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8000';
 
-const goldenDataPath = path.join(__dirname, 'golden-dataset.json');
+const goldenDataPath = path.join(__dirname, '../golden-dataset.json');
 const goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
 
 interface TestCase {
