@@ -6,7 +6,7 @@ import {
 } from 'typeorm'
 
 @Entity('cite_mode_query_logs')
-export class CiteModeQueryLog {
+export class CiteModeQueryLogs {
   @PrimaryGeneratedColumn()
   id!: number
 
