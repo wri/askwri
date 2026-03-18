@@ -365,6 +365,27 @@ const AskWriAppContent = () => {
     })
   }, [pageDocs, index, supporting.length])
 
+  useEffect(() => {
+    if (pageDocs.length === 0) return
+    const topTenResults = JSON.stringify(
+      pageDocs
+        .slice(0, 10)
+        .map((doc) => titleFrom(doc, matchCatalogRow(doc, index))),
+    )
+
+    const sendFeedback = async () => {
+      await fetch('/api/cite-mode-query-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          topTenResults,
+        }),
+      })
+    }
+    sendFeedback()
+  }, [pageDocs, query])
+
   /* -------- render -------- */
   if (searchQuery) {
     if (pageDocs.length > 0) {

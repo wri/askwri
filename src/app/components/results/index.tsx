@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, FC } from 'react'
+import { FC } from 'react'
 import { Heading, Box, List, Text, Spinner } from '@chakra-ui/react'
 import {
   Button,
