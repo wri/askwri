@@ -11,9 +11,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(record, { status: 201 })
   } catch (error) {
     console.error('❌ Error inserting query:', error)
-    return NextResponse.json(
-      { error: 'Error inserting query', details: error },
-      { status: 500 },
-    )
+    const errorMessage =
+      error instanceof Error ? error.message : 'An unexpected error occurred'
+    const isProduction = process.env.NODE_ENV === 'production'
+    const responseBody: { error: string; details?: string } = {
+      error: 'Error inserting query',
+    }
+    if (!isProduction) {
+      responseBody.details = errorMessage
+    }
+    return NextResponse.json(responseBody, { status: 500 })
   }
 }
