@@ -24,11 +24,8 @@ const Navbar = () => {
           key='leave-feedback'
           variant='borderless'
           onClick={() => {
-            window.open(
-              'https://surveys.hotjar.com/4ba2c242-87ac-44a0-9f6f-6caed18f1cf2',
-              '_blank',
-              'noopener,noreferrer',
-            )
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(window as any)?.hj('event', 'open_survey')
           }}
         >
           Leave Feedback
