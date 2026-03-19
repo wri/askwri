@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const record = await insertAnswerModeQueryLog(body)
-    console.log('✅ Query inserted:', record)
+    console.log('✅ Query inserted')
     return NextResponse.json(record, { status: 201 })
   } catch (error) {
     console.error('❌ Error inserting query:', error)
