@@ -31,3 +31,11 @@ Table cite_mode_query_logs {
   top_ten_results text [not null]
   timestamp timestamptz [default: `now()`]
 }
+
+Table answer_mode_query_logs {
+  id int [pk, increment]
+  query text [not null]
+  answer text [not null]
+  top_ten_results text [not null]
+  timestamp timestamptz [default: `now()`]
+}

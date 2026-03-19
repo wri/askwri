@@ -21,7 +21,7 @@ import { RowData } from '../results/types'
 import {
   buildAlignmentSummary,
   calculateEmbeddingCost,
-} from '@/app/utils/utils'
+} from '../../utils/utils'
 
 const MAX_ANSWER_MODE_RESULTS = 20
 
@@ -81,9 +81,9 @@ export const AIResearchModalContent = ({
       const j = await r.json()
 
       if (j?.ok && j?.assessment) {
-        const { insights, alignment } = j.assessment
+        const { insights, alignment: alignmentData } = j.assessment
 
-        setAlignment({ insights, alignment })
+        setAlignment({ insights, alignment: alignmentData })
       } else {
         setAlignment(null)
       }
@@ -140,6 +140,10 @@ export const AIResearchModalContent = ({
 
       // IMPORTANT: Save ALL docs immediately (like original implementation)
       setSupportingDocs(docs)
+
+      const topTenResults = JSON.stringify(
+        docs.slice(0, 10).map((d: DocMeta) => d.title),
+      )
 
       // Filter docs to only those with actual content for synthesis
       const validDocs = docs.filter(
@@ -262,6 +266,16 @@ export const AIResearchModalContent = ({
         }
 
         setAnswer(answerWithCitations)
+
+        fetch('/api/answer-mode-query-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: query.trim(),
+            topTenResults,
+            answer: sentences.join(' '),
+          }),
+        })
 
         // Log warning if present
         if (warning) {
