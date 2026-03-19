@@ -141,19 +141,9 @@ export const AIResearchModalContent = ({
       // IMPORTANT: Save ALL docs immediately (like original implementation)
       setSupportingDocs(docs)
 
-      // Log top 10 results to answer mode query logs
       const topTenResults = JSON.stringify(
         docs.slice(0, 10).map((d: DocMeta) => d.title),
       )
-      fetch('/api/answer-mode-query-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: query.trim(),
-          topTenResults,
-          answer: answer ? answer.sentences.join(' ') : '',
-        }),
-      })
 
       // Filter docs to only those with actual content for synthesis
       const validDocs = docs.filter(
@@ -276,6 +266,16 @@ export const AIResearchModalContent = ({
         }
 
         setAnswer(answerWithCitations)
+
+        fetch('/api/answer-mode-query-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: query.trim(),
+            topTenResults,
+            answer: sentences.join(' '),
+          }),
+        })
 
         // Log warning if present
         if (warning) {
