@@ -1,7 +1,7 @@
+'use client'
+
 /* eslint-disable no-plusplus */
 /* eslint-disable react/no-array-index-key */
-
-'use client'
 
 import { useState, FC } from 'react'
 import { Text, Box, Heading, Spinner } from '@chakra-ui/react'
@@ -17,9 +17,10 @@ import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { MdChat } from 'react-icons/md'
 import { IoIosCopy } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
-import AIProcessExplainedExtendableCard from './AIProcessExplainedExtendableCard'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
+import { AiFillThunderbolt } from 'react-icons/ai'
+import { HiCurrencyDollar } from 'react-icons/hi2'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
@@ -31,6 +32,10 @@ export const AnswerPanel = ({
   supportingDocs,
   setAnswer,
   setQuery,
+  alignLoading,
+  alignment,
+  ops,
+  setSupportingCitationsPage,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
 
@@ -159,156 +164,217 @@ export const AnswerPanel = ({
           }}
         >
           {answer.paragraphs
-            ? answer.paragraphs.map((paragraph, pIdx) => {
-                let sentenceOffset = 0
-                for (let p = 0; p < pIdx; p++) {
-                  sentenceOffset += answer.paragraphs![p].length
-                }
-
-                return (
-                  <Box key={pIdx} marginBottom='3'>
-                    {paragraph.map((sent, sIdx) => {
-                      const globalSentIdx = sentenceOffset + sIdx
-                      return (
-                        <Text as='span' key={sIdx}>
-                          {sent}{' '}
-                          {answer.inline?.[globalSentIdx]?.map(
-                            (c: any, j: number) => (
-                              <Button
-                                key={j}
-                                size='small'
-                                variant='secondary'
-                                style={{
-                                  fontSize: '9px',
-                                  minWidth: 0,
-                                  height: 'auto',
-                                  lineHeight: 1,
-                                }}
-                                title={`Citation ${globalSentIdx + 1}.${j + 1}`}
-                              >
-                                {globalSentIdx + 1}.{j + 1}
-                              </Button>
-                            ),
-                          )}{' '}
-                        </Text>
+            ? (() => {
+                let globalCitationIdx = 0
+                return answer.paragraphs.map((paragraph, pIdx) => {
+                  let sentenceOffset = 0
+                  for (let p = 0; p < pIdx; p++) {
+                    sentenceOffset += answer.paragraphs![p].length
+                  }
+                  return (
+                    <Box key={pIdx} marginBottom='3'>
+                      {paragraph.map((sent, sIdx) => {
+                        const globalSentIdx = sentenceOffset + sIdx
+                        return (
+                          <Text as='span' key={sIdx}>
+                            {sent}{' '}
+                            {answer.inline?.[globalSentIdx]?.map(
+                              (c: any, j: number) => {
+                                const citationDisplay = `${globalSentIdx + 1}.${j + 1}`
+                                const citationPage = globalCitationIdx + 1
+                                const btn = (
+                                  <Button
+                                    key={j}
+                                    size='small'
+                                    variant='secondary'
+                                    style={{
+                                      fontSize: '9px',
+                                      minWidth: 0,
+                                      height: 'auto',
+                                      lineHeight: 1,
+                                    }}
+                                    title={`Citation ${globalSentIdx + 1}.${j + 1}`}
+                                    onClick={() =>
+                                      setSupportingCitationsPage?.(citationPage)
+                                    }
+                                  >
+                                    {citationDisplay}
+                                  </Button>
+                                )
+                                globalCitationIdx++
+                                return btn
+                              },
+                            )}{' '}
+                          </Text>
+                        )
+                      })}
+                    </Box>
+                  )
+                })
+              })()
+            : (() => {
+                let globalCitationIdx = 0
+                return answer.sentences.map((sent, i) => (
+                  <Text as='p' key={i} marginBottom='1' lineHeight='normal'>
+                    {sent}{' '}
+                    {answer.inline?.[i]?.map((c: any, j: number) => {
+                      const citationDisplay = `${i + 1}.${j + 1}`
+                      const citationPage = globalCitationIdx + 1
+                      const btn = (
+                        <Button
+                          key={j}
+                          size='small'
+                          variant='secondary'
+                          style={{
+                            fontSize: '9px',
+                            minWidth: 0,
+                            height: 'auto',
+                            lineHeight: 1,
+                          }}
+                          title={`Citation ${i + 1}.${j + 1}`}
+                          onClick={() =>
+                            setSupportingCitationsPage?.(citationPage)
+                          }
+                        >
+                          {citationDisplay}
+                        </Button>
                       )
+                      globalCitationIdx++
+                      return btn
                     })}
-                  </Box>
-                )
-              })
-            : answer.sentences.map((sent, i) => (
-                <Text as='p' key={i} marginBottom='1' lineHeight='normal'>
-                  {sent}{' '}
-                  {answer.inline?.[i]?.map((c: any, j: number) => (
-                    <Button
-                      key={j}
-                      size='small'
-                      variant='secondary'
-                      style={{
-                        fontSize: '9px',
-                        minWidth: 0,
-                        height: 'auto',
-                        lineHeight: 1,
-                      }}
-                      title={`Citation ${i + 1}.${j + 1}`}
-                    >
-                      {i + 1}.{j + 1}
-                    </Button>
-                  ))}
-                </Text>
-              ))}
+                  </Text>
+                ))
+              })()}
         </Box>
         <div
           style={{
-            paddingTop: '12px',
             display: 'flex',
+            paddingTop: '12px',
             justifyContent: 'space-between',
             alignItems: 'center',
           }}
         >
-          <div style={{ width: '150px' }}>
-            <Tag
-              icon={<FaInfoCircle />}
-              label={`${((answer.confidence ?? 0) * 100).toFixed(0)}% Confidence`}
-              variant='info-white'
-            />
+          <div style={{ flexShrink: 0 }}>
+            {alignLoading ? (
+              <Spinner />
+            ) : alignment ? (
+              <Tooltip content='AI assessment of how well the retrieved sources address the query and whether important gaps or risks remain.'>
+                <Tag
+                  icon={<FaInfoCircle />}
+                  label={`Alignment: ${alignment.alignment}`}
+                  variant='info-white'
+                />
+              </Tooltip>
+            ) : null}
           </div>
-          <div>
-            <Button
-              variant='borderless'
-              size='small'
-              leftIcon={<IoIosCopy />}
-              onClick={() => {
-                let text = ''
-                if (answer.paragraphs) {
-                  text = answer.paragraphs.map((p) => p.join(' ')).join('\n\n')
-                } else if (answer.sentences) {
-                  text = answer.sentences.join(' ')
-                }
-                navigator.clipboard.writeText(text)
-              }}
-            >
-              Copy
-            </Button>
-            <Button
-              variant='borderless'
-              leftIcon={
-                feedbackSubmitted === FeedbackSubmitted.Loading &&
-                feedbackState === FeedbackType.Positive ? (
-                  <Spinner />
-                ) : (
-                  <Tooltip content='Mark as good result'>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {!alignLoading && (
+              <>
+                <Tooltip content='Carbon equivalent of search'>
+                  <Button
+                    leftIcon={<AiFillThunderbolt />}
+                    variant='borderless'
+                    as='div'
+                    size='small'
+                    label={`${ops?.energy_gco2e?.toFixed(2) ?? '0'} gCO2e`}
+                    aria-label='Carbon equivalent of search'
+                    onClick={() => {}}
+                  />
+                </Tooltip>
+                <Tooltip content='Cost of credits used in search'>
+                  <Button
+                    as='div'
+                    leftIcon={<HiCurrencyDollar />}
+                    variant='borderless'
+                    size='small'
+                    label={`$${ops?.cost_usd?.toFixed(2) ?? '0.00'}`}
+                    aria-label='Cost of credits used in search'
+                    onClick={() => {}}
+                  />
+                </Tooltip>
+              </>
+            )}
+            <Tooltip content='Copy answer'>
+              <Button
+                as='div'
+                variant='borderless'
+                size='small'
+                leftIcon={<IoIosCopy />}
+                onClick={() => {
+                  let text = ''
+                  if (answer.paragraphs) {
+                    text = answer.paragraphs
+                      .map((p) => p.join(' '))
+                      .join('\n\n')
+                  } else if (answer.sentences) {
+                    text = answer.sentences.join(' ')
+                  }
+                  navigator.clipboard.writeText(text)
+                }}
+              ></Button>
+            </Tooltip>
+            <Tooltip content='Mark as good result'>
+              <Button
+                as='div'
+                variant='borderless'
+                size='small'
+                leftIcon={
+                  feedbackSubmitted === FeedbackSubmitted.Loading &&
+                  feedbackState === FeedbackType.Positive ? (
+                    <Spinner />
+                  ) : (
                     <FaThumbsUp />
-                  </Tooltip>
-                )
-              }
-              aria-label='Mark as good result'
-              onClick={() => handleFeedback(FeedbackType.Positive)}
-              style={
-                feedbackState === FeedbackType.Positive
-                  ? {
-                      background: getThemedColor('success', 300),
-                      color: getThemedColor('success', 900),
-                      opacity: 0.8,
-                    }
-                  : {}
-              }
-              disabled={
-                feedbackState === FeedbackType.Positive &&
-                feedbackSubmitted === FeedbackSubmitted.Loading
-              }
-            />
-            <Button
-              variant='borderless'
-              leftIcon={
-                feedbackSubmitted === FeedbackSubmitted.Loading &&
-                feedbackState === FeedbackType.Negative ? (
-                  <Spinner />
-                ) : (
-                  <Tooltip content='Mark as poor result'>
+                  )
+                }
+                aria-label='Mark as good result'
+                onClick={() => handleFeedback(FeedbackType.Positive)}
+                style={
+                  feedbackState === FeedbackType.Positive
+                    ? {
+                        background: getThemedColor('success', 300),
+                        color: getThemedColor('success', 900),
+                        opacity: 0.8,
+                      }
+                    : {}
+                }
+                disabled={
+                  feedbackState === FeedbackType.Positive &&
+                  feedbackSubmitted === FeedbackSubmitted.Loading
+                }
+              />
+            </Tooltip>
+            <Tooltip content='Mark as poor result'>
+              <Button
+                as='div'
+                variant='borderless'
+                size='small'
+                leftIcon={
+                  feedbackSubmitted === FeedbackSubmitted.Loading &&
+                  feedbackState === FeedbackType.Negative ? (
+                    <Spinner />
+                  ) : (
                     <FaThumbsDown />
-                  </Tooltip>
-                )
-              }
-              aria-label='Mark as poor result'
-              onClick={() => handleFeedback(FeedbackType.Negative)}
-              style={
-                feedbackState === FeedbackType.Negative
-                  ? {
-                      background: getThemedColor('error', 300),
-                      color: getThemedColor('error', 900),
-                      opacity: 0.8,
-                    }
-                  : {}
-              }
-              disabled={
-                feedbackState === FeedbackType.Negative &&
-                feedbackSubmitted === FeedbackSubmitted.Loading
-              }
-            />
+                  )
+                }
+                aria-label='Mark as poor result'
+                onClick={() => handleFeedback(FeedbackType.Negative)}
+                style={
+                  feedbackState === FeedbackType.Negative
+                    ? {
+                        background: getThemedColor('error', 300),
+                        color: getThemedColor('error', 900),
+                        opacity: 0.8,
+                      }
+                    : {}
+                }
+                disabled={
+                  feedbackState === FeedbackType.Negative &&
+                  feedbackSubmitted === FeedbackSubmitted.Loading
+                }
+              />
+            </Tooltip>
           </div>
         </div>
-        <AIProcessExplainedExtendableCard query={query} />
       </Box>
       <Modal
         size='medium'

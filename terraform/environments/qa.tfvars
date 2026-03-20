@@ -10,6 +10,11 @@ aws_region   = "us-east-2"
 vpc_cidr                 = "10.0.0.0/16"
 availability_zones_count = 2
 
+# Domain / SSL
+domain_name            = "qa.askwri-app.org"
+certificate_arn        = "arn:aws:acm:us-east-2:905418285725:certificate/2519ada5-98d9-43f5-9b31-e70801862222"
+listener_rule_priority = 200
+
 # ECS Configuration
 container_port   = 3000
 container_cpu    = 256   # 0.25 vCPU
@@ -24,6 +29,9 @@ health_check_path = "/api/health"
 # Application Environment Variables
 app_environment_variables = {
   "LOG_LEVEL" = "debug"
+  "DB_HOST" = "askwri-db1.cty8g4ssygz9.us-east-2.rds.amazonaws.com"
+  "DB_PORT" = "5432"
+  "DB_NAME" = "qa"
 }
 
 # =============================================================================
@@ -49,5 +57,9 @@ search_service_environment_variables = {
 # S3 Documents Configuration (QA)
 # =============================================================================
 # Uncomment and set these to enable S3 document downloads
+# RDS Configuration
+rds_security_group_id = "sg-0575d778d3c2efb0c"
+
 documents_s3_bucket = "askwri-data"
 documents_s3_prefix = "documents/"
+cache_s3_prefix     = "cache/"

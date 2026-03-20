@@ -11,18 +11,39 @@ export const DocumentPreviewModalContent = ({
 }: DocumentPreviewModalContentProps) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
     <div style={{ width: 'fit-content' }}>
-      <Tag label={`${rowData.relevance} Relevance`} variant='success' />
+      <Tag label={`${rowData.relevance} Relevance`} variant={
+        rowData.relevance === 'Strong' ? 'success'
+          : rowData.relevance === 'Partial' ? 'warning'
+            : rowData.relevance === 'Weak' ? 'info-grey'
+              : 'success'
+      } />
     </div>
     <div>
-      <Heading size='2xl'>{rowData.publication_name}</Heading>
+      <Heading size='2xl'>{rowData.publication_title}</Heading>
     </div>
+
     <div>
+      <Text
+        textStyle='md'
+        style={{
+          marginBottom: '8px',
+        }}
+      >
+        {rowData.summary}
+      </Text>
       <Text
         style={{
           color: getThemedColor('neutral', 700),
         }}
       >
         {rowData.author}
+      </Text>
+      <Text
+        style={{
+          color: getThemedColor('neutral', 700),
+        }}
+      >
+        {rowData.fullDoc.year}
       </Text>
     </div>
     <div
@@ -119,7 +140,7 @@ export const DocumentPreviewModalContent = ({
           onExportBib?.([rowData.id.toString()])
         }}
       >
-        Export citations (.docx)
+        Export citations (.csv)
       </Button>
     </div>
   </div>

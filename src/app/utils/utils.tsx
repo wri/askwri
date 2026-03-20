@@ -1,7 +1,10 @@
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable no-restricted-syntax */
 
-import { DocMeta } from '@/lib/llamacloud'
+import { DocMeta, LlamaCloudDebug } from '@/lib/llamacloud'
+import { estimateCostUSD } from '@/config/costs'
+import { estimateEnergyGCO2e } from '@/config/energy'
+import { Usage } from '../components/AnswerMode/types'
 
 export interface CatalogMeta {
   file_path?: string
@@ -20,6 +23,7 @@ export interface RawCatalogInput {
 
 export interface CatalogRow {
   articleTitle?: string
+  publicationTitle?: string
   allAuthors?: string
   baseName?: string
   noExt?: string
@@ -31,6 +35,7 @@ export interface CatalogRow {
   dateAccepted?: string
   office?: string
   summary?: string
+  shortSummary?: string
   raw?: Record<string, any>
   fileName?: string
   meta?: CatalogMeta
@@ -92,17 +97,26 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
     fileName,
     baseName: baseName.toLowerCase(),
     noExt: noExt.toLowerCase(),
-    titleSlug: slug(meta['article title']) || undefined,
+    titleSlug: slug(meta['publication title']) || undefined,
     articleTitle: meta['article title'] || undefined,
+    publicationTitle: meta['publication title'] || undefined,
     allAuthors: meta['all authors'] || undefined,
     sourceUrl:
       meta['source url'] || meta['other weblink (not doi)'] || undefined,
-    articleType: meta['article type'] || undefined,
+    articleType: meta['article type'] || meta.article_type || undefined,
     subTag: meta['sub-tag'] || undefined,
     yearAccepted: toYear(String(meta['year accepted'] ?? meta.year)),
     dateAccepted: meta['date accepted'] || undefined,
-    office: meta['wri office affiliation (primary)'] || undefined,
+    office:
+      meta['wri office affiliation (primary)'] ||
+      meta.wri_primary_office ||
+      undefined,
     summary: r.meta?.summary || undefined, // Preserve the CSV summary field
+    shortSummary:
+      r.meta?.short_summary ||
+      meta['short_summary'] ||
+      meta['short summary'] ||
+      undefined,
     raw: meta,
   }
 }
@@ -146,7 +160,7 @@ export function matchCatalogRow(
   return undefined
 }
 export function titleFrom(doc: DocMeta, row?: CatalogRow) {
-  const t = row?.articleTitle || doc.title || ''
+  const t = row?.publicationTitle || doc.title || row?.articleTitle || ''
   if (t) return t
   const fromName =
     row?.baseName || stripExt(basename(doc._url || '')) || '(untitled)'
@@ -161,11 +175,7 @@ export function authorsFrom(doc: DocMeta, row?: CatalogRow) {
   return (doc.authors || []).filter(Boolean)
 }
 export function yearFrom(doc: DocMeta, row?: CatalogRow) {
-  return (
-    row?.yearAccepted ??
-    toYear(row?.dateAccepted ?? '') ??
-    (typeof doc.year === 'number' ? doc.year : undefined)
-  )
+  return doc?.year ?? row?.yearAccepted ?? toYear(row?.dateAccepted ?? '')
 }
 export function typeFrom(row?: CatalogRow) {
   return row?.articleType || 'Report'
@@ -179,9 +189,90 @@ export function urlFrom(doc: DocMeta, row?: CatalogRow) {
   return fn ? `/api/pdf/${basename(fn)}` : doc._url || null
 }
 export const chicagoFull = (doc: DocMeta, row?: CatalogRow) => {
-  const authors = authorsFrom(doc, row).join(', ') || '(author unknown)'
+  const authors = authorsFrom(doc, row).join('; ') || '(author unknown)'
   const title = `"${titleFrom(doc, row)}"`
   const cityPub = 'Washington, DC: WRI'
   const year = yearFrom(doc, row) ?? ''
   return `${authors}. ${title}. ${cityPub}, ${year}.`
+}
+
+export function buildAlignmentSummary(query: string, docs: any[]) {
+  const reviewedCount = docs.length
+  const highlyRelevant = docs.filter((d) => d.score >= 0.8).length
+  const moderatelyRelevant = docs.filter(
+    (d) => d.score >= 0.5 && d.score < 0.8,
+  ).length
+
+  const topDocs = [...docs]
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, 5)
+
+  const passages = topDocs
+    .map(
+      (d, i) =>
+        `${i + 1}. ${d.title || d.doc_id || 'Untitled'} (relevance: ${d.score?.toFixed(2) ?? 'N/A'})`,
+    )
+    .join(' ')
+
+  const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}. Sample passages: ${passages}`
+
+  return resultsSummaryForAlignment
+}
+
+export function approxUsageAndOps(
+  q: string,
+  message: string,
+  docs: DocMeta[],
+  promptVersion: string,
+) {
+  const promptChars =
+    q.length +
+    docs.slice(0, 6).reduce((a, d) => a + (d.kps?.[0]?.snippet?.length ?? 0), 0)
+  const completionChars = message.length
+  const usage = {
+    model: process.env.OPENAI_MODEL || 'unknown',
+    prompt_tokens: Math.max(1, Math.round(promptChars / 4)),
+    completion_tokens: Math.max(1, Math.round(completionChars / 4)),
+  }
+  const total = usage.prompt_tokens + usage.completion_tokens
+  const cost = estimateCostUSD({ ...usage, total_tokens: total })
+  const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
+  return {
+    index_version: 'v1.0',
+    prompt_version: promptVersion,
+    cost_usd: cost ?? 0,
+    energy_gco2e: energy ?? 0,
+  }
+}
+
+export const calculateEmbeddingCost = (
+  query: string,
+  docs: DocMeta[],
+  usage: Usage,
+  debug: LlamaCloudDebug,
+  promptVersion: string = 'CITEv1.3',
+  answer: string = '',
+) => {
+  // Retrieval is vector search + BM25 — no LLM tokens consumed.
+  // Only count the small embedding cost; alignment LLM cost is added later.
+  const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
+  const citeEmbeddingCost =
+    estimateCostUSD({
+      model: 'openai/text-embedding-3-small',
+      prompt_tokens: citeEmbeddingTokens,
+      completion_tokens: 0,
+    }) ?? 0.001
+  const citeEmbeddingEnergy =
+    estimateEnergyGCO2e({
+      model: 'text-embedding-3-small',
+      prompt_tokens: citeEmbeddingTokens,
+      completion_tokens: 0,
+    }) ?? 0.01
+
+  return {
+    index_version: 'v1.0',
+    prompt_version: promptVersion,
+    cost_usd: citeEmbeddingCost,
+    energy_gco2e: citeEmbeddingEnergy,
+  }
 }

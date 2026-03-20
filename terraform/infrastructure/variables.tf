@@ -47,6 +47,37 @@ variable "availability_zones_count" {
   default     = 2
 }
 
+variable "use_shared_vpc" {
+  description = "Whether to use a shared VPC from another environment's Terraform state"
+  type        = bool
+  default     = false
+}
+
+variable "shared_vpc_state_key" {
+  description = "S3 key for the Terraform state containing the shared VPC (e.g., 'qa/terraform.tfstate')"
+  type        = string
+  default     = ""
+}
+
+# =============================================================================
+# Domain / SSL Variables
+# =============================================================================
+
+variable "domain_name" {
+  description = "Domain name for the application (e.g., qa.askwri-app.org)"
+  type        = string
+}
+
+variable "certificate_arn" {
+  description = "ARN of the ACM certificate for HTTPS"
+  type        = string
+}
+
+variable "listener_rule_priority" {
+  description = "Priority for the host-based ALB listener rule (must be unique per listener)"
+  type        = number
+}
+
 # =============================================================================
 # ECS Variables
 # =============================================================================
@@ -170,6 +201,16 @@ variable "search_service_secret_env" {
 }
 
 # =============================================================================
+# RDS Variables
+# =============================================================================
+
+variable "rds_security_group_id" {
+  description = "Security group ID of the RDS instance to allow connections from ECS"
+  type        = string
+  default     = ""
+}
+
+# =============================================================================
 # S3 Variables
 # =============================================================================
 
@@ -183,4 +224,10 @@ variable "documents_s3_prefix" {
   description = "S3 prefix (folder path) for documents within the bucket"
   type        = string
   default     = "documents/"
+}
+
+variable "cache_s3_prefix" {
+  description = "S3 prefix (folder path) for cache within the bucket"
+  type        = string
+  default     = "cache/"
 }

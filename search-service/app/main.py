@@ -424,12 +424,12 @@ def load_documents_and_build_indexes():
             local_file_path = f"{settings.documents_local_dir}/{file_path}"
 
             service_state["documents_metadata"][doc_id] = {
-                "title": metadata_raw.get('Article Title', f'Document {doc_id}'),
+                "title": metadata_raw.get('Publication Title', f'Document {doc_id}'),
                 "authors": metadata_raw.get('All authors', ''),
                 "year": metadata_raw.get('YEAR published', ''),
                 "url": metadata_raw.get('Source URL', metadata_raw.get('URL', metadata_raw.get('Attribution URL', ''))),
                 "summary": row.get('summary', ''),
-                "subtag": metadata_raw.get('Sub-tag', ''),
+                "subtag": metadata_raw.get('Sub-tag', '') if isinstance(metadata_raw.get('Sub-tag'), str) else '',
                 "program_series": metadata_raw.get('program_series', ''),  # Add program_series for filtering
                 "file_path": file_path,
                 "local_file": local_file_path,
@@ -763,6 +763,42 @@ def load_documents_and_build_indexes():
                 })
                 nodes.append(node)
 
+        # Add a dedicated summary node per document for high-signal retrieval.
+        # Summaries are topic-dense (~585 chars avg) and give both the vector
+        # index and BM25 a concise representation of each document's subject,
+        # which fragmented PDF chunks often lack.
+        summary_count = 0
+        for doc in documents:
+            summary = doc["metadata"].get("summary", "")
+            if not summary:
+                continue
+            title = doc["metadata"].get("title", "")
+            summary_text = f"{title}\n\n{summary}" if title else summary
+            summary_node = TextNode(
+                text=summary_text,
+                metadata={
+                    "doc_id": doc["doc_id"],
+                    "title": title[:100],
+                    "authors": doc["metadata"].get("authors", ""),
+                    "year": doc["metadata"].get("year", ""),
+                    "subtag": (doc["metadata"].get("subtag", "") or "")[:50],
+                    "program_series": doc["metadata"].get("program_series", ""),
+                    "chunk_id": f"{doc['doc_id']}_summary",
+                    "chunk_index": -1,
+                    "total_chunks": -1,
+                    "page": 1,
+                    "chunk_start_pos": 0,
+                    "url": doc["metadata"].get("url", ""),
+                    "file_path": doc["metadata"].get("file_path", ""),
+                    "is_summary_node": True,
+                    "prev_chunk_id": None,
+                    "next_chunk_id": f"{doc['doc_id']}_chunk_0",
+                },
+            )
+            nodes.append(summary_node)
+            summary_count += 1
+        logger.info(f"Added {summary_count} summary nodes")
+
         # Cache the newly created nodes
         if cache and nodes:
             cache.cache_nodes("all_docs", content_hash, nodes)
@@ -869,18 +905,18 @@ def load_documents_and_build_indexes():
     logger.info(f"🔄 Loading cross-encoder rerankers (using cached models in offline mode)...")
     step_start = time.time()
 
-    logger.info(f"   [1/2] Loading Answer mode reranker (bge-reranker-v2-m3)...")
+    logger.info(f"   [1/2] Loading Answer mode reranker (MiniLM-L-6)...")
     reranker_start = time.time()
     reranker_answer = SentenceTransformerRerank(
-        model="BAAI/bge-reranker-v2-m3",  # 568M params, better passage discrimination for Answer mode
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # 22M params, fast on CPU (Fargate)
         top_n=20
     )
     logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
 
-    logger.info(f"   [2/2] Loading Cite mode reranker (L-6)...")
+    logger.info(f"   [2/2] Loading Cite mode reranker (MiniLM-L-6)...")
     reranker_start = time.time()
     reranker_cite = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-6-v2",   # Faster for Cite mode
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # Same lightweight model for Cite mode
         top_n=200  # Increased for better recall - preserves more candidates
     )
     logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
@@ -1057,6 +1093,7 @@ async def hybrid_query(request: QueryRequest):
             logger.info(f"Diagnostic - BM25 only: {len(bm25_only_results)} results")
 
         # Stage 1: Hybrid Fusion Retrieval
+        stage1_start = time.time()
         vector_retriever = VectorIndexRetriever(
             index=service_state["vector_index"],
             similarity_top_k=request.vector_top_k
@@ -1071,8 +1108,9 @@ async def hybrid_query(request: QueryRequest):
 
         # Retrieve with hybrid fusion
         stage1_results = hybrid_retriever.retrieve(query_bundle)
+        stage1_elapsed = time.time() - stage1_start
 
-        logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results")
+        logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results in {stage1_elapsed:.1f}s")
 
         # If answer mode and cite_doc_ids provided, filter stage1_results
         if request.mode == "answer" and request.cite_doc_ids:
@@ -1089,6 +1127,7 @@ async def hybrid_query(request: QueryRequest):
             if base_reranker:
                 try:
                     # Use base reranker with dynamic top_n
+                    stage2_start = time.time()
                     original_top_n = base_reranker.top_n
                     base_reranker.top_n = request.rerank_top_n
                     stage2_results = base_reranker.postprocess_nodes(
@@ -1096,7 +1135,8 @@ async def hybrid_query(request: QueryRequest):
                         query_bundle
                     )
                     base_reranker.top_n = original_top_n
-                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results")
+                    stage2_elapsed = time.time() - stage2_start
+                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
                 except Exception as e:
                     logger.warning(f"Reranking failed: {e}, using Stage 1 results")
                     stage2_results = stage1_results
@@ -1136,6 +1176,24 @@ async def hybrid_query(request: QueryRequest):
                 doc_id = node.node.metadata.get("doc_id")
                 if doc_id not in doc_groups or node.score > doc_groups[doc_id].score:
                     doc_groups[doc_id] = node
+
+            # Apply logit floor: drop docs below the calibrated threshold
+            pre_floor = len(doc_groups)
+            doc_groups = {k: v for k, v in doc_groups.items()
+                          if v.score >= settings.cite_logit_floor}
+            logger.info(f"Stage 3 (Logit Floor {settings.cite_logit_floor}): {pre_floor} → {len(doc_groups)} docs")
+
+            # Assign relevance tiers based on raw logit score
+            for node in doc_groups.values():
+                raw = node.score
+                if raw >= settings.cite_strong_threshold:
+                    tier = "strong"
+                elif raw >= settings.cite_partial_threshold:
+                    tier = "partial"
+                else:
+                    tier = "weak"
+                node.node.metadata["relevance_tier"] = tier
+
             filtered_results = list(doc_groups.values())[:request.max_results]
         else:
             # For answer mode - let hybrid fusion handle all ranking, no threshold filtering
@@ -1359,9 +1417,7 @@ async def embeddings_query(request: EmbeddingsRequest):
                 "service_version": "2.0.0",
                 **hybrid_results.debug
             },
-            "usage": {
-                "total_tokens": len(docs) * 100  # Rough estimate
-            }
+            "usage": None  # Retrieval-only: no LLM tokens consumed
         }
 
     except Exception as e:

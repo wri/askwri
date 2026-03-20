@@ -11,8 +11,9 @@ import {
   getThemedColor,
   Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
+import { IoIosCopy } from 'react-icons/io'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
-import { PiDownloadSimpleBold } from 'react-icons/pi'
+import { chicagoFull } from '../../utils/utils'
 import {
   SelectableResultRowProps,
   FeedbackType,
@@ -54,11 +55,11 @@ export const SelectableResultRow = ({
           feedbackType === FeedbackType.Positive ? 'positive' : 'negative',
         howRelevant: rowData.how_relevant,
         mode: 'cite',
-        publicationName: rowData.publication_name,
+        publicationName: rowData.publication_title,
         query,
         relevanceScore: rowData.relevance,
-        rowNumber: rowNumber,
-        summary: rowData.summary,
+        rowNumber,
+        summary: rowData.short_summary,
       }
       const res = await fetch('/api/cite-mode-feedback', {
         method: 'POST',
@@ -87,12 +88,6 @@ export const SelectableResultRow = ({
 
   const handleOnRowSelected = ({ checked }: { checked: boolean | string }) => {
     onCheckedChange(rowData, checked)
-  }
-
-  const handleDownload = () => {
-    if (!rowData.download_url) return
-
-    window.open(rowData.download_url, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -127,8 +122,9 @@ export const SelectableResultRow = ({
             textDecoration: onTitleClick && isHovered ? 'underline' : 'none',
           }}
         >
-          {rowData.publication_name}
+          {rowData.publication_title}
         </Heading>
+        <div>{rowData.year}</div>
         <div
           style={{
             display: '-webkit-box',
@@ -141,22 +137,26 @@ export const SelectableResultRow = ({
           {rowData.author}
         </div>
       </TableCell>
-      <TableCell width='20%'>
+      <TableCell width='25%'>
         {docSummaryLoading?.[rowData.id.toString()] ? (
           <span>Loading...</span>
         ) : (
           <div>
-            {rowData.summary && rowData.summary.length > SUMMARY_MAX_LENGTH
-              ? `${rowData.summary.slice(0, SUMMARY_MAX_LENGTH)}...`
-              : rowData.summary}
+            {rowData.short_summary &&
+            rowData.short_summary.length > SUMMARY_MAX_LENGTH
+              ? `${rowData.short_summary.slice(0, SUMMARY_MAX_LENGTH)}...`
+              : rowData.short_summary}
           </div>
         )}
       </TableCell>
       <TableCell width={120}>
         <div style={{ width: 'fit-content' }}>
-          <Tooltip content='0 to 1, where 1 is most relevant'>
-            <Tag label={rowData.relevance} variant='success' />
-          </Tooltip>
+          <Tag label={rowData.relevance} variant={
+            rowData.relevance === 'Strong' ? 'success'
+              : rowData.relevance === 'Partial' ? 'warning'
+                : rowData.relevance === 'Weak' ? 'info-grey'
+                  : 'success'
+          } />
         </div>
       </TableCell>
       <TableCell>
@@ -177,73 +177,76 @@ export const SelectableResultRow = ({
             transition: 'opacity 0.2s ease-in-out',
           }}
         >
-          <Button
-            variant='borderless'
-            leftIcon={
-              <Tooltip content='Copy citation to clipboard'>
-                <PiDownloadSimpleBold />
-              </Tooltip>
-            }
-            aria-label='Download publication'
-            onClick={handleDownload}
-            disabled={!rowData.download_url}
-          />
-          <Button
-            variant='borderless'
-            leftIcon={
-              feedbackSubmitted === FeedbackSubmitted.Loading &&
-              feedbackState === FeedbackType.Positive ? (
-                <Spinner />
-              ) : (
-                <Tooltip content='Mark as good result'>
+          <Tooltip content='Copy citation to clipboard'>
+            <Button
+              as='div'
+              variant='borderless'
+              leftIcon={<IoIosCopy />}
+              aria-label='Copy citation to clipboard'
+              onClick={() => {
+                const { fullDoc } = rowData
+                navigator.clipboard.writeText(chicagoFull(fullDoc, rowData))
+              }}
+            />
+          </Tooltip>
+          <Tooltip content='Mark as good result'>
+            <Button
+              as='div'
+              variant='borderless'
+              leftIcon={
+                feedbackSubmitted === FeedbackSubmitted.Loading &&
+                feedbackState === FeedbackType.Positive ? (
+                  <Spinner />
+                ) : (
                   <FaThumbsUp />
-                </Tooltip>
-              )
-            }
-            aria-label='Mark as good result'
-            onClick={() => handleFeedback(FeedbackType.Positive)}
-            style={
-              feedbackState === FeedbackType.Positive
-                ? {
-                    background: getThemedColor('success', 300),
-                    color: getThemedColor('success', 900),
-                    opacity: 0.8,
-                  }
-                : {}
-            }
-            disabled={
-              feedbackState === FeedbackType.Positive &&
-              feedbackSubmitted === FeedbackSubmitted.Loading
-            }
-          />
-          <Button
-            variant='borderless'
-            leftIcon={
-              feedbackSubmitted === FeedbackSubmitted.Loading &&
-              feedbackState === FeedbackType.Negative ? (
-                <Spinner />
-              ) : (
-                <Tooltip content='Mark as poor result'>
+                )
+              }
+              aria-label='Mark as good result'
+              onClick={() => handleFeedback(FeedbackType.Positive)}
+              style={
+                feedbackState === FeedbackType.Positive
+                  ? {
+                      background: getThemedColor('success', 300),
+                      color: getThemedColor('success', 900),
+                      opacity: 0.8,
+                    }
+                  : {}
+              }
+              disabled={
+                feedbackState === FeedbackType.Positive &&
+                feedbackSubmitted === FeedbackSubmitted.Loading
+              }
+            />
+          </Tooltip>
+          <Tooltip content='Mark as poor result'>
+            <Button
+              as='div'
+              variant='borderless'
+              leftIcon={
+                feedbackSubmitted === FeedbackSubmitted.Loading &&
+                feedbackState === FeedbackType.Negative ? (
+                  <Spinner />
+                ) : (
                   <FaThumbsDown />
-                </Tooltip>
-              )
-            }
-            aria-label='Mark as poor result'
-            onClick={() => handleFeedback(FeedbackType.Negative)}
-            style={
-              feedbackState === FeedbackType.Negative
-                ? {
-                    background: getThemedColor('error', 300),
-                    color: getThemedColor('error', 900),
-                    opacity: 0.8,
-                  }
-                : {}
-            }
-            disabled={
-              feedbackState === FeedbackType.Negative &&
-              feedbackSubmitted === FeedbackSubmitted.Loading
-            }
-          />
+                )
+              }
+              aria-label='Mark as poor result'
+              onClick={() => handleFeedback(FeedbackType.Negative)}
+              style={
+                feedbackState === FeedbackType.Negative
+                  ? {
+                      background: getThemedColor('error', 300),
+                      color: getThemedColor('error', 900),
+                      opacity: 0.8,
+                    }
+                  : {}
+              }
+              disabled={
+                feedbackState === FeedbackType.Negative &&
+                feedbackSubmitted === FeedbackSubmitted.Loading
+              }
+            />
+          </Tooltip>
         </div>
       </TableCell>
     </TableRow>

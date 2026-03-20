@@ -13,6 +13,8 @@ export type KP = {
   page?: number
   citation_targets: CitationTarget[]
 }
+export type RelevanceTier = 'strong' | 'partial' | 'weak'
+
 export type DocMeta = {
   doc_id: string
   document_id?: string
@@ -26,6 +28,8 @@ export type DocMeta = {
   source?: string
   summary?: string // Pre-generated summary from CSV
   score?: number
+  raw_score?: number
+  relevance_tier?: RelevanceTier
   kps: KP[]
   meta?: any
 }
@@ -272,7 +276,7 @@ function normalizeOneUnfiltered(raw: any): DocMeta | null {
 
   const title = String(
     raw.title ??
-      md.ArticleTitle ??
+      md.PublicationTitle ??
       md.title ??
       md.file_name ??
       md.file_path ??
@@ -372,7 +376,7 @@ function normalizeOne(raw: any): DocMeta | null {
 
   const title = String(
     raw.title ??
-      md['Article Title'] ??
+      md['Publication Title'] ??
       md.title ??
       md.file_name ??
       md.file_path ??

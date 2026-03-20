@@ -66,7 +66,7 @@ const Landing = () => {
         size='full-width'
         variant='warning'
         label='For WRI staff use only'
-        caption='This tool is under testing and intended for WRI employees only, not for external use. It is currently limited to a selection of knowledge products published by WRI Cities program. Results are generated using AI and may occasionally be incomplete or inaccurate.'
+        caption='This tool is under testing and intended for WRI employees only, not for external use. It is currently limited to a selection of Knowledge Products published by WRI Cities program. Results are generated using AI and may occasionally be incomplete or inaccurate.'
       />
 
       <section>
@@ -138,8 +138,8 @@ const Landing = () => {
                 color={getThemedColor('neutral', 700)}
                 fontWeight='400'
               >
-                For best results, try to include a topic, geography, and
-                timeframe in your search.
+                For best results, ask a direct question and experiment with
+                different levels of specificity, including geography.
               </Text>
             </Card.Description>
             <section key={suggestions.join('|')} className='suggestions-list'>

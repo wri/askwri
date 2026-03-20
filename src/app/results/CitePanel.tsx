@@ -10,10 +10,9 @@ import {
   buildCatalogIndex,
   matchCatalogRow,
   titleFrom,
-  typeFrom,
   firstSentence,
   urlFrom,
-  chicagoFull,
+  yearFrom,
 } from '../utils/utils'
 
 const CitePanel = ({
@@ -25,7 +24,6 @@ const CitePanel = ({
   docWhyLoading,
   docSummaryLoading,
   ops,
-  transcript,
   alignment,
   alignLoading,
 }: {
@@ -43,15 +41,11 @@ const CitePanel = ({
     energy_gco2e: number | null
   } | null
   alignment: {
-    coverage?: string[]
-    caveats?: string[]
-    risks?: string[]
-    suggestions?: string[]
-    confidence?: number
+    insights?: string[]
+    alignment?: 'High' | 'Moderate' | 'Low' | 'Very Low'
     _debugKeys?: string[]
   } | null
   alignLoading: boolean
-  transcript: string[]
 }) => {
   const exportBibCsv = (selectedIds: string[]) => {
     exportCitationsCsv({
@@ -79,30 +73,43 @@ const CitePanel = ({
             ? Math.max(...doc.kps.map((k) => k.kp_relevance || 0))
             : 0
 
-        // Convert relevance score to High/Medium/Low
-        const relevanceLabel = getRelevanceLevel(docRel)
+        // Use relevance tier from reranker logit thresholds
+        const tierLabels: Record<string, string> = {
+          strong: 'Strong',
+          partial: 'Partial',
+          weak: 'Weak',
+        }
+        const relevanceLabel =
+          doc.relevance_tier && tierLabels[doc.relevance_tier]
+            ? tierLabels[doc.relevance_tier]
+            : getRelevanceLevel(docRel)
 
         return {
           id: doc.doc_id,
-          publication_name: titleFrom(doc, row),
-          author: `${chicagoFull(doc, row)} [${typeFrom(row)}]`,
+          publication_title: titleFrom(doc, row),
+          author: row?.allAuthors || '',
           summary,
+          short_summary:
+            row?.shortSummary ||
+            row?.raw?.short_summary ||
+            row?.raw?.['short summary'] ||
+            summary,
           relevance: relevanceLabel,
           how_relevant: whyMeta?.why || firstSentence(best?.snippet ?? ''),
           download_url: url,
           relevance_score: docRel,
           row_number: idx + 1,
+          year: yearFrom(doc, row),
+          fullDoc: doc,
         }
       }),
     [docs, index, docSummary, docWhy],
   )
-
   return (
     <ResultsPage
       data={tableData}
       query={query}
       ops={ops}
-      transcript={transcript}
       docSummaryLoading={docSummaryLoading}
       docWhyLoading={docWhyLoading}
       alignment={alignment}

@@ -3,9 +3,10 @@
 # =============================================================================
 
 resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-${var.environment}-alb-sg"
+  count       = var.use_shared_vpc ? 0 : 1
+  name        = "${var.project_name}-alb-sg"
   description = "Security group for ALB"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description = "HTTP from anywhere"
@@ -32,7 +33,11 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-alb-sg"
+    Name = "${var.project_name}-alb-sg"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -43,14 +48,14 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "ecs" {
   name        = "${var.project_name}-${var.environment}-ecs-sg"
   description = "Security group for ECS tasks"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description     = "Allow traffic from ALB"
     from_port       = var.container_port
     to_port         = var.container_port
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    security_groups = [local.alb_security_group_id]
   }
 
   egress {
@@ -73,7 +78,7 @@ resource "aws_security_group" "ecs" {
 resource "aws_security_group" "search_service" {
   name        = "${var.project_name}-${var.environment}-search-service-sg"
   description = "Security group for Search Service ECS tasks"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   # Allow traffic from ALB
   ingress {
@@ -81,7 +86,7 @@ resource "aws_security_group" "search_service" {
     from_port       = var.search_service_container_port
     to_port         = var.search_service_container_port
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    security_groups = [local.alb_security_group_id]
   }
 
   # Allow traffic from Next.js ECS service
@@ -104,6 +109,22 @@ resource "aws_security_group" "search_service" {
   tags = {
     Name = "${var.project_name}-${var.environment}-search-service-sg"
   }
+}
+
+# =============================================================================
+# RDS Access from Next.js
+# =============================================================================
+
+resource "aws_security_group_rule" "rds_from_ecs" {
+  count = var.rds_security_group_id != "" ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = var.rds_security_group_id
+  description              = "PostgreSQL from ${var.environment} ECS tasks for Next.js"
 }
 
 # Add rule to allow Next.js to connect to Search Service

@@ -1,29 +1,34 @@
-/* eslint-disable no-restricted-syntax */
-
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+/* eslint-disable no-restricted-syntax */
+
+import { useState, useEffect, useMemo, FC } from 'react'
 import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
-import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
+import {
+  getThemedColor,
+  Button,
+  Tag,
+  Tooltip as DS_Tooltip,
+} from '@worldresources/wri-design-systems'
 import { DocMeta, KP } from '@/lib/llamacloud'
 import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
-import { getRelevanceLevel, getRelevanceColor } from '@/app/utils/relevance'
+import { getRelevanceLevel } from '@/app/utils/relevance'
 import { AiIcon } from '../icons/AiIcon'
+import { firstSentence, chicagoFull } from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
 
-// Helper to get first sentence from text
-const firstSentence = (text?: string) => {
-  if (!text) return ''
-  const match = text.match(/[^.!?]*[.!?]/)
-  return match ? match[0].trim() : text
-}
+const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
 export const SupportingCitations = ({
   supportingDocs,
   setFirstDocHowRelevant,
+  page: controlledPage,
+  setPage: setControlledPage,
 }: SupportingCitationsProps) => {
-  const [page, setPage] = useState(1)
+  const [internalPage, setInternalPage] = useState(1)
+  const page = controlledPage ?? internalPage
+  const setPage = setControlledPage ?? setInternalPage
   const [pageSize] = useState(1)
   const [passageWhy, setPassageWhy] = useState<Record<string, WhyMeta>>({})
   const [passageWhyLoading, setPassageWhyLoading] = useState<
@@ -187,19 +192,21 @@ export const SupportingCitations = ({
             color={getThemedColor('neutral', 900)}
             flexShrink={0}
           >
-            Citation {page} of {allItems.length}
+            Passage
           </Heading>
 
           {/* Relevance score */}
           {paginatedItems[0] && (
             <Box display='flex' alignItems='center' gap='2' marginBottom='4'>
-              <Text
-                fontSize='xs'
-                color={getRelevanceColor(paginatedItems[0].kp.kp_relevance)}
-                fontWeight='medium'
-              >
-                {`${getRelevanceLevel(paginatedItems[0].kp.kp_relevance)} relevance`}
-              </Text>
+              <Tooltip content='How relevant this document is compared with other results for this query. The top result is scaled to 1.0'>
+                <Text
+                  fontSize='xs'
+                  fontWeight='medium'
+                  color={getThemedColor('neutral', 700)}
+                >
+                  {`${getRelevanceLevel(paginatedItems[0].kp.kp_relevance)} relevance`}
+                </Text>
+              </Tooltip>
             </Box>
           )}
         </div>
@@ -218,12 +225,13 @@ export const SupportingCitations = ({
             size='small'
             leftIcon={<IoIosCopy />}
             onClick={() => {
-              if (paginatedItems[0]?.kp?.snippet) {
-                navigator.clipboard.writeText(paginatedItems[0].kp.snippet)
-              }
+              const { doc, kp } = paginatedItems[0] || {}
+              navigator.clipboard.writeText(
+                `${kp.snippet.trim()}\n\n${chicagoFull(doc)}`,
+              )
             }}
           >
-            Copy citation
+            Copy passage
           </Button>
         </div>
       </div>
@@ -241,7 +249,7 @@ export const SupportingCitations = ({
           {paginatedItems.map(({ doc, kp }, idx) => {
             const docTitle =
               doc.title || `Document ${doc.doc_id?.slice(0, 8) || idx + 1}`
-            const authors = doc.authors?.join(', ') || 'Unknown author'
+            const authors = doc.authors?.join('; ') || 'Unknown author'
             const year = doc.year || ''
             const passageId = `${doc.doc_id}:${kp.passage_id}`
             const whyData = passageWhy[passageId]
@@ -446,7 +454,7 @@ export const SupportingCitations = ({
           <Button
             size='small'
             variant='secondary'
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}
             colorScheme='gray'
             leftIcon={<FaChevronLeft size={20} />}
@@ -460,7 +468,7 @@ export const SupportingCitations = ({
             size='small'
             variant='secondary'
             rightIcon={<FaChevronRight size={20} />}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setPage(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}
             colorScheme='gray'
           >

@@ -1,6 +1,5 @@
 import { DocMeta } from '@/lib/llamacloud'
 import {
-  parseAuthors,
   firstSentence,
   urlFrom,
   matchCatalogRow,
@@ -26,10 +25,10 @@ export function exportCitationsCsv({
     'Date published online',
     'WRI knowledge product type',
     'Language(s)',
-    'DOI',
+    'DOI (not always available)',
     'URL',
     'WRI Office affiliation (primary)',
-    'Summary',
+    'Summary [note summary is static text generated in the tool, not part of the metadata]',
   ]
 
   function formatDate(dateStr: string) {
@@ -60,20 +59,20 @@ export function exportCitationsCsv({
   const rows = selectedDocs.map((doc: DocMeta) => {
     const row = index ? matchCatalogRow(doc, index) : undefined
     const title = titleFrom(doc, row)
-    const authors = authorsFrom(doc, row).join('; ')
+    const authors = row?.allAuthors || ''
     let datePublished = ''
-    if (row?.raw?.['date published online']) {
-      datePublished = formatDate(row.raw['date published online'])
+    if (row?.raw?.['date published']) {
+      datePublished = formatDate(row.raw['date published'])
     } else if (row?.dateAccepted) {
       datePublished = formatDate(row.dateAccepted)
     }
     const type = row?.articleType || ''
     let langs = ''
-    if (row?.raw?.language) {
-      if (Array.isArray(row.raw.language)) {
-        langs = row.raw.language.join('; ')
-      } else if (typeof row.raw.language === 'string') {
-        langs = row.raw.language
+    if (row?.raw?.languages) {
+      if (Array.isArray(row.raw.languages)) {
+        langs = row.raw.languages.join('; ')
+      } else if (typeof row.raw.languages === 'string') {
+        langs = row.raw.languages
           .split(/;|,/)
           .map((l: string) => l.trim())
           .filter(Boolean)
@@ -86,8 +85,11 @@ export function exportCitationsCsv({
       ? new URL(relativeOrAbsoluteUrl, window.location.origin).toString()
       : ''
     const office = row?.office || ''
+
     let summary =
-      docSummary[doc.doc_id] || firstSentence(doc.kps?.[0]?.snippet ?? '')
+      row?.shortSummary ||
+      docSummary[doc.doc_id] ||
+      firstSentence(doc.kps?.[0]?.snippet ?? '')
     if (summary.length > 240) summary = `${summary.slice(0, 237)}...`
 
     return [
@@ -105,7 +107,7 @@ export function exportCitationsCsv({
       .join(',')
   })
 
-  const csvContent = [headers.join(','), ...rows].join('\r\n')
+  const csvContent = [headers.map(csvEscape).join(','), ...rows].join('\r\n')
   const blob = new Blob([csvContent], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

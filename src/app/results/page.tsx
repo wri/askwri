@@ -18,33 +18,21 @@ import {
   yearFrom,
   firstSentence,
   normalizeCatalogRow,
+  buildAlignmentSummary,
+  calculateEmbeddingCost,
 } from '../utils/utils'
+import { Assessment, Ops } from '../components/AnswerMode/types'
 
 /* ---------- component ---------- */
 type WhyMeta = { why: string; relation: 'direct' | 'indirect' }
 
 const AskWriAppContent = () => {
   const [query, setQuery] = useState('')
-  const [history, setHistory] = useState<string[]>([])
   const [retrievalLoading, setRetrievalLoading] = useState(false)
   const [alignLoading, setAlignLoading] = useState(false)
-  const [transcript, setTranscript] = useState<string[]>([])
-
-  const [ops, setOps] = useState<{
-    index_version: string
-    prompt_version: string
-    cost_usd: number | null
-    energy_gco2e: number | null
-  } | null>(null)
+  const [ops, setOps] = useState<Ops | null>(null)
   const [supporting, setSupporting] = useState<DocMeta[]>([])
-  const [alignment, setAlignment] = useState<{
-    coverage?: string[]
-    caveats?: string[]
-    risks?: string[]
-    suggestions?: string[]
-    confidence?: number
-    _debugKeys?: string[]
-  } | null>(null)
+  const [alignment, setAlignment] = useState<Assessment | null>(null)
 
   const [queryCache, setQueryCache] = useState<
     Record<
@@ -86,81 +74,22 @@ const AskWriAppContent = () => {
 
   const searchParams = useSearchParams()
   const searchQuery = searchParams?.get('q')?.trim() ?? ''
-  function pushHistory(q: string) {
-    setHistory((h) => [q, ...h.filter((x) => x !== q)].slice(0, 20))
-  }
-
-  function approxUsageAndOps(
-    q: string,
-    message: string,
-    docs: DocMeta[],
-    promptVersion: string,
-  ) {
-    const promptChars =
-      q.length +
-      docs
-        .slice(0, 6)
-        .reduce((a, d) => a + (d.kps?.[0]?.snippet?.length ?? 0), 0)
-    const completionChars = message.length
-    const usage = {
-      model: process.env.OPENAI_MODEL || 'unknown',
-      prompt_tokens: Math.max(1, Math.round(promptChars / 4)),
-      completion_tokens: Math.max(1, Math.round(completionChars / 4)),
-    }
-    const total = usage.prompt_tokens + usage.completion_tokens
-    const cost = estimateCostUSD({ ...usage, total_tokens: total })
-    const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
-    setOps({
-      index_version: 'v1.0',
-      prompt_version: promptVersion,
-      cost_usd: cost ?? 0,
-      energy_gco2e: energy ?? 0,
-    })
-  }
 
   async function doCite(q: string) {
     try {
       setRetrievalLoading(true)
       const { docs, usage, debug } = await chatCiteLlamaIndex(q)
 
-      // Calculate embedding costs for cite mode
-      const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
-      const citeEmbeddingCost =
-        estimateCostUSD({
-          model: 'openai/text-embedding-3-small',
-          prompt_tokens: citeEmbeddingTokens,
-          completion_tokens: 0,
-        }) ?? 0.001
-      const citeEmbeddingEnergy =
-        estimateEnergyGCO2e({
-          model: 'text-embedding-3-small',
-          prompt_tokens: citeEmbeddingTokens,
-          completion_tokens: 0,
-        }) ?? 0.01
-
       setSupporting(docs)
       setRetrievalLoading(false)
 
-      if (usage) {
-        const total =
-          (usage.total_tokens ?? 0) ||
-          (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)
-        const cost = estimateCostUSD({ ...usage, total_tokens: total })
-        const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
-
-        // Add embedding costs from retrieval
-        const totalCost = (cost ?? 0) + (citeEmbeddingCost ?? 0)
-        const totalEnergy = (energy ?? 0) + (citeEmbeddingEnergy ?? 0)
-
-        setOps({
-          index_version: 'v1.0',
-          prompt_version: 'CITEv1.3',
-          cost_usd: totalCost,
-          energy_gco2e: totalEnergy,
-        })
-      } else {
-        approxUsageAndOps(q, '', docs, 'CITEv1.3')
-      }
+      const embeddingCost = calculateEmbeddingCost(
+        query,
+        docs,
+        usage,
+        debug ?? {},
+      )
+      setOps(embeddingCost)
     } catch (e: any) {
       setRetrievalLoading(false)
     }
@@ -181,19 +110,16 @@ const AskWriAppContent = () => {
       return
     }
 
-    setTranscript([
-      `Interpret query: "${q.trim()}"`,
-      'Plan: CITE → build annotated bibliography.',
-    ])
     setAlignment(null)
 
     setDocWhy({})
     setDocSummary({})
     setDocWhyLoading({})
     setDocSummaryLoading({})
+    setBatchRelatesRequested(false)
 
     setSupporting([])
-    pushHistory(q.trim())
+
     doCite(q)
   }
 
@@ -210,86 +136,75 @@ const AskWriAppContent = () => {
     return supporting
   }, [supporting])
 
-  // Document-level WHY processing
+  // Document-level WHY processing — batched into a single LLM call
+  const [batchRelatesRequested, setBatchRelatesRequested] = useState(false)
   useEffect(() => {
-    if (!index || supporting.length === 0) return
+    if (supporting.length === 0 || batchRelatesRequested) return
 
-    pageDocs.forEach((d) => {
-      const row = matchCatalogRow(d, index)
-      const docTitle = titleFrom(d, row)
+    // Collect all docs that need relates explanations
+    const docsToProcess = pageDocs.filter(
+      (d) => !docWhy[d.doc_id] && !docWhyLoading[d.doc_id],
+    )
+    if (docsToProcess.length === 0) return
 
-      setDocWhy((prevWhy) => {
-        setDocWhyLoading((prevLoading) => {
-          // Document-level explanations via /api/relates
-          if (!prevWhy[d.doc_id] && !prevLoading[d.doc_id]) {
-            const best = [...(d.kps || [])].sort(
-              (a, b) => b.kp_relevance - a.kp_relevance,
-            )[0]
+    setBatchRelatesRequested(true)
 
-            fetch('/api/relates', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                query,
-                doc: {
-                  title: docTitle,
-                  authors: authorsFrom(d, row),
-                  year: yearFrom(d, row),
-                  snippet: best?.snippet ?? '',
-                },
-              }),
-            })
-              .then((r) => r.json())
-              .then((j) => {
-                const txt = (
-                  j?.relates ||
-                  j?.why ||
-                  'Document provides relevant context for this query.'
-                ).trim()
-                const rel: 'direct' | 'indirect' =
-                  j?.relation === 'direct' ? 'direct' : 'indirect'
-                setDocWhy((prev) => ({
-                  ...prev,
-                  [d.doc_id]: { why: txt, relation: rel },
-                }))
-              })
-              .catch(() => {
-                setDocWhy((prev) => ({
-                  ...prev,
-                  [d.doc_id]: {
-                    why: 'Document provides relevant context for this query.',
-                    relation: 'indirect' as const,
-                  },
-                }))
-              })
-              .finally(() =>
-                setDocWhyLoading((prev) => ({ ...prev, [d.doc_id]: false })),
-              )
+    // Mark all docs as loading
+    const loadingUpdate: Record<string, boolean> = {}
+    docsToProcess.forEach((d) => { loadingUpdate[d.doc_id] = true })
+    setDocWhyLoading((prev) => ({ ...prev, ...loadingUpdate }))
 
-            return { ...prevLoading, [d.doc_id]: true }
-          }
-          return prevLoading
-        })
-        return prevWhy
-      })
+    // Build batch request — catalog index is optional (enriches metadata when available)
+    const batchDocs = docsToProcess.map((d) => {
+      const row = index ? matchCatalogRow(d, index) : undefined
+      const best = [...(d.kps || [])].sort(
+        (a, b) => b.kp_relevance - a.kp_relevance,
+      )[0]
+      return {
+        title: titleFrom(d, row),
+        authors: authorsFrom(d, row),
+        year: yearFrom(d, row),
+        snippet: best?.snippet ?? '',
+      }
     })
-  }, [index, pageDocs, query])
 
-  // Helper function to get top quality results (top 40% by score)
-  function getTopQualityDocs(docs: DocMeta[], maxDocs: number = 8): DocMeta[] {
-    if (!docs.length) return []
-
-    // Sort by score descending
-    const sortedDocs = [...docs].sort((a, b) => (b.score || 0) - (a.score || 0))
-
-    // Take top 40% but cap at maxDocs
-    const top40Percent = Math.max(1, Math.ceil(sortedDocs.length * 0.4))
-    const finalCount = Math.min(top40Percent, maxDocs)
-
-    const selected = sortedDocs.slice(0, finalCount)
-
-    return selected
-  }
+    fetch('/api/batch-relates', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query, docs: batchDocs }),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        const results = j?.results || []
+        const whyUpdate: Record<string, WhyMeta> = {}
+        docsToProcess.forEach((d, i) => {
+          const item = results[i]
+          whyUpdate[d.doc_id] = {
+            why: (
+              item?.relates ||
+              'Document provides relevant context for this query.'
+            ).trim(),
+            relation: item?.relation === 'direct' ? 'direct' : 'indirect',
+          }
+        })
+        setDocWhy((prev) => ({ ...prev, ...whyUpdate }))
+      })
+      .catch(() => {
+        const whyUpdate: Record<string, WhyMeta> = {}
+        docsToProcess.forEach((d) => {
+          whyUpdate[d.doc_id] = {
+            why: 'Document provides relevant context for this query.',
+            relation: 'indirect',
+          }
+        })
+        setDocWhy((prev) => ({ ...prev, ...whyUpdate }))
+      })
+      .finally(() => {
+        const doneUpdate: Record<string, boolean> = {}
+        docsToProcess.forEach((d) => { doneUpdate[d.doc_id] = false })
+        setDocWhyLoading((prev) => ({ ...prev, ...doneUpdate }))
+      })
+  }, [index, pageDocs, query, batchRelatesRequested])
 
   async function runAlignment(q: string, docs: DocMeta[]) {
     try {
@@ -299,30 +214,28 @@ const AskWriAppContent = () => {
       }
       setAlignLoading(true)
 
-      // Use only top 40% quality docs for alignment to improve signal and reduce cost
-      const topQualityDocs = getTopQualityDocs(docs, 8)
-
-      // For alignment analysis, enhance existing docs with more context (avoid extra API call)
-      const docsForAlignment = topQualityDocs.map((doc) => ({
-        ...doc,
-        // Add a flag to indicate this is for alignment analysis
-        _alignmentContext: true,
-        // COST OPTIMIZATION: Reduce KPs from 30 to 5 per doc - alignment still works with less context
-        kps: (doc.kps || []).slice(0, 5), // Fewer passages saves tokens while maintaining quality
-      }))
+      const resultsSummaryForAlignment = buildAlignmentSummary(q, docs)
 
       const r = await fetch('/api/alignment', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           query: q,
-          docs: docsForAlignment,
-          answer: undefined,
+          resultsSummary: resultsSummaryForAlignment,
         }),
       })
       const j = await r.json()
+
       if (j?.ok && j?.assessment) {
-        setAlignment(j.assessment)
+        const { insights, alignment } = j.assessment
+
+        const finalAlignment = {
+          insights,
+          alignment,
+          _debugKeys: j.debug?.keys || [],
+        }
+
+        setAlignment(finalAlignment)
 
         // Cache the alignment result
         const cacheKey = `cite:${q.trim()}`
@@ -330,7 +243,7 @@ const AskWriAppContent = () => {
           ...prev,
           [cacheKey]: {
             ...prev[cacheKey],
-            alignment: j.assessment,
+            alignment: finalAlignment,
             timestamp: Date.now(),
           },
         }))
@@ -459,6 +372,27 @@ const AskWriAppContent = () => {
     })
   }, [pageDocs, index, supporting.length])
 
+  useEffect(() => {
+    if (pageDocs.length === 0) return
+    const topTenResults = JSON.stringify(
+      pageDocs
+        .slice(0, 10)
+        .map((doc) => titleFrom(doc, matchCatalogRow(doc, index))),
+    )
+
+    const sendFeedback = async () => {
+      await fetch('/api/cite-mode-query-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          topTenResults,
+        }),
+      })
+    }
+    sendFeedback()
+  }, [pageDocs, query])
+
   /* -------- render -------- */
   if (searchQuery) {
     if (pageDocs.length > 0) {
@@ -472,7 +406,6 @@ const AskWriAppContent = () => {
           docWhyLoading={docWhyLoading}
           docSummaryLoading={docSummaryLoading}
           ops={ops}
-          transcript={transcript}
           alignment={alignment}
           alignLoading={alignLoading}
         />

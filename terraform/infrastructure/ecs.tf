@@ -135,7 +135,7 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
         Resource = "arn:aws:s3:::${var.documents_s3_bucket}"
         Condition = {
           StringLike = {
-            "s3:prefix" = ["${var.documents_s3_prefix}*"]
+            "s3:prefix" = ["${var.documents_s3_prefix}*", "${var.cache_s3_prefix}*"]
           }
         }
       },
@@ -146,7 +146,10 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
           "s3:GetObject",
           "s3:GetObjectVersion"
         ]
-        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.documents_s3_prefix}*"
+        Resource = [
+          "arn:aws:s3:::${var.documents_s3_bucket}/${var.documents_s3_prefix}*",
+          "arn:aws:s3:::${var.documents_s3_bucket}/${var.cache_s3_prefix}*"
+        ]
       },
       {
         Sid    = "GetEvalObjects"
@@ -220,6 +223,18 @@ resource "aws_ecs_task_definition" "app" {
           {
             name  = "EVAL_S3_PREFIX"
             value = "eval-data/"
+          },
+          {
+            name  = "DOCUMENTS_S3_BUCKET"
+            value = var.documents_s3_bucket
+          },
+          {
+            name  = "DOCUMENTS_S3_PREFIX"
+            value = var.documents_s3_prefix
+          },
+          {
+            name  = "CACHE_S3_PREFIX"
+            value = var.cache_s3_prefix
           }
         ],
         [
@@ -274,9 +289,10 @@ resource "aws_ecs_service" "app" {
   desired_count          = var.desired_count
   launch_type            = "FARGATE"
   enable_execute_command = true
+  propagate_tags         = "SERVICE"
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = local.private_subnet_ids
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = false
   }
@@ -305,7 +321,7 @@ resource "aws_ecs_service" "app" {
     ignore_changes = [desired_count]
   }
 
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener_rule.host_based]
 
   tags = {
     Name = "${var.project_name}-${var.environment}-service"
@@ -412,6 +428,18 @@ resource "aws_ecs_task_definition" "search_service" {
           {
             name  = "NEXTJS_BACKEND_URL"
             value = "http://nextjs.${var.project_name}-${var.environment}.local:${var.container_port}"
+          },
+          {
+            name  = "DOCUMENTS_S3_BUCKET"
+            value = var.documents_s3_bucket
+          },
+          {
+            name  = "DOCUMENTS_S3_PREFIX"
+            value = var.documents_s3_prefix
+          },
+          {
+            name  = "CACHE_S3_PREFIX"
+            value = var.cache_s3_prefix
           }
         ],
         [
@@ -438,13 +466,15 @@ resource "aws_ecs_task_definition" "search_service" {
         }
       }
 
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:${var.search_service_container_port}${var.search_service_health_check_path} || exit 1"]
-        interval    = 30
-        timeout     = 10
-        retries     = 5
-        startPeriod = 120
-      }
+      # healthCheck is disabled for search service to prevent ECS from restarting
+      # the container if the search service is not healthy.
+      # healthCheck = {
+      #   command     = ["CMD-SHELL", "curl -f http://localhost:${var.search_service_container_port}${var.search_service_health_check_path} || exit 1"]
+      #   interval    = 30
+      #   timeout     = 10
+      #   retries     = 5
+      #   startPeriod = 120
+      # }
 
       essential = true
     }
@@ -466,9 +496,10 @@ resource "aws_ecs_service" "search_service" {
   desired_count          = var.search_service_desired_count
   launch_type            = "FARGATE"
   enable_execute_command = true
+  propagate_tags         = "SERVICE"
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = local.private_subnet_ids
     security_groups  = [aws_security_group.search_service.id]
     assign_public_ip = false
   }
@@ -502,7 +533,7 @@ resource "aws_ecs_service" "search_service" {
 resource "aws_service_discovery_private_dns_namespace" "main" {
   name        = "${var.project_name}-${var.environment}.local"
   description = "Private DNS namespace for service discovery"
-  vpc         = aws_vpc.main.id
+  vpc         = local.vpc_id
 
   tags = {
     Name = "${var.project_name}-${var.environment}-namespace"

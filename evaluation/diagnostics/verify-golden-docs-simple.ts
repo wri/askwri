@@ -1,37 +1,37 @@
 /**
  * Verify that all expected documents in golden dataset exist in the catalog
+ * Simple version without complex dependencies
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { readCSV } from '../src/lib/csv-utils';
 
 async function main() {
   // Load golden dataset
-  const goldenDataPath = path.join(__dirname, 'golden-dataset.json');
+  const goldenDataPath = path.join(__dirname, '../golden-dataset.json');
   const goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
 
-  // Load documents catalog using existing CSV utility
-  const catalogPath = path.join(__dirname, '../data/documents.csv');
-  const catalog = await readCSV(catalogPath);
+  // Load documents catalog - parse CSV manually
+  const catalogPath = path.join(__dirname, '../../search-service/data/documents.csv');
+  const catalogCSV = fs.readFileSync(catalogPath, 'utf-8');
 
-  // Extract URLs from catalog
+  // Extract URLs from catalog using simple regex
   const catalogUrls = new Set<string>();
   const catalogUrlsNormalized = new Set<string>();
 
-  for (const doc of catalog) {
-    // Try multiple URL field variants
-    const url = doc.metadata['URL'] || doc.metadata['Source URL'] || doc.metadata['url'];
+  // Match ""URL"": ""..."" patterns in the CSV (note the space after colon)
+  const urlMatches = catalogCSV.matchAll(/""URL"":\s*""([^"]+)""/g);
 
-    if (url) {
-      catalogUrls.add(url);
-      // Normalize for comparison
-      const normalized = url
-        .toLowerCase()
-        .replace(/^https?:\/\//, '')
-        .replace(/\/$/, '')
-        .replace(/^www\./, '');
-      catalogUrlsNormalized.add(normalized);
-    }
+  for (const match of urlMatches) {
+    const url = match[1];
+    catalogUrls.add(url);
+
+    // Normalize for comparison
+    const normalized = url
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/$/, '')
+      .replace(/^www\./, '');
+    catalogUrlsNormalized.add(normalized);
   }
 
   console.log(`📊 Loaded ${catalogUrls.size} unique URLs from catalog`);

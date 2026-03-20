@@ -1,13 +1,25 @@
 import { DocMeta } from '@/lib/llamacloud'
 import { RowData } from '../results/types'
 
+export type Assessment = {
+  insights: string[]
+  alignment: 'High' | 'Moderate' | 'Low' | 'Very Low'
+  _debugKeys?: string[]
+}
+
 export interface AnswerResult {
   sentences: string[]
   paragraphs?: string[][]
   inline?: { ref: string; page: number }[][]
-  confidence?: number
   warning?: string
   warningMessage?: string
+}
+
+export type Ops = {
+  index_version: string
+  prompt_version: string
+  cost_usd: number | null
+  energy_gco2e: number | null
 }
 
 export interface AnswerPanelProps {
@@ -18,6 +30,10 @@ export interface AnswerPanelProps {
   supportingDocs: DocMeta[]
   setAnswer: (answer: AnswerResult | null) => void
   setQuery: (query: string) => void
+  alignLoading?: boolean
+  alignment?: Assessment | null
+  ops: Ops | null
+  setSupportingCitationsPage?: (page: number) => void
 }
 
 export interface AISearchFormProps {
@@ -45,4 +61,12 @@ export interface WhyMeta {
 export interface SupportingCitationsProps {
   supportingDocs: DocMeta[]
   setFirstDocHowRelevant: (why: string) => void
+  page?: number
+  setPage?: (p: number) => void
+}
+
+export type Usage = {
+  total_tokens: number
+  prompt_tokens: number
+  completion_tokens: number
 }
