@@ -26,7 +26,10 @@ interface LlamaIndexResponse {
     title: string
     content: string
     score: number
-    metadata: Record<string, any>
+    metadata: Record<string, any> & {
+      raw_score?: number
+      relevance_tier?: 'strong' | 'partial' | 'weak'
+    }
     page?: number
   }>
   total_results: number
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
             max_results: 100,
             vector_top_k: 800,
             bm25_top_k: 800,
-            rerank_top_n: 120,
+            rerank_top_n: 250,
           }
         : {
             max_results: ANSWER_PRESET.maxResults,
@@ -128,33 +131,12 @@ export async function POST(req: NextRequest) {
       `[LlamaIndex API] Hybrid service returned ${llamaIndexResponse.docs?.length || 0} docs`,
     )
 
-    // Cite mode: Apply "top-N with floor" filtering for precision/recall balance
-    // - Keep at least MIN_DOCS (even if scores are low) to preserve recall on hard queries
-    // - Keep up to MAX_DOCS if they meet the SCORE_FLOOR quality threshold
-    // Analysis: This achieves 75% recall, 18.6% precision, F1=29.8% (vs baseline 73.7%/13.3%/21.4%)
-    const CITE_MIN_DOCS = 12
-    const CITE_MAX_DOCS = 32
-    const CITE_SCORE_FLOOR = 0.15
-
-    let filteredDocs: typeof llamaIndexResponse.docs
-    if (mode === 'cite') {
-      filteredDocs = []
-      for (let i = 0; i < llamaIndexResponse.docs.length; i++) {
-        const doc = llamaIndexResponse.docs[i]
-        if (doc.score >= CITE_SCORE_FLOOR) {
-          filteredDocs.push(doc)
-          if (filteredDocs.length >= CITE_MAX_DOCS) break
-        } else if (i < CITE_MIN_DOCS) {
-          // Below floor but within min docs - still include for recall
-          filteredDocs.push(doc)
-        }
-      }
-    } else {
-      filteredDocs = llamaIndexResponse.docs
-    }
+    // Cite mode filtering is now handled by the search service via logit floor threshold.
+    // The service drops docs below the calibrated logit floor and assigns relevance tiers.
+    const filteredDocs = llamaIndexResponse.docs
 
     console.log(
-      `[LlamaIndex API] After filtering (${mode === 'cite' ? `min=${CITE_MIN_DOCS}, max=${CITE_MAX_DOCS}, floor=${CITE_SCORE_FLOOR}` : 'none'}): ${filteredDocs.length}/${llamaIndexResponse.docs.length} docs`,
+      `[LlamaIndex API] After service-side filtering: ${filteredDocs.length} docs`,
     )
 
     // Transform response to match existing API format
@@ -193,6 +175,8 @@ export async function POST(req: NextRequest) {
         source: doc.metadata.source,
         summary: doc.metadata.summary,
         score: effectiveScore,
+        raw_score: doc.metadata.raw_score,
+        relevance_tier: doc.metadata.relevance_tier,
         kps: [
           {
             kp_relevance: effectiveScore,

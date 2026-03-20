@@ -763,6 +763,42 @@ def load_documents_and_build_indexes():
                 })
                 nodes.append(node)
 
+        # Add a dedicated summary node per document for high-signal retrieval.
+        # Summaries are topic-dense (~585 chars avg) and give both the vector
+        # index and BM25 a concise representation of each document's subject,
+        # which fragmented PDF chunks often lack.
+        summary_count = 0
+        for doc in documents:
+            summary = doc["metadata"].get("summary", "")
+            if not summary:
+                continue
+            title = doc["metadata"].get("title", "")
+            summary_text = f"{title}\n\n{summary}" if title else summary
+            summary_node = TextNode(
+                text=summary_text,
+                metadata={
+                    "doc_id": doc["doc_id"],
+                    "title": title[:100],
+                    "authors": doc["metadata"].get("authors", ""),
+                    "year": doc["metadata"].get("year", ""),
+                    "subtag": (doc["metadata"].get("subtag", "") or "")[:50],
+                    "program_series": doc["metadata"].get("program_series", ""),
+                    "chunk_id": f"{doc['doc_id']}_summary",
+                    "chunk_index": -1,
+                    "total_chunks": -1,
+                    "page": 1,
+                    "chunk_start_pos": 0,
+                    "url": doc["metadata"].get("url", ""),
+                    "file_path": doc["metadata"].get("file_path", ""),
+                    "is_summary_node": True,
+                    "prev_chunk_id": None,
+                    "next_chunk_id": f"{doc['doc_id']}_chunk_0",
+                },
+            )
+            nodes.append(summary_node)
+            summary_count += 1
+        logger.info(f"Added {summary_count} summary nodes")
+
         # Cache the newly created nodes
         if cache and nodes:
             cache.cache_nodes("all_docs", content_hash, nodes)
@@ -1140,6 +1176,24 @@ async def hybrid_query(request: QueryRequest):
                 doc_id = node.node.metadata.get("doc_id")
                 if doc_id not in doc_groups or node.score > doc_groups[doc_id].score:
                     doc_groups[doc_id] = node
+
+            # Apply logit floor: drop docs below the calibrated threshold
+            pre_floor = len(doc_groups)
+            doc_groups = {k: v for k, v in doc_groups.items()
+                          if v.score >= settings.cite_logit_floor}
+            logger.info(f"Stage 3 (Logit Floor {settings.cite_logit_floor}): {pre_floor} → {len(doc_groups)} docs")
+
+            # Assign relevance tiers based on raw logit score
+            for node in doc_groups.values():
+                raw = node.score
+                if raw >= settings.cite_strong_threshold:
+                    tier = "strong"
+                elif raw >= settings.cite_partial_threshold:
+                    tier = "partial"
+                else:
+                    tier = "weak"
+                node.node.metadata["relevance_tier"] = tier
+
             filtered_results = list(doc_groups.values())[:request.max_results]
         else:
             # For answer mode - let hybrid fusion handle all ranking, no threshold filtering
