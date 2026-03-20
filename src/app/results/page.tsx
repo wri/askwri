@@ -139,7 +139,7 @@ const AskWriAppContent = () => {
   // Document-level WHY processing — batched into a single LLM call
   const [batchRelatesRequested, setBatchRelatesRequested] = useState(false)
   useEffect(() => {
-    if (!index || supporting.length === 0 || batchRelatesRequested) return
+    if (supporting.length === 0 || batchRelatesRequested) return
 
     // Collect all docs that need relates explanations
     const docsToProcess = pageDocs.filter(
@@ -154,9 +154,9 @@ const AskWriAppContent = () => {
     docsToProcess.forEach((d) => { loadingUpdate[d.doc_id] = true })
     setDocWhyLoading((prev) => ({ ...prev, ...loadingUpdate }))
 
-    // Build batch request
+    // Build batch request — catalog index is optional (enriches metadata when available)
     const batchDocs = docsToProcess.map((d) => {
-      const row = matchCatalogRow(d, index)
+      const row = index ? matchCatalogRow(d, index) : undefined
       const best = [...(d.kps || [])].sort(
         (a, b) => b.kp_relevance - a.kp_relevance,
       )[0]
@@ -204,7 +204,7 @@ const AskWriAppContent = () => {
         docsToProcess.forEach((d) => { doneUpdate[d.doc_id] = false })
         setDocWhyLoading((prev) => ({ ...prev, ...doneUpdate }))
       })
-  }, [index, pageDocs, query, batchRelatesRequested, docWhy, docWhyLoading])
+  }, [index, pageDocs, query, batchRelatesRequested])
 
   async function runAlignment(q: string, docs: DocMeta[]) {
     try {
