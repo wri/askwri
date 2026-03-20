@@ -68,6 +68,9 @@ Runs all 9 answer golden queries against the live search service. For each retur
 **Sweep 3 — Page-1 demotion impact:**
 - Report raw scores for chunk_index=0 chunks both with and without the 0.5x demotion multiplier
 - Determine whether abstract demotion is helping or hurting answer mode precision
+- **Known issue:** The existing demotion (`node.score * 0.5`) has inverted semantics for negative logit scores — multiplying a negative score by 0.5 makes it *less* negative (closer to zero), which *promotes* rather than demotes. For example, a chunk at raw logit -8.0 becomes -4.0 after "demotion." The calibration will quantify this and likely recommend either reordering (floor before demotion) or replacing the 0.5x multiplier with an additive penalty.
+
+**Statistical note:** With 9 queries and ~28 positives per query, per-query precision estimates have wide confidence intervals. The calibration script should report aggregate metrics and note that thresholds are provisional until more queries are labeled or human review is complete.
 
 **Tier boundaries:**
 - `strong_threshold`: 70th percentile of relevant score distribution (same methodology as cite)
@@ -159,15 +162,28 @@ Specific changes deferred until calibration data is available.
 const MIN_DOCS_FOR_CONFIDENCE = 3
 
 // After receiving docs from search service
+if (filteredDocs.length === 0) {
+  // No relevant chunks survived the floor — skip synthesis entirely
+  return NextResponse.json({
+    ok: true,
+    synthesis: {
+      sentences: ['No sufficiently relevant sources were found to answer this query.'],
+      warning: 'no_coverage',
+      warningMessage: 'The corpus does not appear to contain material relevant to this question.',
+    },
+    debug: debugInfo,
+  })
+}
+
 if (filteredDocs.length < MIN_DOCS_FOR_CONFIDENCE) {
-  // Attach warning to synthesis response
+  // Attach warning to synthesis response (synthesis still runs)
   synthesis.warning = 'low_coverage'
   synthesis.warningMessage =
     'Limited relevant sources found for this query. The answer may not fully address your question.'
 }
 ```
 
-The frontend (`AnswerPanel.tsx`) already handles `synthesis.warning` and displays warning messages — no new UI work needed.
+**Frontend warning rendering:** The answer mode component (`AIResearchModal.tsx`) currently stores `synthesis.warning` in state but only logs it to console — it does not render warnings visually. Phase 2 requires adding a small UI element (e.g., an `InlineMessage` or `Alert`) to display the low-coverage warning to users.
 
 ### 4. Eval Validation
 
@@ -194,6 +210,7 @@ The frontend (`AnswerPanel.tsx`) already handles `synthesis.warning` and display
 | `search-service/app/main.py` | Modify | Answer logit floor + tier assignment (gated) |
 | `src/config/retrieval.ts` | Modify | Update ANSWER_PRESET after calibration (deferred) |
 | `src/app/api/answer/route.ts` | Modify | Replace normalized filter, add low-coverage warning (Phase 2, deferred) |
+| `src/app/components/AnswerMode/AIResearchModal.tsx` | Modify | Render low-coverage warning visually (Phase 2, deferred) |
 
 ## Sequence
 
@@ -212,5 +229,5 @@ The frontend (`AnswerPanel.tsx`) already handles `synthesis.warning` and display
 |------|-----------|
 | LLM labels are noisy (no human validation) | Conservative precision target (80%), feature gate for easy rollback, reusable calibration script for when human labels arrive |
 | Answer mode score distributions differ significantly from cite mode | Calibration script discovers this before any code changes |
-| Page-1 demotion interacts poorly with logit floor | Calibration reports pre/post-demotion scores; can reorder if needed |
+| Page-1 demotion has inverted semantics for negative logits (0.5x multiplier promotes instead of demotes) | Calibration reports pre/post-demotion scores; likely fix is reorder (floor before demotion) or additive penalty |
 | Low coverage warning fires too often | MIN_DOCS_FOR_CONFIDENCE is tunable; calibration data shows per-query chunk counts |
