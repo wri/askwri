@@ -10,7 +10,6 @@ export type RowData = {
   how_relevant: string
   download_url?: string | null
   relevance_score?: number
-  relevance_pct?: number | null
   confidence?: number
   row_number?: number
   year?: number | string

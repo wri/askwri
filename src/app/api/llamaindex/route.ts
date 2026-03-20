@@ -176,7 +176,6 @@ export async function POST(req: NextRequest) {
         summary: doc.metadata.summary,
         score: effectiveScore,
         raw_score: doc.metadata.raw_score,
-        relevance_pct: null as number | null,
         relevance_tier: doc.metadata.relevance_tier,
         kps: [
           {
@@ -196,17 +195,6 @@ export async function POST(req: NextRequest) {
         meta: { raw: doc.metadata, llamaindex: true },
       }
     })
-
-    // Per-query min-max normalization of raw logit scores to 0-100
-    const rawScores = docs.map((d: any) => d.raw_score).filter((s: any) => s != null)
-    const minScore = rawScores.length ? Math.min(...rawScores) : 0
-    const maxScore = rawScores.length ? Math.max(...rawScores) : 0
-    const scoreRange = maxScore - minScore
-    for (const doc of docs) {
-      doc.relevance_pct = doc.raw_score != null && scoreRange > 0
-        ? Math.round(((doc.raw_score - minScore) / scoreRange) * 100)
-        : doc.raw_score != null ? 100 : null
-    }
 
     console.log(`[LlamaIndex API] Returning ${docs.length} documents`)
 
