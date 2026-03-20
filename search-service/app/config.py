@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores
     cite_partial_threshold: float = -7.8  # 25th percentile of relevant scores
 
+    # Answer mode reranker logit thresholds (values set after calibration)
+    answer_logit_floor: float = -999.0        # disabled until calibrated
+    answer_strong_threshold: float = -999.0
+    answer_partial_threshold: float = -999.0
+    answer_use_logit_floor: bool = False       # gate — flip after calibration validates
+
     # SSL/Zscaler VPN Workaround
     use_custom_ssl_client: bool = False
     custom_ca_bundle: str = ""
