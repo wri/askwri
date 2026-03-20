@@ -16,6 +16,7 @@ import { FaInfoCircle } from 'react-icons/fa'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { MdChat } from 'react-icons/md'
 import { IoIosCopy } from 'react-icons/io'
+import { InlineMessage } from '@worldresources/wri-design-systems'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
@@ -153,6 +154,16 @@ export const AnswerPanel = ({
         >
           {query}
         </Text>
+
+        {answer.warning === 'low_coverage' && answer.warningMessage && (
+          <Box marginBottom='3'>
+            <InlineMessage
+              variant='warning'
+              label='Limited coverage'
+              caption={answer.warningMessage}
+            />
+          </Box>
+        )}
 
         <Box
           style={{

@@ -36,34 +36,33 @@ const SYS = IS_GPT5
 Synthesize a concise answer from the provided documents. Write exactly 2-3 clear sentences.
 
 Rules:
-- SYNTHESIZE: Combine key information across sources — do NOT copy phrases verbatim
+- EVALUATE FIRST: Before synthesizing, assess each source's relevance to the question. Only use sources that directly address the question. Ignore tangentially related material.
+- SYNTHESIZE: Combine key information across relevant sources — do NOT copy phrases verbatim
 - PRIORITIZE: Focus on the most relevant and important findings
 - GROUND: Every claim must be traceable to the provided documents
 - ACCURACY: Preserve the meaning and facts from the original sources
 - LIMITATIONS: If sources highlight significant risks, trade-offs, or caveats, include the most important one
 - FAITHFULNESS: Only state causal relationships explicitly supported in the sources; use hedging language (e.g., "is associated with", "may contribute to") for correlations or inferences
 
-Return JSON: {"sentences":["sentence1","sentence2","sentence3"]}
+Return JSON: {"sentences":["sentence1","sentence2","sentence3"],"sources_used":[1,3,5]}
+If none of the provided sources adequately answer the question, return: {"sentences":["The available sources do not contain sufficient information to answer this question."],"sources_used":[],"low_coverage":true}
 `.trim()
   : `
 You are a careful research assistant. Write a clear, concise answer that synthesizes the most important information from the provided documents.
 
 CRITICAL RULES:
+- EVALUATE FIRST: Before synthesizing, assess each source's relevance to the question. Only use sources that directly address the question. Ignore tangentially related material.
 - CONCISE: Write exactly 2-3 sentences total (not paragraphs)
-- SYNTHESIZE: Combine key information - do NOT copy phrases verbatim
+- SYNTHESIZE: Combine key information from relevant sources - do NOT copy phrases verbatim
 - PRIORITIZE: Focus on the most relevant and important findings
 - GROUND: Every claim must be traceable to the provided documents
 - ACCURACY: Preserve the meaning and facts from the original sources
 
 Return strict JSON with exactly 2-3 sentences:
-{"sentences":["First sentence with key finding.","Second sentence with supporting detail.","Third sentence with additional context or implication."]}
+{"sentences":["First sentence with key finding.","Second sentence with supporting detail.","Third sentence with additional context or implication."],"sources_used":[1,2,3]}
 
-Example:
-{"sentences":[
-  "Electric buses reduce operational costs by approximately 40% compared to diesel alternatives due to lower fuel and maintenance expenses.",
-  "They achieve 70-80% reductions in greenhouse gas emissions when powered by renewable energy and eliminate local air pollution in urban areas.",
-  "Successful implementation requires strategic charging infrastructure planning and upfront investment, though long-term savings offset initial costs."
-]}
+If none of the provided sources adequately answer the question, return:
+{"sentences":["The available sources do not contain sufficient information to answer this question."],"sources_used":[],"low_coverage":true}
 `.trim()
 
 function synthFallback(query: string, docs: any[]) {
@@ -249,12 +248,11 @@ ${docList
   .map(
     (d) =>
       `[${d.id}] "${d.title}" (${d.year || 'n.d.'})
-   Key finding: ${d.key_finding}
-   Relevance: ${(d.relevance * 100).toFixed(0)}%`,
+   Key finding: ${d.key_finding}`,
   )
   .join('\n\n')}
 
-Task: Write exactly 2-3 clear sentences that synthesize the most important information from these sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.`
+Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences synthesizing the most important information from the relevant sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.`
 
     const messages = [
       { role: 'system', content: SYS },
@@ -408,7 +406,21 @@ Task: Write exactly 2-3 clear sentences that synthesize the most important infor
     // Build synthesis response with appropriate warnings
     const synthesis: any = { sentences }
 
-    if (isPartial || wasTruncated) {
+    // Detect low-coverage signal from synthesis LLM
+    const sourcesUsed = Array.isArray(parsed.sources_used) ? parsed.sources_used.length : docList.length
+    const isLowCoverage = parsed.low_coverage === true || sourcesUsed === 0
+
+    if (isLowCoverage) {
+      synthesis.warning = 'low_coverage'
+      synthesis.warningMessage =
+        'Limited relevant sources found for this query. The answer may not fully address your question.'
+      console.warn(`[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`)
+    } else if (sourcesUsed < 3 && docList.length >= 3) {
+      synthesis.warning = 'low_coverage'
+      synthesis.warningMessage =
+        'Only a few sources were relevant to this query. The answer may be incomplete.'
+      console.warn(`[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`)
+    } else if (isPartial || wasTruncated) {
       synthesis.warning = 'partial_answer'
       synthesis.warningMessage =
         'Answer may be incomplete due to length constraints. Consider refining your query.'
@@ -425,6 +437,9 @@ Task: Write exactly 2-3 clear sentences that synthesize the most important infor
       isPartial,
       wasTruncated,
       hasQuotes,
+      isLowCoverage,
+      sourcesUsed,
+      totalDocs: docList.length,
     }
 
     return NextResponse.json({

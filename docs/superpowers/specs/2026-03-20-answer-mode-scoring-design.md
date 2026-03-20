@@ -201,33 +201,48 @@ if (filteredDocs.length < MIN_DOCS_FOR_CONFIDENCE) {
 
 **Calibration script itself** produces the primary validation data — sweep tables showing precision/recall at each threshold, so we can make an informed decision before flipping the gate.
 
+## Calibration Results and Pivot (2026-03-20)
+
+Calibration revealed that the logit-floor approach **does not work for answer mode**:
+
+- **Score distributions overlap almost completely**: relevant median=2.25, irrelevant median=2.07 (interquartile ranges overlap)
+- **No effective floor threshold exists**: F1-optimal floor (-0.5) drops only 10/180 chunks for +2.4% precision. Achieving 80% precision requires floor=5.9, retaining 1 chunk.
+- **LLM labels are too generous**: GPT-5.4 labeled 75.3% of all corpus chunks as relevant/partially relevant, weakening calibration signal
+- **Cross-encoder reranker (ms-marco-MiniLM-L-6-v2)** is a ranking tool, not a classifier. It's good at coarse selection (300→20 candidates) but cannot discriminate within the top-20.
+
+**Pivot: Push relevance judgment to the synthesis LLM instead of the reranker.** GPT-5.2 is vastly better at judging content relevance than the tiny cross-encoder. Rather than adding a pre-filter step (which adds latency), modify the existing synthesis prompt to evaluate and selectively use sources. Zero additional LLM calls, zero latency impact.
+
+The gated logit floor code in the search service remains deployed but inactive — it can be activated if better calibration data (e.g., human labels) produces clearer score separation in the future.
+
 ## Files Changed
 
 | File | Action | Purpose |
 |------|--------|---------|
 | `evaluation/calibrate-answer-thresholds.ts` | New | Calibration sweep script |
-| `search-service/app/config.py` | Modify | Add answer threshold config + gate |
-| `search-service/app/main.py` | Modify | Answer logit floor + tier assignment (gated) |
-| `src/config/retrieval.ts` | Modify | Update ANSWER_PRESET after calibration (deferred) |
-| `src/app/api/answer/route.ts` | Modify | Replace normalized filter, add low-coverage warning (Phase 2, deferred) |
-| `src/app/components/AnswerMode/AIResearchModal.tsx` | Modify | Render low-coverage warning visually (Phase 2, deferred) |
+| `evaluation/relabel-answer-chunks.ts` | New | Re-label all 900 chunks with GPT-5.4 (debiased) |
+| `evaluation/answer-labels-review.json` | Modified | Updated with GPT-5.4 labels (debiased) |
+| `search-service/app/config.py` | Modify | Add answer threshold config + gate (inactive) |
+| `search-service/app/main.py` | Modify | Answer logit floor + tier assignment (gated off) |
+| `src/app/api/answer/route.ts` | Modify | Selective synthesis prompt + low-coverage detection |
+| `src/app/components/AnswerMode/AnswerPanel.tsx` | Modify | Render low-coverage warning visually |
 
-## Sequence
+## Sequence (Updated)
 
-1. Write calibration script
-2. Run calibration against live service — collect score distributions, sweep results
-3. Analyze: pick floor + tier thresholds, optimal rerankTopN, page-1 demotion verdict
-4. Add gated logit floor + tier assignment to search service with calibrated values
-5. Run answer retrieval eval — compare before/after
-6. Run synthesis eval with GPT-5.4 — compare before/after
-7. If validated: flip gate, update ANSWER_PRESET, replace answer route filtering (Phase 2)
-8. If not validated: adjust thresholds or retrieval params based on data, re-run from step 5
+1. ~~Write calibration script~~ Done
+2. ~~Run calibration against live service~~ Done — score distributions overlap, logit floor ineffective
+3. ~~Analyze~~ Done — pivot to synthesis-prompt approach
+4. ~~Add gated logit floor to search service~~ Done (inactive)
+5. Modify synthesis prompt to evaluate sources selectively (no extra LLM calls)
+6. Add low-coverage detection and warning UI
+7. Run synthesis eval with GPT-5.4 — compare before/after
+8. If validated: ship. If not: iterate on prompt or consider LLM pre-filter step.
 
 ## Risks and Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
-| LLM labels are noisy (no human validation) | Conservative precision target (80%), feature gate for easy rollback, reusable calibration script for when human labels arrive |
-| Answer mode score distributions differ significantly from cite mode | Calibration script discovers this before any code changes |
-| Page-1 demotion has inverted semantics for negative logits (0.5x multiplier promotes instead of demotes) | Calibration reports pre/post-demotion scores; likely fix is reorder (floor before demotion) or additive penalty |
-| Low coverage warning fires too often | MIN_DOCS_FOR_CONFIDENCE is tunable; calibration data shows per-query chunk counts |
+| LLM labels are noisy (no human validation) | Calibration data archived; reusable script for when human labels arrive |
+| Logit floor approach ineffective for answer mode | Pivoted to synthesis-prompt approach; gated floor code retained for future use |
+| Synthesis LLM ignores selectivity instruction | `sources_used` field in response enables monitoring; low-coverage detection flags suspicious cases |
+| Low coverage warning fires too often | Threshold is conservative (< 3 sources used); tunable without code changes |
+| Page-1 demotion has inverted semantics for negative logits | Non-issue in practice: only 1 page-1 chunk observed across all calibration queries, and scores are positive |
