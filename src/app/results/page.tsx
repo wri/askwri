@@ -116,6 +116,7 @@ const AskWriAppContent = () => {
     setDocSummary({})
     setDocWhyLoading({})
     setDocSummaryLoading({})
+    setBatchRelatesRequested(false)
 
     setSupporting([])
 
@@ -135,69 +136,75 @@ const AskWriAppContent = () => {
     return supporting
   }, [supporting])
 
-  // Document-level WHY processing
+  // Document-level WHY processing — batched into a single LLM call
+  const [batchRelatesRequested, setBatchRelatesRequested] = useState(false)
   useEffect(() => {
-    if (!index || supporting.length === 0) return
-    pageDocs.forEach((d) => {
-      const row = matchCatalogRow(d, index)
-      const docTitle = titleFrom(d, row)
+    if (supporting.length === 0 || batchRelatesRequested) return
 
-      setDocWhy((prevWhy) => {
-        setDocWhyLoading((prevLoading) => {
-          // Document-level explanations via /api/relates
-          if (!prevWhy[d.doc_id] && !prevLoading[d.doc_id]) {
-            const best = [...(d.kps || [])].sort(
-              (a, b) => b.kp_relevance - a.kp_relevance,
-            )[0]
+    // Collect all docs that need relates explanations
+    const docsToProcess = pageDocs.filter(
+      (d) => !docWhy[d.doc_id] && !docWhyLoading[d.doc_id],
+    )
+    if (docsToProcess.length === 0) return
 
-            fetch('/api/relates', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                query,
-                doc: {
-                  title: docTitle,
-                  authors: authorsFrom(d, row),
-                  year: yearFrom(d, row),
-                  snippet: best?.snippet ?? '',
-                },
-              }),
-            })
-              .then((r) => r.json())
-              .then((j) => {
-                const txt = (
-                  j?.relates ||
-                  j?.why ||
-                  'Document provides relevant context for this query.'
-                ).trim()
-                const rel: 'direct' | 'indirect' =
-                  j?.relation === 'direct' ? 'direct' : 'indirect'
-                setDocWhy((prev) => ({
-                  ...prev,
-                  [d.doc_id]: { why: txt, relation: rel },
-                }))
-              })
-              .catch(() => {
-                setDocWhy((prev) => ({
-                  ...prev,
-                  [d.doc_id]: {
-                    why: 'Document provides relevant context for this query.',
-                    relation: 'indirect' as const,
-                  },
-                }))
-              })
-              .finally(() =>
-                setDocWhyLoading((prev) => ({ ...prev, [d.doc_id]: false })),
-              )
+    setBatchRelatesRequested(true)
 
-            return { ...prevLoading, [d.doc_id]: true }
-          }
-          return prevLoading
-        })
-        return prevWhy
-      })
+    // Mark all docs as loading
+    const loadingUpdate: Record<string, boolean> = {}
+    docsToProcess.forEach((d) => { loadingUpdate[d.doc_id] = true })
+    setDocWhyLoading((prev) => ({ ...prev, ...loadingUpdate }))
+
+    // Build batch request — catalog index is optional (enriches metadata when available)
+    const batchDocs = docsToProcess.map((d) => {
+      const row = index ? matchCatalogRow(d, index) : undefined
+      const best = [...(d.kps || [])].sort(
+        (a, b) => b.kp_relevance - a.kp_relevance,
+      )[0]
+      return {
+        title: titleFrom(d, row),
+        authors: authorsFrom(d, row),
+        year: yearFrom(d, row),
+        snippet: best?.snippet ?? '',
+      }
     })
-  }, [index, pageDocs, query])
+
+    fetch('/api/batch-relates', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query, docs: batchDocs }),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        const results = j?.results || []
+        const whyUpdate: Record<string, WhyMeta> = {}
+        docsToProcess.forEach((d, i) => {
+          const item = results[i]
+          whyUpdate[d.doc_id] = {
+            why: (
+              item?.relates ||
+              'Document provides relevant context for this query.'
+            ).trim(),
+            relation: item?.relation === 'direct' ? 'direct' : 'indirect',
+          }
+        })
+        setDocWhy((prev) => ({ ...prev, ...whyUpdate }))
+      })
+      .catch(() => {
+        const whyUpdate: Record<string, WhyMeta> = {}
+        docsToProcess.forEach((d) => {
+          whyUpdate[d.doc_id] = {
+            why: 'Document provides relevant context for this query.',
+            relation: 'indirect',
+          }
+        })
+        setDocWhy((prev) => ({ ...prev, ...whyUpdate }))
+      })
+      .finally(() => {
+        const doneUpdate: Record<string, boolean> = {}
+        docsToProcess.forEach((d) => { doneUpdate[d.doc_id] = false })
+        setDocWhyLoading((prev) => ({ ...prev, ...doneUpdate }))
+      })
+  }, [index, pageDocs, query, batchRelatesRequested])
 
   async function runAlignment(q: string, docs: DocMeta[]) {
     try {
