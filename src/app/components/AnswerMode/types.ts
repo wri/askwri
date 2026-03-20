@@ -63,6 +63,7 @@ export interface SupportingCitationsProps {
   setFirstDocHowRelevant: (why: string) => void
   page?: number
   setPage?: (p: number) => void
+  sourceRelevance?: Record<string, string>  // doc_id → 'strong' | 'partial' | 'weak'
 }
 
 export type Usage = {

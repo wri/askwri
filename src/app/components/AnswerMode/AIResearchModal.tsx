@@ -43,6 +43,7 @@ export const AIResearchModalContent = ({
   const [alignLoading, setAlignLoading] = useState(false)
   const [alignment, setAlignment] = useState<Assessment | null>(null)
   const [ops, setOps] = useState<Ops | null>(null)
+  const [sourceRelevance, setSourceRelevance] = useState<Record<string, string>>({})  // doc_id → tier
 
   const handleShuffleSuggestions = () => {
     setSuggestions(getRandomSuggestions(3, 'answer'))
@@ -191,7 +192,7 @@ export const AIResearchModalContent = ({
       const synthesisResult = await synthesisResponse.json()
 
       if (synthesisResult?.synthesis) {
-        const { sentences, paragraphs, warning, warningMessage } =
+        const { sentences, paragraphs, warning, warningMessage, source_relevance } =
           synthesisResult.synthesis
 
         // Validate sentences array
@@ -255,6 +256,17 @@ export const AIResearchModalContent = ({
 
           return refs
         })
+
+        // Store source relevance tiers from synthesis LLM
+        if (Array.isArray(source_relevance)) {
+          const tierMap: Record<string, string> = {}
+          for (const sr of source_relevance) {
+            if (sr.doc_id && sr.tier) {
+              tierMap[sr.doc_id] = sr.tier
+            }
+          }
+          setSourceRelevance(tierMap)
+        }
 
         // Save the answer with generated citations
         const answerWithCitations = {
@@ -360,6 +372,7 @@ export const AIResearchModalContent = ({
               supportingDocs={supportingDocs}
               page={supportingCitationsPage}
               setPage={setSupportingCitationsPage}
+              sourceRelevance={sourceRelevance}
             />
           </Box>
         </Box>

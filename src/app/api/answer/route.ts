@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.2').trim()
+const MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.4').trim()
 const IS_GPT5 = /^gpt-5/i.test(MODEL)
 // Optimized for concise 2-3 sentence answers
 const DEFAULT_MAX = IS_GPT5 ? 2000 : 1500
@@ -44,8 +44,16 @@ Rules:
 - LIMITATIONS: If sources highlight significant risks, trade-offs, or caveats, include the most important one
 - FAITHFULNESS: Only state causal relationships explicitly supported in the sources; use hedging language (e.g., "is associated with", "may contribute to") for correlations or inferences
 
-Return JSON: {"sentences":["sentence1","sentence2","sentence3"],"sources_used":[1,3,5]}
-If none of the provided sources adequately answer the question, return: {"sentences":["The available sources do not contain sufficient information to answer this question."],"sources_used":[],"low_coverage":true}
+Return JSON with your answer AND a relevance assessment for every source:
+{"sentences":["s1","s2","s3"],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
+
+Tier definitions:
+- "strong": Directly answers the question or provides key evidence/data used in your synthesis
+- "partial": Useful background or supporting context but not central to the answer
+- "weak": Does not meaningfully help answer the question
+
+If no sources adequately answer the question:
+{"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
 `.trim()
   : `
 You are a careful research assistant. Write a clear, concise answer that synthesizes the most important information from the provided documents.
@@ -58,11 +66,16 @@ CRITICAL RULES:
 - GROUND: Every claim must be traceable to the provided documents
 - ACCURACY: Preserve the meaning and facts from the original sources
 
-Return strict JSON with exactly 2-3 sentences:
-{"sentences":["First sentence with key finding.","Second sentence with supporting detail.","Third sentence with additional context or implication."],"sources_used":[1,2,3]}
+Return JSON with your answer AND a relevance assessment for every source:
+{"sentences":["s1","s2","s3"],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
 
-If none of the provided sources adequately answer the question, return:
-{"sentences":["The available sources do not contain sufficient information to answer this question."],"sources_used":[],"low_coverage":true}
+Tier definitions:
+- "strong": Directly answers the question or provides key evidence/data used in your synthesis
+- "partial": Useful background or supporting context but not central to the answer
+- "weak": Does not meaningfully help answer the question
+
+If no sources adequately answer the question:
+{"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
 `.trim()
 
 function synthFallback(query: string, docs: any[]) {
@@ -406,9 +419,26 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
     // Build synthesis response with appropriate warnings
     const synthesis: any = { sentences }
 
+    // Extract source relevance tiers from synthesis LLM and map to doc_ids
+    const rawSourceRelevance: {id: number, tier: string}[] = Array.isArray(parsed.source_relevance)
+      ? parsed.source_relevance
+      : []
+    // Map 1-indexed source IDs back to doc_ids so the frontend can match them
+    const sourceRelevance = rawSourceRelevance.map(sr => {
+      const doc = filteredDocs[sr.id - 1]
+      return {
+        doc_id: doc?.doc_id || '',
+        tier: sr.tier || 'weak',
+      }
+    }).filter(sr => sr.doc_id)
+    if (sourceRelevance.length > 0) {
+      synthesis.source_relevance = sourceRelevance
+    }
+
     // Detect low-coverage signal from synthesis LLM
-    const sourcesUsed = Array.isArray(parsed.sources_used) ? parsed.sources_used.length : docList.length
-    const isLowCoverage = parsed.low_coverage === true || sourcesUsed === 0
+    const strongOrPartial = rawSourceRelevance.filter(s => s.tier === 'strong' || s.tier === 'partial').length
+    const sourcesUsed = strongOrPartial > 0 ? strongOrPartial : docList.length
+    const isLowCoverage = parsed.low_coverage === true || strongOrPartial === 0
 
     if (isLowCoverage) {
       synthesis.warning = 'low_coverage'
