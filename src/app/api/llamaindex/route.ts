@@ -176,6 +176,7 @@ export async function POST(req: NextRequest) {
         summary: doc.metadata.summary,
         score: effectiveScore,
         raw_score: doc.metadata.raw_score,
+        relevance_pct: null as number | null,
         relevance_tier: doc.metadata.relevance_tier,
         kps: [
           {
