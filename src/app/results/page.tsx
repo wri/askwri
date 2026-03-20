@@ -17,10 +17,10 @@ import {
   authorsFrom,
   yearFrom,
   firstSentence,
-  normalizeCatalogRow,
   buildAlignmentSummary,
   calculateEmbeddingCost,
 } from '../utils/utils'
+import { getCatalog } from '@/lib/catalog-cache'
 import { Assessment, Ops } from '../components/AnswerMode/types'
 
 /* ---------- component ---------- */
@@ -60,16 +60,10 @@ const AskWriAppContent = () => {
     typeof buildCatalogIndex
   > | null>(null)
   useEffect(() => {
-    ;(async () => {
-      const res = await fetch('/api/catalog', { cache: 'no-store' })
-      if (!res.ok) {
-        return
-      }
-      const j = await res.json()
-      const normed = (j.items as any[]).map(normalizeCatalogRow)
-      setCatalog(normed)
-      setIndex(buildCatalogIndex(normed))
-    })()
+    getCatalog().then(({ catalog: c, index: i }) => {
+      setCatalog(c)
+      setIndex(i)
+    })
   }, [])
 
   const searchParams = useSearchParams()
