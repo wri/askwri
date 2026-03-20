@@ -73,8 +73,16 @@ const CitePanel = ({
             ? Math.max(...doc.kps.map((k) => k.kp_relevance || 0))
             : 0
 
-        // Convert relevance score to High/Medium/Low
-        const relevanceLabel = getRelevanceLevel(docRel)
+        // Use relevance tier from reranker logit thresholds
+        const tierLabels: Record<string, string> = {
+          strong: 'Strong',
+          partial: 'Partial',
+          weak: 'Weak',
+        }
+        const relevanceLabel =
+          doc.relevance_tier && tierLabels[doc.relevance_tier]
+            ? tierLabels[doc.relevance_tier]
+            : getRelevanceLevel(docRel)
 
         return {
           id: doc.doc_id,

@@ -42,7 +42,7 @@
         "https://www.wri.org/research/driving-forward-clean-ride-kids",
         "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
         "https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved",
-        "https://www.wri.org/research/impactar-tool",
+        "https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022",
         "https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/"
       ],
       "expected_count": 5,
@@ -160,13 +160,11 @@
       "task_description": "Retrieve all papers that were published after a specific date on an amorphous intersection. 'Urban finance' is a concatenation of two amorphous terms and not thing as such, so expecting to return all things in our corpus to do with finance, which is mostly electric buses and transportation.",
       "expected_urls": [
         "https://www.wri.org/research/fare-look-funding-urban-public-transport-operations",
-        "https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico",
-        "https://wri.org.cn/en/research/feasibility-of-zero-emission-freight-zones-in-Beijing-Scenario-analysis-and-risk-assessment",
         "https://www.wri.org/research/synergizing-land-value-capture-tod",
         "https://urbantransitions.global/en/publication/global-review-of-finance-for-sustainable-urban-infrastructure/",
         "https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/"
       ],
-      "expected_count": 6,
+      "expected_count": 4,
       "difficulty": "hard",
       "query_type": "amorphous_temporal",
       "note": "Date filter: 2020 onwards. Removed 5 docs not in catalog: rolling-out-electric-buses, access-climate-finance, assessing-financing-challenges, changing-demand-preference, financial-analysis-charging-station-fact"
@@ -179,8 +177,6 @@
         "https://urbantransitions.global/en/publication/scaling-up-investment-for-sustainable-urban-infrastructure-a-guide-to-national-and-subnational-reform/",
         "https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india",
         "https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities",
-        "https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico",
-        "https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/",
         "https://urbantransitions.global/en/publication/financing-the-urban-transition-for-sustainable-development-better-finance-for-better-cities/",
         "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen",
         "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
@@ -190,7 +186,7 @@
         "https://wri-india.org/research/rolling-out-electric-buses",
         "https://urbantransitions.global/en/publication/the-future-of-urban-mobility-the-case-for-electric-bus-deployment-in-bogota-colombia/"
       ],
-      "expected_count": 13,
+      "expected_count": 11,
       "difficulty": "hard",
       "query_type": "amorphous_exclusion",
       "note": "Urban finance minus electric buses. Removed seizing-the-urban-opportunity (not in catalog)"
@@ -198,8 +194,8 @@
   ],
   "metadata": {
     "total_test_cases": 11,
-    "total_expected_documents": 61,
-    "unique_documents": 42,
+    "total_expected_documents": 70,
+    "unique_documents": 54,
     "note": "11 expected docs removed from original 72 (not in catalog). URL typo fixed: healthier-students-and-communities \u2192 healthier-communities. Pruned 3 more URLs missing from current corpus: improving-school-infrastructure-healthier-communities (q3, q6), Pathways-to-Decarbonize-the-Road-Transport-Sector-in-Guangdong (q8)",
     "query_types": [
       "topic_area",

@@ -4,28 +4,101 @@ Search service for AskWRI application, deployed via AWS ECS Fargate.
 
 ## Overview
 
-This service provides search and backend functionality that integrates with the Next.js frontend. It's designed to handle:
-- Data processing tasks
-- ML/AI inference (implement as needed)
-- Complex computations
-- Integration with Python-specific libraries
+This service provides hybrid document retrieval and reranking for the AskWRI application. It supports two modes:
+- **Cite mode**: Returns ranked documents with relevance tiers for citation-style search
+- **Answer mode**: Returns documents for LLM-based answer generation
 
 ## Architecture
 
-Search service is currently completely internal because there is no listener
-on the ALB for /api/search/* routes.  If this is desired in the future,
-it can be configured as below
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   ALB           │────▶│  Next.js Backend │────▶│ Search Service  │
-│ /api/search/*   │     │  (ECS Fargate)   │     │  (ECS Fargate)  │
+│                 │     │  (ECS Fargate)   │     │  (ECS Fargate)  │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
-                                │                         │
-                                ▼                         ▼
-                        ┌──────────────────┐    ┌─────────────────┐
-                        │ Service Discovery│    │ CloudWatch Logs │
-                        │ (AWS Cloud Map)  │    └─────────────────┘
-                        └──────────────────┘
+```
+
+The search service is internal — the Next.js backend proxies all requests.
+
+## Retrieval Pipeline
+
+### 1. Indexing
+
+On startup, the service:
+1. Parses PDFs from the documents directory (400-char chunks, 80-char overlap)
+2. Generates **summary nodes** from `documents.csv` metadata (one per document)
+3. Builds a **vector index** (OpenAI embeddings) and a **BM25 index** over all nodes
+4. Caches parsed nodes and embeddings to avoid reprocessing on restart
+
+### 2. Hybrid Retrieval
+
+Queries use **Reciprocal Rank Fusion (RRF)** to combine two retrieval strategies:
+
+| Parameter | Cite mode | Answer mode |
+|-----------|-----------|-------------|
+| Dense (vector) top_k | 800 | 200 |
+| Sparse (BM25) top_k | 800 | 200 |
+| Fusion top_k | 500 | 200 |
+| Dense weight | 0.5 | 0.5 |
+| Sparse weight | 0.5 | 0.5 |
+| RRF k | 60 | 60 |
+
+BM25 queries receive **conservative query expansion** via domain-specific synonym mapping (e.g., "micromobility" → ["bike sharing", "e-bikes", "scooters"]). See `app/query_expansion.py`.
+
+### 3. Cross-Encoder Reranking
+
+After fusion, results are reranked using `cross-encoder/ms-marco-MiniLM-L-6-v2` (22M params).
+
+| Parameter | Cite mode | Answer mode |
+|-----------|-----------|-------------|
+| rerank_top_n | 250 | 120 |
+
+The reranker produces raw logit scores (not probabilities). Higher = more relevant.
+
+### 4. Cite Mode: Logit Floor & Relevance Tiers
+
+In cite mode, results are filtered and tiered based on calibrated logit thresholds:
+
+| Tier | Logit threshold | Meaning |
+|------|----------------|---------|
+| **Strong** | ≥ -2.3 | Top ~30% of relevant scores (70th percentile) |
+| **Partial** | ≥ -7.8 | Middle ~45% (25th–70th percentile) |
+| **Weak** | ≥ -9.0 | Bottom ~25% of relevant scores |
+| Dropped | < -9.0 | Below floor, not returned |
+
+These are **universal fixed cutpoints** derived from calibration against a golden evaluation dataset. They reflect absolute reranker confidence, not position within a given query's results. A query with easy matches may return all "Strong"; a hard query may return mostly "Weak."
+
+Thresholds are configured in `app/config.py`:
+```python
+cite_logit_floor: float = -9.0        # Drop docs below this raw logit
+cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores
+cite_partial_threshold: float = -7.8  # 25th percentile of relevant scores
+```
+
+The response includes `raw_score` (logit) and `relevance_tier` ("strong"/"partial"/"weak") per document.
+
+### 5. Document Deduplication
+
+Cite mode deduplicates by document ID, keeping the best chunk score per document.
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/query` | POST | Main query endpoint |
+
+### POST /query
+
+```json
+{
+  "query": "electric buses in Latin America",
+  "mode": "cite",
+  "max_results": 100,
+  "rerank": true,
+  "rerank_top_n": 250,
+  "vector_top_k": 800,
+  "bm25_top_k": 800
+}
 ```
 
 ## Local Development
@@ -33,123 +106,71 @@ it can be configured as below
 ### Prerequisites
 
 - Python 3.12+
-- pip or uv
+- pip
 
 ### Setup
 
 ```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+cd search-service
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Copy environment file
-cp .env.example .env
-# Update .env file with openAI key, etc...
+# Create .env with:
+#   OPENAI_API_KEY=sk-...
+#   DOCUMENTS_LOCAL_DIR=./data
 
-# Copy documents from S3 to local directory expected by search service
-aws s3 sync s3://askwri-data/documents/ /tmp/askWRI_docs
+# Place documents.csv and PDF files in ./data/
 
-# Run the server
-python -m app.main
-# Or with uvicorn directly
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-# Note that the app may take several minutes to initial setup of the
-# retrieval indexes (both BM25 and vector embeddings)
+# Start the service
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Index build takes 1-2 minutes on first start; cached after that
 ```
 
 ### API Documentation
 
-Once running, access the API docs at:
-- Swagger UI: http://localhost:8000/api/search/docs
-- OpenAPI JSON: http://localhost:8000/api/search/openapi.json
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check (ALB target) |
-
-## Docker
-
-### Build
-
-```bash
-docker build -t askwri-search-service .
-```
-
-### Run
-
-```bash
-docker run -p 8000:8000 \
-  -e ENVIRONMENT=development \
-  -e DEBUG=true \
-  -e NEXTJS_BACKEND_URL=http://host.docker.internal:3000 \
-  askwri-search-service
-```
+Once running: http://localhost:8000/docs
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENVIRONMENT` | `development` | Environment name (qa, production) |
-| `DEBUG` | `false` | Enable debug mode |
+| `OPENAI_API_KEY` | — | Required for embeddings |
+| `DOCUMENTS_LOCAL_DIR` | `/tmp/askWRI_docs` | Directory containing documents.csv and PDFs |
+| `ENVIRONMENT` | `development` | Environment name |
 | `PORT` | `8000` | Server port |
 | `WORKERS` | `1` | Number of uvicorn workers |
 | `LOG_LEVEL` | `info` | Logging level |
-| `NEXTJS_BACKEND_URL` | `http://localhost:3000` | Next.js backend URL |
+
+## Docker
+
+```bash
+docker build -t askwri-search-service .
+docker run -p 8000:8000 \
+  -e OPENAI_API_KEY=sk-... \
+  -e DOCUMENTS_LOCAL_DIR=/data \
+  askwri-search-service
+```
 
 ## Deployment
 
-This service is deployed via Terraform to AWS ECS Fargate. See the Terraform configuration in `/terraform/infrastructure/`.
-
-### ECR Push
-
-```bash
-# Authenticate with ECR
-aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-2.amazonaws.com
-
-# Build and tag
-docker build -t askwri-app-<env>-search-service .
-docker tag askwri-app-<env>-search-service:latest <account>.dkr.ecr.us-east-2.amazonaws.com/askwri-app-<env>-search-service:latest
-
-# Push
-docker push <account>.dkr.ecr.us-east-2.amazonaws.com/askwri-app-<env>-search-service:latest
-```
-
-## Connecting to Next.js
-
-The Search Service can communicate with Next.js using:
-
-1. **Internal URL** (via Service Discovery): `http://search-service.askwri-app-<env>.local:8000`
-2. **Next.js → Search Service**: Uses the `SEARCH_SERVICE_URL` env var in Next.js
-3. **Search Service → Next.js**: Uses the `NEXTJS_BACKEND_URL` env var in the service
-
-## Testing
-
-```bash
-# Install dev dependencies
-pip install pytest pytest-asyncio httpx
-
-# Run tests
-pytest
-```
+Deployed via Terraform to AWS ECS Fargate. See `/terraform/infrastructure/`.
 
 ## Project Structure
 
 ```
 search-service/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py          # FastAPI application
-│   ├── config.py        # Settings and configuration
+│   ├── main.py              # FastAPI app, retrieval pipeline, reranking
+│   ├── config.py            # Settings (thresholds, paths, ports)
+│   ├── query_expansion.py   # Domain-specific BM25 synonym expansion
 │   └── routers/
-│       ├── __init__.py
-│       └── api.py       # API routes
+│       └── api.py           # API routes
+├── data/                    # Local documents (not in git)
+│   ├── documents.csv        # Document metadata catalog
+│   └── *.pdf                # PDF corpus
 ├── Dockerfile
 ├── requirements.txt
-├── .env.example
 └── README.md
 ```

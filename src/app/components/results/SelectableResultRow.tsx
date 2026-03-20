@@ -151,9 +151,12 @@ export const SelectableResultRow = ({
       </TableCell>
       <TableCell width={120}>
         <div style={{ width: 'fit-content' }}>
-          <Tooltip content='How relevant this document is compared with other results for this query. The top result is scaled to 1.0'>
-            <Tag label={rowData.relevance} variant='success' />
-          </Tooltip>
+          <Tag label={rowData.relevance} variant={
+            rowData.relevance === 'Strong' ? 'success'
+              : rowData.relevance === 'Partial' ? 'warning'
+                : rowData.relevance === 'Weak' ? 'info-grey'
+                  : 'success'
+          } />
         </div>
       </TableCell>
       <TableCell>
