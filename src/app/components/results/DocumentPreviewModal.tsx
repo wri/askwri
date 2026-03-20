@@ -11,7 +11,7 @@ export const DocumentPreviewModalContent = ({
 }: DocumentPreviewModalContentProps) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
     <div style={{ width: 'fit-content' }}>
-      <Tag label={`${rowData.relevance} Relevance`} variant={
+      <Tag label={`${rowData.relevance} Relevance${rowData.relevance_pct != null ? ` (${rowData.relevance_pct}%)` : ''}`} variant={
         rowData.relevance === 'Strong' ? 'success'
           : rowData.relevance === 'Partial' ? 'warning'
             : rowData.relevance === 'Weak' ? 'info-grey'

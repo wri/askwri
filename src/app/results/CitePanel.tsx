@@ -95,6 +95,7 @@ const CitePanel = ({
             row?.raw?.['short summary'] ||
             summary,
           relevance: relevanceLabel,
+          relevance_pct: doc.relevance_pct,
           how_relevant: whyMeta?.why || firstSentence(best?.snippet ?? ''),
           download_url: url,
           relevance_score: docRel,

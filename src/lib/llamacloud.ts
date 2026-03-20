@@ -29,6 +29,7 @@ export type DocMeta = {
   summary?: string // Pre-generated summary from CSV
   score?: number
   raw_score?: number
+  relevance_pct?: number | null
   relevance_tier?: RelevanceTier
   kps: KP[]
   meta?: any
