@@ -312,29 +312,21 @@ const AskWriAppContent = () => {
     }
   }, [supporting, alignLoading, query, queryCache, retrievalLoading])
 
-  // Auto-run alignment after all other LLM calls complete
+  // Auto-run alignment after retrieval completes
   useEffect(() => {
-    const hasSummaryLoading = Object.values(docSummaryLoading).some(Boolean)
-    const hasWhyLoading = Object.values(docWhyLoading).some(Boolean)
-
-    const allLoadingComplete =
-      !retrievalLoading && !hasSummaryLoading && !hasWhyLoading
-
     if (
-      allLoadingComplete &&
+      !retrievalLoading &&
       supporting.length > 0 &&
       query.trim() &&
       !alignLoading
     ) {
       const timer = setTimeout(() => {
         runAlignmentAfterResults()
-      }, 500)
+      }, 100)
       return () => clearTimeout(timer)
     }
   }, [
     retrievalLoading,
-    docSummaryLoading,
-    docWhyLoading,
     alignLoading,
     supporting.length,
     query,
