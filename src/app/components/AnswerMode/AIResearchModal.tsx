@@ -147,19 +147,6 @@ async function runAlignment(q: string, docs: DocMeta[]) {
           d.kps.some((kp: any) => kp.snippet && kp.snippet.length > 10),
       )
 
-      // Fire coverage pre-check in parallel with synthesis (does not block)
-      const coveragePromise = fetch('/api/answer-coverage', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          query: query.trim(),
-          passages: validDocs.slice(0, 5).map((d: any) => ({
-            title: d.title,
-            snippet: d.kps?.[0]?.snippet?.slice(0, 150) || '',
-          })),
-        }),
-      }).then(r => r.json()).catch(() => ({ coverage: 'unknown', explanation: '' }))
-
       if (validDocs.length === 0) {
         console.warn('⚠️ No valid docs with snippets for synthesis!')
         console.warn(
@@ -283,10 +270,16 @@ async function runAlignment(q: string, docs: DocMeta[]) {
 
         setAnswer(answerWithCitations)
 
-        // Await coverage result (should already be done since it ran in parallel)
-        const coverageResult = await coveragePromise
-        setCoverageRating(coverageResult.coverage || 'unknown')
-        setCoverageExplanation(coverageResult.explanation || '')
+        // Coverage comes from nano filter (returned in synthesis response)
+        if (synthesisResult.synthesis?.coverage) {
+          setCoverageRating(synthesisResult.synthesis.coverage)
+          const explanations: Record<string, string> = {
+            good: '',
+            limited: 'Some passages touch on the topic but lack specific answers.',
+            poor: 'The corpus likely does not contain material to adequately answer this question.',
+          }
+          setCoverageExplanation(explanations[synthesisResult.synthesis.coverage] || '')
+        }
 
         fetch('/api/answer-mode-query-logs', {
           method: 'POST',
