@@ -142,7 +142,7 @@ class QueryRequest(BaseModel):
     # Hybrid-specific parameters
     dense_weight: float = 0.5
     sparse_weight: float = 0.5
-    fusion_top_k: int = 150  # RRF fusion limit
+    fusion_top_k: Optional[int] = None  # RRF fusion limit (None = mode default: 500 cite, 100 answer)
     # Metadata filtering
     min_year: Optional[int] = None  # Filter documents by minimum publication year
     max_year: Optional[int] = None  # Filter documents by maximum publication year
@@ -174,6 +174,44 @@ class QueryResponse(BaseModel):
     fusion_results: Optional[List[Dict[str, Any]]] = None
     reranked_results: Optional[List[Dict[str, Any]]] = None
 
+class OnnxReranker:
+    """Cross-encoder reranker using ONNX or PyTorch backend via sentence-transformers.
+
+    Unlike SentenceTransformerRerank, this does not mutate global state per-request.
+    top_n is passed per-call to avoid race conditions with concurrent requests.
+    """
+
+    def __init__(self, model: str, top_n: int = 20, backend: str = "onnx"):
+        from sentence_transformers import CrossEncoder
+        self.top_n = top_n
+        self.model_name = model
+        try:
+            self._cross_encoder = CrossEncoder(model, backend=backend)
+            logger.info(f"Loaded reranker {model} with {backend} backend")
+        except Exception as e:
+            logger.warning(f"Failed to load {backend} backend for {model}: {e}. Falling back to torch.")
+            self._cross_encoder = CrossEncoder(model, backend="torch")
+
+    def postprocess_nodes(self, nodes, query_bundle, top_n=None):
+        """Score and rerank nodes. top_n can be overridden per-call."""
+        if not nodes:
+            return []
+        if query_bundle is None:
+            return nodes
+
+        effective_top_n = top_n if top_n is not None else self.top_n
+        query = query_bundle.query_str
+        pairs = [[query, node.node.get_content()] for node in nodes]
+
+        scores = self._cross_encoder.predict(pairs)
+
+        for node, score in zip(nodes, scores):
+            node.score = float(score)
+
+        nodes.sort(key=lambda n: n.score, reverse=True)
+        return nodes[:effective_top_n]
+
+
 class HybridFusionRetriever(BaseRetriever):
     """Custom hybrid retriever combining dense and sparse results using RRF"""
 
@@ -185,6 +223,8 @@ class HybridFusionRetriever(BaseRetriever):
         similarity_threshold: float = 0.0,
         dense_weight: Optional[float] = None,
         sparse_weight: Optional[float] = None,
+        fusion_top_k: Optional[int] = None,
+        bm25_top_k: Optional[int] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -192,16 +232,19 @@ class HybridFusionRetriever(BaseRetriever):
         self.bm25_retriever = bm25_retriever
         self.mode = mode
         self.similarity_threshold = similarity_threshold
+        self.bm25_top_k = bm25_top_k
 
-        # Mode-specific configurations for 203-doc corpus
-        if mode == "answer":
-            self.dense_weight = dense_weight if dense_weight is not None else 0.5
-            self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
-            self.fusion_top_k = 100  # Precision: scaled from 50 for larger corpus
-        else:  # cite mode - more inclusive for broader coverage
-            self.dense_weight = dense_weight if dense_weight is not None else 0.5
-            self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
-            self.fusion_top_k = 500  # INCREASED: Was dropping docs ranked low in both indexes
+        # Weights default to 0.5/0.5 if not specified by caller
+        self.dense_weight = dense_weight if dense_weight is not None else 0.5
+        self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
+
+        # fusion_top_k: caller controls via preset; fall back to mode defaults
+        if fusion_top_k is not None:
+            self.fusion_top_k = fusion_top_k
+        elif mode == "answer":
+            self.fusion_top_k = 100
+        else:
+            self.fusion_top_k = 500
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes using hybrid fusion with RRF"""
@@ -219,6 +262,11 @@ class HybridFusionRetriever(BaseRetriever):
             sparse_future = executor.submit(self.bm25_retriever.retrieve, expanded_bundle)
             dense_results = dense_future.result()
             sparse_results = sparse_future.result()
+
+        # Slice BM25 results to requested top_k (BM25Retriever is a singleton built
+        # at startup with similarity_top_k=1000; per-request limit applied here)
+        if self.bm25_top_k is not None:
+            sparse_results = sparse_results[:self.bm25_top_k]
 
         logger.info(f"Dense retrieval: {len(dense_results)} results")
         logger.info(f"Sparse retrieval: {len(sparse_results)} results")
@@ -907,25 +955,33 @@ def load_documents_and_build_indexes():
     logger.info(f"✅ BM25 index built in {time.time() - step_start:.1f}s")
 
     # Initialize rerankers
-    logger.info(f"🔄 Loading cross-encoder rerankers (using cached models in offline mode)...")
+    logger.info(f"🔄 Loading cross-encoder rerankers (backend: {settings.reranker_backend})...")
     step_start = time.time()
 
     answer_reranker_model = settings.answer_reranker_model
-    logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model})...")
-    reranker_start = time.time()
-    reranker_answer = SentenceTransformerRerank(
-        model=answer_reranker_model,
-        top_n=20
-    )
-    logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+    cite_reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
-    logger.info(f"   [2/2] Loading Cite mode reranker (MiniLM-L-6)...")
-    reranker_start = time.time()
-    reranker_cite = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
-        top_n=200
-    )
-    logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+    if settings.reranker_backend == "onnx":
+        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, ONNX)...")
+        reranker_start = time.time()
+        reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend="onnx")
+        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+
+        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
+        reranker_start = time.time()
+        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend="onnx")
+        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+    else:
+        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
+        reranker_start = time.time()
+        reranker_answer = SentenceTransformerRerank(model=answer_reranker_model, top_n=20)
+        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+
+        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
+        reranker_start = time.time()
+        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=1000)
+        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+
     logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
 
     # Store in global state
@@ -1112,6 +1168,8 @@ async def hybrid_query(request: QueryRequest):
             similarity_threshold=request.similarity_threshold,
             dense_weight=request.dense_weight,
             sparse_weight=request.sparse_weight,
+            fusion_top_k=request.fusion_top_k,
+            bm25_top_k=request.bm25_top_k,
         )
 
         # Retrieve with hybrid fusion
@@ -1128,21 +1186,23 @@ async def hybrid_query(request: QueryRequest):
 
         # Stage 2: Local Reranking
         if request.rerank and stage1_results:
-            # Get base reranker
             base_reranker = (service_state["reranker_answer"] if request.mode == "answer"
                             else service_state["reranker_cite"])
 
             if base_reranker:
                 try:
-                    # Use base reranker with dynamic top_n
                     stage2_start = time.time()
-                    original_top_n = base_reranker.top_n
-                    base_reranker.top_n = request.rerank_top_n
-                    stage2_results = base_reranker.postprocess_nodes(
-                        stage1_results,
-                        query_bundle
-                    )
-                    base_reranker.top_n = original_top_n
+                    if isinstance(base_reranker, OnnxReranker):
+                        # OnnxReranker: pass top_n per-call (no global mutation)
+                        stage2_results = base_reranker.postprocess_nodes(
+                            stage1_results, query_bundle, top_n=request.rerank_top_n
+                        )
+                    else:
+                        # SentenceTransformerRerank: call with default top_n, then slice
+                        stage2_results = base_reranker.postprocess_nodes(
+                            stage1_results, query_bundle
+                        )
+                        stage2_results = stage2_results[:request.rerank_top_n]
                     stage2_elapsed = time.time() - stage2_start
                     logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
                 except Exception as e:
@@ -1322,10 +1382,12 @@ async def hybrid_query(request: QueryRequest):
                 "final_results": len(docs),
                 "reranking_applied": request.rerank and service_state.get(f"reranker_{request.mode}") is not None,
                 "similarity_threshold": request.similarity_threshold,
+                "stage1_time": round(stage1_elapsed, 2) if 'stage1_elapsed' in locals() else None,
+                "stage2_time": round(stage2_elapsed, 2) if 'stage2_elapsed' in locals() else None,
                 "mode_config": {
                     "dense_weight": request.dense_weight,
                     "sparse_weight": request.sparse_weight,
-                    "fusion_top_k": 100 if request.mode == "answer" else 150,  # Updated for 203-doc corpus
+                    "fusion_top_k": request.fusion_top_k,
                     "cite_filtering": "minimal" if request.mode == "cite" else "threshold_based"
                 }
             }

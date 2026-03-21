@@ -6,6 +6,7 @@ export type RetrievalParams = {
   rerank?: boolean;
   rerankTopN?: number;
   maxResults?: number;
+  fusionTopK?: number;
 };
 
 export const ANSWER_PRESET: RetrievalParams = {
@@ -16,13 +17,16 @@ export const ANSWER_PRESET: RetrievalParams = {
   rerank: true,
   rerankTopN: 20,     // Sweep showed no P@8 gain from reranking more candidates
   maxResults: 15,     // Return top 15 (down from 20) — tighter precision
+  fusionTopK: 100,    // RRF fusion limit for answer mode
 };
 
 export const CITE_PRESET: RetrievalParams = {
-  retrievalMode: "hybrid", // hybrid mode for comprehensive recall
-  denseTopK: 500,    // Retrieve 500 candidates from vector search
-  sparseTopK: 500,   // Retrieve 500 candidates from BM25
-  alpha: 0.5,        // Balanced dense/sparse fusion
-  rerank: true,      // Cross-encoder reranking for quality
-  rerankTopN: 40,    // Return top 40 after reranking (83% recall, 14.4% precision, ~37 docs avg)
+  retrievalMode: "hybrid",
+  denseTopK: 500,     // 203-doc corpus — 500 is ample coverage
+  sparseTopK: 500,
+  alpha: 0.5,         // Balanced dense/sparse fusion
+  rerank: true,
+  rerankTopN: 500,    // Must be >= fusionTopK so logit floor is the sole quality gate
+  maxResults: 100,    // Return up to 100 docs (filtered by logit floor)
+  fusionTopK: 200,    // RRF fusion limit — eval shows 0.6% recall loss vs 500, 56% less rerank work
 };

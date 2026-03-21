@@ -389,7 +389,7 @@ export async function POST(req: NextRequest) {
     const userContent = `Question: ${query}
 
 Source documents with key findings:
-${docList
+${filteredDocs
   .map(
     (d) =>
       `[${d.id}] "${d.title}" (${d.year || 'n.d.'})
