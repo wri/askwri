@@ -104,9 +104,15 @@ The answer mode pipeline was delivering ~61% precision at synthesis input — me
 
 **Phase 1 — Retrieval parameter tuning.** Swept `alpha` (dense/sparse weight) across [0.5, 0.6, 0.65, 0.7]. Setting `alpha=0.65` (favoring semantic search over keyword matching) improved mean P@8 from 61.1% to 63.9%. RerankTopN had no effect — the reranker sees the same candidates regardless of pool size. The broken per-query normalized score threshold (0.75) was removed entirely.
 
-**Phase 2 — GPT-5.4-nano per-chunk relevance filter.** A nano model classifies each passage as strong/partial/weak before synthesis. Only strong and partial passages reach GPT-5.4. The filter also rates overall corpus coverage (good/limited/poor) for UI warnings. Eval results: **100% filter precision** (every passage that reaches synthesis is relevant), 100% recall (no relevant passages dropped). Coverage detection correctly flags queries with weak corpus material.
+**Phase 2 — GPT-5.4-nano per-chunk relevance filter.** A nano model classifies each passage as strong/partial/weak before synthesis. Only strong and partial passages reach GPT-5.4. The filter also rates overall corpus coverage (good/limited/poor) for UI warnings. Coverage detection correctly flags queries with weak corpus material (e.g., ans_002, ans_007 flagged as "limited").
 
-Overall pipeline: **61.1% → 63.9% → 100%** mean precision at synthesis input.
+Overall pipeline: Phase 1 improved retrieval precision from **61.1% → 63.9%**. Phase 2 (nano filter) showed 100% agreement with ground truth labels, but see caveats below.
+
+**Caveats on the nano filter eval:**
+- The "100% filter precision" figure is inflated by circular evaluation: the nano filter (GPT-5.4-nano) is being judged against ground truth labels produced by the same model family (GPT-5.4-full). High agreement is expected and does not independently validate the filter.
+- Doc-level label aggregation (MAX across chunks) further inflates agreement — most docs in a 203-doc research corpus have at least one somewhat-relevant chunk for broad queries, so the eval encountered zero "weak" docs.
+- **What's missing:** an end-to-end synthesis quality comparison (with vs without nano filter) on the worst-performing queries (ans_002 at 25% retrieval precision, ans_006 at 25%). This would show whether filtering actually improves the answers users see, not just whether two GPT-5.4 variants agree.
+- Human-validated labels remain the gold standard. These results should be treated as provisional until human review of the nano filter's tier assignments is completed.
 
 **New eval scripts:**
 - `evaluation/sweep-answer-retrieval.ts` — alpha × rerankTopN precision sweep
