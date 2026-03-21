@@ -17,6 +17,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     awscli \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
