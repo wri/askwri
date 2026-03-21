@@ -945,25 +945,33 @@ def load_documents_and_build_indexes():
     logger.info(f"✅ BM25 index built in {time.time() - step_start:.1f}s")
 
     # Initialize rerankers
-    logger.info(f"🔄 Loading cross-encoder rerankers (using cached models in offline mode)...")
+    logger.info(f"🔄 Loading cross-encoder rerankers (backend: {settings.reranker_backend})...")
     step_start = time.time()
 
     answer_reranker_model = settings.answer_reranker_model
-    logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model})...")
-    reranker_start = time.time()
-    reranker_answer = SentenceTransformerRerank(
-        model=answer_reranker_model,
-        top_n=20
-    )
-    logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+    cite_reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
-    logger.info(f"   [2/2] Loading Cite mode reranker (MiniLM-L-6)...")
-    reranker_start = time.time()
-    reranker_cite = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
-        top_n=200
-    )
-    logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+    if settings.reranker_backend == "onnx":
+        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, ONNX)...")
+        reranker_start = time.time()
+        reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend="onnx")
+        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+
+        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
+        reranker_start = time.time()
+        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=200, backend="onnx")
+        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+    else:
+        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
+        reranker_start = time.time()
+        reranker_answer = SentenceTransformerRerank(model=answer_reranker_model, top_n=20)
+        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+
+        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
+        reranker_start = time.time()
+        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=200)
+        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+
     logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
 
     # Store in global state
@@ -1166,21 +1174,23 @@ async def hybrid_query(request: QueryRequest):
 
         # Stage 2: Local Reranking
         if request.rerank and stage1_results:
-            # Get base reranker
             base_reranker = (service_state["reranker_answer"] if request.mode == "answer"
                             else service_state["reranker_cite"])
 
             if base_reranker:
                 try:
-                    # Use base reranker with dynamic top_n
                     stage2_start = time.time()
-                    original_top_n = base_reranker.top_n
-                    base_reranker.top_n = request.rerank_top_n
-                    stage2_results = base_reranker.postprocess_nodes(
-                        stage1_results,
-                        query_bundle
-                    )
-                    base_reranker.top_n = original_top_n
+                    if isinstance(base_reranker, OnnxReranker):
+                        # OnnxReranker: pass top_n per-call (no global mutation)
+                        stage2_results = base_reranker.postprocess_nodes(
+                            stage1_results, query_bundle, top_n=request.rerank_top_n
+                        )
+                    else:
+                        # SentenceTransformerRerank: call with default top_n, then slice
+                        stage2_results = base_reranker.postprocess_nodes(
+                            stage1_results, query_bundle
+                        )
+                        stage2_results = stage2_results[:request.rerank_top_n]
                     stage2_elapsed = time.time() - stage2_start
                     logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
                 except Exception as e:
