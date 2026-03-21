@@ -905,10 +905,11 @@ def load_documents_and_build_indexes():
     logger.info(f"🔄 Loading cross-encoder rerankers (using cached models in offline mode)...")
     step_start = time.time()
 
-    logger.info(f"   [1/2] Loading Answer mode reranker (MiniLM-L-6)...")
+    answer_reranker_model = settings.answer_reranker_model
+    logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model})...")
     reranker_start = time.time()
     reranker_answer = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # 22M params, fast on CPU (Fargate)
+        model=answer_reranker_model,
         top_n=20
     )
     logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
@@ -1314,8 +1315,8 @@ async def hybrid_query(request: QueryRequest):
                 "reranking_applied": request.rerank and service_state.get(f"reranker_{request.mode}") is not None,
                 "similarity_threshold": request.similarity_threshold,
                 "mode_config": {
-                    "dense_weight": 0.5 if request.mode == "answer" else 0.4,
-                    "sparse_weight": 0.5 if request.mode == "answer" else 0.6,
+                    "dense_weight": request.dense_weight,
+                    "sparse_weight": request.sparse_weight,
                     "fusion_top_k": 100 if request.mode == "answer" else 150,  # Updated for 203-doc corpus
                     "cite_filtering": "minimal" if request.mode == "cite" else "threshold_based"
                 }
