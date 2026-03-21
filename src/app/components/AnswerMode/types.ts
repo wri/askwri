@@ -34,6 +34,7 @@ export interface AnswerPanelProps {
   alignment?: Assessment | null
   ops: Ops | null
   setSupportingCitationsPage?: (page: number) => void
+  coverageRating?: string
 }
 
 export interface AISearchFormProps {
@@ -64,6 +65,8 @@ export interface SupportingCitationsProps {
   page?: number
   setPage?: (p: number) => void
   sourceRelevance?: Record<string, string>  // doc_id → 'strong' | 'partial' | 'weak'
+  coverageRating?: string
+  coverageExplanation?: string
 }
 
 export type Usage = {

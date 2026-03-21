@@ -9,6 +9,7 @@ import {
   Button,
   Tag,
   Tooltip as DS_Tooltip,
+  InlineMessage,
 } from '@worldresources/wri-design-systems'
 import { DocMeta, KP } from '@/lib/llamacloud'
 import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
@@ -26,6 +27,8 @@ export const SupportingCitations = ({
   page: controlledPage,
   setPage: setControlledPage,
   sourceRelevance,
+  coverageRating,
+  coverageExplanation,
 }: SupportingCitationsProps) => {
   const [internalPage, setInternalPage] = useState(1)
   const page = controlledPage ?? internalPage
@@ -178,6 +181,15 @@ export const SupportingCitations = ({
         height: 570,
       }}
     >
+      {(coverageRating === 'poor' || coverageRating === 'limited') && coverageExplanation && (
+        <Box padding='2' marginBottom='2'>
+          <InlineMessage
+            variant='warning'
+            label={coverageRating === 'poor' ? 'Low corpus coverage' : 'Limited corpus coverage'}
+            caption={coverageExplanation}
+          />
+        </Box>
+      )}
       <div
         style={{
           display: 'flex',
@@ -196,36 +208,29 @@ export const SupportingCitations = ({
             Passage
           </Heading>
 
-          {/* Relevance tier */}
+          {/* Relevance tier from synthesis LLM */}
           {paginatedItems[0] && (() => {
             const tier = sourceRelevance?.[paginatedItems[0].doc.doc_id]
             if (tier) {
-              const tierConfig: Record<string, { label: string; variant: string; tooltip: string }> = {
-                strong: { label: 'Strong relevance', variant: 'success', tooltip: 'Directly answers the question or provides key evidence' },
-                partial: { label: 'Partial relevance', variant: 'info-white', tooltip: 'Provides useful background or supporting context' },
-                weak: { label: 'Weak relevance', variant: 'default', tooltip: 'Does not meaningfully help answer the question' },
-              }
-              const config = tierConfig[tier] || tierConfig.weak
               return (
                 <Box display='flex' alignItems='center' gap='2' marginBottom='4'>
-                  <Tooltip content={config.tooltip}>
-                    <Tag label={config.label} variant={config.variant as any} />
-                  </Tooltip>
+                  <Tag
+                    label={tier === 'strong' ? 'Strong' : tier === 'partial' ? 'Partial' : 'Weak'}
+                    variant={
+                      (tier === 'strong' ? 'success'
+                        : tier === 'partial' ? 'warning'
+                          : 'info-grey') as any
+                    }
+                  />
                 </Box>
               )
             }
-            // Fallback to old normalized relevance while synthesis is loading
+            // Fallback while synthesis is loading
             return (
               <Box display='flex' alignItems='center' gap='2' marginBottom='4'>
-                <Tooltip content='How relevant this document is compared with other results for this query. The top result is scaled to 1.0'>
-                  <Text
-                    fontSize='xs'
-                    fontWeight='medium'
-                    color={getThemedColor('neutral', 700)}
-                  >
-                    {`${getRelevanceLevel(paginatedItems[0].kp.kp_relevance)} relevance`}
-                  </Text>
-                </Tooltip>
+                <Text fontSize='xs' fontWeight='medium' color={getThemedColor('neutral', 500)}>
+                  Evaluating relevance...
+                </Text>
               </Box>
             )
           })()}

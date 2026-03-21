@@ -44,6 +44,8 @@ export const AIResearchModalContent = ({
   const [alignment, setAlignment] = useState<Assessment | null>(null)
   const [ops, setOps] = useState<Ops | null>(null)
   const [sourceRelevance, setSourceRelevance] = useState<Record<string, string>>({})  // doc_id → tier
+  const [coverageRating, setCoverageRating] = useState<string>('')
+  const [coverageExplanation, setCoverageExplanation] = useState<string>('')
 
   const handleShuffleSuggestions = () => {
     setSuggestions(getRandomSuggestions(3, 'answer'))
@@ -153,6 +155,19 @@ export const AIResearchModalContent = ({
           d.kps.length > 0 &&
           d.kps.some((kp: any) => kp.snippet && kp.snippet.length > 10),
       )
+
+      // Fire coverage pre-check in parallel with synthesis (does not block)
+      const coveragePromise = fetch('/api/answer-coverage', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          query: query.trim(),
+          passages: validDocs.slice(0, 5).map((d: any) => ({
+            title: d.title,
+            snippet: d.kps?.[0]?.snippet?.slice(0, 150) || '',
+          })),
+        }),
+      }).then(r => r.json()).catch(() => ({ coverage: 'unknown', explanation: '' }))
 
       if (validDocs.length === 0) {
         console.warn('⚠️ No valid docs with snippets for synthesis!')
@@ -279,6 +294,11 @@ export const AIResearchModalContent = ({
 
         setAnswer(answerWithCitations)
 
+        // Await coverage result (should already be done since it ran in parallel)
+        const coverageResult = await coveragePromise
+        setCoverageRating(coverageResult.coverage || 'unknown')
+        setCoverageExplanation(coverageResult.explanation || '')
+
         fetch('/api/answer-mode-query-logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -352,6 +372,7 @@ export const AIResearchModalContent = ({
             alignment={alignment}
             ops={ops}
             setSupportingCitationsPage={setSupportingCitationsPage}
+            coverageRating={coverageRating}
           />
           <Box
             style={{
@@ -373,6 +394,8 @@ export const AIResearchModalContent = ({
               page={supportingCitationsPage}
               setPage={setSupportingCitationsPage}
               sourceRelevance={sourceRelevance}
+              coverageRating={coverageRating}
+              coverageExplanation={coverageExplanation}
             />
           </Box>
         </Box>

@@ -37,6 +37,7 @@ export const AnswerPanel = ({
   alignment,
   ops,
   setSupportingCitationsPage,
+  coverageRating,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
 
@@ -277,6 +278,24 @@ export const AnswerPanel = ({
                 />
               </Tooltip>
             ) : null}
+            {coverageRating === 'poor' && (
+              <Tooltip content='The corpus may not contain sufficient material to answer this question'>
+                <Tag
+                  icon={<FaInfoCircle />}
+                  label="Low corpus coverage"
+                  variant={"default" as any}
+                />
+              </Tooltip>
+            )}
+            {coverageRating === 'limited' && (
+              <Tooltip content='Some relevant sources found but coverage may be incomplete'>
+                <Tag
+                  icon={<FaInfoCircle />}
+                  label="Limited coverage"
+                  variant="info-white"
+                />
+              </Tooltip>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             {!alignLoading && (
