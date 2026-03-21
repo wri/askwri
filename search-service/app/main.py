@@ -969,7 +969,7 @@ def load_documents_and_build_indexes():
 
         logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
         reranker_start = time.time()
-        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=200, backend="onnx")
+        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend="onnx")
         logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
     else:
         logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
@@ -979,7 +979,7 @@ def load_documents_and_build_indexes():
 
         logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
         reranker_start = time.time()
-        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=200)
+        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=1000)
         logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
 
     logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")

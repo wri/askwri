@@ -89,7 +89,7 @@ async function callCiteService(query: string, params?: {
   const rawDocs = await callPythonServiceRaw(query, 'cite', {
     vector_top_k: params?.vector_top_k ?? 800,
     bm25_top_k: params?.bm25_top_k ?? 800,
-    rerank_top_n: params?.rerank_top_n ?? 250,
+    rerank_top_n: params?.rerank_top_n ?? 500,
     max_results: 100,
   });
 

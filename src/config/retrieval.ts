@@ -26,7 +26,7 @@ export const CITE_PRESET: RetrievalParams = {
   sparseTopK: 500,
   alpha: 0.5,         // Balanced dense/sparse fusion
   rerank: true,
-  rerankTopN: 200,    // Output cap after reranking
+  rerankTopN: 500,    // Must be >= fusionTopK so logit floor is the sole quality gate
   maxResults: 100,    // Return up to 100 docs (filtered by logit floor)
   fusionTopK: 200,    // RRF fusion limit — eval shows 0.6% recall loss vs 500, 56% less rerank work
 };
