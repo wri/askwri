@@ -223,6 +223,8 @@ class HybridFusionRetriever(BaseRetriever):
         similarity_threshold: float = 0.0,
         dense_weight: Optional[float] = None,
         sparse_weight: Optional[float] = None,
+        fusion_top_k: Optional[int] = None,
+        bm25_top_k: Optional[int] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -230,16 +232,19 @@ class HybridFusionRetriever(BaseRetriever):
         self.bm25_retriever = bm25_retriever
         self.mode = mode
         self.similarity_threshold = similarity_threshold
+        self.bm25_top_k = bm25_top_k
 
-        # Mode-specific configurations for 203-doc corpus
-        if mode == "answer":
-            self.dense_weight = dense_weight if dense_weight is not None else 0.5
-            self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
-            self.fusion_top_k = 100  # Precision: scaled from 50 for larger corpus
-        else:  # cite mode - more inclusive for broader coverage
-            self.dense_weight = dense_weight if dense_weight is not None else 0.5
-            self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
-            self.fusion_top_k = 500  # INCREASED: Was dropping docs ranked low in both indexes
+        # Weights default to 0.5/0.5 if not specified by caller
+        self.dense_weight = dense_weight if dense_weight is not None else 0.5
+        self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
+
+        # fusion_top_k: caller controls via preset; fall back to mode defaults
+        if fusion_top_k is not None:
+            self.fusion_top_k = fusion_top_k
+        elif mode == "answer":
+            self.fusion_top_k = 100
+        else:
+            self.fusion_top_k = 500
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes using hybrid fusion with RRF"""
@@ -257,6 +262,11 @@ class HybridFusionRetriever(BaseRetriever):
             sparse_future = executor.submit(self.bm25_retriever.retrieve, expanded_bundle)
             dense_results = dense_future.result()
             sparse_results = sparse_future.result()
+
+        # Slice BM25 results to requested top_k (BM25Retriever is a singleton built
+        # at startup with similarity_top_k=1000; per-request limit applied here)
+        if self.bm25_top_k is not None:
+            sparse_results = sparse_results[:self.bm25_top_k]
 
         logger.info(f"Dense retrieval: {len(dense_results)} results")
         logger.info(f"Sparse retrieval: {len(sparse_results)} results")
@@ -1158,6 +1168,8 @@ async def hybrid_query(request: QueryRequest):
             similarity_threshold=request.similarity_threshold,
             dense_weight=request.dense_weight,
             sparse_weight=request.sparse_weight,
+            fusion_top_k=request.fusion_top_k,
+            bm25_top_k=request.bm25_top_k,
         )
 
         # Retrieve with hybrid fusion
@@ -1370,10 +1382,12 @@ async def hybrid_query(request: QueryRequest):
                 "final_results": len(docs),
                 "reranking_applied": request.rerank and service_state.get(f"reranker_{request.mode}") is not None,
                 "similarity_threshold": request.similarity_threshold,
+                "stage1_time": round(stage1_elapsed, 2) if 'stage1_elapsed' in locals() else None,
+                "stage2_time": round(stage2_elapsed, 2) if 'stage2_elapsed' in locals() else None,
                 "mode_config": {
                     "dense_weight": request.dense_weight,
                     "sparse_weight": request.sparse_weight,
-                    "fusion_top_k": 100 if request.mode == "answer" else 150,  # Updated for 203-doc corpus
+                    "fusion_top_k": request.fusion_top_k,
                     "cite_filtering": "minimal" if request.mode == "cite" else "threshold_based"
                 }
             }
