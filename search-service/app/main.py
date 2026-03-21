@@ -174,6 +174,44 @@ class QueryResponse(BaseModel):
     fusion_results: Optional[List[Dict[str, Any]]] = None
     reranked_results: Optional[List[Dict[str, Any]]] = None
 
+class OnnxReranker:
+    """Cross-encoder reranker using ONNX or PyTorch backend via sentence-transformers.
+
+    Unlike SentenceTransformerRerank, this does not mutate global state per-request.
+    top_n is passed per-call to avoid race conditions with concurrent requests.
+    """
+
+    def __init__(self, model: str, top_n: int = 20, backend: str = "onnx"):
+        from sentence_transformers import CrossEncoder
+        self.top_n = top_n
+        self.model_name = model
+        try:
+            self._cross_encoder = CrossEncoder(model, backend=backend)
+            logger.info(f"Loaded reranker {model} with {backend} backend")
+        except Exception as e:
+            logger.warning(f"Failed to load {backend} backend for {model}: {e}. Falling back to torch.")
+            self._cross_encoder = CrossEncoder(model, backend="torch")
+
+    def postprocess_nodes(self, nodes, query_bundle, top_n=None):
+        """Score and rerank nodes. top_n can be overridden per-call."""
+        if not nodes:
+            return []
+        if query_bundle is None:
+            return nodes
+
+        effective_top_n = top_n if top_n is not None else self.top_n
+        query = query_bundle.query_str
+        pairs = [[query, node.node.get_content()] for node in nodes]
+
+        scores = self._cross_encoder.predict(pairs)
+
+        for node, score in zip(nodes, scores):
+            node.score = float(score)
+
+        nodes.sort(key=lambda n: n.score, reverse=True)
+        return nodes[:effective_top_n]
+
+
 class HybridFusionRetriever(BaseRetriever):
     """Custom hybrid retriever combining dense and sparse results using RRF"""
 
