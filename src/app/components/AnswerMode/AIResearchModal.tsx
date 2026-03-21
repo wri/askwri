@@ -107,15 +107,7 @@ async function runAlignment(q: string, docs: DocMeta[]) {
         body: JSON.stringify({
           query: query.trim(),
           mode: 'answer',
-          max_results: MAX_ANSWER_MODE_RESULTS,
-          similarity_threshold: 0.05,
           include_metadata: true,
-          rerank: true,
-          alpha: 0.5,
-          denseTopK: 150,
-          rerankTopK: 20,
-          retrievalMode: 'hybrid',
-          sparseTopK: 150,
           ...(consultedDocIds ? { cite_doc_ids: consultedDocIds } : {}),
         }),
       })
