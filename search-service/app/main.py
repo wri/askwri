@@ -183,6 +183,8 @@ class HybridFusionRetriever(BaseRetriever):
         bm25_retriever: BM25Retriever,
         mode: str = "cite",
         similarity_threshold: float = 0.0,
+        dense_weight: Optional[float] = None,
+        sparse_weight: Optional[float] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -193,27 +195,30 @@ class HybridFusionRetriever(BaseRetriever):
 
         # Mode-specific configurations for 203-doc corpus
         if mode == "answer":
-            self.dense_weight = 0.5
-            self.sparse_weight = 0.5
+            self.dense_weight = dense_weight if dense_weight is not None else 0.5
+            self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
             self.fusion_top_k = 100  # Precision: scaled from 50 for larger corpus
         else:  # cite mode - more inclusive for broader coverage
-            self.dense_weight = 0.5  # BALANCED: Was 0.4, now 0.5 for better semantic+keyword mix
-            self.sparse_weight = 0.5  # BALANCED: Was 0.6, now 0.5 to reduce BM25 over-emphasis
+            self.dense_weight = dense_weight if dense_weight is not None else 0.5
+            self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
             self.fusion_top_k = 500  # INCREASED: Was dropping docs ranked low in both indexes
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes using hybrid fusion with RRF"""
+        import concurrent.futures
 
-        # Get results from both retrievers
-        # Vector search: use original query (preserves semantic similarity)
-        dense_results = self.vector_retriever.retrieve(query_bundle)
-
-        # BM25 search: use expanded query (bridges semantic gap with domain terminology)
+        # BM25 query expansion (done before threading — pure string work)
         expanded_query = expand_query_conservative(query_bundle.query_str, max_expansions=3)
         if expanded_query != query_bundle.query_str:
             logger.info(f"Query expansion: {query_bundle.query_str[:50]}... → {expanded_query[:80]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
-        sparse_results = self.bm25_retriever.retrieve(expanded_bundle)
+
+        # Run dense + sparse retrieval in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            dense_future = executor.submit(self.vector_retriever.retrieve, query_bundle)
+            sparse_future = executor.submit(self.bm25_retriever.retrieve, expanded_bundle)
+            dense_results = dense_future.result()
+            sparse_results = sparse_future.result()
 
         logger.info(f"Dense retrieval: {len(dense_results)} results")
         logger.info(f"Sparse retrieval: {len(sparse_results)} results")
@@ -917,8 +922,8 @@ def load_documents_and_build_indexes():
     logger.info(f"   [2/2] Loading Cite mode reranker (MiniLM-L-6)...")
     reranker_start = time.time()
     reranker_cite = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # Same lightweight model for Cite mode
-        top_n=200  # Increased for better recall - preserves more candidates
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        top_n=200
     )
     logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
     logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
@@ -1104,7 +1109,9 @@ async def hybrid_query(request: QueryRequest):
             vector_retriever=vector_retriever,
             bm25_retriever=service_state["bm25_retriever"],
             mode=request.mode,
-            similarity_threshold=request.similarity_threshold
+            similarity_threshold=request.similarity_threshold,
+            dense_weight=request.dense_weight,
+            sparse_weight=request.sparse_weight,
         )
 
         # Retrieve with hybrid fusion
@@ -1197,7 +1204,8 @@ async def hybrid_query(request: QueryRequest):
 
             filtered_results = list(doc_groups.values())[:request.max_results]
         else:
-            # For answer mode - let hybrid fusion handle all ranking, no threshold filtering
+            # Answer mode: return top results as-is
+            # Relevance filtering happens in the Next.js answer route (nano LLM filter)
             filtered_results = stage2_results[:request.max_results]
 
         # Convert to response format

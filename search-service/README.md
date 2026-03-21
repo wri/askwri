@@ -38,8 +38,8 @@ Queries use **Reciprocal Rank Fusion (RRF)** to combine two retrieval strategies
 | Dense (vector) top_k | 800 | 200 |
 | Sparse (BM25) top_k | 800 | 200 |
 | Fusion top_k | 500 | 200 |
-| Dense weight | 0.5 | 0.5 |
-| Sparse weight | 0.5 | 0.5 |
+| Dense weight | 0.5 | 0.65 |
+| Sparse weight | 0.5 | 0.35 |
 | RRF k | 60 | 60 |
 
 BM25 queries receive **conservative query expansion** via domain-specific synonym mapping (e.g., "micromobility" → ["bike sharing", "e-bikes", "scooters"]). See `app/query_expansion.py`.
@@ -51,6 +51,7 @@ After fusion, results are reranked using `cross-encoder/ms-marco-MiniLM-L-6-v2` 
 | Parameter | Cite mode | Answer mode |
 |-----------|-----------|-------------|
 | rerank_top_n | 250 | 120 |
+| max_results returned | — | 15 |
 
 The reranker produces raw logit scores (not probabilities). Higher = more relevant.
 
@@ -76,7 +77,19 @@ cite_partial_threshold: float = -7.8  # 25th percentile of relevant scores
 
 The response includes `raw_score` (logit) and `relevance_tier` ("strong"/"partial"/"weak") per document.
 
-### 5. Document Deduplication
+### 5. Answer Mode Relevance
+
+Answer mode does **not** use reranker logit thresholds to assign relevance tiers.
+
+Calibration (see `evaluation/calibrate-answer-thresholds.ts`) showed that cross-encoder scores cannot separate relevant from irrelevant chunks for answer-mode queries: the relevant and irrelevant score distributions overlap almost completely (relevant median 2.25, irrelevant median 2.07). The reranker is a ranking tool, not a classifier — it coarsely selects the top candidates but cannot discriminate within them.
+
+**Relevance filtering for answer mode happens in the Next.js answer route**, not the search service. After the search service returns up to 15 chunks, the answer route calls `gpt-5.4-nano` to score each chunk for relevance to the query. Only chunks passing the nano filter are passed to the synthesis LLM (GPT-5.4).
+
+**The `answer_logit_floor` experiment has been removed.** Calibration showed cross-encoder scores cannot separate relevant from irrelevant chunks for answer-mode queries (relevant median 2.25, irrelevant median 2.07). The logit floor config (`answer_use_logit_floor`, `answer_logit_floor`, etc.) has been removed from `app/config.py`.
+
+**Coverage assessment** uses `gpt-5.4-nano` in the Next.js layer (`/api/answer-coverage`), not the search service. It provides an absolute query-level rating (good/limited/poor) before synthesis runs.
+
+### 6. Document Deduplication
 
 Cite mode deduplicates by document ID, keeping the best chunk score per document.
 

@@ -16,6 +16,7 @@ import { FaInfoCircle } from 'react-icons/fa'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { MdChat } from 'react-icons/md'
 import { IoIosCopy } from 'react-icons/io'
+import { InlineMessage } from '@worldresources/wri-design-systems'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
@@ -36,6 +37,7 @@ export const AnswerPanel = ({
   alignment,
   ops,
   setSupportingCitationsPage,
+  coverageRating,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
 
@@ -154,6 +156,16 @@ export const AnswerPanel = ({
           {query}
         </Text>
 
+        {answer.warning === 'low_coverage' && answer.warningMessage && (
+          <Box marginBottom='3'>
+            <InlineMessage
+              variant='warning'
+              label='Limited coverage'
+              caption={answer.warningMessage}
+            />
+          </Box>
+        )}
+
         <Box
           style={{
             fontSize: '14px',
@@ -266,6 +278,24 @@ export const AnswerPanel = ({
                 />
               </Tooltip>
             ) : null}
+            {coverageRating === 'poor' && (
+              <Tooltip content='The corpus may not contain sufficient material to answer this question'>
+                <Tag
+                  icon={<FaInfoCircle />}
+                  label="Low corpus coverage"
+                  variant={"default" as any}
+                />
+              </Tooltip>
+            )}
+            {coverageRating === 'limited' && (
+              <Tooltip content='Some relevant sources found but coverage may be incomplete'>
+                <Tag
+                  icon={<FaInfoCircle />}
+                  label="Limited coverage"
+                  variant="info-white"
+                />
+              </Tooltip>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             {!alignLoading && (

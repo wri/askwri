@@ -98,7 +98,35 @@ A query passes if **ALL** conditions are met:
 
 Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
 
+### Recent: Retrieval Precision Improvements (2026-03-21)
+
+The answer mode pipeline was delivering ~61% precision at synthesis input — meaning ~4 out of 10 passages fed to GPT-5.4 were irrelevant. Broad research queries ("Are denser cities more sustainable?") were worst at 12-25% precision. Two changes were made:
+
+**Phase 1 — Retrieval parameter tuning.** Swept `alpha` (dense/sparse weight) across [0.5, 0.6, 0.65, 0.7]. Setting `alpha=0.65` (favoring semantic search over keyword matching) improved mean P@8 from 61.1% to 63.9%. RerankTopN had no effect — the reranker sees the same candidates regardless of pool size. The broken per-query normalized score threshold (0.75) was removed entirely.
+
+**Phase 2 — GPT-5.4-nano per-chunk relevance filter.** A nano model classifies each passage as strong/partial/weak before synthesis. Only strong and partial passages reach GPT-5.4. The filter also rates overall corpus coverage (good/limited/poor) for UI warnings. Coverage detection correctly flags queries with weak corpus material (e.g., ans_002, ans_007 flagged as "limited").
+
+Overall pipeline: Phase 1 improved retrieval precision from **61.1% → 63.9%**. Phase 2 (nano filter) showed 100% agreement with ground truth labels, but see caveats below.
+
+**Caveats and known limitations:**
+
+1. **Circular evaluation.** The nano filter (GPT-5.4-nano), ground truth labels (GPT-5.4-full), and synthesis evaluator (GPT-5.4) are all from the same model family. GPT-5.4 is both judge and defendant at every layer. The "100% filter precision" figure is expected given this circularity and does not independently validate the filter.
+
+2. **Doc-level aggregation inflates agreement.** Label aggregation uses MAX across chunks per document. Most docs in a 203-doc research corpus have at least one somewhat-relevant chunk for broad queries. The eval encountered zero "weak" docs — meaning it never tested the filter's ability to reject irrelevant material.
+
+3. **Synthesis quality regression.** Before/after synthesis comparison showed consistent regression across all 5 dimensions when the nano filter was active (faithfulness 0.811→0.800, completeness 0.889→0.867, conciseness 0.944→0.911, coherence 0.956→0.911, citation_accuracy 0.811→0.800). The nano filter is currently gated off (`USE_NANO_FILTER=false` by default) pending further investigation.
+
+4. **Alpha field name bug (fixed 2026-03-21).** The `alpha` parameter in `retrieval.ts` was being sent to the Python search service, but Python's `QueryRequest` model uses `dense_weight`/`sparse_weight`. Pydantic silently ignored the unknown field, meaning the Phase 1 alpha=0.65 improvement was never active in production until this fix. The calibration sweep script correctly used `dense_weight`/`sparse_weight`, so sweep results are valid.
+
+5. **What's missing.** An end-to-end synthesis comparison on the worst-performing queries (ans_002 at 25%, ans_006 at 25%) with a different evaluator model family would provide independent validation. Human-validated labels remain the gold standard — all results should be treated as provisional.
+
+**New eval scripts:**
+- `evaluation/sweep-answer-retrieval.ts` — alpha × rerankTopN precision sweep
+- `evaluation/eval-nano-filter.ts` — nano filter accuracy vs GPT-5.4 debiased labels
+- `evaluation/chart-answer-precision.py` — generate comparison charts
+
 **Design docs:**
+- `docs/superpowers/specs/2026-03-20-answer-retrieval-precision-design.md` — full design spec
 - `docs/plans/2026-02-20-answer-golden-set-generation-design.md` — chunk-first golden set pipeline
 - `docs/plans/2026-02-15-answer-retrieval-html-enhancement.md` — HTML report enhancements
 
@@ -122,9 +150,14 @@ Evaluates whether the LLM generates good answers given retrieved passages. Uses 
 
 **Scoring dimensions:** faithfulness, completeness, conciseness, coherence, citation_accuracy
 
-**Evaluator model:** Configurable via `SYNTHESIS_EVAL_MODEL` env var (default: `gpt-5.2`). Thinking models (gpt-5*, o1*) are auto-detected for correct API params.
+**Evaluator model:** Configurable via `SYNTHESIS_EVAL_MODEL` env var (default: `gpt-5.4`). Thinking models (gpt-5*, o1*) are auto-detected for correct API params.
 
 **Design doc:** `docs/plans/2026-02-24-answer-synthesis-eval-design.md`
+
+**Calibration and re-labeling scripts:**
+- `evaluation/calibrate-answer-thresholds.ts` — sweeps logit thresholds against LLM labels; established that reranker scores overlap for answer mode (logit floor approach inactive)
+- `evaluation/relabel-answer-chunks.ts` — re-labeled all 900 chunks in `answer-labels-review.json` with GPT-5.4 using a debiased methodology (no scores shown in prompt, all 100 chunks included, shuffled order)
+- `evaluation/compare-synthesis-evals.ts` — compares before/after synthesis eval results (to be created)
 
 ### Golden Dataset Generation
 

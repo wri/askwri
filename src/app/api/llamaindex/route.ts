@@ -78,6 +78,8 @@ export async function POST(req: NextRequest) {
             vector_top_k: ANSWER_PRESET.denseTopK,
             bm25_top_k: ANSWER_PRESET.sparseTopK,
             rerank_top_n: ANSWER_PRESET.rerankTopN,
+            dense_weight: 0.65,
+            sparse_weight: 0.35,
           }
 
     const llamaIndexRequest: LlamaIndexRequest & {

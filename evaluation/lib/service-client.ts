@@ -64,6 +64,8 @@ export async function callPythonService(
     bm25_top_k?: number;
     rerank_top_n?: number;
     max_results?: number;
+    dense_weight?: number;
+    sparse_weight?: number;
   }
 ): Promise<RawServiceDoc[]> {
   const response = await fetch(`${PYTHON_SERVICE_URL}/query`, {
@@ -79,6 +81,8 @@ export async function callPythonService(
       vector_top_k: params?.vector_top_k,
       bm25_top_k: params?.bm25_top_k,
       rerank_top_n: params?.rerank_top_n,
+      dense_weight: params?.dense_weight,
+      sparse_weight: params?.sparse_weight,
     })
   });
 

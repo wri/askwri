@@ -1,0 +1,322 @@
+{
+  "evaluated_at": "2026-03-21T00:26:44.670Z",
+  "evaluator_model": "gpt-5.4",
+  "test_cases": [
+    {
+      "test_case_id": "ans_001",
+      "scores": {
+        "faithfulness": 0.6,
+        "completeness": 0.8,
+        "conciseness": 0.8,
+        "coherence": 0.9,
+        "citation_accuracy": 0.6
+      },
+      "qualitative_feedback": "The synthesis does a good job capturing the core role of land value capture in equitable urban development: it presents LVC as a way to raise public revenue for infrastructure and services, and it correctly emphasizes that outcomes depend on planning, land records, legal authority, and institutional capacity. It also appropriately links weak implementation in Bengaluru, Hyderabad, and Addis Ababa to limited or aspirational equity outcomes. However, the final sentence goes beyond the provided passages by introducing claims about poor spending, poor project implementation, displacement, and inadequate resettlement, which are not supported by the supplied excerpts. A stronger 2-3 sentence synthesis could have used that space to mention that the Hyderabad and Addis Ababa cases were framed as a starting point for integrating LVC into broader urban planning and land-market governance.",
+      "flagged_issues": [
+        {
+          "type": "unsupported_claim",
+          "text": "The sources also caution that even when land value capture is designed to raise revenue effectively, equitable development is not guaranteed if the funds are spent or projects are implemented poorly, including cases involving displacement and inadequate resettlement.",
+          "detail": "The provided passages do not mention poor spending of funds, poor project implementation, displacement, or inadequate resettlement."
+        },
+        {
+          "type": "missing_info",
+          "text": "Omission of the idea that Hyderabad and Addis Ababa illustrate a starting point and opportunity for integrating LVC into broader urban planning and land-market governance.",
+          "detail": "This is a notable point in the supplied São Paulo/Addis Ababa/Hyderabad passage and would have fit within the 2-3 sentence limit."
+        }
+      ],
+      "key_facts_extracted": [
+        "Land value capture mechanisms can convert increases in land value into public revenue for infrastructure, services, and transit-oriented growth.",
+        "LVC can help cities meet basic urban needs and pursue broader sustainability goals.",
+        "The equity benefits of LVC depend on strong planning, land records, legal authority, and institutional capacity.",
+        "In Bengaluru, Hyderabad, and Addis Ababa, weak enabling conditions have limited implementation and made outcomes more aspirational than concrete.",
+        "Equitable development is not guaranteed if LVC funds are spent poorly or projects are implemented poorly, including situations involving displacement and inadequate resettlement."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 2244
+    },
+    {
+      "test_case_id": "ans_002",
+      "scores": {
+        "faithfulness": 0.7,
+        "completeness": 0.9,
+        "conciseness": 1,
+        "coherence": 0.9,
+        "citation_accuracy": 0.7
+      },
+      "qualitative_feedback": "The synthesis does a strong job of using limited space to present a balanced answer: it captures the anti-sprawl argument, the warning that density should not be treated as a sufficient standalone metric, and the main trade-offs around affordability, displacement, congestion, and pollution. It is also concise and reads as a coherent synthesis rather than a list. The main weakness is that a couple of claims are somewhat more inferential than the excerpts themselves support, especially the idea that density reduces long travel distances and the broad conclusion about equitable planning of housing, transport, and services. A small omission is that passage [2] also highlights that service/supply gaps can create health and safety risks and drain poor residents' income.",
+      "flagged_issues": [
+        {
+          "type": "unsupported_claim",
+          "text": "reduces the long travel distances that many residents in outlying areas face",
+          "detail": "Passage [5] says lower-income people in outlying areas often travel long distances to find work, but it does not explicitly state that greater density reduces those distances."
+        },
+        {
+          "type": "unsupported_claim",
+          "text": "whether density improves sustainability depends on how it is planned and whether housing, transport, and services are provided equitably",
+          "detail": "This is a reasonable synthesis of the excerpts, but the specific formulation about planning and equitable provision is broader than what is directly stated in the provided passages."
+        },
+        {
+          "type": "missing_info",
+          "text": "Supply gaps filled by formal or informal private providers can create health and safety risks and drain large proportions of poor people's income.",
+          "detail": "This point appears in passage [2] and is relevant to the sustainability/equity trade-offs discussed, but it is not mentioned in the synthesis."
+        }
+      ],
+      "key_facts_extracted": [
+        "Denser cities can be more sustainable when density curbs sprawl.",
+        "Residents in outlying areas often face long travel distances.",
+        "Density alone is not a sufficient measure of sustainability.",
+        "Restricting density can push cities toward sprawl.",
+        "Some high-density development is linked to unaffordability, gentrification, and displacement.",
+        "Informal transport in dense city centers can worsen congestion and pollution.",
+        "The sustainability benefits of density depend on how density is implemented and whether housing, transport, and services are provided equitably."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 1696
+    },
+    {
+      "test_case_id": "ans_003",
+      "scores": {
+        "faithfulness": 1,
+        "completeness": 0.9,
+        "conciseness": 0.9,
+        "coherence": 0.9,
+        "citation_accuracy": 1
+      },
+      "qualitative_feedback": "This is a strong synthesis: it accurately captures the main actionable recommendations in the passages, especially assessment of multilevel partnerships, evidence gathering on subnational contributions, alignment/trade-off analysis, collaborative planning, and improved data transparency. It also appropriately notes the source's caveat that financing and implementation are outside the document's scope. What is slightly missing is the broader framing that subnational governments fill a significant governance gap and that institutional arrangements should support both horizontal and vertical collaboration; those ideas could potentially have been included if prioritized differently. No clear unsupported claims or problematic paraphrases are present.",
+      "flagged_issues": [
+        {
+          "type": "missing_info",
+          "text": "The synthesis does not mention that subnational governments fill a significant governance gap in climate action or explicitly reference horizontal and vertical collaboration.",
+          "detail": "Passages [2] and [5] emphasize the role of subnational governments and the need for institutional arrangements that support multilevel collaboration; this is relevant context that could have fit briefly."
+        }
+      ],
+      "key_facts_extracted": [
+        "National governments should assess existing multilevel partnerships and institutional arrangements.",
+        "National governments should build an evidence base on current subnational contributions.",
+        "National governments should identify where national and subnational goals align and where trade-offs exist.",
+        "National governments should create a vision and stakeholder engagement plan with subnational governments.",
+        "National governments should set clear collaborative objectives.",
+        "Data collection, exchange, and transparency should be strengthened so local contributions can be reflected in NDCs.",
+        "Formal coordination mechanisms are important.",
+        "Current national awareness and consultation practices may be insufficient.",
+        "The document does not address NDC financing or implementation in depth."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 1755
+    },
+    {
+      "test_case_id": "ans_004",
+      "scores": {
+        "faithfulness": 0.8,
+        "completeness": 0.9,
+        "conciseness": 0.9,
+        "coherence": 0.9,
+        "citation_accuracy": 0.8
+      },
+      "qualitative_feedback": "This is a strong, compact synthesis that captures the main thrust of the passages: cities should move beyond rider-focused measures alone and use a broader safe-systems approach centered on urban infrastructure, speed management, equity, maintenance, and integration with pedestrian/public transport improvements. It makes good use of the 2-3 sentence limit and organizes the material into a clear policy-oriented answer. The main weaknesses are slight overstatement and imprecision in two places: the sources support collaboration within cities and across regions, not explicitly 'cross-city collaboration,' and the evidence for BRT/public transport is more nuanced than stated, with clear support for fewer injuries and potential death reductions when paired with other measures such as pedestrian safety actions and speed reduction. A notable nuance omitted from the sources is the mixed London bus-lane evidence.",
+      "flagged_issues": [
+        {
+          "type": "unsupported_claim",
+          "text": "cross-city collaboration",
+          "detail": "Passage [4] supports 'collaboration within cities and across regions,' but does not explicitly say cross-city collaboration."
+        },
+        {
+          "type": "unsupported_claim",
+          "text": "well-designed public transport such as BRT is associated with fewer motorcycle injuries and deaths",
+          "detail": "Passage [6] supports fewer motorcycle injuries near well-designed BRT stations, and passage [5] says public transport improvements such as BRT, along with speed reductions and pedestrian safety actions, can reduce deaths. The synthesis slightly overstates the direct evidence for deaths from BRT/public transport alone."
+        },
+        {
+          "type": "missing_info",
+          "text": "Mixed evidence on opening bus lanes to motorcyclists was omitted",
+          "detail": "Passage [3] notes that in London crashes increased in a first bus-lane trial but did not significantly increase after a second trial; this nuance could have been mentioned, though it is understandable to omit under a 2-3 sentence limit."
+        }
+      ],
+      "key_facts_extracted": [
+        "Motorcycle safety in cities requires a broader safe-systems approach beyond helmets, enforcement, and education.",
+        "The approach should include evidence-based urban infrastructure changes.",
+        "Collaboration is important for improving motorcycle safety.",
+        "Reducing speeds through traffic calming can improve motorcycle safety.",
+        "Limiting vehicle traffic can improve motorcycle safety.",
+        "Improving road maintenance and removing hazards can improve motorcycle safety.",
+        "Cities should invest equitably in high-quality infrastructure in lower-income neighborhoods.",
+        "Data should be used to target motorcycle safety investments and improvements.",
+        "Motorcycle safety efforts can be aligned with pedestrian and public transport upgrades.",
+        "Well-designed public transport such as BRT is linked to better motorcycle safety outcomes, while poorly implemented transit changes can worsen safety."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 1959
+    },
+    {
+      "test_case_id": "ans_005",
+      "scores": {
+        "faithfulness": 0.7,
+        "completeness": 0.8,
+        "conciseness": 0.9,
+        "coherence": 0.9,
+        "citation_accuracy": 0.7
+      },
+      "qualitative_feedback": "The synthesis captures the passage's main high-level point: cities should consider financing alongside technology, planning, operations, procurement, and regulations, and they should understand the benefits and risks of electric and hybrid-electric bus investments. It is concise and reads smoothly. However, it slightly overstates what the source says by framing this as a direct answer to how cities can pay and by adding that funding should not be treated as a standalone issue and that cities can choose financing approaches more effectively; those ideas are reasonable inferences but are not explicitly stated in the provided text. Also, the passage itself does not provide concrete payment mechanisms, so the synthesis cannot offer specific financing methods.",
+      "flagged_issues": [
+        {
+          "type": "unsupported_claim",
+          "text": "rather than treating funding as a standalone issue",
+          "detail": "The source lists financing opportunities among several decision areas, but it does not explicitly state that funding should not be treated as a standalone issue."
+        },
+        {
+          "type": "unsupported_claim",
+          "text": "choose financing approaches more effectively",
+          "detail": "The provided passage says understanding benefits and risks will help, but the visible text does not explicitly connect this to choosing financing approaches more effectively."
+        },
+        {
+          "type": "missing_info",
+          "text": "Cities can pay for electric buses by making informed choices across technology, planning, operations, procurement, regulations, and available financing opportunities",
+          "detail": "The source passage is high-level and does not actually describe concrete ways cities can pay for electric buses; it only says informed decisions about financing opportunities are important."
+        }
+      ],
+      "key_facts_extracted": [
+        "Cities can pay for electric buses by making informed choices across technology, planning, operations, procurement, regulations, and financing opportunities rather than treating funding as a standalone issue.",
+        "Understanding the real-world benefits and risks of electric and hybrid-electric bus investments can help city decision-makers improve bus fleets and choose financing approaches more effectively."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 913
+    },
+    {
+      "test_case_id": "ans_006",
+      "scores": {
+        "faithfulness": 0.8,
+        "completeness": 0.8,
+        "conciseness": 0.9,
+        "coherence": 0.9,
+        "citation_accuracy": 0.8
+      },
+      "qualitative_feedback": "The synthesis does a good job defining nature-based solutions using the core IUCN-style wording from the source and connecting them to urban benefits such as resilience and inclusiveness. It also usefully notes implementation barriers drawn from the passages, especially lack of cost references and limited practical project experience. The main weakness is that the claim that program participants reported benefits for urban climate resilience is not clearly supported by the provided excerpts; the sources support resilience in general, but not that participant-reported, climate-specific benefit. Also, given the question, the barrier sentence is somewhat less central than emphasizing city benefits like human well-being, biodiversity, resilience, and inclusion.",
+      "flagged_issues": [
+        {
+          "type": "unsupported_claim",
+          "text": "participants in the cited program also reported benefits for urban climate resilience",
+          "detail": "The provided passages support that NBS can make cities more resilient and inclusive, but they do not show that participants specifically reported urban climate resilience benefits."
+        },
+        {
+          "type": "verbatim_copy",
+          "text": "protect, sustainably manage, and restore natural or modified ecosystems",
+          "detail": "This closely mirrors the source definition wording rather than fully paraphrasing it."
+        }
+      ],
+      "key_facts_extracted": [
+        "Nature-based solutions are an umbrella term for actions that protect, sustainably manage, and restore natural or modified ecosystems to address societal challenges.",
+        "Nature-based solutions also support human well-being and biodiversity.",
+        "In cities, nature-based solutions are described as innovative, multifunctional approaches that can improve resilience and inclusiveness.",
+        "The synthesis claims that participants in the cited program reported benefits for urban climate resilience.",
+        "Cities face practical barriers to scaling nature-based solutions, including limited cost references and limited hands-on project experience."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 1120
+    },
+    {
+      "test_case_id": "ans_007",
+      "scores": {
+        "faithfulness": 0.8,
+        "completeness": 0.9,
+        "conciseness": 0.9,
+        "coherence": 0.9,
+        "citation_accuracy": 0.8
+      },
+      "qualitative_feedback": "This is a strong, well-structured synthesis that captures the main storyline across the passages: slums and informal settlements are often more exposed and sensitive to climate hazards because of where they are located and because of precarious housing, weak protection, and limited services; they are also underserved by policy and finance; and targeted, community-led investment can improve resilience and well-being. It makes good use of the 3-sentence limit and synthesizes problems and solutions rather than listing disconnected points. The main weakness is slight overreach in a couple of places: the passages clearly support finance, upgrading, and community inclusion, but 'data' as a resilience solution is only weakly implied, and 'floods' is not explicitly tied to slums/informal settlements in the provided excerpts. A concrete figure from the sources (only 3.5% of global climate finance reaching the urban poor) was also omitted, though the general point is preserved.",
+      "flagged_issues": [
+        {
+          "type": "unsupported_claim",
+          "text": "prioritizing finance, data, upgrading, and community-led action can produce large resilience and well-being gains",
+          "detail": "Finance, upgrading, and community-led action are supported, but the provided excerpts do not clearly show 'data' itself producing resilience and well-being gains; that point is only indirectly implied by the assessment language."
+        },
+        {
+          "type": "unsupported_claim",
+          "text": "which increases their sensitivity to floods, landslides, and other hazards",
+          "detail": "Landslides are explicitly mentioned for slum communities, but floods are only referenced in a more general city adaptation example and not directly linked to slums/informal settlements in the provided passages."
+        },
+        {
+          "type": "missing_info",
+          "text": "receive very little climate finance",
+          "detail": "The synthesis captures the idea but omits the concrete statistic from the source that only 3.5% of global climate finance has reached the urban poor."
+        }
+      ],
+      "key_facts_extracted": [
+        "Slums and informal settlements often face the highest climate risk in cities.",
+        "These communities are frequently located in hazard-prone areas.",
+        "Residents often have precarious housing, limited services, and weak financial and social protection, which heightens vulnerability.",
+        "Informality can reduce climate resilience because these communities are often neglected in policy.",
+        "Informal-settlement residents receive very little climate finance, leaving adaptation needs unmet and deepening vulnerability.",
+        "Prioritizing finance, upgrading, and community-led action in informal settlements can improve resilience and well-being.",
+        "Including residents in planning and targeting interventions to local risks can strengthen outcomes."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 1462
+    },
+    {
+      "test_case_id": "ans_008",
+      "scores": {
+        "faithfulness": 1,
+        "completeness": 0.9,
+        "conciseness": 1,
+        "coherence": 1,
+        "citation_accuracy": 1
+      },
+      "qualitative_feedback": "This is a strong synthesis: it accurately captures the main opportunities highlighted in the passages, especially the need to turn broad transport commitments into specific targets, strengthen adaptation and resilience for public transport, raise ambition away from private motorized travel, and address the neglect of informal transport. It is concise and reads as a unified answer rather than a list. The main limitation is that it leaves out the headline quantitative evidence and does not explicitly mention the source's point that many newer transport-related non-GHG commitments remain vague and have not yet delivered major CO2 reductions.",
+      "flagged_issues": [
+        {
+          "type": "missing_info",
+          "text": "The synthesis omits the key quantitative gaps in specificity and adaptation coverage.",
+          "detail": "Source 1 provides important headline figures: 55 NDCs promote a shift to public transit but only 13 set targets; 35 mention electrification of public transport but only 12 set targets; only 16 include adaptation measures for public transport."
+        },
+        {
+          "type": "missing_info",
+          "text": "The synthesis does not explicitly state that many transport-related non-GHG targets are still vague and have not led to major CO2 reductions.",
+          "detail": "Source 3 makes this point directly; the synthesis captures the need for more specific targets but not the explicit emissions-impact limitation."
+        }
+      ],
+      "key_facts_extracted": [
+        "A key opportunity is to turn broad NDC commitments into specific, measurable targets for shifting travel from private vehicles to public transit.",
+        "A key opportunity is to set specific, measurable targets for electrifying public transport fleets.",
+        "Many countries mention modal shift and public transport electrification, but far fewer define targets.",
+        "NDCs could strengthen climate adaptation for public transport by improving affordability, reliability, accessibility, and resilience during floods or emergencies.",
+        "Only a limited number of NDCs currently include such public-transport adaptation measures.",
+        "There is broader room to raise ambition by moving transport systems away from private motorized travel toward cleaner public transport.",
+        "Limited attention to informal transport remains a major gap in NDCs."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 3297
+    },
+    {
+      "test_case_id": "ans_009",
+      "scores": {
+        "faithfulness": 0.8,
+        "completeness": 0.9,
+        "conciseness": 0.9,
+        "coherence": 0.9,
+        "citation_accuracy": 0.8
+      },
+      "qualitative_feedback": "The synthesis does a strong job combining the two passages into a unified answer: it captures the rental-side policies from passage 1 and the land/infrastructure-side policies from passage 2, while staying within the 2-sentence limit. Most claims are well grounded in the sources, especially the points about tenant-landlord regulations, social rental housing, tenure protection, serviced land, partnerships with private developers and landowners, and integrating land/infrastructure/economic planning. The main weakness is one interpretive addition: 'To keep costs from rising elsewhere' is not stated in the provided passages. A small omission is that passage 2 explicitly mentions balancing land costs with the costs of connecting services, which could have been included instead of the unsupported cost-spillover phrasing.",
+      "flagged_issues": [
+        {
+          "type": "unsupported_claim",
+          "text": "To keep costs from rising elsewhere",
+          "detail": "The provided passages do not state that integrated planning is needed to prevent costs from rising elsewhere; this appears to be an added inference."
+        },
+        {
+          "type": "missing_info",
+          "text": "expanding the supply of serviced land through coordination with private developers and landowners",
+          "detail": "This is supported, but the source also specifically says cities should balance the cost of land with the cost of connecting it with services, which is omitted."
+        }
+      ],
+      "key_facts_extracted": [
+        "Housing affordability in cities requires both better functioning rental markets and more housing-ready land.",
+        "Policies should include clear tenant-landlord rules with equal access to information and legal recourse.",
+        "Cities should support social rental housing with adequate tenure protection.",
+        "Tenant protections should be designed so they do not reduce residential mobility.",
+        "Cities should expand the supply of serviced land in coordination with private developers and landowners.",
+        "Land, infrastructure, and economic development planning should be integrated so new housing is connected to services and employment."
+      ],
+      "model": "gpt-5.4",
+      "reasoning_tokens": 1024
+    }
+  ]
+}

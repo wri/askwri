@@ -43,6 +43,9 @@ export const AIResearchModalContent = ({
   const [alignLoading, setAlignLoading] = useState(false)
   const [alignment, setAlignment] = useState<Assessment | null>(null)
   const [ops, setOps] = useState<Ops | null>(null)
+  const [sourceRelevance, setSourceRelevance] = useState<Record<string, string>>({})  // doc_id → tier
+  const [coverageRating, setCoverageRating] = useState<string>('')
+  const [coverageExplanation, setCoverageExplanation] = useState<string>('')
 
   const handleShuffleSuggestions = () => {
     setSuggestions(getRandomSuggestions(3, 'answer'))
@@ -52,16 +55,7 @@ export const AIResearchModalContent = ({
     setQuery(example)
   }
 
-  // Helper function to get top quality results (top 40% by score)
-  const getTopQualityDocs = (docs: any[], maxDocs: number = 8): any[] => {
-    if (!docs.length) return []
-    const sortedDocs = [...docs].sort((a, b) => (b.score || 0) - (a.score || 0))
-    const top40Percent = Math.max(1, Math.ceil(sortedDocs.length * 0.4))
-    const finalCount = Math.min(top40Percent, maxDocs)
-    return sortedDocs.slice(0, finalCount)
-  }
-
-  async function runAlignment(q: string, docs: DocMeta[]) {
+async function runAlignment(q: string, docs: DocMeta[]) {
     try {
       if (!docs?.length) {
         setAlignment(null)
@@ -172,13 +166,11 @@ export const AIResearchModalContent = ({
         return
       }
 
-      // Step 2: Get top quality docs for synthesis (top 40%, max 6)
-      const topQualityDocs = getTopQualityDocs(validDocs, 6)
-
+      // Send all valid docs to answer route — nano filter handles relevance
       const synthesisResponse = await fetch('/api/answer', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), docs: topQualityDocs }),
+        body: JSON.stringify({ query: query.trim(), docs: validDocs }),
       })
 
       runAlignment(query.trim(), validDocs)
@@ -191,7 +183,7 @@ export const AIResearchModalContent = ({
       const synthesisResult = await synthesisResponse.json()
 
       if (synthesisResult?.synthesis) {
-        const { sentences, paragraphs, warning, warningMessage } =
+        const { sentences, paragraphs, warning, warningMessage, source_relevance } =
           synthesisResult.synthesis
 
         // Validate sentences array
@@ -256,6 +248,17 @@ export const AIResearchModalContent = ({
           return refs
         })
 
+        // Store source relevance tiers from synthesis LLM
+        if (Array.isArray(source_relevance)) {
+          const tierMap: Record<string, string> = {}
+          for (const sr of source_relevance) {
+            if (sr.doc_id && sr.tier) {
+              tierMap[sr.doc_id] = sr.tier
+            }
+          }
+          setSourceRelevance(tierMap)
+        }
+
         // Save the answer with generated citations
         const answerWithCitations = {
           sentences,
@@ -266,6 +269,17 @@ export const AIResearchModalContent = ({
         }
 
         setAnswer(answerWithCitations)
+
+        // Coverage comes from nano filter (returned in synthesis response)
+        if (synthesisResult.synthesis?.coverage) {
+          setCoverageRating(synthesisResult.synthesis.coverage)
+          const explanations: Record<string, string> = {
+            good: '',
+            limited: 'Some passages touch on the topic but lack specific answers.',
+            poor: 'The corpus likely does not contain material to adequately answer this question.',
+          }
+          setCoverageExplanation(explanations[synthesisResult.synthesis.coverage] || '')
+        }
 
         fetch('/api/answer-mode-query-logs', {
           method: 'POST',
@@ -340,6 +354,7 @@ export const AIResearchModalContent = ({
             alignment={alignment}
             ops={ops}
             setSupportingCitationsPage={setSupportingCitationsPage}
+            coverageRating={coverageRating}
           />
           <Box
             style={{
@@ -360,6 +375,9 @@ export const AIResearchModalContent = ({
               supportingDocs={supportingDocs}
               page={supportingCitationsPage}
               setPage={setSupportingCitationsPage}
+              sourceRelevance={sourceRelevance}
+              coverageRating={coverageRating}
+              coverageExplanation={coverageExplanation}
             />
           </Box>
         </Box>

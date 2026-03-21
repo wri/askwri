@@ -28,6 +28,8 @@ const ANSWER_PARAMS = {
   bm25_top_k: ANSWER_PRESET.sparseTopK,
   rerank_top_n: ANSWER_PRESET.rerankTopN,
   max_results: ANSWER_PRESET.maxResults,
+  dense_weight: ANSWER_PRESET.alpha,
+  sparse_weight: ANSWER_PRESET.alpha ? 1 - ANSWER_PRESET.alpha : undefined,
 };
 
 const ADJACENT_TOLERANCE = 1; // chunk N+/-1 counts as partial match
