@@ -1,6 +1,6 @@
 ## AskWRI Evaluation System
 
-**Last Updated:** 2026-03-03
+**Last Updated:** 2026-03-21
 
 ## Quick Reference
 
@@ -100,25 +100,60 @@ Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
 
 ### Recent: Retrieval Precision Improvements (2026-03-21)
 
-The answer mode pipeline was delivering ~61% precision at synthesis input — meaning ~4 out of 10 passages fed to GPT-5.4 were irrelevant. Broad research queries ("Are denser cities more sustainable?") were worst at 12-25% precision. Two changes were made:
+Baseline answer mode retrieval delivered 36.1% strict chunk precision and 85.2% doc precision. Broad queries ("Are denser cities more sustainable?") were worst at 0-20%.
 
-**Phase 1 — Retrieval parameter tuning.** Swept `alpha` (dense/sparse weight) across [0.5, 0.6, 0.65, 0.7]. Setting `alpha=0.65` (favoring semantic search over keyword matching) improved mean P@8 from 61.1% to 63.9%. RerankTopN had no effect — the reranker sees the same candidates regardless of pool size. The broken per-query normalized score threshold (0.75) was removed entirely.
+**What shipped:**
 
-**Phase 2 — GPT-5.4-nano per-chunk relevance filter.** A nano model classifies each passage as strong/partial/weak before synthesis. Only strong and partial passages reach GPT-5.4. The filter also rates overall corpus coverage (good/limited/poor) for UI warnings. Coverage detection correctly flags queries with weak corpus material (e.g., ans_002, ans_007 flagged as "limited").
+| Change | Detail |
+|--------|--------|
+| L-12 reranker | `ms-marco-MiniLM-L-12-v2` (33M) replaces L-6 (22M) for answer mode |
+| Alpha=0.65 | Semantic search weighted over keyword (was 0.5) |
+| maxResults 20→15 | Fewer, tighter chunks reach synthesis |
+| Parallel retrieval | Dense + sparse run concurrently via ThreadPoolExecutor |
+| dense_weight/sparse_weight fix | Next.js route and eval scripts now send correct field names |
+| Tier labels | Strong/Partial/Weak on answer mode passages in UI |
+| Nano filter (gated off) | Per-chunk GPT-5.4-nano classifier — regressed synthesis, needs work |
 
-Overall pipeline: Phase 1 improved retrieval precision from **61.1% → 63.9%**. Phase 2 (nano filter) showed 100% agreement with ground truth labels, but see caveats below.
+**Eval results (same harness, same golden set):**
 
-**Caveats and known limitations:**
+| Metric | Baseline (L-6, max=20) | Current (L-12, max=15) | Delta |
+|--------|----------------------|----------------------|-------|
+| Chunk precision (strict) | 36.1% | 40.7% | +4.6pp |
+| Chunk precision (adjacent) | 48.6% | 55.2% | +6.6pp |
+| Doc precision | 85.2% | 91.7% | +6.5pp |
+| Doc recall | 74.1% | 74.4% | +0.3pp |
 
-1. **Circular evaluation.** The nano filter (GPT-5.4-nano), ground truth labels (GPT-5.4-full), and synthesis evaluator (GPT-5.4) are all from the same model family. GPT-5.4 is both judge and defendant at every layer. The "100% filter precision" figure is expected given this circularity and does not independently validate the filter.
+**Persistently weak queries:**
+- ans_002 "Are denser cities more sustainable?" — 0% chunk precision (corpus coverage thin)
+- ans_006 "What are nature-based solutions?" — 33% chunk precision, only 2 of 6 docs found
+- ans_007 "How do slums affect climate resilience?" — 20% chunk precision
 
-2. **Doc-level aggregation inflates agreement.** Label aggregation uses MAX across chunks per document. Most docs in a 203-doc research corpus have at least one somewhat-relevant chunk for broad queries. The eval encountered zero "weak" docs — meaning it never tested the filter's ability to reject irrelevant material.
+**Caveats:**
 
-3. **Synthesis quality regression.** Before/after synthesis comparison showed consistent regression across all 5 dimensions when the nano filter was active (faithfulness 0.811→0.800, completeness 0.889→0.867, conciseness 0.944→0.911, coherence 0.956→0.911, citation_accuracy 0.811→0.800). The nano filter is currently gated off (`USE_NANO_FILTER=false` by default) pending further investigation.
+1. **Circular evaluation.** Ground truth labels are GPT-5.4. The nano filter and synthesis evaluator are also GPT-5.4 family. Independent human labels are needed.
 
-4. **Alpha field name bug (fixed 2026-03-21).** The `alpha` parameter in `retrieval.ts` was being sent to the Python search service, but Python's `QueryRequest` model uses `dense_weight`/`sparse_weight`. Pydantic silently ignored the unknown field, meaning the Phase 1 alpha=0.65 improvement was never active in production until this fix. The calibration sweep script correctly used `dense_weight`/`sparse_weight`, so sweep results are valid.
+2. **Nano filter regressed synthesis.** All 5 quality dimensions went down when active. Gated off via `USE_NANO_FILTER=false`. Needs investigation in a separate session.
 
-5. **What's missing.** An end-to-end synthesis comparison on the worst-performing queries (ans_002 at 25%, ans_006 at 25%) with a different evaluator model family would provide independent validation. Human-validated labels remain the gold standard — all results should be treated as provisional.
+3. **ONNX abandoned.** Tested ONNX Runtime for reranker acceleration. Slower than PyTorch on Mac (CoreML interference). Untested on Fargate. Not shipping.
+
+4. **Fargate latency unknown.** L-12 is 1.5x the size of L-6. Runs fine locally but Fargate has 2 vCPUs. Needs deployment testing.
+
+### TODO: Next Steps for Answer Retrieval
+
+**High impact, ready to try:**
+- [ ] **API-based reranker (Cohere/Jina/Voyage)** — free tiers available for eval. The cross-encoder fundamentally can't discriminate for broad research queries. An API reranker sidesteps Fargate compute constraints entirely. Start with Cohere Rerank v3.5.
+- [ ] **Fix nano filter** — investigate why it regressed synthesis quality. Possible causes: filtering too aggressively, tier definitions too vague, prompt not calibrated. Being worked on in a separate session.
+- [ ] **Human labels** — all eval results are provisional without human-validated ground truth. Run `npm run eval:golden-review` and have domain experts review the 9 answer queries.
+
+**Medium impact:**
+- [ ] **Fargate latency test** — deploy L-12 to QA, measure actual rerank time on 2 vCPU Fargate
+- [ ] **ONNX on Fargate** — the Mac test was invalid (CoreML). Linux + CPUExecutionProvider may show the expected 2-4x speedup. Worth a quick test on QA.
+- [ ] **Eval parity audit** — verify that eval scripts match production code paths exactly (the `dense_weight`/`sparse_weight` bug was found late)
+
+**Longer term:**
+- [ ] **Query decomposition** — break broad queries into targeted sub-queries for more precise retrieval. Adds complexity and latency.
+- [ ] **Better embeddings** — current dense retriever uses default LlamaIndex embeddings. Domain-specific or larger embedding models could improve initial retrieval quality before reranking.
+- [ ] **Corpus expansion** — some queries (ans_002, ans_006) may simply need more relevant documents in the index
 
 **New eval scripts:**
 - `evaluation/sweep-answer-retrieval.ts` — alpha × rerankTopN precision sweep
