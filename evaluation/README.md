@@ -98,7 +98,23 @@ A query passes if **ALL** conditions are met:
 
 Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
 
+### Recent: Retrieval Precision Improvements (2026-03-21)
+
+The answer mode pipeline was delivering ~61% precision at synthesis input — meaning ~4 out of 10 passages fed to GPT-5.4 were irrelevant. Broad research queries ("Are denser cities more sustainable?") were worst at 12-25% precision. Two changes were made:
+
+**Phase 1 — Retrieval parameter tuning.** Swept `alpha` (dense/sparse weight) across [0.5, 0.6, 0.65, 0.7]. Setting `alpha=0.65` (favoring semantic search over keyword matching) improved mean P@8 from 61.1% to 63.9%. RerankTopN had no effect — the reranker sees the same candidates regardless of pool size. The broken per-query normalized score threshold (0.75) was removed entirely.
+
+**Phase 2 — GPT-5.4-nano per-chunk relevance filter.** A nano model classifies each passage as strong/partial/weak before synthesis. Only strong and partial passages reach GPT-5.4. The filter also rates overall corpus coverage (good/limited/poor) for UI warnings. Eval results: **100% filter precision** (every passage that reaches synthesis is relevant), 100% recall (no relevant passages dropped). Coverage detection correctly flags queries with weak corpus material.
+
+Overall pipeline: **61.1% → 63.9% → 100%** mean precision at synthesis input.
+
+**New eval scripts:**
+- `evaluation/sweep-answer-retrieval.ts` — alpha × rerankTopN precision sweep
+- `evaluation/eval-nano-filter.ts` — nano filter accuracy vs GPT-5.4 debiased labels
+- `evaluation/chart-answer-precision.py` — generate comparison charts
+
 **Design docs:**
+- `docs/superpowers/specs/2026-03-20-answer-retrieval-precision-design.md` — full design spec
 - `docs/plans/2026-02-20-answer-golden-set-generation-design.md` — chunk-first golden set pipeline
 - `docs/plans/2026-02-15-answer-retrieval-html-enhancement.md` — HTML report enhancements
 
