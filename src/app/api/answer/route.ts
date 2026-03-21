@@ -17,6 +17,7 @@ const MAX = IS_GPT5 ? Math.max(2000, ENV_MAX) : ENV_MAX
 const TEMP = Number(process.env.OPENAI_TEMPERATURE ?? 0.3) // Moderate temperature for concise synthesis
 
 const NANO_MODEL = (process.env.OPENAI_MODEL_NANO ?? 'gpt-5.4-nano').trim()
+const USE_NANO_FILTER = (process.env.USE_NANO_FILTER ?? 'false').toLowerCase() === 'true'
 
 const NANO_SYSTEM_PROMPT = `Given a research question and a set of passages, classify each passage's relevance to the question.
 
@@ -316,16 +317,16 @@ export async function POST(req: NextRequest) {
       authors: d.authors,
       year: d.year,
       doc_id: d.doc_id || '',
-      key_finding: String(d.kps?.[0]?.snippet ?? '').slice(0, maxSnippetLen),
+      key_finding: String(d.kps?.[0]?.snippet ?? d.content ?? '').slice(0, maxSnippetLen),
       relevance: d.kps?.[0]?.kp_relevance || d.score || 0,
     }))
 
-    // Run nano relevance filter
-    const nanoResult = await runNanoFilter(
+    // Run nano relevance filter (gated — enable with USE_NANO_FILTER=true)
+    const nanoResult = USE_NANO_FILTER ? await runNanoFilter(
       query,
       docList.map(d => ({ id: d.id, title: d.title, key_finding: d.key_finding })),
       key
-    )
+    ) : null
 
     let filteredDocs: typeof docList
     let coverageRating: string = 'unknown'
@@ -370,8 +371,7 @@ export async function POST(req: NextRequest) {
         })
       }
     } else {
-      // Nano filter failed — fall back to all docs capped at maxDocs
-      console.warn('[Nano Filter] Failed, falling back to unfiltered docs')
+      // Nano filter off or failed — use all docs capped at maxDocs
       const maxDocs = IS_GPT5 ? 8 : 6
       filteredDocs = docList.slice(0, maxDocs)
     }
@@ -560,7 +560,7 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
         ? parsed.source_relevance
         : []
       sourceRelevance = rawSourceRelevance.map(sr => {
-        const doc = filteredDocs[sr.id - 1]
+        const doc = docList[sr.id - 1]
         return {
           doc_id: doc?.doc_id || '',
           tier: sr.tier || 'weak',
