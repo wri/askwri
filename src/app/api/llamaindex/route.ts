@@ -1,6 +1,6 @@
 /* eslint-disable no-console, no-plusplus */
 import { NextRequest, NextResponse } from 'next/server'
-import { ANSWER_PRESET } from '@/config/retrieval'
+import { ANSWER_PRESET, CITE_PRESET } from '@/config/retrieval'
 
 const SEARCH_SERVICE_URL =
   process.env.SEARCH_SERVICE_URL || 'http://localhost:8000'
@@ -64,28 +64,30 @@ export async function POST(req: NextRequest) {
     console.log(`[LlamaIndex API] Processing query: "${query}" (mode: ${mode})`)
 
     // Prepare request for embedded service
-    // Cite mode: larger retrieval pool (800) for better recall on semantic matches
     const defaults =
       mode === 'cite'
         ? {
-            max_results: 100,
-            vector_top_k: 800,
-            bm25_top_k: 800,
-            rerank_top_n: 250,
+            max_results: CITE_PRESET.maxResults,
+            vector_top_k: CITE_PRESET.denseTopK,
+            bm25_top_k: CITE_PRESET.sparseTopK,
+            rerank_top_n: CITE_PRESET.rerankTopN,
+            fusion_top_k: CITE_PRESET.fusionTopK,
           }
         : {
             max_results: ANSWER_PRESET.maxResults,
             vector_top_k: ANSWER_PRESET.denseTopK,
             bm25_top_k: ANSWER_PRESET.sparseTopK,
             rerank_top_n: ANSWER_PRESET.rerankTopN,
-            dense_weight: 0.65,
-            sparse_weight: 0.35,
+            fusion_top_k: ANSWER_PRESET.fusionTopK,
+            dense_weight: ANSWER_PRESET.alpha,
+            sparse_weight: 1 - (ANSWER_PRESET.alpha ?? 0.5),
           }
 
     const llamaIndexRequest: LlamaIndexRequest & {
       vector_top_k?: number
       bm25_top_k?: number
       rerank_top_n?: number
+      fusion_top_k?: number
     } = {
       query,
       mode,
