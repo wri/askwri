@@ -205,17 +205,20 @@ class HybridFusionRetriever(BaseRetriever):
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes using hybrid fusion with RRF"""
+        import concurrent.futures
 
-        # Get results from both retrievers
-        # Vector search: use original query (preserves semantic similarity)
-        dense_results = self.vector_retriever.retrieve(query_bundle)
-
-        # BM25 search: use expanded query (bridges semantic gap with domain terminology)
+        # BM25 query expansion (done before threading — pure string work)
         expanded_query = expand_query_conservative(query_bundle.query_str, max_expansions=3)
         if expanded_query != query_bundle.query_str:
             logger.info(f"Query expansion: {query_bundle.query_str[:50]}... → {expanded_query[:80]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
-        sparse_results = self.bm25_retriever.retrieve(expanded_bundle)
+
+        # Run dense + sparse retrieval in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            dense_future = executor.submit(self.vector_retriever.retrieve, query_bundle)
+            sparse_future = executor.submit(self.bm25_retriever.retrieve, expanded_bundle)
+            dense_results = dense_future.result()
+            sparse_results = sparse_future.result()
 
         logger.info(f"Dense retrieval: {len(dense_results)} results")
         logger.info(f"Sparse retrieval: {len(sparse_results)} results")
