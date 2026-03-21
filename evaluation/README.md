@@ -108,11 +108,17 @@ The answer mode pipeline was delivering ~61% precision at synthesis input — me
 
 Overall pipeline: Phase 1 improved retrieval precision from **61.1% → 63.9%**. Phase 2 (nano filter) showed 100% agreement with ground truth labels, but see caveats below.
 
-**Caveats on the nano filter eval:**
-- The "100% filter precision" figure is inflated by circular evaluation: the nano filter (GPT-5.4-nano) is being judged against ground truth labels produced by the same model family (GPT-5.4-full). High agreement is expected and does not independently validate the filter.
-- Doc-level label aggregation (MAX across chunks) further inflates agreement — most docs in a 203-doc research corpus have at least one somewhat-relevant chunk for broad queries, so the eval encountered zero "weak" docs.
-- **What's missing:** an end-to-end synthesis quality comparison (with vs without nano filter) on the worst-performing queries (ans_002 at 25% retrieval precision, ans_006 at 25%). This would show whether filtering actually improves the answers users see, not just whether two GPT-5.4 variants agree.
-- Human-validated labels remain the gold standard. These results should be treated as provisional until human review of the nano filter's tier assignments is completed.
+**Caveats and known limitations:**
+
+1. **Circular evaluation.** The nano filter (GPT-5.4-nano), ground truth labels (GPT-5.4-full), and synthesis evaluator (GPT-5.4) are all from the same model family. GPT-5.4 is both judge and defendant at every layer. The "100% filter precision" figure is expected given this circularity and does not independently validate the filter.
+
+2. **Doc-level aggregation inflates agreement.** Label aggregation uses MAX across chunks per document. Most docs in a 203-doc research corpus have at least one somewhat-relevant chunk for broad queries. The eval encountered zero "weak" docs — meaning it never tested the filter's ability to reject irrelevant material.
+
+3. **Synthesis quality regression.** Before/after synthesis comparison showed consistent regression across all 5 dimensions when the nano filter was active (faithfulness 0.811→0.800, completeness 0.889→0.867, conciseness 0.944→0.911, coherence 0.956→0.911, citation_accuracy 0.811→0.800). The nano filter is currently gated off (`USE_NANO_FILTER=false` by default) pending further investigation.
+
+4. **Alpha field name bug (fixed 2026-03-21).** The `alpha` parameter in `retrieval.ts` was being sent to the Python search service, but Python's `QueryRequest` model uses `dense_weight`/`sparse_weight`. Pydantic silently ignored the unknown field, meaning the Phase 1 alpha=0.65 improvement was never active in production until this fix. The calibration sweep script correctly used `dense_weight`/`sparse_weight`, so sweep results are valid.
+
+5. **What's missing.** An end-to-end synthesis comparison on the worst-performing queries (ans_002 at 25%, ans_006 at 25%) with a different evaluator model family would provide independent validation. Human-validated labels remain the gold standard — all results should be treated as provisional.
 
 **New eval scripts:**
 - `evaluation/sweep-answer-retrieval.ts` — alpha × rerankTopN precision sweep
