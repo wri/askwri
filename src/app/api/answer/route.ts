@@ -47,10 +47,10 @@ Rules:
 Return JSON with your answer AND a relevance assessment for every source:
 {"sentences":["s1","s2","s3"],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
 
-Tier definitions:
-- "strong": Directly answers the question or provides key evidence/data used in your synthesis
-- "partial": Useful background or supporting context but not central to the answer
-- "weak": Does not meaningfully help answer the question
+Tier definitions (match these exactly):
+- "strong": Information from this source appears in your synthesis. You directly used it.
+- "partial": Source is on-topic and could support the answer, but you did not directly use it.
+- "weak": Source does not meaningfully address the question.
 
 If no sources adequately answer the question:
 {"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
@@ -69,10 +69,10 @@ CRITICAL RULES:
 Return JSON with your answer AND a relevance assessment for every source:
 {"sentences":["s1","s2","s3"],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
 
-Tier definitions:
-- "strong": Directly answers the question or provides key evidence/data used in your synthesis
-- "partial": Useful background or supporting context but not central to the answer
-- "weak": Does not meaningfully help answer the question
+Tier definitions (match these exactly):
+- "strong": Information from this source appears in your synthesis. You directly used it.
+- "partial": Source is on-topic and could support the answer, but you did not directly use it.
+- "weak": Source does not meaningfully address the question.
 
 If no sources adequately answer the question:
 {"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
