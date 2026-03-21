@@ -1,3 +1,5 @@
+> **SUPERSEDED**: This spec has been superseded by `2026-03-20-answer-retrieval-precision-design.md`. The logit floor approach was invalidated by calibration — score distributions overlap too much for answer mode. The replacement uses a GPT-5.4-nano per-chunk relevance filter instead.
+
 # Answer Mode Scoring and Relevance Filtering
 
 **Date:** 2026-03-20
