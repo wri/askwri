@@ -2,7 +2,7 @@
 
 **Goal:** Maximize precision of passages fed to answer synthesis by tightening the retrieval pipeline and adding an LLM relevance filter.
 
-**Architecture:** Two-phase approach. Phase 1 tightens retrieval parameters (alpha, rerankTopN, remove broken normalized threshold). Phase 2 adds a GPT-5.4-nano per-chunk relevance classifier between retrieval and synthesis, replacing the cross-encoder reranker as the primary relevance discriminator.
+**Architecture:** Two-phase approach. Phase 1 tightens retrieval parameters (alpha, rerankTopN, remove broken normalized threshold). Phase 2 adds a GPT-5.4-nano per-chunk relevance classifier between retrieval and synthesis. The reranker continues to provide candidate ordering; the nano classifier adds the absolute relevance discrimination the reranker cannot provide.
 
 **Tech Stack:** GPT-5.4-nano (relevance filter), cross-encoder/ms-marco-MiniLM-L-6-v2 (reranker, unchanged), Next.js API route, Python search service.
 
@@ -48,20 +48,27 @@ Per-query precision at top-20:
 
 ## Phase 1: Tighten Retrieval Parameters
 
-Config-only changes in `src/config/retrieval.ts` and a small edit to `src/app/api/answer/route.ts`.
+Changes in two files: `src/config/retrieval.ts` (retrieval params) and `src/app/api/answer/route.ts` (remove normalized threshold).
 
 ### Changes
 
-| Parameter | Before | After | Rationale |
-|-----------|--------|-------|-----------|
-| `rerankTopN` | 20 | 50 | Reranker processes 2.5x more fusion candidates, better pool |
-| `maxResults` | 20 | 15 | Return fewer, tighter results from search service |
-| `alpha` | 0.5 | 0.65 (pending sweep) | Favor semantic search for broad queries; keyword noise is the primary source of irrelevant results |
-| Normalized threshold | 0.75 | **Removed** | Per-query normalization destroys absolute signal; replaced by LLM filter in Phase 2 |
+| Parameter | File | Before | After | Rationale |
+|-----------|------|--------|-------|-----------|
+| `rerankTopN` | `retrieval.ts` | 20 | 50 | Reranker processes 2.5x more fusion candidates, better pool |
+| `maxResults` | `retrieval.ts` | 20 | 15 | Return fewer, tighter results from search service |
+| `alpha` | `retrieval.ts` | 0.5 | 0.65 (pending sweep) | Favor semantic search for broad queries; keyword noise is the primary source of irrelevant results |
+| `RELEVANCE_THRESHOLD` | `route.ts:225-235` | 0.75 filter + normalize | **Remove entirely** | Per-query normalization destroys absolute signal; replaced by LLM filter in Phase 2 |
+| `maxDocs` | `route.ts:226` | 8 | **Keep at 8** | This is the final synthesis budget cap; stays as the last gate |
+
+Specifically in `src/app/api/answer/route.ts`:
+- **Delete** the `RELEVANCE_THRESHOLD = 0.75` constant (line 225)
+- **Delete** the `.filter()` block that normalizes scores and filters by threshold (lines 230-234)
+- **Keep** the `maxDocs` cap (line 226) and `.slice(0, maxDocs)` — this remains the synthesis budget limit
+- After Phase 2, the nano filter runs before this cap, so only strong+partial chunks reach the `.slice()`
 
 ### Alpha Sweep
 
-Before committing alpha, sweep [0.5, 0.6, 0.65, 0.7] with rerankTopN=50 on the 9 golden queries. Measure precision@8 (the number that reaches synthesis). Pick the value that maximizes precision@8 without catastrophic recall loss.
+Before committing alpha, sweep [0.5, 0.6, 0.65, 0.7] with rerankTopN=50 on the 9 golden queries. Measure precision@8 (the number that reaches synthesis). Pick the value that maximizes precision@8 without recall dropping below 50% (from baseline ~60% recall@8). Ship with alpha=0.5 initially; update after sweep completes.
 
 ### Cite Mode Unchanged
 
@@ -73,16 +80,19 @@ A GPT-5.4-nano classifier runs between retrieval and synthesis, replacing the no
 
 ### Pipeline
 
+The nano filter runs **inline in `src/app/api/answer/route.ts`**, after receiving docs from the frontend but before calling the synthesis LLM. The answer route already receives the search results as `docs` in the request body (line 191). The filter processes these docs before building the synthesis prompt.
+
 ```
-Search service (rerank 50 → return top 15)
-    → Answer route receives 15 chunks
-    → Shuffle chunks (prevent position bias)
-    → Send query + shuffled chunks to GPT-5.4-nano
+Frontend calls search service → receives 15 chunks
+Frontend calls /api/answer with { query, docs: 15 chunks }
+    → Answer route receives docs
+    → Shuffle docs (prevent position bias)
+    → Call GPT-5.4-nano with query + shuffled doc snippets
     → Nano classifies each: strong / partial / weak
     → Nano rates overall coverage: good / limited / poor
-    → Drop weak chunks
-    → Send strong + partial (up to 8) to GPT-5.4 synthesis
-    → Tier labels + coverage flow to frontend
+    → Drop weak docs
+    → Send strong + partial (up to maxDocs=8) to GPT-5.4 synthesis
+    → Return synthesis + tier labels + coverage to frontend
 ```
 
 ### Nano Classifier Prompt
@@ -93,8 +103,8 @@ Given a research question and a set of passages, classify each passage's relevan
 Question: {query}
 
 Passages (presented in random order):
-[1] "{title}" — {snippet}
-[2] "{title}" — {snippet}
+[1] "{title}" — {key_finding}
+[2] "{title}" — {key_finding}
 ...
 
 For each passage, classify as:
@@ -116,6 +126,7 @@ Design decisions:
 - **No reranker scores in prompt** — prevents score bias leaking into LLM judgment
 - **Tier vocabulary matches synthesis prompt** — consistent strong/partial/weak throughout pipeline
 - **Coverage is first-class output** — replaces the separate `/api/answer-coverage` nano pre-check
+- **Passage text is `key_finding`** — same field the synthesis prompt uses: `String(doc.kps?.[0]?.snippet ?? '').slice(0, 400)`. Truncated to 400 chars (matching `maxSnippetLen`)
 
 ### Edge Cases
 
@@ -127,10 +138,10 @@ Design decisions:
 
 | Step | Latency |
 |------|---------|
-| Search service (fusion + rerank 50) | ~1.0s |
+| Search service (fusion + rerank 50) | ~1.2-1.5s (reranking 50 vs 20 adds ~200-500ms) |
 | Nano filter (~750 input tokens) | ~50-100ms |
 | Synthesis (GPT-5.4) | ~1.0s |
-| **Total** | **~2.1s** (vs ~2.0s today) |
+| **Total** | **~2.3-2.6s** (vs ~2.0s today) |
 
 ### What This Replaces
 
@@ -165,6 +176,7 @@ Remove experimental answer-mode scoring code that the LLM filter replaces:
 - `search-service/app/config.py`: Remove `answer_logit_floor`, `answer_strong_threshold`, `answer_partial_threshold`, `answer_use_logit_floor`
 - `search-service/app/main.py`: Remove gated logit floor block in answer branch (lines ~1199-1215)
 - `src/app/api/answer-coverage/route.ts`: Remove entire route (subsumed by inline filter)
+- Frontend: Remove any calls to `/api/answer-coverage` (check `src/components/AIResearchModal.tsx` and related components for fetch calls to this endpoint)
 - Update `docs/superpowers/specs/2026-03-20-answer-mode-scoring-design.md` with pointer to this spec
 
 ## Evaluation Strategy
@@ -177,7 +189,7 @@ Script: Extend `evaluation/calibrate-answer-thresholds.ts` with alpha sweep capa
 
 ### Layer 2: LLM Filter Accuracy (Phase 2 validation)
 
-Run the nano classifier on top-15 chunks for all 9 queries. Compare nano's strong/partial/weak assignments against GPT-5.4 debiased labels from `answer-labels-review.json`. Measure:
+Run the nano classifier on top-15 chunks for all 9 queries. Compare nano's strong/partial/weak assignments against the GPT-5.4 debiased labels in `evaluation/answer-labels-review.json` (the current version, overwritten by `relabel-answer-chunks.ts`; backup of original Haiku labels in `answer-labels-review.backup.json`). Measure:
 - Agreement rate (nano tier vs label tier)
 - Confusion matrix
 - Per-query filter precision (what fraction of chunks nano passes are actually relevant)
