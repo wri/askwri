@@ -12,9 +12,9 @@ export const ANSWER_PRESET: RetrievalParams = {
   retrievalMode: "hybrid",
   denseTopK: 150,
   sparseTopK: 150,
-  alpha: 0.5,         // Will be updated after alpha sweep (Task 3)
+  alpha: 0.65,        // Favor semantic search — sweep showed P@8 improves 0.611→0.639
   rerank: true,
-  rerankTopN: 50,     // Rerank 50 candidates (up from 20) for better pool
+  rerankTopN: 20,     // Sweep showed no P@8 gain from reranking more candidates
   maxResults: 15,     // Return top 15 (down from 20) — tighter
 };
 

@@ -183,6 +183,8 @@ class HybridFusionRetriever(BaseRetriever):
         bm25_retriever: BM25Retriever,
         mode: str = "cite",
         similarity_threshold: float = 0.0,
+        dense_weight: Optional[float] = None,
+        sparse_weight: Optional[float] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -193,12 +195,12 @@ class HybridFusionRetriever(BaseRetriever):
 
         # Mode-specific configurations for 203-doc corpus
         if mode == "answer":
-            self.dense_weight = 0.5
-            self.sparse_weight = 0.5
+            self.dense_weight = dense_weight if dense_weight is not None else 0.5
+            self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
             self.fusion_top_k = 100  # Precision: scaled from 50 for larger corpus
         else:  # cite mode - more inclusive for broader coverage
-            self.dense_weight = 0.5  # BALANCED: Was 0.4, now 0.5 for better semantic+keyword mix
-            self.sparse_weight = 0.5  # BALANCED: Was 0.6, now 0.5 to reduce BM25 over-emphasis
+            self.dense_weight = dense_weight if dense_weight is not None else 0.5
+            self.sparse_weight = sparse_weight if sparse_weight is not None else 0.5
             self.fusion_top_k = 500  # INCREASED: Was dropping docs ranked low in both indexes
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
@@ -1103,7 +1105,9 @@ async def hybrid_query(request: QueryRequest):
             vector_retriever=vector_retriever,
             bm25_retriever=service_state["bm25_retriever"],
             mode=request.mode,
-            similarity_threshold=request.similarity_threshold
+            similarity_threshold=request.similarity_threshold,
+            dense_weight=request.dense_weight,
+            sparse_weight=request.sparse_weight,
         )
 
         # Retrieve with hybrid fusion
