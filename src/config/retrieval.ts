@@ -9,13 +9,13 @@ export type RetrievalParams = {
 };
 
 export const ANSWER_PRESET: RetrievalParams = {
-  retrievalMode: "hybrid", // Use hybrid mode for balanced precision/recall
-  denseTopK: 150,    // Precision: high-quality results from 203-doc corpus
-  sparseTopK: 150,   // Precision: focused keyword matching
-  alpha: 0.5,        // Balanced dense/sparse for precision
-  rerank: true,      // Enable reranking to filter noisy results
-  rerankTopN: 20,    // Top 20 snippets → ~10-15 unique docs for synthesis
-  maxResults: 20,
+  retrievalMode: "hybrid",
+  denseTopK: 150,
+  sparseTopK: 150,
+  alpha: 0.5,         // Will be updated after alpha sweep (Task 3)
+  rerank: true,
+  rerankTopN: 50,     // Rerank 50 candidates (up from 20) for better pool
+  maxResults: 15,     // Return top 15 (down from 20) — tighter
 };
 
 export const CITE_PRESET: RetrievalParams = {

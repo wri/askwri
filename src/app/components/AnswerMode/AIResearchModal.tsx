@@ -55,16 +55,7 @@ export const AIResearchModalContent = ({
     setQuery(example)
   }
 
-  // Helper function to get top quality results (top 40% by score)
-  const getTopQualityDocs = (docs: any[], maxDocs: number = 8): any[] => {
-    if (!docs.length) return []
-    const sortedDocs = [...docs].sort((a, b) => (b.score || 0) - (a.score || 0))
-    const top40Percent = Math.max(1, Math.ceil(sortedDocs.length * 0.4))
-    const finalCount = Math.min(top40Percent, maxDocs)
-    return sortedDocs.slice(0, finalCount)
-  }
-
-  async function runAlignment(q: string, docs: DocMeta[]) {
+async function runAlignment(q: string, docs: DocMeta[]) {
     try {
       if (!docs?.length) {
         setAlignment(null)
@@ -188,13 +179,11 @@ export const AIResearchModalContent = ({
         return
       }
 
-      // Step 2: Get top quality docs for synthesis (top 40%, max 6)
-      const topQualityDocs = getTopQualityDocs(validDocs, 6)
-
+      // Send all valid docs to answer route — nano filter handles relevance
       const synthesisResponse = await fetch('/api/answer', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), docs: topQualityDocs }),
+        body: JSON.stringify({ query: query.trim(), docs: validDocs }),
       })
 
       runAlignment(query.trim(), validDocs)

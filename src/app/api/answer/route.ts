@@ -221,18 +221,11 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // DYNAMIC FILTERING: Only use high-relevance documents (>0.75 threshold)
-    const RELEVANCE_THRESHOLD = 0.75
-    const maxDocs = IS_GPT5 ? 8 : 6 // Reduced for concise answers
-    const maxSnippetLen = IS_GPT5 ? 400 : 350 // Shorter snippets
+    // Phase 2 nano filter handles relevance filtering — just cap at maxDocs here
+    const maxDocs = IS_GPT5 ? 8 : 6
+    const maxSnippetLen = IS_GPT5 ? 400 : 350
 
-    // Filter by relevance first, then take top N
-    const filteredDocs = (Array.isArray(docs) ? docs : [])
-      .filter((d: any) => {
-        const relevance = d.kps?.[0]?.kp_relevance || d.score || 0
-        return relevance >= RELEVANCE_THRESHOLD
-      })
-      .slice(0, maxDocs)
+    const filteredDocs = (Array.isArray(docs) ? docs : []).slice(0, maxDocs)
 
     const docList = filteredDocs.map((d: any, idx: number) => ({
       id: idx + 1,
