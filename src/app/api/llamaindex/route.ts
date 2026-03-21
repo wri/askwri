@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       rerank: true, // Enable reranking for quality results
       ...defaults,
       // Override with client-supplied retrieval params if provided
-      ...(alpha !== undefined && { alpha }),
+      ...(alpha !== undefined && { dense_weight: alpha, sparse_weight: 1 - alpha }),
       ...(denseTopK !== undefined && { vector_top_k: denseTopK }),
       ...(sparseTopK !== undefined && { bm25_top_k: sparseTopK }),
       ...(rerankTopK !== undefined && { rerank_top_n: rerankTopK }),
