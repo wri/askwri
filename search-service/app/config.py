@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Answer mode reranker model (swap for benchmarking)
     answer_reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-12-v2"  # 33M params, 2x depth vs L-6
 
+    # Reranker inference backend: "onnx" for Fargate (fast CPU), "torch" for local dev (Mac Accelerate)
+    reranker_backend: str = "onnx"
+
     # SSL/Zscaler VPN Workaround
     use_custom_ssl_client: bool = False
     custom_ca_bundle: str = ""
