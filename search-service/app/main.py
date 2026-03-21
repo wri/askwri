@@ -1196,24 +1196,8 @@ async def hybrid_query(request: QueryRequest):
 
             filtered_results = list(doc_groups.values())[:request.max_results]
         else:
-            # Answer mode: optionally apply logit floor + tier assignment (gated)
-            if settings.answer_use_logit_floor:
-                pre_floor = len(stage2_results)
-                stage2_results = [n for n in stage2_results
-                                  if n.score >= settings.answer_logit_floor]
-                logger.info(f"Stage 3 (Answer Logit Floor {settings.answer_logit_floor}): {pre_floor} → {len(stage2_results)} chunks")
-
-                # Assign relevance tiers based on raw logit score
-                for node in stage2_results:
-                    raw = node.score
-                    if raw >= settings.answer_strong_threshold:
-                        tier = "strong"
-                    elif raw >= settings.answer_partial_threshold:
-                        tier = "partial"
-                    else:
-                        tier = "weak"
-                    node.node.metadata["relevance_tier"] = tier
-
+            # Answer mode: return top results as-is
+            # Relevance filtering happens in the Next.js answer route (nano LLM filter)
             filtered_results = stage2_results[:request.max_results]
 
         # Convert to response format
