@@ -142,7 +142,7 @@ class QueryRequest(BaseModel):
     # Hybrid-specific parameters
     dense_weight: float = 0.5
     sparse_weight: float = 0.5
-    fusion_top_k: int = 150  # RRF fusion limit
+    fusion_top_k: Optional[int] = None  # RRF fusion limit (None = mode default: 500 cite, 100 answer)
     # Metadata filtering
     min_year: Optional[int] = None  # Filter documents by minimum publication year
     max_year: Optional[int] = None  # Filter documents by maximum publication year
