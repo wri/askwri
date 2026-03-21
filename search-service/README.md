@@ -76,7 +76,19 @@ cite_partial_threshold: float = -7.8  # 25th percentile of relevant scores
 
 The response includes `raw_score` (logit) and `relevance_tier` ("strong"/"partial"/"weak") per document.
 
-### 5. Document Deduplication
+### 5. Answer Mode Relevance
+
+Answer mode does **not** use reranker logit thresholds to assign relevance tiers.
+
+Calibration (see `evaluation/calibrate-answer-thresholds.ts`) showed that cross-encoder scores cannot separate relevant from irrelevant chunks for answer-mode queries: the relevant and irrelevant score distributions overlap almost completely (relevant median 2.25, irrelevant median 2.07). The reranker is a ranking tool, not a classifier — it coarsely selects the top candidates but cannot discriminate within them.
+
+**Relevance tiers for answer mode come from the synthesis LLM (GPT-5.4)**, not the reranker. The synthesis prompt instructs GPT-5.4 to classify each source as `strong` (used in synthesis), `partial` (on-topic but not used), or `weak` (not relevant). This costs zero extra LLM calls.
+
+**Gated logit floor config** exists in `app/config.py` (`answer_use_logit_floor`, `answer_logit_floor`, `answer_strong_threshold`, `answer_partial_threshold`) but is inactive (`answer_use_logit_floor = False`). It is retained for future use if better calibration data produces clearer score separation.
+
+**Coverage assessment** uses `gpt-5.4-nano` in the Next.js layer (`/api/answer-coverage`), not the search service. It provides an absolute query-level rating (good/limited/poor) before synthesis runs.
+
+### 6. Document Deduplication
 
 Cite mode deduplicates by document ID, keeping the best chunk score per document.
 

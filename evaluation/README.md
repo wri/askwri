@@ -122,9 +122,14 @@ Evaluates whether the LLM generates good answers given retrieved passages. Uses 
 
 **Scoring dimensions:** faithfulness, completeness, conciseness, coherence, citation_accuracy
 
-**Evaluator model:** Configurable via `SYNTHESIS_EVAL_MODEL` env var (default: `gpt-5.2`). Thinking models (gpt-5*, o1*) are auto-detected for correct API params.
+**Evaluator model:** Configurable via `SYNTHESIS_EVAL_MODEL` env var (default: `gpt-5.4`). Thinking models (gpt-5*, o1*) are auto-detected for correct API params.
 
 **Design doc:** `docs/plans/2026-02-24-answer-synthesis-eval-design.md`
+
+**Calibration and re-labeling scripts:**
+- `evaluation/calibrate-answer-thresholds.ts` — sweeps logit thresholds against LLM labels; established that reranker scores overlap for answer mode (logit floor approach inactive)
+- `evaluation/relabel-answer-chunks.ts` — re-labeled all 900 chunks in `answer-labels-review.json` with GPT-5.4 using a debiased methodology (no scores shown in prompt, all 100 chunks included, shuffled order)
+- `evaluation/compare-synthesis-evals.ts` — compares before/after synthesis eval results (to be created)
 
 ### Golden Dataset Generation
 

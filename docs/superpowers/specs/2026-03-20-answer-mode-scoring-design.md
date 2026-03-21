@@ -246,3 +246,31 @@ The gated logit floor code in the search service remains deployed but inactive �
 | Synthesis LLM ignores selectivity instruction | `sources_used` field in response enables monitoring; low-coverage detection flags suspicious cases |
 | Low coverage warning fires too often | Threshold is conservative (< 3 sources used); tunable without code changes |
 | Page-1 demotion has inverted semantics for negative logits | Non-issue in practice: only 1 page-1 chunk observed across all calibration queries, and scores are positive |
+
+## Final Implementation (2026-03-20)
+
+### Nano Coverage Pre-Check
+
+`gpt-5.4-nano` provides an absolute query-level coverage rating (good/limited/poor) via `/api/answer-coverage` in the Next.js layer. This is a fast, cheap pre-check that runs before synthesis and gives users an upfront signal when the corpus lacks strong material for a query. Configured via `OPENAI_MODEL_COVERAGE` env var (defaults to `OPENAI_MODEL_WHY`, then `gpt-5.4-nano`).
+
+### Synthesis LLM Tier Labels
+
+GPT-5.4 assigns `strong`/`partial`/`weak` relevance tiers to each source during synthesis — zero extra LLM calls, zero latency. The classification is embedded in the existing synthesis prompt:
+- **Strong**: source was used in the synthesized answer
+- **Partial**: source is on-topic but was not incorporated
+- **Weak**: source is not relevant to the query
+
+### Color-Coded UI
+
+Relevance tiers are rendered using the same visual language as cite mode:
+- **Strong** → green / `success`
+- **Partial** → yellow / `warning`
+- **Weak** → grey / `info-grey`
+
+### Gated Logit Floor
+
+The search service config includes `answer_use_logit_floor`, `answer_logit_floor`, `answer_strong_threshold`, and `answer_partial_threshold`. These remain inactive (gate is `False`). Calibration showed cross-encoder scores cannot separate relevant from irrelevant for answer mode (score distributions overlap: relevant median 2.25, irrelevant median 2.07). The code is retained for future use if better calibration data (e.g., human labels) produces clearer score separation.
+
+### Default Model
+
+Default synthesis model bumped from `gpt-5.2` to `gpt-5.4`.
