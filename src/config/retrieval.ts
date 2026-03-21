@@ -15,7 +15,7 @@ export const ANSWER_PRESET: RetrievalParams = {
   alpha: 0.65,        // Favor semantic search — sweep showed P@8 improves 0.611→0.639
   rerank: true,
   rerankTopN: 20,     // Sweep showed no P@8 gain from reranking more candidates
-  maxResults: 15,     // Return top 15 (down from 20) — tighter
+  maxResults: 15,     // Return top 15 (down from 20) — tighter precision
 };
 
 export const CITE_PRESET: RetrievalParams = {

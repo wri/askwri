@@ -922,8 +922,8 @@ def load_documents_and_build_indexes():
     logger.info(f"   [2/2] Loading Cite mode reranker (MiniLM-L-6)...")
     reranker_start = time.time()
     reranker_cite = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # Same lightweight model for Cite mode
-        top_n=200  # Increased for better recall - preserves more candidates
+        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        top_n=200
     )
     logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
     logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
