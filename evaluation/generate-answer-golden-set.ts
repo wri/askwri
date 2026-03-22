@@ -213,7 +213,7 @@ async function callAnthropicLabeler(
   startIndex: number,
 ): Promise<LabelResult[]> {
   const chunkDescriptions = chunks.map((c, idx) => {
-    return `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`;
+    return `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}):\n${c.content}`;
   });
 
   const userPrompt = `Question: "${question}"
@@ -230,7 +230,7 @@ Label each of the ${chunks.length} chunks above.`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-opus-4-6-20250515',
       max_tokens: 4096,
       messages: [
         {
@@ -262,7 +262,7 @@ async function callOpenAILabeler(
   startIndex: number,
 ): Promise<LabelResult[]> {
   const chunkDescriptions = chunks.map((c, idx) => {
-    return `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`;
+    return `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}):\n${c.content}`;
   });
 
   const userPrompt = `Question: "${question}"
@@ -328,7 +328,7 @@ async function phaseLabel(): Promise<void> {
   }
 
   if (anthropicKey) {
-    console.log('Using Anthropic claude-haiku-4-5-20251001 for labeling.');
+    console.log('Using Anthropic claude-opus-4-6 for labeling.');
   } else {
     console.log('ANTHROPIC_API_KEY not set, falling back to OpenAI gpt-4o-mini.');
   }

@@ -98,37 +98,39 @@ A query passes if **ALL** conditions are met:
 
 Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
 
-### Recent: Retrieval Precision Improvements (2026-03-21)
+### Recent: Voyage Reranker Migration & Opus Labels (2026-03-22)
 
-The answer mode pipeline was delivering ~61% precision at synthesis input — meaning ~4 out of 10 passages fed to GPT-5.4 were irrelevant. Broad research queries ("Are denser cities more sustainable?") were worst at 12-25% precision. Two changes were made:
+**Reranker migration.** Local cross-encoder models (MiniLM-L-6 for cite, MiniLM-L-12 for answer) were replaced with Voyage rerank-2.5 API. The L-6 model took 28s on Fargate (2 vCPU) to score 500 fusion candidates. Voyage completes in <1s.
 
-**Phase 1 — Retrieval parameter tuning.** Swept `alpha` (dense/sparse weight) across [0.5, 0.6, 0.65, 0.7]. Setting `alpha=0.65` (favoring semantic search over keyword matching) improved mean P@8 from 61.1% to 63.9%. RerankTopN had no effect — the reranker sees the same candidates regardless of pool size. The broken per-query normalized score threshold (0.75) was removed entirely.
+**Cite mode results (Voyage + floor=0.50):**
+- P=33.2%, R=77%, F1=45%, 8/11 passed — best F1 and pass rate in eval history
+- Previous best (L-6, Mar 4): P=39%, R=67%, F1=44.5%, 4/11 passed
 
-**Phase 2 — GPT-5.4-nano per-chunk relevance filter.** A nano model classifies each passage as strong/partial/weak before synthesis. Only strong and partial passages reach GPT-5.4. The filter also rates overall corpus coverage (good/limited/poor) for UI warnings. Coverage detection correctly flags queries with weak corpus material (e.g., ans_002, ans_007 flagged as "limited").
+**Answer mode results (Voyage + Opus labels):**
+- Sweep P@8: alpha=0.5 and 0.7 tie at 61.1%, alpha=0.65 at 59.7% (within noise)
+- RerankTopN has no effect (same as with L-12)
+- Score floor not viable: relevant and irrelevant Voyage scores both span 0.0–1.0
 
-Overall pipeline: Phase 1 improved retrieval precision from **61.1% → 63.9%**. Phase 2 (nano filter) showed 100% agreement with ground truth labels, but see caveats below.
+**Opus 4.6 labels.** GPT-5.4 labels were replaced with Claude Opus 4.6 labels for answer retrieval evaluation. Opus provides independent judgment (breaking the GPT-5.4 circularity where the same model family was labeler, filter, and evaluator). Opus is stricter — labels fewer chunks as relevant per question.
 
-**Caveats and known limitations:**
+**Parameter fixes.** Several request parameters were silently ignored:
+- `bm25_top_k`: BM25 always returned 1000 results regardless. Now sliced to request value.
+- `fusion_top_k`: Hardcoded per mode. Now flows through from request.
+- `AIResearchModal.tsx` hardcoded `alpha: 0.5`, overriding the sweep-validated 0.65. Fixed — modal now sends only `query`, `mode`, `cite_doc_ids`.
+- `CITE_PRESET` was defined but never imported in route.ts. Fixed — route now uses preset values.
 
-1. **Circular evaluation.** The nano filter (GPT-5.4-nano), ground truth labels (GPT-5.4-full), and synthesis evaluator (GPT-5.4) are all from the same model family. GPT-5.4 is both judge and defendant at every layer. The "100% filter precision" figure is expected given this circularity and does not independently validate the filter.
+### Previous: Retrieval Precision Improvements (2026-03-21)
 
-2. **Doc-level aggregation inflates agreement.** Label aggregation uses MAX across chunks per document. Most docs in a 203-doc research corpus have at least one somewhat-relevant chunk for broad queries. The eval encountered zero "weak" docs — meaning it never tested the filter's ability to reject irrelevant material.
+**Phase 1 — Retrieval parameter tuning.** Swept `alpha` across [0.5, 0.6, 0.65, 0.7]. Setting `alpha=0.65` improved mean P@8 from 61.1% to 63.9%. RerankTopN had no effect.
 
-3. **Synthesis quality regression.** Before/after synthesis comparison showed consistent regression across all 5 dimensions when the nano filter was active (faithfulness 0.811→0.800, completeness 0.889→0.867, conciseness 0.944→0.911, coherence 0.956→0.911, citation_accuracy 0.811→0.800). The nano filter is currently gated off (`USE_NANO_FILTER=false` by default) pending further investigation.
+**Phase 2 — GPT-5.4-nano per-chunk relevance filter.** Gated off (`USE_NANO_FILTER=false`) after synthesis quality regressed across all 5 dimensions.
 
-4. **Alpha field name bug (fixed 2026-03-21).** The `alpha` parameter in `retrieval.ts` was being sent to the Python search service, but Python's `QueryRequest` model uses `dense_weight`/`sparse_weight`. Pydantic silently ignored the unknown field, meaning the Phase 1 alpha=0.65 improvement was never active in production until this fix. The calibration sweep script correctly used `dense_weight`/`sparse_weight`, so sweep results are valid.
+**Caveats:** The GPT-5.4 circularity (same model family as labeler, filter, and evaluator) inflated agreement metrics. Opus labels now address this.
 
-5. **What's missing.** An end-to-end synthesis comparison on the worst-performing queries (ans_002 at 25%, ans_006 at 25%) with a different evaluator model family would provide independent validation. Human-validated labels remain the gold standard — all results should be treated as provisional.
-
-**New eval scripts:**
+**Eval scripts:**
 - `evaluation/sweep-answer-retrieval.ts` — alpha × rerankTopN precision sweep
-- `evaluation/eval-nano-filter.ts` — nano filter accuracy vs GPT-5.4 debiased labels
-- `evaluation/chart-answer-precision.py` — generate comparison charts
-
-**Design docs:**
-- `docs/superpowers/specs/2026-03-20-answer-retrieval-precision-design.md` — full design spec
-- `docs/plans/2026-02-20-answer-golden-set-generation-design.md` — chunk-first golden set pipeline
-- `docs/plans/2026-02-15-answer-retrieval-html-enhancement.md` — HTML report enhancements
+- `evaluation/eval-nano-filter.ts` — nano filter accuracy vs labels
+- `evaluation/calibrate-cite-thresholds.ts` — cite mode threshold sweep
 
 ### Track 1: Retrieval (`npm run eval:answer-retrieval`)
 

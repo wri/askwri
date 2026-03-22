@@ -89,7 +89,7 @@ from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.postprocessor import SentenceTransformerRerank
+
 
 from app.config import get_settings
 
@@ -118,9 +118,8 @@ service_state = {
     "vector_index": None,
     "bm25_retriever": None,
     "hybrid_retriever": None,
-    "reranker_answer": None,
-    "reranker_cite": None,
-    "documents_metadata": {},
+    "voyage_reranker_ready": False,
+        "documents_metadata": {},
     "document_texts": {},
     "evaluation_data": None,
     "cache": AskWRICache(cache_dir=settings.cache_dir),
@@ -174,42 +173,53 @@ class QueryResponse(BaseModel):
     fusion_results: Optional[List[Dict[str, Any]]] = None
     reranked_results: Optional[List[Dict[str, Any]]] = None
 
-class OnnxReranker:
-    """Cross-encoder reranker using ONNX or PyTorch backend via sentence-transformers.
+def voyage_rerank(nodes, query_str, top_n=None):
+    """Rerank nodes using Voyage AI rerank-2.5 API.
 
-    Unlike SentenceTransformerRerank, this does not mutate global state per-request.
-    top_n is passed per-call to avoid race conditions with concurrent requests.
+    Each chunk is prepended with its document title and summary to give the
+    reranker full context about where the chunk came from. This helps
+    distinguish topically related but irrelevant chunks from directly
+    relevant ones.
+
+    Returns nodes sorted by Voyage relevance score (0-1 range).
     """
+    if not nodes:
+        return []
 
-    def __init__(self, model: str, top_n: int = 20, backend: str = "onnx"):
-        from sentence_transformers import CrossEncoder
-        self.top_n = top_n
-        self.model_name = model
-        try:
-            self._cross_encoder = CrossEncoder(model, backend=backend)
-            logger.info(f"Loaded reranker {model} with {backend} backend")
-        except Exception as e:
-            logger.warning(f"Failed to load {backend} backend for {model}: {e}. Falling back to torch.")
-            self._cross_encoder = CrossEncoder(model, backend="torch")
+    import voyageai
+    vo = voyageai.Client(api_key=get_settings().VOYAGE_API_KEY)
 
-    def postprocess_nodes(self, nodes, query_bundle, top_n=None):
-        """Score and rerank nodes. top_n can be overridden per-call."""
-        if not nodes:
-            return []
-        if query_bundle is None:
-            return nodes
+    # Build contextual documents: title + summary + chunk text
+    metadata = service_state.get("documents_metadata", {})
+    docs = []
+    for node in nodes:
+        chunk_text = node.node.get_content()
+        doc_id = node.node.metadata.get("doc_id", "")
+        doc_meta = metadata.get(doc_id, {})
+        title = doc_meta.get("title", node.node.metadata.get("title", ""))
+        summary = doc_meta.get("summary", "")
 
-        effective_top_n = top_n if top_n is not None else self.top_n
-        query = query_bundle.query_str
-        pairs = [[query, node.node.get_content()] for node in nodes]
+        if title:
+            context_text = f"[{title}]\n\n{chunk_text}"
+        else:
+            context_text = chunk_text
+        docs.append(context_text)
 
-        scores = self._cross_encoder.predict(pairs)
+    result = vo.rerank(
+        query=query_str,
+        documents=docs,
+        model="rerank-2.5",
+        top_k=len(docs),  # Score all candidates
+    )
 
-        for node, score in zip(nodes, scores):
-            node.score = float(score)
+    # Map scores back to nodes
+    for r in result.results:
+        nodes[r.index].score = r.relevance_score
 
-        nodes.sort(key=lambda n: n.score, reverse=True)
-        return nodes[:effective_top_n]
+    nodes.sort(key=lambda n: n.score, reverse=True)
+    if top_n is not None:
+        return nodes[:top_n]
+    return nodes
 
 
 class HybridFusionRetriever(BaseRetriever):
@@ -864,8 +874,7 @@ def load_documents_and_build_indexes():
         logger.warning("⚠️ No nodes created - service will run without indexes")
         service_state["vector_index"] = None
         service_state["bm25_retriever"] = None
-        service_state["reranker_answer"] = None
-        service_state["reranker_cite"] = None
+        service_state["voyage_reranker_ready"] = False
         service_state["document_texts"] = {}
         return
 
@@ -954,41 +963,16 @@ def load_documents_and_build_indexes():
     )
     logger.info(f"✅ BM25 index built in {time.time() - step_start:.1f}s")
 
-    # Initialize rerankers
-    logger.info(f"🔄 Loading cross-encoder rerankers (backend: {settings.reranker_backend})...")
-    step_start = time.time()
-
-    answer_reranker_model = settings.answer_reranker_model
-    cite_reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-    if settings.reranker_backend == "onnx":
-        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, ONNX)...")
-        reranker_start = time.time()
-        reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend="onnx")
-        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
-
-        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
-        reranker_start = time.time()
-        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend="onnx")
-        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+    # Verify Voyage API key for reranking
+    if settings.VOYAGE_API_KEY:
+        logger.info("✅ Voyage API key configured — using Voyage rerank-2.5 for both modes")
+        service_state["voyage_reranker_ready"] = True
     else:
-        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
-        reranker_start = time.time()
-        reranker_answer = SentenceTransformerRerank(model=answer_reranker_model, top_n=20)
-        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
-
-        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
-        reranker_start = time.time()
-        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=1000)
-        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
-
-    logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
+        logger.warning("⚠️ No VOYAGE_API_KEY — reranking will be skipped (fusion scores only)")
 
     # Store in global state
     service_state["vector_index"] = vector_index
     service_state["bm25_retriever"] = bm25_retriever
-    service_state["reranker_answer"] = reranker_answer
-    service_state["reranker_cite"] = reranker_cite
     service_state["document_texts"] = document_texts
 
     logger.info("Successfully built indexes and initialized rerankers")
@@ -1115,8 +1099,7 @@ async def health_check():
         "documents_count": len(service_state["documents_metadata"]),
         "document_texts_count": len(service_state["document_texts"]),
         "rerankers_loaded": {
-            "answer_mode": service_state["reranker_answer"] is not None,
-            "cite_mode": service_state["reranker_cite"] is not None,
+            "voyage_reranker": service_state["voyage_reranker_ready"],
         },
         "cache_stats": service_state["cache"].get_cache_stats() if service_state.get("cache") else {}
     }
@@ -1184,31 +1167,17 @@ async def hybrid_query(request: QueryRequest):
             stage1_results = [n for n in stage1_results if n.node.metadata.get("doc_id") in request.cite_doc_ids]
             logger.info(f"Answer mode: Filtered to cite_doc_ids ({before_filter} -> {len(stage1_results)})")
 
-        # Stage 2: Local Reranking
-        if request.rerank and stage1_results:
-            base_reranker = (service_state["reranker_answer"] if request.mode == "answer"
-                            else service_state["reranker_cite"])
-
-            if base_reranker:
-                try:
-                    stage2_start = time.time()
-                    if isinstance(base_reranker, OnnxReranker):
-                        # OnnxReranker: pass top_n per-call (no global mutation)
-                        stage2_results = base_reranker.postprocess_nodes(
-                            stage1_results, query_bundle, top_n=request.rerank_top_n
-                        )
-                    else:
-                        # SentenceTransformerRerank: call with default top_n, then slice
-                        stage2_results = base_reranker.postprocess_nodes(
-                            stage1_results, query_bundle
-                        )
-                        stage2_results = stage2_results[:request.rerank_top_n]
-                    stage2_elapsed = time.time() - stage2_start
-                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
-                except Exception as e:
-                    logger.warning(f"Reranking failed: {e}, using Stage 1 results")
-                    stage2_results = stage1_results
-            else:
+        # Stage 2: Voyage Reranking
+        if request.rerank and stage1_results and settings.VOYAGE_API_KEY:
+            try:
+                stage2_start = time.time()
+                stage2_results = voyage_rerank(
+                    stage1_results, request.query, top_n=request.rerank_top_n
+                )
+                stage2_elapsed = time.time() - stage2_start
+                logger.info(f"Stage 2 (Voyage Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
+            except Exception as e:
+                logger.warning(f"Voyage reranking failed: {e}, using Stage 1 results")
                 stage2_results = stage1_results
         else:
             stage2_results = stage1_results
@@ -1245,18 +1214,18 @@ async def hybrid_query(request: QueryRequest):
                 if doc_id not in doc_groups or node.score > doc_groups[doc_id].score:
                     doc_groups[doc_id] = node
 
-            # Apply logit floor: drop docs below the calibrated threshold
+            # Apply score floor: drop docs below the calibrated threshold
             pre_floor = len(doc_groups)
             doc_groups = {k: v for k, v in doc_groups.items()
-                          if v.score >= settings.cite_logit_floor}
-            logger.info(f"Stage 3 (Logit Floor {settings.cite_logit_floor}): {pre_floor} → {len(doc_groups)} docs")
+                          if v.score >= settings.cite_score_floor}
+            logger.info(f"Stage 3 (Score Floor {settings.cite_score_floor}): {pre_floor} → {len(doc_groups)} docs")
 
-            # Assign relevance tiers based on raw logit score
+            # Assign relevance tiers based on Voyage score (0-1 range)
             for node in doc_groups.values():
-                raw = node.score
-                if raw >= settings.cite_strong_threshold:
+                score = node.score
+                if score >= settings.cite_strong_threshold:
                     tier = "strong"
-                elif raw >= settings.cite_partial_threshold:
+                elif score >= settings.cite_partial_threshold:
                     tier = "partial"
                 else:
                     tier = "weak"
@@ -1380,7 +1349,7 @@ async def hybrid_query(request: QueryRequest):
                 "stage1_results": len(stage1_results),
                 "stage2_results": len(stage2_results) if 'stage2_results' in locals() else len(stage1_results),
                 "final_results": len(docs),
-                "reranking_applied": request.rerank and service_state.get(f"reranker_{request.mode}") is not None,
+                "reranking_applied": request.rerank and service_state["voyage_reranker_ready"],
                 "similarity_threshold": request.similarity_threshold,
                 "stage1_time": round(stage1_elapsed, 2) if 'stage1_elapsed' in locals() else None,
                 "stage2_time": round(stage2_elapsed, 2) if 'stage2_elapsed' in locals() else None,
@@ -1522,8 +1491,7 @@ async def get_stats():
             "bm25_retriever_ready": service_state["bm25_retriever"] is not None,
         },
         "rerankers": {
-            "answer_mode_ready": service_state["reranker_answer"] is not None,
-            "cite_mode_ready": service_state["reranker_cite"] is not None,
+            "voyage_reranker_ready": service_state["voyage_reranker_ready"],
         },
         "embedding_model": "text-embedding-3-small",
         "retrieval_method": "hybrid_fusion_rrf_with_reranking",
