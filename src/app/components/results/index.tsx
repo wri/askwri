@@ -33,7 +33,7 @@ const ResultsPage = ({
 
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
-      <Navbar />
+      <Navbar query={query} />
       <section
         style={{
           display: 'flex',
