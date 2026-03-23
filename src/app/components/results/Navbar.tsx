@@ -6,7 +6,7 @@ import { Button, Navbar as WriNavbar } from '@worldresources/wri-design-systems'
 import { FiPlus } from 'react-icons/fi'
 import { WriLogoIcon } from '../icons/WriLogo'
 
-const Navbar = () => {
+const Navbar = ({ query }: { query: string }) => {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -20,16 +20,19 @@ const Navbar = () => {
       linkRouter={Link}
       pathname={pathname}
       utilitySection={[
-        <Button
-          key='leave-feedback'
-          variant='borderless'
-          onClick={() => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(window as any)?.hj('event', 'open_survey')
-          }}
-        >
-          Leave Feedback
-        </Button>,
+        query ? (
+          <Button
+            key='leave-feedback'
+            variant='borderless'
+            onClick={() => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ;(window as any)?.hj('identify', null, { last_query: query })
+              ;(window as any)?.hj('event', 'open_survey')
+            }}
+          >
+            Leave Feedback
+          </Button>
+        ) : null,
         <Button
           key='new-search'
           variant='secondary'
