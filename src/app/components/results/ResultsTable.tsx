@@ -14,10 +14,7 @@ import { SelectableResultRow } from './SelectableResultRow'
 import { RowData, ResultsTableProps } from './types'
 import { AiIcon } from '../icons/AiIcon'
 import { DocumentPreviewModalContent } from './DocumentPreviewModal'
-import {
-  AIResearchModalContent,
-  aiResearchModalHeader,
-} from '../AnswerMode/AIResearchModal'
+import { AIResearchModalContent } from '../AnswerMode/AIResearchModal'
 
 const PAGE_SIZE = 20
 const MAXIMUM_CONSULTED_DOCS = 20
@@ -79,7 +76,6 @@ const ResultsTable = ({
   onToggleSelect,
   onExportBib,
 }: ResultsTableProps) => {
-
   const totalItems = data.length
   const pageSize = PAGE_SIZE
   const [selectedRows, setSelectedRows] = useState<RowData[]>([])
@@ -246,19 +242,13 @@ const ResultsTable = ({
           setActiveRowId(null)
         }}
       />
-      <Modal
-        header={aiResearchModalHeader}
-        content={
-          <AIResearchModalContent
-            consultedDocs={
-              selectedRows.length
-                ? selectedRows.slice(0, MAXIMUM_CONSULTED_DOCS)
-                : data.slice(0, MAXIMUM_CONSULTED_DOCS)
-            }
-          />
+
+      <AIResearchModalContent
+        consultedDocs={
+          selectedRows.length
+            ? selectedRows.slice(0, MAXIMUM_CONSULTED_DOCS)
+            : data.slice(0, MAXIMUM_CONSULTED_DOCS)
         }
-        size='xlarge'
-        blocking={false}
         open={aiModalOpen}
         onClose={() => setAiModalOpen(false)}
       />

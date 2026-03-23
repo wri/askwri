@@ -8,6 +8,7 @@ import { DocMeta } from '@/lib/llamacloud'
 import {
   getThemedColor,
   InlineMessage,
+  Modal,
 } from '@worldresources/wri-design-systems'
 import {
   ANSWER_MODE_SUGGESTION_POOL,
@@ -23,12 +24,14 @@ import {
   calculateEmbeddingCost,
 } from '../../utils/utils'
 
-const MAX_ANSWER_MODE_RESULTS = 20
-
 export const AIResearchModalContent = ({
   consultedDocs,
+  open,
+  onClose,
 }: {
   consultedDocs?: RowData[]
+  open: boolean
+  onClose?: () => void
 }) => {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
@@ -36,6 +39,8 @@ export const AIResearchModalContent = ({
   const [firstDocHowRelevant, setFirstDocHowRelevant] = useState('')
   // State for SupportingCitations page
   const [supportingCitationsPage, setSupportingCitationsPage] = useState(1)
+  const [passageWhy, setPassageWhy] = useState<Record<string, any>>({})
+  const [passageWhyLoading, setPassageWhyLoading] = useState<Record<string, boolean>>({})
   const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
@@ -43,7 +48,9 @@ export const AIResearchModalContent = ({
   const [alignLoading, setAlignLoading] = useState(false)
   const [alignment, setAlignment] = useState<Assessment | null>(null)
   const [ops, setOps] = useState<Ops | null>(null)
-  const [sourceRelevance, setSourceRelevance] = useState<Record<string, string>>({})  // doc_id → tier
+  const [sourceRelevance, setSourceRelevance] = useState<
+    Record<string, string>
+  >({}) // doc_id → tier
   const [coverageRating, setCoverageRating] = useState<string>('')
   const [coverageExplanation, setCoverageExplanation] = useState<string>('')
 
@@ -55,7 +62,7 @@ export const AIResearchModalContent = ({
     setQuery(example)
   }
 
-async function runAlignment(q: string, docs: DocMeta[]) {
+  async function runAlignment(q: string, docs: DocMeta[]) {
     try {
       if (!docs?.length) {
         setAlignment(null)
@@ -175,8 +182,13 @@ async function runAlignment(q: string, docs: DocMeta[]) {
       const synthesisResult = await synthesisResponse.json()
 
       if (synthesisResult?.synthesis) {
-        const { sentences, paragraphs, warning, warningMessage, source_relevance } =
-          synthesisResult.synthesis
+        const {
+          sentences,
+          paragraphs,
+          warning,
+          warningMessage,
+          source_relevance,
+        } = synthesisResult.synthesis
 
         // Validate sentences array
         if (!Array.isArray(sentences) || sentences.length === 0) {
@@ -267,10 +279,13 @@ async function runAlignment(q: string, docs: DocMeta[]) {
           setCoverageRating(synthesisResult.synthesis.coverage)
           const explanations: Record<string, string> = {
             good: '',
-            limited: 'Some passages touch on the topic but lack specific answers.',
+            limited:
+              'Some passages touch on the topic but lack specific answers.',
             poor: 'The corpus likely does not contain material to adequately answer this question.',
           }
-          setCoverageExplanation(explanations[synthesisResult.synthesis.coverage] || '')
+          setCoverageExplanation(
+            explanations[synthesisResult.synthesis.coverage] || '',
+          )
         }
 
         fetch('/api/answer-mode-query-logs', {
@@ -370,6 +385,10 @@ async function runAlignment(q: string, docs: DocMeta[]) {
               sourceRelevance={sourceRelevance}
               coverageRating={coverageRating}
               coverageExplanation={coverageExplanation}
+              passageWhy={passageWhy}
+              setPassageWhy={setPassageWhy}
+              passageWhyLoading={passageWhyLoading}
+              setPassageWhyLoading={setPassageWhyLoading}
             />
           </Box>
         </Box>
@@ -391,26 +410,33 @@ async function runAlignment(q: string, docs: DocMeta[]) {
   }
 
   return (
-    <div style={{ margin: '-10px' }}>
-      <div>
-        <InlineMessage
-          size='full-width'
-          variant='warning'
-          label='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
-        />
-      </div>
-      {renderContent()}
-    </div>
+    <Modal
+      header={
+        <p
+          style={{
+            fontWeight: 'bold',
+            color: getThemedColor('neutral', 800),
+          }}
+        >
+          AI research assistant
+        </p>
+      }
+      content={
+        <div style={{ margin: '-10px' }}>
+          <div>
+            <InlineMessage
+              size='full-width'
+              variant='warning'
+              label='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
+            />
+          </div>
+          {renderContent()}
+        </div>
+      }
+      size='xlarge'
+      blocking={false}
+      open={open}
+      onClose={onClose}
+    />
   )
 }
-
-export const aiResearchModalHeader = (
-  <p
-    style={{
-      fontWeight: 'bold',
-      color: getThemedColor('neutral', 800),
-    }}
-  >
-    AI research assistant
-  </p>
-)

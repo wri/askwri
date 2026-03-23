@@ -8,18 +8,14 @@ import {
   getThemedColor,
   Button,
   Tag,
-  Tooltip as DS_Tooltip,
   InlineMessage,
 } from '@worldresources/wri-design-systems'
 import { DocMeta, KP } from '@/lib/llamacloud'
 import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
-import { getRelevanceLevel } from '@/app/utils/relevance'
 import { AiIcon } from '../icons/AiIcon'
 import { firstSentence, chicagoFull } from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
-
-const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
 export const SupportingCitations = ({
   supportingDocs,
@@ -29,15 +25,27 @@ export const SupportingCitations = ({
   sourceRelevance,
   coverageRating,
   coverageExplanation,
+  passageWhy: externalPassageWhy,
+  setPassageWhy: setExternalPassageWhy,
+  passageWhyLoading: externalPassageWhyLoading,
+  setPassageWhyLoading: setExternalPassageWhyLoading,
 }: SupportingCitationsProps) => {
   const [internalPage, setInternalPage] = useState(1)
   const page = controlledPage ?? internalPage
   const setPage = setControlledPage ?? setInternalPage
   const [pageSize] = useState(1)
-  const [passageWhy, setPassageWhy] = useState<Record<string, WhyMeta>>({})
-  const [passageWhyLoading, setPassageWhyLoading] = useState<
+  const [internalPassageWhy, setInternalPassageWhy] = useState<
+    Record<string, WhyMeta>
+  >({})
+  const [internalPassageWhyLoading, setInternalPassageWhyLoading] = useState<
     Record<string, boolean>
   >({})
+  const passageWhy = externalPassageWhy ?? internalPassageWhy
+  const setPassageWhy = setExternalPassageWhy ?? setInternalPassageWhy
+  const passageWhyLoading =
+    externalPassageWhyLoading ?? internalPassageWhyLoading
+  const setPassageWhyLoading =
+    setExternalPassageWhyLoading ?? setInternalPassageWhyLoading
   const [docSummary, setDocSummary] = useState<Record<string, string>>({})
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [docSummaryLoading, setDocSummaryLoading] = useState<
@@ -166,7 +174,13 @@ export const SupportingCitations = ({
           setPassageWhyLoading((prev) => ({ ...prev, [passageId]: false }))
         })
       })
-  }, [paginatedItems])
+  }, [
+    paginatedItems,
+    passageWhy,
+    passageWhyLoading,
+    setPassageWhy,
+    setPassageWhyLoading,
+  ])
 
   if (allItems.length === 0) return null
 
@@ -181,15 +195,20 @@ export const SupportingCitations = ({
         height: 570,
       }}
     >
-      {(coverageRating === 'poor' || coverageRating === 'limited') && coverageExplanation && (
-        <Box padding='2' marginBottom='2'>
-          <InlineMessage
-            variant='warning'
-            label={coverageRating === 'poor' ? 'Low corpus coverage' : 'Limited corpus coverage'}
-            caption={coverageExplanation}
-          />
-        </Box>
-      )}
+      {(coverageRating === 'poor' || coverageRating === 'limited') &&
+        coverageExplanation && (
+          <Box padding='2' marginBottom='2'>
+            <InlineMessage
+              variant='warning'
+              label={
+                coverageRating === 'poor'
+                  ? 'Low corpus coverage'
+                  : 'Limited corpus coverage'
+              }
+              caption={coverageExplanation}
+            />
+          </Box>
+        )}
       <div
         style={{
           display: 'flex',
@@ -209,31 +228,54 @@ export const SupportingCitations = ({
           </Heading>
 
           {/* Relevance tier from synthesis LLM */}
-          {paginatedItems[0] && (() => {
-            const tier = sourceRelevance?.[paginatedItems[0].doc.doc_id]
-            if (tier) {
+          {paginatedItems[0] &&
+            (() => {
+              const tier = sourceRelevance?.[paginatedItems[0].doc.doc_id]
+              if (tier) {
+                return (
+                  <Box
+                    display='flex'
+                    alignItems='center'
+                    gap='2'
+                    marginBottom='4'
+                  >
+                    <Tag
+                      label={
+                        tier === 'strong'
+                          ? 'Strong'
+                          : tier === 'partial'
+                            ? 'Partial'
+                            : 'Weak'
+                      }
+                      variant={
+                        (tier === 'strong'
+                          ? 'success'
+                          : tier === 'partial'
+                            ? 'warning'
+                            : 'info-grey') as any
+                      }
+                    />
+                  </Box>
+                )
+              }
+              // Fallback while synthesis is loading
               return (
-                <Box display='flex' alignItems='center' gap='2' marginBottom='4'>
-                  <Tag
-                    label={tier === 'strong' ? 'Strong' : tier === 'partial' ? 'Partial' : 'Weak'}
-                    variant={
-                      (tier === 'strong' ? 'success'
-                        : tier === 'partial' ? 'warning'
-                          : 'info-grey') as any
-                    }
-                  />
+                <Box
+                  display='flex'
+                  alignItems='center'
+                  gap='2'
+                  marginBottom='4'
+                >
+                  <Text
+                    fontSize='xs'
+                    fontWeight='medium'
+                    color={getThemedColor('neutral', 500)}
+                  >
+                    Evaluating relevance...
+                  </Text>
                 </Box>
               )
-            }
-            // Fallback while synthesis is loading
-            return (
-              <Box display='flex' alignItems='center' gap='2' marginBottom='4'>
-                <Text fontSize='xs' fontWeight='medium' color={getThemedColor('neutral', 500)}>
-                  Evaluating relevance...
-                </Text>
-              </Box>
-            )
-          })()}
+            })()}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <Button variant='secondary' size='small' leftIcon={<IoMdOpen />}>
