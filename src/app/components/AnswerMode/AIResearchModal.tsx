@@ -17,14 +17,14 @@ import {
 import { AISearchForm } from './AISearchForm'
 import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
-import { AnswerResult, Assessment, Ops } from './types'
+import { AnswerResult, Assessment, Ops, WhyMeta } from './types'
 import { RowData } from '../results/types'
 import {
   buildAlignmentSummary,
   calculateEmbeddingCost,
 } from '../../utils/utils'
 
-export const AIResearchModalContent = ({
+export const AIResearchModal = ({
   consultedDocs,
   open,
   onClose,
@@ -39,7 +39,7 @@ export const AIResearchModalContent = ({
   const [firstDocHowRelevant, setFirstDocHowRelevant] = useState('')
   // State for SupportingCitations page
   const [supportingCitationsPage, setSupportingCitationsPage] = useState(1)
-  const [passageWhy, setPassageWhy] = useState<Record<string, any>>({})
+  const [passageWhy, setPassageWhy] = useState<Record<string, WhyMeta>>({})
   const [passageWhyLoading, setPassageWhyLoading] = useState<Record<string, boolean>>({})
   const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(() =>

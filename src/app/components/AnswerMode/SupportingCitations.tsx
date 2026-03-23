@@ -2,7 +2,7 @@
 
 /* eslint-disable no-restricted-syntax */
 
-import { useState, useEffect, useMemo, FC } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
 import {
   getThemedColor,

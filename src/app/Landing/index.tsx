@@ -15,7 +15,7 @@ import { LuRefreshCcw } from 'react-icons/lu'
 import { FaArrowRightLong } from 'react-icons/fa6'
 import { WriLogoIcon } from '../components/icons/WriLogo'
 import { AiIcon } from '../components/icons/AiIcon'
-import { AIResearchModalContent } from '../components/AnswerMode/AIResearchModal'
+import { AIResearchModal } from '../components/AnswerMode/AIResearchModal'
 import {
   CITE_MODE_SUGGESTION_POOL,
   getRandomSuggestions,
@@ -208,7 +208,7 @@ const Landing = () => {
         </Card.Root>
       </section>
       <Toast />
-      <AIResearchModalContent
+      <AIResearchModal
         open={aiModalOpen}
         onClose={() => setAiModalOpen(false)}
       />

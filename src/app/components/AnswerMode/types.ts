@@ -1,4 +1,4 @@
-import React from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import { DocMeta } from '@/lib/llamacloud'
 import { RowData } from '../results/types'
 
@@ -65,13 +65,13 @@ export interface SupportingCitationsProps {
   setFirstDocHowRelevant: (why: string) => void
   page?: number
   setPage?: (p: number) => void
-  sourceRelevance?: Record<string, string>  // doc_id → 'strong' | 'partial' | 'weak'
+  sourceRelevance?: Record<string, string> // doc_id → 'strong' | 'partial' | 'weak'
   coverageRating?: string
   coverageExplanation?: string
-  passageWhy?: Record<string, WhyMeta>
-  setPassageWhy?: React.Dispatch<React.SetStateAction<Record<string, WhyMeta>>>
-  passageWhyLoading?: Record<string, boolean>
-  setPassageWhyLoading?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  passageWhy: Record<string, WhyMeta>
+  setPassageWhy: Dispatch<SetStateAction<Record<string, WhyMeta>>>
+  passageWhyLoading: Record<string, boolean>
+  setPassageWhyLoading: Dispatch<SetStateAction<Record<string, boolean>>>
 }
 
 export type Usage = {

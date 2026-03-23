@@ -14,7 +14,7 @@ import { SelectableResultRow } from './SelectableResultRow'
 import { RowData, ResultsTableProps } from './types'
 import { AiIcon } from '../icons/AiIcon'
 import { DocumentPreviewModalContent } from './DocumentPreviewModal'
-import { AIResearchModalContent } from '../AnswerMode/AIResearchModal'
+import { AIResearchModal } from '../AnswerMode/AIResearchModal'
 
 const PAGE_SIZE = 20
 const MAXIMUM_CONSULTED_DOCS = 20
@@ -243,7 +243,7 @@ const ResultsTable = ({
         }}
       />
 
-      <AIResearchModalContent
+      <AIResearchModal
         consultedDocs={
           selectedRows.length
             ? selectedRows.slice(0, MAXIMUM_CONSULTED_DOCS)
