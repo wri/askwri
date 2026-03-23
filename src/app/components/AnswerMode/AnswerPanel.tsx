@@ -10,18 +10,18 @@ import {
   Button,
   getThemedColor,
   Modal,
+  InlineMessage,
   Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
 import { FaInfoCircle } from 'react-icons/fa'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
+import { AiFillThunderbolt } from 'react-icons/ai'
+import { HiCurrencyDollar } from 'react-icons/hi2'
 import { MdChat } from 'react-icons/md'
 import { IoIosCopy } from 'react-icons/io'
-import { InlineMessage } from '@worldresources/wri-design-systems'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
-import { AiFillThunderbolt } from 'react-icons/ai'
-import { HiCurrencyDollar } from 'react-icons/hi2'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
@@ -282,8 +282,8 @@ export const AnswerPanel = ({
               <Tooltip content='The corpus may not contain sufficient material to answer this question'>
                 <Tag
                   icon={<FaInfoCircle />}
-                  label="Low corpus coverage"
-                  variant={"default" as any}
+                  label='Low corpus coverage'
+                  variant={'default' as any}
                 />
               </Tooltip>
             )}
@@ -291,8 +291,8 @@ export const AnswerPanel = ({
               <Tooltip content='Some relevant sources found but coverage may be incomplete'>
                 <Tag
                   icon={<FaInfoCircle />}
-                  label="Limited coverage"
-                  variant="info-white"
+                  label='Limited coverage'
+                  variant='info-white'
                 />
               </Tooltip>
             )}
