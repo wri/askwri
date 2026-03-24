@@ -10,12 +10,12 @@ export const metadata: Metadata = {
   title: 'Ask WRI',
   description:
     'Find relevant Knowledge Products for your research, identify insights, and export citations.',
+  icons: { icon: '/favicon.ico' },
 }
 
 const RootLayout = ({ children }: { children: ReactNode }) => (
   <html lang='en'>
     <head>
-      <link rel='icon' href='/favicon.ico' />
       {/* Hotjar Tracking Code for Ask WRI */}
       <Script id='hotjar' strategy='afterInteractive'>
         {`
