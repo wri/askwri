@@ -15,6 +15,7 @@ export const metadata: Metadata = {
 const RootLayout = ({ children }: { children: ReactNode }) => (
   <html lang='en'>
     <head>
+      <link rel='icon' href='/favicon.ico' />
       {/* Hotjar Tracking Code for Ask WRI */}
       <Script id='hotjar' strategy='afterInteractive'>
         {`
