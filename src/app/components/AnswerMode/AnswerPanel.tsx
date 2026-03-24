@@ -208,7 +208,7 @@ export const AnswerPanel = ({
                                       ...(supportingCitationsPage ===
                                       citationPage
                                         ? {
-                                            background: '#1a73e8',
+                                            background: getThemedColor('primary', 500),
                                             color: 'white',
                                           }
                                         : {}),
