@@ -3,23 +3,11 @@
 import { useState } from 'react'
 import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
 import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
-import { DocMeta, KP } from '@/lib/llamacloud'
 import { FaQuoteRight } from 'react-icons/fa6'
 import { IoIosCopy, IoMdOpen } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { chicagoFull, firstSentence } from '../../utils/utils'
-import { WhyMeta } from './types'
-
-interface CitationCardProps {
-  doc: DocMeta
-  kp: KP
-  idx: number
-  itemRef: (el: HTMLElement | null) => void
-  passageWhy: Record<string, WhyMeta>
-  passageWhyLoading: Record<string, boolean>
-  docSummary: Record<string, string>
-  docSummaryLoading: Record<string, boolean>
-}
+import { CitationCardProps } from './types'
 
 export const CitationCard = ({
   doc,
@@ -97,7 +85,6 @@ export const CitationCard = ({
           Copy passage
         </Button>
       </div>
-
       {/* Snippet preview */}
       <Box
         margin='3'

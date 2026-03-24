@@ -60,7 +60,6 @@ export const SupportingCitations = ({
   }, [supportingDocs])
 
   const paginatedItems = allItems
-
   const itemRefs = useRef<Record<number, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLElement | null>(null)
   const isProgrammaticScroll = useRef(false)

@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { DocMeta } from '@/lib/llamacloud'
+import { DocMeta, KP } from '@/lib/llamacloud'
 import { RowData } from '../results/types'
 
 export type Assessment = {
@@ -80,4 +80,15 @@ export type Usage = {
   total_tokens: number
   prompt_tokens: number
   completion_tokens: number
+}
+
+export interface CitationCardProps {
+  doc: DocMeta
+  kp: KP
+  idx: number
+  itemRef: (el: HTMLElement | null) => void
+  passageWhy: Record<string, WhyMeta>
+  passageWhyLoading: Record<string, boolean>
+  docSummary: Record<string, string>
+  docSummaryLoading: Record<string, boolean>
 }
