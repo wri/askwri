@@ -63,16 +63,28 @@ export const SupportingCitations = ({
   const itemRefs = useRef<Record<number, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLElement | null>(null)
   const isProgrammaticScroll = useRef(false)
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    if (!controlledPage) return
+    if (!controlledPage) return undefined
     const el = itemRefs.current[controlledPage - 1]
     if (el) {
       isProgrammaticScroll.current = true
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      setTimeout(() => {
+      scrollTimeoutRef.current = setTimeout(() => {
         isProgrammaticScroll.current = false
+        scrollTimeoutRef.current = null
       }, 800)
+    }
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+        scrollTimeoutRef.current = null
+      }
+      isProgrammaticScroll.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollVersion])
