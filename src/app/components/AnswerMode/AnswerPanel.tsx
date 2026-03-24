@@ -175,7 +175,9 @@ export const AnswerPanel = ({
             marginBottom='4'
             color={getThemedColor('neutral', 700)}
           >
-            {`Based on ${numberOfUsedKnowledgeProducts} selected Knowledge products:`}
+            {`Based on ${numberOfUsedKnowledgeProducts} Knowledge product${
+              numberOfUsedKnowledgeProducts === 1 ? '' : 's'
+            }:`}
           </Text>
         )}
 
