@@ -208,7 +208,10 @@ export const AnswerPanel = ({
                                       ...(supportingCitationsPage ===
                                       citationPage
                                         ? {
-                                            background: getThemedColor('primary', 500),
+                                            background: getThemedColor(
+                                              'primary',
+                                              500,
+                                            ),
                                             color: 'white',
                                           }
                                         : {}),
@@ -252,7 +255,10 @@ export const AnswerPanel = ({
                             lineHeight: 1,
                             ...(supportingCitationsPage === citationPage
                               ? {
-                                  backgroundColor: getThemedColor('primary', '500'),
+                                  backgroundColor: getThemedColor(
+                                    'primary',
+                                    500,
+                                  ),
                                   color: 'white',
                                 }
                               : {}),
