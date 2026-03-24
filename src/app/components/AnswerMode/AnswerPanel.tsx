@@ -18,7 +18,7 @@ import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { AiFillThunderbolt } from 'react-icons/ai'
 import { HiCurrencyDollar } from 'react-icons/hi2'
 import { MdChat } from 'react-icons/md'
-import { IoIosCopy } from 'react-icons/io'
+import { IoIosCopy, IoMdCheckmark } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
@@ -41,6 +41,7 @@ export const AnswerPanel = ({
   coverageRating,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const numberOfUsedKnowledgeProducts = supportingDocs
     ? new Set(supportingDocs.map((doc) => doc.doc_id)).size
@@ -358,12 +359,13 @@ export const AnswerPanel = ({
                 </Tooltip>
               </>
             )}
-            <Tooltip content='Copy answer'>
+            <Tooltip content={copied ? 'Copied' : 'Copy answer'}>
               <Button
                 as='div'
                 variant='borderless'
                 size='small'
-                leftIcon={<IoIosCopy />}
+                leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
+                aria-label={copied ? 'Answer copied' : 'Copy answer'}
                 onClick={() => {
                   let text = ''
                   if (answer.paragraphs) {
@@ -374,8 +376,10 @@ export const AnswerPanel = ({
                     text = answer.sentences.join(' ')
                   }
                   navigator.clipboard.writeText(text)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1500)
                 }}
-              ></Button>
+              />
             </Tooltip>
             <Tooltip content='Mark as good result'>
               <Button

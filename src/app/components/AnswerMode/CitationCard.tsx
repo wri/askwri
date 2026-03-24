@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
 import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
 import { FaQuoteRight } from 'react-icons/fa6'
-import { IoIosCopy, IoMdOpen } from 'react-icons/io'
+import { IoIosCopy, IoMdCheckmark, IoMdOpen } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { chicagoFull, firstSentence } from '../../utils/utils'
 import { CitationCardProps } from './types'
@@ -21,6 +21,7 @@ export const CitationCard = ({
 }: CitationCardProps) => {
   const [expandedSnippet, setExpandedSnippet] = useState(false)
   const [expandedWhy, setExpandedWhy] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const passageId = `${doc.doc_id}:${kp.passage_id}`
   const whyData = passageWhy[passageId]
@@ -75,14 +76,16 @@ export const CitationCard = ({
         <Button
           variant='secondary'
           size='small'
-          leftIcon={<IoIosCopy />}
+          leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
           onClick={() => {
             navigator.clipboard.writeText(
               `${kp.snippet.trim()}\n\n${chicagoFull(doc)}`,
             )
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
           }}
         >
-          Copy passage
+          {copied ? 'Copied' : 'Copy passage'}
         </Button>
       </div>
       {/* Snippet preview */}
