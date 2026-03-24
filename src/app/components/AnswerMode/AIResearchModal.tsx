@@ -17,8 +17,13 @@ import {
 import { AISearchForm } from './AISearchForm'
 import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
-import { AnswerResult, Assessment, Ops, WhyMeta } from './types'
-import { RowData } from '../results/types'
+import {
+  AIResearchModalProps,
+  AnswerResult,
+  Assessment,
+  Ops,
+  WhyMeta,
+} from './types'
 import {
   buildAlignmentSummary,
   calculateEmbeddingCost,
@@ -29,12 +34,7 @@ export const AIResearchModal = ({
   userSelectedDocs,
   open,
   onClose,
-}: {
-  consultedDocs?: RowData[]
-  userSelectedDocs: boolean
-  open: boolean
-  onClose?: () => void
-}) => {
+}: AIResearchModalProps) => {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)

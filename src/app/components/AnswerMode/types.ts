@@ -51,6 +51,13 @@ export interface AISearchFormProps {
   onExampleClick: (example: string) => void
 }
 
+export interface AIResearchModalProps {
+  consultedDocs?: RowData[]
+  userSelectedDocs?: boolean
+  open: boolean
+  onClose?: () => void
+}
+
 export type CitationTarget = {
   score: number
   page?: number
