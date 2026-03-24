@@ -365,6 +365,7 @@ export const AnswerPanel = ({
                 variant='borderless'
                 size='small'
                 leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
+                aria-label={copied ? 'Answer copied' : 'Copy answer'}
                 aria-label={copied ? 'Copied' : 'Copy answer'}
                 onClick={() => {
                   let text = ''
