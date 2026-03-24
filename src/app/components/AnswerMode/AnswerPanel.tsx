@@ -251,7 +251,10 @@ export const AnswerPanel = ({
                             height: 'auto',
                             lineHeight: 1,
                             ...(supportingCitationsPage === citationPage
-                              ? { background: '#1a73e8', color: 'white' }
+                              ? {
+                                  backgroundColor: getThemedColor('primary', '500'),
+                                  color: 'white',
+                                }
                               : {}),
                           }}
                           title={`Citation ${i + 1}.${j + 1}`}
