@@ -44,10 +44,18 @@ export interface AISearchFormProps {
   loading: boolean
   suggestions: string[]
   numberOfCiteDocs?: number
+  userSelectedDocs?: boolean
   onQueryChange: (query: string) => void
   onSubmit: () => void
   onShuffleSuggestions: () => void
   onExampleClick: (example: string) => void
+}
+
+export interface AIResearchModalProps {
+  consultedDocs?: RowData[]
+  userSelectedDocs?: boolean
+  open: boolean
+  onClose?: () => void
 }
 
 export type CitationTarget = {

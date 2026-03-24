@@ -22,8 +22,6 @@ import {
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
-const SUMMARY_MAX_LENGTH = 240
-
 export const SelectableResultRow = ({
   query,
   rowData,
@@ -141,22 +139,23 @@ export const SelectableResultRow = ({
         {docSummaryLoading?.[rowData.id.toString()] ? (
           <span>Loading...</span>
         ) : (
-          <div>
-            {rowData.short_summary &&
-            rowData.short_summary.length > SUMMARY_MAX_LENGTH
-              ? `${rowData.short_summary.slice(0, SUMMARY_MAX_LENGTH)}...`
-              : rowData.short_summary}
-          </div>
+          <div>{rowData.short_summary}</div>
         )}
       </TableCell>
       <TableCell width={120}>
         <div style={{ width: 'fit-content' }}>
-          <Tag label={rowData.relevance} variant={
-            rowData.relevance === 'Strong' ? 'success'
-              : rowData.relevance === 'Partial' ? 'warning'
-                : rowData.relevance === 'Weak' ? 'info-grey'
-                  : 'success'
-          } />
+          <Tag
+            label={rowData.relevance}
+            variant={
+              rowData.relevance === 'Strong'
+                ? 'success'
+                : rowData.relevance === 'Partial'
+                  ? 'warning'
+                  : rowData.relevance === 'Weak'
+                    ? 'info-grey'
+                    : 'success'
+            }
+          />
         </div>
       </TableCell>
       <TableCell>
