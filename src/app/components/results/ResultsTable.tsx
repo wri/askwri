@@ -249,6 +249,7 @@ const ResultsTable = ({
             ? selectedRows.slice(0, MAXIMUM_CONSULTED_DOCS)
             : data.slice(0, MAXIMUM_CONSULTED_DOCS)
         }
+        userSelectedDocs={!!selectedRows.length}
         open={aiModalOpen}
         onClose={() => setAiModalOpen(false)}
       />

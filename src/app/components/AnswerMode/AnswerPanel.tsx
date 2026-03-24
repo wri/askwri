@@ -42,6 +42,9 @@ export const AnswerPanel = ({
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
 
+  const numberOfUsedKnowledgeProducts = supportingDocs
+    ? new Set(supportingDocs.map((doc) => doc.doc_id)).size
+    : 0
   // 0 = no feedbackState, 1 = positive, -1 = negative
   const [feedbackState, setFeedbackState] = useState<FeedbackType>(
     FeedbackType.None,
@@ -165,6 +168,15 @@ export const AnswerPanel = ({
               caption={answer.warningMessage}
             />
           </Box>
+        )}
+        {numberOfUsedKnowledgeProducts > 0 && (
+          <Text
+            textStyle='sm'
+            marginBottom='4'
+            color={getThemedColor('neutral', 700)}
+          >
+            {`Based on ${numberOfUsedKnowledgeProducts} selected Knowledge products:`}
+          </Text>
         )}
 
         <Box

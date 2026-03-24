@@ -16,6 +16,7 @@ export const AISearchForm = ({
   loading,
   suggestions,
   numberOfCiteDocs,
+  userSelectedDocs,
   onQueryChange,
   onSubmit,
   onShuffleSuggestions,
@@ -45,8 +46,8 @@ export const AISearchForm = ({
         {numberOfCiteDocs ? (
           <>
             Discover insights by asking about the
-            <strong>{` ${numberOfCiteDocs} publications `}</strong>returned in
-            your search.
+            <strong>{` ${numberOfCiteDocs} ${userSelectedDocs ? '' : 'most relevant'} publication${numberOfCiteDocs > 1 ? 's' : ''} `}</strong>
+            returned in your search.
           </>
         ) : (
           'Discover insights by asking about WRI Knowledge Products.'

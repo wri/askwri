@@ -26,10 +26,12 @@ import {
 
 export const AIResearchModal = ({
   consultedDocs,
+  userSelectedDocs,
   open,
   onClose,
 }: {
   consultedDocs?: RowData[]
+  userSelectedDocs: boolean
   open: boolean
   onClose?: () => void
 }) => {
@@ -410,6 +412,7 @@ export const AIResearchModal = ({
         loading={loading}
         suggestions={suggestions}
         numberOfCiteDocs={consultedDocs?.length}
+        userSelectedDocs={userSelectedDocs}
         onQueryChange={setQuery}
         onSubmit={handleSubmit}
         onShuffleSuggestions={handleShuffleSuggestions}
