@@ -11,7 +11,7 @@ import {
   getThemedColor,
   Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
-import { IoIosCopy } from 'react-icons/io'
+import { IoIosCopy, IoMdCheckmark } from 'react-icons/io'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { chicagoFull } from '../../utils/utils'
 import {
@@ -34,6 +34,7 @@ export const SelectableResultRow = ({
   onTitleClick,
 }: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // 0 = no feedbackState, 1 = positive, -1 = negative
   const [feedbackState, setFeedbackState] = useState<FeedbackType>(
@@ -180,11 +181,13 @@ export const SelectableResultRow = ({
             <Button
               as='div'
               variant='borderless'
-              leftIcon={<IoIosCopy />}
+              leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
               aria-label='Copy citation to clipboard'
               onClick={() => {
                 const { fullDoc } = rowData
                 navigator.clipboard.writeText(chicagoFull(fullDoc, rowData))
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1500)
               }}
             />
           </Tooltip>
