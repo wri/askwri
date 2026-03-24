@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { DocMeta } from '@/lib/llamacloud'
+import { DocMeta, KP } from '@/lib/llamacloud'
 import { RowData } from '../results/types'
 
 export type Assessment = {
@@ -35,6 +35,7 @@ export interface AnswerPanelProps {
   alignment?: Assessment | null
   ops: Ops | null
   setSupportingCitationsPage?: (page: number) => void
+  supportingCitationsPage?: number
   coverageRating?: string
 }
 
@@ -65,6 +66,7 @@ export interface SupportingCitationsProps {
   setFirstDocHowRelevant: (why: string) => void
   page?: number
   setPage?: (p: number) => void
+  scrollVersion?: number
   sourceRelevance?: Record<string, string> // doc_id → 'strong' | 'partial' | 'weak'
   coverageRating?: string
   coverageExplanation?: string
@@ -78,4 +80,15 @@ export type Usage = {
   total_tokens: number
   prompt_tokens: number
   completion_tokens: number
+}
+
+export interface CitationCardProps {
+  doc: DocMeta
+  kp: KP
+  idx: number
+  itemRef: (el: HTMLElement | null) => void
+  passageWhy: Record<string, WhyMeta>
+  passageWhyLoading: Record<string, boolean>
+  docSummary: Record<string, string>
+  docSummaryLoading: Record<string, boolean>
 }
