@@ -35,6 +35,7 @@ export interface AnswerPanelProps {
   alignment?: Assessment | null
   ops: Ops | null
   setSupportingCitationsPage?: (page: number) => void
+  supportingCitationsPage?: number
   coverageRating?: string
 }
 
@@ -65,6 +66,7 @@ export interface SupportingCitationsProps {
   setFirstDocHowRelevant: (why: string) => void
   page?: number
   setPage?: (p: number) => void
+  scrollVersion?: number
   sourceRelevance?: Record<string, string> // doc_id → 'strong' | 'partial' | 'weak'
   coverageRating?: string
   coverageExplanation?: string

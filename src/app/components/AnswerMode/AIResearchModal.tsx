@@ -39,8 +39,15 @@ export const AIResearchModal = ({
   const [firstDocHowRelevant, setFirstDocHowRelevant] = useState('')
   // State for SupportingCitations page
   const [supportingCitationsPage, setSupportingCitationsPage] = useState(1)
+  const [scrollVersion, setScrollVersion] = useState(0)
+  const handleCitationPageClick = (page: number) => {
+    setSupportingCitationsPage(page)
+    setScrollVersion((v) => v + 1)
+  }
   const [passageWhy, setPassageWhy] = useState<Record<string, WhyMeta>>({})
-  const [passageWhyLoading, setPassageWhyLoading] = useState<Record<string, boolean>>({})
+  const [passageWhyLoading, setPassageWhyLoading] = useState<
+    Record<string, boolean>
+  >({})
   const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
@@ -360,7 +367,8 @@ export const AIResearchModal = ({
             alignLoading={alignLoading}
             alignment={alignment}
             ops={ops}
-            setSupportingCitationsPage={setSupportingCitationsPage}
+            setSupportingCitationsPage={handleCitationPageClick}
+            supportingCitationsPage={supportingCitationsPage}
             coverageRating={coverageRating}
           />
           <Box
@@ -382,6 +390,7 @@ export const AIResearchModal = ({
               supportingDocs={supportingDocs}
               page={supportingCitationsPage}
               setPage={setSupportingCitationsPage}
+              scrollVersion={scrollVersion}
               sourceRelevance={sourceRelevance}
               coverageRating={coverageRating}
               coverageExplanation={coverageExplanation}

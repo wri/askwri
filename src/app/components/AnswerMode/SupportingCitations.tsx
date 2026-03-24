@@ -2,26 +2,24 @@
 
 /* eslint-disable no-restricted-syntax */
 
-import { useState, useEffect, useMemo } from 'react'
-import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { Box, Heading } from '@chakra-ui/react'
 import {
   getThemedColor,
-  Button,
-  Tag,
   InlineMessage,
 } from '@worldresources/wri-design-systems'
 import { DocMeta, KP } from '@/lib/llamacloud'
-import { FaChevronRight, FaChevronLeft, FaQuoteRight } from 'react-icons/fa6'
-import { IoIosCopy, IoMdOpen } from 'react-icons/io'
-import { AiIcon } from '../icons/AiIcon'
-import { firstSentence, chicagoFull } from '../../utils/utils'
+import { firstSentence } from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
+import { CitationCard } from './CitationCard'
 
 export const SupportingCitations = ({
   supportingDocs,
   setFirstDocHowRelevant,
   page: controlledPage,
   setPage: setControlledPage,
+  scrollVersion,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   sourceRelevance,
   coverageRating,
   coverageExplanation,
@@ -30,10 +28,6 @@ export const SupportingCitations = ({
   passageWhyLoading: externalPassageWhyLoading,
   setPassageWhyLoading: setExternalPassageWhyLoading,
 }: SupportingCitationsProps) => {
-  const [internalPage, setInternalPage] = useState(1)
-  const page = controlledPage ?? internalPage
-  const setPage = setControlledPage ?? setInternalPage
-  const [pageSize] = useState(1)
   const [internalPassageWhy, setInternalPassageWhy] = useState<
     Record<string, WhyMeta>
   >({})
@@ -52,10 +46,6 @@ export const SupportingCitations = ({
     Record<string, boolean>
   >({})
 
-  const [expandedSnippets, setExpandedSnippets] = useState<
-    Record<string, boolean>
-  >({})
-
   // Flatten all passages and sort by relevance
   const allItems = useMemo(() => {
     const arr: { doc: DocMeta; kp: KP }[] = []
@@ -69,9 +59,47 @@ export const SupportingCitations = ({
     return arr.sort((a, b) => b.kp.kp_relevance - a.kp.kp_relevance)
   }, [supportingDocs])
 
-  // Paginate items
-  const totalPages = Math.max(1, Math.ceil(allItems.length / pageSize))
-  const paginatedItems = allItems.slice((page - 1) * pageSize, page * pageSize)
+  const paginatedItems = allItems
+
+  const itemRefs = useRef<Record<number, HTMLElement | null>>({})
+  const scrollContainerRef = useRef<HTMLElement | null>(null)
+  const isProgrammaticScroll = useRef(false)
+
+  useEffect(() => {
+    if (!controlledPage) return
+    const el = itemRefs.current[controlledPage - 1]
+    if (el) {
+      isProgrammaticScroll.current = true
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setTimeout(() => {
+        isProgrammaticScroll.current = false
+      }, 800)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollVersion])
+
+  useEffect(() => {
+    if (!setControlledPage) return undefined
+    const container = scrollContainerRef.current
+    if (!container) return undefined
+    const handleScroll = () => {
+      if (isProgrammaticScroll.current) return
+      const containerTop = container.getBoundingClientRect().top
+      let closestIdx = 0
+      let closestDist = Infinity
+      Object.entries(itemRefs.current).forEach(([idxStr, el]) => {
+        if (!el) return
+        const dist = Math.abs(el.getBoundingClientRect().top - containerTop)
+        if (dist < closestDist) {
+          closestDist = dist
+          closestIdx = Number(idxStr)
+        }
+      })
+      setControlledPage(closestIdx + 1)
+    }
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [allItems, setControlledPage])
 
   // When passageWhy updates, call setFirstDocHowRelevant with first doc why
   useEffect(() => {
@@ -211,99 +239,22 @@ export const SupportingCitations = ({
         )}
       <div
         style={{
-          display: 'flex',
-          gap: '8px',
-          alignItems: 'center',
-          justifyContent: 'space-between',
           padding: '0 8px',
         }}
       >
-        <div>
-          <Heading
-            size='md'
-            color={getThemedColor('neutral', 900)}
-            flexShrink={0}
-          >
-            Passage
-          </Heading>
-
-          {/* Relevance tier from synthesis LLM */}
-          {paginatedItems[0] &&
-            (() => {
-              const tier = sourceRelevance?.[paginatedItems[0].doc.doc_id]
-              if (tier) {
-                return (
-                  <Box
-                    display='flex'
-                    alignItems='center'
-                    gap='2'
-                    marginBottom='4'
-                  >
-                    <Tag
-                      label={
-                        tier === 'strong'
-                          ? 'Strong'
-                          : tier === 'partial'
-                            ? 'Partial'
-                            : 'Weak'
-                      }
-                      variant={
-                        (tier === 'strong'
-                          ? 'success'
-                          : tier === 'partial'
-                            ? 'warning'
-                            : 'info-grey') as any
-                      }
-                    />
-                  </Box>
-                )
-              }
-              // Fallback while synthesis is loading
-              return (
-                <Box
-                  display='flex'
-                  alignItems='center'
-                  gap='2'
-                  marginBottom='4'
-                >
-                  <Text
-                    fontSize='xs'
-                    fontWeight='medium'
-                    color={getThemedColor('neutral', 500)}
-                  >
-                    Evaluating relevance...
-                  </Text>
-                </Box>
-              )
-            })()}
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant='secondary' size='small' leftIcon={<IoMdOpen />}>
-            <a
-              href={`api/pdf/${paginatedItems[0].doc.doc_id}.pdf#page=${paginatedItems[0].kp.page || 1}`}
-              target='_blank'
-              rel='noopener noreferrer'
-            >
-              Open document
-            </a>
-          </Button>
-          <Button
-            variant='secondary'
-            size='small'
-            leftIcon={<IoIosCopy />}
-            onClick={() => {
-              const { doc, kp } = paginatedItems[0] || {}
-              navigator.clipboard.writeText(
-                `${kp.snippet.trim()}\n\n${chicagoFull(doc)}`,
-              )
-            }}
-          >
-            Copy passage
-          </Button>
-        </div>
+        <Heading
+          size='md'
+          color={getThemedColor('neutral', 900)}
+          flexShrink={0}
+        >
+          Passages
+        </Heading>
       </div>
       {/* Scrollable content area */}
       <Box
+        ref={(el: HTMLElement | null) => {
+          scrollContainerRef.current = el
+        }}
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -313,236 +264,23 @@ export const SupportingCitations = ({
       >
         {/* Document cards */}
         <Box display='flex' flexDirection='column' gap='3'>
-          {paginatedItems.map(({ doc, kp }, idx) => {
-            const docTitle =
-              doc.title || `Document ${doc.doc_id?.slice(0, 8) || idx + 1}`
-            const authors = doc.authors?.join('; ') || 'Unknown author'
-            const year = doc.year || ''
-            const passageId = `${doc.doc_id}:${kp.passage_id}`
-            const whyData = passageWhy[passageId]
-            const summary = docSummary[doc.doc_id]
-
-            return (
-              <Box
-                key={`${doc.doc_id}-${kp.passage_id}`}
-                borderWidth='1px'
-                borderColor={getThemedColor('neutral', 200)}
-                backgroundColor='white'
-              >
-                {/* Why it answers */}
-                <Box
-                  backgroundColor={getThemedColor('neutral', 200)}
-                  padding='3'
-                >
-                  <Text fontSize='md' as='div' marginBottom={3}>
-                    <AiIcon /> How is this relevant?{' '}
-                  </Text>
-                  {passageWhyLoading[passageId] ? (
-                    <Spinner size='xs' marginLeft='2' />
-                  ) : (
-                    <Text
-                      as='span'
-                      fontSize='sm'
-                      color={getThemedColor('neutral', 700)}
-                    >
-                      {whyData?.why || '—'}
-                    </Text>
-                  )}
-                </Box>
-
-                {/* Snippet preview */}
-                <Box
-                  margin='3'
-                  paddingX='3'
-                  borderLeftWidth='5px'
-                  borderColor={getThemedColor('neutral', 200)}
-                  position='relative'
-                  minHeight={150}
-                >
-                  <Text
-                    fontSize='sm'
-                    style={
-                      expandedSnippets[passageId]
-                        ? {}
-                        : {
-                            display: '-webkit-box',
-                            WebkitLineClamp: 6,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            position: 'relative',
-                          }
-                    }
-                  >
-                    &rdquo;{kp.snippet}&rdquo;
-                  </Text>
-                  {!expandedSnippets[passageId] && kp.snippet.length > 120 && (
-                    <Box
-                      position='absolute'
-                      left={0}
-                      right={0}
-                      bottom={0}
-                      height={100}
-                      background='linear-gradient(to bottom, rgba(255,255,255,0) 0%, white 90%)'
-                      display='flex'
-                      alignItems='flex-end'
-                      justifyContent='center'
-                      pointerEvents='none'
-                      zIndex={1}
-                    >
-                      {/* Fade overlay */}
-                    </Box>
-                  )}
-                  {!expandedSnippets[passageId] && kp.snippet.length > 120 && (
-                    <Box
-                      position='absolute'
-                      left={0}
-                      right={0}
-                      bottom={0}
-                      display='flex'
-                      alignItems='flex-end'
-                      justifyContent='center'
-                      zIndex={2}
-                      pointerEvents='auto'
-                      minHeight={200}
-                      height={200}
-                    >
-                      <Button
-                        size='small'
-                        variant='borderless'
-                        style={{ margin: '8px 0' }}
-                        onClick={() =>
-                          setExpandedSnippets((prev) => ({
-                            ...prev,
-                            [passageId]: true,
-                          }))
-                        }
-                      >
-                        Show more
-                      </Button>
-                    </Box>
-                  )}
-                  {expandedSnippets[passageId] && kp.snippet.length > 120 && (
-                    <Box
-                      position='relative'
-                      left={0}
-                      right={0}
-                      bottom={0}
-                      display='flex'
-                      alignItems='flex-end'
-                      justifyContent='center'
-                      zIndex={2}
-                      pointerEvents='auto'
-                    >
-                      <Button
-                        size='small'
-                        variant='borderless'
-                        style={{ margin: '8px 0' }}
-                        onClick={() =>
-                          setExpandedSnippets((prev) => ({
-                            ...prev,
-                            [passageId]: false,
-                          }))
-                        }
-                      >
-                        Show less
-                      </Button>
-                    </Box>
-                  )}
-                </Box>
-
-                <div style={{ width: '100px', margin: '0 12px' }}>
-                  <Tag
-                    icon={<FaQuoteRight />}
-                    label={`Page ${kp.page}`}
-                    variant='info-white'
-                  />
-                </div>
-                {/* Title */}
-                <Heading
-                  padding='3'
-                  size='sm'
-                  color={getThemedColor('neutral', 900)}
-                  style={{
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {docTitle}
-                </Heading>
-                {/* Doc summary */}
-                <Box marginTop='1' paddingX='3' paddingBottom='2'>
-                  <Text
-                    fontSize='xs'
-                    color={getThemedColor('neutral', 700)}
-                    fontWeight='medium'
-                    marginBottom='1'
-                  >
-                    Doc summary
-                  </Text>
-                  <Text fontSize='sm' color={getThemedColor('neutral', 700)}>
-                    {docSummaryLoading[doc.doc_id] ? (
-                      <Spinner size='xs' />
-                    ) : (
-                      summary || '—'
-                    )}
-                  </Text>
-                </Box>
-                {/* Citation info */}
-                <Text
-                  padding='3'
-                  fontSize='xs'
-                  color={getThemedColor('neutral', 600)}
-                  marginBottom='3'
-                >
-                  {authors}
-                  {year && ` (${year})`} • p.{kp.page || '?'}
-                </Text>
-              </Box>
-            )
-          })}
+          {paginatedItems.map(({ doc, kp }, idx) => (
+            <CitationCard
+              key={`${doc.doc_id}-${kp.passage_id}`}
+              doc={doc}
+              kp={kp}
+              idx={idx}
+              itemRef={(el) => {
+                itemRefs.current[idx] = el
+              }}
+              passageWhy={passageWhy}
+              passageWhyLoading={passageWhyLoading}
+              docSummary={docSummary}
+              docSummaryLoading={docSummaryLoading}
+            />
+          ))}
         </Box>
       </Box>
-
-      {/* Fixed pagination at bottom */}
-      {totalPages > 1 && (
-        <Box
-          display='flex'
-          justifyContent='space-between'
-          alignItems='center'
-          paddingTop='4'
-          width='55%'
-          padding='0 8px'
-          marginTop='4'
-          borderColor={getThemedColor('neutral', 200)}
-          flexShrink={0}
-        >
-          <Button
-            size='small'
-            variant='secondary'
-            onClick={() => setPage(Math.max(1, page - 1))}
-            disabled={page === 1}
-            colorScheme='gray'
-            leftIcon={<FaChevronLeft size={20} />}
-          >
-            Previous
-          </Button>
-          <Text fontSize='sm' color={getThemedColor('neutral', 600)}>
-            {page} of {totalPages}
-          </Text>
-          <Button
-            size='small'
-            variant='secondary'
-            rightIcon={<FaChevronRight size={20} />}
-            onClick={() => setPage(Math.min(totalPages, page + 1))}
-            disabled={page === totalPages}
-            colorScheme='gray'
-          >
-            Next
-          </Button>
-        </Box>
-      )}
     </Box>
   )
 }

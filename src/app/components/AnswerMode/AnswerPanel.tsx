@@ -37,6 +37,7 @@ export const AnswerPanel = ({
   alignment,
   ops,
   setSupportingCitationsPage,
+  supportingCitationsPage,
   coverageRating,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
@@ -204,6 +205,13 @@ export const AnswerPanel = ({
                                       minWidth: 0,
                                       height: 'auto',
                                       lineHeight: 1,
+                                      ...(supportingCitationsPage ===
+                                      citationPage
+                                        ? {
+                                            background: '#1a73e8',
+                                            color: 'white',
+                                          }
+                                        : {}),
                                     }}
                                     title={`Citation ${globalSentIdx + 1}.${j + 1}`}
                                     onClick={() =>
@@ -242,6 +250,9 @@ export const AnswerPanel = ({
                             minWidth: 0,
                             height: 'auto',
                             lineHeight: 1,
+                            ...(supportingCitationsPage === citationPage
+                              ? { background: '#1a73e8', color: 'white' }
+                              : {}),
                           }}
                           title={`Citation ${i + 1}.${j + 1}`}
                           onClick={() =>
