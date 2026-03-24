@@ -177,12 +177,12 @@ export const SelectableResultRow = ({
             transition: 'opacity 0.2s ease-in-out',
           }}
         >
-          <Tooltip content='Copy citation to clipboard'>
+          <Tooltip content={copied ? 'Copied' : 'Copy citation to clipboard'}>
             <Button
               as='div'
               variant='borderless'
               leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
-              aria-label='Copy citation to clipboard'
+              aria-label={copied ? 'Copied' : 'Copy citation to clipboard'}
               onClick={() => {
                 const { fullDoc } = rowData
                 navigator.clipboard.writeText(chicagoFull(fullDoc, rowData))

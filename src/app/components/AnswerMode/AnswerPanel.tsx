@@ -359,12 +359,13 @@ export const AnswerPanel = ({
                 </Tooltip>
               </>
             )}
-            <Tooltip content='Copy answer'>
+            <Tooltip content={copied ? 'Copied' : 'Copy answer'}>
               <Button
                 as='div'
                 variant='borderless'
                 size='small'
                 leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
+                aria-label={copied ? 'Copied' : 'Copy answer'}
                 onClick={() => {
                   let text = ''
                   if (answer.paragraphs) {
