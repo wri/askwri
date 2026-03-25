@@ -129,7 +129,7 @@ export const AIResearchModal = ({
       })
       const data = await response.json()
       const { docs, usage, debug } = data
-
+      console.log({docs})
       const embeddingCost = calculateEmbeddingCost(
         query,
         docs,
@@ -356,6 +356,26 @@ export const AIResearchModal = ({
     }
 
     if (answer) {
+      const citationLabels: string[] = []
+      let globalCitIdx = 0
+      if (answer.paragraphs) {
+        answer.paragraphs.forEach((paragraph, pIdx) => {
+          let sentenceOffset = 0
+          for (let p = 0; p < pIdx; p++) sentenceOffset += answer.paragraphs![p].length
+          paragraph.forEach((_sent, sIdx) => {
+            const globalSentIdx = sentenceOffset + sIdx
+            answer.inline?.[globalSentIdx]?.forEach((_c: any, j: number) => {
+              citationLabels[globalCitIdx++] = `${globalSentIdx + 1}.${j + 1}`
+            })
+          })
+        })
+      } else {
+        answer.sentences.forEach((_sent, i) => {
+          answer.inline?.[i]?.forEach((_c: any, j: number) => {
+            citationLabels[globalCitIdx++] = `${i + 1}.${j + 1}`
+          })
+        })
+      }
       return (
         <Box style={{ display: 'flex' }}>
           <AnswerPanel
@@ -377,9 +397,6 @@ export const AIResearchModal = ({
             style={{
               flex: 1,
               backgroundColor: 'white',
-              borderRadius: '8px',
-              border: '1px solid',
-              borderColor: getThemedColor('neutral', 200),
               minWidth: 0,
               maxHeight: '600px',
               display: 'flex',
@@ -396,6 +413,8 @@ export const AIResearchModal = ({
               sourceRelevance={sourceRelevance}
               coverageRating={coverageRating}
               coverageExplanation={coverageExplanation}
+              directlyCitedCount={answer.inline?.reduce((sum, arr) => sum + arr.length, 0) ?? 0}
+              citationLabels={citationLabels}
               passageWhy={passageWhy}
               setPassageWhy={setPassageWhy}
               passageWhyLoading={passageWhyLoading}
