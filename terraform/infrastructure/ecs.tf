@@ -283,13 +283,14 @@ resource "aws_ecs_task_definition" "app" {
 # =============================================================================
 
 resource "aws_ecs_service" "app" {
-  name                   = "${var.project_name}-${var.environment}-service"
-  cluster                = aws_ecs_cluster.main.id
-  task_definition        = aws_ecs_task_definition.app.arn
-  desired_count          = var.desired_count
-  launch_type            = "FARGATE"
-  enable_execute_command = true
-  propagate_tags         = "SERVICE"
+  name                    = "${var.project_name}-${var.environment}-service"
+  cluster                 = aws_ecs_cluster.main.id
+  task_definition         = aws_ecs_task_definition.app.arn
+  desired_count           = var.desired_count
+  launch_type             = "FARGATE"
+  enable_execute_command  = true
+  enable_ecs_managed_tags = true
+  propagate_tags          = "SERVICE"
 
   network_configuration {
     subnets          = local.private_subnet_ids
@@ -490,13 +491,14 @@ resource "aws_ecs_task_definition" "search_service" {
 # =============================================================================
 
 resource "aws_ecs_service" "search_service" {
-  name                   = "${var.project_name}-${var.environment}-search-service"
-  cluster                = aws_ecs_cluster.main.id
-  task_definition        = aws_ecs_task_definition.search_service.arn
-  desired_count          = var.search_service_desired_count
-  launch_type            = "FARGATE"
-  enable_execute_command = true
-  propagate_tags         = "SERVICE"
+  name                    = "${var.project_name}-${var.environment}-search-service"
+  cluster                 = aws_ecs_cluster.main.id
+  task_definition         = aws_ecs_task_definition.search_service.arn
+  desired_count           = var.search_service_desired_count
+  launch_type             = "FARGATE"
+  enable_execute_command  = true
+  enable_ecs_managed_tags = true
+  propagate_tags          = "SERVICE"
 
   network_configuration {
     subnets          = local.private_subnet_ids
