@@ -20,11 +20,10 @@ graph TB
                     NextJS[Next.js Service<br/>cite-mode · answer-mode]
                     Search[Search Service<br/>BM25 + vector retrieval]
                 end
-                NextJS <-->|Service Discovery| Search
             end
 
             ALB --> NextJS
-            ALB --> Search
+            NextJS -->|Service Discovery| Search
             NextJS --> NAT
             Search --> NAT
         end
