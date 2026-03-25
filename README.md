@@ -1,77 +1,113 @@
-# ECS Fargate Deployment
+# AskWRI
 
-A production-ready Next.js application as well as a python application with CI/CD pipeline for deploying to AWS ECS Fargate using Terraform and GitHub Actions.
+A production-ready Next.js + Python application deployed to AWS ECS Fargate with Terraform and GitHub Actions. The Next.js frontend provides cite-mode and answer-mode search interfaces, while the Python search service handles BM25 + vector retrieval with query expansion.
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         AWS Cloud                               │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                          VPC                              │  │
-│  │  ┌─────────────────────┐    ┌──────────────────────────┐  │  │
-│  │  │   Public Subnets    │    │    Private Subnets       │  │  │
-│  │  │  ┌───────────────┐  │    │  ┌──────────────────┐    │  │  │
-│  │  │  │      ALB      │  │───▶│  │   ECS Fargate    │    │  │  │
-│  │  │  └───────────────┘  │    │  │     Tasks        │    │  │  │
-│  │  │         │           │    │  │  NextJS & Python │    │  │  │
-│  │  │         │           │    │  └──────────────────┘    │  │  │
-│  │  │  ┌───────────────┐  │    │          │               │  │  │
-│  │  │  │  NAT Gateway  │  │◀───│──────────┘              │  │  │
-│  │  │  └───────────────┘  │    │                          │  │  │
-│  │  └─────────────────────┘    └──────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌────────────┐  ┌────────────┐  ┌─────────────┐                │
-│  │    ECR     │  │ CloudWatch │  │     S3      │                │
-│  │ Repository │  │    Logs    │  │  (TF State, │                │
-│  │            │  │            │  │ askwri-data)│                │
-│  └────────────┘  └────────────┘  └─────────────┘                │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    User([User]) --> ALB
+
+    subgraph AWS Cloud
+        subgraph VPC
+            subgraph Public Subnets
+                ALB[Application Load Balancer]
+                NAT[NAT Gateway]
+            end
+
+            subgraph Private Subnets
+                subgraph ECSCluster[ECS Fargate Cluster]
+                    NextJS[Next.js Service<br/>cite-mode · answer-mode]
+                    Search[Search Service<br/>BM25 + vector retrieval]
+                end
+                NextJS <-->|Service Discovery| Search
+            end
+
+            ALB --> NextJS
+            ALB --> Search
+            NextJS --> NAT
+            Search --> NAT
+        end
+
+        subgraph Supporting Services
+            ECR[ECR Repositories]
+            CW[CloudWatch Logs]
+            S3[(S3<br/>TF State · Documents · Eval)]
+            RDS[(RDS PostgreSQL<br/>Query Logs · Feedback)]
+        end
+
+        NextJS --> RDS
+        NextJS --> S3
+        Search --> S3
+        NextJS -.-> CW
+        Search -.-> CW
+        ECR -.-> NextJS
+        ECR -.-> Search
+    end
 ```
 
 ## 📁 Project Structure
 
 ```
 .
-├── .github/
-│   └── workflows/
-│       ├── deploy-qa.yml           # QA deployment workflow
-│       ├── deploy-production.yml   # Production deployment workflow
-│       ├── pr-check.yml            # Pull request validation
-│       └── destroy.yml             # Infrastructure teardown
-├── search-service/
-│   └── app/                        # Python app
-│       ├── README.md               # Detailed description and instructions
-│       └── main.py                 # Retrieval service (BM25 + vector)
+├── .github/workflows/
+│   ├── deploy-qa.yml               # QA deployment workflow
+│   ├── deploy-production.yml       # Production deployment workflow
+│   ├── pr-check.yml                # Pull request validation
+│   └── destroy.yml                 # Infrastructure teardown
+├── docs/plans/                     # Design & implementation docs
+├── evaluation/                     # Retrieval & synthesis eval framework
+│   ├── run-answer-retrieval-eval.ts
+│   ├── run-answer-synthesis-capture.ts
+│   ├── run-answer-synthesis-llm-eval.ts
+│   ├── run-cite-eval.ts
+│   ├── calibrate-answer-thresholds.ts
+│   ├── calibrate-cite-thresholds.ts
+│   ├── diagnostics/                # Eval diagnostic utilities
+│   └── lib/                        # Shared eval helpers
+├── search-service/                 # Python retrieval service
+│   └── app/
+│       ├── main.py                 # FastAPI entry (BM25 + vector)
+│       ├── cache_system.py         # S3-backed caching
+│       ├── config.py               # Service configuration
+│       ├── query_expansion.py      # Query expansion logic
+│       └── routers/                # API route handlers
 ├── src/
-│   └── app/                        # Next.js App Router
-│       ├── api/health/route.ts     # Health check endpoint
-│       ├── layout.tsx
-│       ├── page.tsx
-│       └── globals.css
+│   ├── app/                        # Next.js App Router
+│   │   ├── api/                    # API routes
+│   │   │   ├── answer/             # Answer-mode endpoints
+│   │   │   ├── alignment/          # Alignment endpoints
+│   │   │   ├── catalog/            # Catalog endpoints
+│   │   │   ├── cite-mode-*/        # Cite-mode feedback & query logs
+│   │   │   ├── answer-mode-*/      # Answer-mode feedback & query logs
+│   │   │   ├── eval/               # Evaluation endpoints
+│   │   │   ├── health/             # Health check
+│   │   │   ├── relates/            # Related questions
+│   │   │   └── why/                # Why endpoints
+│   │   ├── components/             # React components
+│   │   │   ├── AnswerMode/         # Answer-mode UI
+│   │   │   ├── results/            # Results display
+│   │   │   └── Footer/
+│   │   ├── results/                # Results page (cite-mode)
+│   │   └── utils/                  # Client utilities
+│   ├── config/                     # App configuration
+│   ├── db/                         # TypeORM database layer
+│   │   ├── entities/               # DB entities (feedback, query logs)
+│   │   ├── queries/                # Query helpers
+│   │   └── migrations/             # Database migrations
+│   └── lib/                        # Server-side libraries
+│       ├── llamacloud.ts           # LlamaCloud integration
+│       ├── llamaindex-client.ts    # LlamaIndex client
+│       ├── multi-query-strategy.ts # Multi-query retrieval
+│       ├── catalog-cache.ts        # Catalog caching
+│       └── eval-storage.ts         # Eval data S3 storage
 ├── terraform/
 │   ├── backend-setup/              # Terraform state backend
-│   │   ├── main.tf
-│   │   ├── setup.sh
-│   │   └── teardown.sh
-│   ├── infrastructure/             # Main infrastructure
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   ├── outputs.tf
-│   │   ├── vpc.tf
-│   │   ├── security_groups.tf
-│   │   ├── alb.tf
-│   │   ├── ecr.tf
-│   │   └── ecs.tf
-│   └── environments/               # Environment configs
-│       ├── qa.tfvars
-│       ├── qa.backend.hcl
-│       ├── production.tfvars
-│       └── production.backend.hcl
-├── Dockerfile
-├── package.json
-└── README.md
+│   ├── infrastructure/             # Main infrastructure (VPC, ECS, ALB, etc.)
+│   └── environments/               # Environment configs (qa, production)
+├── Dockerfile                      # Next.js container
+├── search-service/Dockerfile       # Search service container
+└── package.json
 ```
 
 ## 🚀 Getting Started
@@ -222,15 +258,18 @@ chmod +x teardown.sh
 
 ## 📊 Monitoring
 
-- **CloudWatch Logs**: `/ecs/askwri-app-{environment}`
+- **CloudWatch Logs (Next.js)**: `/ecs/askwri-app-{environment}`
+- **CloudWatch Logs (Search Service)**: `/ecs/askwri-app-{environment}-search-service`
 - **Container Insights**: Enabled on ECS cluster
-- **Health Check**: `GET /api/health`
+- **Health Check (Next.js)**: `GET /api/health`
+- **Service Discovery**: Internal DNS via `{service}.askwri-app-{environment}.local`
 
 ## 🔐 Security Features
 
 - VPC with public/private subnet isolation
 - NAT Gateways for private subnet internet access
 - Security groups limiting traffic
+- ECS managed tags propagated to ENIs and runtime resources
 - S3 bucket versioning and encryption for Terraform state
 - ECR image scanning on push
 - Non-root container user
@@ -290,4 +329,3 @@ desired_count    = 3
 ## 📄 License
 
 MIT
-# askwri
