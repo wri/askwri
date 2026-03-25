@@ -9,9 +9,10 @@ import {
   InlineMessage,
 } from '@worldresources/wri-design-systems'
 import { DocMeta, KP } from '@/lib/llamacloud'
-import { firstSentence } from '../../utils/utils'
-import { WhyMeta, SupportingCitationsProps } from './types'
+import { getCatalog } from '@/lib/catalog-cache'
 import { CitationCard } from './CitationCard'
+import { buildCatalogIndex } from '../../utils/utils'
+import { WhyMeta, SupportingCitationsProps } from './types'
 
 export const SupportingCitations = ({
   supportingDocs,
@@ -19,8 +20,6 @@ export const SupportingCitations = ({
   page: controlledPage,
   setPage: setControlledPage,
   scrollVersion,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  sourceRelevance,
   coverageRating,
   coverageExplanation,
   directlyCitedCount = 0,
@@ -42,11 +41,15 @@ export const SupportingCitations = ({
     externalPassageWhyLoading ?? internalPassageWhyLoading
   const setPassageWhyLoading =
     setExternalPassageWhyLoading ?? setInternalPassageWhyLoading
-  const [docSummary, setDocSummary] = useState<Record<string, string>>({})
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [docSummaryLoading, setDocSummaryLoading] = useState<
-    Record<string, boolean>
-  >({})
+
+  const [catalogIndex, setCatalogIndex] = useState<ReturnType<
+    typeof buildCatalogIndex
+  > | null>(null)
+  useEffect(() => {
+    getCatalog().then(({ catalog, index }) => {
+      setCatalogIndex(index)
+    })
+  }, [])
 
   // Flatten all passages and sort by relevance
   const allItems = useMemo(() => {
@@ -149,15 +152,6 @@ export const SupportingCitations = ({
       setPassageWhyLoading((prev) => ({ ...prev, [passageId]: true }))
     })
 
-    setDocSummary((prev) => {
-      const next = { ...prev }
-      paginatedItems.forEach(({ doc, kp }) => {
-        if (!next[doc.doc_id]) {
-          next[doc.doc_id] = firstSentence(kp.snippet)
-        }
-      })
-      return next
-    })
     // Fetch batch explanations
     fetch('/api/batch-why', {
       method: 'POST',
@@ -287,6 +281,7 @@ export const SupportingCitations = ({
                 doc={doc}
                 kp={kp}
                 idx={idx}
+                catalogIndex={catalogIndex}
                 isActive={controlledPage === idx + 1}
                 isDirectlyCited
                 citationLabel={citationLabels?.[idx]}
@@ -295,8 +290,6 @@ export const SupportingCitations = ({
                 }}
                 passageWhy={passageWhy}
                 passageWhyLoading={passageWhyLoading}
-                docSummary={docSummary}
-                docSummaryLoading={docSummaryLoading}
               />
             ))}
         </Box>
@@ -322,6 +315,7 @@ export const SupportingCitations = ({
                       doc={doc}
                       kp={kp}
                       idx={idx}
+                      catalogIndex={catalogIndex}
                       isActive={controlledPage === idx + 1}
                       isDirectlyCited={false}
                       itemRef={(el) => {
@@ -329,8 +323,6 @@ export const SupportingCitations = ({
                       }}
                       passageWhy={passageWhy}
                       passageWhyLoading={passageWhyLoading}
-                      docSummary={docSummary}
-                      docSummaryLoading={docSummaryLoading}
                     />
                   )
                 })}

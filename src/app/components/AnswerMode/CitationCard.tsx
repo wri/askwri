@@ -6,21 +6,20 @@ import { getThemedColor, Button } from '@worldresources/wri-design-systems'
 import { IoIosCopy, IoMdCheckmark, IoMdOpen } from 'react-icons/io'
 import { VscTriangleRight } from 'react-icons/vsc'
 import { AiIcon } from '../icons/AiIcon'
-import { chicagoFull } from '../../utils/utils'
+import { chicagoFull, matchCatalogRow } from '../../utils/utils'
 import { CitationCardProps } from './types'
 
 export const CitationCard = ({
   doc,
   kp,
   idx,
+  catalogIndex,
   isActive,
   isDirectlyCited,
   citationLabel,
   itemRef,
   passageWhy,
   passageWhyLoading,
-  docSummary,
-  docSummaryLoading,
 }: CitationCardProps) => {
   const [expandedSnippet, setExpandedSnippet] = useState(false)
   const [expandedWhy, setExpandedWhy] = useState(false)
@@ -29,10 +28,12 @@ export const CitationCard = ({
 
   const passageId = `${doc.doc_id}:${kp.passage_id}`
   const whyData = passageWhy[passageId]
-  const summary = docSummary[doc.doc_id]
   const docTitle = doc.title || `Document ${doc.doc_id?.slice(0, 8) || idx + 1}`
   const authors = doc.authors?.join('; ') || 'Unknown author'
   const year = doc.year || ''
+
+  const row = catalogIndex ? matchCatalogRow(doc, catalogIndex) : undefined
+  const summary = row?.shortSummary
 
   return (
     <Box
@@ -160,9 +161,7 @@ export const CitationCard = ({
         </Text>
         {expandedSummary && (
           <>
-            <Text fontSize='sm'>
-              {docSummaryLoading[doc.doc_id] ? <Spinner size='xs' /> : summary}
-            </Text>
+            <Text fontSize='sm'>{summary}</Text>
 
             {/* Citation info */}
             <Text

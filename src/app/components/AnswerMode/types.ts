@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { DocMeta, KP } from '@/lib/llamacloud'
+import { buildCatalogIndex } from '@/app/utils/utils'
 import { RowData } from '../results/types'
 
 export type Assessment = {
@@ -77,7 +78,6 @@ export interface SupportingCitationsProps {
   scrollVersion?: number
   directlyCitedCount?: number
   citationLabels?: string[]
-  sourceRelevance?: Record<string, string> // doc_id → 'strong' | 'partial' | 'weak'
   coverageRating?: string
   coverageExplanation?: string
   passageWhy: Record<string, WhyMeta>
@@ -96,12 +96,11 @@ export interface CitationCardProps {
   doc: DocMeta
   kp: KP
   idx: number
+  catalogIndex: ReturnType<typeof buildCatalogIndex> | null
   isActive: boolean
   isDirectlyCited: boolean
   citationLabel?: string
   itemRef: (el: HTMLElement | null) => void
   passageWhy: Record<string, WhyMeta>
   passageWhyLoading: Record<string, boolean>
-  docSummary: Record<string, string>
-  docSummaryLoading: Record<string, boolean>
 }
