@@ -289,6 +289,7 @@ resource "aws_ecs_service" "app" {
   desired_count          = var.desired_count
   launch_type            = "FARGATE"
   enable_execute_command = true
+  enable_ecs_managed_tags = true
   propagate_tags         = "SERVICE"
 
   network_configuration {
@@ -496,6 +497,7 @@ resource "aws_ecs_service" "search_service" {
   desired_count          = var.search_service_desired_count
   launch_type            = "FARGATE"
   enable_execute_command = true
+  enable_ecs_managed_tags = true
   propagate_tags         = "SERVICE"
 
   network_configuration {
