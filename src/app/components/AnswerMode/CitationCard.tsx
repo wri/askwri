@@ -48,7 +48,7 @@ export const CitationCard = ({
     >
       <Box display='flex'>
         <Text fontSize='xs' color='#0A4298'>
-          {citationLabel && ` Citation ${citationLabel} \u2022 `}
+          {citationLabel && `Citation ${citationLabel} \u2022 `}
           {`${kp.kp_relevance.toFixed(2)} relevance`}
         </Text>
       </Box>
