@@ -46,7 +46,7 @@ export const SupportingCitations = ({
     typeof buildCatalogIndex
   > | null>(null)
   useEffect(() => {
-    getCatalog().then(({ catalog, index }) => {
+    getCatalog().then(({ index }) => {
       setCatalogIndex(index)
     })
   }, [])
