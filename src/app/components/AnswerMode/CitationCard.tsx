@@ -88,7 +88,7 @@ export const CitationCard = ({
               flexShrink: 0,
             }}
           />
-          {`Excerpt (Page ${kp.page})`}
+          {`Excerpt (Page ${kp.page ?? 1})`}
         </Text>
 
         <Text
