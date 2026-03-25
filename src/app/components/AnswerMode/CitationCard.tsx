@@ -1,18 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { Box, Text, Heading, Spinner } from '@chakra-ui/react'
-import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
-import { FaQuoteRight } from 'react-icons/fa6'
+import { Box, Text, Spinner } from '@chakra-ui/react'
+import { getThemedColor, Button } from '@worldresources/wri-design-systems'
 import { IoIosCopy, IoMdCheckmark, IoMdOpen } from 'react-icons/io'
+import { VscTriangleRight } from 'react-icons/vsc'
 import { AiIcon } from '../icons/AiIcon'
-import { chicagoFull, firstSentence } from '../../utils/utils'
+import { chicagoFull } from '../../utils/utils'
 import { CitationCardProps } from './types'
 
 export const CitationCard = ({
   doc,
   kp,
   idx,
+  isActive,
+  isDirectlyCited,
+  citationLabel,
   itemRef,
   passageWhy,
   passageWhyLoading,
@@ -21,6 +24,7 @@ export const CitationCard = ({
 }: CitationCardProps) => {
   const [expandedSnippet, setExpandedSnippet] = useState(false)
   const [expandedWhy, setExpandedWhy] = useState(false)
+  const [expandedSummary, setExpandedSummary] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const passageId = `${doc.doc_id}:${kp.passage_id}`
@@ -34,36 +38,155 @@ export const CitationCard = ({
     <Box
       key={`${doc.doc_id}-${kp.passage_id}`}
       ref={itemRef}
-      borderWidth='1px'
-      borderColor={getThemedColor('neutral', 200)}
-      backgroundColor='white'
+      borderWidth={isDirectlyCited ? '2px' : '1px'}
+      borderColor={
+        isDirectlyCited && isActive ? '#0A4298' : getThemedColor('neutral', 300)
+      }
+      borderRadius='8px'
+      background='white'
+      padding='16px'
     >
-      {/* Why it answers */}
-      <Box backgroundColor={getThemedColor('neutral', 200)} padding='3'>
+      <Box display='flex'>
+        <Text fontSize='xs' color='#0A4298'>
+          {citationLabel && `Citation ${citationLabel} \u2022 `}
+          {`${kp.kp_relevance.toFixed(2)} relevance`}
+        </Text>
+      </Box>
+
+      {/* Title */}
+      <Text
+        fontSize='md'
+        style={{
+          margin: '8px 0px',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}
+      >
+        {docTitle}
+      </Text>
+
+      {/* Excerpt */}
+      <Box>
         <Text
-          fontSize='md'
+          onClick={() => setExpandedSnippet((prev) => !prev)}
           as='div'
-          onClick={() => setExpandedWhy((prev) => !prev)}
-          style={{ cursor: 'pointer' }}
+          style={{
+            padding: '4px 0px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
         >
-          <AiIcon /> How is this relevant?{' '}
+          <VscTriangleRight
+            style={{
+              color: getThemedColor('neutral', 700),
+              transition: 'transform 0.2s',
+              transform: expandedSnippet ? 'rotate(90deg)' : 'rotate(0deg)',
+              flexShrink: 0,
+            }}
+          />
+          {`Excerpt (Page ${kp.page ?? 1})`}
+        </Text>
+
+        <Text
+          fontSize='sm'
+          style={{
+            borderLeft: `4px solid ${getThemedColor('neutral', 300)}`,
+            paddingLeft: '8px',
+          }}
+        >
+          {expandedSnippet && <>&rdquo;{kp.snippet}&rdquo;</>}
+        </Text>
+      </Box>
+
+      {/* How is this relevant? */}
+      <Box>
+        <Text
+          onClick={() => setExpandedWhy((prev) => !prev)}
+          as='div'
+          style={{
+            padding: '8px 0px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <VscTriangleRight
+            style={{
+              color: getThemedColor('neutral', 700),
+              transition: 'transform 0.2s',
+              transform: expandedWhy ? 'rotate(90deg)' : 'rotate(0deg)',
+              flexShrink: 0,
+            }}
+          />
+          How is this relevant? <AiIcon />
         </Text>
         {expandedWhy &&
           (passageWhyLoading[passageId] ? (
             <Spinner size='xs' marginLeft='2' />
           ) : (
-            <Text
-              as='span'
-              fontSize='sm'
-              color={getThemedColor('neutral', 700)}
-            >
+            <Text as='span' fontSize='sm'>
               {whyData?.why || '—'}
             </Text>
           ))}
       </Box>
 
+      {/* Doc summary */}
+      <Box paddingBottom='2'>
+        <Text
+          onClick={() => setExpandedSummary((prev) => !prev)}
+          as='div'
+          style={{
+            padding: '8px 0px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <VscTriangleRight
+            style={{
+              color: getThemedColor('neutral', 700),
+              transition: 'transform 0.2s',
+              transform: expandedSummary ? 'rotate(90deg)' : 'rotate(0deg)',
+              flexShrink: 0,
+            }}
+          />
+          Document Summary
+        </Text>
+        {expandedSummary && (
+          <>
+            <Text fontSize='sm'>
+              {docSummaryLoading[doc.doc_id] ? <Spinner size='xs' /> : summary}
+            </Text>
+
+            {/* Citation info */}
+            <Text
+              fontSize='sm'
+              padding='8px 0px'
+              color={getThemedColor('neutral', 700)}
+            >
+              {authors}
+            </Text>
+
+            <Text
+              fontSize='sm'
+              color={getThemedColor('neutral', 700)}
+              paddingBottom='8px'
+              fontStyle='italic'
+            >
+              {`Washington, DC: WRI ${year ? `(${year})` : ''}`}
+            </Text>
+          </>
+        )}
+      </Box>
+
       {/* Actions */}
-      <div style={{ display: 'flex', gap: '8px', padding: '8px 12px' }}>
+      <div style={{ display: 'flex', gap: '8px', padding: '8px 0px' }}>
         <Button variant='secondary' size='small' leftIcon={<IoMdOpen />}>
           <a
             href={`api/pdf/${doc.doc_id}.pdf#page=${kp.page || 1}`}
@@ -88,148 +211,6 @@ export const CitationCard = ({
           {copied ? 'Copied' : 'Copy passage'}
         </Button>
       </div>
-      {/* Snippet preview */}
-      <Box
-        margin='3'
-        paddingX='3'
-        borderLeftWidth='5px'
-        borderColor={getThemedColor('neutral', 200)}
-        position='relative'
-        minHeight={150}
-      >
-        <Text
-          fontSize='sm'
-          style={
-            expandedSnippet
-              ? {}
-              : {
-                  display: '-webkit-box',
-                  WebkitLineClamp: 6,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  position: 'relative',
-                }
-          }
-        >
-          &rdquo;{kp.snippet}&rdquo;
-        </Text>
-        {!expandedSnippet && kp.snippet.length > 120 && (
-          <Box
-            position='absolute'
-            left={0}
-            right={0}
-            bottom={0}
-            height={100}
-            background='linear-gradient(to bottom, rgba(255,255,255,0) 0%, white 90%)'
-            display='flex'
-            alignItems='flex-end'
-            justifyContent='center'
-            pointerEvents='none'
-            zIndex={1}
-          >
-            {/* Fade overlay */}
-          </Box>
-        )}
-        {!expandedSnippet && kp.snippet.length > 120 && (
-          <Box
-            position='absolute'
-            left={0}
-            right={0}
-            bottom={0}
-            display='flex'
-            alignItems='flex-end'
-            justifyContent='center'
-            zIndex={2}
-            pointerEvents='auto'
-            minHeight={200}
-            height={200}
-          >
-            <Button
-              size='small'
-              variant='borderless'
-              style={{ margin: '8px 0' }}
-              onClick={() => setExpandedSnippet(true)}
-            >
-              Show more
-            </Button>
-          </Box>
-        )}
-        {expandedSnippet && kp.snippet.length > 120 && (
-          <Box
-            position='relative'
-            left={0}
-            right={0}
-            bottom={0}
-            display='flex'
-            alignItems='flex-end'
-            justifyContent='center'
-            zIndex={2}
-            pointerEvents='auto'
-          >
-            <Button
-              size='small'
-              variant='borderless'
-              style={{ margin: '8px 0' }}
-              onClick={() => setExpandedSnippet(false)}
-            >
-              Show less
-            </Button>
-          </Box>
-        )}
-      </Box>
-
-      <div style={{ width: '100px', margin: '0 12px' }}>
-        <Tag
-          icon={<FaQuoteRight />}
-          label={`Page ${kp.page}`}
-          variant='info-white'
-        />
-      </div>
-
-      {/* Title */}
-      <Heading
-        padding='3'
-        size='sm'
-        color={getThemedColor('neutral', 900)}
-        style={{
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-        }}
-      >
-        {docTitle}
-      </Heading>
-
-      {/* Doc summary */}
-      <Box marginTop='1' paddingX='3' paddingBottom='2'>
-        <Text
-          fontSize='xs'
-          color={getThemedColor('neutral', 700)}
-          fontWeight='medium'
-          marginBottom='1'
-        >
-          Doc summary
-        </Text>
-        <Text fontSize='sm' color={getThemedColor('neutral', 700)}>
-          {docSummaryLoading[doc.doc_id] ? (
-            <Spinner size='xs' />
-          ) : (
-            summary || firstSentence(kp.snippet) || '—'
-          )}
-        </Text>
-      </Box>
-
-      {/* Citation info */}
-      <Text
-        padding='3'
-        fontSize='xs'
-        color={getThemedColor('neutral', 600)}
-        marginBottom='3'
-      >
-        {authors}
-        {year && ` (${year})`} • p.{kp.page || '?'}
-      </Text>
     </Box>
   )
 }

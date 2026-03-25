@@ -3,7 +3,7 @@
 /* eslint-disable no-restricted-syntax */
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Box, Heading } from '@chakra-ui/react'
+import { Box, Heading, Text } from '@chakra-ui/react'
 import {
   getThemedColor,
   InlineMessage,
@@ -23,6 +23,8 @@ export const SupportingCitations = ({
   sourceRelevance,
   coverageRating,
   coverageExplanation,
+  directlyCitedCount = 0,
+  citationLabels,
   passageWhy: externalPassageWhy,
   setPassageWhy: setExternalPassageWhy,
   passageWhyLoading: externalPassageWhyLoading,
@@ -232,6 +234,9 @@ export const SupportingCitations = ({
         minHeight: 0,
         maxHeight: 570,
         height: 570,
+        backgroundColor: '#f2f6ff',
+        padding: '20px',
+        borderRadius: '16px',
       }}
     >
       {(coverageRating === 'poor' || coverageRating === 'limited') &&
@@ -248,19 +253,11 @@ export const SupportingCitations = ({
             />
           </Box>
         )}
-      <div
-        style={{
-          padding: '0 8px',
-        }}
-      >
-        <Heading
-          size='md'
-          color={getThemedColor('neutral', 900)}
-          flexShrink={0}
-        >
-          Passages
-        </Heading>
-      </div>
+
+      <Heading size='2xl' paddingBottom='8px' color='#123369' flexShrink={0}>
+        Sources
+      </Heading>
+
       {/* Scrollable content area */}
       <Box
         ref={(el: HTMLElement | null) => {
@@ -273,24 +270,73 @@ export const SupportingCitations = ({
           minHeight: 0,
         }}
       >
-        {/* Document cards */}
+        <Heading size='md' flexShrink={0}>
+          Directly cited{' '}
+          {directlyCitedCount > 0 ? `(${directlyCitedCount})` : ''}
+        </Heading>
+        <Text paddingBottom='16px' color={getThemedColor('neutral', 700)}>
+          Excerpts used directly to generate answer.
+        </Text>
+        {/* Directly cited cards */}
         <Box display='flex' flexDirection='column' gap='3'>
-          {paginatedItems.map(({ doc, kp }, idx) => (
-            <CitationCard
-              key={`${doc.doc_id}-${kp.passage_id}`}
-              doc={doc}
-              kp={kp}
-              idx={idx}
-              itemRef={(el) => {
-                itemRefs.current[idx] = el
-              }}
-              passageWhy={passageWhy}
-              passageWhyLoading={passageWhyLoading}
-              docSummary={docSummary}
-              docSummaryLoading={docSummaryLoading}
-            />
-          ))}
+          {paginatedItems
+            .slice(0, directlyCitedCount)
+            .map(({ doc, kp }, idx) => (
+              <CitationCard
+                key={`${doc.doc_id}-${kp.passage_id}`}
+                doc={doc}
+                kp={kp}
+                idx={idx}
+                isActive={controlledPage === idx + 1}
+                isDirectlyCited
+                citationLabel={citationLabels?.[idx]}
+                itemRef={(el) => {
+                  itemRefs.current[idx] = el
+                }}
+                passageWhy={passageWhy}
+                passageWhyLoading={passageWhyLoading}
+                docSummary={docSummary}
+                docSummaryLoading={docSummaryLoading}
+              />
+            ))}
         </Box>
+        {paginatedItems.length > directlyCitedCount && (
+          <>
+            <Heading size='md' flexShrink={0} marginTop='4'>
+              Additional reading{' '}
+              {paginatedItems.length - directlyCitedCount > 0
+                ? `(${paginatedItems.length - directlyCitedCount})`
+                : ''}
+            </Heading>
+            <Text paddingBottom='8px' color={getThemedColor('neutral', 700)}>
+              Other potentially relevant excerpts not used to generate answer.
+            </Text>
+            <Box display='flex' flexDirection='column' gap='3'>
+              {paginatedItems
+                .slice(directlyCitedCount)
+                .map(({ doc, kp }, i) => {
+                  const idx = directlyCitedCount + i
+                  return (
+                    <CitationCard
+                      key={`${doc.doc_id}-${kp.passage_id}`}
+                      doc={doc}
+                      kp={kp}
+                      idx={idx}
+                      isActive={controlledPage === idx + 1}
+                      isDirectlyCited={false}
+                      itemRef={(el) => {
+                        itemRefs.current[idx] = el
+                      }}
+                      passageWhy={passageWhy}
+                      passageWhyLoading={passageWhyLoading}
+                      docSummary={docSummary}
+                      docSummaryLoading={docSummaryLoading}
+                    />
+                  )
+                })}
+            </Box>
+          </>
+        )}
       </Box>
     </Box>
   )

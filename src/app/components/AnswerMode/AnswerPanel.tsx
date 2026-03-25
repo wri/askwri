@@ -107,14 +107,10 @@ export const AnswerPanel = ({
   return (
     <>
       <Box
-        className='gradient-background'
         style={{
           flex: 1,
           padding: '20px',
           backgroundColor: 'white',
-          borderRadius: '8px',
-          border: '1px solid',
-          borderColor: getThemedColor('neutral', 200),
           minWidth: 0,
         }}
       >
@@ -176,7 +172,7 @@ export const AnswerPanel = ({
             marginBottom='4'
             color={getThemedColor('neutral', 700)}
           >
-            {`Based on ${numberOfUsedKnowledgeProducts} Knowledge product${
+            {`Based on ${numberOfUsedKnowledgeProducts} Knowledge Product${
               numberOfUsedKnowledgeProducts === 1 ? '' : 's'
             }:`}
           </Text>
@@ -223,10 +219,7 @@ export const AnswerPanel = ({
                                       ...(supportingCitationsPage ===
                                       citationPage
                                         ? {
-                                            background: getThemedColor(
-                                              'primary',
-                                              500,
-                                            ),
+                                            background: '#0A4298',
                                             color: 'white',
                                           }
                                         : {}),
@@ -270,10 +263,7 @@ export const AnswerPanel = ({
                             lineHeight: 1,
                             ...(supportingCitationsPage === citationPage
                               ? {
-                                  backgroundColor: getThemedColor(
-                                    'primary',
-                                    500,
-                                  ),
+                                  background: '#0A4298',
                                   color: 'white',
                                 }
                               : {}),

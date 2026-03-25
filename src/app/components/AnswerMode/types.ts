@@ -75,6 +75,8 @@ export interface SupportingCitationsProps {
   page?: number
   setPage?: (p: number) => void
   scrollVersion?: number
+  directlyCitedCount?: number
+  citationLabels?: string[]
   sourceRelevance?: Record<string, string> // doc_id → 'strong' | 'partial' | 'weak'
   coverageRating?: string
   coverageExplanation?: string
@@ -94,6 +96,9 @@ export interface CitationCardProps {
   doc: DocMeta
   kp: KP
   idx: number
+  isActive: boolean
+  isDirectlyCited: boolean
+  citationLabel?: string
   itemRef: (el: HTMLElement | null) => void
   passageWhy: Record<string, WhyMeta>
   passageWhyLoading: Record<string, boolean>
