@@ -24,3 +24,18 @@ Table answer_mode_feedback {
   feedback varchar(8)
   timestamp timestamptz
 }
+
+Table cite_mode_query_logs {
+  id int [pk, increment]
+  query text [not null]
+  top_ten_results text [not null]
+  timestamp timestamptz [default: `now()`]
+}
+
+Table answer_mode_query_logs {
+  id int [pk, increment]
+  query text [not null]
+  answer text [not null]
+  top_ten_results text [not null]
+  timestamp timestamptz [default: `now()`]
+}

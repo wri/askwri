@@ -8,6 +8,7 @@ import { DocMeta } from '@/lib/llamacloud'
 import {
   getThemedColor,
   InlineMessage,
+  Modal,
 } from '@worldresources/wri-design-systems'
 import {
   ANSWER_MODE_SUGGESTION_POOL,
@@ -16,26 +17,39 @@ import {
 import { AISearchForm } from './AISearchForm'
 import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
-import { AnswerResult, Assessment, Ops } from './types'
-import { RowData } from '../results/types'
+import {
+  AIResearchModalProps,
+  AnswerResult,
+  Assessment,
+  Ops,
+  WhyMeta,
+} from './types'
 import {
   buildAlignmentSummary,
   calculateEmbeddingCost,
-} from '@/app/utils/utils'
+} from '../../utils/utils'
 
-const MAX_ANSWER_MODE_RESULTS = 20
-
-export const AIResearchModalContent = ({
+export const AIResearchModal = ({
   consultedDocs,
-}: {
-  consultedDocs?: RowData[]
-}) => {
+  userSelectedDocs,
+  open,
+  onClose,
+}: AIResearchModalProps) => {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)
   const [firstDocHowRelevant, setFirstDocHowRelevant] = useState('')
   // State for SupportingCitations page
   const [supportingCitationsPage, setSupportingCitationsPage] = useState(1)
+  const [scrollVersion, setScrollVersion] = useState(0)
+  const handleCitationPageClick = (page: number) => {
+    setSupportingCitationsPage(page)
+    setScrollVersion((v) => v + 1)
+  }
+  const [passageWhy, setPassageWhy] = useState<Record<string, WhyMeta>>({})
+  const [passageWhyLoading, setPassageWhyLoading] = useState<
+    Record<string, boolean>
+  >({})
   const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
@@ -43,6 +57,8 @@ export const AIResearchModalContent = ({
   const [alignLoading, setAlignLoading] = useState(false)
   const [alignment, setAlignment] = useState<Assessment | null>(null)
   const [ops, setOps] = useState<Ops | null>(null)
+  const [coverageRating, setCoverageRating] = useState<string>('')
+  const [coverageExplanation, setCoverageExplanation] = useState<string>('')
 
   const handleShuffleSuggestions = () => {
     setSuggestions(getRandomSuggestions(3, 'answer'))
@@ -50,15 +66,6 @@ export const AIResearchModalContent = ({
 
   const handleExampleClick = (example: string) => {
     setQuery(example)
-  }
-
-  // Helper function to get top quality results (top 40% by score)
-  const getTopQualityDocs = (docs: any[], maxDocs: number = 8): any[] => {
-    if (!docs.length) return []
-    const sortedDocs = [...docs].sort((a, b) => (b.score || 0) - (a.score || 0))
-    const top40Percent = Math.max(1, Math.ceil(sortedDocs.length * 0.4))
-    const finalCount = Math.min(top40Percent, maxDocs)
-    return sortedDocs.slice(0, finalCount)
   }
 
   async function runAlignment(q: string, docs: DocMeta[]) {
@@ -81,9 +88,9 @@ export const AIResearchModalContent = ({
       const j = await r.json()
 
       if (j?.ok && j?.assessment) {
-        const { insights, alignment } = j.assessment
+        const { insights, alignment: alignmentData } = j.assessment
 
-        setAlignment({ insights, alignment })
+        setAlignment({ insights, alignment: alignmentData })
       } else {
         setAlignment(null)
       }
@@ -113,15 +120,7 @@ export const AIResearchModalContent = ({
         body: JSON.stringify({
           query: query.trim(),
           mode: 'answer',
-          max_results: MAX_ANSWER_MODE_RESULTS,
-          similarity_threshold: 0.05,
           include_metadata: true,
-          rerank: true,
-          alpha: 0.5,
-          denseTopK: 150,
-          rerankTopK: 20,
-          retrievalMode: 'hybrid',
-          sparseTopK: 150,
           ...(consultedDocIds ? { cite_doc_ids: consultedDocIds } : {}),
         }),
       })
@@ -140,6 +139,10 @@ export const AIResearchModalContent = ({
 
       // IMPORTANT: Save ALL docs immediately (like original implementation)
       setSupportingDocs(docs)
+
+      const topTenResults = JSON.stringify(
+        docs.slice(0, 10).map((d: DocMeta) => d.title),
+      )
 
       // Filter docs to only those with actual content for synthesis
       const validDocs = docs.filter(
@@ -168,13 +171,11 @@ export const AIResearchModalContent = ({
         return
       }
 
-      // Step 2: Get top quality docs for synthesis (top 40%, max 6)
-      const topQualityDocs = getTopQualityDocs(validDocs, 6)
-
+      // Send all valid docs to answer route — nano filter handles relevance
       const synthesisResponse = await fetch('/api/answer', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), docs: topQualityDocs }),
+        body: JSON.stringify({ query: query.trim(), docs: validDocs }),
       })
 
       runAlignment(query.trim(), validDocs)
@@ -263,6 +264,30 @@ export const AIResearchModalContent = ({
 
         setAnswer(answerWithCitations)
 
+        // Coverage comes from nano filter (returned in synthesis response)
+        if (synthesisResult.synthesis?.coverage) {
+          setCoverageRating(synthesisResult.synthesis.coverage)
+          const explanations: Record<string, string> = {
+            good: '',
+            limited:
+              'Some passages touch on the topic but lack specific answers.',
+            poor: 'The corpus likely does not contain material to adequately answer this question.',
+          }
+          setCoverageExplanation(
+            explanations[synthesisResult.synthesis.coverage] || '',
+          )
+        }
+
+        fetch('/api/answer-mode-query-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: query.trim(),
+            topTenResults,
+            answer: sentences.join(' '),
+          }),
+        })
+
         // Log warning if present
         if (warning) {
           console.warn(`[Answer Warning] ${warning}: ${warningMessage}`)
@@ -312,6 +337,27 @@ export const AIResearchModalContent = ({
     }
 
     if (answer) {
+      const citationLabels: string[] = []
+      let globalCitIdx = 0
+      if (answer.paragraphs) {
+        answer.paragraphs.forEach((paragraph, pIdx) => {
+          let sentenceOffset = 0
+          for (let p = 0; p < pIdx; p++)
+            sentenceOffset += answer.paragraphs![p].length
+          paragraph.forEach((_sent, sIdx) => {
+            const globalSentIdx = sentenceOffset + sIdx
+            answer.inline?.[globalSentIdx]?.forEach((_c: any, j: number) => {
+              citationLabels[globalCitIdx++] = `${globalSentIdx + 1}.${j + 1}`
+            })
+          })
+        })
+      } else {
+        answer.sentences.forEach((_sent, i) => {
+          answer.inline?.[i]?.forEach((_c: any, j: number) => {
+            citationLabels[globalCitIdx++] = `${i + 1}.${j + 1}`
+          })
+        })
+      }
       return (
         <Box style={{ display: 'flex' }}>
           <AnswerPanel
@@ -325,15 +371,14 @@ export const AIResearchModalContent = ({
             alignLoading={alignLoading}
             alignment={alignment}
             ops={ops}
-            setSupportingCitationsPage={setSupportingCitationsPage}
+            setSupportingCitationsPage={handleCitationPageClick}
+            supportingCitationsPage={supportingCitationsPage}
+            coverageRating={coverageRating}
           />
           <Box
             style={{
               flex: 1,
               backgroundColor: 'white',
-              borderRadius: '8px',
-              border: '1px solid',
-              borderColor: getThemedColor('neutral', 200),
               minWidth: 0,
               maxHeight: '600px',
               display: 'flex',
@@ -346,6 +391,17 @@ export const AIResearchModalContent = ({
               supportingDocs={supportingDocs}
               page={supportingCitationsPage}
               setPage={setSupportingCitationsPage}
+              scrollVersion={scrollVersion}
+              coverageRating={coverageRating}
+              coverageExplanation={coverageExplanation}
+              directlyCitedCount={
+                answer.inline?.reduce((sum, arr) => sum + arr.length, 0) ?? 0
+              }
+              citationLabels={citationLabels}
+              passageWhy={passageWhy}
+              setPassageWhy={setPassageWhy}
+              passageWhyLoading={passageWhyLoading}
+              setPassageWhyLoading={setPassageWhyLoading}
             />
           </Box>
         </Box>
@@ -358,6 +414,7 @@ export const AIResearchModalContent = ({
         loading={loading}
         suggestions={suggestions}
         numberOfCiteDocs={consultedDocs?.length}
+        userSelectedDocs={userSelectedDocs}
         onQueryChange={setQuery}
         onSubmit={handleSubmit}
         onShuffleSuggestions={handleShuffleSuggestions}
@@ -367,26 +424,33 @@ export const AIResearchModalContent = ({
   }
 
   return (
-    <div style={{ margin: '-10px' }}>
-      <div>
-        <InlineMessage
-          size='full-width'
-          variant='warning'
-          label='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
-        />
-      </div>
-      {renderContent()}
-    </div>
+    <Modal
+      header={
+        <p
+          style={{
+            fontWeight: 'bold',
+            color: getThemedColor('neutral', 800),
+          }}
+        >
+          AI research assistant
+        </p>
+      }
+      content={
+        <div style={{ margin: '-10px' }}>
+          <div>
+            <InlineMessage
+              size='full-width'
+              variant='warning'
+              label='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
+            />
+          </div>
+          {renderContent()}
+        </div>
+      }
+      size='xlarge'
+      blocking={false}
+      open={open}
+      onClose={onClose}
+    />
   )
 }
-
-export const aiResearchModalHeader = (
-  <p
-    style={{
-      fontWeight: 'bold',
-      color: getThemedColor('neutral', 800),
-    }}
-  >
-    AI research assistant
-  </p>
-)

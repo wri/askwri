@@ -13,6 +13,8 @@ export type KP = {
   page?: number
   citation_targets: CitationTarget[]
 }
+export type RelevanceTier = 'strong' | 'partial' | 'weak'
+
 export type DocMeta = {
   doc_id: string
   document_id?: string
@@ -26,6 +28,8 @@ export type DocMeta = {
   source?: string
   summary?: string // Pre-generated summary from CSV
   score?: number
+  raw_score?: number
+  relevance_tier?: RelevanceTier
   kps: KP[]
   meta?: any
 }

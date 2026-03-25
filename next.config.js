@@ -4,6 +4,7 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  optimizePackageImports: ['react-icons'],
 
   // Environment variables that should be available at runtime
   env: {

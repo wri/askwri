@@ -11,7 +11,7 @@ import {
   getThemedColor,
   Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
-import { IoIosCopy } from 'react-icons/io'
+import { IoIosCopy, IoMdCheckmark } from 'react-icons/io'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { chicagoFull } from '../../utils/utils'
 import {
@@ -21,8 +21,6 @@ import {
 } from './types'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
-
-const SUMMARY_MAX_LENGTH = 240
 
 export const SelectableResultRow = ({
   query,
@@ -36,6 +34,7 @@ export const SelectableResultRow = ({
   onTitleClick,
 }: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // 0 = no feedbackState, 1 = positive, -1 = negative
   const [feedbackState, setFeedbackState] = useState<FeedbackType>(
@@ -124,6 +123,7 @@ export const SelectableResultRow = ({
         >
           {rowData.publication_title}
         </Heading>
+        <div>{rowData.year}</div>
         <div
           style={{
             display: '-webkit-box',
@@ -140,19 +140,23 @@ export const SelectableResultRow = ({
         {docSummaryLoading?.[rowData.id.toString()] ? (
           <span>Loading...</span>
         ) : (
-          <div>
-            {rowData.short_summary &&
-            rowData.short_summary.length > SUMMARY_MAX_LENGTH
-              ? `${rowData.short_summary.slice(0, SUMMARY_MAX_LENGTH)}...`
-              : rowData.short_summary}
-          </div>
+          <div>{rowData.short_summary}</div>
         )}
       </TableCell>
       <TableCell width={120}>
         <div style={{ width: 'fit-content' }}>
-          <Tooltip content='How relevant this document is compared with other results for this query. The top result is scaled to 1.0'>
-            <Tag label={rowData.relevance} variant='success' />
-          </Tooltip>
+          <Tag
+            label={rowData.relevance}
+            variant={
+              rowData.relevance === 'Strong'
+                ? 'success'
+                : rowData.relevance === 'Partial'
+                  ? 'warning'
+                  : rowData.relevance === 'Weak'
+                    ? 'info-grey'
+                    : 'success'
+            }
+          />
         </div>
       </TableCell>
       <TableCell>
@@ -173,15 +177,17 @@ export const SelectableResultRow = ({
             transition: 'opacity 0.2s ease-in-out',
           }}
         >
-          <Tooltip content='Copy citation to clipboard'>
+          <Tooltip content={copied ? 'Copied' : 'Copy citation to clipboard'}>
             <Button
               as='div'
               variant='borderless'
-              leftIcon={<IoIosCopy />}
-              aria-label='Copy citation to clipboard'
+              leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
+              aria-label={copied ? 'Copied' : 'Copy citation to clipboard'}
               onClick={() => {
                 const { fullDoc } = rowData
                 navigator.clipboard.writeText(chicagoFull(fullDoc, rowData))
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1500)
               }}
             />
           </Tooltip>

@@ -2,6 +2,8 @@ import 'reflect-metadata'
 import { DataSource } from 'typeorm'
 import { CiteModeFeedback } from './entities/CiteModeFeedback.entity'
 import { AnswerModeFeedback } from './entities/AnswerModeFeedback.entity'
+import { CiteModeQueryLogs } from './entities/CiteModeQueryLogs.entity'
+import { AnswerModeQueryLogs } from './entities/AnswerModeQueryLogs.entity'
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -13,7 +15,12 @@ const MigrationDataSource = new DataSource({
   url: DATABASE_URL,
   synchronize: false,
   logging: process.env.TYPEORM_LOGGING === 'true',
-  entities: [CiteModeFeedback, AnswerModeFeedback],
+  entities: [
+    CiteModeFeedback,
+    AnswerModeFeedback,
+    CiteModeQueryLogs,
+    AnswerModeQueryLogs,
+  ],
   migrations: ['src/db/migrations/**/*.ts'],
   subscribers: [],
   ssl: {

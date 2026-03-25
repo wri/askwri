@@ -8,13 +8,31 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.2').trim()
+const MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.4').trim()
 const IS_GPT5 = /^gpt-5/i.test(MODEL)
 // Optimized for concise 2-3 sentence answers
 const DEFAULT_MAX = IS_GPT5 ? 2000 : 1500
 const ENV_MAX = Number(process.env.OPENAI_MAX_TOKENS || DEFAULT_MAX)
 const MAX = IS_GPT5 ? Math.max(2000, ENV_MAX) : ENV_MAX
 const TEMP = Number(process.env.OPENAI_TEMPERATURE ?? 0.3) // Moderate temperature for concise synthesis
+
+const NANO_MODEL = (process.env.OPENAI_MODEL_NANO ?? 'gpt-5.4-nano').trim()
+const USE_NANO_FILTER = (process.env.USE_NANO_FILTER ?? 'false').toLowerCase() === 'true'
+
+const NANO_SYSTEM_PROMPT = `Given a research question and a set of passages, classify each passage's relevance to the question.
+
+For each passage, classify as:
+- "strong": Directly answers or provides specific evidence for the question
+- "partial": Related to the topic but does not directly address the question
+- "weak": Not meaningfully relevant to the question
+
+Also rate overall corpus coverage for this question:
+- "good": Multiple passages directly address the question
+- "limited": Some relevant material but significant gaps exist
+- "poor": No passages adequately address the question
+
+Return JSON only:
+{"relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"partial"}],"coverage":"good"}`
 
 // Log config at module load time to diagnose env var issues
 console.log(
@@ -36,34 +54,46 @@ const SYS = IS_GPT5
 Synthesize a concise answer from the provided documents. Write exactly 2-3 clear sentences.
 
 Rules:
-- SYNTHESIZE: Combine key information across sources — do NOT copy phrases verbatim
+- TRUST SOURCES: The provided sources have been pre-filtered for relevance. Focus on synthesizing their key findings.
+- SYNTHESIZE: Combine key information across relevant sources — do NOT copy phrases verbatim
 - PRIORITIZE: Focus on the most relevant and important findings
 - GROUND: Every claim must be traceable to the provided documents
 - ACCURACY: Preserve the meaning and facts from the original sources
 - LIMITATIONS: If sources highlight significant risks, trade-offs, or caveats, include the most important one
 - FAITHFULNESS: Only state causal relationships explicitly supported in the sources; use hedging language (e.g., "is associated with", "may contribute to") for correlations or inferences
 
-Return JSON: {"sentences":["sentence1","sentence2","sentence3"]}
+Return JSON with your answer AND a relevance assessment for every source:
+{"sentences":["s1","s2","s3"],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
+
+Tier definitions (match these exactly):
+- "strong": Information from this source appears in your synthesis. You directly used it.
+- "partial": Source is on-topic and could support the answer, but you did not directly use it.
+- "weak": Source does not meaningfully address the question.
+
+If no sources adequately answer the question:
+{"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
 `.trim()
   : `
 You are a careful research assistant. Write a clear, concise answer that synthesizes the most important information from the provided documents.
 
 CRITICAL RULES:
+- TRUST SOURCES: The provided sources have been pre-filtered for relevance. Focus on synthesizing their key findings.
 - CONCISE: Write exactly 2-3 sentences total (not paragraphs)
-- SYNTHESIZE: Combine key information - do NOT copy phrases verbatim
+- SYNTHESIZE: Combine key information from relevant sources - do NOT copy phrases verbatim
 - PRIORITIZE: Focus on the most relevant and important findings
 - GROUND: Every claim must be traceable to the provided documents
 - ACCURACY: Preserve the meaning and facts from the original sources
 
-Return strict JSON with exactly 2-3 sentences:
-{"sentences":["First sentence with key finding.","Second sentence with supporting detail.","Third sentence with additional context or implication."]}
+Return JSON with your answer AND a relevance assessment for every source:
+{"sentences":["s1","s2","s3"],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
 
-Example:
-{"sentences":[
-  "Electric buses reduce operational costs by approximately 40% compared to diesel alternatives due to lower fuel and maintenance expenses.",
-  "They achieve 70-80% reductions in greenhouse gas emissions when powered by renewable energy and eliminate local air pollution in urban areas.",
-  "Successful implementation requires strategic charging infrastructure planning and upfront investment, though long-term savings offset initial costs."
-]}
+Tier definitions (match these exactly):
+- "strong": Information from this source appears in your synthesis. You directly used it.
+- "partial": Source is on-topic and could support the answer, but you did not directly use it.
+- "weak": Source does not meaningfully address the question.
+
+If no sources adequately answer the question:
+{"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
 `.trim()
 
 function synthFallback(query: string, docs: any[]) {
@@ -171,6 +201,74 @@ function detectVerbatimCopying(sentences: string[], docs: any[]): boolean {
   return false
 }
 
+async function runNanoFilter(
+  query: string,
+  docs: Array<{ id: number; title: string; key_finding: string }>,
+  apiKey: string
+): Promise<{ relevance: Array<{ id: number; tier: string }>; coverage: string } | null> {
+  try {
+    // Shuffle docs to prevent position bias (Fisher-Yates)
+    const shuffled = [...docs]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+
+    const passageText = shuffled
+      .map(d => `[${d.id}] "${d.title}" — ${d.key_finding}`)
+      .join('\n\n')
+
+    const userPrompt = `Question: ${query}\n\nPassages (presented in random order):\n${passageText}`
+
+    const isNanoGPT5 = /^gpt-5/i.test(NANO_MODEL)
+    const body: any = {
+      model: NANO_MODEL,
+      messages: [
+        { role: 'system', content: NANO_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+    }
+    if (isNanoGPT5) {
+      body.max_completion_tokens = 500
+    } else {
+      body.max_tokens = 500
+      body.temperature = 0.1
+    }
+
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!r.ok) {
+      console.error(`[Nano Filter] API error: ${r.status}`)
+      return null
+    }
+
+    const data = await r.json()
+    const content = data.choices?.[0]?.message?.content || ''
+    const parsed = safeParse(content, false)
+
+    if (!Array.isArray(parsed.relevance)) {
+      console.error('[Nano Filter] Invalid response structure')
+      return null
+    }
+
+    const coverage = ['good', 'limited', 'poor'].includes(parsed.coverage)
+      ? parsed.coverage
+      : 'limited'
+
+    return { relevance: parsed.relevance, coverage }
+  } catch (err) {
+    console.error('[Nano Filter] Error:', err)
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   const debugInfo: any = { timestamp: new Date().toISOString() }
 
@@ -209,34 +307,80 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // DYNAMIC FILTERING: Only use high-relevance documents (>0.75 threshold)
-    const RELEVANCE_THRESHOLD = 0.75
-    const maxDocs = IS_GPT5 ? 8 : 6 // Reduced for concise answers
-    const maxSnippetLen = IS_GPT5 ? 400 : 350 // Shorter snippets
+    // Build doc list from all incoming docs (cap at 15 from search service)
+    const maxSnippetLen = IS_GPT5 ? 400 : 350
+    const allDocs = (Array.isArray(docs) ? docs : []).slice(0, 15)
 
-    // Filter by relevance first, then take top N
-    const filteredDocs = (Array.isArray(docs) ? docs : [])
-      .filter((d: any) => {
-        const relevance = d.kps?.[0]?.kp_relevance || d.score || 0
-        return relevance >= RELEVANCE_THRESHOLD
-      })
-      .slice(0, maxDocs)
-
-    const docList = filteredDocs.map((d: any, idx: number) => ({
+    const docList = allDocs.map((d: any, idx: number) => ({
       id: idx + 1,
       title: d.title || 'Untitled',
       authors: d.authors,
       year: d.year,
-      key_finding: String(d.kps?.[0]?.snippet ?? '').slice(0, maxSnippetLen),
+      doc_id: d.doc_id || '',
+      key_finding: String(d.kps?.[0]?.snippet ?? d.content ?? '').slice(0, maxSnippetLen),
       relevance: d.kps?.[0]?.kp_relevance || d.score || 0,
     }))
 
+    // Run nano relevance filter (gated — enable with USE_NANO_FILTER=true)
+    const nanoResult = USE_NANO_FILTER ? await runNanoFilter(
+      query,
+      docList.map(d => ({ id: d.id, title: d.title, key_finding: d.key_finding })),
+      key
+    ) : null
+
+    let filteredDocs: typeof docList
+    let coverageRating: string = 'unknown'
+    let sourceRelevanceFromNano: Array<{ doc_id: string; tier: string }> = []
+
+    if (nanoResult) {
+      const tierMap = new Map<number, string>()
+      for (const r of nanoResult.relevance) {
+        tierMap.set(r.id, r.tier)
+      }
+
+      // Filter: keep strong + partial, drop weak
+      filteredDocs = docList.filter(d => {
+        const tier = tierMap.get(d.id) || 'weak'
+        return tier === 'strong' || tier === 'partial'
+      })
+
+      // Build source_relevance for frontend (all docs, not just filtered)
+      sourceRelevanceFromNano = docList.map(d => ({
+        doc_id: d.doc_id,
+        tier: tierMap.get(d.id) || 'weak',
+      })).filter(sr => sr.doc_id)
+
+      coverageRating = nanoResult.coverage
+      const maxDocs = IS_GPT5 ? 8 : 6
+      filteredDocs = filteredDocs.slice(0, maxDocs)
+
+      console.log(`[Nano Filter] ${docList.length} → ${filteredDocs.length} docs (coverage: ${coverageRating})`)
+
+      // Edge case: all weak → skip synthesis, return low coverage
+      if (filteredDocs.length === 0) {
+        return NextResponse.json({
+          ok: true,
+          synthesis: {
+            sentences: ['The available sources do not contain sufficient information to answer this question.'],
+            source_relevance: sourceRelevanceFromNano,
+            warning: 'low_coverage',
+            warningMessage: 'The available sources do not adequately cover this topic.',
+            coverage: coverageRating,
+          },
+          debug: { ...debugInfo, nanoFilter: 'all_weak', coverage: coverageRating },
+        })
+      }
+    } else {
+      // Nano filter off or failed — use all docs capped at maxDocs
+      const maxDocs = IS_GPT5 ? 8 : 6
+      filteredDocs = docList.slice(0, maxDocs)
+    }
+
     debugInfo.docListCreated = {
-      count: docList.length,
-      hasContent: docList.some((d) => d.key_finding.length > 0),
-      avgSnippetLength:
-        docList.reduce((sum, d) => sum + d.key_finding.length, 0) /
-        (docList.length || 1),
+      count: filteredDocs.length,
+      totalBeforeFilter: docList.length,
+      hasContent: filteredDocs.some((d) => d.key_finding.length > 0),
+      coverage: coverageRating,
     }
 
     console.log('[Answer Route] DocList created:', debugInfo.docListCreated)
@@ -245,16 +389,15 @@ export async function POST(req: NextRequest) {
     const userContent = `Question: ${query}
 
 Source documents with key findings:
-${docList
+${filteredDocs
   .map(
     (d) =>
       `[${d.id}] "${d.title}" (${d.year || 'n.d.'})
-   Key finding: ${d.key_finding}
-   Relevance: ${(d.relevance * 100).toFixed(0)}%`,
+   Key finding: ${d.key_finding}`,
   )
   .join('\n\n')}
 
-Task: Write exactly 2-3 clear sentences that synthesize the most important information from these sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.`
+Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences synthesizing the most important information from the relevant sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.`
 
     const messages = [
       { role: 'system', content: SYS },
@@ -408,7 +551,45 @@ Task: Write exactly 2-3 clear sentences that synthesize the most important infor
     // Build synthesis response with appropriate warnings
     const synthesis: any = { sentences }
 
-    if (isPartial || wasTruncated) {
+    // Source relevance: prefer nano filter tiers (absolute), fall back to synthesis LLM tiers
+    let sourceRelevance: Array<{ doc_id: string; tier: string }> = []
+    if (sourceRelevanceFromNano.length > 0) {
+      sourceRelevance = sourceRelevanceFromNano
+    } else {
+      const rawSourceRelevance: {id: number, tier: string}[] = Array.isArray(parsed.source_relevance)
+        ? parsed.source_relevance
+        : []
+      sourceRelevance = rawSourceRelevance.map(sr => {
+        const doc = docList[sr.id - 1]
+        return {
+          doc_id: doc?.doc_id || '',
+          tier: sr.tier || 'weak',
+        }
+      }).filter(sr => sr.doc_id)
+    }
+    if (sourceRelevance.length > 0) {
+      synthesis.source_relevance = sourceRelevance
+    }
+    if (coverageRating && coverageRating !== 'unknown') {
+      synthesis.coverage = coverageRating
+    }
+
+    // Low coverage: from nano filter or synthesis LLM
+    const isLowCoverage = coverageRating === 'poor' || coverageRating === 'limited' ||
+      parsed.low_coverage === true
+    const sourcesUsed = filteredDocs.length
+
+    if (isLowCoverage) {
+      synthesis.warning = 'low_coverage'
+      synthesis.warningMessage =
+        'Limited relevant sources found for this query. The answer may not fully address your question.'
+      console.warn(`[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`)
+    } else if (sourcesUsed < 3 && docList.length >= 3) {
+      synthesis.warning = 'low_coverage'
+      synthesis.warningMessage =
+        'Only a few sources were relevant to this query. The answer may be incomplete.'
+      console.warn(`[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`)
+    } else if (isPartial || wasTruncated) {
       synthesis.warning = 'partial_answer'
       synthesis.warningMessage =
         'Answer may be incomplete due to length constraints. Consider refining your query.'
@@ -425,6 +606,9 @@ Task: Write exactly 2-3 clear sentences that synthesize the most important infor
       isPartial,
       wasTruncated,
       hasQuotes,
+      isLowCoverage,
+      sourcesUsed,
+      totalDocs: docList.length,
     }
 
     return NextResponse.json({

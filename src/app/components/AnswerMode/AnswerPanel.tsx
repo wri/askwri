@@ -10,17 +10,18 @@ import {
   Button,
   getThemedColor,
   Modal,
+  InlineMessage,
   Tooltip as DS_Tooltip,
 } from '@worldresources/wri-design-systems'
 import { FaInfoCircle } from 'react-icons/fa'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
+import { AiFillThunderbolt } from 'react-icons/ai'
+import { HiCurrencyDollar } from 'react-icons/hi2'
 import { MdChat } from 'react-icons/md'
-import { IoIosCopy } from 'react-icons/io'
+import { IoIosCopy, IoMdCheckmark } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
-import { AiFillThunderbolt } from 'react-icons/ai'
-import { HiCurrencyDollar } from 'react-icons/hi2'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
 
@@ -36,9 +37,15 @@ export const AnswerPanel = ({
   alignment,
   ops,
   setSupportingCitationsPage,
+  supportingCitationsPage,
+  coverageRating,
 }: AnswerPanelProps) => {
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
+  const numberOfUsedKnowledgeProducts = supportingDocs
+    ? new Set(supportingDocs.map((doc) => doc.doc_id)).size
+    : 0
   // 0 = no feedbackState, 1 = positive, -1 = negative
   const [feedbackState, setFeedbackState] = useState<FeedbackType>(
     FeedbackType.None,
@@ -100,14 +107,10 @@ export const AnswerPanel = ({
   return (
     <>
       <Box
-        className='gradient-background'
         style={{
           flex: 1,
           padding: '20px',
           backgroundColor: 'white',
-          borderRadius: '8px',
-          border: '1px solid',
-          borderColor: getThemedColor('neutral', 200),
           minWidth: 0,
         }}
       >
@@ -154,6 +157,27 @@ export const AnswerPanel = ({
           {query}
         </Text>
 
+        {answer.warning === 'low_coverage' && answer.warningMessage && (
+          <Box marginBottom='3'>
+            <InlineMessage
+              variant='warning'
+              label='Limited coverage'
+              caption={answer.warningMessage}
+            />
+          </Box>
+        )}
+        {numberOfUsedKnowledgeProducts > 0 && (
+          <Text
+            textStyle='sm'
+            marginBottom='4'
+            color={getThemedColor('neutral', 700)}
+          >
+            {`Based on ${numberOfUsedKnowledgeProducts} Knowledge Product${
+              numberOfUsedKnowledgeProducts === 1 ? '' : 's'
+            }:`}
+          </Text>
+        )}
+
         <Box
           style={{
             fontSize: '14px',
@@ -192,6 +216,13 @@ export const AnswerPanel = ({
                                       minWidth: 0,
                                       height: 'auto',
                                       lineHeight: 1,
+                                      ...(supportingCitationsPage ===
+                                      citationPage
+                                        ? {
+                                            background: '#0A4298',
+                                            color: 'white',
+                                          }
+                                        : {}),
                                     }}
                                     title={`Citation ${globalSentIdx + 1}.${j + 1}`}
                                     onClick={() =>
@@ -230,6 +261,12 @@ export const AnswerPanel = ({
                             minWidth: 0,
                             height: 'auto',
                             lineHeight: 1,
+                            ...(supportingCitationsPage === citationPage
+                              ? {
+                                  background: '#0A4298',
+                                  color: 'white',
+                                }
+                              : {}),
                           }}
                           title={`Citation ${i + 1}.${j + 1}`}
                           onClick={() =>
@@ -266,6 +303,24 @@ export const AnswerPanel = ({
                 />
               </Tooltip>
             ) : null}
+            {coverageRating === 'poor' && (
+              <Tooltip content='The corpus may not contain sufficient material to answer this question'>
+                <Tag
+                  icon={<FaInfoCircle />}
+                  label='Low corpus coverage'
+                  variant={'default' as any}
+                />
+              </Tooltip>
+            )}
+            {coverageRating === 'limited' && (
+              <Tooltip content='Some relevant sources found but coverage may be incomplete'>
+                <Tag
+                  icon={<FaInfoCircle />}
+                  label='Limited coverage'
+                  variant='info-white'
+                />
+              </Tooltip>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             {!alignLoading && (
@@ -294,12 +349,13 @@ export const AnswerPanel = ({
                 </Tooltip>
               </>
             )}
-            <Tooltip content='Copy answer'>
+            <Tooltip content={copied ? 'Copied' : 'Copy answer'}>
               <Button
                 as='div'
                 variant='borderless'
                 size='small'
-                leftIcon={<IoIosCopy />}
+                leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
+                aria-label={copied ? 'Answer copied' : 'Copy answer'}
                 onClick={() => {
                   let text = ''
                   if (answer.paragraphs) {
@@ -310,8 +366,10 @@ export const AnswerPanel = ({
                     text = answer.sentences.join(' ')
                   }
                   navigator.clipboard.writeText(text)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1500)
                 }}
-              ></Button>
+              />
             </Tooltip>
             <Tooltip content='Mark as good result'>
               <Button

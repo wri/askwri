@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, FC } from 'react'
+import { FC } from 'react'
 import { Heading, Box, List, Text, Spinner } from '@chakra-ui/react'
 import {
   Button,
@@ -33,7 +33,7 @@ const ResultsPage = ({
 
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
-      <Navbar />
+      <Navbar query={query} />
       <section
         style={{
           display: 'flex',
@@ -70,7 +70,7 @@ const ResultsPage = ({
                   leftIcon={<HiCurrencyDollar />}
                   variant='borderless'
                   size='small'
-                  label={`$${ops?.cost_usd?.toFixed(2) ?? '0.00'}`}
+                  label={`$${ops?.cost_usd?.toFixed(4) ?? '0.0000'}`}
                   aria-label='Cost of credits used in search'
                   onClick={() => {}}
                 />

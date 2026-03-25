@@ -1,6 +1,6 @@
 /* eslint-disable no-console, no-plusplus */
 import { NextRequest, NextResponse } from 'next/server'
-import { ANSWER_PRESET } from '@/config/retrieval'
+import { ANSWER_PRESET, CITE_PRESET } from '@/config/retrieval'
 
 const SEARCH_SERVICE_URL =
   process.env.SEARCH_SERVICE_URL || 'http://localhost:8000'
@@ -26,7 +26,10 @@ interface LlamaIndexResponse {
     title: string
     content: string
     score: number
-    metadata: Record<string, any>
+    metadata: Record<string, any> & {
+      raw_score?: number
+      relevance_tier?: 'strong' | 'partial' | 'weak'
+    }
     page?: number
   }>
   total_results: number
@@ -61,26 +64,30 @@ export async function POST(req: NextRequest) {
     console.log(`[LlamaIndex API] Processing query: "${query}" (mode: ${mode})`)
 
     // Prepare request for embedded service
-    // Cite mode: larger retrieval pool (800) for better recall on semantic matches
     const defaults =
       mode === 'cite'
         ? {
-            max_results: 100,
-            vector_top_k: 800,
-            bm25_top_k: 800,
-            rerank_top_n: 120,
+            max_results: CITE_PRESET.maxResults,
+            vector_top_k: CITE_PRESET.denseTopK,
+            bm25_top_k: CITE_PRESET.sparseTopK,
+            rerank_top_n: CITE_PRESET.rerankTopN,
+            fusion_top_k: CITE_PRESET.fusionTopK,
           }
         : {
             max_results: ANSWER_PRESET.maxResults,
             vector_top_k: ANSWER_PRESET.denseTopK,
             bm25_top_k: ANSWER_PRESET.sparseTopK,
             rerank_top_n: ANSWER_PRESET.rerankTopN,
+            fusion_top_k: ANSWER_PRESET.fusionTopK,
+            dense_weight: ANSWER_PRESET.alpha,
+            sparse_weight: 1 - (ANSWER_PRESET.alpha ?? 0.5),
           }
 
     const llamaIndexRequest: LlamaIndexRequest & {
       vector_top_k?: number
       bm25_top_k?: number
       rerank_top_n?: number
+      fusion_top_k?: number
     } = {
       query,
       mode,
@@ -89,7 +96,7 @@ export async function POST(req: NextRequest) {
       rerank: true, // Enable reranking for quality results
       ...defaults,
       // Override with client-supplied retrieval params if provided
-      ...(alpha !== undefined && { alpha }),
+      ...(alpha !== undefined && { dense_weight: alpha, sparse_weight: 1 - alpha }),
       ...(denseTopK !== undefined && { vector_top_k: denseTopK }),
       ...(sparseTopK !== undefined && { bm25_top_k: sparseTopK }),
       ...(rerankTopK !== undefined && { rerank_top_n: rerankTopK }),
@@ -128,33 +135,12 @@ export async function POST(req: NextRequest) {
       `[LlamaIndex API] Hybrid service returned ${llamaIndexResponse.docs?.length || 0} docs`,
     )
 
-    // Cite mode: Apply "top-N with floor" filtering for precision/recall balance
-    // - Keep at least MIN_DOCS (even if scores are low) to preserve recall on hard queries
-    // - Keep up to MAX_DOCS if they meet the SCORE_FLOOR quality threshold
-    // Analysis: This achieves 75% recall, 18.6% precision, F1=29.8% (vs baseline 73.7%/13.3%/21.4%)
-    const CITE_MIN_DOCS = 12
-    const CITE_MAX_DOCS = 32
-    const CITE_SCORE_FLOOR = 0.15
-
-    let filteredDocs: typeof llamaIndexResponse.docs
-    if (mode === 'cite') {
-      filteredDocs = []
-      for (let i = 0; i < llamaIndexResponse.docs.length; i++) {
-        const doc = llamaIndexResponse.docs[i]
-        if (doc.score >= CITE_SCORE_FLOOR) {
-          filteredDocs.push(doc)
-          if (filteredDocs.length >= CITE_MAX_DOCS) break
-        } else if (i < CITE_MIN_DOCS) {
-          // Below floor but within min docs - still include for recall
-          filteredDocs.push(doc)
-        }
-      }
-    } else {
-      filteredDocs = llamaIndexResponse.docs
-    }
+    // Cite mode filtering is now handled by the search service via logit floor threshold.
+    // The service drops docs below the calibrated logit floor and assigns relevance tiers.
+    const filteredDocs = llamaIndexResponse.docs
 
     console.log(
-      `[LlamaIndex API] After filtering (${mode === 'cite' ? `min=${CITE_MIN_DOCS}, max=${CITE_MAX_DOCS}, floor=${CITE_SCORE_FLOOR}` : 'none'}): ${filteredDocs.length}/${llamaIndexResponse.docs.length} docs`,
+      `[LlamaIndex API] After service-side filtering: ${filteredDocs.length} docs`,
     )
 
     // Transform response to match existing API format
@@ -193,6 +179,8 @@ export async function POST(req: NextRequest) {
         source: doc.metadata.source,
         summary: doc.metadata.summary,
         score: effectiveScore,
+        raw_score: doc.metadata.raw_score,
+        relevance_tier: doc.metadata.relevance_tier,
         kps: [
           {
             kp_relevance: effectiveScore,
@@ -220,9 +208,7 @@ export async function POST(req: NextRequest) {
       message: '',
       docs,
       sources: docs, // For compatibility
-      usage: {
-        total_tokens: llamaIndexResponse.total_results * 100, // Rough estimate
-      },
+      usage: null, // Retrieval-only: no LLM tokens consumed
       debug: {
         llamaindex: true,
         service_url: SEARCH_SERVICE_URL,

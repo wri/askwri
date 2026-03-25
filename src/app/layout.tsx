@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: 'Ask WRI',
   description:
     'Find relevant Knowledge Products for your research, identify insights, and export citations.',
+  icons: { icon: '/favicon.ico' },
 }
 
 const RootLayout = ({ children }: { children: ReactNode }) => (

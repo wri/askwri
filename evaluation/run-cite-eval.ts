@@ -85,34 +85,17 @@ async function callCiteService(query: string, params?: {
   bm25_top_k?: number,
   rerank_top_n?: number
 }): Promise<DocMeta[]> {
+  // Service now handles logit floor filtering and tier assignment
   const rawDocs = await callPythonServiceRaw(query, 'cite', {
     vector_top_k: params?.vector_top_k ?? 800,
     bm25_top_k: params?.bm25_top_k ?? 800,
-    rerank_top_n: params?.rerank_top_n ?? 120,
+    rerank_top_n: params?.rerank_top_n ?? 500,
     max_results: 100,
   });
 
-  // Cite-specific "top-N with floor" filtering for precision/recall balance
-  // Analysis: This achieves 75% recall, 18.6% precision, F1=29.8%
-  const CITE_MIN_DOCS = 12;
-  const CITE_MAX_DOCS = 32;
-  const CITE_SCORE_FLOOR = 0.15;
+  console.log(`[Cite Service] Retrieved: ${rawDocs.length} docs (logit floor applied by service)`);
 
-  const filteredDocs: typeof rawDocs = [];
-  for (let i = 0; i < rawDocs.length; i++) {
-    const doc = rawDocs[i];
-    const score = doc.score > 0 ? doc.score : (doc.metadata.raw_score || doc.score);
-    if (score >= CITE_SCORE_FLOOR) {
-      filteredDocs.push(doc);
-      if (filteredDocs.length >= CITE_MAX_DOCS) break;
-    } else if (i < CITE_MIN_DOCS) {
-      filteredDocs.push(doc);
-    }
-  }
-
-  console.log(`[Score Filter] Retrieved: ${rawDocs.length}, After filtering (min=${CITE_MIN_DOCS}, max=${CITE_MAX_DOCS}, floor=${CITE_SCORE_FLOOR}): ${filteredDocs.length}`);
-
-  return filteredDocs.map(transformToDocMeta);
+  return rawDocs.map(transformToDocMeta);
 }
 
 /**

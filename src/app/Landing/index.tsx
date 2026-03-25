@@ -9,17 +9,13 @@ import {
   Tag,
   Textarea,
   Toast,
-  Modal,
   InlineMessage,
 } from '@worldresources/wri-design-systems'
 import { LuRefreshCcw } from 'react-icons/lu'
 import { FaArrowRightLong } from 'react-icons/fa6'
 import { WriLogoIcon } from '../components/icons/WriLogo'
 import { AiIcon } from '../components/icons/AiIcon'
-import {
-  AIResearchModalContent,
-  aiResearchModalHeader,
-} from '../components/AnswerMode/AIResearchModal'
+import { AIResearchModal } from '../components/AnswerMode/AIResearchModal'
 import {
   CITE_MODE_SUGGESTION_POOL,
   getRandomSuggestions,
@@ -212,11 +208,7 @@ const Landing = () => {
         </Card.Root>
       </section>
       <Toast />
-      <Modal
-        header={aiResearchModalHeader}
-        content={<AIResearchModalContent />}
-        size='xlarge'
-        blocking={false}
+      <AIResearchModal
         open={aiModalOpen}
         onClose={() => setAiModalOpen(false)}
       />

@@ -17,10 +17,10 @@ import {
   authorsFrom,
   yearFrom,
   firstSentence,
-  normalizeCatalogRow,
   buildAlignmentSummary,
   calculateEmbeddingCost,
 } from '../utils/utils'
+import { getCatalog } from '@/lib/catalog-cache'
 import { Assessment, Ops } from '../components/AnswerMode/types'
 
 /* ---------- component ---------- */
@@ -60,16 +60,10 @@ const AskWriAppContent = () => {
     typeof buildCatalogIndex
   > | null>(null)
   useEffect(() => {
-    ;(async () => {
-      const res = await fetch('/api/catalog', { cache: 'no-store' })
-      if (!res.ok) {
-        return
-      }
-      const j = await res.json()
-      const normed = (j.items as any[]).map(normalizeCatalogRow)
-      setCatalog(normed)
-      setIndex(buildCatalogIndex(normed))
-    })()
+    getCatalog().then(({ catalog: c, index: i }) => {
+      setCatalog(c)
+      setIndex(i)
+    })
   }, [])
 
   const searchParams = useSearchParams()
@@ -116,6 +110,7 @@ const AskWriAppContent = () => {
     setDocSummary({})
     setDocWhyLoading({})
     setDocSummaryLoading({})
+    setBatchRelatesRequested(false)
 
     setSupporting([])
 
@@ -135,69 +130,75 @@ const AskWriAppContent = () => {
     return supporting
   }, [supporting])
 
-  // Document-level WHY processing
+  // Document-level WHY processing — batched into a single LLM call
+  const [batchRelatesRequested, setBatchRelatesRequested] = useState(false)
   useEffect(() => {
-    if (!index || supporting.length === 0) return
-    pageDocs.forEach((d) => {
-      const row = matchCatalogRow(d, index)
-      const docTitle = titleFrom(d, row)
+    if (supporting.length === 0 || batchRelatesRequested) return
 
-      setDocWhy((prevWhy) => {
-        setDocWhyLoading((prevLoading) => {
-          // Document-level explanations via /api/relates
-          if (!prevWhy[d.doc_id] && !prevLoading[d.doc_id]) {
-            const best = [...(d.kps || [])].sort(
-              (a, b) => b.kp_relevance - a.kp_relevance,
-            )[0]
+    // Collect all docs that need relates explanations
+    const docsToProcess = pageDocs.filter(
+      (d) => !docWhy[d.doc_id] && !docWhyLoading[d.doc_id],
+    )
+    if (docsToProcess.length === 0) return
 
-            fetch('/api/relates', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                query,
-                doc: {
-                  title: docTitle,
-                  authors: authorsFrom(d, row),
-                  year: yearFrom(d, row),
-                  snippet: best?.snippet ?? '',
-                },
-              }),
-            })
-              .then((r) => r.json())
-              .then((j) => {
-                const txt = (
-                  j?.relates ||
-                  j?.why ||
-                  'Document provides relevant context for this query.'
-                ).trim()
-                const rel: 'direct' | 'indirect' =
-                  j?.relation === 'direct' ? 'direct' : 'indirect'
-                setDocWhy((prev) => ({
-                  ...prev,
-                  [d.doc_id]: { why: txt, relation: rel },
-                }))
-              })
-              .catch(() => {
-                setDocWhy((prev) => ({
-                  ...prev,
-                  [d.doc_id]: {
-                    why: 'Document provides relevant context for this query.',
-                    relation: 'indirect' as const,
-                  },
-                }))
-              })
-              .finally(() =>
-                setDocWhyLoading((prev) => ({ ...prev, [d.doc_id]: false })),
-              )
+    setBatchRelatesRequested(true)
 
-            return { ...prevLoading, [d.doc_id]: true }
-          }
-          return prevLoading
-        })
-        return prevWhy
-      })
+    // Mark all docs as loading
+    const loadingUpdate: Record<string, boolean> = {}
+    docsToProcess.forEach((d) => { loadingUpdate[d.doc_id] = true })
+    setDocWhyLoading((prev) => ({ ...prev, ...loadingUpdate }))
+
+    // Build batch request — catalog index is optional (enriches metadata when available)
+    const batchDocs = docsToProcess.map((d) => {
+      const row = index ? matchCatalogRow(d, index) : undefined
+      const best = [...(d.kps || [])].sort(
+        (a, b) => b.kp_relevance - a.kp_relevance,
+      )[0]
+      return {
+        title: titleFrom(d, row),
+        authors: authorsFrom(d, row),
+        year: yearFrom(d, row),
+        snippet: best?.snippet ?? '',
+      }
     })
-  }, [index, pageDocs, query])
+
+    fetch('/api/batch-relates', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query, docs: batchDocs }),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        const results = j?.results || []
+        const whyUpdate: Record<string, WhyMeta> = {}
+        docsToProcess.forEach((d, i) => {
+          const item = results[i]
+          whyUpdate[d.doc_id] = {
+            why: (
+              item?.relates ||
+              'Document provides relevant context for this query.'
+            ).trim(),
+            relation: item?.relation === 'direct' ? 'direct' : 'indirect',
+          }
+        })
+        setDocWhy((prev) => ({ ...prev, ...whyUpdate }))
+      })
+      .catch(() => {
+        const whyUpdate: Record<string, WhyMeta> = {}
+        docsToProcess.forEach((d) => {
+          whyUpdate[d.doc_id] = {
+            why: 'Document provides relevant context for this query.',
+            relation: 'indirect',
+          }
+        })
+        setDocWhy((prev) => ({ ...prev, ...whyUpdate }))
+      })
+      .finally(() => {
+        const doneUpdate: Record<string, boolean> = {}
+        docsToProcess.forEach((d) => { doneUpdate[d.doc_id] = false })
+        setDocWhyLoading((prev) => ({ ...prev, ...doneUpdate }))
+      })
+  }, [index, pageDocs, query, batchRelatesRequested])
 
   async function runAlignment(q: string, docs: DocMeta[]) {
     try {
@@ -311,29 +312,21 @@ const AskWriAppContent = () => {
     }
   }, [supporting, alignLoading, query, queryCache, retrievalLoading])
 
-  // Auto-run alignment after all other LLM calls complete
+  // Auto-run alignment after retrieval completes
   useEffect(() => {
-    const hasSummaryLoading = Object.values(docSummaryLoading).some(Boolean)
-    const hasWhyLoading = Object.values(docWhyLoading).some(Boolean)
-
-    const allLoadingComplete =
-      !retrievalLoading && !hasSummaryLoading && !hasWhyLoading
-
     if (
-      allLoadingComplete &&
+      !retrievalLoading &&
       supporting.length > 0 &&
       query.trim() &&
       !alignLoading
     ) {
       const timer = setTimeout(() => {
         runAlignmentAfterResults()
-      }, 500)
+      }, 100)
       return () => clearTimeout(timer)
     }
   }, [
     retrievalLoading,
-    docSummaryLoading,
-    docWhyLoading,
     alignLoading,
     supporting.length,
     query,
@@ -364,6 +357,27 @@ const AskWriAppContent = () => {
       })
     })
   }, [pageDocs, index, supporting.length])
+
+  useEffect(() => {
+    if (pageDocs.length === 0) return
+    const topTenResults = JSON.stringify(
+      pageDocs
+        .slice(0, 10)
+        .map((doc) => titleFrom(doc, matchCatalogRow(doc, index))),
+    )
+
+    const sendFeedback = async () => {
+      await fetch('/api/cite-mode-query-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          topTenResults,
+        }),
+      })
+    }
+    sendFeedback()
+  }, [pageDocs, query])
 
   /* -------- render -------- */
   if (searchQuery) {
