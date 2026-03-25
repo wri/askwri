@@ -129,7 +129,7 @@ export const AIResearchModal = ({
       })
       const data = await response.json()
       const { docs, usage, debug } = data
-      console.log({docs})
+
       const embeddingCost = calculateEmbeddingCost(
         query,
         docs,
