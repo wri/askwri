@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Box, Text, Spinner } from '@chakra-ui/react'
-import { getThemedColor, Button } from '@worldresources/wri-design-systems'
+import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
 import { IoIosCopy, IoMdCheckmark, IoMdOpen } from 'react-icons/io'
 import { VscTriangleRight } from 'react-icons/vsc'
 import { AiIcon } from '../icons/AiIcon'
@@ -17,6 +17,7 @@ export const CitationCard = ({
   isActive,
   isDirectlyCited,
   citationLabel,
+  sourceRelevance,
   itemRef,
   passageWhy,
   passageWhyLoading,
@@ -32,8 +33,9 @@ export const CitationCard = ({
   const authors = doc.authors?.join('; ') || 'Unknown author'
   const year = doc.year || ''
 
+  const tier = sourceRelevance?.[doc.doc_id]
   const row = catalogIndex ? matchCatalogRow(doc, catalogIndex) : undefined
-  const summary = row?.shortSummary
+  const summary = row?.summary || row?.shortSummary
 
   return (
     <Box
@@ -47,11 +49,24 @@ export const CitationCard = ({
       background='white'
       padding='16px'
     >
-      <Box display='flex'>
-        <Text fontSize='xs' color='#0A4298'>
-          {citationLabel && `Citation ${citationLabel} \u2022 `}
-          {`${kp.kp_relevance.toFixed(2)} relevance`}
-        </Text>
+      <Box display='flex' alignItems='center' gap='2'>
+        {citationLabel && (
+          <Text fontSize='xs' color='#0A4298'>
+            {`Citation ${citationLabel}`}
+          </Text>
+        )}
+        {tier && (
+          <Tag
+            label={`${tier.charAt(0).toUpperCase()}${tier.slice(1)}`}
+            variant={
+              tier === 'strong'
+                ? 'success'
+                : tier === 'partial'
+                  ? 'warning'
+                  : 'info-grey'
+            }
+          />
+        )}
       </Box>
 
       {/* Title */}
