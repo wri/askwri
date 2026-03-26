@@ -255,6 +255,26 @@ chmod +x teardown.sh
 
 ⚠️ **Warning**: This will permanently delete all Terraform state files!
 
+## Process for updating KPs (Knowledge products)
+Note this assumes that documents.csv has already been generated and list of documents has also been compiled.
+- Update /tmp/askWRI_docs directory with new documents.csv as well as new documents (may require some removals too)
+- rm -rf /tmp/askWRI_cache/*
+- Ensure local `.env` file contains the same contents as in AWS param store for search-service.  Also good to add ASKWRI_APP_ENV contents as well.
+- In search-service directory:
+  - `pip install -r requirements.txt`
+  - `python -m uvicorn app.main:app`
+    - This should rebuild the cache directory (/tmp/askWRI_cache)
+    - This takes about half an hour or so for 170 documents
+    - When finished, the python code will output `app.main - INFO - Background indexing complete`
+- Test changes by running `npm run dev` from root directory
+- Run following aws s3 sync commands.
+  - Note: this requires you have proper AWS_PROFILE setup and have recently run `aws sso login`
+  - Note: Following sync commands do not remove files, so any file removals should be done separately, or delete everything with `aws s3 rm --recursive s3://askwri-data/documents/`
+  - `aws s3 sync /tmp/askWRI_docs s3://askwri-data/documents/`
+  - `aws s3 rm --recursive s3://askwri-data/cache/`
+  - `aws s3 sync /tmp/askWRI_cache s3://askwri-data/cache/`
+- Restart services (both search service and app) to pick up new files from AWS S3 (either by deploying or via AWS Console ECS service)
+
 ## 📊 Monitoring
 
 - **CloudWatch Logs (Next.js)**: `/ecs/askwri-app-{environment}`
