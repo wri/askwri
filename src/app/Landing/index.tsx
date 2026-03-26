@@ -11,32 +11,20 @@ import {
   Toast,
   InlineMessage,
 } from '@worldresources/wri-design-systems'
-import { LuRefreshCcw } from 'react-icons/lu'
 import { FaArrowRightLong } from 'react-icons/fa6'
 import { WriLogoIcon } from '../components/icons/WriLogo'
-import { AiIcon } from '../components/icons/AiIcon'
 import { AIResearchModal } from '../components/AnswerMode/AIResearchModal'
-import {
-  CITE_MODE_SUGGESTION_POOL,
-  getRandomSuggestions,
-} from '../utils/exampleQuestions'
+import QuerySuggestions from '../components/QuerySuggestions'
+
 import '../styles.css'
 
 const Landing = () => {
   const [query, setQuery] = useState('')
   const [aiModalOpen, setAiModalOpen] = useState(false)
-  const [suggestions, setSuggestions] = useState<string[]>(() =>
-    CITE_MODE_SUGGESTION_POOL.slice(0, 3),
-  )
-
   const router = useRouter()
 
-  const handleExampleClick = (example: string) => {
+  const onExampleClick = (example: string) => {
     setQuery(example)
-  }
-
-  const handleShuffleSuggestions = () => {
-    setSuggestions(getRandomSuggestions(3, 'cite'))
   }
 
   const handleSubmit = () => {
@@ -128,39 +116,9 @@ const Landing = () => {
                   onClick={handleSubmit}
                 />
               </div>
-              <Text
-                as='div'
-                marginTop='2'
-                color={getThemedColor('neutral', 700)}
-                fontWeight='400'
-              >
-                For best results, ask a direct question and experiment with
-                different levels of specificity, including geography.
-              </Text>
             </Card.Description>
-            <section key={suggestions.join('|')} className='suggestions-list'>
-              {suggestions.map((item) => (
-                <Button
-                  key={item}
-                  variant='borderless'
-                  leftIcon={<AiIcon />}
-                  onClick={() => handleExampleClick(item)}
-                >
-                  {item}
-                </Button>
-              ))}
-            </section>
+            <QuerySuggestions mode='cite' onExampleClick={onExampleClick} />
           </Card.Body>
-          <Card.Footer>
-            <Button
-              variant='secondary'
-              size='small'
-              leftIcon={<LuRefreshCcw />}
-              onClick={handleShuffleSuggestions}
-            >
-              More suggestions
-            </Button>
-          </Card.Footer>
         </Card.Root>
       </section>
       <section style={{ marginBottom: '150px' }}>

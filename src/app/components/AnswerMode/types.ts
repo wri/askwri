@@ -43,12 +43,10 @@ export interface AnswerPanelProps {
 export interface AISearchFormProps {
   query: string
   loading: boolean
-  suggestions: string[]
   numberOfCiteDocs?: number
   userSelectedDocs?: boolean
   onQueryChange: (query: string) => void
   onSubmit: () => void
-  onShuffleSuggestions: () => void
   onExampleClick: (example: string) => void
 }
 
@@ -76,6 +74,7 @@ export interface SupportingCitationsProps {
   page?: number
   setPage?: (p: number) => void
   scrollVersion?: number
+  sourceRelevance?: Record<string, string>
   directlyCitedCount?: number
   citationLabels?: string[]
   coverageRating?: string
@@ -100,6 +99,7 @@ export interface CitationCardProps {
   isActive: boolean
   isDirectlyCited: boolean
   citationLabel?: string
+  sourceRelevance?: Record<string, string>
   itemRef: (el: HTMLElement | null) => void
   passageWhy: Record<string, WhyMeta>
   passageWhyLoading: Record<string, boolean>

@@ -1,34 +1,3 @@
 .gradient-background {
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.3), rgba(245, 191, 79, 0.3));
 }
-
-.suggestions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-  text-align: left;
-  animation: suggestionFadeIn 1s ease;
-  width: 100%;
-}
-
-.suggestions-list button {
-  margin-top: 10px;
-  max-width: 100%;
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  text-align: left;
-  justify-content: flex-start;
-}
-
-@keyframes suggestionFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}

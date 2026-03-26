@@ -20,6 +20,7 @@ export const SupportingCitations = ({
   page: controlledPage,
   setPage: setControlledPage,
   scrollVersion,
+  sourceRelevance,
   coverageRating,
   coverageExplanation,
   directlyCitedCount = 0,
@@ -285,6 +286,7 @@ export const SupportingCitations = ({
                 isActive={controlledPage === idx + 1}
                 isDirectlyCited
                 citationLabel={citationLabels?.[idx]}
+                sourceRelevance={sourceRelevance}
                 itemRef={(el) => {
                   itemRefs.current[idx] = el
                 }}
@@ -318,6 +320,7 @@ export const SupportingCitations = ({
                       catalogIndex={catalogIndex}
                       isActive={controlledPage === idx + 1}
                       isDirectlyCited={false}
+                      sourceRelevance={sourceRelevance}
                       itemRef={(el) => {
                         itemRefs.current[idx] = el
                       }}
