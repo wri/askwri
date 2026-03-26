@@ -1264,7 +1264,11 @@ async def hybrid_query(request: QueryRequest):
 
             filtered_results = list(doc_groups.values())[:request.max_results]
         else:
-            # Answer mode: return top results as-is
+            # Answer mode: strip summary nodes — they helped retrieval find the
+            # right documents but their content (title+summary) isn't a real PDF
+            # passage and shouldn't be shown to users or fed to synthesis.
+            stage2_results = [n for n in stage2_results
+                              if not n.node.metadata.get("is_summary_node", False)]
             # Relevance filtering happens in the Next.js answer route (nano LLM filter)
             filtered_results = stage2_results[:request.max_results]
 
@@ -1313,7 +1317,10 @@ async def hybrid_query(request: QueryRequest):
                     pass
 
             # Always try to add context for better passage preview
-            if full_doc_text:
+            # Skip context lookup for summary nodes — their text is title+summary,
+            # not a passage from the PDF, so find() will fail or match incorrectly.
+            is_summary = metadata.get("is_summary_node", False)
+            if full_doc_text and not is_summary:
                 content_with_context = get_passage_with_context(node.text, full_doc_text, context_chars=150)
 
                 # Smart truncation that preserves markers
