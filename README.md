@@ -262,9 +262,9 @@ Note this assumes that documents.csv has already been generated and a list of do
 - Ensure local `.env` file contains the same contents as in AWS param store for search-service.  Also good to add ASKWRI_APP_ENV contents as well.
 - In search-service directory:
   - `pip install -r requirements.txt`
-  - `python -m uvicorn app.main:app`
+  - `python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`
     - This should rebuild the cache directory (/tmp/askWRI_cache)
-    - This takes about half an hour or so for 170 documents
+    - Indexing time depends on the number and size of documents; see `search-service/README.md` for up-to-date details.
     - When finished, the python code will output `app.main - INFO - Background indexing complete`
 - Test changes by running `npm run dev` from root directory
 - Run following aws s3 sync commands.
