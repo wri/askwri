@@ -10,10 +10,6 @@ import {
   InlineMessage,
   Modal,
 } from '@worldresources/wri-design-systems'
-import {
-  ANSWER_MODE_SUGGESTION_POOL,
-  getRandomSuggestions,
-} from '../../utils/exampleQuestions'
 import { AISearchForm } from './AISearchForm'
 import { AnswerPanel } from './AnswerPanel'
 import { SupportingCitations } from './SupportingCitations'
@@ -51,9 +47,6 @@ export const AIResearchModal = ({
     Record<string, boolean>
   >({})
   const [supportingDocs, setSupportingDocs] = useState<DocMeta[]>([])
-  const [suggestions, setSuggestions] = useState<string[]>(() =>
-    ANSWER_MODE_SUGGESTION_POOL.slice(0, 3),
-  )
   const [alignLoading, setAlignLoading] = useState(false)
   const [alignment, setAlignment] = useState<Assessment | null>(null)
   const [ops, setOps] = useState<Ops | null>(null)
@@ -63,11 +56,7 @@ export const AIResearchModal = ({
   const [coverageRating, setCoverageRating] = useState<string>('')
   const [coverageExplanation, setCoverageExplanation] = useState<string>('')
 
-  const handleShuffleSuggestions = () => {
-    setSuggestions(getRandomSuggestions(3, 'answer'))
-  }
-
-  const handleExampleClick = (example: string) => {
+  const onExampleClick = (example: string) => {
     setQuery(example)
   }
 
@@ -432,13 +421,11 @@ export const AIResearchModal = ({
       <AISearchForm
         query={query}
         loading={loading}
-        suggestions={suggestions}
         numberOfCiteDocs={consultedDocs?.length}
         userSelectedDocs={userSelectedDocs}
         onQueryChange={setQuery}
         onSubmit={handleSubmit}
-        onShuffleSuggestions={handleShuffleSuggestions}
-        onExampleClick={handleExampleClick}
+        onExampleClick={onExampleClick}
       />
     )
   }
