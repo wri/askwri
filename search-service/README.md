@@ -138,7 +138,7 @@ pip install -r requirements.txt
 # Start the service
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-# Index build takes 1-2 minutes on first start; cached after that
+# Index build takes about half hour for 170 documents on first start; cached after that
 ```
 
 ### API Documentation
