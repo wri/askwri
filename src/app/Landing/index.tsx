@@ -23,7 +23,7 @@ const Landing = () => {
   const [aiModalOpen, setAiModalOpen] = useState(false)
   const router = useRouter()
 
-  const handleExampleClick = (example: string) => {
+  const onExampleClick = (example: string) => {
     setQuery(example)
   }
 
@@ -117,10 +117,7 @@ const Landing = () => {
                 />
               </div>
             </Card.Description>
-            <QuerySuggestions
-              mode='cite'
-              handleExampleClick={handleExampleClick}
-            />
+            <QuerySuggestions mode='cite' onExampleClick={onExampleClick} />
           </Card.Body>
         </Card.Root>
       </section>

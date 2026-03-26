@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { FaArrowTurnUp } from 'react-icons/fa6'
 import { LuRefreshCcw } from 'react-icons/lu'
 import { Spinner, Text } from '@chakra-ui/react'
@@ -12,15 +12,7 @@ import {
 } from './suggestionPool'
 import './QuerySuggestions.css'
 
-const ALL_SUGGESTIONS = [
-  ...ANSWER_MODE_SUGGESTION_POOL,
-  ...CITE_MODE_SUGGESTION_POOL,
-]
-
-const QuerySuggestions = ({
-  mode,
-  handleExampleClick,
-}: QuerySuggestionsProps) => {
+const QuerySuggestions = ({ mode, onExampleClick }: QuerySuggestionsProps) => {
   const pool =
     mode === 'cite' ? CITE_MODE_SUGGESTION_POOL : ANSWER_MODE_SUGGESTION_POOL
   const [localSuggestions, setLocalSuggestions] = useState(() =>
@@ -28,23 +20,32 @@ const QuerySuggestions = ({
   )
   const [loadingItem, setLoadingItem] = useState<string | null>(null)
   const [newItem, setNewItem] = useState<string | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    },
+    [],
+  )
 
   const handleShuffle = () => {
+    if (loadingItem) return
     setLocalSuggestions(getRandomSuggestions(3, mode))
   }
 
   const handleClick = (item: string) => {
     if (loadingItem) return
     setLoadingItem(item)
-    setTimeout(() => {
-      const replacement = ALL_SUGGESTIONS.find(
-        (s) => !localSuggestions.includes(s),
-      )
-      const next = replacement ?? item
-      setLocalSuggestions((prev) => prev.map((s) => (s === item ? next : s)))
-      setNewItem(next)
+    timeoutRef.current = setTimeout(() => {
+      setLocalSuggestions((prev) => {
+        const replacement = pool.find((s) => !prev.includes(s))
+        const next = replacement ?? item
+        setNewItem(next)
+        return prev.map((s) => (s === item ? next : s))
+      })
       setLoadingItem(null)
-      handleExampleClick(item)
+      onExampleClick(item)
     }, 600)
   }
 
@@ -92,6 +93,7 @@ const QuerySuggestions = ({
           size='small'
           leftIcon={<LuRefreshCcw />}
           onClick={handleShuffle}
+          disabled={!!loadingItem}
         >
           More suggestions
         </Button>

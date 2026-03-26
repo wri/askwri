@@ -56,7 +56,7 @@ export const AIResearchModal = ({
   const [coverageRating, setCoverageRating] = useState<string>('')
   const [coverageExplanation, setCoverageExplanation] = useState<string>('')
 
-  const handleExampleClick = (example: string) => {
+  const onExampleClick = (example: string) => {
     setQuery(example)
   }
 
@@ -425,7 +425,7 @@ export const AIResearchModal = ({
         userSelectedDocs={userSelectedDocs}
         onQueryChange={setQuery}
         onSubmit={handleSubmit}
-        handleExampleClick={handleExampleClick}
+        onExampleClick={onExampleClick}
       />
     )
   }

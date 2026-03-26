@@ -47,7 +47,7 @@ export interface AISearchFormProps {
   userSelectedDocs?: boolean
   onQueryChange: (query: string) => void
   onSubmit: () => void
-  handleExampleClick: (example: string) => void
+  onExampleClick: (example: string) => void
 }
 
 export interface AIResearchModalProps {

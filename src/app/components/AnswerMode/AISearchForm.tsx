@@ -17,7 +17,7 @@ export const AISearchForm = ({
   userSelectedDocs,
   onQueryChange,
   onSubmit,
-  handleExampleClick,
+  onExampleClick,
 }: AISearchFormProps) => (
   <div className='gradient-background'>
     <section
@@ -84,10 +84,7 @@ export const AISearchForm = ({
               />
             </div>
           </Card.Description>
-          <QuerySuggestions
-            mode='answer'
-            handleExampleClick={handleExampleClick}
-          />
+          <QuerySuggestions mode='answer' onExampleClick={onExampleClick} />
         </Card.Body>
       </Card.Root>
     </section>
