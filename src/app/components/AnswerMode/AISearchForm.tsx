@@ -1,26 +1,23 @@
 'use client'
 
 import { Heading, Card, Text } from '@chakra-ui/react'
-import { LuRefreshCcw } from 'react-icons/lu'
 import { FaArrowRightLong } from 'react-icons/fa6'
 import {
   Button,
   getThemedColor,
   Textarea,
 } from '@worldresources/wri-design-systems'
-import { AiIcon } from '../icons/AiIcon'
 import { AISearchFormProps } from './types'
+import QuerySuggestions from '../QuerySuggestions'
 
 export const AISearchForm = ({
   query,
   loading,
-  suggestions,
   numberOfCiteDocs,
   userSelectedDocs,
   onQueryChange,
   onSubmit,
-  onShuffleSuggestions,
-  onExampleClick,
+  handleExampleClick,
 }: AISearchFormProps) => (
   <div className='gradient-background'>
     <section
@@ -39,8 +36,6 @@ export const AISearchForm = ({
         textStyle='lg'
         style={{
           color: getThemedColor('neutral', 800),
-
-          paddingBottom: '20px',
         }}
       >
         {numberOfCiteDocs ? (
@@ -88,39 +83,12 @@ export const AISearchForm = ({
                 onClick={onSubmit}
               />
             </div>
-            <Text
-              as='div'
-              marginTop='2'
-              color={getThemedColor('neutral', 700)}
-              fontWeight='400'
-            >
-              For best results, ask a direct question and experiment with
-              different levels of specificity, including geography.
-            </Text>
           </Card.Description>
-          <section key={suggestions.join('|')} className='suggestions-list'>
-            {suggestions.map((item) => (
-              <Button
-                key={item}
-                variant='borderless'
-                leftIcon={<AiIcon />}
-                onClick={() => onExampleClick(item)}
-              >
-                {item}
-              </Button>
-            ))}
-          </section>
+          <QuerySuggestions
+            mode='answer'
+            handleExampleClick={handleExampleClick}
+          />
         </Card.Body>
-        <Card.Footer>
-          <Button
-            variant='secondary'
-            size='small'
-            leftIcon={<LuRefreshCcw />}
-            onClick={onShuffleSuggestions}
-          >
-            More suggestions
-          </Button>
-        </Card.Footer>
       </Card.Root>
     </section>
   </div>

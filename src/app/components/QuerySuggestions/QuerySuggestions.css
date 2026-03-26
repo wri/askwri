@@ -1,0 +1,41 @@
+
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+}
+
+.suggestions-list button {
+  margin-top: 4px;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.suggestion-enter {
+  opacity: 0;
+  padding-left: 8px;
+  transition: opacity 0.2s ease;
+}
+
+.suggestion-button:hover .suggestion-enter {
+  opacity: 1;
+}
+
+.suggestion-text-reveal {
+  display: inline;
+  clip-path: inset(0 100% 0 0);
+  animation: revealLeft 0.4s ease forwards;
+}
+
+@keyframes revealLeft {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0% 0 0); }
+}
+

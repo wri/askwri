@@ -43,13 +43,11 @@ export interface AnswerPanelProps {
 export interface AISearchFormProps {
   query: string
   loading: boolean
-  suggestions: string[]
   numberOfCiteDocs?: number
   userSelectedDocs?: boolean
   onQueryChange: (query: string) => void
   onSubmit: () => void
-  onShuffleSuggestions: () => void
-  onExampleClick: (example: string) => void
+  handleExampleClick: (example: string) => void
 }
 
 export interface AIResearchModalProps {
