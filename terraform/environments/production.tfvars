@@ -50,7 +50,7 @@ search_service_health_check_path = "/health"
 search_service_environment_variables = {
   "LOG_LEVEL"   = "info"
   "DEBUG"       = "false"
-  "WORKERS"     = "4"
+  "WORKERS"     = "1"  # Must be 1: each worker loads its own copy of indexes+models into RAM
 }
 
 # =============================================================================
