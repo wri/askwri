@@ -446,8 +446,7 @@ export const AIResearchModal = ({
         <div style={{ margin: '-10px' }}>
           <div>
             <AlertBanner
-              title=' This feature is an early release and under evaluation. Output
-              quality may vary and should be treated as exploratory.'
+              title="This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory."
               variant='warning'
             />
           </div>
