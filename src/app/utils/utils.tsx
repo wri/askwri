@@ -253,6 +253,7 @@ export const calculateEmbeddingCost = (
 
 export const formatCost = (usd: number | null | undefined): string => {
   const value = usd ?? 0
+  if (!Number.isFinite(value)) return ''
   if (value >= 1) return `$${value.toFixed(2)}`
   const cents = value * 100
   if (cents < 0.01) return '< 0.01¢'
@@ -261,7 +262,8 @@ export const formatCost = (usd: number | null | undefined): string => {
 
 export const formatCO2 = (gco2e: number | null | undefined): string => {
   const value = gco2e ?? 0
-  if (value >= 1) return `${value.toPrecision(3)} gCO2e`
+  if (!Number.isFinite(value)) return ''
+  if (value >= 1) return `${value.toPrecision(3)} g CO2e`
   const mg = value * 1000
   return `${Math.round(mg)} mg CO2e`
 }
