@@ -9,7 +9,7 @@ import {
   Tag,
   Textarea,
   Toast,
-  InlineMessage,
+  AlertBanner,
 } from '@worldresources/wri-design-systems'
 import { FaArrowRightLong } from 'react-icons/fa6'
 import { WriLogoIcon } from '../components/icons/WriLogo'
@@ -46,12 +46,14 @@ const Landing = () => {
         alignItems: 'center',
       }}
     >
-      <InlineMessage
-        size='full-width'
-        variant='warning'
-        label='For WRI staff use only'
-        caption='This tool is under testing and intended for WRI employees only, not for external use. It is currently limited to a selection of Knowledge Products published by WRI Cities program. Results are generated using AI and may occasionally be incomplete or inaccurate.'
-      />
+      <AlertBanner title='For WRI staff use only' variant='warning'>
+        <div style={{ textAlign: 'left' }}>
+          This tool is under testing and intended for WRI employees only, not
+          for external use. It is currently limited to a selection of Knowledge
+          Products published by WRI Cities program. <br />Results are generated
+          using AI and may occasionally be incomplete or inaccurate.
+        </div>
+      </AlertBanner>
 
       <section>
         <div

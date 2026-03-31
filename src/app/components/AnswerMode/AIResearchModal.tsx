@@ -7,7 +7,7 @@ import { Spinner, Box } from '@chakra-ui/react'
 import { DocMeta } from '@/lib/llamacloud'
 import {
   getThemedColor,
-  InlineMessage,
+  AlertBanner,
   Modal,
 } from '@worldresources/wri-design-systems'
 import { AISearchForm } from './AISearchForm'
@@ -445,10 +445,9 @@ export const AIResearchModal = ({
       content={
         <div style={{ margin: '-10px' }}>
           <div>
-            <InlineMessage
-              size='full-width'
+            <AlertBanner
+              title="This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory."
               variant='warning'
-              label='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
             />
           </div>
           {renderContent()}

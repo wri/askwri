@@ -14,6 +14,7 @@ import { AiFillThunderbolt } from 'react-icons/ai'
 import { AiIcon } from '../icons/AiIcon'
 import Navbar from './Navbar'
 import ResultsTable from './ResultsTable'
+import { formatCO2, formatCost } from '../../utils/utils'
 import { ResultsPageProps } from './types'
 import '../../styles.css'
 
@@ -59,7 +60,7 @@ const ResultsPage = ({
                   variant='borderless'
                   as='div'
                   size='small'
-                  label={`${ops?.energy_gco2e?.toFixed(2) ?? '0'} gCO2e`}
+                  label={formatCO2(ops?.energy_gco2e)}
                   aria-label='Carbon equivalent of search'
                   onClick={() => {}}
                 />
@@ -70,7 +71,7 @@ const ResultsPage = ({
                   leftIcon={<HiCurrencyDollar />}
                   variant='borderless'
                   size='small'
-                  label={`$${ops?.cost_usd?.toFixed(4) ?? '0.0000'}`}
+                  label={formatCost(ops?.cost_usd)}
                   aria-label='Cost of credits used in search'
                   onClick={() => {}}
                 />
