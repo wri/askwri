@@ -20,6 +20,7 @@ import { HiCurrencyDollar } from 'react-icons/hi2'
 import { MdChat } from 'react-icons/md'
 import { IoIosCopy, IoMdCheckmark } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
+import { formatCO2, formatCost } from '../../utils/utils'
 import { AnswerPanelProps } from './types'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
 
@@ -286,9 +287,10 @@ export const AnswerPanel = ({
         <div
           style={{
             display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
             paddingTop: '12px',
             justifyContent: 'space-between',
-            alignItems: 'center',
           }}
         >
           <div style={{ flexShrink: 0 }}>
@@ -331,7 +333,7 @@ export const AnswerPanel = ({
                     variant='borderless'
                     as='div'
                     size='small'
-                    label={`${ops?.energy_gco2e?.toFixed(2) ?? '0'} gCO2e`}
+                    label={formatCO2(ops?.energy_gco2e)}
                     aria-label='Carbon equivalent of search'
                     onClick={() => {}}
                   />
@@ -342,7 +344,7 @@ export const AnswerPanel = ({
                     leftIcon={<HiCurrencyDollar />}
                     variant='borderless'
                     size='small'
-                    label={`$${ops?.cost_usd?.toFixed(2) ?? '0.00'}`}
+                    label={formatCost(ops?.cost_usd)}
                     aria-label='Cost of credits used in search'
                     onClick={() => {}}
                   />

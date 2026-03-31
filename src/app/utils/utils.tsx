@@ -219,32 +219,6 @@ export function buildAlignmentSummary(query: string, docs: any[]) {
   return resultsSummaryForAlignment
 }
 
-export function approxUsageAndOps(
-  q: string,
-  message: string,
-  docs: DocMeta[],
-  promptVersion: string,
-) {
-  const promptChars =
-    q.length +
-    docs.slice(0, 6).reduce((a, d) => a + (d.kps?.[0]?.snippet?.length ?? 0), 0)
-  const completionChars = message.length
-  const usage = {
-    model: process.env.OPENAI_MODEL || 'unknown',
-    prompt_tokens: Math.max(1, Math.round(promptChars / 4)),
-    completion_tokens: Math.max(1, Math.round(completionChars / 4)),
-  }
-  const total = usage.prompt_tokens + usage.completion_tokens
-  const cost = estimateCostUSD({ ...usage, total_tokens: total })
-  const energy = estimateEnergyGCO2e({ ...usage, total_tokens: total })
-  return {
-    index_version: 'v1.0',
-    prompt_version: promptVersion,
-    cost_usd: cost ?? 0,
-    energy_gco2e: energy ?? 0,
-  }
-}
-
 export const calculateEmbeddingCost = (
   query: string,
   docs: DocMeta[],
@@ -275,4 +249,19 @@ export const calculateEmbeddingCost = (
     cost_usd: citeEmbeddingCost,
     energy_gco2e: citeEmbeddingEnergy,
   }
+}
+
+export const formatCost = (usd: number | null | undefined): string => {
+  const value = usd ?? 0
+  if (value >= 1) return `$${value.toFixed(2)}`
+  const cents = value * 100
+  if (cents < 0.01) return '< 0.01¢'
+  return `${parseFloat(cents.toPrecision(2))}¢`
+}
+
+export const formatCO2 = (gco2e: number | null | undefined): string => {
+  const value = gco2e ?? 0
+  if (value >= 1) return `${value.toPrecision(3)} gCO2e`
+  const mg = value * 1000
+  return `${Math.round(mg)} mg CO2e`
 }
