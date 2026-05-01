@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package*.json .npmrc ./
 
 # Install dependencies
 RUN npm ci
@@ -53,6 +53,12 @@ RUN chmod +x start-app.sh
 
 # Create writable directory for S3 sync
 RUN mkdir -p /tmp/askWRI_docs && chown nextjs:nodejs /tmp/askWRI_docs
+
+# Pre-create the next/image cache mount point with correct ownership.
+# ECS Fargate initializes empty volumes from the image's directory at the
+# mount target, so without this the mounted next-cache volume would be
+# root:root and the non-root nextjs user could not write to it.
+RUN mkdir -p /app/.next/cache
 
 # Set correct ownership
 RUN chown -R nextjs:nodejs /app
