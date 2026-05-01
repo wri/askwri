@@ -212,9 +212,7 @@ async function callAnthropicLabeler(
   chunks: RetrievedChunk[],
   startIndex: number,
 ): Promise<LabelResult[]> {
-  const chunkDescriptions = chunks.map((c, idx) => {
-    return `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`;
-  });
+  const chunkDescriptions = chunks.map((c, idx) => `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`);
 
   const userPrompt = `Question: "${question}"
 
@@ -261,9 +259,7 @@ async function callOpenAILabeler(
   chunks: RetrievedChunk[],
   startIndex: number,
 ): Promise<LabelResult[]> {
-  const chunkDescriptions = chunks.map((c, idx) => {
-    return `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`;
-  });
+  const chunkDescriptions = chunks.map((c, idx) => `Chunk ${startIndex + idx + 1} (doc_id: ${c.doc_id}, chunk_id: ${c.chunk_id}, score: ${c.score.toFixed(4)}):\n${c.content}`);
 
   const userPrompt = `Question: "${question}"
 

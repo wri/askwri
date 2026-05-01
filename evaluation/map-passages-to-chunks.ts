@@ -20,7 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkPythonService, callPythonService, PYTHON_SERVICE_URL } from './lib/service-client';
-import type { AnswerGoldenDataset, ExpectedPassage } from './lib/types';
+import type { AnswerGoldenDataset } from './lib/types';
 
 // --- Text overlap matching ---
 

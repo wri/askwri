@@ -25,7 +25,7 @@ const Navbar = ({ query }: { query: string }) => {
             key='leave-feedback'
             variant='borderless'
             onClick={() => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+               
               ;(window as any)?.hj('identify', null, { last_query: query })
               ;(window as any)?.hj('event', 'open_survey')
             }}

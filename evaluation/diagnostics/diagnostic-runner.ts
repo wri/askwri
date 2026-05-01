@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Configuration
-const NEXTJS_SERVER_URL = process.env.NEXTJS_SERVER_URL || 'http://localhost:3000';
+const _NEXTJS_SERVER_URL = process.env.NEXTJS_SERVER_URL || 'http://localhost:3000';
 const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8000';
 
 // Load golden dataset
@@ -54,7 +54,7 @@ interface DiagnosticReport {
 function extractUrlSlug(url: string): string {
   if (!url) return '';
 
-  let slug = url
+  const slug = url
     .toLowerCase()
     .replace(/^https?:\/\//, '')
     .replace(/^www\./, '');
@@ -156,7 +156,7 @@ async function analyzeDenseRetrieval(
 /**
  * Stage 2: Sparse Retrieval Analysis
  */
-async function analyzeSparseRetrieval(
+async function _analyzeSparseRetrieval(
   query: string,
   expectedUrls: string[]
 ): Promise<StageResult> {
@@ -165,7 +165,7 @@ async function analyzeSparseRetrieval(
   // Note: This requires a sparse-only endpoint in the Python service
   // For now, we'll estimate based on query term matching
 
-  const expectedSlugs = expectedUrls.map(extractUrlSlug);
+  const _expectedSlugs = expectedUrls.map(extractUrlSlug);
 
   // TODO: Implement sparse-only endpoint call
   // For now, return placeholder
@@ -438,7 +438,7 @@ function determineRootCause(stageResults: StageResult[]): string {
 /**
  * Generate recommended actions based on root cause
  */
-function getRecommendedActions(rootCause: string, stageResults: StageResult[]): string[] {
+function getRecommendedActions(rootCause: string, _stageResults: StageResult[]): string[] {
   const actions: string[] = [];
 
   switch (rootCause) {
@@ -577,7 +577,7 @@ async function runDiagnosticEvaluation() {
       throw new Error('Service not healthy');
     }
     console.log('✅ Python service is running\n');
-  } catch (error: any) {
+  } catch (_error: any) {
     console.error(`❌ Python service not available at ${PYTHON_SERVICE_URL}`);
     console.error('   Please start the service with: bash start.sh');
     process.exit(1);

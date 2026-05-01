@@ -1,4 +1,4 @@
-/* eslint-disable no-plusplus */
+ 
 
 'use client'
 
@@ -86,7 +86,7 @@ export const AIResearchModal = ({
       } else {
         setAlignment(null)
       }
-    } catch (e: any) {
+    } catch (_e: any) {
       setAlignment(null)
     } finally {
       setAlignLoading(false)

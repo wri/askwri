@@ -1,5 +1,5 @@
-/* eslint-disable no-param-reassign */
-/* eslint-disable @typescript-eslint/naming-convention */
+ 
+ 
 /**
  * Multi-query strategy to work around LlamaIndex Cloud's 6-chunk limit
  * Uses parallel execution and smart deduplication for performance
@@ -102,7 +102,7 @@ export async function executeParallelQueries(
     try {
       const result = await queryFunc(v.query, { multiQuery: false }); // Prevent recursion
       return result.docs || [];
-    } catch (_error) {
+    } catch (__error) {
       return [];
     }
   });

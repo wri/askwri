@@ -5,7 +5,6 @@ import {
   matchCatalogRow,
   buildCatalogIndex,
   titleFrom,
-  authorsFrom,
 } from './utils'
 
 export function exportCitationsCsv({

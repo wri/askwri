@@ -187,12 +187,10 @@ async function runDiagnostic(testCase: TestCase): Promise<DiagnosticResult> {
   const rerankResults = response.results || response.reranked_results || [];
 
   // Calculate stage-by-stage recall
-  const getFoundDocs = (results: any[]) => {
-    return testCase.expectedDocuments.filter(expected => {
+  const getFoundDocs = (results: any[]) => testCase.expectedDocuments.filter(expected => {
       const { found } = findDocInResults(expected, results);
       return found;
     });
-  };
 
   const vectorFound = getFoundDocs(vectorResults);
   const bm25Found = getFoundDocs(bm25Results);
@@ -351,7 +349,7 @@ function printDiagnosticReport(results: DiagnosticResult[]): void {
     Array.from(lostInRerank.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
-      .forEach(([doc, count]) => {
+      .forEach(([doc, _count]) => {
         console.log(`   - ${doc}`);
       });
   } else {
@@ -384,7 +382,7 @@ async function main() {
   printDiagnosticReport(allResults);
 
   // Save detailed results
-  const fs = require('fs');
+  const fs = await import('fs');
   const outputPath = `/Users/zunix/Documents/GitHub/askwri/mockups/askwri/evaluation/results/diagnostic-${Date.now()}.json`;
   fs.writeFileSync(outputPath, JSON.stringify(allResults, null, 2));
   console.log(`\n💾 Detailed results saved to: ${outputPath}`);

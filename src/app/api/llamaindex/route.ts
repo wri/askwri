@@ -1,4 +1,4 @@
-/* eslint-disable no-console, no-plusplus */
+ 
 import { NextRequest, NextResponse } from 'next/server'
 import { ANSWER_PRESET, CITE_PRESET } from '@/config/retrieval'
 

@@ -22,7 +22,7 @@ interface TestCase {
 
 function extractUrlSlug(url: string): string {
   if (!url) return '';
-  let slug = url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
+  const slug = url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
   const pathParts = slug.split('/').filter(Boolean);
   const lastPart = pathParts[pathParts.length - 1] || '';
   return lastPart.split('?')[0].replace(/\.(pdf|docx?|html?)$/i, '').replace(/[^a-z0-9\-]/g, '').replace(/^_+|_+$/g, '');

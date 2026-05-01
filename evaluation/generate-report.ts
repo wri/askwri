@@ -41,7 +41,7 @@ function generateHtmlReport(report: EvalReport): string {
   // Recalculate pass count based on current thresholds (75% recall, 15% precision, 25% F1)
   const actualPassedCount = report.results.filter(r => r.recall >= 0.75 && r.precision >= 0.15 && r.f1 >= 0.25).length;
   const passRate = (actualPassedCount / report.test_cases_total * 100).toFixed(1);
-  const statusColor = report.overall_f1 >= 0.25 ? 'green' : report.overall_f1 >= 0.18 ? 'orange' : 'red';
+  const _statusColor = report.overall_f1 >= 0.25 ? 'green' : report.overall_f1 >= 0.18 ? 'orange' : 'red';
 
   let html = `
 <!DOCTYPE html>
