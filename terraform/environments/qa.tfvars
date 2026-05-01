@@ -21,7 +21,7 @@ container_cpu    = 256   # 0.25 vCPU
 container_memory = 512   # 512 MB
 desired_count    = 1     # Lower for QA
 min_capacity     = 1
-max_capacity     = 2
+max_capacity     = 1
 
 # Health Check
 health_check_path = "/api/health"
