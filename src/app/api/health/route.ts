@@ -11,7 +11,6 @@ export async function GET() {
   const LOG_INTERVAL_MS = 3600_000;
 
   if (now - lastLoggedAt >= LOG_INTERVAL_MS) {
-     
     console.log(`[Health API] Requests in last hour: ${requestCount} at ${new Date().toISOString()}`);
     lastLoggedAt = now;
     requestCount = 0;
