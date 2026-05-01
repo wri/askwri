@@ -225,7 +225,6 @@ export const calculateEmbeddingCost = (
   usage: Usage,
   debug: LlamaCloudDebug,
   promptVersion: string = 'CITEv1.3',
-  _answer: string = '',
 ) => {
   // Retrieval is vector search + BM25 — no LLM tokens consumed.
   // Only count the small embedding cost; alignment LLM cost is added later.

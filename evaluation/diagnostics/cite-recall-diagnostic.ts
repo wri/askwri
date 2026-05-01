@@ -383,7 +383,15 @@ async function main() {
 
   // Save detailed results
   const fs = await import('fs');
-  const outputPath = `/Users/zunix/Documents/GitHub/askwri/mockups/askwri/evaluation/results/diagnostic-${Date.now()}.json`;
+  const path = await import('path');
+  const configuredOutputPath = process.argv[2] || process.env.DIAGNOSTIC_OUTPUT_PATH;
+  const outputPath = configuredOutputPath || path.join(
+    process.cwd(),
+    'evaluation',
+    'results',
+    `diagnostic-${Date.now()}.json`,
+  );
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, JSON.stringify(allResults, null, 2));
   console.log(`\n💾 Detailed results saved to: ${outputPath}`);
 }

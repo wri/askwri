@@ -12,7 +12,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Configuration
-const _NEXTJS_SERVER_URL = process.env.NEXTJS_SERVER_URL || 'http://localhost:3000';
 const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8000';
 
 // Load golden dataset
@@ -151,34 +150,6 @@ async function analyzeDenseRetrieval(
       details: { error: error.message }
     };
   }
-}
-
-/**
- * Stage 2: Sparse Retrieval Analysis
- */
-async function _analyzeSparseRetrieval(
-  query: string,
-  expectedUrls: string[]
-): Promise<StageResult> {
-  console.log('  [Stage 2] Analyzing sparse (BM25) retrieval...');
-
-  // Note: This requires a sparse-only endpoint in the Python service
-  // For now, we'll estimate based on query term matching
-
-  const _expectedSlugs = expectedUrls.map(extractUrlSlug);
-
-  // TODO: Implement sparse-only endpoint call
-  // For now, return placeholder
-
-  return {
-    stage_name: 'Sparse Retrieval (BM25)',
-    recall: 0,
-    docs_found: [],
-    docs_missing: expectedUrls,
-    details: {
-      note: 'Sparse-only endpoint not yet implemented. Add /debug/sparse-only to hybrid-service/main.py'
-    }
-  };
 }
 
 /**
@@ -501,9 +472,8 @@ async function runDiagnosticForTestCase(testCase: TestCase): Promise<DiagnosticR
   const denseResult = await analyzeDenseRetrieval(fullQuery, testCase.expected_urls);
   stageResults.push(denseResult);
 
-  // Stage 2: Sparse Retrieval (placeholder for now)
-  // const sparseResult = await analyzeSparseRetrieval(fullQuery, testCase.expected_urls);
-  // stageResults.push(sparseResult);
+  // Stage 2 (Sparse Retrieval / BM25) is not yet implemented; it requires a
+  // sparse-only endpoint in the Python service. Re-introduce when available.
 
   // Stage 3: Hybrid Fusion
   const fusionResult = await analyzeHybridFusion(fullQuery, testCase.expected_urls);

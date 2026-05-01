@@ -125,7 +125,6 @@ export const AIResearchModal = ({
         usage,
         debug,
         'ANSv1.3',
-        answer ? answer.sentences.join(' ') : '',
       )
       setOps(embeddingCost)
 
