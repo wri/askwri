@@ -87,9 +87,7 @@ async function labelBatch(
   startIndex: number,
 ): Promise<LabelResult[]> {
   // No scores, no doc_ids, no metadata that could bias — just content and title
-  const chunkDescriptions = chunks.map((c, idx) => {
-    return `Passage ${startIndex + idx + 1}:\nTitle: ${c.title}\n${c.content}`;
-  });
+  const chunkDescriptions = chunks.map((c, idx) => `Passage ${startIndex + idx + 1}:\nTitle: ${c.title}\n${c.content}`);
 
   const userPrompt = `Research question: "${question}"
 

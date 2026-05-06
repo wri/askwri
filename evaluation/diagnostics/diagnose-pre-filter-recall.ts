@@ -28,7 +28,7 @@ interface TestCase {
  */
 function extractUrlSlug(url: string): string {
   if (!url) return '';
-  let slug = url
+  const slug = url
     .toLowerCase()
     .replace(/^https?:\/\//, '')
     .replace(/^www\./, '');

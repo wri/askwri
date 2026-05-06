@@ -1,6 +1,3 @@
-/* eslint-disable no-underscore-dangle */
-/* eslint-disable no-restricted-syntax */
-
 import { DocMeta, LlamaCloudDebug } from '@/lib/llamacloud'
 import { estimateCostUSD } from '@/config/costs'
 import { estimateEnergyGCO2e } from '@/config/energy'
@@ -225,7 +222,6 @@ export const calculateEmbeddingCost = (
   usage: Usage,
   debug: LlamaCloudDebug,
   promptVersion: string = 'CITEv1.3',
-  answer: string = '',
 ) => {
   // Retrieval is vector search + BM25 — no LLM tokens consumed.
   // Only count the small embedding cost; alignment LLM cost is added later.

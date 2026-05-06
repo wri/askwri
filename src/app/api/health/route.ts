@@ -4,14 +4,12 @@ let requestCount = 0;
 let lastLoggedAt = 0;
 
 export async function GET() {
-  // eslint-disable-next-line no-plusplus
   requestCount++;
 
   const now = Date.now();
   const LOG_INTERVAL_MS = 3600_000;
 
   if (now - lastLoggedAt >= LOG_INTERVAL_MS) {
-    // eslint-disable-next-line no-console -- surface health check requests during development
     console.log(`[Health API] Requests in last hour: ${requestCount} at ${new Date().toISOString()}`);
     lastLoggedAt = now;
     requestCount = 0;

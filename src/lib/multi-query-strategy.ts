@@ -1,5 +1,3 @@
-/* eslint-disable no-param-reassign */
-/* eslint-disable @typescript-eslint/naming-convention */
 /**
  * Multi-query strategy to work around LlamaIndex Cloud's 6-chunk limit
  * Uses parallel execution and smart deduplication for performance

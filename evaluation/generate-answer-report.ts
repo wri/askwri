@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { RetrievalEvalReport, RetrievalTestResult } from './lib/types';
+import type { RetrievalEvalReport } from './lib/types';
 import type { AnswerGoldenDataset } from './lib/types';
 
 function pct(v: number): string {
@@ -416,18 +416,9 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
   for (const r of report.results) {
     const testCase = goldenData.test_cases.find(tc => tc.id === r.test_case_id);
 
-    const expectedSet = new Set(r.expected_chunk_ids);
     const retrievedSet = new Set(r.retrieved_chunk_ids);
     const exactSet = new Set(r.exact_matches);
     const adjSet = new Set(r.adjacent_matches);
-
-    const expectedDocSet = new Set(r.expected_doc_ids);
-    const retrievedDocSet = new Set(r.retrieved_doc_ids);
-    const matchedDocs = r.retrieved_doc_ids.filter(d => expectedDocSet.has(d));
-    const extraDocs = r.retrieved_doc_ids.filter(d => !expectedDocSet.has(d));
-    const missedDocs = r.expected_doc_ids.filter(d => !retrievedDocSet.has(d));
-
-    const missedChunks = r.expected_chunk_ids.filter(c => !retrievedSet.has(c) && !adjSet.has(c));
 
     html += `
   <div class="test-case">
