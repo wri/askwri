@@ -122,7 +122,6 @@ const AskWriAppContent = () => {
     if (query.trim() === searchQuery) return
     setQuery(searchQuery)
     runQuery(searchQuery)
-     
   }, [searchQuery])
 
   const pageDocs = useMemo(() => {

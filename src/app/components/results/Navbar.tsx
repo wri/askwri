@@ -25,7 +25,6 @@ const Navbar = ({ query }: { query: string }) => {
             key='leave-feedback'
             variant='borderless'
             onClick={() => {
-               
               ;(window as any)?.hj('identify', null, { last_query: query })
               ;(window as any)?.hj('event', 'open_survey')
             }}

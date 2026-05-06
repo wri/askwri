@@ -1,6 +1,3 @@
- 
- 
-
 import { DocMeta, LlamaCloudDebug } from '@/lib/llamacloud'
 import { estimateCostUSD } from '@/config/costs'
 import { estimateEnergyGCO2e } from '@/config/energy'

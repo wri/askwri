@@ -4,7 +4,6 @@ let requestCount = 0;
 let lastLoggedAt = 0;
 
 export async function GET() {
-   
   requestCount++;
 
   const now = Date.now();

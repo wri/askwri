@@ -22,10 +22,10 @@ export default [
     ],
   },
   {
-    // Files with blanket `/* eslint-disable */` comments may legitimately
-    // suppress rules that don't currently fire; don't warn about that.
+    // Surface stale eslint-disable directives so they don't accumulate as
+    // dead comments after the active ruleset changes.
     linterOptions: {
-      reportUnusedDisableDirectives: 'off',
+      reportUnusedDisableDirectives: 'warn',
     },
   },
   js.configs.recommended,
