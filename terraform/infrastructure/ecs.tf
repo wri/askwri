@@ -511,9 +511,13 @@ resource "aws_ecs_task_definition" "search_service" {
 
   # Ephemeral writable volumes for /tmp and SSM agent scratch space.
   # Required because the container runs with readonlyRootFilesystem = true.
-  # - /tmp            S3-synced docs/cache directories
-  # - ssm-agent       writable scratch space required by the SSM agent injected
-  #                   by ECS Exec; required when using aws ecs execute-command
+  #
+  # Fargate always initializes ephemeral volumes as empty root:root 755 directories.
+  # The init-volumes container (below) runs as root, creates the docs/cache
+  # subdirectories, and chowns all of /tmp to appuser (UID 1000), giving the app
+  # a fully writable /tmp (needed by Python's tempfile module in addition to the
+  # S3-sync directories).  ssm-agent is intentionally excluded: the SSM agent
+  # runs as root and needs no chown.
   volume {
     name = "tmp"
   }
@@ -523,12 +527,47 @@ resource "aws_ecs_task_definition" "search_service" {
   }
 
   container_definitions = jsonencode([
+    # Init container: runs as root to set up /tmp before the app starts.
+    # Creates the S3-sync subdirectories and chowns all of /tmp to appuser (UID
+    # 1000) so the app can write tempfiles as well as the docs/cache directories.
+    # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
+    {
+      name      = "init-volumes"
+      image     = "${aws_ecr_repository.search_service.repository_url}:latest"
+      essential = false
+      user      = "0"
+      command   = ["sh", "-c", "mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache && chown -R 1000:1000 /tmp"]
+
+      mountPoints = [
+        {
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
+          readOnly      = false
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.search_service.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "ecs-init"
+        }
+      }
+    },
     {
       name  = "${var.project_name}-${var.environment}-search-service"
       image = "${aws_ecr_repository.search_service.repository_url}:latest"
 
       readonlyRootFilesystem = true
       privileged             = false
+
+      dependsOn = [
+        {
+          containerName = "init-volumes"
+          condition     = "SUCCESS"
+        }
+      ]
 
       mountPoints = [
         {
