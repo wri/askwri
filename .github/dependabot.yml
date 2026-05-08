@@ -39,9 +39,18 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
-  # Terraform
+  # Terraform (infrastructure)
   - package-ecosystem: "terraform"
-    directory: "/terraform"
+    directory: "/terraform/infrastructure"
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Terraform (backend-setup)
+  - package-ecosystem: "terraform"
+    directory: "/terraform/backend-setup"
     schedule:
       interval: "monthly"
     ignore:
