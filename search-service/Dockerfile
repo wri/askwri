@@ -2,7 +2,7 @@
 # Search Service Dockerfile
 # =============================================================================
 
-FROM python:3.12-slim as base
+FROM python:3.14-slim as base
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
