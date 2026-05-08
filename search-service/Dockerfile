@@ -58,8 +58,8 @@ COPY --chown=appuser:appgroup app/ ./app/
 COPY --chown=appuser:appgroup start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Create documents directory (writable by appuser) - must be before USER switch
-RUN mkdir -p /tmp/askWRI_docs && chown appuser:appgroup /tmp/askWRI_docs
+# Create documents and cache directories (writable by appuser) - must be before USER switch
+RUN mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache && chown appuser:appgroup /tmp/askWRI_docs /tmp/askWRI_cache
 
 # Make models readable by appuser
 RUN chmod -R a+r /opt/models
