@@ -188,13 +188,10 @@ resource "aws_ecs_task_definition" "app" {
   # Ephemeral writable volumes (Fargate ephemeral storage, not tmpfs).
   # Required because the rest of the container's root filesystem is read-only.
   #
-  # Fargate initializes each empty volume from the container image directory at
-  # the mount target, but permissions may be reset, making the path non-writable
-  # for the non-root nextjs user.  Volumes must therefore be mounted at paths
-  # that are already owned by nextjs in the image:
-  # - /tmp/askWRI_docs      S3-synced documents; pre-created as nextjs:nodejs in Dockerfile
-  # - /app/.next/cache      next/image optimized-image cache; owned by nextjs via chown -R
-  # - /var/lib/amazon/ssm   SSM agent scratch space for ECS Exec
+  # Fargate always initializes ephemeral volumes as empty root:root 755 directories,
+  # regardless of the image content at the mount path.  The init-volumes container
+  # (below) runs as root before the app starts and chowns the writable volumes to
+  # the nextjs user (UID 1001) so the app can write to them.
   volume {
     name = "docs"
   }
@@ -208,6 +205,38 @@ resource "aws_ecs_task_definition" "app" {
   }
 
   container_definitions = jsonencode([
+    # Init container: runs as root to chown ephemeral volumes before the app starts.
+    # Fargate volumes are always root:root 755 on creation; this fixes ownership for
+    # the non-root nextjs user (UID 1001).
+    {
+      name      = "init-volumes"
+      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      essential = false
+      user      = "0"
+      command   = ["sh", "-c", "chown 1001:1001 /tmp/askWRI_docs /app/.next/cache"]
+
+      mountPoints = [
+        {
+          sourceVolume  = "docs"
+          containerPath = "/tmp/askWRI_docs"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "next-cache"
+          containerPath = "/app/.next/cache"
+          readOnly      = false
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.app.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "ecs-init"
+        }
+      }
+    },
     {
       name  = "${var.project_name}-${var.environment}"
       image = "${aws_ecr_repository.app.repository_url}:latest"
@@ -222,6 +251,13 @@ resource "aws_ecs_task_definition" "app" {
       #                     fails to boot or serves 500s for next/image requests
       #   /var/lib/amazon/ssm  writable scratch space for the SSM agent injected
       #                        by ECS Exec; required when using aws ecs execute-command
+      dependsOn = [
+        {
+          containerName = "init-volumes"
+          condition     = "SUCCESS"
+        }
+      ]
+
       readonlyRootFilesystem = true
       privileged             = false
 
