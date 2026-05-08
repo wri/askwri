@@ -189,13 +189,12 @@ resource "aws_ecs_task_definition" "app" {
   # Required because the rest of the container's root filesystem is read-only.
   #
   # Fargate initializes each empty volume from the container image directory at
-  # the mount target, preserving ownership but NOT special mode bits (e.g. the
-  # sticky bit on /tmp is stripped, yielding root:root 755 which is not writable
-  # by the non-root nextjs user).  Volumes must therefore be mounted at paths
+  # the mount target, but permissions may be reset, making the path non-writable
+  # for the non-root nextjs user.  Volumes must therefore be mounted at paths
   # that are already owned by nextjs in the image:
-  # - /tmp/askWRI_docs  S3-synced documents; pre-created as nextjs:nodejs in Dockerfile
-  # - /app/.next/cache  next/image optimized-image cache; owned by nextjs via chown -R
-  # - ssm-agent         SSM agent scratch space for ECS Exec
+  # - /tmp/askWRI_docs      S3-synced documents; pre-created as nextjs:nodejs in Dockerfile
+  # - /app/.next/cache      next/image optimized-image cache; owned by nextjs via chown -R
+  # - /var/lib/amazon/ssm   SSM agent scratch space for ECS Exec
   volume {
     name = "docs"
   }
