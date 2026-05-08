@@ -55,9 +55,9 @@ RUN chmod +x start-app.sh
 RUN mkdir -p /tmp/askWRI_docs && chown nextjs:nodejs /tmp/askWRI_docs
 
 # Pre-create the next/image cache mount point with correct ownership.
-# ECS Fargate initializes empty volumes from the image's directory at the
-# mount target, so without this the mounted next-cache volume would be
-# root:root and the non-root nextjs user could not write to it.
+# Fargate always initializes ephemeral volumes as empty root:root 755 directories;
+# the init-volumes container in the ECS task definition chowns them to the nextjs
+# user (UID 1001) before the app starts.
 RUN mkdir -p /app/.next/cache
 
 # Set correct ownership

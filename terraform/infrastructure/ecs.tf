@@ -190,8 +190,9 @@ resource "aws_ecs_task_definition" "app" {
   #
   # Fargate always initializes ephemeral volumes as empty root:root 755 directories,
   # regardless of the image content at the mount path.  The init-volumes container
-  # (below) runs as root before the app starts and chowns the writable volumes to
-  # the nextjs user (UID 1001) so the app can write to them.
+  # (below) runs as root before the app starts and chowns docs and next-cache to
+  # the nextjs user (UID 1001).  ssm-agent is intentionally excluded: the SSM agent
+  # binary is injected by ECS and runs as root, so it does not need chown.
   volume {
     name = "docs"
   }
@@ -208,6 +209,7 @@ resource "aws_ecs_task_definition" "app" {
     # Init container: runs as root to chown ephemeral volumes before the app starts.
     # Fargate volumes are always root:root 755 on creation; this fixes ownership for
     # the non-root nextjs user (UID 1001).
+    # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
     {
       name      = "init-volumes"
       image     = "${aws_ecr_repository.app.repository_url}:latest"
