@@ -186,12 +186,17 @@ resource "aws_ecs_task_definition" "app" {
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   # Ephemeral writable volumes (Fargate ephemeral storage, not tmpfs).
-  # Required because the rest of the container's root filesystem is read-only:
-  # - /tmp general scratch space used by Node and Next.js standalone
-  # - /app/.next/cache next/image optimized-image cache (the app uses next/image)
-  # - ssm-agent writable scratch space required by the SSM agent used by ECS Exec
+  # Required because the rest of the container's root filesystem is read-only.
+  #
+  # Fargate initializes each empty volume from the container image directory at
+  # the mount target, but permissions may be reset, making the path non-writable
+  # for the non-root nextjs user.  Volumes must therefore be mounted at paths
+  # that are already owned by nextjs in the image:
+  # - /tmp/askWRI_docs      S3-synced documents; pre-created as nextjs:nodejs in Dockerfile
+  # - /app/.next/cache      next/image optimized-image cache; owned by nextjs via chown -R
+  # - /var/lib/amazon/ssm   SSM agent scratch space for ECS Exec
   volume {
-    name = "tmp"
+    name = "docs"
   }
 
   volume {
@@ -212,7 +217,7 @@ resource "aws_ecs_task_definition" "app" {
       # - linuxParameters drops all Linux capabilities; the Node process needs none.
       # - ulimits cap process count to slow fork-bomb / miner-spawn behaviour.
       # - mountPoints expose only the specific writable paths needed:
-      #   /tmp              general scratch space for Node and Next.js standalone
+      #   /tmp/askWRI_docs  S3-synced documents directory
       #   /app/.next/cache  next/image optimized-image cache; without it the app
       #                     fails to boot or serves 500s for next/image requests
       #   /var/lib/amazon/ssm  writable scratch space for the SSM agent injected
@@ -237,8 +242,8 @@ resource "aws_ecs_task_definition" "app" {
 
       mountPoints = [
         {
-          sourceVolume  = "tmp"
-          containerPath = "/tmp"
+          sourceVolume  = "docs"
+          containerPath = "/tmp/askWRI_docs"
           readOnly      = false
         },
         {
