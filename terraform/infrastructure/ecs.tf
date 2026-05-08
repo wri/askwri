@@ -536,7 +536,7 @@ resource "aws_ecs_task_definition" "search_service" {
       image     = "${aws_ecr_repository.search_service.repository_url}:latest"
       essential = false
       user      = "0"
-      command   = ["sh", "-c", "mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache && chown -R 1000:1000 /tmp"]
+      command   = ["sh", "-c", "mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache/hf_hub && chown -R 1000:1000 /tmp"]
 
       mountPoints = [
         {
@@ -615,6 +615,14 @@ resource "aws_ecs_task_definition" "search_service" {
           {
             name  = "CACHE_S3_PREFIX"
             value = var.cache_s3_prefix
+          },
+          {
+            # HF_HOME points at the baked-in read-only model weights.
+            # HF_HUB_CACHE redirects hub cache metadata (e.g. .no_exist sentinel
+            # files) to a writable path so they don't try to write into /opt/models
+            # which is read-only under readonlyRootFilesystem = true.
+            name  = "HF_HUB_CACHE"
+            value = "/tmp/askWRI_cache/hf_hub"
           }
         ],
         [
