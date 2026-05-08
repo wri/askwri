@@ -466,10 +466,27 @@ resource "aws_ecs_task_definition" "search_service" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
+  # Ephemeral writable volumes for /tmp (askWRI_docs and askWRI_cache live here).
+  # Required because the container runs with readonlyRootFilesystem = true.
+  volume {
+    name = "tmp"
+  }
+
   container_definitions = jsonencode([
     {
       name  = "${var.project_name}-${var.environment}-search-service"
       image = "${aws_ecr_repository.search_service.repository_url}:latest"
+
+      readonlyRootFilesystem = true
+      privileged             = false
+
+      mountPoints = [
+        {
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
+          readOnly      = false
+        }
+      ]
 
       portMappings = [
         {
