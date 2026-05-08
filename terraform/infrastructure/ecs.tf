@@ -509,13 +509,19 @@ resource "aws_ecs_task_definition" "search_service" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
-  # Ephemeral writable volumes for /tmp and SSM agent scratch space.
+  # Ephemeral writable volumes for S3-synced data and SSM agent scratch space.
   # Required because the container runs with readonlyRootFilesystem = true.
-  # - /tmp            S3-synced docs/cache directories
-  # - ssm-agent       writable scratch space required by the SSM agent injected
-  #                   by ECS Exec; required when using aws ecs execute-command
+  #
+  # Fargate always initializes ephemeral volumes as empty root:root 755 directories.
+  # The init-volumes container (below) runs as root and chowns docs/cache to
+  # appuser (UID 1000).  ssm-agent is intentionally excluded: the SSM agent runs
+  # as root and needs no chown.
   volume {
-    name = "tmp"
+    name = "docs"
+  }
+
+  volume {
+    name = "cache"
   }
 
   volume {
@@ -523,6 +529,39 @@ resource "aws_ecs_task_definition" "search_service" {
   }
 
   container_definitions = jsonencode([
+    # Init container: runs as root to chown ephemeral volumes before the app starts.
+    # Fargate volumes are always root:root 755 on creation; this fixes ownership for
+    # the non-root appuser (UID 1000).
+    # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
+    {
+      name      = "init-volumes"
+      image     = "${aws_ecr_repository.search_service.repository_url}:latest"
+      essential = false
+      user      = "0"
+      command   = ["sh", "-c", "chown 1000:1000 /tmp/askWRI_docs /tmp/askWRI_cache"]
+
+      mountPoints = [
+        {
+          sourceVolume  = "docs"
+          containerPath = "/tmp/askWRI_docs"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "cache"
+          containerPath = "/tmp/askWRI_cache"
+          readOnly      = false
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.search_service.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "ecs-init"
+        }
+      }
+    },
     {
       name  = "${var.project_name}-${var.environment}-search-service"
       image = "${aws_ecr_repository.search_service.repository_url}:latest"
@@ -530,10 +569,22 @@ resource "aws_ecs_task_definition" "search_service" {
       readonlyRootFilesystem = true
       privileged             = false
 
+      dependsOn = [
+        {
+          containerName = "init-volumes"
+          condition     = "SUCCESS"
+        }
+      ]
+
       mountPoints = [
         {
-          sourceVolume  = "tmp"
-          containerPath = "/tmp"
+          sourceVolume  = "docs"
+          containerPath = "/tmp/askWRI_docs"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "cache"
+          containerPath = "/tmp/askWRI_cache"
           readOnly      = false
         },
         {

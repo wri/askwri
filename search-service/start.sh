@@ -24,7 +24,6 @@ sync_from_s3() {
 }
 
 if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
-    mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache
     sync_from_s3 "documents" "s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}" /tmp/askWRI_docs
     sync_from_s3 "cache" "s3://${DOCUMENTS_S3_BUCKET}/${CACHE_S3_PREFIX:-}" /tmp/askWRI_cache
 else
