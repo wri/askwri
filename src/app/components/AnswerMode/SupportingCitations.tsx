@@ -1,7 +1,5 @@
 'use client'
 
-/* eslint-disable no-restricted-syntax */
-
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import {

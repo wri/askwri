@@ -68,7 +68,7 @@ function main() {
           urlToTitle.set(normalized, title);
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // Skip invalid JSON
     }
   }

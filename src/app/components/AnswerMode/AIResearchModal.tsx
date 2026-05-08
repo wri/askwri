@@ -1,5 +1,3 @@
-/* eslint-disable no-plusplus */
-
 'use client'
 
 import { useState } from 'react'
@@ -86,7 +84,7 @@ export const AIResearchModal = ({
       } else {
         setAlignment(null)
       }
-    } catch (e: any) {
+    } catch (_e: any) {
       setAlignment(null)
     } finally {
       setAlignLoading(false)
@@ -125,7 +123,6 @@ export const AIResearchModal = ({
         usage,
         debug,
         'ANSv1.3',
-        answer ? answer.sentences.join(' ') : '',
       )
       setOps(embeddingCost)
 

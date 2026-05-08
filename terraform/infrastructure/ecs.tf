@@ -7,7 +7,7 @@ resource "aws_ecs_cluster" "main" {
 
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = "disabled"
   }
 
   tags = {
@@ -185,10 +185,116 @@ resource "aws_ecs_task_definition" "app" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
+  # Ephemeral writable volumes (Fargate ephemeral storage, not tmpfs).
+  # Required because the rest of the container's root filesystem is read-only.
+  #
+  # Fargate always initializes ephemeral volumes as empty root:root 755 directories,
+  # regardless of the image content at the mount path.  The init-volumes container
+  # (below) runs as root before the app starts and chowns docs and next-cache to
+  # the nextjs user (UID 1001).  ssm-agent is intentionally excluded: the SSM agent
+  # binary is injected by ECS and runs as root, so it does not need chown.
+  volume {
+    name = "docs"
+  }
+
+  volume {
+    name = "next-cache"
+  }
+
+  volume {
+    name = "ssm-agent"
+  }
+
   container_definitions = jsonencode([
+    # Init container: runs as root to chown ephemeral volumes before the app starts.
+    # Fargate volumes are always root:root 755 on creation; this fixes ownership for
+    # the non-root nextjs user (UID 1001).
+    # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
+    {
+      name      = "init-volumes"
+      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      essential = false
+      user      = "0"
+      command   = ["sh", "-c", "chown 1001:1001 /tmp/askWRI_docs /app/.next/cache"]
+
+      mountPoints = [
+        {
+          sourceVolume  = "docs"
+          containerPath = "/tmp/askWRI_docs"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "next-cache"
+          containerPath = "/app/.next/cache"
+          readOnly      = false
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.app.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "ecs-init"
+        }
+      }
+    },
     {
       name  = "${var.project_name}-${var.environment}"
       image = "${aws_ecr_repository.app.repository_url}:latest"
+
+      # Security hardening:
+      # - readonlyRootFilesystem prevents attackers from dropping payloads onto disk.
+      # - linuxParameters drops all Linux capabilities; the Node process needs none.
+      # - ulimits cap process count to slow fork-bomb / miner-spawn behaviour.
+      # - mountPoints expose only the specific writable paths needed:
+      #   /tmp/askWRI_docs  S3-synced documents directory
+      #   /app/.next/cache  next/image optimized-image cache; without it the app
+      #                     fails to boot or serves 500s for next/image requests
+      #   /var/lib/amazon/ssm  writable scratch space for the SSM agent injected
+      #                        by ECS Exec; required when using aws ecs execute-command
+      dependsOn = [
+        {
+          containerName = "init-volumes"
+          condition     = "SUCCESS"
+        }
+      ]
+
+      readonlyRootFilesystem = true
+      privileged             = false
+
+      linuxParameters = {
+        capabilities = {
+          drop = ["ALL"]
+        }
+        initProcessEnabled = true
+      }
+
+      ulimits = [
+        {
+          name      = "nproc"
+          softLimit = 1024
+          hardLimit = 2048
+        }
+      ]
+
+      mountPoints = [
+        {
+          sourceVolume  = "docs"
+          containerPath = "/tmp/askWRI_docs"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "next-cache"
+          containerPath = "/app/.next/cache"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "ssm-agent"
+          containerPath = "/var/lib/amazon/ssm"
+          readOnly      = false
+        }
+      ]
 
       portMappings = [
         {
@@ -403,10 +509,78 @@ resource "aws_ecs_task_definition" "search_service" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
+  # Ephemeral writable volumes for /tmp and SSM agent scratch space.
+  # Required because the container runs with readonlyRootFilesystem = true.
+  #
+  # Fargate always initializes ephemeral volumes as empty root:root 755 directories.
+  # The init-volumes container (below) runs as root, creates the docs/cache
+  # subdirectories, and chowns all of /tmp to appuser (UID 1000), giving the app
+  # a fully writable /tmp (needed by Python's tempfile module in addition to the
+  # S3-sync directories).  ssm-agent is intentionally excluded: the SSM agent
+  # runs as root and needs no chown.
+  volume {
+    name = "tmp"
+  }
+
+  volume {
+    name = "ssm-agent"
+  }
+
   container_definitions = jsonencode([
+    # Init container: runs as root to set up /tmp before the app starts.
+    # Creates the S3-sync subdirectories and chowns all of /tmp to appuser (UID
+    # 1000) so the app can write tempfiles as well as the docs/cache directories.
+    # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
+    {
+      name      = "init-volumes"
+      image     = "${aws_ecr_repository.search_service.repository_url}:latest"
+      essential = false
+      user      = "0"
+      command   = ["sh", "-c", "mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache/hf_hub && chown -R 1000:1000 /tmp"]
+
+      mountPoints = [
+        {
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
+          readOnly      = false
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.search_service.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "ecs-init"
+        }
+      }
+    },
     {
       name  = "${var.project_name}-${var.environment}-search-service"
       image = "${aws_ecr_repository.search_service.repository_url}:latest"
+
+      readonlyRootFilesystem = true
+      privileged             = false
+
+      dependsOn = [
+        {
+          containerName = "init-volumes"
+          condition     = "SUCCESS"
+        }
+      ]
+
+      mountPoints = [
+        {
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "ssm-agent"
+          containerPath = "/var/lib/amazon/ssm"
+          readOnly      = false
+        }
+      ]
 
       portMappings = [
         {
@@ -441,6 +615,14 @@ resource "aws_ecs_task_definition" "search_service" {
           {
             name  = "CACHE_S3_PREFIX"
             value = var.cache_s3_prefix
+          },
+          {
+            # HF_HOME points at the baked-in read-only model weights.
+            # HF_HUB_CACHE redirects hub cache metadata (e.g. .no_exist sentinel
+            # files) to a writable path so they don't try to write into /opt/models
+            # which is read-only under readonlyRootFilesystem = true.
+            name  = "HF_HUB_CACHE"
+            value = "/tmp/askWRI_cache/hf_hub"
           }
         ],
         [

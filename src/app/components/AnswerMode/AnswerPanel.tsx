@@ -1,8 +1,5 @@
 'use client'
 
-/* eslint-disable no-plusplus */
-/* eslint-disable react/no-array-index-key */
-
 import { useState, FC } from 'react'
 import { Text, Box, Heading, Spinner } from '@chakra-ui/react'
 import {

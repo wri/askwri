@@ -122,7 +122,6 @@ const AskWriAppContent = () => {
     if (query.trim() === searchQuery) return
     setQuery(searchQuery)
     runQuery(searchQuery)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery])
 
   const pageDocs = useMemo(() => {

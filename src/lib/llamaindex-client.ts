@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ChatResponse } from './llamacloud'
 
 /**
@@ -94,7 +93,7 @@ export async function checkLlamaIndexHealth(): Promise<boolean> {
     const response = await fetch('/api/llamaindex')
     const data = await response.json()
     return data.ok && data.python_service?.index_loaded
-  } catch (error: any) {
+  } catch (_error: any) {
     return false
   }
 }

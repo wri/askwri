@@ -1,10 +1,10 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package*.json .npmrc ./
 
 # Install dependencies
 RUN npm ci
@@ -20,7 +20,7 @@ ENV NEXT_PUBLIC_ENVIRONMENT=$NEXT_PUBLIC_ENVIRONMENT
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 
@@ -53,6 +53,12 @@ RUN chmod +x start-app.sh
 
 # Create writable directory for S3 sync
 RUN mkdir -p /tmp/askWRI_docs && chown nextjs:nodejs /tmp/askWRI_docs
+
+# Pre-create the next/image cache mount point with correct ownership.
+# Fargate always initializes ephemeral volumes as empty root:root 755 directories;
+# the init-volumes container in the ECS task definition chowns them to the nextjs
+# user (UID 1001) before the app starts.
+RUN mkdir -p /app/.next/cache
 
 # Set correct ownership
 RUN chown -R nextjs:nodejs /app

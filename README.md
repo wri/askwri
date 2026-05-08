@@ -113,7 +113,7 @@ graph TB
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 20.x or later
+- [Node.js](https://nodejs.org/) 24.x or later
 - [Python](https://www.python.org/) 3.12.x or later
 - [Docker](https://www.docker.com/)
 - [Terraform](https://www.terraform.io/) 1.0+
