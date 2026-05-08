@@ -509,19 +509,17 @@ resource "aws_ecs_task_definition" "search_service" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
-  # Ephemeral writable volumes for S3-synced data and SSM agent scratch space.
+  # Ephemeral writable volumes for /tmp and SSM agent scratch space.
   # Required because the container runs with readonlyRootFilesystem = true.
   #
   # Fargate always initializes ephemeral volumes as empty root:root 755 directories.
-  # The init-volumes container (below) runs as root and chowns docs/cache to
-  # appuser (UID 1000).  ssm-agent is intentionally excluded: the SSM agent runs
-  # as root and needs no chown.
+  # The init-volumes container (below) runs as root, creates the docs/cache
+  # subdirectories, and chowns all of /tmp to appuser (UID 1000), giving the app
+  # a fully writable /tmp (needed by Python's tempfile module in addition to the
+  # S3-sync directories).  ssm-agent is intentionally excluded: the SSM agent
+  # runs as root and needs no chown.
   volume {
-    name = "docs"
-  }
-
-  volume {
-    name = "cache"
+    name = "tmp"
   }
 
   volume {
@@ -529,26 +527,21 @@ resource "aws_ecs_task_definition" "search_service" {
   }
 
   container_definitions = jsonencode([
-    # Init container: runs as root to chown ephemeral volumes before the app starts.
-    # Fargate volumes are always root:root 755 on creation; this fixes ownership for
-    # the non-root appuser (UID 1000).
+    # Init container: runs as root to set up /tmp before the app starts.
+    # Creates the S3-sync subdirectories and chowns all of /tmp to appuser (UID
+    # 1000) so the app can write tempfiles as well as the docs/cache directories.
     # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
     {
       name      = "init-volumes"
       image     = "${aws_ecr_repository.search_service.repository_url}:latest"
       essential = false
       user      = "0"
-      command   = ["sh", "-c", "chown 1000:1000 /tmp/askWRI_docs /tmp/askWRI_cache"]
+      command   = ["sh", "-c", "mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache && chown -R 1000:1000 /tmp"]
 
       mountPoints = [
         {
-          sourceVolume  = "docs"
-          containerPath = "/tmp/askWRI_docs"
-          readOnly      = false
-        },
-        {
-          sourceVolume  = "cache"
-          containerPath = "/tmp/askWRI_cache"
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
           readOnly      = false
         }
       ]
@@ -578,13 +571,8 @@ resource "aws_ecs_task_definition" "search_service" {
 
       mountPoints = [
         {
-          sourceVolume  = "docs"
-          containerPath = "/tmp/askWRI_docs"
-          readOnly      = false
-        },
-        {
-          sourceVolume  = "cache"
-          containerPath = "/tmp/askWRI_cache"
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
           readOnly      = false
         },
         {
