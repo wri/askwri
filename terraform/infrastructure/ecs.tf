@@ -211,9 +211,12 @@ resource "aws_ecs_task_definition" "app" {
       # - readonlyRootFilesystem prevents attackers from dropping payloads onto disk.
       # - linuxParameters drops all Linux capabilities; the Node process needs none.
       # - ulimits cap process count to slow fork-bomb / miner-spawn behaviour.
-      # - mountPoints expose only the specific writable paths the app needs
-      #   (/tmp and /app/.next/cache). Without these the app fails to boot or
-      #   serves 500s for next/image optimized requests.
+      # - mountPoints expose only the specific writable paths needed:
+      #   /tmp              general scratch space for Node and Next.js standalone
+      #   /app/.next/cache  next/image optimized-image cache; without it the app
+      #                     fails to boot or serves 500s for next/image requests
+      #   /var/lib/amazon/ssm  writable scratch space for the SSM agent injected
+      #                        by ECS Exec; required when using aws ecs execute-command
       readonlyRootFilesystem = true
       privileged             = false
 
