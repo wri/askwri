@@ -2,6 +2,7 @@
 set -e
 
 if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
+    mkdir -p /tmp/askWRI_docs
     echo "Syncing documents from S3..."
     RETRIES=3
     DELAY=5
