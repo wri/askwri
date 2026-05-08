@@ -189,12 +189,17 @@ resource "aws_ecs_task_definition" "app" {
   # Required because the rest of the container's root filesystem is read-only:
   # - /tmp general scratch space used by Node and Next.js standalone
   # - /app/.next/cache next/image optimized-image cache (the app uses next/image)
+  # - ssm-agent writable scratch space required by the SSM agent used by ECS Exec
   volume {
     name = "tmp"
   }
 
   volume {
     name = "next-cache"
+  }
+
+  volume {
+    name = "ssm-agent"
   }
 
   container_definitions = jsonencode([
@@ -236,6 +241,11 @@ resource "aws_ecs_task_definition" "app" {
         {
           sourceVolume  = "next-cache"
           containerPath = "/app/.next/cache"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "ssm-agent"
+          containerPath = "/var/lib/amazon/ssm"
           readOnly      = false
         }
       ]
