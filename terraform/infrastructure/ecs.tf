@@ -466,10 +466,17 @@ resource "aws_ecs_task_definition" "search_service" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
-  # Ephemeral writable volumes for /tmp (askWRI_docs and askWRI_cache live here).
+  # Ephemeral writable volumes for /tmp and SSM agent scratch space.
   # Required because the container runs with readonlyRootFilesystem = true.
+  # - /tmp            S3-synced docs/cache directories
+  # - ssm-agent       writable scratch space required by the SSM agent injected
+  #                   by ECS Exec; required when using aws ecs execute-command
   volume {
     name = "tmp"
+  }
+
+  volume {
+    name = "ssm-agent"
   }
 
   container_definitions = jsonencode([
@@ -484,6 +491,11 @@ resource "aws_ecs_task_definition" "search_service" {
         {
           sourceVolume  = "tmp"
           containerPath = "/tmp"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "ssm-agent"
+          containerPath = "/var/lib/amazon/ssm"
           readOnly      = false
         }
       ]
