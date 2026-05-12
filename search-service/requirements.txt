@@ -22,7 +22,7 @@ optimum[onnxruntime]>=1.17.0
 
 # Data processing
 pandas>=2.3.3
-numpy>=1.24.0
+numpy>=1.26.4
 
 # HTTP client
 httpx>=0.28.1,<1.0.0
