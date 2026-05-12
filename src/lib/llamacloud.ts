@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { smartMultiQuerySearch } from './multi-query-strategy'
 
 export type CitationTarget = {
