@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 /**
  * Catalog API
  *  - Reads a CSV (or JSON) catalog from disk
