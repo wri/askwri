@@ -43,11 +43,11 @@ resource "aws_ecr_lifecycle_policy" "app" {
       },
       {
         rulePriority = 2
-        description  = "Keep last 15 images"
+        description  = "Keep last 10 images"
         selection = {
           tagStatus   = "any"
           countType   = "imageCountMoreThan"
-          countNumber = 15
+          countNumber = 10
         }
         action = {
           type = "expire"
@@ -98,11 +98,11 @@ resource "aws_ecr_lifecycle_policy" "search_service" {
       },
       {
         rulePriority = 2
-        description  = "Keep last 10 images"
+        description  = "Keep last 5 images"
         selection = {
           tagStatus   = "any"
           countType   = "imageCountMoreThan"
-          countNumber = 10
+          countNumber = 5
         }
         action = {
           type = "expire"
