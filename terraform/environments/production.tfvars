@@ -21,7 +21,7 @@ container_cpu    = 512   # 0.5 vCPU
 container_memory = 1024  # 1 GB
 desired_count    = 1     # Could be raised higher based on usage patterns
 min_capacity     = 1
-max_capacity     = 10
+max_capacity     = 1
 
 # Health Check
 health_check_path = "/api/health"
@@ -39,11 +39,11 @@ app_environment_variables = {
 # =============================================================================
 
 search_service_container_port   = 8000
-search_service_container_cpu    = 2048  # 2 vCPU
-search_service_container_memory = 16384 # 16 GB
+search_service_container_cpu    = 1024  # 1 vCPU
+search_service_container_memory = 8192  # 8 GB
 search_service_desired_count    = 1     # Could be raised higher based on usage patterns
 search_service_min_capacity     = 1
-search_service_max_capacity     = 10
+search_service_max_capacity     = 1
 search_service_health_check_path = "/health"
 
 # Search Service Environment Variables
