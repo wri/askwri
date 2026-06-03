@@ -9,7 +9,7 @@ python-dotenv>=1.2.1
 # Core LlamaIndex - using latest versions
 llama-index>=0.14.22
 llama-index-readers-file>=0.6.0
-openai>=1.0.0
+openai>=1.109.1
 
 # Hybrid retrieval
 llama-index-retrievers-bm25>=0.2.0,<1.0.0
