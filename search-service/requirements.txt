@@ -12,7 +12,7 @@ llama-index-readers-file>=0.6.0
 openai>=1.109.1
 
 # Hybrid retrieval
-llama-index-retrievers-bm25>=0.2.0,<1.0.0
+llama-index-retrievers-bm25>=0.7.1,<1.0.0
 sentence-transformers>=3.4.1
 rank-bm25>=0.2.2
 
