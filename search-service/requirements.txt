@@ -4,7 +4,7 @@ uvicorn[standard]>=0.48.0,<1.0.0
 pydantic>=2.13.4,<3.0.0
 pydantic-settings>=2.14.1,<3.0.0
 python-multipart>=0.0.9,<0.1.0
-python-dotenv>=1.2.1
+python-dotenv>=1.2.2
 
 # Core LlamaIndex - using latest versions
 llama-index>=0.14.22
