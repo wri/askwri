@@ -155,6 +155,24 @@ Once running: http://localhost:8000/docs
 | `PORT` | `8000` | Server port |
 | `WORKERS` | `1` | Number of uvicorn workers |
 | `LOG_LEVEL` | `info` | Logging level |
+| `RETRIEVAL_BACKEND` | `legacy` | `legacy` (CSV + boot-time index build) or `postgres` (read chunks/embeddings from Postgres) |
+| `DATABASE_URL` | — | Postgres connection URL; required for `postgres` backend and the migration script (append `?sslmode=require` for RDS) |
+| `RERANKER_BACKEND` | `onnx` | `onnx` for Fargate CPU; use `torch` on local Macs (the CoreML/ONNX path is ~20x slower on Apple Silicon) |
+
+## Postgres-backed retrieval (Phase 0)
+
+Two boot modes, switched by `RETRIEVAL_BACKEND`:
+
+- **`legacy`** (default): parses `documents.csv` + PDFs, builds in-memory indexes at boot (cached; slow cold start).
+- **`postgres`**: reads `document_chunks` (text + embeddings + node metadata) from Postgres at boot — no CSV, no PDF parsing, no OpenAI calls at startup. Dense retrieval runs per-query against pgvector; BM25 is hydrated from the chunk rows in `corpus_order` (which must match the legacy node build order — BM25 breaks score ties by corpus position).
+
+One-time corpus migration (schema first via `npm run migration:run` at the repo root):
+
+```bash
+./venv/bin/python -m scripts.migrate_csv_to_postgres [--reset]
+```
+
+The `/query` request/response contract (`QueryRequest`/`QueryResponse` in `app/main.py`) is frozen — both backends serve it identically. Parity vs the golden sets is recorded in `docs/plans/2026-06-09-phase0-store-and-migration-plan.md` (Task 10).
 
 ## Docker
 
