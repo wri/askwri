@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import path from 'node:path'
 import fs from 'node:fs/promises'
+import { initializeDatabase } from '../../../db/data-source'
+import { getCatalogItems } from '../../../db/queries/getCatalogItems'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -141,6 +143,17 @@ function normalizeRow(row: Record<string, string>) {
 
 export async function GET(_req: NextRequest) {
   try {
+    if (process.env.CATALOG_SOURCE === 'postgres') {
+      await initializeDatabase()
+      const items = await getCatalogItems()
+      return NextResponse.json({
+        ok: true,
+        count: items.length,
+        updatedAt: new Date().toISOString(),
+        items,
+        source: 'postgres',
+      })
+    }
     const p = await detectCatalogPath()
     const buf = await fs.readFile(p, 'utf8')
     let items: Array<Record<string, any>> = []
