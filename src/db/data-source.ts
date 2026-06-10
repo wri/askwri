@@ -20,10 +20,15 @@ export const AppDataSource = new DataSource({
     CiteModeQueryLogs,
     AnswerModeQueryLogs,
   ],
-  ssl: {
-    rejectUnauthorized:
-      process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
-  },
+  // DATABASE_SSL=false disables SSL for local dev databases (docker has no SSL);
+  // default stays SSL-on for RDS.
+  ssl:
+    process.env.DATABASE_SSL === 'false'
+      ? false
+      : {
+          rejectUnauthorized:
+            process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
+        },
 })
 
 // Initialize connection (for Next.js API routes)
