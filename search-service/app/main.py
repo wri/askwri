@@ -120,7 +120,9 @@ service_state = {
     "cache": AskWRICache(cache_dir=settings.cache_dir),
     "indexing_in_progress": False,
     "indexing_error": None,
-    "indexing_task": None
+    "indexing_task": None,
+    "pg_dense_ready": False,
+    "embed_model": None,
 }
 
 class QueryRequest(BaseModel):
@@ -427,6 +429,39 @@ def get_passage_with_context(chunk_text: str, full_document_text: str, context_c
 
     return result
 
+def init_rerankers():
+    """Load mode-specific cross-encoder rerankers. Returns (answer, cite)."""
+    logger.info(f"🔄 Loading cross-encoder rerankers (backend: {settings.reranker_backend})...")
+    step_start = time.time()
+
+    answer_reranker_model = settings.answer_reranker_model
+    cite_reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+    if settings.reranker_backend == "onnx":
+        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, ONNX)...")
+        reranker_start = time.time()
+        reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend="onnx")
+        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+
+        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
+        reranker_start = time.time()
+        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend="onnx")
+        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+    else:
+        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
+        reranker_start = time.time()
+        reranker_answer = SentenceTransformerRerank(model=answer_reranker_model, top_n=20)
+        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+
+        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
+        reranker_start = time.time()
+        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=1000)
+        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+
+    logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
+    return reranker_answer, reranker_cite
+
+
 def load_documents_and_build_indexes():
     """Load documents and build both dense and sparse indexes (synchronous, runs in thread pool)"""
     global service_state
@@ -558,34 +593,7 @@ def load_documents_and_build_indexes():
     logger.info(f"✅ BM25 index built in {time.time() - step_start:.1f}s")
 
     # Initialize rerankers
-    logger.info(f"🔄 Loading cross-encoder rerankers (backend: {settings.reranker_backend})...")
-    step_start = time.time()
-
-    answer_reranker_model = settings.answer_reranker_model
-    cite_reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-    if settings.reranker_backend == "onnx":
-        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, ONNX)...")
-        reranker_start = time.time()
-        reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend="onnx")
-        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
-
-        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
-        reranker_start = time.time()
-        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend="onnx")
-        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
-    else:
-        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
-        reranker_start = time.time()
-        reranker_answer = SentenceTransformerRerank(model=answer_reranker_model, top_n=20)
-        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
-
-        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
-        reranker_start = time.time()
-        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=1000)
-        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
-
-    logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
+    reranker_answer, reranker_cite = init_rerankers()
 
     # Store in global state
     service_state["vector_index"] = vector_index
@@ -596,6 +604,51 @@ def load_documents_and_build_indexes():
 
     logger.info("Successfully built indexes and initialized rerankers")
 
+def load_from_postgres():
+    """Postgres-backed boot: no CSV, no PDF parsing, no OpenAI calls at startup.
+
+    Dense retrieval happens per-query against pgvector (PgVectorRetriever);
+    BM25 is hydrated from document_chunks rows; full texts and metadata come
+    from document_texts / documents.
+    """
+    global service_state
+    from app import pg_store
+
+    logger.info("Loading retrieval state from Postgres...")
+
+    if _use_custom_ssl_client and _ca_bundle:
+        http_client = httpx.Client(verify=_ca_bundle)
+        embed_model = OpenAIEmbedding(
+            model="text-embedding-3-small",
+            api_key=os.getenv("OPENAI_API_KEY"),
+            http_client=http_client,
+        )
+    else:
+        embed_model = OpenAIEmbedding(
+            model="text-embedding-3-small",
+            api_key=os.getenv("OPENAI_API_KEY"),
+        )
+
+    nodes = pg_store.load_nodes()
+    if not nodes:
+        raise RuntimeError("No searchable chunks in Postgres — run the migration script first")
+
+    logger.info("📊 Building BM25 sparse index from Postgres chunks...")
+    bm25_retriever = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=1000)
+
+    reranker_answer, reranker_cite = init_rerankers()
+
+    service_state["documents_metadata"] = pg_store.load_documents_metadata()
+    service_state["document_texts"] = pg_store.load_document_texts()
+    service_state["bm25_retriever"] = bm25_retriever
+    service_state["reranker_answer"] = reranker_answer
+    service_state["reranker_cite"] = reranker_cite
+    service_state["embed_model"] = embed_model
+    service_state["vector_index"] = None
+    service_state["pg_dense_ready"] = True
+    logger.info(f"✅ Postgres-backed retrieval ready ({len(nodes)} chunks)")
+
+
 async def _run_indexing_in_background():
     """Background task to load documents and build indexes in a thread pool"""
     global service_state
@@ -604,7 +657,10 @@ async def _run_indexing_in_background():
     try:
         logger.info("Background indexing started (running in thread pool)...")
         # Run blocking code in thread pool to avoid blocking the event loop
-        await asyncio.to_thread(load_documents_and_build_indexes)
+        if settings.retrieval_backend == "postgres":
+            await asyncio.to_thread(load_from_postgres)
+        else:
+            await asyncio.to_thread(load_documents_and_build_indexes)
         logger.info("Background indexing complete")
     except Exception as e:
         logger.error(f"Background indexing failed: {e}")
@@ -686,7 +742,7 @@ async def health_check():
     indexing_in_progress = service_state.get("indexing_in_progress", False)
     indexing_error = service_state.get("indexing_error")
     indexes_ready = (
-        service_state["vector_index"] is not None and
+        (service_state["vector_index"] is not None or bool(service_state.get("pg_dense_ready"))) and
         service_state["bm25_retriever"] is not None
     )
 
@@ -712,7 +768,7 @@ async def health_check():
             "ready": indexes_ready
         },
         "indexes_loaded": {
-            "vector_index": service_state["vector_index"] is not None,
+            "vector_index": service_state["vector_index"] is not None or bool(service_state.get("pg_dense_ready")),
             "bm25_retriever": service_state["bm25_retriever"] is not None,
         },
         "documents_count": len(service_state["documents_metadata"]),
@@ -724,6 +780,18 @@ async def health_check():
         "cache_stats": service_state["cache"].get_cache_stats() if service_state.get("cache") else {}
     }
 
+def make_dense_retriever(top_k: int):
+    """Dense lane: pgvector-backed or legacy in-memory, per settings."""
+    if settings.retrieval_backend == "postgres":
+        from app.pg_store import PgVectorRetriever
+        return PgVectorRetriever(
+            embed_model=service_state["embed_model"], similarity_top_k=top_k
+        )
+    return VectorIndexRetriever(
+        index=service_state["vector_index"], similarity_top_k=top_k
+    )
+
+
 @app.post("/query", response_model=QueryResponse)
 async def hybrid_query(request: QueryRequest):
     """
@@ -732,7 +800,8 @@ async def hybrid_query(request: QueryRequest):
     Stage 2: Local reranking with mode-specific cross-encoders
     """
 
-    if not service_state["vector_index"] or not service_state["bm25_retriever"]:
+    dense_ready = service_state["vector_index"] is not None or service_state.get("pg_dense_ready")
+    if not dense_ready or not service_state["bm25_retriever"]:
         raise HTTPException(status_code=500, detail="Service not properly initialized")
 
     try:
@@ -746,10 +815,7 @@ async def hybrid_query(request: QueryRequest):
 
         if request.return_intermediate_results:
             # Stage 1a: Vector search only
-            vector_retriever_temp = VectorIndexRetriever(
-                index=service_state["vector_index"],
-                similarity_top_k=request.vector_top_k
-            )
+            vector_retriever_temp = make_dense_retriever(request.vector_top_k)
             vector_only_results = vector_retriever_temp.retrieve(query_bundle)
             logger.info(f"Diagnostic - Vector only: {len(vector_only_results)} results")
 
@@ -759,10 +825,7 @@ async def hybrid_query(request: QueryRequest):
 
         # Stage 1: Hybrid Fusion Retrieval
         stage1_start = time.time()
-        vector_retriever = VectorIndexRetriever(
-            index=service_state["vector_index"],
-            similarity_top_k=request.vector_top_k
-        )
+        vector_retriever = make_dense_retriever(request.vector_top_k)
 
         hybrid_retriever = HybridFusionRetriever(
             vector_retriever=vector_retriever,
@@ -1033,7 +1096,8 @@ async def embeddings_query(request: EmbeddingsRequest):
     This transforms our hybrid retrieval results into the format expected by AskWriApp.tsx
     """
 
-    if not service_state["vector_index"] or not service_state["bm25_retriever"]:
+    dense_ready = service_state["vector_index"] is not None or service_state.get("pg_dense_ready")
+    if not dense_ready or not service_state["bm25_retriever"]:
         raise HTTPException(status_code=500, detail="Service not properly initialized")
 
     try:
@@ -1128,7 +1192,7 @@ async def get_stats():
         "version": "2.0.0",
         "documents_loaded": len(service_state["documents_metadata"]),
         "indexes": {
-            "vector_index_ready": service_state["vector_index"] is not None,
+            "vector_index_ready": service_state["vector_index"] is not None or bool(service_state.get("pg_dense_ready")),
             "bm25_retriever_ready": service_state["bm25_retriever"] is not None,
         },
         "rerankers": {
@@ -1154,9 +1218,13 @@ async def trigger_reindex():
         service_state["bm25_retriever"] = None
         service_state["documents_metadata"] = {}
         service_state["document_texts"] = {}
+        service_state["pg_dense_ready"] = False
 
         # Re-run startup logic in thread pool
-        await asyncio.to_thread(load_documents_and_build_indexes)
+        if settings.retrieval_backend == "postgres":
+            await asyncio.to_thread(load_from_postgres)
+        else:
+            await asyncio.to_thread(load_documents_and_build_indexes)
 
         logger.info("[Reindex] Re-index complete")
 
