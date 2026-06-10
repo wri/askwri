@@ -33,7 +33,9 @@
     "eval:synthesis-prepare-review": "npx tsx --env-file-if-exists=.env evaluation/prepare-synthesis-review.ts",
     "eval:synthesis-assemble": "npx tsx --env-file-if-exists=.env evaluation/assemble-synthesis-ground-truth.ts",
     "eval:upload": "npx tsx --env-file-if-exists=.env evaluation/upload-eval-to-s3.ts",
-    "eval:download": "npx tsx --env-file-if-exists=.env evaluation/download-eval-from-s3.ts"
+    "eval:download": "npx tsx --env-file-if-exists=.env evaluation/download-eval-from-s3.ts",
+    "test:python": "cd search-service && ./venv/bin/python -m pytest tests/ -v",
+    "test:db": "DATABASE_URL=postgresql://askwri:password@localhost:5432/qa DATABASE_SSL=false jest --testPathPattern='db.test'"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.997.0",
