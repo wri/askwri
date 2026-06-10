@@ -416,3 +416,116 @@ class TestParseStage:
                 "SELECT status FROM documents WHERE id = %s", (doc_id,)
             ).fetchone()[0]
             assert status == "needs_review"
+
+
+# ---------------------------------------------------------------------------
+# --- language stage ---
+# ---------------------------------------------------------------------------
+
+_EN_TEXT = (
+    "The World Resources Institute publishes reports on climate change and "
+    "sustainable development. Their research covers forests, water, food, and "
+    "energy systems around the globe. Policy makers and businesses use WRI data "
+    "to guide environmental decisions."
+)
+
+_ES_TEXT = (
+    "El Instituto de Recursos Mundiales publica informes sobre el cambio "
+    "climático y el desarrollo sostenible. Su investigación abarca bosques, "
+    "agua, alimentos y sistemas energéticos en todo el mundo. Los responsables "
+    "políticos y las empresas utilizan los datos del WRI para orientar las "
+    "decisiones medioambientales."
+)
+
+_ZH_SIMPLIFIED_TEXT = (
+    "世界资源研究所发布有关气候变化和可持续发展的报告。"
+    "他们的研究涵盖全球的森林、水资源、粮食和能源系统。"
+    "政策制定者和企业使用世界资源研究所的数据来指导环境决策。"
+    "这些研究为全球可持续发展提供了重要的科学依据。"
+)
+
+_ZH_TRADITIONAL_TEXT = (
+    "臺灣是一個美麗的島嶼，位於亞洲東部。這裡有豐富的自然景觀和文化遺產。"
+    "臺灣人民勤奮努力，創造了經濟奇蹟。教育和科技是臺灣發展的重要支柱。"
+    "許多國際企業選擇在臺灣設立研發中心。"
+)
+
+_PT_TEXT = (
+    "O Instituto de Recursos Mundiais publica relatórios sobre mudanças "
+    "climáticas e desenvolvimento sustentável. Sua pesquisa abrange florestas, "
+    "água, alimentos e sistemas de energia em todo o mundo. Formuladores de "
+    "políticas e empresas usam dados do WRI para orientar decisões ambientais."
+)
+
+_DE_TEXT = (
+    "Das World Resources Institute veröffentlicht Berichte über den Klimawandel "
+    "und nachhaltige Entwicklung. Ihre Forschung umfasst Wälder, Wasser, "
+    "Lebensmittel und Energiesysteme auf der ganzen Welt. Politische "
+    "Entscheidungsträger und Unternehmen nutzen WRI-Daten für Umweltentscheidungen."
+)
+
+
+class TestDetectUnit:
+    """Unit tests for worker.stages.language.detect — no DB required."""
+
+    def test_english_text(self):
+        from worker.stages.language import detect
+        assert detect(_EN_TEXT) == "en"
+
+    def test_spanish_text(self):
+        from worker.stages.language import detect
+        assert detect(_ES_TEXT) == "es"
+
+    def test_chinese_simplified_maps_to_zh(self):
+        """langdetect returns 'zh-cn' for Simplified; startswith branch maps it to 'zh'."""
+        from worker.stages.language import detect
+        assert detect(_ZH_SIMPLIFIED_TEXT) == "zh"
+
+    def test_portuguese_text(self):
+        from worker.stages.language import detect
+        assert detect(_PT_TEXT) == "pt"
+
+    def test_chinese_traditional_maps_to_zh(self):
+        """langdetect returns 'zh-tw' for Traditional; startswith branch maps it to 'zh'."""
+        from worker.stages.language import detect
+        assert detect(_ZH_TRADITIONAL_TEXT) == "zh"
+
+    def test_determinism(self):
+        """Calling detect twice on the same text returns the same code."""
+        from worker.stages.language import detect
+        first = detect(_EN_TEXT)
+        second = detect(_EN_TEXT)
+        assert first == second
+
+    def test_unsupported_language_falls_back_to_en(self):
+        """German (not in SUPPORTED) falls back to 'en'."""
+        from worker.stages.language import detect
+        assert detect(_DE_TEXT) == "en"
+
+
+class TestLanguageStageWrite:
+
+    def test_language_stage_writes_language_columns(self, stages_test_db):
+        """language stage reads document_texts.full_text, detects 'en',
+        and writes documents.language = 'en', documents.languages = ['en']."""
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, external_id="lang-test-doc")
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _EN_TEXT, len(_EN_TEXT), []),
+            )
+            conn.commit()
+
+        from worker.stages.language import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT language, languages FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()
+            assert row is not None
+            language, languages = row
+            assert language == "en"
+            assert languages == ["en"]
