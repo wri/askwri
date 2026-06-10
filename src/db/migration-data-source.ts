@@ -4,6 +4,7 @@ import { CiteModeFeedback } from './entities/CiteModeFeedback.entity'
 import { AnswerModeFeedback } from './entities/AnswerModeFeedback.entity'
 import { CiteModeQueryLogs } from './entities/CiteModeQueryLogs.entity'
 import { AnswerModeQueryLogs } from './entities/AnswerModeQueryLogs.entity'
+import { Document } from './entities/Document.entity'
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -20,6 +21,7 @@ const MigrationDataSource = new DataSource({
     AnswerModeFeedback,
     CiteModeQueryLogs,
     AnswerModeQueryLogs,
+    Document,
   ],
   migrations: ['src/db/migrations/**/*.ts'],
   subscribers: [],
