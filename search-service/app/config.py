@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     documents_local_dir: str = "/tmp/askWRI_docs"
     cache_dir: str = "/tmp/askWRI_cache"
 
+    # Postgres-backed retrieval (Phase 0 cutover)
+    database_url: str = ""          # postgresql://user:pass@host:5432/db (append ?sslmode=require for RDS)
+    retrieval_backend: str = "legacy"  # "legacy" (CSV + boot-time build) | "postgres"
+
     # Cite mode reranker logit thresholds (calibrated 2026-03-19)
     cite_logit_floor: float = -9.0        # Drop docs below this raw logit
     cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores

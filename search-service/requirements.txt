@@ -28,3 +28,7 @@ numpy>=1.26.4
 httpx>=0.28.1,<1.0.0
 requests>=2.34.2
 certifi>=2023.11.17
+
+# Postgres / pgvector (system of record for chunks + embeddings)
+psycopg[binary,pool]>=3.2
+pgvector>=0.3.0
