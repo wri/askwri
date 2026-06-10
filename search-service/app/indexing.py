@@ -60,7 +60,9 @@ def load_csv_metadata(documents_local_dir: str) -> dict:
                 "authors": metadata_raw.get('All authors', ''),
                 "year": metadata_raw.get('YEAR published', ''),
                 "url": metadata_raw.get('Source URL', metadata_raw.get('URL', metadata_raw.get('Attribution URL', ''))),
-                "summary": row.get('summary', ''),
+                # pandas reads empty CSV cells as NaN, which is truthy and not
+                # JSON-serializable — coerce to '' so empty summaries behave.
+                "summary": row.get('summary', '') if pd.notna(row.get('summary', '')) else '',
                 "subtag": metadata_raw.get('Sub-tag', '') if isinstance(metadata_raw.get('Sub-tag'), str) else '',
                 "program_series": metadata_raw.get('program_series', ''),  # Add program_series for filtering
                 "file_path": file_path,
