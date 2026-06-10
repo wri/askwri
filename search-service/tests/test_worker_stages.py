@@ -529,3 +529,180 @@ class TestLanguageStageWrite:
             language, languages = row
             assert language == "en"
             assert languages == ["en"]
+
+
+# ---------------------------------------------------------------------------
+# --- summarize stage ---
+# ---------------------------------------------------------------------------
+
+def _insert_document_with_lang(conn, *, external_id, language, languages, title="Test Title"):
+    """Insert a documents row with language/languages set; return id."""
+    row = conn.execute(
+        """INSERT INTO documents
+               (external_id, s3_key, title, status, content_hash, language, languages)
+           VALUES (%s, %s, %s, 'draft', 'abc123', %s, %s)
+           RETURNING id""",
+        (external_id, f"documents/{external_id}.pdf", title, language, languages),
+    ).fetchone()
+    conn.commit()
+    return row[0]
+
+
+def _insert_document_text(conn, document_id, text="Sample document text."):
+    conn.execute(
+        """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+           VALUES (%s, %s, %s, %s)""",
+        (document_id, text, len(text), []),
+    )
+    conn.commit()
+
+
+class TestSummarizeStage:
+
+    def _make_fake_llm(self, calls: list):
+        """Return a fake chat_json that records calls and returns canned responses."""
+        call_index = {"n": 0}
+
+        def fake(system, user, schema, model, max_tokens=1500):
+            n = call_index["n"]
+            call_index["n"] += 1
+            calls.append({"system": system, "user": user, "model": model, "n": n})
+            return {"long": f"Long summary call {n}.", "short": f"Short {n}."}
+
+        return fake
+
+    def test_zh_document_produces_four_rows_and_title_en(
+        self, stages_test_db, monkeypatch
+    ):
+        """zh document → 4 summary rows (zh long/short + en long/short),
+        all source='generated'; title_en set; exactly 2 LLM calls."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="zh-doc", language="zh", languages=["zh"], title="中文标题"
+            )
+            _insert_document_text(conn, doc_id, text="中文内容。")
+
+        from worker.stages.summarize import run
+        result = run(doc_id)
+        assert result is None
+
+        assert len(calls) == 2, f"Expected 2 LLM calls, got {len(calls)}"
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT language, kind, source FROM document_summaries WHERE document_id=%s ORDER BY language, kind",
+                (doc_id,),
+            ).fetchall()
+            assert len(rows) == 4, f"Expected 4 summary rows, got {len(rows)}: {rows}"
+            for lang, kind, source in rows:
+                assert source == "generated", f"Expected source='generated', got '{source}'"
+            langs_kinds = {(r[0], r[1]) for r in rows}
+            assert langs_kinds == {("en", "long"), ("en", "short"), ("zh", "long"), ("zh", "short")}
+
+            title_en = conn.execute(
+                "SELECT title_en FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+            assert title_en is not None, "title_en should be set for non-English document"
+
+    def test_en_document_produces_two_rows_no_title_en(
+        self, stages_test_db, monkeypatch
+    ):
+        """en document → 2 rows (en long/short); 1 LLM call; title_en untouched (NULL)."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="en-doc", language="en", languages=["en"], title="English Title"
+            )
+            _insert_document_text(conn, doc_id, text="English document content.")
+
+        from worker.stages.summarize import run
+        result = run(doc_id)
+        assert result is None
+
+        assert len(calls) == 1, f"Expected 1 LLM call, got {len(calls)}"
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT language, kind, source FROM document_summaries WHERE document_id=%s",
+                (doc_id,),
+            ).fetchall()
+            assert len(rows) == 2, f"Expected 2 summary rows, got {len(rows)}"
+            langs_kinds = {(r[0], r[1]) for r in rows}
+            assert langs_kinds == {("en", "long"), ("en", "short")}
+
+            title_en = conn.execute(
+                "SELECT title_en FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+            assert title_en is None, "title_en should remain NULL for English document"
+
+    def test_idempotent_rerun_no_extra_rows_no_extra_calls(
+        self, stages_test_db, monkeypatch
+    ):
+        """Running summarize twice → same row count; second run makes 0 LLM calls."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="idem-doc", language="en", languages=["en"], title="Idempotent"
+            )
+            _insert_document_text(conn, doc_id, text="Some text for idempotency check.")
+
+        from worker.stages.summarize import run
+        run(doc_id)
+        first_call_count = len(calls)
+
+        run(doc_id)
+        second_call_count = len(calls) - first_call_count
+
+        assert second_call_count == 0, f"Second run should make 0 LLM calls, got {second_call_count}"
+
+        with psycopg.connect(stages_test_db) as conn:
+            count = conn.execute(
+                "SELECT count(*) FROM document_summaries WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+            assert count == 2, f"Should still have exactly 2 rows after two runs, got {count}"
+
+    def test_preexisting_external_rows_preserved(
+        self, stages_test_db, monkeypatch
+    ):
+        """Pre-existing 'external' rows preserved: 0 LLM calls, source stays 'external'."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="ext-doc", language="en", languages=["en"], title="External"
+            )
+            _insert_document_text(conn, doc_id, text="Document with externally supplied summaries.")
+            # Insert pre-existing external summaries
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'Original long summary.', 'external'),
+                          (%s, 'en', 'short', 'Original short.', 'external')""",
+                (doc_id, doc_id),
+            )
+            conn.commit()
+
+        from worker.stages.summarize import run
+        result = run(doc_id)
+        assert result is None
+
+        assert len(calls) == 0, f"Expected 0 LLM calls when external rows cover all targets, got {len(calls)}"
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT language, kind, source, text FROM document_summaries WHERE document_id=%s ORDER BY kind",
+                (doc_id,),
+            ).fetchall()
+            assert len(rows) == 2, f"Should still have exactly 2 rows, got {len(rows)}"
+            for lang, kind, source, text in rows:
+                assert source == "external", f"Source should remain 'external', got '{source}'"
+            texts = {r[3] for r in rows}
+            assert "Original long summary." in texts
+            assert "Original short." in texts
