@@ -125,6 +125,9 @@ def main():
     embeddings = load_embeddings(cache, nodes, content_hash)
 
     print("4/4 Writing to Postgres...")
+    # BM25 breaks score ties by corpus position, so each chunk records its
+    # position in the legacy node build order (corpus_order) for parity.
+    corpus_order = {n.node_id: i for i, n in enumerate(nodes)}
     nodes_by_doc = {}
     for n in nodes:
         nodes_by_doc.setdefault(n.metadata["doc_id"], []).append(n)
@@ -208,12 +211,14 @@ def main():
                 conn.execute(
                     """INSERT INTO document_chunks
                        (document_id, legacy_chunk_id, chunk_index, unit_type, page, text,
-                        language, node_metadata, embedding, embedding_model, dimension)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        language, node_metadata, embedding, embedding_model, dimension,
+                        corpus_order)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (doc_id, node.metadata["chunk_id"], node.metadata.get("chunk_index", 0),
                      "summary" if is_summary else "text", node.metadata.get("page"),
                      node.text, language, Jsonb(dict(node.metadata)),
-                     np.array(vector, dtype=np.float32), EMBEDDING_MODEL, DIMENSION),
+                     np.array(vector, dtype=np.float32), EMBEDDING_MODEL, DIMENSION,
+                     corpus_order[node.node_id]),
                 )
                 n_chunks += 1
 

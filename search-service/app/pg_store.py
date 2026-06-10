@@ -24,8 +24,10 @@ _CHUNKS_SQL = """
     FROM document_chunks dc
     JOIN documents d ON d.id = dc.document_id
     WHERE d.status = 'searchable'
-    ORDER BY dc.legacy_chunk_id
+    ORDER BY dc.corpus_order NULLS LAST, dc.legacy_chunk_id
 """
+# corpus_order reproduces the legacy node build order: BM25 breaks score ties
+# by corpus position, so any other order changes tail rankings vs legacy.
 
 _DENSE_SQL = """
     SELECT dc.legacy_chunk_id, dc.text, dc.node_metadata,

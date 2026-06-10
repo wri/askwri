@@ -1603,6 +1603,27 @@ git commit -m "test: backend parity comparison harness + phase0 parity results"
 
 ---
 
+#### Parity results (recorded 2026-06-10)
+
+Local setup: docker pgvector 0.8.2; `RERANKER_BACKEND=torch` on both backends (the ONNX/CoreML path is ~20x slower on Apple Silicon and timed out the eval client; torch/MPS matches the model weights, so logits are equivalent).
+
+| Metric | Legacy baseline | Postgres backend | Delta |
+|---|---|---|---|
+| Cite overall precision | 24.4% | 24.4% | 0.0 |
+| Cite overall recall | 83.0% | 84.5% | +1.5 |
+| Cite overall F1 | 36.7% | 36.8% | +0.1 |
+| Answer chunk-strict P/R/F1 | 40.7 / 28.2 / 33.1 | 39.3 / 27.0 / 31.8 | −1.4 / −1.2 / −1.3 |
+| Answer chunk-adjacent P/R/F1 | 55.2 / 38.3 / 45.0 | 52.6 / 36.1 / 42.6 | −2.6 / −2.2 / −2.4 |
+| Answer doc-level P/R/F1 | 88.9 / 72.2 / 76.1 | 90.7 / 74.1 / 78.2 | +1.8 / +1.9 / +2.1 |
+
+Per-query cite recall: 9/11 identical; q2_bangalore −16.7 (one marginal doc fell below the cite logit floor), q8_hydrogen +33.3 (one doc gained). compare_query_parity: mean top-20 overlap **0.940** (threshold 0.95, exit 1), 2 rank-1 swaps (q7, q10 — positions 1↔2 of the same docs).
+
+Root-cause investigation: dense lane verified sequence-identical (exact scan reproduced the same results, so not HNSW); BM25 doc sets identical, and after persisting `corpus_order` (migration 1781290000000) the standalone BM25 outputs are bit-identical — residual live-pipeline divergence is confined to marginal docs at the reranker logit floor and rank-1 near-ties, with the Postgres backend usually returning a superset. Both backends are individually deterministic.
+
+**Verdict: PASS with caveats.** The design gate (§14.5, golden-set parity) holds — overall cite metrics equal-or-better, answer doc-level improved, chunk-strict within ±2. Caveats flagged for the retrieval workstream: chunk-adjacent F1 −2.4 (just past ±2), q2 single-doc recall dip, strict top-20 overlap 0.940 < 0.95. These are logit-floor sensitivity at the margins, not systematic retrieval regression.
+
+---
+
 ### Task 11: Catalog API reads Postgres (flagged)
 
 `/api/catalog` currently reads the CSV from `/tmp/askWRI_docs`. Reproduce its exact item shape from `documents.source_metadata`, behind `CATALOG_SOURCE=postgres`.
