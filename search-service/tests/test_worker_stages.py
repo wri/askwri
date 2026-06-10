@@ -10,7 +10,9 @@ Skip guard: requires DATABASE_URL (same convention as other DB tests).
 """
 import hashlib
 import os
+import shutil
 import subprocess
+from pathlib import Path
 
 import psycopg
 import pytest
@@ -114,6 +116,9 @@ def clean_db(stages_test_db):
         except Exception:
             pass
     _db._pool = None
+    # Symmetric with setup: don't let monkeypatched env values outlive the test
+    from app.config import get_settings
+    get_settings.cache_clear()
 
 
 # ---------------------------------------------------------------------------
@@ -279,3 +284,135 @@ class TestIntakeSweepLocal:
                 (doc_id_first,),
             ).fetchone()[0]
             assert queued_jobs >= 1, "A new queued job should be enqueued for re-ingestion"
+
+
+# ---------------------------------------------------------------------------
+# --- parse stage ---
+# ---------------------------------------------------------------------------
+
+_FIXTURE_PDF = Path(__file__).parent / "fixtures" / "sample.pdf"
+
+
+def _insert_document(conn, *, external_id="test-doc", s3_key="documents/sample.pdf",
+                     title="Test Document", source_metadata=None):
+    """Insert a minimal documents row and return its id."""
+    row = conn.execute(
+        """INSERT INTO documents
+               (external_id, s3_key, title, status, content_hash)
+           VALUES (%s, %s, %s, 'draft', 'abc123')
+           RETURNING id""",
+        (external_id, s3_key, title),
+    ).fetchone()
+    if source_metadata is not None:
+        from psycopg.types.json import Jsonb
+        conn.execute(
+            "UPDATE documents SET source_metadata = %s WHERE id = %s",
+            (Jsonb(source_metadata), row[0]),
+        )
+    conn.commit()
+    return row[0]
+
+
+class TestParseStage:
+
+    def test_parse_writes_document_texts_and_flips_status(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """Parse a real PDF → document_texts row with char_count > 0,
+        non-empty page_boundaries, and document status = 'processing'."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "sample.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT full_text, page_boundaries, char_count FROM document_texts WHERE document_id = %s",
+                (doc_id,),
+            ).fetchone()
+            assert row is not None, "document_texts row should exist"
+            full_text, page_boundaries, char_count = row
+            assert char_count > 0, "char_count must be positive"
+            assert "World Resources Institute" in full_text, "extracted text should match fixture content"
+            assert len(page_boundaries) > 0, "page_boundaries must be non-empty"
+
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()[0]
+            assert status == "processing"
+
+    def test_parse_upsert_no_duplicate_key(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """Running parse twice on the same document upserts — no duplicate-key error
+        and exactly one document_texts row remains."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "sample.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        run(doc_id)
+        run(doc_id)  # second run — must not raise
+
+        with psycopg.connect(stages_test_db) as conn:
+            count = conn.execute(
+                "SELECT count(*) FROM document_texts WHERE document_id = %s", (doc_id,)
+            ).fetchone()[0]
+            assert count == 1, "Exactly one document_texts row should exist after two runs"
+
+    def test_parse_no_file_no_summary_returns_needs_review(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """Document with no accessible file and no summary in source_metadata
+        → run returns 'needs_review' and document status = 'needs_review'."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        # No file placed in documents/ dir
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        # Block the legacy fallback path too (defaults to /tmp/askWRI_docs,
+        # which may contain real files on a dev machine)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path / "nonexistent"))
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(
+                conn,
+                s3_key="documents/missing.pdf",
+                source_metadata={},
+            )
+
+        from worker.stages.parse import run
+        result = run(doc_id)
+        assert result == "needs_review"
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()[0]
+            assert status == "needs_review"
