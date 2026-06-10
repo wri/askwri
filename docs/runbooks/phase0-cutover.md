@@ -250,7 +250,7 @@ Python test layout:
 
 ### CI recommendation
 
-No in-repo CI pipeline exists today for the Python tests. Recommended CI job (GitHub Actions or equivalent):
+CI exists in `.github/workflows/` (`pr-check.yml` and the deploy workflows run `npm run test:ci` + build), but the **Python suite is not wired in**. The Jest DB-gated tests skip gracefully when `DATABASE_URL` is absent, so current CI stays green without a database. Recommended addition to `pr-check.yml`:
 
 ```yaml
 services:
