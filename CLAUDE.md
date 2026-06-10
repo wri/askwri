@@ -37,6 +37,9 @@ See `.env.example`. DB: `DATABASE_URL` (or `DB_HOST/PORT/USER/PASSWORD/NAME`). S
 Search-service: `RETRIEVAL_BACKEND` (`legacy`|`postgres`), `DOCUMENTS_LOCAL_DIR`, `CACHE_DIR`,
 S3 sync vars (`DOCUMENTS_S3_BUCKET`, `DOCUMENTS_S3_PREFIX`, `CACHE_S3_PREFIX`).
 
+## Document management docs
+See `docs/document-management.md` (Phase 0 as-built reference) and `docs/runbooks/phase0-cutover.md` (cutover + local dev setup).
+
 ## Out of scope for document-management work
 Retrieval tuning (RRF weights, rerankers, thresholds/tiers), answer synthesis, and eval
 internals are separate workstreams. Preserve the `/query` request/response contract

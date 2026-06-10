@@ -159,6 +159,11 @@ Once running: http://localhost:8000/docs
 | `DATABASE_URL` | — | Postgres connection URL; required for `postgres` backend and the migration script (append `?sslmode=require` for RDS) |
 | `RERANKER_BACKEND` | `onnx` | `onnx` for Fargate CPU; use `torch` on local Macs (the CoreML/ONNX path is ~20x slower on Apple Silicon) |
 
+## Docs
+
+- [docs/document-management.md](../docs/document-management.md) — Phase 0 as-built reference (schema, lifecycle, retrieval backends, parity status)
+- [docs/runbooks/phase0-cutover.md](../docs/runbooks/phase0-cutover.md) — local dev setup, production cutover steps, rollback
+
 ## Postgres-backed retrieval (Phase 0)
 
 Two boot modes, switched by `RETRIEVAL_BACKEND`:
