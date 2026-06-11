@@ -381,3 +381,68 @@ WHERE id = '<job-uuid>';
 ### Deploy note
 
 The ingestion worker (`ingestion-worker` ECS service) runs the same container image as the search-service with command override `python -m worker.main`. It has no ALB or service-discovery endpoint and runs as a single task (`desired_count=1`). Deploying is handled by the existing deploy workflows, which force-new-deployment for the worker alongside the search-service and Next.js tasks. No separate `terraform plan/apply` is needed for normal deployments; Terraform changes to the worker service definition are an ops action.
+
+---
+
+## Admin UI — local dev
+
+This section assumes the Phase 0 local setup (§1–5 above) is already complete: Postgres container running, migrations applied.
+
+### SESSION_SECRET
+
+The admin session JWT requires a `SESSION_SECRET` of at least 32 characters. Generate one with:
+
+```bash
+openssl rand -hex 32
+```
+
+Add the result to your `.env`:
+
+```
+SESSION_SECRET=<output of above>
+```
+
+### Seed an admin user
+
+Once the DB is migrated and `.env` is loaded:
+
+```bash
+npm run seed:admin -- <username> <password>
+```
+
+This creates a `users` row with `role='admin'` and a bcryptjs (cost 12) password hash. The script reads `.env` for `DATABASE_URL`. Run it again with different credentials to add additional users; it will not overwrite an existing username.
+
+### Review-queue fixture for manual QA
+
+The local `qa` DB has zero `needs_review` documents, suggested tags, or errored jobs by default. Use this SQL to fabricate review state against a real searchable document:
+
+**Apply:**
+
+```sql
+-- Flag one doc for review + give it 3 suggested LLM tags and an errored job:
+UPDATE documents SET status='needs_review', extraction_confidence=0.42
+WHERE external_id = (SELECT external_id FROM documents WHERE status='searchable' LIMIT 1);
+
+INSERT INTO document_tags (document_id, tag_id, source, confidence, model_version, status)
+SELECT d.id, t.id, 'llm', 0.55, 'fixture', 'suggested'
+FROM (SELECT id FROM documents WHERE status='needs_review' LIMIT 1) d
+CROSS JOIN (SELECT id FROM tags LIMIT 3) t
+ON CONFLICT (document_id, tag_id) DO UPDATE SET status='suggested', source='llm', model_version='fixture';
+
+INSERT INTO ingestion_jobs (document_id, stage, status, error, attempts)
+SELECT id, 'parse', 'error', 'fixture: simulated parse failure', 3
+FROM documents WHERE status='needs_review' LIMIT 1;
+```
+
+**Revert after QA:**
+
+```sql
+DELETE FROM ingestion_jobs WHERE error LIKE 'fixture:%';
+DELETE FROM document_tags WHERE model_version = 'fixture';
+UPDATE documents SET status='searchable', extraction_confidence=NULL WHERE status='needs_review';
+DELETE FROM audit_log WHERE at > now() - interval '1 day';  -- optional: clear QA noise
+```
+
+### Deploy note
+
+Add `SESSION_SECRET` (and `ADMIN_API_TOKEN` if machine-to-machine auth is needed) to the app-tier secret JSON. This is the GitHub secret that populates `app_secret_environment_variables` in the ECS task definition. No Terraform code change is required — the existing secret JSON already wires into the Next.js task.
