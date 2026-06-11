@@ -44,18 +44,28 @@ export async function createTag(
   return tag
 }
 
+export type DeleteTagResult =
+  | { deleted: true }
+  | { deleted: false; reason: 'in_use' | 'not_found'; error: string }
+
 export async function deleteTagIfUnused(
   id: string,
   identity: AdminIdentity,
-): Promise<{ deleted: boolean; error?: string }> {
-  const [{ n }] = await AppDataSource.query(
-    `SELECT count(*)::int AS n FROM document_tags WHERE tag_id = $1`,
+): Promise<DeleteTagResult> {
+  const tag = await AppDataSource.getRepository(Tag).findOne({ where: { id } })
+  if (!tag) return { deleted: false, reason: 'not_found', error: 'not found' }
+  // Atomic: the NOT EXISTS guard and the delete run as one statement, so a
+  // concurrent tag application cannot slip between check and delete.
+  // pg driver returns [rows, rowCount] for DELETE.
+  const [rows] = await AppDataSource.query(
+    `DELETE FROM tags
+     WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM document_tags WHERE tag_id = $1)
+     RETURNING id`,
     [id],
   )
-  if (n > 0) return { deleted: false, error: `tag is applied to ${n} document(s)` }
-  const tag = await AppDataSource.getRepository(Tag).findOne({ where: { id } })
-  if (!tag) return { deleted: false, error: 'not found' }
-  await AppDataSource.getRepository(Tag).delete(id)
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { deleted: false, reason: 'in_use', error: 'tag is applied to one or more documents' }
+  }
   await writeAudit({
     ...auditActor(identity),
     action: 'delete',

@@ -36,14 +36,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const patch: Partial<{ role: 'admin' | 'editor'; active: boolean; passwordHash: string }> = {}
+    const auditBefore: Record<string, any> = {}
     const auditAfter: Record<string, any> = {}
 
     if (role !== undefined) {
       patch.role = role as 'admin' | 'editor'
+      auditBefore.role = existing.role
       auditAfter.role = role
     }
     if (active !== undefined) {
       patch.active = Boolean(active)
+      auditBefore.active = existing.active
       auditAfter.active = Boolean(active)
     }
     if (password !== undefined) {
@@ -80,6 +83,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       action: 'update',
       entityType: 'user',
       entityId: id,
+      before: Object.keys(auditBefore).length > 0 ? auditBefore : undefined,
       after: auditAfter,
     })
 

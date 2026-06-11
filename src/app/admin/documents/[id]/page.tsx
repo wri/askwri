@@ -364,7 +364,9 @@ const DocumentEditorPage = () => {
               <tr>
                 <td style={{ ...cell, fontWeight: 500 }}>Extraction confidence</td>
                 <td style={cell}>
-                  {doc.extractionConfidence != null ? doc.extractionConfidence.toFixed(2) : '—'}
+                  {doc.extractionConfidence != null
+                    ? Number(doc.extractionConfidence).toFixed(2)
+                    : '—'}
                 </td>
               </tr>
               {detail?.latestJob && (

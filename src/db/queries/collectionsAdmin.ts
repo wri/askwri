@@ -62,7 +62,7 @@ export async function updateCollection(
   const before: Record<string, any> = {}
   const after: Record<string, any> = {}
   for (const key of ['name', 'description'] as const) {
-    if (key in patch && patch[key] !== collection[key]) {
+    if (key in patch && patch[key] !== undefined && patch[key] !== collection[key]) {
       before[key] = collection[key]
       after[key] = patch[key]
       ;(collection as any)[key] = patch[key]
@@ -87,6 +87,10 @@ export async function addDocumentsToCollection(
   documentIds: string[],
   identity: AdminIdentity,
 ): Promise<{ added: number } | { error: string }> {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!documentIds.every((id) => typeof id === 'string' && UUID_RE.test(id))) {
+    return { error: 'documentIds must be UUIDs' }
+  }
   const collection = await AppDataSource.getRepository(Collection).findOne({
     where: { id: collectionId },
   })
@@ -101,15 +105,15 @@ export async function addDocumentsToCollection(
      RETURNING document_id`,
     [collectionId, addedBy, documentIds],
   )
-  const added = Array.isArray(result) ? result.length : 0
+  const rows: { document_id: string }[] = Array.isArray(result) ? result : []
   await writeAudit({
     ...auditActor(identity),
     action: 'collection_change',
     entityType: 'collection',
     entityId: collectionId,
-    after: { addedDocumentIds: documentIds },
+    after: { addedDocumentIds: rows.map((r) => r.document_id) },
   })
-  return { added: Number(added) }
+  return { added: rows.length }
 }
 
 export async function removeDocumentFromCollection(
@@ -117,10 +121,13 @@ export async function removeDocumentFromCollection(
   documentId: string,
   identity: AdminIdentity,
 ): Promise<void> {
-  await AppDataSource.query(
-    `DELETE FROM document_collections WHERE collection_id = $1 AND document_id = $2`,
+  // pg driver returns [rows, rowCount] for DELETE
+  const [deletedRows] = await AppDataSource.query(
+    `DELETE FROM document_collections WHERE collection_id = $1 AND document_id = $2
+     RETURNING document_id`,
     [collectionId, documentId],
   )
+  if (!Array.isArray(deletedRows) || deletedRows.length === 0) return
   await writeAudit({
     ...auditActor(identity),
     action: 'collection_change',

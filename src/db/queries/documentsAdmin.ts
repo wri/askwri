@@ -115,7 +115,14 @@ export async function updateDocumentFields(
   id: string,
   patch: Partial<Record<EditableField, unknown>>,
   identity: AdminIdentity,
-): Promise<{ updated: string[] } | null> {
+): Promise<{ updated: string[] } | { error: string } | null> {
+  if ('yearPublished' in patch && patch.yearPublished != null) {
+    const year = Number(patch.yearPublished)
+    if (!Number.isFinite(year) || !Number.isInteger(year) || year < 1900 || year > 2100) {
+      return { error: 'yearPublished must be an integer year' }
+    }
+    patch.yearPublished = year
+  }
   const repo = AppDataSource.getRepository(Document)
   const doc = await repo.findOne({ where: { id } })
   if (!doc) return null
@@ -182,16 +189,16 @@ export async function reenqueueIngestion(
 ): Promise<{ jobId: string } | { error: string } | null> {
   const doc = await AppDataSource.getRepository(Document).findOne({ where: { id } })
   if (!doc) return null
-  const open = await AppDataSource.query(
-    `SELECT id FROM ingestion_jobs
-     WHERE document_id = $1 AND status IN ('queued', 'running') LIMIT 1`,
-    [id],
-  )
-  if (open.length > 0) return { error: 'an open ingestion job already exists' }
+  // The partial unique index ingestion_jobs_one_open_per_doc is the arbiter:
+  // ON CONFLICT (document_id) WHERE <index predicate> infers it, making the
+  // open-job check and the insert one atomic statement (no enqueue race).
   const [job] = await AppDataSource.query(
-    `INSERT INTO ingestion_jobs (document_id, status) VALUES ($1, 'queued') RETURNING id`,
+    `INSERT INTO ingestion_jobs (document_id, status) VALUES ($1, 'queued')
+     ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
+     RETURNING id`,
     [id],
   )
+  if (!job) return { error: 'an open ingestion job already exists' }
   await writeAudit({
     ...auditActor(identity),
     action: 'create',

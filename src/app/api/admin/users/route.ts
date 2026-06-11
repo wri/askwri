@@ -52,7 +52,11 @@ export async function POST(req: NextRequest) {
       after: { username: user.username, role: user.role },
     })
     return NextResponse.json({ ok: true, user })
-  } catch (err) {
+  } catch (err: any) {
+    // Unique violation on users.username (pg error 23505)
+    if (err?.code === '23505' || err?.driverError?.code === '23505') {
+      return NextResponse.json({ ok: false, error: 'username already exists' }, { status: 409 })
+    }
     return internalError(err)
   }
 }

@@ -13,9 +13,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params
     if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
-    const { name, description } = (await req.json().catch(() => ({}))) ?? {}
+    const body = (await req.json().catch(() => ({}))) ?? {}
+    const patch: Partial<{ name: string; description: string | null }> = {}
+    if ('name' in body && body.name !== undefined) patch.name = body.name
+    if ('description' in body && body.description !== undefined) patch.description = body.description
     await initializeDatabase()
-    const result = await updateCollection(id, { name, description }, identity!)
+    const result = await updateCollection(id, patch, identity!)
     if (result === null)
       return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
     return NextResponse.json({ ok: true, collection: result })

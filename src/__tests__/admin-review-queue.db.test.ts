@@ -8,6 +8,7 @@ const d = hasDb ? describe : describe.skip
 d('getReviewQueue (DB integration)', () => {
   const externalId = `review_test_${Date.now()}`
   let docId: string
+  let tagId: string
 
   beforeAll(async () => {
     if (!AppDataSource.isInitialized) await AppDataSource.initialize()
@@ -17,15 +18,24 @@ d('getReviewQueue (DB integration)', () => {
       [externalId, `documents/${externalId}.pdf`],
     )
     docId = row.id
+    // Throwaway tag: don't depend on the tags table being populated.
+    const [tagRow] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__review_queue_test_${Date.now()}__`],
+    )
+    tagId = tagRow.id
     await AppDataSource.query(
       `INSERT INTO document_tags (document_id, tag_id, source, confidence, status)
-       SELECT $1, id, 'llm', 0.55, 'suggested' FROM tags LIMIT 1`,
-      [docId],
+       VALUES ($1, $2, 'llm', 0.55, 'suggested')`,
+      [docId, tagId],
     )
   })
 
   afterAll(async () => {
+    // Deleting the document cascades document_tags rows.
     await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
+    await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tagId])
     await AppDataSource.destroy()
   })
 

@@ -37,6 +37,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     await initializeDatabase()
     const result = await updateDocumentFields(id, patch, identity!)
     if (!result) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    if ('error' in result)
+      return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
     return NextResponse.json({ ok: true, updated: result.updated })
   } catch (err) {
     return internalError(err)

@@ -122,6 +122,9 @@ d('user management routes (DB integration)', () => {
 
   afterAll(async () => {
     if (createdUserIds.length > 0) {
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = ANY($1::uuid[])`, [
+        createdUserIds,
+      ])
       for (const id of createdUserIds) {
         await AppDataSource.getRepository(User).delete({ id })
       }
@@ -226,6 +229,7 @@ d('last-admin guard (DB integration)', () => {
 
   afterAll(async () => {
     const repo = AppDataSource.getRepository(User)
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [soloAdminId])
     await repo.delete({ id: soloAdminId })
     if (parkedAdminIds.length > 0) await repo.update(parkedAdminIds, { active: true })
     // Last describe in this file: close the connection so jest exits cleanly.

@@ -15,8 +15,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
     await initializeDatabase()
     const result = await deleteTagIfUnused(id, identity!)
-    if (!result.deleted)
-      return NextResponse.json({ ok: false, error: result.error }, { status: 409 })
+    if (!result.deleted) {
+      const status = result.reason === 'not_found' ? 404 : 409
+      return NextResponse.json({ ok: false, error: result.error }, { status })
+    }
     return NextResponse.json({ ok: true })
   } catch (err) {
     return internalError(err)

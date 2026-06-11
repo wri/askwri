@@ -27,8 +27,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
     await initializeDatabase()
     const result = await addDocumentsToCollection(id, documentIds, identity!)
-    if ('error' in result)
-      return NextResponse.json({ ok: false, error: result.error }, { status: 404 })
+    if ('error' in result) {
+      const status = result.error === 'documentIds must be UUIDs' ? 400 : 404
+      return NextResponse.json({ ok: false, error: result.error }, { status })
+    }
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
     return internalError(err)
