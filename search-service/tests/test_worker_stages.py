@@ -706,3 +706,192 @@ class TestSummarizeStage:
             texts = {r[3] for r in rows}
             assert "Original long summary." in texts
             assert "Original short." in texts
+
+
+# ---------------------------------------------------------------------------
+# --- classify stage ---
+# ---------------------------------------------------------------------------
+
+def _seed_tags(conn):
+    """Insert taxonomy rows for classify tests; return {(facet, value_id): tag_id}."""
+    tag_map = {}
+    for facet, value_id in [("topic", "forests"), ("topic", "water"), ("doc_type", "report")]:
+        tag_id = conn.execute(
+            """INSERT INTO tags (facet, value_id, taxonomy_version)
+               VALUES (%s, %s, 'v1')
+               ON CONFLICT (facet, value_id, taxonomy_version) DO UPDATE SET facet=EXCLUDED.facet
+               RETURNING id""",
+            (facet, value_id),
+        ).fetchone()[0]
+        tag_map[(facet, value_id)] = tag_id
+    conn.commit()
+    return tag_map
+
+
+class TestClassifyStage:
+
+    def _make_fake_llm(self, calls: list, response: dict):
+        """Return a fake chat_json that records calls and returns a fixed response."""
+        def fake(system, user, schema, model, max_tokens=1500):
+            calls.append({"system": system, "user": user, "model": model})
+            return response
+        return fake
+
+    def test_accepted_and_suggested_rows_written(self, stages_test_db, monkeypatch):
+        """Mock returns confidence 0.9 (accepted) and 0.4 (suggested); both rows written
+        with correct status, source='llm', confidence stored. Also verifies summary
+        basis selection (en/long summary row is used)."""
+        calls = []
+        canned = {
+            "topic": [
+                {"value": "forests", "confidence": 0.9},
+                {"value": "water", "confidence": 0.4},
+            ],
+            "doc_type": [],
+        }
+        monkeypatch.setattr("worker.stages.classify.chat_json", self._make_fake_llm(calls, canned))
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute("DELETE FROM tags")
+            conn.commit()
+            tag_map = _seed_tags(conn)
+            doc_id = _insert_document_with_lang(
+                conn, external_id="classify-doc1", language="en", languages=["en"],
+                title="Forest and Water Report"
+            )
+            _insert_document_text(conn, doc_id, text="Full text about forests and water.")
+            # Insert an en/long summary so basis selection uses it
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'Summary about forests and water resources.', 'generated')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.classify import run
+        result = run(doc_id)
+        assert result is None
+        assert len(calls) == 1, f"Expected 1 LLM call, got {len(calls)}"
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                """SELECT tag_id, source, confidence, status
+                   FROM document_tags WHERE document_id=%s ORDER BY confidence DESC""",
+                (doc_id,),
+            ).fetchall()
+            assert len(rows) == 2, f"Expected 2 document_tags rows, got {len(rows)}"
+
+            forests_tag = tag_map[("topic", "forests")]
+            water_tag = tag_map[("topic", "water")]
+            row_map = {r[0]: r for r in rows}
+
+            assert forests_tag in row_map, "forests tag should be present"
+            assert water_tag in row_map, "water tag should be present"
+
+            forests_row = row_map[forests_tag]
+            assert forests_row[1] == "llm"
+            assert abs(float(forests_row[2]) - 0.9) < 0.001
+            assert forests_row[3] == "accepted"
+
+            water_row = row_map[water_tag]
+            assert water_row[1] == "llm"
+            assert abs(float(water_row[2]) - 0.4) < 0.001
+            assert water_row[3] == "suggested"
+
+    def test_human_external_rows_not_overwritten(self, stages_test_db, monkeypatch):
+        """Pre-existing human-sourced tag row is not modified when LLM returns same
+        facet/value with high confidence."""
+        calls = []
+        canned = {
+            "topic": [{"value": "forests", "confidence": 0.95}],
+            "doc_type": [],
+        }
+        monkeypatch.setattr("worker.stages.classify.chat_json", self._make_fake_llm(calls, canned))
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute("DELETE FROM tags")
+            conn.commit()
+            tag_map = _seed_tags(conn)
+            doc_id = _insert_document_with_lang(
+                conn, external_id="classify-doc2", language="en", languages=["en"],
+                title="Protected Tags Doc"
+            )
+            _insert_document_text(conn, doc_id, text="Content about forests.")
+            # Pre-insert human tag for forests
+            forests_tag = tag_map[("topic", "forests")]
+            conn.execute(
+                """INSERT INTO document_tags (document_id, tag_id, source, confidence, model_version, status)
+                   VALUES (%s, %s, 'human', 0.99, 'manual', 'accepted')""",
+                (doc_id, forests_tag),
+            )
+            conn.commit()
+
+        from worker.stages.classify import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT source, confidence, model_version FROM document_tags WHERE document_id=%s AND tag_id=%s",
+                (doc_id, forests_tag),
+            ).fetchone()
+            assert row is not None
+            assert row[0] == "human", f"source should remain 'human', got '{row[0]}'"
+            assert abs(float(row[1]) - 0.99) < 0.001, "confidence should remain 0.99"
+            assert row[2] == "manual", "model_version should remain 'manual'"
+
+    def test_empty_taxonomy_returns_none_no_llm_call(self, stages_test_db, monkeypatch):
+        """No tags rows → run returns None, makes 0 LLM calls, writes nothing."""
+        calls = []
+        monkeypatch.setattr("worker.stages.classify.chat_json",
+                            self._make_fake_llm(calls, {}))
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute("DELETE FROM tags")
+            conn.commit()
+            doc_id = _insert_document_with_lang(
+                conn, external_id="classify-doc3", language="en", languages=["en"],
+                title="No Taxonomy Doc"
+            )
+            _insert_document_text(conn, doc_id, text="Some content.")
+            conn.commit()
+
+        from worker.stages.classify import run
+        result = run(doc_id)
+        assert result is None
+        assert len(calls) == 0, f"Expected 0 LLM calls with empty taxonomy, got {len(calls)}"
+
+        with psycopg.connect(stages_test_db) as conn:
+            count = conn.execute(
+                "SELECT count(*) FROM document_tags WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+            assert count == 0, "No document_tags rows should be written with empty taxonomy"
+
+    def test_out_of_vocab_value_ignored(self, stages_test_db, monkeypatch):
+        """LLM returns a value not in the taxonomy → ignored, no row written."""
+        calls = []
+        canned = {
+            "topic": [{"value": "unicorns", "confidence": 0.95}],
+            "doc_type": [],
+        }
+        monkeypatch.setattr("worker.stages.classify.chat_json", self._make_fake_llm(calls, canned))
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute("DELETE FROM tags")
+            conn.commit()
+            _seed_tags(conn)
+            doc_id = _insert_document_with_lang(
+                conn, external_id="classify-doc4", language="en", languages=["en"],
+                title="OOV Test Doc"
+            )
+            _insert_document_text(conn, doc_id, text="Content about mythical creatures.")
+            conn.commit()
+
+        from worker.stages.classify import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            count = conn.execute(
+                "SELECT count(*) FROM document_tags WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+            assert count == 0, "Out-of-vocab value should produce no document_tags row"
