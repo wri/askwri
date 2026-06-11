@@ -35,6 +35,15 @@ if [ "$MODE" = "--daemon" ]; then
   exit 0
 fi
 
+# Single-instance guard: the eval checkpoints below are label-blind, so two
+# concurrent suite runs (any labels) would corrupt each other's resume state.
+LOCKDIR="$REPO/evaluation/results/.suite-lock"
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+  echo "FATAL: another suite run appears active ($LOCKDIR exists). If stale, rmdir it."
+  exit 1
+fi
+trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+
 # The per-query eval checkpoints are label-blind: starting a fresh run under a
 # new label must not resume from another label's checkpoints. Existence of the
 # state file (not its content) marks a run as started, so a resume after a

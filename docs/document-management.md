@@ -93,6 +93,8 @@ All retrieval queries in `pg_store.py` filter `WHERE d.status = 'searchable'`. T
 
 **Frozen stats refresh:** under the sparse backend, new documents are weighted at embed time using IDF/avgdl statistics frozen by the last `build_sparse_keyword.py` run. Re-run that script after bulk corpus changes to refresh keyword statistics. This is never required for lifecycle correctness (promote/withdraw) — only for accurate weighting of newly ingested documents.
 
+**Pre-backfill edge case:** a document ingested before `build_sparse_keyword.py` has ever run (e.g. during an initial cutover window) gets `sparse = NULL` chunks — absent from keyword-lane results (dense lane unaffected) until the next backfill run. The sparse-mode boot guard refuses to start against a fully unpopulated corpus, so this only arises for documents added mid-cutover.
+
 ---
 
 ## 5. Retrieval backends
@@ -229,7 +231,7 @@ queued → running → queued (next stage) → … → done | needs_review | err
 | **summarize** | Generates native-language + English long/short summaries via `WORKER_LLM_MODEL` (default `gpt-5-mini`), `source='generated'`. Skips rows that already exist (including CSV-seeded `source='external'` rows). For non-English docs, `title_en` is COALESCE'd to the original title — true translation is deferred. |
 | **classify** | LLM call constrained to the `tags` taxonomy v1 values. Writes `document_tags` with `source='llm'`; `status='accepted'` if `confidence ≥ TAG_CONFIDENCE_ACCEPT` (default 0.7), else `status='suggested'`. Never touches rows with `source='human'` or `source='external'`. |
 | **embed** | Phase 0-identical chunking: SimpleNodeParser 400/80 + summary node, legacy chunk id format, `node_metadata` verbatim, `text-embedding-3-small`. `corpus_order` appended after the current global max (advisory lock for concurrency). Re-ingest deletes prior chunks first. Chinese text and summaries are OpenCC t2s-normalized in chunks only (`document_texts` retains original). |
-| **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). If `< 0.7`: document status → `needs_review`. Otherwise: document status → `searchable` + best-effort `POST SEARCH_SERVICE_URL/reindex` for BM25 lane (dense lane picks up new chunks immediately via SQL). |
+| **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). If `< 0.7`: document status → `needs_review`. Otherwise: document status → `searchable` + best-effort `POST SEARCH_SERVICE_URL/reindex` to refresh the service's in-memory passage-context texts/metadata (both retrieval lanes pick up new chunks immediately via SQL under the default sparse backend). |
 
 ### 10.5 Document lifecycle update
 
@@ -314,7 +316,7 @@ All pages are under `/admin`:
 | Path | Purpose |
 |---|---|
 | `/admin/login` | Login form |
-| `/admin/review` | Review queue: promote or re-ingest flagged documents, reindex notices |
+| `/admin/review` | Review queue: promote or re-ingest flagged documents |
 | `/admin/documents` | Catalog with status/language/collection/search filters and bulk add-to-collection |
 | `/admin/documents/[id]` | Document detail: metadata whitelist form, tags grouped by facet (accept/reject on suggested, add human tag), read-only summaries, lifecycle panel (promote/withdraw/re-ingest/Open PDF), collections panel |
 | `/admin/collections` | List, create, rename collections |
@@ -358,7 +360,7 @@ When an editor accepts or rejects a suggested LLM tag, the `document_tags` row h
 
 Promote (`needs_review → searchable`) and withdraw (`searchable → withdrawn`) are consistent on the next query under the default `KEYWORD_BACKEND=sparse` — both lanes filter `status='searchable'` per-query, so no reindex is needed for UI-driven or direct psql status changes.
 
-The `/reindex` endpoint is still called as a best-effort fire-and-forget after promote/withdraw (120 s timeout; result surfaced in `reindex: { ok, error? }` on the API response and shown in the UI if `ok` is false). Under `KEYWORD_BACKEND=sparse`, it refreshes in-memory passage-context texts and metadata rather than rebuilding the BM25 index. Under `KEYWORD_BACKEND=memory` (legacy path), it also rebuilds the in-memory BM25 index — which remains necessary for lifecycle correctness in that mode.
+The admin status route no longer calls `/reindex` at all — the API response has no `reindex` field and the UI shows no staleness notices. The `/reindex` endpoint itself remains, called only by the worker's publish stage to refresh the service's in-memory passage-context texts and metadata after a new document publishes (build-then-swap, seconds under sparse mode). Under `KEYWORD_BACKEND=memory` (legacy path) `/reindex` also rebuilds the in-memory BM25 index, and a manual call after admin lifecycle changes is required for keyword-lane correctness in that mode (see §4).
 
 ### 11.8 Deferred
 
