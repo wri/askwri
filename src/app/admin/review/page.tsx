@@ -48,7 +48,7 @@ const ReviewQueuePage = () => {
     setError(null)
     try {
       if (action === 'promote') {
-        const body = await adminFetch(`/api/admin/documents/${id}/status`, {
+        await adminFetch(`/api/admin/documents/${id}/status`, {
           method: 'POST',
           body: JSON.stringify({ status: 'searchable' }),
         })
