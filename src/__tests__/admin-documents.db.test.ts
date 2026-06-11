@@ -70,6 +70,25 @@ d('documentsAdmin (DB integration)', () => {
     expect(result).toHaveProperty('error')
   })
 
+  it('refuses an editor restoring a withdrawn document, allows an admin', async () => {
+    const editor = { kind: 'user', userId: 'x', username: 'e', role: 'editor' } as const
+    // Withdraw (takedown) as admin first.
+    const withdrawn = await setDocumentStatus(docId, 'withdrawn', identity)
+    expect(withdrawn).toEqual({ fromStatus: 'searchable' })
+
+    // Editor cannot reverse the takedown.
+    const refused = await setDocumentStatus(docId, 'searchable', editor)
+    expect(refused).toEqual({ forbidden: true })
+    const [still] = await AppDataSource.query(`SELECT status FROM documents WHERE id=$1`, [docId])
+    expect(still.status).toBe('withdrawn')
+
+    // Admin can.
+    const restored = await setDocumentStatus(docId, 'searchable', identity)
+    expect(restored).toEqual({ fromStatus: 'withdrawn' })
+    const [row] = await AppDataSource.query(`SELECT status FROM documents WHERE id=$1`, [docId])
+    expect(row.status).toBe('searchable')
+  })
+
   it('re-enqueues ingestion once, then refuses while the job is open', async () => {
     const first = await reenqueueIngestion(docId, identity)
     expect(first).toHaveProperty('jobId')

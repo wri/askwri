@@ -3,11 +3,16 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { writeFile, mkdir } from 'fs/promises'
 import { join, basename } from 'path'
 import { requireIdentity, auditActor } from '../../../../lib/auth/identity'
+import { internalError } from '../../../../lib/api-error'
 import { initializeDatabase } from '../../../../db/data-source'
 import { writeAudit } from '../../../../db/queries/audit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+const MAX_FILES = 20
+const MAX_FILE_BYTES = 50 * 1024 * 1024
+const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d] // "%PDF-"
 
 export async function POST(req: NextRequest) {
   const { identity, response } = await requireIdentity(req)
@@ -17,6 +22,12 @@ export async function POST(req: NextRequest) {
     const files = form.getAll('files').filter((f): f is File => f instanceof File)
     if (files.length === 0) {
       return NextResponse.json({ ok: false, error: 'no files provided' }, { status: 400 })
+    }
+    if (files.length > MAX_FILES) {
+      return NextResponse.json(
+        { ok: false, error: `too many files (max ${MAX_FILES})` },
+        { status: 400 },
+      )
     }
     const bucket = process.env.DOCUMENTS_S3_BUCKET
     const intakePrefix = process.env.INTAKE_S3_PREFIX || 'intake/'
@@ -33,7 +44,16 @@ export async function POST(req: NextRequest) {
       if (!name.toLowerCase().endsWith('.pdf')) {
         return NextResponse.json({ ok: false, error: `${name}: only PDFs accepted` }, { status: 400 })
       }
+      if (file.size > MAX_FILE_BYTES) {
+        return NextResponse.json(
+          { ok: false, error: `${name}: file too large (max ${MAX_FILE_BYTES} bytes)` },
+          { status: 400 },
+        )
+      }
       const bytes = new Uint8Array(await file.arrayBuffer())
+      if (bytes.length < PDF_MAGIC.length || !PDF_MAGIC.every((b, i) => bytes[i] === b)) {
+        return NextResponse.json({ ok: false, error: `${name}: not a valid PDF` }, { status: 400 })
+      }
       if (bucket) {
         const s3 = new S3Client({})
         await s3.send(
@@ -54,7 +74,7 @@ export async function POST(req: NextRequest) {
       after: { files: uploaded },
     })
     return NextResponse.json({ ok: true, uploaded })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }

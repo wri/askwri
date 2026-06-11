@@ -8,6 +8,8 @@ export async function proxy(req: NextRequest) {
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next()
 
   const apiToken = process.env.ADMIN_API_TOKEN
+  // Plain === is fine here: this is only an edge-runtime pre-filter; the real
+  // gate is the timing-safe check in requireIdentity inside each handler.
   if (apiToken && req.headers.get('authorization') === `Bearer ${apiToken}`) {
     return NextResponse.next()
   }

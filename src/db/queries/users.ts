@@ -1,8 +1,23 @@
+import { Not } from 'typeorm'
 import { AppDataSource } from '../data-source'
 import { User } from '../entities/User.entity'
 
 export async function findActiveUserByUsername(username: string): Promise<User | null> {
   return AppDataSource.getRepository(User).findOne({ where: { username, active: true } })
+}
+
+export async function findUserById(
+  id: string,
+): Promise<{ id: string; role: string; active: boolean } | null> {
+  const user = await AppDataSource.getRepository(User).findOne({ where: { id } })
+  return user ? { id: user.id, role: user.role, active: user.active } : null
+}
+
+/** Count active admins other than the given user id (last-admin guard). */
+export async function countOtherActiveAdmins(excludeId: string): Promise<number> {
+  return AppDataSource.getRepository(User).count({
+    where: { role: 'admin', active: true, id: Not(excludeId) },
+  })
 }
 
 export async function touchLastLogin(id: string): Promise<void> {

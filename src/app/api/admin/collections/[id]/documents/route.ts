@@ -5,6 +5,7 @@ import {
   removeDocumentFromCollection,
 } from '../../../../../../db/queries/collectionsAdmin'
 import { requireIdentity } from '../../../../../../lib/auth/identity'
+import { internalError, isUuid } from '../../../../../../lib/api-error'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (response) return response
   try {
     const { id } = await params
+    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
     const { documentIds } = (await req.json().catch(() => ({}))) ?? {}
     if (!Array.isArray(documentIds) || documentIds.length === 0) {
       return NextResponse.json(
@@ -28,8 +30,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     if ('error' in result)
       return NextResponse.json({ ok: false, error: result.error }, { status: 404 })
     return NextResponse.json({ ok: true, ...result })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }
 
@@ -38,13 +40,14 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   if (response) return response
   try {
     const { id } = await params
+    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
     const { documentId } = (await req.json().catch(() => ({}))) ?? {}
     if (!documentId)
       return NextResponse.json({ ok: false, error: 'documentId is required' }, { status: 400 })
     await initializeDatabase()
     await removeDocumentFromCollection(id, String(documentId), identity!)
     return NextResponse.json({ ok: true })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }

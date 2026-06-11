@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { initializeDatabase, AppDataSource } from '../../../../../db/data-source'
-import { updateUser } from '../../../../../db/queries/users'
+import { updateUser, countOtherActiveAdmins } from '../../../../../db/queries/users'
 import { requireIdentity, auditActor } from '../../../../../lib/auth/identity'
+import { internalError, isUuid } from '../../../../../lib/api-error'
 import { writeAudit } from '../../../../../db/queries/audit'
 import { User } from '../../../../../db/entities/User.entity'
 
@@ -14,6 +15,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (response) return response
   try {
     const { id } = await params
+    if (!isUuid(id)) {
+      return NextResponse.json({ ok: false, error: 'user not found' }, { status: 404 })
+    }
     const body = (await req.json().catch(() => ({}))) ?? {}
     const { role, active, password } = body as {
       role?: unknown
@@ -57,6 +61,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ ok: false, error: 'no valid fields to update' }, { status: 400 })
     }
 
+    // Last-admin guard: never demote or deactivate the only active admin.
+    const demotes = patch.role === 'editor'
+    const deactivates = patch.active === false
+    if (existing.role === 'admin' && existing.active && (demotes || deactivates)) {
+      const others = await countOtherActiveAdmins(id)
+      if (others === 0) {
+        return NextResponse.json(
+          { ok: false, error: 'cannot remove the last active admin' },
+          { status: 409 },
+        )
+      }
+    }
+
     await updateUser(id, patch)
     await writeAudit({
       ...auditActor(identity!),
@@ -67,7 +84,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     })
 
     return NextResponse.json({ ok: true })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }

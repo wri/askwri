@@ -5,6 +5,8 @@
  * DB test is gated on process.env.DATABASE_URL — skipped cleanly if unset.
  */
 
+import { NextRequest } from 'next/server'
+import { POST as importDocumentsRoute } from '@/app/api/import-documents/route'
 import {
   deriveExternalId,
   mapLanguages,
@@ -223,6 +225,36 @@ describe('classifyUpsert', () => {
       sourceMetadata: { file_path: 'x' },
     } as any
     expect(classifyUpsert(existing, mapped)).toBe('skipped')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Route auth (no DB needed: rejected before any DB access)
+// ---------------------------------------------------------------------------
+
+describe('POST /api/import-documents auth', () => {
+  beforeAll(() => {
+    process.env.ADMIN_API_TOKEN = 'test-admin-token'
+  })
+
+  function importReq(body: unknown, bearer?: string) {
+    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    if (bearer) headers.authorization = `Bearer ${bearer}`
+    return new NextRequest('http://localhost/api/import-documents', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers,
+    })
+  }
+
+  it('401s without credentials', async () => {
+    const res = await importDocumentsRoute(importReq({ rows: [] }))
+    expect(res.status).toBe(401)
+  })
+
+  it('passes auth with the bearer token (then 400s on empty rows)', async () => {
+    const res = await importDocumentsRoute(importReq({ rows: [] }, 'test-admin-token'))
+    expect(res.status).toBe(400)
   })
 })
 

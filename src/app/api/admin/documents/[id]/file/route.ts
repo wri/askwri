@@ -6,6 +6,7 @@ import { basename, join } from 'path'
 import { initializeDatabase, AppDataSource } from '../../../../../../db/data-source'
 import { Document } from '../../../../../../db/entities/Document.entity'
 import { requireIdentity } from '../../../../../../lib/auth/identity'
+import { internalError, isUuid } from '../../../../../../lib/api-error'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,6 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (response) return response
   try {
     const { id } = await params
+    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
     await initializeDatabase()
     const doc = await AppDataSource.getRepository(Document).findOne({ where: { id } })
     if (!doc?.s3Key) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         'Cache-Control': 'private, max-age=3600',
       },
     })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }

@@ -148,7 +148,7 @@ export async function setDocumentStatus(
   id: string,
   toStatus: string,
   identity: AdminIdentity,
-): Promise<{ fromStatus: string } | null | { error: string }> {
+): Promise<{ fromStatus: string } | null | { error: string } | { forbidden: true }> {
   if (!ALLOWED_TARGET_STATUSES.has(toStatus)) {
     return { error: `status must be one of: ${[...ALLOWED_TARGET_STATUSES].join(', ')}` }
   }
@@ -156,6 +156,11 @@ export async function setDocumentStatus(
   const doc = await repo.findOne({ where: { id } })
   if (!doc) return null
   const fromStatus = doc.status
+  // Reversing an admin takedown is admin-only: editors may promote documents
+  // through review, but not restore a withdrawn one.
+  if (fromStatus === 'withdrawn' && identity.role !== 'admin') {
+    return { forbidden: true }
+  }
   if (fromStatus === toStatus) return { fromStatus }
   doc.status = toStatus
   await repo.save(doc)

@@ -5,6 +5,7 @@ import {
   createCollection,
 } from '../../../../db/queries/collectionsAdmin'
 import { requireIdentity } from '../../../../lib/auth/identity'
+import { internalError } from '../../../../lib/api-error'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,8 +16,8 @@ export async function GET(req: NextRequest) {
   try {
     await initializeDatabase()
     return NextResponse.json({ ok: true, collections: await listCollectionsWithCounts() })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }
 
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     if ('error' in result)
       return NextResponse.json({ ok: false, error: result.error }, { status: 409 })
     return NextResponse.json({ ok: true, collection: result })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }
