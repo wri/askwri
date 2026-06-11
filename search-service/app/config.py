@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     database_url: str = ""          # postgresql://user:pass@host:5432/db (append ?sslmode=require for RDS)
     retrieval_backend: str = "legacy"  # "legacy" (CSV + boot-time build) | "postgres"
 
+    # Keyword lane residency (postgres retrieval backend only):
+    # "sparse" = Postgres-resident BM25 impact vectors in document_chunks.sparse,
+    #            filtered per-query (status='searchable'); requires
+    #            scripts/build_sparse_keyword.py to have run at least once.
+    #            Rollback: set KEYWORD_BACKEND=memory to revert to legacy path.
+    # "memory" = in-memory bm25s built at boot//reindex (legacy behavior, kept intact)
+    keyword_backend: str = "sparse"  # "sparse" (default) | "memory"
+
     # Phase 1 ingestion worker
     worker_poll_seconds: int = 10
     worker_max_attempts: int = 3

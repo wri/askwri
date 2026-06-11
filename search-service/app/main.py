@@ -629,12 +629,29 @@ def load_from_postgres():
             api_key=os.getenv("OPENAI_API_KEY"),
         )
 
-    nodes = pg_store.load_nodes()
-    if not nodes:
-        raise RuntimeError("No searchable chunks in Postgres — run the migration script first")
+    if settings.keyword_backend == "sparse":
+        from app.db import get_pool
+        from app.pg_store import SparseKeywordRetriever
 
-    logger.info("📊 Building BM25 sparse index from Postgres chunks...")
-    bm25_retriever = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=1000)
+        with get_pool().connection() as conn:
+            populated = conn.execute(
+                """SELECT count(*) FROM document_chunks dc
+                   JOIN documents d ON d.id = dc.document_id
+                   WHERE d.status = 'searchable' AND dc.sparse IS NOT NULL"""
+            ).fetchone()[0]
+        if not populated:
+            raise RuntimeError(
+                "KEYWORD_BACKEND=sparse but document_chunks.sparse is unpopulated — "
+                "run scripts/build_sparse_keyword.py first"
+            )
+        bm25_retriever = SparseKeywordRetriever(similarity_top_k=1000)
+        logger.info(f"📊 Keyword lane: Postgres sparse ({populated} chunks; no in-memory build)")
+    else:
+        nodes = pg_store.load_nodes()
+        if not nodes:
+            raise RuntimeError("No searchable chunks in Postgres — run the migration script first")
+        logger.info("📊 Building BM25 sparse index from Postgres chunks...")
+        bm25_retriever = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=1000)
 
     reranker_answer, reranker_cite = init_rerankers()
 
@@ -646,7 +663,7 @@ def load_from_postgres():
     service_state["embed_model"] = embed_model
     service_state["vector_index"] = None
     service_state["pg_dense_ready"] = True
-    logger.info(f"✅ Postgres-backed retrieval ready ({len(nodes)} chunks)")
+    logger.info(f"✅ Postgres-backed retrieval ready ({len(service_state['document_texts'])} documents)")
 
 
 async def _run_indexing_in_background():
@@ -1205,8 +1222,12 @@ async def get_stats():
     }
 
 # Single-flight guard for /reindex: concurrent calls (e.g. several publish
-# stages finishing together) must not stack rebuilds. Note: state is still
-# cleared during the rebuild (known limitation; build-then-swap deferred).
+# stages finishing together) must not stack rebuilds. The load functions
+# update service_state keys sequentially after the expensive work completes —
+# not atomically — so a query racing a rebuild may briefly observe a mix of
+# old and new state (GIL keeps each individual assignment safe). Queries no
+# longer see CLEARED state during a rebuild, which is what the old
+# clear-then-rebuild code caused.
 _reindex_lock = asyncio.Lock()
 
 
@@ -1221,13 +1242,6 @@ async def trigger_reindex():
     async with _reindex_lock:
         try:
             logger.info("[Reindex] Starting full re-index...")
-
-            # Clear existing state
-            service_state["vector_index"] = None
-            service_state["bm25_retriever"] = None
-            service_state["documents_metadata"] = {}
-            service_state["document_texts"] = {}
-            service_state["pg_dense_ready"] = False
 
             # Re-run startup logic in thread pool
             if settings.retrieval_backend == "postgres":

@@ -105,6 +105,43 @@ def run(document_id):
                     f"~{sum(len(n.text) for n in nodes)//4} tokens to {EMBEDDING_MODEL}")
         vectors = _embed_texts([n.get_content(metadata_mode=MetadataMode.EMBED) for n in nodes])
 
+        from pgvector import SparseVector
+
+        from app.sparse_keyword import SPARSE_DIM, chunk_weights, lucene_idf, tokenize
+
+        stats = conn.execute(
+            "SELECT n_chunks, avgdl FROM keyword_corpus_stats WHERE id = 1"
+        ).fetchone()
+        if stats:
+            n_chunks, avgdl = stats
+            token_lists = [
+                tokenize(n.get_content(metadata_mode=MetadataMode.EMBED)) for n in nodes
+            ]
+            new_tokens = sorted({t for toks in token_lists for t in toks})
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """INSERT INTO keyword_vocab (token, df, idf) VALUES (%s, 1, %s)
+                       ON CONFLICT (token) DO NOTHING""",
+                    [(t, lucene_idf(1, n_chunks)) for t in new_tokens],
+                )
+            rows = conn.execute(
+                "SELECT token, token_id, idf FROM keyword_vocab WHERE token = ANY(%s)",
+                (new_tokens,),
+            ).fetchall()
+            id_by_token = {t: i for t, i, _ in rows}
+            idf_by_token = {t: idf for t, _, idf in rows}
+            sparse_vecs = [
+                SparseVector(
+                    {id_by_token[t] - 1: w
+                     for t, w in chunk_weights(toks, idf_by_token, avgdl).items()},
+                    SPARSE_DIM,
+                )
+                for toks in token_lists
+            ]
+        else:
+            logger.warning("keyword_corpus_stats missing — sparse lane not backfilled; writing NULL sparse")
+            sparse_vecs = [None] * len(nodes)
+
         conn.execute("SELECT pg_advisory_xact_lock(%s)", (_LOCK_KEY,))
         conn.execute("DELETE FROM document_chunks WHERE document_id=%s", (document_id,))
         next_order = conn.execute(
@@ -115,11 +152,13 @@ def run(document_id):
             conn.execute(
                 """INSERT INTO document_chunks
                    (document_id, legacy_chunk_id, chunk_index, unit_type, page, text,
-                    language, node_metadata, embedding, embedding_model, dimension, corpus_order)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    language, node_metadata, embedding, embedding_model, dimension,
+                    corpus_order, sparse)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (document_id, node.metadata["chunk_id"], node.metadata.get("chunk_index", 0),
                  "summary" if is_summary else "text", node.metadata.get("page"),
                  node.text, doc["language"], Jsonb(dict(node.metadata)),
-                 np.array(vec, dtype=np.float32), EMBEDDING_MODEL, DIMENSION, next_order + offset),
+                 np.array(vec, dtype=np.float32), EMBEDDING_MODEL, DIMENSION,
+                 next_order + offset, sparse_vecs[offset]),
             )
     return None

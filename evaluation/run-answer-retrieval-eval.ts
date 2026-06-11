@@ -182,9 +182,29 @@ async function main() {
 
   const results: RetrievalTestResult[] = [];
 
+  // Resume support: checkpoint each completed query so interrupted runs only
+  // re-pay unfinished queries (mirrors run-cite-eval.ts).
+  const checkpointPath = path.join(__dirname, 'results', 'answer-retrieval-checkpoint.json');
+  const checkpoint: Record<string, RetrievalTestResult> = fs.existsSync(checkpointPath)
+    ? JSON.parse(fs.readFileSync(checkpointPath, 'utf-8'))
+    : {};
+  const resumed = Object.values(checkpoint).filter(r => !r.error).length;
+  if (resumed > 0) {
+    console.log(`Resuming from checkpoint: ${resumed} completed queries will be skipped\n`);
+  }
+
   for (const tc of goldenData.test_cases) {
+    const prior = checkpoint[tc.id];
+    if (prior && !prior.error) {
+      console.log(`\n  Skipping (checkpointed): ${tc.id}`);
+      results.push(prior);
+      continue;
+    }
     const result = await runTestCase(tc);
     results.push(result);
+    checkpoint[tc.id] = result;
+    fs.mkdirSync(path.dirname(checkpointPath), { recursive: true });
+    fs.writeFileSync(checkpointPath, JSON.stringify(checkpoint, null, 2));
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
@@ -217,6 +237,11 @@ async function main() {
   fs.mkdirSync(resultsDir, { recursive: true });
   const reportPath = path.join(resultsDir, `answer-retrieval-${Date.now()}.json`);
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+  // Completed run: clear checkpoint only if every query succeeded.
+  if (results.every(r => !r.error) && fs.existsSync(checkpointPath)) {
+    fs.unlinkSync(checkpointPath);
+  }
 
   // Print summary
   console.log('\n' + '='.repeat(70));

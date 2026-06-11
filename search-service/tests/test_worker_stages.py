@@ -1058,6 +1058,12 @@ class TestEmbedStage:
         zero_vec = "[" + ",".join(["0.0"] * 1536) + "]"
 
         with psycopg.connect(stages_test_db) as conn:
+            # Seed frozen corpus stats so the embed stage writes sparse vectors
+            conn.execute(
+                """INSERT INTO keyword_corpus_stats (id, n_chunks, avgdl, k1, b, sparse_dim)
+                   VALUES (1, 100, 250.0, 1.5, 0.75, 1000000)
+                   ON CONFLICT (id) DO NOTHING"""
+            )
             # Insert a dummy document to hold the sentinel corpus_order=99
             sentinel_doc_id = conn.execute(
                 """INSERT INTO documents
@@ -1124,6 +1130,17 @@ class TestEmbedStage:
             f"corpus_order values not contiguous: {orders}"
 
         assert len(embed_calls) == 1, "Expected exactly one _embed_texts call"
+
+        # sparse keyword lane: every chunk row gets an impact vector computed
+        # under frozen corpus stats; new tokens are upserted into keyword_vocab
+        with psycopg.connect(stages_test_db) as conn:
+            sparse_rows = conn.execute(
+                "SELECT legacy_chunk_id, sparse FROM document_chunks WHERE document_id = %s",
+                (doc_id,),
+            ).fetchall()
+            assert all(s is not None for _, s in sparse_rows)
+            vocab_n = conn.execute("SELECT count(*) FROM keyword_vocab").fetchone()[0]
+        assert vocab_n > 0
 
     def test_rerun_replaces_chunks_corpus_order_increases(
         self, stages_test_db, monkeypatch
