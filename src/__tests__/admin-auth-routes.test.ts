@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs'
 import { AppDataSource } from '@/db/data-source'
 import { User } from '@/db/entities/User.entity'
 import { POST as login } from '@/app/api/admin/auth/login/route'
+import { POST as createUserRoute } from '@/app/api/admin/users/route'
+import { PATCH as patchUserRoute } from '@/app/api/admin/users/[id]/route'
 import { SESSION_COOKIE, verifySession } from '@/lib/auth/session'
 
 const hasDb = !!process.env.DATABASE_URL
@@ -11,6 +13,7 @@ const d = hasDb ? describe : describe.skip
 
 beforeAll(() => {
   process.env.SESSION_SECRET = 'test-secret-test-secret-test-secret-1234'
+  process.env.ADMIN_API_TOKEN = 'test-admin-token'
 })
 
 d('login route (DB integration)', () => {
@@ -60,5 +63,89 @@ d('login route (DB integration)', () => {
   it('400s on a missing body', async () => {
     const res = await login(loginReq({}))
     expect(res.status).toBe(400)
+  })
+})
+
+d('user management routes (DB integration)', () => {
+  const createdUserIds: string[] = []
+
+  function adminReq(method: string, url: string, body?: unknown) {
+    return new NextRequest(url, {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer test-admin-token',
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    })
+  }
+
+  function loginReq(body: unknown) {
+    return new NextRequest('http://localhost/api/admin/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  afterAll(async () => {
+    if (createdUserIds.length > 0) {
+      for (const id of createdUserIds) {
+        await AppDataSource.getRepository(User).delete({ id })
+      }
+    }
+  })
+
+  it('POST /admin/users creates a user and login works with new credentials', async () => {
+    const username = `created_user_${Date.now()}`
+    const password = 'ValidPassword123!'
+    const res = await createUserRoute(
+      adminReq('POST', 'http://localhost/api/admin/users', { username, password, role: 'editor' }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.user.username).toBe(username)
+    createdUserIds.push(body.user.id)
+
+    const loginRes = await login(loginReq({ username, password }))
+    expect(loginRes.status).toBe(200)
+    const loginBody = await loginRes.json()
+    expect(loginBody.ok).toBe(true)
+  })
+
+  it('POST /admin/users 400s on a short password', async () => {
+    const res = await createUserRoute(
+      adminReq('POST', 'http://localhost/api/admin/users', {
+        username: `short_pw_${Date.now()}`,
+        password: 'short',
+        role: 'editor',
+      }),
+    )
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.ok).toBe(false)
+  })
+
+  it('PATCH /admin/users/[id] deactivates user and login then 401s', async () => {
+    const username = `deactivate_user_${Date.now()}`
+    const password = 'ValidPassword456!'
+    const createRes = await createUserRoute(
+      adminReq('POST', 'http://localhost/api/admin/users', { username, password, role: 'editor' }),
+    )
+    expect(createRes.status).toBe(200)
+    const { user } = await createRes.json()
+    createdUserIds.push(user.id)
+
+    const patchRes = await patchUserRoute(
+      adminReq('PATCH', `http://localhost/api/admin/users/${user.id}`, { active: false }),
+      { params: Promise.resolve({ id: user.id }) },
+    )
+    expect(patchRes.status).toBe(200)
+    const patchBody = await patchRes.json()
+    expect(patchBody.ok).toBe(true)
+
+    const loginRes = await login(loginReq({ username, password }))
+    expect(loginRes.status).toBe(401)
   })
 })
