@@ -1,0 +1,125 @@
+"""Stage: chunk the document and write embedded document_chunks rows.
+
+Chunking is IDENTICAL to Phase 0 (SimpleNodeParser 400/80 + one summary node;
+legacy chunk-id format; node_metadata verbatim) so retrieval semantics and
+golden-set chunk references stay coherent. corpus_order appends after the
+global max under an advisory lock (BM25 tie parity: append == legacy rebuild
+behavior for new docs). Re-ingest deletes the doc's prior chunks first.
+zh text is OpenCC-normalized (t2s) in chunk/summary TEXT (indexed form);
+document_texts keeps the original.
+"""
+import logging
+
+from psycopg.types.json import Jsonb
+
+from app.config import get_settings
+from app.db import get_pool
+from worker.stages import fetch_document, stage
+
+logger = logging.getLogger(__name__)
+EMBEDDING_MODEL = "text-embedding-3-small"
+DIMENSION = 1536
+_LOCK_KEY = 0x636F7270  # 'corp' — corpus_order allocation lock
+
+
+def _build_nodes_for_doc(doc, full_text: str, boundaries: list, summary: str):
+    """Single-document version of app.indexing.build_nodes (same params/metadata)."""
+    from llama_index.core.node_parser import SimpleNodeParser
+    from llama_index.core.schema import Document, TextNode
+
+    from app.indexing import get_page_number_for_position
+
+    src = (doc["source_metadata"] or {}).get("metadata", {}) or {}
+    # Same fallback chain as app.indexing.prepare_documents (line 62)
+    url = src.get("Source URL", src.get("URL", src.get("Attribution URL", "")))
+    base = {
+        "doc_id": doc["external_id"],
+        "title": (doc["title"] or "")[:100],
+        "authors": (src.get("All authors") or "")[:100],
+        "year": str(src.get("YEAR published") or ""),
+        "subtag": (src.get("Sub-tag") or "")[:50] if isinstance(src.get("Sub-tag"), str) else "",
+        "program_series": src.get("program_series", ""),
+    }
+    parser = SimpleNodeParser.from_defaults(chunk_size=400, chunk_overlap=80)
+    nodes = parser.get_nodes_from_documents([Document(text=full_text, metadata=dict(base))])
+    for idx, node in enumerate(nodes):
+        start = full_text.find(node.text[:100])
+        if start == -1:
+            start = idx * (len(full_text) // max(len(nodes), 1))
+        node.metadata.update({
+            "chunk_id": f"{doc['external_id']}_chunk_{idx}",
+            "chunk_index": idx, "total_chunks": len(nodes),
+            "page": get_page_number_for_position(start, boundaries),
+            "chunk_start_pos": start,
+            "authors": base["authors"], "year": base["year"],
+            "url": url, "file_path": doc["s3_key"],
+            "program_series": base["program_series"],
+            "prev_chunk_id": f"{doc['external_id']}_chunk_{idx-1}" if idx else None,
+            "next_chunk_id": f"{doc['external_id']}_chunk_{idx+1}" if idx < len(nodes) - 1 else None,
+        })
+    if summary:
+        nodes.append(TextNode(
+            text=f"{doc['title']}\n\n{summary}" if doc["title"] else summary,
+            metadata={**base, "chunk_id": f"{doc['external_id']}_summary", "chunk_index": -1,
+                      "total_chunks": -1, "page": 1, "chunk_start_pos": 0,
+                      "url": url, "file_path": doc["s3_key"],
+                      "is_summary_node": True, "prev_chunk_id": None,
+                      "next_chunk_id": f"{doc['external_id']}_chunk_0"},
+        ))
+    return nodes
+
+
+def _embed_texts(texts: list) -> list:
+    import os
+    from llama_index.embeddings.openai import OpenAIEmbedding
+
+    return OpenAIEmbedding(model=EMBEDDING_MODEL, api_key=os.getenv("OPENAI_API_KEY")) \
+        .get_text_embedding_batch(texts)
+
+
+@stage("embed")
+def run(document_id):
+    import numpy as np
+    from llama_index.core.schema import MetadataMode
+
+    with get_pool().connection() as conn:
+        doc = fetch_document(conn, document_id)
+        full_text, boundaries = conn.execute(
+            "SELECT full_text, page_boundaries FROM document_texts WHERE document_id=%s",
+            (document_id,),
+        ).fetchone()
+        summary_row = conn.execute(
+            """SELECT text FROM document_summaries WHERE document_id=%s
+               AND language=%s AND kind='long'""", (document_id, doc["language"]),
+        ).fetchone()
+        index_text = full_text
+        summary = summary_row[0] if summary_row else ""
+        if doc["language"] == "zh":
+            from opencc import OpenCC
+            cc = OpenCC("t2s")
+            index_text = cc.convert(full_text)
+            if summary:
+                summary = cc.convert(summary)
+        nodes = _build_nodes_for_doc(doc, index_text, boundaries, summary)
+        logger.info(f"embed {doc['external_id']}: {len(nodes)} chunks, "
+                    f"~{sum(len(n.text) for n in nodes)//4} tokens to {EMBEDDING_MODEL}")
+        vectors = _embed_texts([n.get_content(metadata_mode=MetadataMode.EMBED) for n in nodes])
+
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (_LOCK_KEY,))
+        conn.execute("DELETE FROM document_chunks WHERE document_id=%s", (document_id,))
+        next_order = conn.execute(
+            "SELECT COALESCE(MAX(corpus_order), -1) + 1 FROM document_chunks"
+        ).fetchone()[0]
+        for offset, (node, vec) in enumerate(zip(nodes, vectors)):
+            is_summary = bool(node.metadata.get("is_summary_node"))
+            conn.execute(
+                """INSERT INTO document_chunks
+                   (document_id, legacy_chunk_id, chunk_index, unit_type, page, text,
+                    language, node_metadata, embedding, embedding_model, dimension, corpus_order)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (document_id, node.metadata["chunk_id"], node.metadata.get("chunk_index", 0),
+                 "summary" if is_summary else "text", node.metadata.get("page"),
+                 node.text, doc["language"], Jsonb(dict(node.metadata)),
+                 np.array(vec, dtype=np.float32), EMBEDDING_MODEL, DIMENSION, next_order + offset),
+            )
+    return None

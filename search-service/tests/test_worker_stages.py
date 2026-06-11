@@ -895,3 +895,326 @@ class TestClassifyStage:
                 "SELECT count(*) FROM document_tags WHERE document_id=%s", (doc_id,)
             ).fetchone()[0]
             assert count == 0, "Out-of-vocab value should produce no document_tags row"
+
+
+# ---------------------------------------------------------------------------
+# --- embed stage ---
+# ---------------------------------------------------------------------------
+
+# Long English text — enough distinct sentences to force multiple chunks at 400 chars
+_EMBED_LONG_TEXT = (
+    "Climate change poses one of the greatest challenges to sustainable development worldwide. "
+    "Rising global temperatures are disrupting weather patterns and increasing the frequency of extreme events. "
+    "Sea level rise threatens coastal communities and critical infrastructure around the world. "
+    "Deforestation and land use change are major contributors to greenhouse gas emissions globally. "
+    "Renewable energy transitions offer pathways to decarbonize electricity systems at scale. "
+    "Water scarcity is intensifying as glaciers recede and precipitation patterns shift dramatically. "
+    "Food systems must adapt to changing growing conditions and more frequent droughts and floods. "
+    "Biodiversity loss accelerates as habitats are destroyed by human activity and climate stress. "
+    "Urban heat islands amplify temperature extremes in densely populated metropolitan areas. "
+    "International climate agreements require ambitious national commitments to limit warming to 1.5 degrees. "
+    "Carbon pricing mechanisms can drive emissions reductions across industrial and energy sectors. "
+    "Nature-based solutions such as wetland restoration provide co-benefits for climate and communities. "
+    "Ocean acidification from excess carbon dioxide threatens coral reefs and marine ecosystems worldwide. "
+    "Adaptation finance must flow to vulnerable nations that bear disproportionate climate impacts today. "
+    "Clean cooking solutions reduce household air pollution and improve health outcomes across the globe. "
+    "Soil carbon sequestration through regenerative agriculture offers scalable mitigation potential now. "
+    "Energy efficiency improvements in buildings and industry can cut emissions significantly at low cost. "
+    "Just transitions protect workers in fossil fuel industries as economies shift to clean energy systems. "
+    "Climate risk disclosure frameworks help investors and companies assess physical and transition risks. "
+    "Indigenous land stewardship practices offer proven models for sustainable forest and water management. "
+)
+
+_ZH_TRADITIONAL_EMBED_TEXT = (
+    "環境保護是當今世界最重要的議題之一，各國政府和國際組織正在積極尋求解決方案。"
+    "氣候變遷導致全球氣溫上升，極端天氣事件的頻率和強度也隨之增加，威脅著人類社會。"
+    "森林砍伐和土地利用變化是溫室氣體排放的主要來源，需要立即採取行動加以遏制。"
+    "可再生能源的發展為脫碳化提供了可行的途徑，太陽能和風能技術的成本已大幅下降。"
+    "水資源短缺問題日益嚴峻，冰川退縮和降水模式變化對農業和飲用水供應造成威脅。"
+    "生物多樣性喪失的速度令人擔憂，棲息地破壞和氣候壓力共同加速了物種滅絕的進程。"
+    "城市熱島效應在人口密集的大都市地區進一步加劇了氣溫極端值，影響居民健康。"
+    "國際氣候協議要求各國提出雄心勃勃的國家承諾，以將全球暖化限制在攝氏一點五度內。"
+    "碳定價機制可以推動工業和能源部門的減排，是實現淨零目標的重要政策工具之一。"
+    "基於自然的解決方案，如濕地恢復和植樹造林，為氣候和社區提供了多重協同效益。"
+) * 3  # repeat to ensure sufficient length
+
+
+def _insert_embed_document(conn, *, external_id, language="en", languages=None,
+                            title="Embed Test Doc", source_metadata=None):
+    """Insert a documents row suitable for embed stage tests; return id."""
+    from psycopg.types.json import Jsonb
+    if languages is None:
+        languages = [language]
+    row = conn.execute(
+        """INSERT INTO documents
+               (external_id, s3_key, title, status, content_hash, language, languages)
+           VALUES (%s, %s, %s, 'processing', 'embed_hash_123', %s, %s)
+           RETURNING id""",
+        (external_id, f"documents/{external_id}.pdf", title, language, languages),
+    ).fetchone()
+    if source_metadata is not None:
+        conn.execute(
+            "UPDATE documents SET source_metadata = %s WHERE id = %s",
+            (Jsonb(source_metadata), row[0]),
+        )
+    conn.commit()
+    return row[0]
+
+
+class TestEmbedStage:
+
+    def test_basic_chunks_written_with_correct_ids_and_corpus_order(
+        self, stages_test_db, monkeypatch
+    ):
+        """Basic en doc: chunk rows exist with legacy ids, summary chunk, corpus_order
+        contiguous starting above a pre-existing max of 99."""
+        embed_calls = []
+
+        def fake_embed(texts):
+            embed_calls.append(texts)
+            return [[0.01] * 1536 for _ in texts]
+
+        monkeypatch.setattr("worker.stages.embed._embed_texts", fake_embed)
+
+        page_boundaries = [
+            {"page": 1, "end_pos": len(_EMBED_LONG_TEXT) // 2},
+            {"page": 2, "end_pos": len(_EMBED_LONG_TEXT)},
+        ]
+
+        from psycopg.types.json import Jsonb
+        zero_vec = "[" + ",".join(["0.0"] * 1536) + "]"
+
+        with psycopg.connect(stages_test_db) as conn:
+            # Insert a dummy document to hold the sentinel corpus_order=99
+            sentinel_doc_id = conn.execute(
+                """INSERT INTO documents
+                       (external_id, s3_key, title, status, content_hash, language, languages)
+                   VALUES ('sentinel-doc', 'documents/sentinel.pdf', 'Sentinel', 'processing',
+                           'sentinel_hash', 'en', '{en}')
+                   RETURNING id"""
+            ).fetchone()[0]
+            conn.execute(
+                f"""INSERT INTO document_chunks
+                       (document_id, legacy_chunk_id, chunk_index, unit_type, page, text,
+                        language, node_metadata, embedding, embedding_model, dimension, corpus_order)
+                   VALUES (%s, 'sentinel_chunk_0', 0, 'text', 1, 'sentinel text',
+                           'en', '{{}}', '{zero_vec}'::vector(1536), 'text-embedding-3-small', 1536, 99)""",
+                (sentinel_doc_id,),
+            )
+            doc_id = _insert_embed_document(
+                conn, external_id="embed-basic-doc", language="en",
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _EMBED_LONG_TEXT, len(_EMBED_LONG_TEXT), Jsonb(page_boundaries)),
+            )
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'A long summary of the document.', 'generated')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.embed import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                """SELECT legacy_chunk_id, chunk_index, unit_type, corpus_order
+                   FROM document_chunks WHERE document_id=%s ORDER BY corpus_order""",
+                (doc_id,),
+            ).fetchall()
+
+        assert len(rows) >= 2, f"Expected at least 2 chunk rows, got {len(rows)}"
+
+        legacy_ids = [r[0] for r in rows]
+        # Text chunks follow the pattern external_id_chunk_N
+        text_chunks = [lid for lid in legacy_ids if lid != "embed-basic-doc_summary"]
+        assert all(lid.startswith("embed-basic-doc_chunk_") for lid in text_chunks), \
+            f"Unexpected legacy_chunk_ids: {legacy_ids}"
+        assert "embed-basic-doc_summary" in legacy_ids, "Summary chunk missing"
+
+        # Summary row properties
+        summary_row = next(r for r in rows if r[0] == "embed-basic-doc_summary")
+        assert summary_row[1] == -1, "Summary chunk_index should be -1"
+        assert summary_row[2] == "summary", "Summary unit_type should be 'summary'"
+
+        # corpus_order starts above 99 (the sentinel)
+        min_order = min(r[3] for r in rows)
+        assert min_order >= 100, f"corpus_order should start at 100+, got min={min_order}"
+
+        # corpus_order values are contiguous
+        orders = sorted(r[3] for r in rows)
+        assert orders == list(range(orders[0], orders[0] + len(orders))), \
+            f"corpus_order values not contiguous: {orders}"
+
+        assert len(embed_calls) == 1, "Expected exactly one _embed_texts call"
+
+    def test_rerun_replaces_chunks_corpus_order_increases(
+        self, stages_test_db, monkeypatch
+    ):
+        """Run embed twice → same chunk count, corpus_order max increases on second run.
+
+        A pinned document (anchor_doc) holds corpus_order=500 and is never deleted,
+        so the global max is always anchored above the first run's values.
+        """
+        def fake_embed(texts):
+            return [[0.01] * 1536 for _ in texts]
+
+        monkeypatch.setattr("worker.stages.embed._embed_texts", fake_embed)
+
+        from psycopg.types.json import Jsonb
+        zero_vec = "[" + ",".join(["0.0"] * 1536) + "]"
+        page_boundaries = [{"page": 1, "end_pos": len(_EMBED_LONG_TEXT)}]
+
+        with psycopg.connect(stages_test_db) as conn:
+            # Anchor doc: holds a chunk at corpus_order=500 so second run appends above it
+            anchor_doc_id = conn.execute(
+                """INSERT INTO documents
+                       (external_id, s3_key, title, status, content_hash, language, languages)
+                   VALUES ('anchor-doc', 'documents/anchor.pdf', 'Anchor', 'processing',
+                           'anchor_hash_456', 'en', '{en}')
+                   RETURNING id"""
+            ).fetchone()[0]
+            conn.execute(
+                f"""INSERT INTO document_chunks
+                       (document_id, legacy_chunk_id, chunk_index, unit_type, page, text,
+                        language, node_metadata, embedding, embedding_model, dimension, corpus_order)
+                   VALUES (%s, 'anchor_chunk_0', 0, 'text', 1, 'anchor text',
+                           'en', '{{}}', '{zero_vec}'::vector(1536), 'text-embedding-3-small', 1536, 500)""",
+                (anchor_doc_id,),
+            )
+            doc_id = _insert_embed_document(conn, external_id="embed-rerun-doc", language="en")
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _EMBED_LONG_TEXT, len(_EMBED_LONG_TEXT), Jsonb(page_boundaries)),
+            )
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'Summary for rerun test.', 'generated')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.embed import run
+
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            count_after_first = conn.execute(
+                "SELECT count(*) FROM document_chunks WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+            max_order_after_first = conn.execute(
+                "SELECT MAX(corpus_order) FROM document_chunks WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+            # Simulate another document accumulating chunks after first run, pushing global max up
+            conn.execute(
+                f"""INSERT INTO document_chunks
+                       (document_id, legacy_chunk_id, chunk_index, unit_type, page, text,
+                        language, node_metadata, embedding, embedding_model, dimension, corpus_order)
+                   VALUES (%s, 'anchor_chunk_1', 1, 'text', 1, 'extra anchor text',
+                           'en', '{{}}', '{zero_vec}'::vector(1536), 'text-embedding-3-small', 1536, 999)""",
+                (anchor_doc_id,),
+            )
+            conn.commit()
+
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            count_after_second = conn.execute(
+                "SELECT count(*) FROM document_chunks WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+            max_order_after_second = conn.execute(
+                "SELECT MAX(corpus_order) FROM document_chunks WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+            # No orphan rows with old corpus_order values for this doc
+            total_chunks = conn.execute(
+                "SELECT count(*) FROM document_chunks WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+            stale_rows = conn.execute(
+                "SELECT count(*) FROM document_chunks WHERE document_id=%s AND corpus_order <= %s",
+                (doc_id, max_order_after_first),
+            ).fetchone()[0]
+
+        assert stale_rows == 0, \
+            f"All first-run rows should be deleted on rerun ({stale_rows} stale rows remain)"
+        assert count_after_second == count_after_first, \
+            f"Chunk count should be stable: first={count_after_first} second={count_after_second}"
+        assert max_order_after_second > max_order_after_first, \
+            f"corpus_order max should increase on rerun: first={max_order_after_first} second={max_order_after_second}"
+        assert total_chunks == count_after_first, "No orphan chunks should remain"
+
+    def test_zh_normalization_simplified_in_chunks_traditional_in_document_texts(
+        self, stages_test_db, monkeypatch
+    ):
+        """zh doc: chunk text contains Simplified forms; document_texts.full_text unchanged."""
+        def fake_embed(texts):
+            return [[0.01] * 1536 for _ in texts]
+
+        monkeypatch.setattr("worker.stages.embed._embed_texts", fake_embed)
+
+        from psycopg.types.json import Jsonb
+        page_boundaries = [{"page": 1, "end_pos": len(_ZH_TRADITIONAL_EMBED_TEXT)}]
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_embed_document(
+                conn, external_id="embed-zh-doc", language="zh", languages=["zh"],
+                title="環境報告",
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _ZH_TRADITIONAL_EMBED_TEXT, len(_ZH_TRADITIONAL_EMBED_TEXT), Jsonb(page_boundaries)),
+            )
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'zh', 'long', '環境保護摘要', 'generated')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.embed import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            text_chunk_texts = conn.execute(
+                "SELECT text FROM document_chunks WHERE document_id=%s AND unit_type='text'", (doc_id,)
+            ).fetchall()
+            summary_chunk_text = conn.execute(
+                "SELECT text FROM document_chunks WHERE document_id=%s AND unit_type='summary'", (doc_id,)
+            ).fetchone()[0]
+            stored_full_text = conn.execute(
+                "SELECT full_text FROM document_texts WHERE document_id=%s", (doc_id,)
+            ).fetchone()[0]
+
+        # Summary node text is also normalized (the summary string, not the raw title)
+        assert "环境保护摘要" in summary_chunk_text, \
+            "Summary chunk text should be OpenCC-normalized to Simplified"
+        assert "環境保護摘要" not in summary_chunk_text, \
+            "Traditional summary text should NOT appear in the summary chunk"
+
+        assert len(text_chunk_texts) > 0, "No text chunks written for zh document"
+
+        all_text_chunk = " ".join(r[0] for r in text_chunk_texts)
+
+        # Simplified forms must appear in indexed text chunks (from OpenCC t2s conversion)
+        assert "环境保护" in all_text_chunk, \
+            "Simplified '环境保护' should appear in text chunk text (OpenCC t2s)"
+        assert "气候变迁" in all_text_chunk, \
+            "Simplified '气候变迁' should appear in text chunk text (OpenCC t2s)"
+
+        # Traditional forms must NOT appear in text chunk content
+        assert "環境保護" not in all_text_chunk, \
+            "Traditional '環境保護' should NOT appear in text chunk text"
+        assert "氣候變遷" not in all_text_chunk, \
+            "Traditional '氣候變遷' should NOT appear in text chunk text"
+
+        # Original document_texts.full_text must be unchanged (still Traditional)
+        assert "環境保護" in stored_full_text, \
+            "Traditional form should be preserved in document_texts.full_text"
+        assert "氣候變遷" in stored_full_text, \
+            "Traditional form should be preserved in document_texts.full_text"
