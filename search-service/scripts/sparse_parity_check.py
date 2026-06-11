@@ -1,0 +1,121 @@
+"""Offline parity check: BM25-as-sparse-vector vs the live bm25s lane.
+
+Evidence for the keyword-lane design note (option b). Builds the exact
+BM25Retriever the service builds at boot, then verifies that representing each
+chunk as a sparse vector of bm25s impact weights and scoring queries as a
+sparse inner product (doc_weights . query_token_counts) reproduces bm25s
+scores and rankings exactly. Also reports sparsevec feasibility numbers
+(vocab size, nnz distribution vs pgvector limits).
+
+Run: cd search-service && ./venv/bin/python -m scripts.sparse_parity_check
+(requires DATABASE_URL; read-only)
+"""
+import sys
+import time
+
+import numpy as np
+
+QUERIES = [
+    # eval:cite golden-set questions (question text only, matching runner usage)
+    "What have we published on land value capture?",
+    "What have we published on Bangalore?",
+    "What research do we have on children and air pollution?",
+    "What have we published about climate adaptation in Brazil?",
+    "What have we published on micromobility?",
+    "Do we have anything on school buses and health?",
+    "What can be done to solve the housing crisis in Jakarta?",
+    "Have we published any papers or reports on hydrogen?",
+    "Give me all the papers that were published as part of the cities World Resources Report?",
+    "Have we published anything to do with urban finance since 2020?",
+    # non-English smoke queries
+    "株洲完整街道设计指南",
+    "电动公交车运营挑战",
+    "北京零排放货运",
+    "出行即服务平台商业模式",
+    "深圳港集装箱运输脱碳",
+    "轨道交通站点安全可达性设计",
+    "广东道路交通深度减排路径",
+    "el costo de la expansión urbana en México",
+    "las mujeres y el transporte en Bogotá",
+    "entornos caminables seguros",
+    "ciencia participativa para un aire limpio",
+    "índice de desigualdad urbana",
+    "ruas completas no Brasil",
+    "medindo PM2.5 com sensores de baixo custo",
+    "pesquisa de satisfação QualiÔnibus",
+    "expansão vertical e horizontal em cidades brasileiras",
+]
+
+
+def main():
+    import bm25s
+    import scipy.sparse as sp
+    from app import pg_store
+    from llama_index.retrievers.bm25 import BM25Retriever
+
+    t0 = time.time()
+    nodes = pg_store.load_nodes()
+    print(f"loaded {len(nodes)} chunks in {time.time() - t0:.1f}s")
+
+    t0 = time.time()
+    retriever = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=1000)
+    print(f"built BM25 index in {time.time() - t0:.1f}s")
+
+    bm25 = retriever.bm25
+    scores = bm25.scores
+    n_docs = int(scores["num_docs"])
+    n_tokens = len(scores["indptr"]) - 1
+    # bm25s stores the impact matrix token-major (CSC over tokens); transpose to
+    # doc-major rows = the sparsevec each chunk would store.
+    mat = sp.csc_matrix(
+        (scores["data"], scores["indices"], scores["indptr"]),
+        shape=(n_docs, n_tokens),
+    )
+    doc_rows = mat.tocsr()
+    nnz_per_doc = np.diff(doc_rows.indptr)
+    print(f"vocab size (sparsevec dimension): {n_tokens}")
+    print(f"nnz/chunk: max {nnz_per_doc.max()}, mean {nnz_per_doc.mean():.0f} "
+          f"(pgvector sparsevec limit 16k store / 1k HNSW)")
+
+    vocab = bm25.vocab_dict  # token string -> column id
+
+    failures = 0
+    for q in QUERIES:
+        # Reference: the exact path BM25Retriever._retrieve uses
+        tokenized = bm25s.tokenize(
+            q, stemmer=retriever.stemmer, token_pattern=retriever.token_pattern,
+            show_progress=False,
+        )
+        ref = bm25.get_scores(tokenized.ids[0]) if len(tokenized.ids[0]) else np.zeros(n_docs)
+
+        # Candidate: sparse inner product against a query token-count vector,
+        # replicating tokenization independently (as the SQL path would).
+        toks = bm25s.tokenize(
+            q, stemmer=retriever.stemmer, token_pattern=retriever.token_pattern,
+            return_ids=False, show_progress=False,
+        )[0]
+        qvec = np.zeros(n_tokens, dtype=np.float32)
+        for t in toks:
+            col = vocab.get(t)
+            if col is not None:
+                qvec[col] += 1.0
+        cand = doc_rows @ qvec
+
+        score_ok = np.allclose(ref, cand, atol=1e-4)
+        rank_ok = np.array_equal(
+            np.argsort(-ref, kind="stable"), np.argsort(-cand, kind="stable")
+        )
+        status = "OK " if (score_ok and rank_ok) else "FAIL"
+        if not (score_ok and rank_ok):
+            failures += 1
+            diff = np.abs(ref - cand).max()
+            print(f"{status} {q[:50]!r} max|Δscore|={diff:.6f} rank_identical={rank_ok}")
+        else:
+            print(f"{status} {q[:50]!r} top1_score={ref.max():.4f}")
+
+    print(f"\n{len(QUERIES) - failures}/{len(QUERIES)} queries score+rank identical")
+    sys.exit(1 if failures else 0)
+
+
+if __name__ == "__main__":
+    main()
