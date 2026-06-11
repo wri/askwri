@@ -5,6 +5,7 @@ import { AnswerModeFeedback } from './entities/AnswerModeFeedback.entity'
 import { CiteModeQueryLogs } from './entities/CiteModeQueryLogs.entity'
 import { AnswerModeQueryLogs } from './entities/AnswerModeQueryLogs.entity'
 import { Document } from './entities/Document.entity'
+import { IngestionJob } from './entities/IngestionJob.entity'
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -21,6 +22,7 @@ export const AppDataSource = new DataSource({
     CiteModeQueryLogs,
     AnswerModeQueryLogs,
     Document,
+    IngestionJob,
   ],
   // DATABASE_SSL=false disables SSL for local dev databases (docker has no SSL);
   // default stays SSL-on for RDS.
