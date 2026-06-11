@@ -128,6 +128,7 @@ def test_oov_query_returns_zero_scores_not_error(seeded):
     from app.pg_store import SparseKeywordRetriever
     r = SparseKeywordRetriever(similarity_top_k=10)
     out = r._retrieve(QueryBundle(query_str="zzznotavocabword"))
+    assert len(out) == 3  # all non-NULL searchable chunks, not an empty list
     assert all(n.score == pytest.approx(0.0) for n in out)
 
 

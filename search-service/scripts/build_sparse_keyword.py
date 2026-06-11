@@ -7,8 +7,9 @@ document_chunks.sparse.
 
 Run for the initial backfill and to refresh frozen stats after bulk corpus
 changes. Lifecycle consistency (withdraw/promote) NEVER depends on this —
-only IDF/avgdl freshness does. Idempotent; single transaction; ~1-2 min on
-30k chunks.
+only IDF/avgdl freshness does. Idempotent. All writes commit atomically:
+psycopg3's connection context manager wraps the block in one transaction
+and commits on clean exit. ~1-2 min on 30k chunks.
 
 Run: cd search-service && ./venv/bin/python -m scripts.build_sparse_keyword
 """

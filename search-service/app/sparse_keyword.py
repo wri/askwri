@@ -30,9 +30,14 @@ _stemmer = Stemmer.Stemmer("english")
 
 
 def tokenize(text: str) -> List[str]:
-    """Tokenize one string exactly like BM25Retriever (both sides)."""
+    """Tokenize one string exactly like BM25Retriever (both sides).
+
+    stopwords="en" is passed explicitly (bm25s treats "en" and its default
+    "english" identically) so callers don't depend on a library default.
+    """
     return bm25s.tokenize(
         text,
+        stopwords="en",
         stemmer=_stemmer,
         token_pattern=TOKEN_PATTERN,
         return_ids=False,

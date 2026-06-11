@@ -1222,9 +1222,12 @@ async def get_stats():
     }
 
 # Single-flight guard for /reindex: concurrent calls (e.g. several publish
-# stages finishing together) must not stack rebuilds. load_from_postgres and
-# load_documents_and_build_indexes assign service_state keys only at the end,
-# so queries keep serving the previous state during a rebuild.
+# stages finishing together) must not stack rebuilds. The load functions
+# update service_state keys sequentially after the expensive work completes —
+# not atomically — so a query racing a rebuild may briefly observe a mix of
+# old and new state (GIL keeps each individual assignment safe). Queries no
+# longer see CLEARED state during a rebuild, which is what the old
+# clear-then-rebuild code caused.
 _reindex_lock = asyncio.Lock()
 
 
