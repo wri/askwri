@@ -230,6 +230,79 @@ class TestIntakeSweepLocal:
             assert dup_audit is not None, "audit_log should have duplicate_skipped entry"
             assert dup_audit[0]["intake"] == "second.pdf"
 
+    def test_duplicate_does_not_overwrite_documents_object(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """A duplicate re-drop is removed from intake WITHOUT copying — an
+        existing documents/ object is never clobbered."""
+        content = b"%PDF-1.4 original content"
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        (intake_dir / "report.pdf").write_bytes(content)
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        from worker import intake_s3
+        intake_s3.sweep()  # registers report.pdf, copies into documents/
+
+        # Simulate documents/report.pdf having since diverged (sentinel bytes)
+        sentinel = b"%PDF-1.4 sentinel must survive"
+        (tmp_path / "documents" / "report.pdf").write_bytes(sentinel)
+
+        # Re-drop the SAME original bytes under the same filename
+        (intake_dir / "report.pdf").write_bytes(content)
+        result = intake_s3.sweep()
+        assert result is True
+
+        assert not (intake_dir / "report.pdf").exists(), "duplicate should be removed from intake"
+        assert (tmp_path / "documents" / "report.pdf").read_bytes() == sentinel, (
+            "duplicate must not overwrite the existing documents/ object"
+        )
+
+    def test_crash_before_commit_leaves_resweepable_intake(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """A crash inside the registration transaction (before commit) rolls
+        back the rows and leaves the intake file in place; the next sweep
+        processes it normally (copy precedes commit, delete follows it)."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        (intake_dir / "report.pdf").write_bytes(b"%PDF-1.4 crash window content")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        from worker import intake_s3
+        real_register = intake_s3._register
+
+        def crash_after_register(conn, filename, content):
+            real_register(conn, filename, content)
+            raise RuntimeError("simulated crash before commit")
+
+        monkeypatch.setattr(intake_s3, "_register", crash_after_register)
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            intake_s3.sweep()
+
+        # Intake object survives (delete only happens after commit) ...
+        assert (intake_dir / "report.pdf").exists(), "intake file must survive a pre-commit crash"
+        # ... and the transaction rolled back: no rows committed
+        with psycopg.connect(stages_test_db) as conn:
+            assert conn.execute("SELECT count(*) FROM documents").fetchone()[0] == 0
+            assert conn.execute("SELECT count(*) FROM ingestion_jobs").fetchone()[0] == 0
+
+        # Next sweep (no crash) processes the file end-to-end
+        monkeypatch.setattr(intake_s3, "_register", real_register)
+        assert intake_s3.sweep() is True
+        assert not (intake_dir / "report.pdf").exists()
+        assert (tmp_path / "documents" / "report.pdf").exists()
+        with psycopg.connect(stages_test_db) as conn:
+            assert conn.execute("SELECT count(*) FROM documents").fetchone()[0] == 1
+
     def test_same_filename_different_bytes_reenqueues_existing_doc(
         self, tmp_path, stages_test_db, monkeypatch
     ):
@@ -1322,6 +1395,28 @@ class TestPublishStage:
         assert row[0] == "needs_review", f"Expected 'needs_review', got '{row[0]}'"
         assert row[1] is not None, "extraction_confidence should be recorded"
         assert float(row[1]) < 0.7, f"Expected confidence < 0.7, got {row[1]}"
+
+    def test_withdrawn_doc_not_resurrected(self, stages_test_db, monkeypatch):
+        """A withdrawn document is never flipped back to searchable by publish:
+        the status UPDATE matches 0 rows, publishing is skipped, stage returns None."""
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-withdrawn", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-withdrawn")
+            conn.execute("UPDATE documents SET status='withdrawn' WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert status == "withdrawn", f"Withdrawn doc must stay withdrawn, got '{status}'"
 
     def test_reindex_failure_does_not_fail_stage(self, stages_test_db, monkeypatch):
         """/reindex POST failure (closed port) does not raise; stage still returns None and searchable.

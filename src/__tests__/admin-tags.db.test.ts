@@ -74,8 +74,13 @@ d('tagsAdmin (DB integration)', () => {
       [docId, tagId],
     )
     const result = await deleteTagIfUnused(tagId, identity)
-    expect(result.deleted).toBe(false)
-    expect(result.error).toMatch(/document/)
+    expect(result).toMatchObject({ deleted: false, reason: 'in_use' })
+    if (!result.deleted) expect(result.error).toMatch(/document/)
+  })
+
+  it('deleteTagIfUnused reports not_found for an unknown tag id', async () => {
+    const result = await deleteTagIfUnused('00000000-0000-4000-8000-000000000000', identity)
+    expect(result).toMatchObject({ deleted: false, reason: 'not_found' })
   })
 
   it('decideDocumentTag flips status AND source to human, audit before preserves llm row', async () => {

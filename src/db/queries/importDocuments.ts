@@ -31,7 +31,8 @@ export interface MappedDocument {
 
 export interface RowDecision {
   externalId: string
-  action: 'created' | 'updated' | 'skipped'
+  action: 'created' | 'updated' | 'skipped' | 'error'
+  reason?: string
 }
 
 export interface ImportResult {
@@ -42,10 +43,11 @@ export interface ImportResult {
   decisions?: RowDecision[]
 }
 
-// external_id = file_path minus trailing .pdf (and any directory part)
+// external_id = file_path minus trailing .pdf (case-insensitive, so CSV-imported
+// and intake-worker external_ids agree) and any directory part
 export function deriveExternalId(filePath: string): string {
   const base = filePath.split('/').pop() ?? filePath
-  return base.endsWith('.pdf') ? base.slice(0, -4) : base
+  return base.toLowerCase().endsWith('.pdf') ? base.slice(0, -4) : base
 }
 
 // Mirrors map_languages() in the Python script.
@@ -141,6 +143,12 @@ export async function importDocuments(
   // committed (safe — re-running is idempotent). Do not invoke concurrently
   // for the same rows: the open-job check below is read-then-insert.
   for (const row of rows) {
+    // Per-row validation: bad rows get an error decision instead of throwing
+    // mid-loop (which would abandon the rest of the batch).
+    if (typeof row.file_path !== 'string' || row.file_path.trim() === '') {
+      decisions.push({ externalId: '', action: 'error', reason: 'invalid file_path' })
+      continue
+    }
     const mapped = mapRowToDocument(row)
     const existing = await docRepo.findOne({ where: { externalId: mapped.externalId } })
     const action = classifyUpsert(existing, mapped)

@@ -5,6 +5,8 @@
  * DB test is gated on process.env.DATABASE_URL — skipped cleanly if unset.
  */
 
+import { NextRequest } from 'next/server'
+import { POST as importDocumentsRoute } from '@/app/api/import-documents/route'
 import {
   deriveExternalId,
   mapLanguages,
@@ -35,6 +37,14 @@ describe('deriveExternalId', () => {
 
   it('handles file with no directory', () => {
     expect(deriveExternalId('plain.pdf')).toBe('plain')
+  })
+
+  it('strips the extension case-insensitively (.PDF)', () => {
+    expect(deriveExternalId('Report.PDF')).toBe('Report')
+  })
+
+  it('strips mixed-case extension (.Pdf) with directory prefix', () => {
+    expect(deriveExternalId('docs/Report.Pdf')).toBe('Report')
   })
 })
 
@@ -227,6 +237,36 @@ describe('classifyUpsert', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Route auth (no DB needed: rejected before any DB access)
+// ---------------------------------------------------------------------------
+
+describe('POST /api/import-documents auth', () => {
+  beforeAll(() => {
+    process.env.ADMIN_API_TOKEN = 'test-admin-token'
+  })
+
+  function importReq(body: unknown, bearer?: string) {
+    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    if (bearer) headers.authorization = `Bearer ${bearer}`
+    return new NextRequest('http://localhost/api/import-documents', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers,
+    })
+  }
+
+  it('401s without credentials', async () => {
+    const res = await importDocumentsRoute(importReq({ rows: [] }))
+    expect(res.status).toBe(401)
+  })
+
+  it('passes auth with the bearer token (then 400s on empty rows)', async () => {
+    const res = await importDocumentsRoute(importReq({ rows: [] }, 'test-admin-token'))
+    expect(res.status).toBe(400)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // DB integration test
 // ---------------------------------------------------------------------------
 
@@ -334,6 +374,23 @@ describe('importDocuments() DB integration', () => {
     expect(result.updated).toBe(0)
     expect(result.skipped).toBe(2)
     expect(result.jobs).toBe(0) // no new jobs because open jobs exist
+  })
+
+  it('invalid file_path rows get a per-row error decision instead of throwing', async () => {
+    const mixedRows: ImportRow[] = [
+      { file_path: '', metadata: {}, summary: '' },
+      { file_path: null as any, metadata: {}, summary: '' },
+      {
+        file_path: `${PREFIX}doc-delta.pdf`,
+        metadata: { 'Article Title': 'Delta', languages: 'English', 'YEAR published': '2024' },
+        summary: '',
+      },
+    ]
+    const result = await importDocuments(mixedRows, { dryRun: true })
+    expect(result.decisions).toHaveLength(3)
+    expect(result.decisions![0]).toEqual({ externalId: '', action: 'error', reason: 'invalid file_path' })
+    expect(result.decisions![1]).toEqual({ externalId: '', action: 'error', reason: 'invalid file_path' })
+    expect(result.decisions![2].action).toBe('created')
   })
 
   it('dryRun returns decisions without writing', async () => {

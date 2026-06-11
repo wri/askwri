@@ -31,26 +31,49 @@ _CLAIM_SQL = """
 
 
 def enqueue(conn, document_id, model_versions: dict | None = None) -> uuid.UUID:
-    """Insert a queued job for a document (idempotent: skips if an open job exists)."""
+    """Insert a queued job for a document (idempotent: returns the open job if one exists).
+
+    Open = queued|running only. A parked needs_review job does NOT block a fresh
+    drop of fixed content. The partial unique index ingestion_jobs_one_open_per_doc
+    is the arbiter: ON CONFLICT (document_id) WHERE <index predicate> makes the
+    open-job check and the insert one atomic statement (no enqueue race) — same
+    approach as reenqueueIngestion in src/db/queries/documentsAdmin.ts.
+    """
+    job_id = uuid.uuid4()
     row = conn.execute(
-        """SELECT id FROM ingestion_jobs
-           WHERE document_id = %s AND status IN ('queued', 'running', 'needs_review')""",
-        (document_id,),
+        """INSERT INTO ingestion_jobs (id, document_id, stage, status, model_versions)
+           VALUES (%s, %s, NULL, 'queued', %s)
+           ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
+           RETURNING id""",
+        (job_id, document_id, Jsonb(model_versions or {})),
     ).fetchone()
     if row:
         return row[0]
-    job_id = uuid.uuid4()
-    conn.execute(
-        """INSERT INTO ingestion_jobs (id, document_id, stage, status, model_versions)
-           VALUES (%s, %s, NULL, 'queued', %s)""",
-        (job_id, document_id, Jsonb(model_versions or {})),
-    )
-    return job_id
+    existing = conn.execute(
+        """SELECT id FROM ingestion_jobs
+           WHERE document_id = %s AND status IN ('queued', 'running')""",
+        (document_id,),
+    ).fetchone()
+    return existing[0]
 
 
 def claim_job() -> Optional[Tuple]:
     with get_pool().connection() as conn:
         return conn.execute(_CLAIM_SQL).fetchone()
+
+
+def reap_stale_jobs(conn, max_age_minutes: int = 15) -> list:
+    """Requeue jobs stuck in 'running' (worker died mid-stage). Stages are
+    idempotent, so a requeue is safe. updated_at is touched on every transition
+    (claim/advance/fail), so age is measured from the last transition. Returns
+    the reclaimed job ids."""
+    rows = conn.execute(
+        """UPDATE ingestion_jobs SET status = 'queued'
+           WHERE status = 'running' AND updated_at < now() - make_interval(mins => %s)
+           RETURNING id""",
+        (max_age_minutes,),
+    ).fetchall()
+    return [r[0] for r in rows]
 
 
 def next_stage(completed_stage: Optional[str]) -> str:

@@ -31,6 +31,7 @@ const ReviewQueuePage = () => {
     try {
       const body = await adminFetch<{ items: QueueItem[] }>('/api/admin/review-queue')
       setItems(body.items)
+      setError(null)
     } catch (err: any) {
       setError(err.message)
     }

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { SESSION_COOKIE, verifySession } from './session'
+import { initializeDatabase } from '../../db/data-source'
+import { findUserById } from '../../db/queries/users'
 
 export type AdminIdentity =
   | { kind: 'user'; userId: string; username: string; role: 'admin' | 'editor' }
@@ -10,17 +13,31 @@ export interface IdentityResult {
   response?: NextResponse
 }
 
+/** Constant-time string comparison via sha256 digests (lengths may differ). */
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const da = createHash('sha256').update(a).digest()
+  const db = createHash('sha256').update(b).digest()
+  return timingSafeEqual(da, db)
+}
+
 export async function getIdentity(req: NextRequest): Promise<AdminIdentity | null> {
   const apiToken = process.env.ADMIN_API_TOKEN
   const bearer = req.headers.get('authorization')
-  if (apiToken && bearer === `Bearer ${apiToken}`) {
+  if (apiToken && bearer && timingSafeStringEqual(bearer, `Bearer ${apiToken}`)) {
     return { kind: 'token', role: 'admin' }
   }
   const token = req.cookies.get(SESSION_COOKIE)?.value
   if (!token) return null
   const session = await verifySession(token)
   if (!session) return null
-  return { kind: 'user', ...session }
+  // Revalidate the session against the DB so deactivation/role changes take
+  // effect immediately instead of after the 7-day token TTL. The DB role wins
+  // over whatever the token says.
+  await initializeDatabase()
+  const user = await findUserById(session.userId)
+  if (!user || user.active === false) return null
+  const role = user.role === 'admin' ? 'admin' : 'editor'
+  return { kind: 'user', userId: session.userId, username: session.username, role }
 }
 
 /**

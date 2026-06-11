@@ -4,6 +4,7 @@ import {
   slugify,
   listCollectionsWithCounts,
   createCollection,
+  updateCollection,
   addDocumentsToCollection,
   removeDocumentFromCollection,
 } from '@/db/queries/collectionsAdmin'
@@ -76,6 +77,51 @@ d('collectionsAdmin (DB integration)', () => {
     )
     const result = await createCollection(existing.name, null, identity)
     expect(result).toHaveProperty('error', 'a collection with this slug exists')
+  })
+
+  it('updateCollection with description only leaves name intact and audits only description', async () => {
+    const [{ name: originalName }] = await AppDataSource.query(
+      `SELECT name FROM collections WHERE id = $1`,
+      [collectionId],
+    )
+    // name: undefined simulates a PATCH body that omitted name entirely
+    const result = await updateCollection(
+      collectionId,
+      { name: undefined, description: 'Updated description' } as any,
+      identity,
+    )
+    expect(result).not.toBeNull()
+    expect(result!.name).toBe(originalName)
+    expect(result!.description).toBe('Updated description')
+
+    const [audit] = await AppDataSource.query(
+      `SELECT before, after FROM audit_log
+       WHERE entity_type = 'collection' AND entity_id = $1 AND action = 'update'
+       ORDER BY at DESC LIMIT 1`,
+      [collectionId],
+    )
+    expect(Object.keys(audit.before)).toEqual(['description'])
+    expect(Object.keys(audit.after)).toEqual(['description'])
+    expect(audit.after.description).toBe('Updated description')
+  })
+
+  it('updateCollection with an empty patch writes no audit row', async () => {
+    const [{ n: before }] = await AppDataSource.query(
+      `SELECT count(*)::int AS n FROM audit_log WHERE entity_id = $1`,
+      [collectionId],
+    )
+    const result = await updateCollection(collectionId, {}, identity)
+    expect(result).not.toBeNull()
+    const [{ n: after }] = await AppDataSource.query(
+      `SELECT count(*)::int AS n FROM audit_log WHERE entity_id = $1`,
+      [collectionId],
+    )
+    expect(after).toBe(before)
+  })
+
+  it('addDocumentsToCollection rejects non-UUID documentIds', async () => {
+    const result = await addDocumentsToCollection(collectionId, ['not-a-uuid'], identity)
+    expect(result).toEqual({ error: 'documentIds must be UUIDs' })
   })
 
   it('addDocumentsToCollection adds a document idempotently (add same id twice → count stays 1)', async () => {

@@ -23,11 +23,13 @@ const TagsPage = () => {
   const [addFacet, setAddFacet] = useState('')
   const [addNewFacet, setAddNewFacet] = useState('')
   const [addValue, setAddValue] = useState('')
+  const [addBusy, setAddBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
       const body = await adminFetch<{ tags: Tag[] }>('/api/admin/tags')
       setTags(body.tags)
+      setError(null)
     } catch (err: any) {
       setError(err.message)
     }
@@ -37,8 +39,9 @@ const TagsPage = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
     fetch('/api/admin/auth/me')
-      .then((r) => r.json())
-      .then((b) => setMe(b.identity ?? {}))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setMe(b?.identity ?? {}))
+      .catch(() => setMe({}))
   }, [load])
 
   const deleteTag = async (id: string, valueId: string) => {
@@ -60,6 +63,7 @@ const TagsPage = () => {
     setError(null)
     const facet = addFacet === '__new__' ? addNewFacet.trim() : addFacet
     if (!facet || !addValue.trim()) return
+    setAddBusy(true)
     try {
       await adminFetch('/api/admin/tags', {
         method: 'POST',
@@ -72,6 +76,8 @@ const TagsPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setAddBusy(false)
     }
   }
 
@@ -173,7 +179,7 @@ const TagsPage = () => {
           required
           style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '2px 6px' }}
         />
-        <button type='submit' style={{ textDecoration: 'underline' }}>
+        <button type='submit' disabled={addBusy} style={{ textDecoration: 'underline' }}>
           Add
         </button>
       </form>

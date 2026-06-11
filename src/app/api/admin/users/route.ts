@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { initializeDatabase } from '../../../../db/data-source'
 import { listUsers, createUser } from '../../../../db/queries/users'
 import { requireIdentity, auditActor } from '../../../../lib/auth/identity'
+import { internalError } from '../../../../lib/api-error'
 import { writeAudit } from '../../../../db/queries/audit'
 
 export const runtime = 'nodejs'
@@ -14,8 +15,8 @@ export async function GET(req: NextRequest) {
   try {
     await initializeDatabase()
     return NextResponse.json({ ok: true, users: await listUsers() })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }
 
@@ -52,6 +53,10 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ ok: true, user })
   } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+    // Unique violation on users.username (pg error 23505)
+    if (err?.code === '23505' || err?.driverError?.code === '23505') {
+      return NextResponse.json({ ok: false, error: 'username already exists' }, { status: 409 })
+    }
+    return internalError(err)
   }
 }

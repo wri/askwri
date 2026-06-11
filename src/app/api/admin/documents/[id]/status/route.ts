@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { initializeDatabase } from '../../../../../../db/data-source'
 import { setDocumentStatus } from '../../../../../../db/queries/documentsAdmin'
 import { requireIdentity } from '../../../../../../lib/auth/identity'
+import { internalError, isUuid } from '../../../../../../lib/api-error'
 import { triggerReindex } from '../../../../../../lib/search-reindex'
 
 export const runtime = 'nodejs'
@@ -19,9 +20,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (response) return response
   try {
     const { id } = await params
+    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
     await initializeDatabase()
     const result = await setDocumentStatus(id, toStatus, identity!)
     if (!result) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    if ('forbidden' in result)
+      return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 })
     if ('error' in result)
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
     // Both directions need a BM25 refresh: the in-memory BM25 index only
@@ -33,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       status: toStatus,
       reindex,
     })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }

@@ -20,6 +20,8 @@ const UsersPage = () => {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [createForm, setCreateForm] = useState({ username: '', email: '', password: '', role: 'editor' })
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [createBusy, setCreateBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -38,6 +40,7 @@ const UsersPage = () => {
   const patch = async (id: string, payload: Record<string, any>) => {
     setNotice(null)
     setError(null)
+    setBusyId(id)
     try {
       await adminFetch(`/api/admin/users/${id}`, {
         method: 'PATCH',
@@ -46,6 +49,8 @@ const UsersPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -58,14 +63,18 @@ const UsersPage = () => {
     }
     setNotice(null)
     setError(null)
+    setBusyId(id)
     try {
       await adminFetch(`/api/admin/users/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ password: pw }),
       })
       setNotice(`Password reset for ${username}.`)
+      await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -73,6 +82,7 @@ const UsersPage = () => {
     e.preventDefault()
     setNotice(null)
     setError(null)
+    setCreateBusy(true)
     try {
       await adminFetch('/api/admin/users', {
         method: 'POST',
@@ -83,6 +93,8 @@ const UsersPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setCreateBusy(false)
     }
   }
 
@@ -113,6 +125,7 @@ const UsersPage = () => {
               <td style={cell}>
                 <select
                   value={u.role}
+                  disabled={busyId === u.id}
                   onChange={(e) => patch(u.id, { role: e.target.value })}
                   style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
                 >
@@ -125,12 +138,14 @@ const UsersPage = () => {
               <td style={cell}>
                 <button
                   onClick={() => patch(u.id, { active: !u.active })}
+                  disabled={busyId === u.id}
                   style={{ marginRight: 8, textDecoration: 'underline' }}
                 >
                   {u.active ? 'Deactivate' : 'Activate'}
                 </button>
                 <button
                   onClick={() => resetPassword(u.id, u.username)}
+                  disabled={busyId === u.id}
                   style={{ textDecoration: 'underline' }}
                 >
                   Reset password
@@ -184,7 +199,7 @@ const UsersPage = () => {
         </select>
         <button
           type='submit'
-          disabled={!createForm.username || !createForm.email || !createForm.password}
+          disabled={!createForm.username || !createForm.email || !createForm.password || createBusy}
           style={{ textDecoration: 'underline' }}
         >
           Create

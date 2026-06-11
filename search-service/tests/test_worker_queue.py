@@ -323,3 +323,96 @@ class TestWorkerQueue:
         # No queued jobs remain → claim returns None
         result = queue.claim_job()
         assert result is None
+
+    def test_needs_review_does_not_block_reenqueue(self, worker_test_db):
+        """A parked needs_review job must NOT block a fresh enqueue
+        (re-ingest of fixed content)."""
+        from worker import queue
+
+        with psycopg.connect(worker_test_db) as conn:
+            doc_id = _insert_document(conn)
+            job_id_1 = queue.enqueue(conn, doc_id)
+            conn.commit()
+
+        claimed = queue.claim_job()
+        assert claimed is not None
+        queue.mark_needs_review(job_id_1, "publish")
+
+        with psycopg.connect(worker_test_db) as conn:
+            job_id_2 = queue.enqueue(conn, doc_id)
+            conn.commit()
+
+        assert job_id_2 != job_id_1, "needs_review job should not block a new enqueue"
+        with psycopg.connect(worker_test_db) as conn:
+            queued = conn.execute(
+                "SELECT count(*) FROM ingestion_jobs WHERE document_id = %s AND status = 'queued'",
+                (doc_id,),
+            ).fetchone()[0]
+        assert queued == 1
+
+    def test_reap_stale_jobs_requeues_old_running(self, worker_test_db):
+        """A 'running' job whose updated_at is older than the cutoff is
+        requeued; a fresh running job is left alone."""
+        from worker import queue
+
+        with psycopg.connect(worker_test_db) as conn:
+            doc_id_stale = _insert_document(conn)
+            stale_job_id = queue.enqueue(conn, doc_id_stale)
+            doc_id_fresh = _insert_document(conn)
+            fresh_job_id = queue.enqueue(conn, doc_id_fresh)
+            conn.execute(
+                """UPDATE ingestion_jobs SET status = 'running',
+                   updated_at = now() - interval '30 minutes' WHERE id = %s""",
+                (stale_job_id,),
+            )
+            conn.execute(
+                "UPDATE ingestion_jobs SET status = 'running' WHERE id = %s",
+                (fresh_job_id,),
+            )
+            conn.commit()
+
+        with psycopg.connect(worker_test_db) as conn:
+            reclaimed = queue.reap_stale_jobs(conn, max_age_minutes=15)
+            conn.commit()
+
+        assert reclaimed == [stale_job_id]
+
+        with psycopg.connect(worker_test_db) as conn:
+            stale_status = conn.execute(
+                "SELECT status FROM ingestion_jobs WHERE id = %s", (stale_job_id,)
+            ).fetchone()[0]
+            fresh_status = conn.execute(
+                "SELECT status FROM ingestion_jobs WHERE id = %s", (fresh_job_id,)
+            ).fetchone()[0]
+        assert stale_status == "queued", "stale running job should be requeued"
+        assert fresh_status == "running", "fresh running job should be untouched"
+
+    def test_withdrawn_document_job_skipped_without_running_stages(self, worker_test_db):
+        """process_one_job on a withdrawn document marks the job done without
+        running any stage; the document stays withdrawn."""
+        from worker import queue
+        from worker.main import process_one_job
+
+        with psycopg.connect(worker_test_db) as conn:
+            doc_id = _insert_document(conn)
+            job_id = queue.enqueue(conn, doc_id)
+            conn.execute(
+                "UPDATE documents SET status = 'withdrawn' WHERE id = %s", (doc_id,)
+            )
+            conn.commit()
+
+        worked = process_one_job()
+        assert worked is True
+
+        with psycopg.connect(worker_test_db) as conn:
+            job_status = conn.execute(
+                "SELECT status FROM ingestion_jobs WHERE id = %s", (job_id,)
+            ).fetchone()[0]
+            doc_status = conn.execute(
+                "SELECT status FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()[0]
+        assert job_status == "done", "job must not be left stuck"
+        assert doc_status == "withdrawn", "document must stay withdrawn"
+
+        # Nothing left to claim
+        assert queue.claim_job() is None

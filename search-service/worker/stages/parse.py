@@ -82,5 +82,7 @@ def run(document_id):
                    char_count = EXCLUDED.char_count""",
             (document_id, full_text, Jsonb(boundaries), len(full_text)),
         )
-        conn.execute("UPDATE documents SET status='processing', updated_at=now() WHERE id=%s", (document_id,))
+        conn.execute(
+            "UPDATE documents SET status='processing', updated_at=now() WHERE id=%s AND status <> 'withdrawn'",
+            (document_id,))
     return None

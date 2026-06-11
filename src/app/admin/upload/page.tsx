@@ -27,7 +27,7 @@ const UploadPage = () => {
       }
       const res = await fetch('/api/admin/intake', { method: 'POST', body: form })
       if (res.status === 401) {
-        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname)}`
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
       }
       const body = await res.json().catch(() => ({}))

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { initializeDatabase } from '../../../../../../../db/data-source'
 import { decideDocumentTag } from '../../../../../../../db/queries/tagsAdmin'
 import { requireIdentity } from '../../../../../../../lib/auth/identity'
+import { internalError, isUuid } from '../../../../../../../lib/api-error'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,6 +15,9 @@ export async function PATCH(
   if (response) return response
   try {
     const { id, tagId } = await params
+    if (!isUuid(id) || !isUuid(tagId)) {
+      return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    }
     const { decision } = (await req.json().catch(() => ({}))) ?? {}
     if (decision !== 'accepted' && decision !== 'rejected') {
       return NextResponse.json(
@@ -26,7 +30,7 @@ export async function PATCH(
     if ('error' in result)
       return NextResponse.json({ ok: false, error: result.error }, { status: 404 })
     return NextResponse.json({ ok: true })
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 })
+  } catch (err) {
+    return internalError(err)
   }
 }
