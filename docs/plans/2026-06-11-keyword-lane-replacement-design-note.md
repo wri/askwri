@@ -300,3 +300,54 @@ multilingual workstream (D3: BGE-M3 lexical weights) expects to reuse.
 3. Eval gate: rerun §4.1–4.3 with `KEYWORD_BACKEND=sparse`; adopt only if candidate ≥
    baseline and latency is not materially regressed; merge `--no-ff` to local `qa`
    (no push).
+
+---
+
+## 10. Candidate results (`KEYWORD_BACKEND=sparse`, measured 2026-06-11)
+
+Implementation: branch `keyword-lane-replacement`, plan
+`docs/plans/2026-06-11-keyword-lane-sparse-implementation-plan.md`.
+
+### 10.1 Construction parity (pre-gate)
+
+- Unit: `chunk_weights` reproduces the bm25s impact matrix at 1e-5 on a real index
+  (`tests/test_sparse_keyword.py`).
+- End-to-end on the full local corpus: `scripts/sparse_parity_check.py --db` — **26/26
+  queries**, SQL lane vs in-memory lane: identical id sets, max per-id score diff 9.5e-7,
+  identical ordered tie groups. (Within-tie order differs by construction: bm25s
+  argpartition is unstable, SQL uses `corpus_order`; equal-score noise either way.)
+- Backfill: 30,526/30,526 vectors in ~41s; vocab 184,395; avgdl 192.5.
+- Boot in sparse mode: ~15s to ready (no node load, no BM25 build).
+
+### 10.2 Consistency demonstration (the point)
+
+Same doc and query as the §4.5 baseline demo, sparse lane, **no reindex calls**:
+
+| Action | Baseline (memory lane) | Candidate (sparse lane) |
+|---|---|---|
+| Withdraw → query | BM25 rank 1, **leaked into final docs** | absent from BM25 lane, dense lane, and final docs — immediately |
+| Restore → query | stale until reindex | back at BM25 doc-rank 1 — immediately |
+
+### 10.3 Eval gate vs §4 baseline — **PASS**
+
+| Check | Baseline | Candidate (sparse) | Verdict |
+|---|---|---|---|
+| `eval:cite` P/R/F1 | .1943 / .8701 / .3039 | .1943 / .8701 / .3039 — **11/11 queries return identical retrieved-URL lists** | PASS (exact) |
+| `eval:answer-retrieval` | chunk .437/.304 · adj F1 .465 · doc F1 .871 | identical aggregates | PASS (exact) |
+| Smoke es/pt (9) | 9/9 BM25 rank 1 | 9/9 BM25 rank 1 | PASS (exact) |
+| Smoke zh (7) | 0/7 in BM25 lane | 2/7 (nq-zh-03 rank 2, nq-zh-04 rank 6) | PASS (≥, see note) |
+| Smoke latency (rerank=false, incl. embedding API) | p50 863ms / p95 4343ms | p50 940ms / p95 3780ms | PASS (same order) |
+| `/reindex` | 18s (memory rebuild) | 11s (texts/metadata reload only) | PASS |
+| Consistency (§10.2) | leaks withdrawn docs | instant both directions | PASS |
+
+Reports: cite `eval-report-1781218885011.json` (a first candidate run,
+`eval-report-1781216449022.json`, had q10 fail on a transient OpenAI
+`431 Request headers are too large` during embedding — infrastructure, not retrieval;
+the checkpointed retry re-ran only q10 and matched baseline exactly); answer
+`answer-retrieval-1781217*.json`; smoke `non-english-smoke-sparse-1781217546091.json`.
+
+zh note: the two new zh "hits" are zero-score artifacts — no zh query token matches any
+vocab token in either lane; with all scores 0, SQL orders by `corpus_order`
+(deterministic) where bm25s padded its top-1000 arbitrarily, and two targets happen to
+sit early in corpus order. Final fused ranks are unchanged (dense carries zh). Not a
+retrieval improvement; recorded for honesty.
