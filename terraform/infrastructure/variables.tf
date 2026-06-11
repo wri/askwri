@@ -231,3 +231,50 @@ variable "cache_s3_prefix" {
   type        = string
   default     = "cache/"
 }
+
+# =============================================================================
+# Ingestion Worker Variables
+# =============================================================================
+
+variable "ingestion_worker_container_cpu" {
+  description = "CPU units for the Ingestion Worker container (1 vCPU = 1024)"
+  type        = number
+  default     = 512
+}
+
+variable "ingestion_worker_container_memory" {
+  description = "Memory for the Ingestion Worker container in MB"
+  type        = number
+  default     = 2048
+}
+
+variable "ingestion_worker_desired_count" {
+  description = "Desired number of Ingestion Worker tasks"
+  type        = number
+  default     = 1
+}
+
+variable "ingestion_worker_environment_variables" {
+  description = "Environment variables for the Ingestion Worker application"
+  type        = map(string)
+  default     = {}
+}
+
+variable "ingestion_worker_secret_env" {
+  description = "Secret environment variables for Ingestion Worker as JSON string (from GitHub Secrets)"
+  type        = string
+  sensitive   = true
+  default     = "{}"
+}
+
+variable "intake_s3_prefix" {
+  description = "S3 prefix (folder path) for intake documents within the bucket"
+  type        = string
+  default     = "intake/"
+}
+
+variable "worker_llm_model" {
+  description = "LLM model name used by the ingestion worker for summaries and tagging"
+  type        = string
+  default     = "gpt-5-mini"
+}

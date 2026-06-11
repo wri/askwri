@@ -1,7 +1,7 @@
-# AskWRI Document Management — Phase 0 As-Built Reference
+# AskWRI Document Management — As-Built Reference
 
-**Audience:** engineer starting Phase 1 work.
-**Phase:** 0 — Store + Migration (shipped).
+**Audience:** engineers working on Phase 1 or later.
+**Phases covered:** 0 — Store + Migration (shipped); 1 — Ingestion + Classification (shipped).
 **Runbook:** [docs/runbooks/phase0-cutover.md](runbooks/phase0-cutover.md)
 **Design doc:** [docs/plans/2026-06-09-askwri-document-management-design.md](plans/2026-06-09-askwri-document-management-design.md)
 
@@ -46,8 +46,9 @@ Two migrations: `1781280000000-Migration.ts` (initial 11 tables) and `1781290000
 
 ### Write ownership rule
 
-- **App tier (TypeORM):** owns ALL DDL and the relational tables (`documents`, `document_summaries`, `tags`, `document_tags`, `collections`, `document_collections`, `ingestion_jobs`, `users`, `audit_log`). One TypeORM entity exists for `documents` (`src/db/entities/Document.entity.ts`).
-- **Python side (search-service):** writes `document_chunks` rows (raw psycopg SQL) and `document_texts` rows. Reads everything else. Never issues DDL.
+- **App tier (TypeORM):** owns ALL DDL and admin-driven CRUD on the relational tables (`documents`, `document_summaries`, `tags`, `document_tags`, `collections`, `document_collections`, `ingestion_jobs`, `users`, `audit_log`). One TypeORM entity exists for `documents` (`src/db/entities/Document.entity.ts`); `IngestionJob` entity added in Phase 1 and registered in both data sources.
+- **Python side (search-service / ingestion worker):** writes `document_chunks` rows and `document_texts` rows (raw psycopg SQL). Reads everything else. Never issues DDL.
+- **Ingestion worker (Scope decision #4 — Phase 1 amendment):** the ingestion domain is worker-owned. For documents it ingests, the worker may INSERT `documents` rows (status `draft`) and write `document_texts`, `document_summaries`, `document_chunks`, LLM `document_tags`, `ingestion_jobs`, and `audit_log` rows. The CSV import API (`POST /api/import-documents`) creates `documents` rows app-side (with queued jobs); the worker then drives those jobs through the pipeline. Human/external `document_tags` rows (`source='human'` or `source='external'`) are never modified by the worker.
 
 ### Table reference
 
@@ -155,15 +156,117 @@ Flagged for the retrieval workstream: chunk-adjacent F1 −2.4, q2 single-doc re
 
 ---
 
-## 9. Phase 1 builds on this
+## 9. Phase 1 prediction corrections
 
-Design doc §17 Phase 1 — Durable ingestion + classification — builds on the schema established in Phase 0:
+The original Phase 1 prediction in this section was partially wrong. Actual outcomes:
 
-- The ingestion worker (Python) takes over `document_chunks` writes via the same raw-SQL path.
-- `document_chunks.sparse` (sparsevec) is populated with BGE-M3 weights, replacing BM25.
-- `ingestion_jobs` table is activated for queue-driven async pipeline.
-- LLM auto-tagging writes to `document_tags` with `source='llm'`.
-- `document_summaries` is populated for non-English documents.
-- `GROBID` + layout parser replace the current `PDFReader`-based extraction.
+- **Sparse lane (`document_chunks.sparse`):** NOT populated in Phase 1. The sparse/BGE-M3 swap is a separate eval-gated track, deferred pending bake-off results. BM25 remains in-memory.
+- **GROBID / layout parser:** NOT adopted. PDFReader (LlamaIndex) is retained as the single parser. GROBID is deferred to a future phase.
+- **What did ship:** the queue-driven ingestion worker (`ingestion_jobs` activated), LLM auto-tagging (`source='llm'`), generated `document_summaries` for all languages including Indonesian, and the `RETRIEVAL_BACKEND=postgres` dense lane for new chunks. See §10 below.
 
-The write-ownership rule remains: app tier owns schema and relational truth; the Python worker owns derived artifact rows (`document_chunks`, `document_summaries`).
+---
+
+## 10. Phase 1 — Ingestion + classification (as built)
+
+### 10.1 Overview
+
+Phase 1 ships a persistent ingestion worker (`search-service/worker/`) that drives every new document through a six-stage pipeline: parse → language → summarize → classify → embed → publish. Two intake paths feed it: S3/local file drop and a CSV import API.
+
+### 10.2 Intake paths
+
+**Intake A — S3/local file drop**
+
+The worker watches `INTAKE_S3_PREFIX` (default `intake/`) on `DOCUMENTS_S3_BUCKET`. For each PDF found:
+
+1. Compute SHA-256 content hash.
+2. If a document with that hash already exists: write an `audit_log` row (`action='duplicate_skipped'`) and remove the object from the intake prefix. No new job is created.
+3. Otherwise: insert a `documents` row (`status='draft'`, `external_id=filename minus .pdf`, `content_hash` stored), create a queued `ingestion_jobs` row, write an `audit_log` row (`action='registered'`), and move the object to the `documents/` prefix.
+
+Re-ingest semantics: dropping a file whose `external_id` already exists (different content hash) re-enqueues the existing document row; chunks are replaced atomically by the embed stage; `content_hash` is updated.
+
+Local-dev mode: set `INTAKE_LOCAL_DIR` (e.g. `./intake`). Files are moved to a sibling `documents/` directory instead of S3.
+
+**Intake B — CSV import API**
+
+`POST /api/import-documents` body `{rows: [{file_path, metadata, summary}], dryRun?}`.
+
+Seed semantics: insert new `documents` rows (status `draft`) or fill ONLY currently-NULL columns on existing docs (never clobbers existing values). Column mapping mirrors the Phase 0 migration script (`LANGUAGE_MAP` extended with `bahasa→id`). Creates queued `ingestion_jobs` rows (skipped if an open job already exists for that document). Writes one `audit_log` row per call. `dryRun: true` returns per-row decisions without writing.
+
+### 10.3 Job model and retry semantics
+
+`ingestion_jobs` columns: `id`, `document_id`, `stage` (last completed stage), `status`, `error`, `attempts`, `model_versions`.
+
+Status machine:
+
+```
+queued → running → queued (next stage) → … → done | needs_review | error
+```
+
+- The worker polls with `SELECT … FOR UPDATE SKIP LOCKED ORDER BY created_at` (oldest first).
+- On stage success: `stage` is updated to the completed stage, `status` reset to `queued` for the next stage (or `done` after publish).
+- On stage failure: same stage is requeued with `attempts+1`. After `WORKER_MAX_ATTEMPTS` (default 3) failures the job moves to `status='error'`.
+- `--once` flag: runs one intake sweep and one job-stage step, then exits. Useful for local iteration and smoke tests (run repeatedly until the job reaches `done`).
+
+### 10.4 Stage pipeline
+
+| Stage | What it does |
+|---|---|
+| **parse** | PDFReader (LlamaIndex) → `document_texts` (`full_text`, `page_boundaries`). Sets document `status='processing'`. Falls back to title+summary text for CSV-imported docs with no associated file. If no text can be extracted at all, advances to `needs_review`. |
+| **language** | langdetect; supported set: `{en, es, zh, pt, id}` (Indonesian added in Phase 1). Unsupported languages fall back to `en`. |
+| **summarize** | Generates native-language + English long/short summaries via `WORKER_LLM_MODEL` (default `gpt-5-mini`), `source='generated'`. Skips rows that already exist (including CSV-seeded `source='external'` rows). For non-English docs, `title_en` is COALESCE'd to the original title — true translation is deferred. |
+| **classify** | LLM call constrained to the `tags` taxonomy v1 values. Writes `document_tags` with `source='llm'`; `status='accepted'` if `confidence ≥ TAG_CONFIDENCE_ACCEPT` (default 0.7), else `status='suggested'`. Never touches rows with `source='human'` or `source='external'`. |
+| **embed** | Phase 0-identical chunking: SimpleNodeParser 400/80 + summary node, legacy chunk id format, `node_metadata` verbatim, `text-embedding-3-small`. `corpus_order` appended after the current global max (advisory lock for concurrency). Re-ingest deletes prior chunks first. Chinese text and summaries are OpenCC t2s-normalized in chunks only (`document_texts` retains original). |
+| **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). If `< 0.7`: document status → `needs_review`. Otherwise: document status → `searchable` + best-effort `POST SEARCH_SERVICE_URL/reindex` for BM25 lane (dense lane picks up new chunks immediately via SQL). |
+
+### 10.5 Document lifecycle update
+
+```
+draft → processing (set by parse) → searchable | needs_review
+                                                      ↑
+                                  error (job exhausted retries)
+```
+
+Phase 0 migration set all existing documents directly to `searchable` (bypassing the pipeline). Phase 1 worker advances newly ingested documents through `processing` → `searchable` or `needs_review`.
+
+`needs_review` documents are excluded from retrieval (`status='searchable'` filter in all retrieval SQL). To review and promote:
+
+```sql
+-- List documents needing review (with job error if any):
+SELECT d.id, d.external_id, d.title, j.error, j.attempts
+FROM documents d
+JOIN ingestion_jobs j ON j.document_id = d.id
+WHERE d.status = 'needs_review'
+ORDER BY d.created_at;
+
+-- Promote after manual review:
+UPDATE documents SET status = 'searchable' WHERE id = '<uuid>';
+```
+
+A review UI is planned for Phase 2.
+
+### 10.6 Worker env vars
+
+| Var | Default | Purpose |
+|---|---|---|
+| `WORKER_LLM_MODEL` | `gpt-5-mini` | LLM used for summarize and classify stages |
+| `WORKER_POLL_SECONDS` | `10` | Seconds between intake sweeps when running in continuous mode |
+| `WORKER_MAX_ATTEMPTS` | `3` | Max stage attempts before job status → `error` |
+| `INTAKE_S3_PREFIX` | `intake/` | S3 prefix the worker watches for new PDFs |
+| `INTAKE_LOCAL_DIR` | — | Local directory for intake in dev mode (e.g. `./intake`) |
+| `DOCUMENTS_S3_BUCKET` | — | S3 bucket for both intake and document storage |
+| `DOCUMENTS_S3_PREFIX` | — | S3 prefix for stored documents |
+| `TAG_CONFIDENCE_ACCEPT` | `0.7` | LLM tag confidence threshold for `accepted` vs `suggested` |
+| `QUALITY_MIN_CHARS_PER_PAGE` | `200` | Chars/page baseline for extraction_confidence density term |
+| `SEARCH_SERVICE_URL` | — | Used by publish stage to trigger `/reindex` |
+| `OPENAI_API_KEY` | — | Required for summarize and embed stages |
+| `DATABASE_URL` | — | Postgres connection string |
+
+### 10.7 Taxonomy human-gate note
+
+Taxonomy v1 is the raw 18 CSV values seeded in Phase 0. A domain owner should curate facets and values before auto-tags are fully trusted in production. Until that curation happens, the `TAG_CONFIDENCE_ACCEPT=0.7` threshold governs which LLM tags are `accepted` vs `suggested`. `suggested` tags are stored but excluded from the default retrieval tag filter.
+
+### 10.8 Deploy
+
+The ingestion worker runs as a separate ECS service (`ingestion-worker`) using the same container image as the search-service, with command override `python -m worker.main`. It has no ALB or service-discovery endpoint; `desired_count=1`. The deploy workflows force-new-deployment for the worker alongside the other services.
+
+CI (`pr-check.yml`) runs a `python-tests` job covering the hermetic/unit worker tests; DB-dependent worker tests self-skip when `DATABASE_URL` is absent (same pattern as the search-service tests).

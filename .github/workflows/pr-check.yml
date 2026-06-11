@@ -44,6 +44,34 @@ jobs:
         run: npm run build
 
   # ==========================================================================
+  # Python Tests (Search Service + Worker)
+  # ==========================================================================
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: search-service
+        run: pip install -r requirements.txt
+
+      - name: Install dev dependencies
+        working-directory: search-service
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        working-directory: search-service
+        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py -v
+
+  # ==========================================================================
   # Docker Build Test
   # ==========================================================================
   docker-build:

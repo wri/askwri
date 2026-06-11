@@ -276,3 +276,108 @@ steps:
 ```
 
 Note: the migration-script tests create their own scratch database, so the CI job only needs the empty migrated `qa` schema for the e2e/pg_store/catalog tests — except those expect the migrated corpus (169 docs). For corpus-dependent tests in CI, either stage the corpus via the migration script with real assets, or scope CI to the hermetic modules (`test_indexing.py`, `test_migration_script.py`) until an artifact pipeline exists. Without `OPENAI_API_KEY`, the one dense-retrieval test skips (acceptable — it incurs OpenAI spend per run).
+
+---
+
+## Phase 1 worker — local dev
+
+This section covers running the ingestion worker locally. It assumes the Phase 0 local setup (§1–5 above) is already complete: Postgres container running, migrations applied, and the venv available at `search-service/venv/`.
+
+### Worker env vars (add to `.env`)
+
+```
+INTAKE_LOCAL_DIR=./intake
+WORKER_LLM_MODEL=gpt-5-mini
+WORKER_POLL_SECONDS=10
+WORKER_MAX_ATTEMPTS=3
+TAG_CONFIDENCE_ACCEPT=0.7
+QUALITY_MIN_CHARS_PER_PAGE=200
+SEARCH_SERVICE_URL=http://localhost:8000
+OPENAI_API_KEY=<your key>
+```
+
+`INTAKE_LOCAL_DIR` activates local-dev mode: the worker watches the specified directory for PDFs instead of S3. Files are moved to a sibling `documents/` directory (`./documents/` relative to the worker's working directory) after registration.
+
+`DOCUMENTS_S3_BUCKET` / `DOCUMENTS_S3_PREFIX` are not required when `INTAKE_LOCAL_DIR` is set — the worker bypasses S3 for intake. They are still required for the embed stage if PDFs need to be fetched from S3 during processing; for purely local testing, place PDFs in `INTAKE_LOCAL_DIR` and ensure `DOCUMENTS_LOCAL_DIR` is set so the parse stage can find them.
+
+### Dropping a PDF and running the pipeline
+
+1. Create the intake directory if it does not exist:
+
+   ```bash
+   mkdir -p search-service/intake
+   ```
+
+2. Copy a PDF into it:
+
+   ```bash
+   cp /path/to/sample.pdf search-service/intake/
+   ```
+
+3. Run one worker step with `--once` (one intake sweep + one job-stage advance):
+
+   ```bash
+   cd search-service && ./venv/bin/python -m worker.main --once
+   ```
+
+   After the first `--once` run the PDF is moved out of `intake/` into `documents/` and a `draft` document + queued job appear in the database. Each subsequent `--once` call advances the job one stage.
+
+4. Check job progress:
+
+   ```sql
+   SELECT d.external_id, d.status, j.stage, j.status, j.attempts, j.error
+   FROM ingestion_jobs j
+   JOIN documents d ON d.id = j.document_id
+   ORDER BY j.created_at DESC
+   LIMIT 10;
+   ```
+
+   Stages in order: `parse → language → summarize → classify → embed → publish`. The `stage` column shows the last **completed** stage; `status` shows the job's current state (`queued`, `running`, `done`, `needs_review`, `error`).
+
+5. Repeat `--once` calls until `j.status = 'done'` (or `needs_review` / `error`). A full pipeline run takes 5–6 `--once` invocations.
+
+   To run continuously instead of stepping:
+
+   ```bash
+   cd search-service && ./venv/bin/python -m worker.main
+   ```
+
+   The worker polls every `WORKER_POLL_SECONDS` seconds (default 10).
+
+6. Verify the published document:
+
+   ```sql
+   SELECT id, external_id, status, language, extraction_confidence
+   FROM documents WHERE external_id = 'sample';
+   ```
+
+   Expected `status='searchable'` (or `needs_review` if extraction confidence < 0.7 — e.g. a very short or image-only PDF). If `needs_review`, see [§10.5 of the as-built reference](../document-management.md#105-document-lifecycle-update) for the promotion query.
+
+### Where files move
+
+| State | Location |
+|---|---|
+| Before worker runs | `INTAKE_LOCAL_DIR/` (e.g. `./intake/sample.pdf`) |
+| After intake sweep | `./documents/sample.pdf` (sibling `documents/` dir) |
+
+### Retry behavior
+
+If a stage fails (e.g. OpenAI call error), the job is requeued for the same stage with `attempts+1`. After `WORKER_MAX_ATTEMPTS` (default 3) failures the job status becomes `error`. To inspect errors:
+
+```sql
+SELECT d.external_id, j.stage, j.attempts, j.error
+FROM ingestion_jobs j
+JOIN documents d ON d.id = j.document_id
+WHERE j.status = 'error';
+```
+
+Fix the underlying issue (e.g. missing API key, network error) and reset the job manually to retry:
+
+```sql
+UPDATE ingestion_jobs SET status = 'queued', attempts = 0, error = NULL
+WHERE id = '<job-uuid>';
+```
+
+### Deploy note
+
+The ingestion worker (`ingestion-worker` ECS service) runs the same container image as the search-service with command override `python -m worker.main`. It has no ALB or service-discovery endpoint and runs as a single task (`desired_count=1`). Deploying is handled by the existing deploy workflows, which force-new-deployment for the worker alongside the search-service and Next.js tasks. No separate `terraform plan/apply` is needed for normal deployments; Terraform changes to the worker service definition are an ops action.

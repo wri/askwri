@@ -159,3 +159,52 @@ resource "aws_security_group_rule" "ecs_from_search_service" {
   security_group_id        = aws_security_group.ecs.id
   description              = "Allow traffic from Search Service"
 }
+
+# =============================================================================
+# Ingestion Worker Security Group
+# =============================================================================
+
+resource "aws_security_group" "ingestion_worker" {
+  name        = "${var.project_name}-${var.environment}-ingestion-worker-sg"
+  description = "Security group for Ingestion Worker ECS tasks"
+  vpc_id      = local.vpc_id
+
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-ingestion-worker-sg"
+  }
+}
+
+# =============================================================================
+# RDS Access from Ingestion Worker
+# =============================================================================
+
+resource "aws_security_group_rule" "rds_from_worker" {
+  count = var.rds_security_group_id != "" ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ingestion_worker.id
+  security_group_id        = var.rds_security_group_id
+  description              = "PostgreSQL from ${var.environment} ECS tasks for Ingestion Worker"
+}
+
+# Allow Ingestion Worker to reach Search Service
+resource "aws_security_group_rule" "search_service_from_worker" {
+  type                     = "ingress"
+  from_port                = var.search_service_container_port
+  to_port                  = var.search_service_container_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ingestion_worker.id
+  security_group_id        = aws_security_group.search_service.id
+  description              = "Allow Ingestion Worker to connect to Search Service"
+}
