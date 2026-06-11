@@ -3,8 +3,10 @@
  *
  * For each query in non-english-smoke.json, calls /query (cite mode) with
  * return_intermediate_results=true and records where the target doc(s) first
- * appear in each lane: BM25-only, dense-only, and the final fused+reranked
- * docs. Used to compare keyword-lane candidates before/after replacement.
+ * appear in each lane: BM25-only, dense-only, and the fused doc list.
+ * rerank=false: lane comparison doesn't need the cross-encoder, and skipping
+ * it turns ~3min/query (CPU rerank of a 500-candidate pool) into seconds.
+ * Used to compare keyword-lane candidates before/after replacement.
  *
  * Usage: npx tsx evaluation/run-non-english-smoke.ts [--label baseline]
  * (search-service must be running; see CLAUDE.md)
@@ -75,6 +77,7 @@ async function main() {
         query: q.query,
         mode: 'cite',
         max_results: 150,
+        rerank: false,
         return_intermediate_results: true,
       }),
     });
