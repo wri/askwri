@@ -6,7 +6,13 @@
  * callers handle their own filtering logic.
  */
 
+import { Agent, setGlobalDispatcher } from 'undici';
 import type { DocMeta } from '../../src/lib/llamacloud';
+
+// Local cite-mode queries rerank 500+ candidates on CPU and can exceed undici's
+// default 300s headersTimeout; an aborted fetch leaves the service reranking a
+// zombie request and cascades into concurrent slowdowns. Allow 30 min.
+setGlobalDispatcher(new Agent({ headersTimeout: 1_800_000, bodyTimeout: 1_800_000 }));
 
 export const PYTHON_SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://127.0.0.1:8000';
 export const NEXTJS_SERVER_URL = process.env.NEXTJS_SERVER_URL || 'http://localhost:3000';
