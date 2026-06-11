@@ -37,14 +37,18 @@ def run(document_id):
         doc = fetch_document(conn, document_id)
         score = round(_confidence(conn, document_id, doc["language"]), 3)
         if score < 0.7:
+            # Never overwrite an admin takedown: a withdrawn doc stays withdrawn.
             conn.execute(
                 """UPDATE documents SET status='needs_review', extraction_confidence=%s,
-                   updated_at=now() WHERE id=%s""", (score, document_id))
+                   updated_at=now() WHERE id=%s AND status <> 'withdrawn'""", (score, document_id))
             logger.warning(f"{doc['external_id']}: confidence {score} -> needs_review")
             return "needs_review"
-        conn.execute(
+        cur = conn.execute(
             """UPDATE documents SET status='searchable', extraction_confidence=%s,
-               updated_at=now() WHERE id=%s""", (score, document_id))
+               updated_at=now() WHERE id=%s AND status <> 'withdrawn'""", (score, document_id))
+        if cur.rowcount == 0:
+            logger.info(f"{doc['external_id']}: withdrawn — publishing skipped")
+            return None
         logger.info(f"{doc['external_id']}: searchable (confidence {score})")
     url = os.getenv("SEARCH_SERVICE_URL", "")
     if url:

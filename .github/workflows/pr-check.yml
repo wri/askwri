@@ -50,6 +50,29 @@ jobs:
     name: Python Tests
     runs-on: ubuntu-latest
 
+    # DB-backed worker tests create scratch databases (askwri_worker_test etc.)
+    # against localhost:5432 as user askwri — POSTGRES_USER makes askwri the
+    # container superuser, so CREATE DATABASE works. REQUIRE_DB_TESTS=1 makes
+    # the conftest guard fail loudly instead of silently skipping.
+    env:
+      DATABASE_URL: postgresql://askwri:password@localhost:5432/postgres
+      REQUIRE_DB_TESTS: '1'
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: askwri
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -58,6 +81,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      # The scratch-DB fixtures apply the TypeORM schema via `npm run migration:run`
+      # (subprocess from the repo root), so Node + npm deps are required here too.
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm install
 
       - name: Install dependencies
         working-directory: search-service

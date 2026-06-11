@@ -13,8 +13,9 @@ from dotenv import load_dotenv
 load_dotenv()  # local dev: export .env (OPENAI_API_KEY etc.), same as app.main
 
 from app.config import get_settings  # noqa: E402
+from app.db import get_pool  # noqa: E402
 from worker import intake_s3, queue  # noqa: E402
-from worker.stages import STAGE_ORDER, run_stage  # noqa: E402
+from worker.stages import STAGE_ORDER, fetch_document, run_stage  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("worker")
@@ -28,8 +29,15 @@ def process_one_job() -> bool:
         return False
     job_id, document_id, stage, attempts = claimed
     next_stage = queue.next_stage(stage)
-    logger.info(f"job {job_id} doc {document_id}: running stage '{next_stage}' (attempt {attempts + 1})")
     try:
+        # Claim-time guard: never run stages for a withdrawn document.
+        with get_pool().connection() as conn:
+            doc = fetch_document(conn, document_id)
+        if doc["status"] == "withdrawn":
+            logger.info(f"job {job_id} doc {document_id}: document withdrawn — skipping stages, marking job done")
+            queue.mark_done(job_id, stage)
+            return True
+        logger.info(f"job {job_id} doc {document_id}: running stage '{next_stage}' (attempt {attempts + 1})")
         outcome = run_stage(next_stage, document_id)
         if outcome == "needs_review":
             queue.mark_needs_review(job_id, next_stage)
@@ -50,6 +58,10 @@ def main() -> None:
     settings = get_settings()
     logger.info("Ingestion worker started")
     while True:
+        with get_pool().connection() as conn:
+            reclaimed = queue.reap_stale_jobs(conn)
+        if reclaimed:
+            logger.warning(f"reaped stale running jobs back to queued: {reclaimed}")
         swept = intake_s3.sweep()
         worked = process_one_job()
         if args.once:

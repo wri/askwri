@@ -38,6 +38,14 @@ describe('deriveExternalId', () => {
   it('handles file with no directory', () => {
     expect(deriveExternalId('plain.pdf')).toBe('plain')
   })
+
+  it('strips the extension case-insensitively (.PDF)', () => {
+    expect(deriveExternalId('Report.PDF')).toBe('Report')
+  })
+
+  it('strips mixed-case extension (.Pdf) with directory prefix', () => {
+    expect(deriveExternalId('docs/Report.Pdf')).toBe('Report')
+  })
 })
 
 describe('mapLanguages', () => {
@@ -366,6 +374,23 @@ describe('importDocuments() DB integration', () => {
     expect(result.updated).toBe(0)
     expect(result.skipped).toBe(2)
     expect(result.jobs).toBe(0) // no new jobs because open jobs exist
+  })
+
+  it('invalid file_path rows get a per-row error decision instead of throwing', async () => {
+    const mixedRows: ImportRow[] = [
+      { file_path: '', metadata: {}, summary: '' },
+      { file_path: null as any, metadata: {}, summary: '' },
+      {
+        file_path: `${PREFIX}doc-delta.pdf`,
+        metadata: { 'Article Title': 'Delta', languages: 'English', 'YEAR published': '2024' },
+        summary: '',
+      },
+    ]
+    const result = await importDocuments(mixedRows, { dryRun: true })
+    expect(result.decisions).toHaveLength(3)
+    expect(result.decisions![0]).toEqual({ externalId: '', action: 'error', reason: 'invalid file_path' })
+    expect(result.decisions![1]).toEqual({ externalId: '', action: 'error', reason: 'invalid file_path' })
+    expect(result.decisions![2].action).toBe('created')
   })
 
   it('dryRun returns decisions without writing', async () => {

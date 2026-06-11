@@ -1204,41 +1204,50 @@ async def get_stats():
         "evaluation_frameworks": ["ranx", "ragas", "trulens"]
     }
 
+# Single-flight guard for /reindex: concurrent calls (e.g. several publish
+# stages finishing together) must not stack rebuilds. Note: state is still
+# cleared during the rebuild (known limitation; build-then-swap deferred).
+_reindex_lock = asyncio.Lock()
+
+
 @app.post("/reindex")
 async def trigger_reindex():
     """
     Trigger a full re-index of all documents
     This will reload the CSV, rebuild caches, and recreate all indexes
     """
-    try:
-        logger.info("[Reindex] Starting full re-index...")
+    if _reindex_lock.locked():
+        return JSONResponse(status_code=409, content={"status": "already_running"})
+    async with _reindex_lock:
+        try:
+            logger.info("[Reindex] Starting full re-index...")
 
-        # Clear existing state
-        service_state["vector_index"] = None
-        service_state["bm25_retriever"] = None
-        service_state["documents_metadata"] = {}
-        service_state["document_texts"] = {}
-        service_state["pg_dense_ready"] = False
+            # Clear existing state
+            service_state["vector_index"] = None
+            service_state["bm25_retriever"] = None
+            service_state["documents_metadata"] = {}
+            service_state["document_texts"] = {}
+            service_state["pg_dense_ready"] = False
 
-        # Re-run startup logic in thread pool
-        if settings.retrieval_backend == "postgres":
-            await asyncio.to_thread(load_from_postgres)
-        else:
-            await asyncio.to_thread(load_documents_and_build_indexes)
+            # Re-run startup logic in thread pool
+            if settings.retrieval_backend == "postgres":
+                await asyncio.to_thread(load_from_postgres)
+            else:
+                await asyncio.to_thread(load_documents_and_build_indexes)
 
-        logger.info("[Reindex] Re-index complete")
+            logger.info("[Reindex] Re-index complete")
 
-        return {
-            "status": "success",
-            "documents_indexed": len(service_state["documents_metadata"]),
-            "indexes_rebuilt": {
-                "vector_index": service_state["vector_index"] is not None,
-                "bm25_retriever": service_state["bm25_retriever"] is not None,
+            return {
+                "status": "success",
+                "documents_indexed": len(service_state["documents_metadata"]),
+                "indexes_rebuilt": {
+                    "vector_index": service_state["vector_index"] is not None,
+                    "bm25_retriever": service_state["bm25_retriever"] is not None,
+                }
             }
-        }
-    except Exception as e:
-        logger.error(f"[Reindex] Failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Reindex failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"[Reindex] Failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Reindex failed: {str(e)}")
 
 
 # Global exception handler
