@@ -84,13 +84,13 @@
 
 **Files:** Modify `package.json`, `.env.example`.
 
-- [ ] **Step 1:** Create the working branch:
+- [x] **Step 1:** Create the working branch:
 
 ```bash
 git checkout -b phase2-admin-ui qa
 ```
 
-- [ ] **Step 2:** Install runtime deps (jose for edge-compatible JWT in `proxy.ts`; bcryptjs is pure JS so the Docker build needs no native toolchain):
+- [x] **Step 2:** Install runtime deps (jose for edge-compatible JWT in `proxy.ts`; bcryptjs is pure JS so the Docker build needs no native toolchain):
 
 ```bash
 npm install bcryptjs jose
@@ -100,7 +100,7 @@ npm install bcryptjs jose
 npm install --save-dev @types/bcryptjs
 ```
 
-- [ ] **Step 3:** Append to `.env.example`:
+- [x] **Step 3:** Append to `.env.example`:
 
 ```bash
 # --- Phase 2 admin UI ---
@@ -111,19 +111,19 @@ SESSION_SECRET=
 ADMIN_API_TOKEN=
 ```
 
-- [ ] **Step 4:** Add the seed script entry to `package.json` `scripts` (script file arrives in Task 6):
+- [x] **Step 4:** Add the seed script entry to `package.json` `scripts` (script file arrives in Task 6):
 
 ```json
 "seed:admin": "npx tsx --env-file-if-exists=.env scripts/seed-admin.ts"
 ```
 
-- [ ] **Step 5:** Generate a local `SESSION_SECRET` and add it to your `.env` (not committed):
+- [x] **Step 5:** Generate a local `SESSION_SECRET` and add it to your `.env` (not committed):
 
 ```bash
 openssl rand -hex 32
 ```
 
-- [ ] **Step 6:** Commit:
+- [x] **Step 6:** Commit:
 
 ```bash
 git add package.json package-lock.json .env.example
@@ -138,7 +138,7 @@ git commit -m "chore: add bcryptjs/jose deps and admin env scaffolding (Phase 2)
 
 All tables already exist (migration `1781280000000`) — these entities only map them. Follow `Document.entity.ts` style: snake_case via `name:`, no relations decorators (keep raw FKs as columns; joins are SQL in queries).
 
-- [ ] **Step 1:** Create `src/db/entities/User.entity.ts`:
+- [x] **Step 1:** Create `src/db/entities/User.entity.ts`:
 
 ```typescript
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm'
@@ -171,7 +171,7 @@ export class User {
 }
 ```
 
-- [ ] **Step 2:** Create `src/db/entities/Tag.entity.ts`:
+- [x] **Step 2:** Create `src/db/entities/Tag.entity.ts`:
 
 ```typescript
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm'
@@ -192,7 +192,7 @@ export class Tag {
 }
 ```
 
-- [ ] **Step 3:** Create `src/db/entities/DocumentTag.entity.ts`:
+- [x] **Step 3:** Create `src/db/entities/DocumentTag.entity.ts`:
 
 ```typescript
 import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm'
@@ -222,7 +222,7 @@ export class DocumentTag {
 }
 ```
 
-- [ ] **Step 4:** Create `src/db/entities/Collection.entity.ts`:
+- [x] **Step 4:** Create `src/db/entities/Collection.entity.ts`:
 
 ```typescript
 import {
@@ -267,7 +267,7 @@ export class Collection {
 }
 ```
 
-- [ ] **Step 5:** Create `src/db/entities/DocumentCollection.entity.ts`:
+- [x] **Step 5:** Create `src/db/entities/DocumentCollection.entity.ts`:
 
 ```typescript
 import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm'
@@ -288,7 +288,7 @@ export class DocumentCollection {
 }
 ```
 
-- [ ] **Step 6:** Create `src/db/entities/AuditLog.entity.ts`:
+- [x] **Step 6:** Create `src/db/entities/AuditLog.entity.ts`:
 
 ```typescript
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm'
@@ -324,9 +324,9 @@ export class AuditLog {
 }
 ```
 
-- [ ] **Step 7:** Register all six entities in `src/db/data-source.ts` AND `src/db/migration-data-source.ts` (import each, append to the `entities:` array after `IngestionJob`).
+- [x] **Step 7:** Register all six entities in `src/db/data-source.ts` AND `src/db/migration-data-source.ts` (import each, append to the `entities:` array after `IngestionJob`).
 
-- [ ] **Step 8:** Create `src/__tests__/admin-entities.db.test.ts` — a DATABASE_URL-gated smoke test that each entity round-trips against the real schema:
+- [x] **Step 8:** Create `src/__tests__/admin-entities.db.test.ts` — a DATABASE_URL-gated smoke test that each entity round-trips against the real schema:
 
 ```typescript
 /** @jest-environment node */
@@ -381,7 +381,7 @@ d('admin entities (DB integration)', () => {
 })
 ```
 
-- [ ] **Step 9:** Run and verify:
+- [x] **Step 9:** Run and verify:
 
 ```bash
 npm run test:db -- --testPathPattern='admin-entities'
@@ -389,9 +389,9 @@ npm run test:db -- --testPathPattern='admin-entities'
 
 Expected: 3 passing (against docker `askwri-pg`).
 
-- [ ] **Step 10:** Run `npm test` (full suite, db tests skip) and `npm run lint`. Expected: green.
+- [x] **Step 10:** Run `npm test` (full suite, db tests skip) and `npm run lint`. Expected: green.
 
-- [ ] **Step 11:** Commit:
+- [x] **Step 11:** Commit:
 
 ```bash
 git add src/db/entities src/db/data-source.ts src/db/migration-data-source.ts src/__tests__/admin-entities.db.test.ts
@@ -404,7 +404,7 @@ git commit -m "feat: TypeORM entities for users/tags/collections/audit_log (Phas
 
 **Files:** Create `src/lib/auth/session.ts`. Test: `src/__tests__/admin-session.test.ts`.
 
-- [ ] **Step 1:** Write the failing test `src/__tests__/admin-session.test.ts`:
+- [x] **Step 1:** Write the failing test `src/__tests__/admin-session.test.ts`:
 
 ```typescript
 /** @jest-environment node */
@@ -448,13 +448,13 @@ describe('session sign/verify', () => {
 })
 ```
 
-- [ ] **Step 2:** Run it; expected FAIL (module not found):
+- [x] **Step 2:** Run it; expected FAIL (module not found):
 
 ```bash
 npm test -- --testPathPattern='admin-session'
 ```
 
-- [ ] **Step 3:** Implement `src/lib/auth/session.ts`:
+- [x] **Step 3:** Implement `src/lib/auth/session.ts`:
 
 ```typescript
 import { SignJWT, jwtVerify } from 'jose'
@@ -507,7 +507,7 @@ export function sessionCookieOptions() {
 }
 ```
 
-- [ ] **Step 4:** Run the test again; expected PASS. Commit:
+- [x] **Step 4:** Run the test again; expected PASS. Commit:
 
 ```bash
 git add src/lib/auth/session.ts src/__tests__/admin-session.test.ts
@@ -520,7 +520,7 @@ git commit -m "feat: jose session sign/verify for admin auth"
 
 **Files:** Create `src/lib/auth/identity.ts`. Test: `src/__tests__/admin-identity.test.ts`.
 
-- [ ] **Step 1:** Write the failing test:
+- [x] **Step 1:** Write the failing test:
 
 ```typescript
 /** @jest-environment node */
@@ -570,7 +570,7 @@ describe('requireIdentity', () => {
 })
 ```
 
-- [ ] **Step 2:** Run; expected FAIL. Implement `src/lib/auth/identity.ts`:
+- [x] **Step 2:** Run; expected FAIL. Implement `src/lib/auth/identity.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -632,7 +632,7 @@ export function auditActor(identity: AdminIdentity): {
 }
 ```
 
-- [ ] **Step 3:** Run; expected PASS. Commit:
+- [x] **Step 3:** Run; expected PASS. Commit:
 
 ```bash
 git add src/lib/auth/identity.ts src/__tests__/admin-identity.test.ts
@@ -647,7 +647,7 @@ git commit -m "feat: requireIdentity route guard (session cookie or bearer token
 
 Next 16 convention: the file is `src/proxy.ts` and must export a function named `proxy` (verified in `node_modules/next/dist/build/templates/middleware.js`). It runs before route handlers; jose verification works in this runtime. No DB access here — signature check only; role checks stay in route handlers.
 
-- [ ] **Step 1:** Write the failing test:
+- [x] **Step 1:** Write the failing test:
 
 ```typescript
 /** @jest-environment node */
@@ -697,7 +697,7 @@ describe('proxy auth gate', () => {
 })
 ```
 
-- [ ] **Step 2:** Run; expected FAIL. Implement `src/proxy.ts`:
+- [x] **Step 2:** Run; expected FAIL. Implement `src/proxy.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -731,7 +731,7 @@ export const config = {
 }
 ```
 
-- [ ] **Step 3:** Run the test; expected PASS. Then verify the build accepts the proxy file:
+- [x] **Step 3:** Run the test; expected PASS. Then verify the build accepts the proxy file:
 
 ```bash
 npm run build
@@ -739,7 +739,16 @@ npm run build
 
 Expected: build succeeds and reports the proxy/middleware bundle.
 
-- [ ] **Step 4:** Commit:
+> **Deviation (verified during implementation):** the default Turbopack `npm run build` panics
+> locally on the pre-existing `search-service/venv/bin/python` absolute symlink (Turbopack
+> refuses symlinks pointing outside the project root while tracing the catalog route's
+> directory reference; fails identically on `qa` before Phase 2). Local builds use
+> `npx next build --webpack` (official flag) instead — output confirms `ƒ Proxy (Middleware)`.
+> CI/Docker builds have no venv, so the default build is unaffected. Also: `jose` v6 is pure
+> ESM, so `transpilePackages: ['jose']` was added to `next.config.js` (committed with Task 3)
+> to let `next/jest` transform it.
+
+- [x] **Step 4:** Commit:
 
 ```bash
 git add src/proxy.ts src/__tests__/admin-proxy.test.ts
@@ -752,7 +761,7 @@ git commit -m "feat: proxy.ts auth gate for /admin and admin APIs"
 
 **Files:** Create `src/db/queries/users.ts`, `src/app/api/admin/auth/login/route.ts`, `src/app/api/admin/auth/logout/route.ts`, `src/app/api/admin/auth/me/route.ts`, `scripts/seed-admin.ts`. Test: `src/__tests__/admin-auth-routes.test.ts`.
 
-- [ ] **Step 1:** Create `src/db/queries/users.ts`:
+- [x] **Step 1:** Create `src/db/queries/users.ts`:
 
 ```typescript
 import { AppDataSource } from '../data-source'
@@ -801,7 +810,7 @@ export async function updateUser(
 }
 ```
 
-- [ ] **Step 2:** Create `src/app/api/admin/auth/login/route.ts`:
+- [x] **Step 2:** Create `src/app/api/admin/auth/login/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -843,7 +852,7 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 3:** Create `src/app/api/admin/auth/logout/route.ts`:
+- [x] **Step 3:** Create `src/app/api/admin/auth/logout/route.ts`:
 
 ```typescript
 import { NextResponse } from 'next/server'
@@ -858,7 +867,7 @@ export async function POST() {
 }
 ```
 
-- [ ] **Step 4:** Create `src/app/api/admin/auth/me/route.ts`:
+- [x] **Step 4:** Create `src/app/api/admin/auth/me/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -880,7 +889,7 @@ export async function GET(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 5:** Create `scripts/seed-admin.ts`:
+- [x] **Step 5:** Create `scripts/seed-admin.ts`:
 
 ```typescript
 import 'reflect-metadata'
@@ -914,7 +923,7 @@ main().catch((err) => {
 })
 ```
 
-- [ ] **Step 6:** Write `src/__tests__/admin-auth-routes.test.ts` — DB-gated end-to-end of seed → login → me:
+- [x] **Step 6:** Write `src/__tests__/admin-auth-routes.test.ts` — DB-gated end-to-end of seed → login → me:
 
 ```typescript
 /** @jest-environment node */
@@ -983,7 +992,7 @@ d('login route (DB integration)', () => {
 })
 ```
 
-- [ ] **Step 7:** Run:
+- [x] **Step 7:** Run:
 
 ```bash
 npm run test:db -- --testPathPattern='admin-auth-routes'
@@ -995,7 +1004,7 @@ Expected: PASS. Then seed your local admin and verify manually once the UI exist
 npm run seed:admin -- admin admin-local-password
 ```
 
-- [ ] **Step 8:** Commit:
+- [x] **Step 8:** Commit:
 
 ```bash
 git add src/db/queries/users.ts src/app/api/admin/auth scripts/seed-admin.ts src/__tests__/admin-auth-routes.test.ts
@@ -1008,7 +1017,7 @@ git commit -m "feat: admin login/logout/me routes and seed-admin script"
 
 **Files:** Create `src/db/queries/audit.ts`, `src/lib/search-reindex.ts`. Tests included in `src/__tests__/admin-documents.db.test.ts` (Task 9) for audit; reindex tested here with a mocked fetch in `src/__tests__/admin-reindex.test.ts`.
 
-- [ ] **Step 1:** Create `src/db/queries/audit.ts`:
+- [x] **Step 1:** Create `src/db/queries/audit.ts`:
 
 ```typescript
 import { AppDataSource } from '../data-source'
@@ -1047,7 +1056,7 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
 }
 ```
 
-- [ ] **Step 2:** Create `src/lib/search-reindex.ts`. `/reindex` is synchronous in the search-service (re-reads chunks, rebuilds BM25) — allow up to 120s, never throw:
+- [x] **Step 2:** Create `src/lib/search-reindex.ts`. `/reindex` is synchronous in the search-service (re-reads chunks, rebuilds BM25) — allow up to 120s, never throw:
 
 ```typescript
 export interface ReindexResult {
@@ -1076,7 +1085,7 @@ export async function triggerReindex(): Promise<ReindexResult> {
 }
 ```
 
-- [ ] **Step 3:** Write `src/__tests__/admin-reindex.test.ts`:
+- [x] **Step 3:** Write `src/__tests__/admin-reindex.test.ts`:
 
 ```typescript
 /** @jest-environment node */
@@ -1114,7 +1123,7 @@ describe('triggerReindex', () => {
 })
 ```
 
-- [ ] **Step 4:** Run `npm test -- --testPathPattern='admin-reindex'`; expected PASS. Commit:
+- [x] **Step 4:** Run `npm test -- --testPathPattern='admin-reindex'`; expected PASS. Commit:
 
 ```bash
 git add src/db/queries/audit.ts src/lib/search-reindex.ts src/__tests__/admin-reindex.test.ts
@@ -1127,7 +1136,7 @@ git commit -m "feat: audit_log writer and best-effort /reindex trigger"
 
 **Files:** Create `src/db/queries/reviewQueue.ts`, `src/app/api/admin/review-queue/route.ts`. Test: `src/__tests__/admin-review-queue.db.test.ts`.
 
-- [ ] **Step 1:** Create `src/db/queries/reviewQueue.ts` (raw SQL — needs a lateral join on the latest job, which the entity layer can't express cleanly):
+- [x] **Step 1:** Create `src/db/queries/reviewQueue.ts` (raw SQL — needs a lateral join on the latest job, which the entity layer can't express cleanly):
 
 ```typescript
 import { AppDataSource } from '../data-source'
@@ -1184,7 +1193,7 @@ export async function getReviewQueue(): Promise<ReviewQueueItem[]> {
 }
 ```
 
-- [ ] **Step 2:** Create `src/app/api/admin/review-queue/route.ts`:
+- [x] **Step 2:** Create `src/app/api/admin/review-queue/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1208,7 +1217,7 @@ export async function GET(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 3:** Write `src/__tests__/admin-review-queue.db.test.ts` — DB-gated; fabricates a `needs_review` doc + suggested tag inside a transaction-style setup/teardown:
+- [x] **Step 3:** Write `src/__tests__/admin-review-queue.db.test.ts` — DB-gated; fabricates a `needs_review` doc + suggested tag inside a transaction-style setup/teardown:
 
 ```typescript
 /** @jest-environment node */
@@ -1253,7 +1262,7 @@ d('getReviewQueue (DB integration)', () => {
 })
 ```
 
-- [ ] **Step 4:** Run `npm run test:db -- --testPathPattern='admin-review-queue'`; expected PASS. Commit:
+- [x] **Step 4:** Run `npm run test:db -- --testPathPattern='admin-review-queue'`; expected PASS. Commit:
 
 ```bash
 git add src/db/queries/reviewQueue.ts src/app/api/admin/review-queue src/__tests__/admin-review-queue.db.test.ts
@@ -1266,7 +1275,7 @@ git commit -m "feat: review-queue query and API route"
 
 **Files:** Create `src/db/queries/documentsAdmin.ts`, `src/app/api/admin/documents/route.ts`, `src/app/api/admin/documents/[id]/route.ts`, `src/app/api/admin/documents/[id]/status/route.ts`, `src/app/api/admin/documents/[id]/reingest/route.ts`. Test: `src/__tests__/admin-documents.db.test.ts`.
 
-- [ ] **Step 1:** Create `src/db/queries/documentsAdmin.ts`:
+- [x] **Step 1:** Create `src/db/queries/documentsAdmin.ts`:
 
 ```typescript
 import { AppDataSource } from '../data-source'
@@ -1469,7 +1478,7 @@ export async function reenqueueIngestion(
 }
 ```
 
-- [ ] **Step 2:** Create `src/app/api/admin/documents/route.ts` (GET list with query-param filters):
+- [x] **Step 2:** Create `src/app/api/admin/documents/route.ts` (GET list with query-param filters):
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1500,7 +1509,7 @@ export async function GET(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 3:** Create `src/app/api/admin/documents/[id]/route.ts` (GET detail, PATCH metadata):
+- [x] **Step 3:** Create `src/app/api/admin/documents/[id]/route.ts` (GET detail, PATCH metadata):
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1546,7 +1555,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 ```
 
-- [ ] **Step 4:** Create `src/app/api/admin/documents/[id]/status/route.ts` (POST lifecycle change — **the BM25 gotcha lives here**; withdraw is admin-only, promote is editor-ok):
+- [x] **Step 4:** Create `src/app/api/admin/documents/[id]/status/route.ts` (POST lifecycle change — **the BM25 gotcha lives here**; withdraw is admin-only, promote is editor-ok):
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1590,7 +1599,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 ```
 
-- [ ] **Step 5:** Create `src/app/api/admin/documents/[id]/reingest/route.ts`:
+- [x] **Step 5:** Create `src/app/api/admin/documents/[id]/reingest/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1618,7 +1627,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 ```
 
-- [ ] **Step 6:** Write `src/__tests__/admin-documents.db.test.ts` (DB-gated). Cover: detail returns summaries/tags/collections; `updateDocumentFields` writes only changed fields + an audit row; `setDocumentStatus` enforces the allowlist and writes a `lifecycle` audit row; `reenqueueIngestion` refuses when an open job exists:
+- [x] **Step 6:** Write `src/__tests__/admin-documents.db.test.ts` (DB-gated). Cover: detail returns summaries/tags/collections; `updateDocumentFields` writes only changed fields + an audit row; `setDocumentStatus` enforces the allowlist and writes a `lifecycle` audit row; `reenqueueIngestion` refuses when an open job exists:
 
 ```typescript
 /** @jest-environment node */
@@ -1708,7 +1717,7 @@ d('documentsAdmin (DB integration)', () => {
 })
 ```
 
-- [ ] **Step 7:** Run `npm run test:db -- --testPathPattern='admin-documents'`; expected PASS. Run `npm run lint`. Commit:
+- [x] **Step 7:** Run `npm run test:db -- --testPathPattern='admin-documents'`; expected PASS. Run `npm run lint`. Commit:
 
 ```bash
 git add src/db/queries/documentsAdmin.ts src/app/api/admin/documents src/__tests__/admin-documents.db.test.ts
@@ -1721,7 +1730,7 @@ git commit -m "feat: admin document list/detail/edit/lifecycle/reingest APIs"
 
 **Files:** Create `src/db/queries/tagsAdmin.ts`, `src/app/api/admin/tags/route.ts`, `src/app/api/admin/tags/[id]/route.ts`, `src/app/api/admin/documents/[id]/tags/route.ts`, `src/app/api/admin/documents/[id]/tags/[tagId]/route.ts`. Test: `src/__tests__/admin-tags.db.test.ts`.
 
-- [ ] **Step 1:** Create `src/db/queries/tagsAdmin.ts`:
+- [x] **Step 1:** Create `src/db/queries/tagsAdmin.ts`:
 
 ```typescript
 import { AppDataSource } from '../data-source'
@@ -1853,7 +1862,7 @@ export async function addHumanTag(
 }
 ```
 
-- [ ] **Step 2:** Create `src/app/api/admin/tags/route.ts` (GET list+counts for any session; POST create for editors+):
+- [x] **Step 2:** Create `src/app/api/admin/tags/route.ts` (GET list+counts for any session; POST create for editors+):
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1897,7 +1906,7 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 3:** Create `src/app/api/admin/tags/[id]/route.ts` (DELETE unused, admin-only):
+- [x] **Step 3:** Create `src/app/api/admin/tags/[id]/route.ts` (DELETE unused, admin-only):
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1924,7 +1933,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 }
 ```
 
-- [ ] **Step 4:** Create `src/app/api/admin/documents/[id]/tags/route.ts` (POST add human tag):
+- [x] **Step 4:** Create `src/app/api/admin/documents/[id]/tags/route.ts` (POST add human tag):
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1953,7 +1962,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 ```
 
-- [ ] **Step 5:** Create `src/app/api/admin/documents/[id]/tags/[tagId]/route.ts` (PATCH accept/reject):
+- [x] **Step 5:** Create `src/app/api/admin/documents/[id]/tags/[tagId]/route.ts` (PATCH accept/reject):
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -1990,9 +1999,9 @@ export async function PATCH(
 }
 ```
 
-- [ ] **Step 6:** Write `src/__tests__/admin-tags.db.test.ts` (DB-gated). Cover: counts query shape; create + duplicate-create conflict; delete-unused vs delete-in-use; `decideDocumentTag` flips status AND source to human with audit `before` preserving the llm row; `addHumanTag` inserts and conflicts on re-add. Use a fabricated doc + a fabricated tag (`facet='topic', value_id='__test_value__'`), clean up audit/doc/tag rows in `afterAll` (same pattern as Task 9's test — fabricate with raw INSERTs, delete by id).
+- [x] **Step 6:** Write `src/__tests__/admin-tags.db.test.ts` (DB-gated). Cover: counts query shape; create + duplicate-create conflict; delete-unused vs delete-in-use; `decideDocumentTag` flips status AND source to human with audit `before` preserving the llm row; `addHumanTag` inserts and conflicts on re-add. Use a fabricated doc + a fabricated tag (`facet='topic', value_id='__test_value__'`), clean up audit/doc/tag rows in `afterAll` (same pattern as Task 9's test — fabricate with raw INSERTs, delete by id).
 
-- [ ] **Step 7:** Run `npm run test:db -- --testPathPattern='admin-tags'`; expected PASS. Commit:
+- [x] **Step 7:** Run `npm run test:db -- --testPathPattern='admin-tags'`; expected PASS. Commit:
 
 ```bash
 git add src/db/queries/tagsAdmin.ts src/app/api/admin/tags src/app/api/admin/documents src/__tests__/admin-tags.db.test.ts
@@ -2005,7 +2014,7 @@ git commit -m "feat: taxonomy curation and per-document tag decision APIs"
 
 **Files:** Create `src/db/queries/collectionsAdmin.ts`, `src/app/api/admin/collections/route.ts`, `src/app/api/admin/collections/[id]/route.ts`, `src/app/api/admin/collections/[id]/documents/route.ts`. Test: `src/__tests__/admin-collections.db.test.ts`.
 
-- [ ] **Step 1:** Create `src/db/queries/collectionsAdmin.ts`:
+- [x] **Step 1:** Create `src/db/queries/collectionsAdmin.ts`:
 
 ```typescript
 import { AppDataSource } from '../data-source'
@@ -2140,7 +2149,7 @@ export async function removeDocumentFromCollection(
 
 Note on `added`: TypeORM's raw `query()` for INSERT returns `[rows, rowCount]` for parameterized writes on pg. If the count proves unreliable during implementation, drop it from the response — it's informational only.
 
-- [ ] **Step 2:** Create `src/app/api/admin/collections/route.ts` (GET list, POST create) — same shape as the tags route: GET requires any identity and returns `{ ok, collections }`; POST validates `name` (400 if missing), calls `createCollection`, maps `{ error }` to 409.
+- [x] **Step 2:** Create `src/app/api/admin/collections/route.ts` (GET list, POST create) — same shape as the tags route: GET requires any identity and returns `{ ok, collections }`; POST validates `name` (400 if missing), calls `createCollection`, maps `{ error }` to 409.
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -2182,7 +2191,7 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 3:** Create `src/app/api/admin/collections/[id]/route.ts` (PATCH name/description → `updateCollection`, 404 on null) and `src/app/api/admin/collections/[id]/documents/route.ts`:
+- [x] **Step 3:** Create `src/app/api/admin/collections/[id]/route.ts` (PATCH name/description → `updateCollection`, 404 on null) and `src/app/api/admin/collections/[id]/documents/route.ts`:
 
 ```typescript
 // collections/[id]/documents/route.ts
@@ -2238,9 +2247,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 }
 ```
 
-- [ ] **Step 4:** Write `src/__tests__/admin-collections.db.test.ts` (DB-gated). Cover: `slugify` (pure — runs ungated), create + slug conflict, add documents idempotently (add same id twice → membership count stays 1), remove, counts in `listCollectionsWithCounts`. Fabricate one doc + one collection, clean up in `afterAll` (delete collection, doc, and audit rows by entity id).
+- [x] **Step 4:** Write `src/__tests__/admin-collections.db.test.ts` (DB-gated). Cover: `slugify` (pure — runs ungated), create + slug conflict, add documents idempotently (add same id twice → membership count stays 1), remove, counts in `listCollectionsWithCounts`. Fabricate one doc + one collection, clean up in `afterAll` (delete collection, doc, and audit rows by entity id).
 
-- [ ] **Step 5:** Run `npm run test:db -- --testPathPattern='admin-collections'`; expected PASS. Commit:
+- [x] **Step 5:** Run `npm run test:db -- --testPathPattern='admin-collections'`; expected PASS. Commit:
 
 ```bash
 git add src/db/queries/collectionsAdmin.ts src/app/api/admin/collections src/__tests__/admin-collections.db.test.ts
@@ -2253,7 +2262,7 @@ git commit -m "feat: collections CRUD and membership APIs"
 
 **Files:** Create `src/app/api/admin/users/route.ts`, `src/app/api/admin/users/[id]/route.ts`. Tests: extend `src/__tests__/admin-auth-routes.test.ts`.
 
-- [ ] **Step 1:** Create `src/app/api/admin/users/route.ts`:
+- [x] **Step 1:** Create `src/app/api/admin/users/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -2315,11 +2324,11 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 2:** Create `src/app/api/admin/users/[id]/route.ts` — PATCH accepting any of `{ role, active, password }`; hash password with bcryptjs when present; reject unknown roles; write an `update` audit row with the changed keys (`password` audited as `{ password: '<reset>' }`, never the value); 404 when the user id doesn't exist (check with `listUsers`-style repo lookup before update). Admin-only via `requireIdentity(req, 'admin')`. Same try/catch + response shape as every route above.
+- [x] **Step 2:** Create `src/app/api/admin/users/[id]/route.ts` — PATCH accepting any of `{ role, active, password }`; hash password with bcryptjs when present; reject unknown roles; write an `update` audit row with the changed keys (`password` audited as `{ password: '<reset>' }`, never the value); 404 when the user id doesn't exist (check with `listUsers`-style repo lookup before update). Admin-only via `requireIdentity(req, 'admin')`. Same try/catch + response shape as every route above.
 
-- [ ] **Step 3:** Extend `src/__tests__/admin-auth-routes.test.ts` with a DB-gated describe block: POST creates a user (then login works with the new credentials), short password 400s, PATCH deactivates (login then 401s). Clean up created users in `afterAll`.
+- [x] **Step 3:** Extend `src/__tests__/admin-auth-routes.test.ts` with a DB-gated describe block: POST creates a user (then login works with the new credentials), short password 400s, PATCH deactivates (login then 401s). Clean up created users in `afterAll`.
 
-- [ ] **Step 4:** Run `npm run test:db -- --testPathPattern='admin-auth-routes'`; expected PASS. Commit:
+- [x] **Step 4:** Run `npm run test:db -- --testPathPattern='admin-auth-routes'`; expected PASS. Commit:
 
 ```bash
 git add src/app/api/admin/users src/__tests__/admin-auth-routes.test.ts
@@ -2334,7 +2343,7 @@ git commit -m "feat: admin-only user management API"
 
 The existing `/api/pdf/[filename]` reads `/tmp/askWRI_docs` only — worker-ingested PDFs live in S3 under `documents/`. This route streams by document id: S3 when `DOCUMENTS_S3_BUCKET` is set, local-dir fallback for dev. Follow the `new S3Client({})` ambient-credentials pattern from `src/lib/eval-storage.ts`.
 
-- [ ] **Step 1:** Create the route:
+- [x] **Step 1:** Create the route:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -2389,9 +2398,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 ```
 
-- [ ] **Step 2:** Add `ADMIN_PDF_LOCAL_DIR` to `.env.example` under the Phase 2 block with a comment (`# Local dir for admin PDF preview when DOCUMENTS_S3_BUCKET is unset (dev)`).
+- [x] **Step 2:** Add `ADMIN_PDF_LOCAL_DIR` to `.env.example` under the Phase 2 block with a comment (`# Local dir for admin PDF preview when DOCUMENTS_S3_BUCKET is unset (dev)`).
 
-- [ ] **Step 3:** `npm run lint` + `npm run build`. Commit:
+- [x] **Step 3:** `npm run lint` + `npm run build`. Commit:
 
 ```bash
 git add src/app/api/admin/documents .env.example
@@ -2406,7 +2415,7 @@ git commit -m "feat: admin document file route (S3 or local dir)"
 
 UI ground rules for Tasks 14–19: `'use client'` pages, Chakra layout primitives (`Box`, `Heading`, `Text`) + plain HTML tables/forms with inline styles (matches the existing idiom; avoids guessing Chakra v3 composite APIs), client-side fetching via the shared helper. Styling is intentionally minimal — this is an internal tool.
 
-- [ ] **Step 1:** Create `src/app/admin/lib/api.ts`:
+- [x] **Step 1:** Create `src/app/admin/lib/api.ts`:
 
 ```typescript
 'use client'
@@ -2428,7 +2437,7 @@ export async function adminFetch<T = any>(path: string, init?: RequestInit): Pro
 }
 ```
 
-- [ ] **Step 2:** Create `src/app/admin/layout.tsx` — nav + logout; hides the Users link for editors; renders bare children on `/admin/login`:
+- [x] **Step 2:** Create `src/app/admin/layout.tsx` — nav + logout; hides the Users link for editors; renders bare children on `/admin/login`:
 
 ```tsx
 'use client'
@@ -2498,7 +2507,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 }
 ```
 
-- [ ] **Step 3:** Create `src/app/admin/login/page.tsx`:
+- [x] **Step 3:** Create `src/app/admin/login/page.tsx`:
 
 ```tsx
 'use client'
@@ -2577,7 +2586,7 @@ export default function LoginPage() {
 
 (`useSearchParams` requires the Suspense wrapper in App Router builds.)
 
-- [ ] **Step 4:** Create `src/app/admin/page.tsx`:
+- [x] **Step 4:** Create `src/app/admin/page.tsx`:
 
 ```tsx
 import { redirect } from 'next/navigation'
@@ -2587,9 +2596,9 @@ export default function AdminIndex() {
 }
 ```
 
-- [ ] **Step 5:** Manual check — run `npm run dev`, visit `http://localhost:3000/admin` while logged out → redirected to `/admin/login`; log in with the Task 6 seeded admin → lands on `/admin/review` (404s for now — page arrives next task); nav renders. Then `npm run build` + `npm run lint`.
+- [x] **Step 5:** Manual check — run `npm run dev`, visit `http://localhost:3000/admin` while logged out → redirected to `/admin/login`; log in with the Task 6 seeded admin → lands on `/admin/review` (404s for now — page arrives next task); nav renders. Then `npm run build` + `npm run lint`. *(deferred to Task 20 QA sweep)*
 
-- [ ] **Step 6:** Commit:
+- [x] **Step 6:** Commit:
 
 ```bash
 git add src/app/admin
@@ -2602,7 +2611,7 @@ git commit -m "feat: admin shell, login page, client API helper"
 
 **Files:** Create `src/app/admin/review/page.tsx`.
 
-- [ ] **Step 1:** Implement the page — table of queue items with per-row actions. Promote/withdraw call the status route and surface the `reindex` result; row links go to the document editor for tag review:
+- [x] **Step 1:** Implement the page — table of queue items with per-row actions. Promote/withdraw call the status route and surface the `reindex` result; row links go to the document editor for tag review:
 
 ```tsx
 'use client'
@@ -2745,9 +2754,9 @@ export default function ReviewQueuePage() {
 }
 ```
 
-- [ ] **Step 2:** Manual check with the Appendix fixture applied: queue shows the fabricated doc; Promote moves it out of the queue and shows the reindex notice (search-service running → success message; stopped → the warning message). Restore fixture state afterwards.
+- [x] **Step 2:** Manual check with the Appendix fixture applied: queue shows the fabricated doc; Promote moves it out of the queue and shows the reindex notice (search-service running → success message; stopped → the warning message). Restore fixture state afterwards. *(deferred to Task 20 QA sweep)*
 
-- [ ] **Step 3:** `npm run lint` + `npm run build`. Commit:
+- [x] **Step 3:** `npm run lint` + `npm run build`. Commit:
 
 ```bash
 git add src/app/admin/review
@@ -2762,7 +2771,7 @@ git commit -m "feat: review queue page with promote/re-ingest and reindex feedba
 
 One page, four panels: (1) metadata form over the `EDITABLE_FIELDS` whitelist with provenance hints; (2) tags grouped by facet with status/source/confidence badges, accept/reject buttons on `suggested` rows, add-tag select fed by `/api/admin/tags`; (3) summaries read-only (native + English, long + short); (4) lifecycle box (status, promote/withdraw buttons with the same reindex feedback as Task 15, re-ingest, link to `/api/admin/documents/{id}/file` PDF preview in a new tab). Withdraw button renders only for `role==='admin'` (from `/api/admin/auth/me`).
 
-- [ ] **Step 1:** Implement the page. Skeleton (state + handlers — the JSX follows the same table/button idiom as Task 15; keep each panel a plain `<section>`):
+- [x] **Step 1:** Implement the page. Skeleton (state + handlers — the JSX follows the same table/button idiom as Task 15; keep each panel a plain `<section>`):
 
 ```tsx
 'use client'
@@ -2877,9 +2886,9 @@ Render specifics the implementer must include:
 - **Lifecycle panel:** current `status` + `extractionConfidence`; latest job status/stage/error if present; buttons — Promote (`setStatus('searchable')`, hidden when already searchable), Withdraw (`setStatus('withdrawn')`, rendered only when `me.role === 'admin'`), Re-ingest (POST to the reingest route, same as Task 15), and an `<a href={'/api/admin/documents/' + id + '/file'} target='_blank'>Open PDF</a>` link.
 - **Collections panel (small):** list `detail.collections` with a remove button (`DELETE /api/admin/collections/{collectionId}/documents` with `{ documentId: id }`), and a `<select>` of all collections (`GET /api/admin/collections`) with an Add button (`POST .../documents` with `{ documentIds: [id] }`).
 
-- [ ] **Step 2:** Manual check (fixture doc): edit a title → audit row appears (`SELECT action, after FROM audit_log ORDER BY at DESC LIMIT 3` in psql); accept a suggested tag → row flips to `human/accepted`; reject → `human/rejected`; withdraw hidden for an editor user, shown for admin; PDF link 404s gracefully when the file isn't present locally.
+- [x] **Step 2:** Manual check (fixture doc): edit a title → audit row appears (`SELECT action, after FROM audit_log ORDER BY at DESC LIMIT 3` in psql); accept a suggested tag → row flips to `human/accepted`; reject → `human/rejected`; withdraw hidden for an editor user, shown for admin; PDF link 404s gracefully when the file isn't present locally. *(deferred to Task 20 QA sweep)*
 
-- [ ] **Step 3:** `npm run lint` + `npm run build`. Commit:
+- [x] **Step 3:** `npm run lint` + `npm run build`. Commit:
 
 ```bash
 git add src/app/admin/documents
@@ -2892,20 +2901,20 @@ git commit -m "feat: document editor (metadata, tag decisions, lifecycle, collec
 
 **Files:** Create `src/app/admin/documents/page.tsx`, `src/app/admin/collections/page.tsx`.
 
-- [ ] **Step 1:** Implement `src/app/admin/documents/page.tsx` — the admin catalog:
+- [x] **Step 1:** Implement `src/app/admin/documents/page.tsx` — the admin catalog:
   - Filter bar: status `<select>` (all/draft/processing/needs_review/searchable/withdrawn/error), language `<select>` (en/es/zh/pt/id), collection `<select>` (from `/api/admin/collections`), free-text search `<input>`; every change refetches `/api/admin/documents?{params}` via `adminFetch`.
   - Result table: checkbox column, external id, title (link to `/admin/documents/{id}`), language, status, year. Same `cell` style constant as Task 15.
   - Bulk action bar (visible when ≥1 checked): a collection `<select>` + "Add N docs to collection" button → `POST /api/admin/collections/{id}/documents` with the checked `documentIds`, then a success notice ("Added N documents to <name>") and checkbox reset.
   - State: `items`, `filters`, `selected: Set<string>`, `notice`, `error` — same hooks pattern as Task 15.
 
-- [ ] **Step 2:** Implement `src/app/admin/collections/page.tsx`:
+- [x] **Step 2:** Implement `src/app/admin/collections/page.tsx`:
   - Table from `/api/admin/collections`: name, slug, description, document count, link "View documents" → `/admin/documents?collectionId={id}` (the catalog page reads `useSearchParams` for an initial filter — wrap in `Suspense` like the login page).
   - Create form: name + description inputs → `POST /api/admin/collections`, refresh on success, surface 409 errors inline.
   - Rename: inline edit button per row → `PATCH /api/admin/collections/{id}` with `{ name }`.
 
-- [ ] **Step 3:** Manual check: filter by `needs_review` finds the fixture doc; select two docs, add to the seeded collection; collection page count increments; "View documents" filter round-trips.
+- [x] **Step 3:** Manual check: filter by `needs_review` finds the fixture doc; select two docs, add to the seeded collection; collection page count increments; "View documents" filter round-trips. *(deferred to Task 20 QA sweep)*
 
-- [ ] **Step 4:** `npm run lint` + `npm run build`. Commit:
+- [x] **Step 4:** `npm run lint` + `npm run build`. Commit:
 
 ```bash
 git add src/app/admin/documents/page.tsx src/app/admin/collections
@@ -2918,19 +2927,19 @@ git commit -m "feat: admin catalog with filters/bulk-add and collections page"
 
 **Files:** Create `src/app/admin/tags/page.tsx`, `src/app/admin/users/page.tsx`.
 
-- [ ] **Step 1:** Implement `src/app/admin/tags/page.tsx` (taxonomy curation, Scope decision 5):
+- [x] **Step 1:** Implement `src/app/admin/tags/page.tsx` (taxonomy curation, Scope decision 5):
   - Table from `/api/admin/tags` grouped by facet: value, accepted count, suggested count, taxonomy version, and (admin only, when both counts are 0) a Delete button → `DELETE /api/admin/tags/{id}` (confirm with `window.confirm`).
   - Add form: facet `<select>` (distinct facets from the loaded list, plus a free-text "new facet" input) + value input → `POST /api/admin/tags`; 409 shown inline.
   - A static note under the heading: *"Taxonomy v1 (raw CSV values). Rename/merge and version bumps are deferred until a curation owner is assigned — see docs/document-management.md §10.7."*
 
-- [ ] **Step 2:** Implement `src/app/admin/users/page.tsx` (admin-only — the API already 403s editors; the page shows the error banner if an editor navigates directly):
+- [x] **Step 2:** Implement `src/app/admin/users/page.tsx` (admin-only — the API already 403s editors; the page shows the error banner if an editor navigates directly):
   - Table from `/api/admin/users`: username, email, role, active, last login.
   - Per row: role `<select>` (admin/editor) → PATCH on change; Activate/Deactivate toggle → PATCH `{ active }`; "Reset password" prompt (`window.prompt`, min 12 chars client-checked) → PATCH `{ password }`.
   - Create form: username, email, password, role → `POST /api/admin/users`.
 
-- [ ] **Step 3:** Manual check: create an editor user, log in as them in a private window → Users nav link hidden, `/admin/users` shows the forbidden banner, withdraw button absent in the editor; deactivate the editor → their next request 401s after cookie expiry **(note: JWT sessions outlive deactivation by up to the 7-day TTL — the `active` flag gates new logins; acceptable for an internal tool, noted in the docs task)**.
+- [x] **Step 3:** Manual check: create an editor user, log in as them in a private window → Users nav link hidden, `/admin/users` shows the forbidden banner, withdraw button absent in the editor; deactivate the editor → their next request 401s after cookie expiry **(note: JWT sessions outlive deactivation by up to the 7-day TTL — the `active` flag gates new logins; acceptable for an internal tool, noted in the docs task)**. *(deferred to Task 20 QA sweep)*
 
-- [ ] **Step 4:** `npm run lint` + `npm run build`. Commit:
+- [x] **Step 4:** `npm run lint` + `npm run build`. Commit:
 
 ```bash
 git add src/app/admin/tags src/app/admin/users
@@ -2945,7 +2954,7 @@ git commit -m "feat: taxonomy curation and user management pages"
 
 Skip this task entirely if Phase 2 needs trimming — S3/local intake drop and the CSV import API already cover intake. If skipped, remove the Upload link from `src/app/admin/layout.tsx` NAV.
 
-- [ ] **Step 1:** Create `src/app/api/admin/intake/route.ts` — accepts `multipart/form-data` PDFs and drops them where the worker watches (S3 `INTAKE_S3_PREFIX` or `INTAKE_LOCAL_DIR` for dev). The worker handles dedup/registration from there (as-built §10.2):
+- [x] **Step 1:** Create `src/app/api/admin/intake/route.ts` — accepts `multipart/form-data` PDFs and drops them where the worker watches (S3 `INTAKE_S3_PREFIX` or `INTAKE_LOCAL_DIR` for dev). The worker handles dedup/registration from there (as-built §10.2):
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -3010,11 +3019,11 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 2:** Create `src/app/admin/upload/page.tsx` — `<input type='file' multiple accept='.pdf'>` + Upload button POSTing `FormData` (note: do NOT set Content-Type manually — use raw `fetch`, not `adminFetch`, so the browser sets the multipart boundary; still handle 401 → login redirect). On success show "N file(s) dropped into intake — the worker registers them within ~`WORKER_POLL_SECONDS` (10s default); duplicates are skipped by content hash."
+- [x] **Step 2:** Create `src/app/admin/upload/page.tsx` — `<input type='file' multiple accept='.pdf'>` + Upload button POSTing `FormData` (note: do NOT set Content-Type manually — use raw `fetch`, not `adminFetch`, so the browser sets the multipart boundary; still handle 401 → login redirect). On success show "N file(s) dropped into intake — the worker registers them within ~`WORKER_POLL_SECONDS` (10s default); duplicates are skipped by content hash."
 
-- [ ] **Step 3:** Manual check (dev): set `INTAKE_LOCAL_DIR=./intake` in `.env`, upload a PDF, confirm the file lands in `./intake/`. If the worker is running (`--once` mode per runbook §"Phase 1 worker — local dev"), confirm a job appears.
+- [x] **Step 3:** Manual check (dev): set `INTAKE_LOCAL_DIR=./intake` in `.env`, upload a PDF, confirm the file lands in `./intake/`. If the worker is running (`--once` mode per runbook §"Phase 1 worker — local dev"), confirm a job appears. *(deferred to Task 20 QA sweep)*
 
-- [ ] **Step 4:** `npm run lint` + `npm run build`. Commit:
+- [x] **Step 4:** `npm run lint` + `npm run build`. Commit:
 
 ```bash
 git add src/app/api/admin/intake src/app/admin/upload
@@ -3027,11 +3036,11 @@ git commit -m "feat: admin multi-file intake upload (cuttable)"
 
 **Files:** Modify `docs/document-management.md`, `docs/runbooks/phase0-cutover.md`.
 
-- [ ] **Step 1:** Append a `## 11. Phase 2 — Admin UI + review queue (as built)` section to `docs/document-management.md` covering: auth model (session JWT, bcryptjs, roles, `ADMIN_API_TOKEN`, the JWT-outlives-deactivation caveat), the route map (pages + APIs), tag-decision provenance rule (decision 7 — `source` flips to `human`), lifecycle actions + automatic `/reindex` trigger (closing §4's manual gotcha for UI-driven changes), what was deferred (purge, export, dashboard, audit UI, bulk collection ops, taxonomy rename/merge), and update §10.5's "A review UI is planned for Phase 2" sentence to point at the new section.
+- [x] **Step 1:** Append a `## 11. Phase 2 — Admin UI + review queue (as built)` section to `docs/document-management.md` covering: auth model (session JWT, bcryptjs, roles, `ADMIN_API_TOKEN`, the JWT-outlives-deactivation caveat), the route map (pages + APIs), tag-decision provenance rule (decision 7 — `source` flips to `human`), lifecycle actions + automatic `/reindex` trigger (closing §4's manual gotcha for UI-driven changes), what was deferred (purge, export, dashboard, audit UI, bulk collection ops, taxonomy rename/merge), and update §10.5's "A review UI is planned for Phase 2" sentence to point at the new section.
 
-- [ ] **Step 2:** Append an `## Admin UI — local dev` section to `docs/runbooks/phase0-cutover.md`: `SESSION_SECRET` generation, `npm run seed:admin -- <user> <pw>`, the review-queue fixture SQL (copy from the Appendix below), and the deploy note (add `SESSION_SECRET` — and `ADMIN_API_TOKEN` if used — to the app secret JSON; no terraform change).
+- [x] **Step 2:** Append an `## Admin UI — local dev` section to `docs/runbooks/phase0-cutover.md`: `SESSION_SECRET` generation, `npm run seed:admin -- <user> <pw>`, the review-queue fixture SQL (copy from the Appendix below), and the deploy note (add `SESSION_SECRET` — and `ADMIN_API_TOKEN` if used — to the app secret JSON; no terraform change).
 
-- [ ] **Step 3:** Full verification gate:
+- [x] **Step 3:** Full verification gate:
 
 ```bash
 npm run lint
@@ -3051,16 +3060,40 @@ npm run build
 
 Expected: all green (db suite against docker `askwri-pg`).
 
-- [ ] **Step 4:** Manual QA sweep (with fixture + seeded users): login/logout both roles → review queue promote with search-service up (success notice) and down (warning notice) → editor: metadata edit, tag accept/reject/add, collection add/remove → admin: withdraw + restore, taxonomy add/delete, user create/deactivate → confirm `audit_log` rows for each mutation class (`SELECT source, action, entity_type, count(*) FROM audit_log GROUP BY 1,2,3`).
+> **Result:** lint clean; `npm test` 106/106 (16 suites — DB suites also ran locally because
+> `next/jest` loads `.env`'s `DATABASE_URL`); `npm run test:db` 26/26; build green via
+> `npx next build --webpack` (see Task 5 deviation — Turbopack panics on the pre-existing
+> venv symlink) with all 11 `/admin` pages, 19 `/api/admin` routes, and `ƒ Proxy (Middleware)`
+> in the route table.
 
-- [ ] **Step 5:** Commit docs:
+- [x] **Step 4:** Manual QA sweep (with fixture + seeded users): login/logout both roles → review queue promote with search-service up (success notice) and down (warning notice) → editor: metadata edit, tag accept/reject/add, collection add/remove → admin: withdraw + restore, taxonomy add/delete, user create/deactivate → confirm `audit_log` rows for each mutation class (`SELECT source, action, entity_type, count(*) FROM audit_log GROUP BY 1,2,3`).
+
+> **Result (API-level sweep with the Appendix fixture, both roles):** all passes — login/logout
+> both roles; editor metadata edit, tag accept/reject (DB confirms `source` flips to `human`,
+> `model_version` retained, untouched rows stay `llm/suggested`), collection remove/re-add
+> (`added: 1` count correct); editor withdraw and taxonomy delete both 403; admin withdraw +
+> restore, taxonomy add/delete, user create/deactivate (deactivated login 401s) / reactivate;
+> unauthenticated APIs 401, pages 307 → `/admin/login?next=…`; audit rows present for every
+> mutation class; all 8 admin pages render 200; PDF file route degrades to a clean JSON error
+> without local AWS creds (ECS task role provides them in deploy).
+>
+> **Deviation (reindex duration):** `/reindex` on the full local corpus (169 docs / 30,526
+> chunks, postgres backend) takes ~540s — far beyond the 120s client timeout — so the
+> promote/withdraw API reports `reindex: { ok: false, error: 'timeout' }` and the UI shows the
+> staleness warning. The abort only severs the HTTP wait: the search-service keeps rebuilding
+> and completes successfully (verified directly), so keyword results catch up minutes later and
+> the warning copy stays accurate. Kept the planned 120s contract; the success-notice path is
+> covered by the mocked-fetch unit tests (`admin-reindex.test.ts`). An in-browser click-through
+> was not run (headless session); UI role gating (`me.role === 'admin'`) verified in code.
+
+- [x] **Step 5:** Commit docs:
 
 ```bash
 git add docs/document-management.md docs/runbooks/phase0-cutover.md
 git commit -m "docs: Phase 2 as-built section and admin local-dev runbook"
 ```
 
-- [ ] **Step 6:** Merge to local `qa` (no push — same as Phases 0/1):
+- [x] **Step 6:** Merge to local `qa` (no push — same as Phases 0/1):
 
 ```bash
 git checkout qa
