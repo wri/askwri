@@ -1,0 +1,188 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Box, Heading, Text } from '@chakra-ui/react'
+import { adminFetch } from '../lib/api'
+
+interface Collection {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  documentCount: number
+}
+
+const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid #eee' }
+
+const CollectionsPage = () => {
+  const [items, setItems] = useState<Collection[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [createName, setCreateName] = useState('')
+  const [createDescription, setCreateDescription] = useState('')
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+
+  const load = useCallback(async () => {
+    try {
+      const body = await adminFetch<{ collections: Collection[] }>('/api/admin/collections')
+      setItems(body.collections)
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load()
+  }, [load])
+
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setNotice(null)
+    setError(null)
+    try {
+      await adminFetch('/api/admin/collections', {
+        method: 'POST',
+        body: JSON.stringify({ name: createName, description: createDescription || null }),
+      })
+      setCreateName('')
+      setCreateDescription('')
+      setNotice('Collection created.')
+      await load()
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  const startEdit = (col: Collection) => {
+    setEditId(col.id)
+    setEditName(col.name)
+  }
+
+  const saveRename = async (id: string) => {
+    setNotice(null)
+    setError(null)
+    try {
+      await adminFetch(`/api/admin/collections/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: editName }),
+      })
+      setEditId(null)
+      setNotice('Collection renamed.')
+      await load()
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  return (
+    <Box>
+      <Heading size='lg' style={{ marginBottom: 8 }}>
+        Collections
+      </Heading>
+
+      {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
+      {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
+
+      <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 24 }}>
+        <thead>
+          <tr>
+            {['Name', 'Slug', 'Description', 'Documents', 'Actions'].map((h) => (
+              <th key={h} style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((col) => (
+            <tr key={col.id}>
+              <td style={cell}>
+                {editId === col.id ? (
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    style={{ fontFamily: 'inherit', fontSize: 'inherit', width: '100%' }}
+                  />
+                ) : (
+                  col.name
+                )}
+              </td>
+              <td style={{ ...cell, color: '#888' }}>{col.slug}</td>
+              <td style={cell}>{col.description ?? '—'}</td>
+              <td style={cell}>{col.documentCount}</td>
+              <td style={cell}>
+                {editId === col.id ? (
+                  <>
+                    <button
+                      onClick={() => saveRename(col.id)}
+                      style={{ marginRight: 8, textDecoration: 'underline' }}
+                    >
+                      Save
+                    </button>
+                    <button onClick={() => setEditId(null)} style={{ textDecoration: 'underline' }}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => startEdit(col)}
+                      style={{ marginRight: 8, textDecoration: 'underline' }}
+                    >
+                      Rename
+                    </button>
+                    <Link
+                      href={`/admin/documents?collectionId=${col.id}`}
+                      style={{ textDecoration: 'underline' }}
+                    >
+                      View documents
+                    </Link>
+                  </>
+                )}
+              </td>
+            </tr>
+          ))}
+          {items.length === 0 && (
+            <tr>
+              <td colSpan={5} style={cell}>
+                No collections yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Create form */}
+      <Heading size='md' style={{ marginBottom: 12 }}>
+        New collection
+      </Heading>
+      <form onSubmit={create} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <input
+          placeholder='Name'
+          value={createName}
+          onChange={(e) => setCreateName(e.target.value)}
+          required
+          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '4px 8px' }}
+        />
+        <input
+          placeholder='Description (optional)'
+          value={createDescription}
+          onChange={(e) => setCreateDescription(e.target.value)}
+          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '4px 8px', minWidth: 240 }}
+        />
+        <button
+          type='submit'
+          disabled={!createName}
+          style={{ textDecoration: 'underline' }}
+        >
+          Create
+        </button>
+      </form>
+    </Box>
+  )
+}
+
+export default CollectionsPage
