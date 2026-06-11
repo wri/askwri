@@ -4,6 +4,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   optimizePackageImports: ['react-icons'],
+  transpilePackages: ['jose'],
 
   // Environment variables that should be available at runtime
   env: {
