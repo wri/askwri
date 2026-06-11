@@ -120,3 +120,67 @@ class PgVectorRetriever(BaseRetriever):
                 )
             )
         return results
+
+
+_SPARSE_KEYWORD_SQL = """
+    SELECT dc.legacy_chunk_id, dc.text, dc.node_metadata,
+           -(dc.sparse <#> %(q)s) AS score
+    FROM document_chunks dc
+    JOIN documents d ON d.id = dc.document_id
+    WHERE d.status = 'searchable'
+      AND dc.sparse IS NOT NULL
+    ORDER BY dc.sparse <#> %(q)s, dc.corpus_order NULLS LAST, dc.legacy_chunk_id
+    LIMIT %(k)s
+"""
+# <#> is the NEGATIVE inner product (ascending = best first). corpus_order
+# tie-break mirrors bm25s, which resolves equal scores by corpus position.
+# Exact scan by design: 30k rows, nnz<=~200 — no ANN index, zero recall loss.
+
+
+class SparseKeywordRetriever(BaseRetriever):
+    """Postgres-resident BM25 lane (KEYWORD_BACKEND=sparse).
+
+    Per-chunk bm25s impact weights live in document_chunks.sparse; a query is
+    scored as the inner product with its token-count vector — score-identical
+    to the in-memory BM25Retriever (scripts/sparse_parity_check.py, 26/26).
+    status='searchable' filters per query, like the dense lane: withdraw and
+    promote are consistent on the next query, no reindex.
+    """
+
+    def __init__(self, similarity_top_k: int = 1000, **kwargs):
+        super().__init__(**kwargs)
+        self._similarity_top_k = similarity_top_k
+
+    def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        from pgvector import SparseVector
+
+        from app.sparse_keyword import SPARSE_DIM, tokenize
+
+        tokens = tokenize(query_bundle.query_str)
+        counts: dict = {}
+        if tokens:
+            with get_pool().connection() as conn:
+                rows = conn.execute(
+                    "SELECT token, token_id FROM keyword_vocab WHERE token = ANY(%s)",
+                    (sorted(set(tokens)),),
+                ).fetchall()
+            token_id = {t: i for t, i in rows}
+            for t in tokens:
+                i = token_id.get(t)
+                if i is not None:  # OOV query tokens score 0, same as bm25s
+                    counts[i - 1] = counts.get(i - 1, 0.0) + 1.0
+        qvec = SparseVector(counts, SPARSE_DIM)
+
+        results = []
+        with get_pool().connection() as conn:
+            rows = conn.execute(
+                _SPARSE_KEYWORD_SQL, {"q": qvec, "k": self._similarity_top_k}
+            ).fetchall()
+        for legacy_id, text, meta, score in rows:
+            results.append(
+                NodeWithScore(
+                    node=TextNode(id_=legacy_id, text=text, metadata=meta),
+                    score=float(score),
+                )
+            )
+        return results
