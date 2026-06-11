@@ -137,19 +137,14 @@ const DocumentEditorPage = () => {
     try {
       setError(null)
       setNotice(null)
-      const body = await adminFetch<{ reindex?: { ok: boolean; error?: string } }>(
+      await adminFetch(
         `/api/admin/documents/${id}/status`,
         {
           method: 'POST',
           body: JSON.stringify({ status }),
         },
       )
-      setNotice(
-        body.reindex?.ok
-          ? `Status set to ${status}; keyword (BM25) index refreshed.`
-          : `Status set to ${status}, but BM25 reindex failed (${body.reindex?.error}). ` +
-            'Keyword results are stale until /reindex succeeds or the search service restarts.',
-      )
+      setNotice(`Status set to ${status}.`)
       await load()
     } catch (err: any) {
       setError(err.message)

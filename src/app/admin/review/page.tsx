@@ -52,12 +52,7 @@ const ReviewQueuePage = () => {
           method: 'POST',
           body: JSON.stringify({ status: 'searchable' }),
         })
-        setNotice(
-          body.reindex?.ok
-            ? 'Promoted to searchable; keyword (BM25) index refreshed.'
-            : `Promoted to searchable, but BM25 reindex failed (${body.reindex?.error}). ` +
-              'The document is missing from keyword results until /reindex succeeds or the search service restarts.',
-        )
+        setNotice('Promoted to searchable.')
       } else {
         await adminFetch(`/api/admin/documents/${id}/reingest`, { method: 'POST' })
         setNotice('Re-queued for ingestion.')

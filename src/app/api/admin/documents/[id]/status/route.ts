@@ -3,8 +3,6 @@ import { initializeDatabase } from '../../../../../../db/data-source'
 import { setDocumentStatus } from '../../../../../../db/queries/documentsAdmin'
 import { requireIdentity } from '../../../../../../lib/auth/identity'
 import { internalError, isUuid } from '../../../../../../lib/api-error'
-import { triggerReindex } from '../../../../../../lib/search-reindex'
-
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
@@ -28,14 +26,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 })
     if ('error' in result)
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
-    // Both directions need a BM25 refresh: the in-memory BM25 index only
-    // tracks status='searchable' rows as of the last boot//reindex.
-    const reindex = await triggerReindex()
+    // Keyword + dense lanes both filter status='searchable' per query (KEYWORD_BACKEND=sparse) — no reindex choreography.
     return NextResponse.json({
       ok: true,
       fromStatus: result.fromStatus,
       status: toStatus,
-      reindex,
     })
   } catch (err) {
     return internalError(err)

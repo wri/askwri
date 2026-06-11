@@ -1,11 +1,13 @@
-"""Stage: quality gate, then flip to searchable and refresh BM25.
+"""Stage: quality gate, then flip to searchable and refresh in-memory document texts/metadata.
 
 extraction_confidence heuristic (cheap signals, design §7.9):
   0.4 * (chars/page >= settings.quality_min_chars_per_page, capped at 1)
 + 0.3 * (language detected in supported set)
 + 0.3 * (chunk count > 0)
 < 0.7 -> needs_review (document + job), else searchable + best-effort
-POST {SEARCH_SERVICE_URL}/reindex so the BM25 lane picks the doc up.
+POST {SEARCH_SERVICE_URL}/reindex to reload the service's in-memory document texts/metadata
+used for passage context (keyword-lane consistency no longer depends on it; build-then-swap
+takes seconds in sparse mode).
 """
 import logging
 import os
@@ -55,6 +57,6 @@ def run(document_id):
         try:
             import httpx
             httpx.post(f"{url}/reindex", timeout=10)
-        except Exception as exc:  # noqa: BLE001 — refresh is best-effort; dense lane is already live
-            logger.warning(f"/reindex refresh failed (BM25 stale until restart): {exc}")
+        except Exception as exc:  # noqa: BLE001 — refresh is best-effort; retrieval lanes are already live
+            logger.warning(f"/reindex refresh failed (in-memory passage context not updated): {exc}")
     return None
