@@ -8,9 +8,13 @@ import argparse
 import logging
 import time
 
-from app.config import get_settings
-from worker import intake_s3, queue
-from worker.stages import STAGE_ORDER, run_stage
+from dotenv import load_dotenv
+
+load_dotenv()  # local dev: export .env (OPENAI_API_KEY etc.), same as app.main
+
+from app.config import get_settings  # noqa: E402
+from worker import intake_s3, queue  # noqa: E402
+from worker.stages import STAGE_ORDER, run_stage  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("worker")
