@@ -6,6 +6,12 @@ import { CiteModeQueryLogs } from './entities/CiteModeQueryLogs.entity'
 import { AnswerModeQueryLogs } from './entities/AnswerModeQueryLogs.entity'
 import { Document } from './entities/Document.entity'
 import { IngestionJob } from './entities/IngestionJob.entity'
+import { User } from './entities/User.entity'
+import { Tag } from './entities/Tag.entity'
+import { DocumentTag } from './entities/DocumentTag.entity'
+import { Collection } from './entities/Collection.entity'
+import { DocumentCollection } from './entities/DocumentCollection.entity'
+import { AuditLog } from './entities/AuditLog.entity'
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -23,6 +29,12 @@ export const AppDataSource = new DataSource({
     AnswerModeQueryLogs,
     Document,
     IngestionJob,
+    User,
+    Tag,
+    DocumentTag,
+    Collection,
+    DocumentCollection,
+    AuditLog,
   ],
   // DATABASE_SSL=false disables SSL for local dev databases (docker has no SSL);
   // default stays SSL-on for RDS.
