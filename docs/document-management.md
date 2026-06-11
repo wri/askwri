@@ -242,7 +242,7 @@ ORDER BY d.created_at;
 UPDATE documents SET status = 'searchable' WHERE id = '<uuid>';
 ```
 
-A review UI is planned for Phase 2.
+A review UI shipped in Phase 2; see §11 below.
 
 ### 10.6 Worker env vars
 
@@ -270,3 +270,91 @@ Taxonomy v1 is the raw 18 CSV values seeded in Phase 0. A domain owner should cu
 The ingestion worker runs as a separate ECS service (`ingestion-worker`) using the same container image as the search-service, with command override `python -m worker.main`. It has no ALB or service-discovery endpoint; `desired_count=1`. The deploy workflows force-new-deployment for the worker alongside the other services.
 
 CI (`pr-check.yml`) runs a `python-tests` job covering the hermetic/unit worker tests; DB-dependent worker tests self-skip when `DATABASE_URL` is absent (same pattern as the search-service tests).
+
+---
+
+## 11. Phase 2 — Admin UI + review queue (as built)
+
+### 11.1 Auth model
+
+Authentication uses username/password against the existing `users` table. Passwords are stored as bcryptjs hashes (cost 12). On successful login a jose HS256 JWT is issued in an httpOnly `askwri_session` cookie (7-day TTL, `sameSite: lax`, `secure` in production). `SESSION_SECRET` must be at least 32 characters (set via the app-tier secret JSON — see runbook §"Admin UI — local dev").
+
+An optional `ADMIN_API_TOKEN` bearer token acts as an admin identity for machine-to-machine calls (`source='system'`, `actor=NULL` in audit rows). This is the same token used by the ingestion worker for upload intake.
+
+**Caveat:** JWT sessions are stateless and outlive deactivation by up to the 7-day TTL. The `users.active` flag gates new logins only — it does not invalidate existing cookies. This is acceptable for an internal tool; note it when deactivating accounts.
+
+### 11.2 Route protection
+
+`src/proxy.ts` (Next.js 16 middleware) matches `/admin/:path*` and `/api/admin/:path*` and `/api/import-documents`. Page routes redirect unauthenticated requests to `/admin/login`; API routes return `401` JSON. Role checks (`admin` vs. `editor`) live in individual route handlers via `requireIdentity(req, 'admin'?)`.
+
+### 11.3 Roles
+
+| Role | Capabilities |
+|---|---|
+| `editor` | Review-queue promote, metadata edits, tag decisions (accept/reject/add human tags), collections CRUD and membership, taxonomy add, upload |
+| `admin` | All editor capabilities plus withdraw, taxonomy value deletion, user management |
+
+### 11.4 Page map
+
+All pages are under `/admin`:
+
+| Path | Purpose |
+|---|---|
+| `/admin/login` | Login form |
+| `/admin/review` | Review queue: promote or re-ingest flagged documents, reindex notices |
+| `/admin/documents` | Catalog with status/language/collection/search filters and bulk add-to-collection |
+| `/admin/documents/[id]` | Document detail: metadata whitelist form, tags grouped by facet (accept/reject on suggested, add human tag), read-only summaries, lifecycle panel (promote/withdraw/re-ingest/Open PDF), collections panel |
+| `/admin/collections` | List, create, rename collections |
+| `/admin/tags` | Taxonomy list with counts; add value; delete unused (admin only) |
+| `/admin/users` | User management (admin only) |
+| `/admin/upload` | Multipart PDF intake → S3 `INTAKE_S3_PREFIX` or `INTAKE_LOCAL_DIR`; worker registers and deduplicates |
+
+### 11.5 API map
+
+All APIs are under `/api/admin`:
+
+| Route | Notes |
+|---|---|
+| `POST /api/admin/auth/login` | Issues session cookie |
+| `POST /api/admin/auth/logout` | Clears session cookie |
+| `GET /api/admin/auth/me` | Returns current identity |
+| `GET /api/admin/review-queue` | Documents at `needs_review` with job details |
+| `GET/POST /api/admin/documents` | Catalog list with filters; bulk add-to-collection |
+| `GET/PATCH /api/admin/documents/[id]` | Fetch or update document metadata |
+| `POST /api/admin/documents/[id]/status` | Promote or withdraw |
+| `POST /api/admin/documents/[id]/reingest` | Re-queue for ingestion |
+| `GET/POST /api/admin/documents/[id]/tags` | List or add tags |
+| `DELETE /api/admin/documents/[id]/tags/[tagId]` | Remove a tag |
+| `GET /api/admin/documents/[id]/file` | Signed URL or redirect to the PDF |
+| `GET/POST /api/admin/tags` | List taxonomy values; add a new value |
+| `DELETE /api/admin/tags/[id]` | Delete unused tag (admin only) |
+| `GET/POST /api/admin/collections` | List or create collections |
+| `GET/PATCH /api/admin/collections/[id]` | Fetch or rename a collection |
+| `GET/POST /api/admin/collections/[id]/documents` | List or add documents to a collection |
+| `GET/POST /api/admin/users` | List or create users (admin only) |
+| `PATCH /api/admin/users/[id]` | Update user (admin only) |
+| `POST /api/admin/intake` | Upload a PDF (same as `/api/import-documents` intake path) |
+
+All mutating endpoints write `audit_log` rows (actor, `source: human|system`, action, entity type, before/after JSON snapshot).
+
+### 11.6 Tag-decision provenance (Scope decision 7)
+
+When an editor accepts or rejects a suggested LLM tag, the `document_tags` row has its `status` set to `accepted` or `rejected` **and** its `source` flipped to `'human'`. The prior row is preserved in the `audit_log` `before` snapshot. This means the ingestion worker's classify stage can never overwrite a human decision: the classify stage skips any row with `source='human'` or `source='external'`.
+
+### 11.7 Lifecycle actions and automatic /reindex
+
+Promote (`needs_review → searchable`) and withdraw (`searchable → withdrawn`) both trigger a best-effort `POST {SEARCH_SERVICE_URL}/reindex` with a 120-second timeout. The trigger never throws — it is fire-and-forget. The API response carries a `reindex: { ok: boolean, error?: string }` field, and the UI shows an explicit staleness warning when `ok` is false.
+
+This closes the manual-reindex requirement noted in §4 for UI-driven status changes. Direct database mutations (psql) still require a manual `/reindex` call or service restart to update the BM25 lane.
+
+### 11.8 Deferred
+
+The following items were not built in Phase 2 (owner unassigned):
+
+- Hard purge (permanent deletion of document rows and S3 objects)
+- CSV/JSON export of catalog or audit log
+- Corpus-health dashboard
+- Audit-history UI (the `audit_log` table is populated; no read surface in the UI)
+- Summary editing
+- Per-collection bulk operations
+- Taxonomy rename/merge and version bumps
