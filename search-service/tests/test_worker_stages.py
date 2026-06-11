@@ -1218,3 +1218,130 @@ class TestEmbedStage:
             "Traditional form should be preserved in document_texts.full_text"
         assert "氣候變遷" in stored_full_text, \
             "Traditional form should be preserved in document_texts.full_text"
+
+
+# ---------------------------------------------------------------------------
+# --- publish stage ---
+# ---------------------------------------------------------------------------
+
+def _insert_publish_document(conn, *, external_id, language="en"):
+    """Insert a documents row suitable for publish stage tests; return id."""
+    row = conn.execute(
+        """INSERT INTO documents
+               (external_id, s3_key, title, status, content_hash, language, languages)
+           VALUES (%s, %s, %s, 'processing', 'pub_hash_abc', %s, %s)
+           RETURNING id""",
+        (external_id, f"documents/{external_id}.pdf", f"Pub Test {external_id}",
+         language, [language]),
+    ).fetchone()
+    conn.commit()
+    return row[0]
+
+
+def _insert_document_texts_for_publish(conn, document_id, *, char_count, pages):
+    """Insert document_texts with page_boundaries of length `pages`."""
+    from psycopg.types.json import Jsonb
+    boundaries = [{"page": i + 1, "end_pos": char_count} for i in range(pages)]
+    conn.execute(
+        """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+           VALUES (%s, %s, %s, %s)""",
+        (document_id, "x" * char_count, char_count, Jsonb(boundaries)),
+    )
+    conn.commit()
+
+
+def _insert_chunk_for_publish(conn, document_id, *, external_id):
+    """Insert one document_chunks row using the zero-vector SQL pattern."""
+    zero_vec = "[" + ",".join(["0.0"] * 1536) + "]"
+    conn.execute(
+        f"""INSERT INTO document_chunks
+               (document_id, legacy_chunk_id, chunk_index, unit_type, page, text,
+                language, node_metadata, embedding, embedding_model, dimension, corpus_order)
+           VALUES (%s, %s, 0, 'text', 1, 'chunk text',
+                   'en', '{{}}', '{zero_vec}'::vector(1536), 'text-embedding-3-small', 1536, 1)""",
+        (document_id, f"{external_id}_chunk_0"),
+    )
+    conn.commit()
+
+
+class TestPublishStage:
+
+    def test_high_density_doc_becomes_searchable(self, stages_test_db, monkeypatch):
+        """High-quality en doc → status='searchable', extraction_confidence >= 0.7, returns None.
+
+        Arithmetic:
+          char_count=1000, pages=2 → chars/page=500
+          density = min(500/200, 1.0) = 1.0
+          language 'en' ∈ SUPPORTED → 0.3
+          chunks present → 0.3
+          score = 0.4*1.0 + 0.3 + 0.3 = 1.0 >= 0.7 → searchable
+        """
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-high", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-high")
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT status, extraction_confidence FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+        assert row[0] == "searchable", f"Expected 'searchable', got '{row[0]}'"
+        assert float(row[1]) >= 0.7, f"Expected confidence >= 0.7, got {row[1]}"
+
+    def test_sparse_doc_becomes_needs_review(self, stages_test_db, monkeypatch):
+        """Low-quality doc (low density, no chunks) → status='needs_review', returns 'needs_review'.
+
+        Arithmetic:
+          char_count=50, pages=1 → chars/page=50
+          density = min(50/200, 1.0) = 0.25
+          language 'en' ∈ SUPPORTED → 0.3
+          NO chunks → 0.0
+          score = 0.4*0.25 + 0.3 + 0.0 = 0.1 + 0.3 = 0.4 < 0.7 → needs_review
+        """
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-sparse", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=50, pages=1)
+            # No chunks inserted — 0.0 weight from chunk component
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result == "needs_review"
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT status, extraction_confidence FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+        assert row[0] == "needs_review", f"Expected 'needs_review', got '{row[0]}'"
+        assert row[1] is not None, "extraction_confidence should be recorded"
+        assert float(row[1]) < 0.7, f"Expected confidence < 0.7, got {row[1]}"
+
+    def test_reindex_failure_does_not_fail_stage(self, stages_test_db, monkeypatch):
+        """/reindex POST failure (closed port) does not raise; stage still returns None and searchable.
+
+        Arithmetic (same as high-density test):
+          char_count=1000, pages=2 → score=1.0 >= 0.7 → searchable
+        """
+        monkeypatch.setenv("SEARCH_SERVICE_URL", "http://127.0.0.1:1")
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-reindex", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-reindex")
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert status == "searchable", f"Expected 'searchable' despite /reindex failure, got '{status}'"
