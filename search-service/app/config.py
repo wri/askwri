@@ -27,6 +27,17 @@ class Settings(BaseSettings):
     database_url: str = ""          # postgresql://user:pass@host:5432/db (append ?sslmode=require for RDS)
     retrieval_backend: str = "legacy"  # "legacy" (CSV + boot-time build) | "postgres"
 
+    # Phase 1 ingestion worker
+    worker_poll_seconds: int = 10
+    worker_max_attempts: int = 3
+    worker_llm_model: str = "gpt-5-mini"      # summaries + tagging; override in env
+    intake_s3_prefix: str = "intake/"          # watched S3 prefix (bulk drop)
+    intake_local_dir: str = ""                 # local-dev alternative to S3 intake
+    documents_s3_bucket: str = ""              # reuse the existing env var name
+    documents_s3_prefix: str = "documents/"
+    tag_confidence_accept: float = 0.7         # >= -> accepted, else suggested
+    quality_min_chars_per_page: int = 200      # extraction_confidence gate input
+
     # Cite mode reranker logit thresholds (calibrated 2026-03-19)
     cite_logit_floor: float = -9.0        # Drop docs below this raw logit
     cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores
