@@ -85,9 +85,13 @@ Phase 0 migration sets all migrated documents directly to `searchable` (bypassin
 All retrieval queries in `pg_store.py` filter `WHERE d.status = 'searchable'`. This means:
 
 - **Dense lane (pgvector):** withdrawing a document (`UPDATE documents SET status='withdrawn'`) removes it from the next query immediately — the SQL filter excludes it per-query.
-- **BM25 lane (in-memory):** the BM25 index is hydrated at boot (or `/reindex`) from the same `status='searchable'` rows. After a withdrawal, the BM25 index still holds the document's chunks until `/reindex` is called or the service restarts. Until then, a withdrawn document can surface in BM25 results and pass through to RRF fusion.
+- **Keyword lane (`KEYWORD_BACKEND=sparse`, default since 2026-06-11):** BM25 impact vectors are stored in `document_chunks.sparse` and filtered per-query with `WHERE status='searchable'`. Withdraw and promote operations take effect on the next query with no operational step required.
 
-**Operational implication:** after withdrawing a document, call `POST /reindex` (or restart the service) to purge it from the BM25 lane. There is no automatic refresh.
+**Operational implication (default sparse backend):** no manual action needed after lifecycle changes — both lanes filter per-query.
+
+**Legacy memory backend note:** with `KEYWORD_BACKEND=memory`, the old staleness behavior returns. The BM25 index is hydrated at boot or `/reindex`; after a withdrawal, the in-memory index still holds those chunks until `/reindex` is called or the service restarts. A manual `POST /reindex` is required after any lifecycle change.
+
+**Frozen stats refresh:** under the sparse backend, new documents are weighted at embed time using IDF/avgdl statistics frozen by the last `build_sparse_keyword.py` run. Re-run that script after bulk corpus changes to refresh keyword statistics. This is never required for lifecycle correctness (promote/withdraw) — only for accurate weighting of newly ingested documents.
 
 ---
 
@@ -98,11 +102,20 @@ Switched by `RETRIEVAL_BACKEND` env var in `search-service/app/config.py`.
 | Backend | Value | Boot behavior | Dense lane | BM25 lane |
 |---|---|---|---|---|
 | Legacy | `legacy` (default) | Parses CSV + PDFs, builds in-memory indexes (cached; ~30 min cold) | LlamaIndex `VectorStoreIndex` in-memory | `BM25Retriever` over in-memory nodes |
-| Postgres | `postgres` | Reads `document_chunks` from Postgres (seconds; no OpenAI calls) | `PgVectorRetriever` (SQL per query, pgvector HNSW) | `BM25Retriever` hydrated from Postgres chunk rows, ordered by `corpus_order` |
+| Postgres | `postgres` | Reads `document_chunks` from Postgres (seconds; no OpenAI calls) | `PgVectorRetriever` (SQL per query, pgvector HNSW) | See keyword lane below |
 
 Both backends serve the same frozen `/query` contract (`QueryRequest`/`QueryResponse` in `search-service/app/main.py`). The `/reindex` endpoint re-runs the active boot path (re-reads Postgres in postgres mode; re-parses CSV in legacy mode).
 
 `CATALOG_SOURCE=postgres` (app tier) switches `/api/catalog` from reading the CSV to reading `documents.source_metadata` from Postgres.
+
+**Keyword lane** (`RETRIEVAL_BACKEND=postgres` only) — controlled by `KEYWORD_BACKEND`:
+
+| Value | Boot behavior | Query behavior |
+|---|---|---|
+| `sparse` (default) | No BM25 build; sparse vectors already in `document_chunks.sparse` | Per-query SQL with `WHERE status='searchable'` filter; requires `build_sparse_keyword.py` to have run |
+| `memory` | Hydrates `BM25Retriever` from Postgres chunk rows at boot or `/reindex` | In-memory lookup; stale until next boot or `/reindex` |
+
+Under `KEYWORD_BACKEND=sparse`, the `/reindex` endpoint no longer rebuilds the BM25 index. It refreshes in-memory passage-context texts and metadata (build-then-swap, ~11 s) used for answer synthesis — the worker publish stage still calls it for that reason.
 
 ---
 
@@ -341,11 +354,11 @@ All mutating endpoints write `audit_log` rows (actor, `source: human|system`, ac
 
 When an editor accepts or rejects a suggested LLM tag, the `document_tags` row has its `status` set to `accepted` or `rejected` **and** its `source` flipped to `'human'`. The prior row is preserved in the `audit_log` `before` snapshot. This means the ingestion worker's classify stage can never overwrite a human decision: the classify stage skips any row with `source='human'` or `source='external'`.
 
-### 11.7 Lifecycle actions and automatic /reindex
+### 11.7 Lifecycle actions and /reindex
 
-Promote (`needs_review → searchable`) and withdraw (`searchable → withdrawn`) both trigger a best-effort `POST {SEARCH_SERVICE_URL}/reindex` with a 120-second timeout. The trigger never throws — it is fire-and-forget. The API response carries a `reindex: { ok: boolean, error?: string }` field, and the UI shows an explicit staleness warning when `ok` is false.
+Promote (`needs_review → searchable`) and withdraw (`searchable → withdrawn`) are consistent on the next query under the default `KEYWORD_BACKEND=sparse` — both lanes filter `status='searchable'` per-query, so no reindex is needed for UI-driven or direct psql status changes.
 
-This closes the manual-reindex requirement noted in §4 for UI-driven status changes. Direct database mutations (psql) still require a manual `/reindex` call or service restart to update the BM25 lane.
+The `/reindex` endpoint is still called as a best-effort fire-and-forget after promote/withdraw (120 s timeout; result surfaced in `reindex: { ok, error? }` on the API response and shown in the UI if `ok` is false). Under `KEYWORD_BACKEND=sparse`, it refreshes in-memory passage-context texts and metadata rather than rebuilding the BM25 index. Under `KEYWORD_BACKEND=memory` (legacy path), it also rebuilds the in-memory BM25 index — which remains necessary for lifecycle correctness in that mode.
 
 ### 11.8 Deferred
 
