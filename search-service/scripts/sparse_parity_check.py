@@ -123,6 +123,59 @@ def main():
             print(f"{status} {q[:50]!r} top1={ref.max():.4f} "
                   f"nonzero={nonzero_ref} qtokens_matched={matched}")
 
+        if "--db" in sys.argv:
+            # End-to-end: SQL sparse lane (backfilled vectors + vocab) vs the
+            # in-memory production path, positive-score prefix only. Zero-score
+            # tails differ by construction: bm25s pads top-k with arbitrary
+            # zero-score docs, SQL orders them by corpus_order — both are
+            # "no match" noise below RRF.
+            #
+            # Tie-aware comparison: bm25s orders EQUAL scores arbitrarily
+            # (argpartition is unstable) while SQL uses corpus_order, so we
+            # compare ordered tie GROUPS (descending score buckets at 1e-4)
+            # rather than exact positions. At the k=1000 truncation boundary
+            # the final tie group may be cut differently — both truncations
+            # are arbitrary members of the same score class, so the last
+            # (possibly clipped) group is compared by score only.
+            from llama_index.core.schema import QueryBundle
+
+            from app.pg_store import SparseKeywordRetriever
+
+            sql_lane = SparseKeywordRetriever(similarity_top_k=1000)
+            sql_out = sql_lane._retrieve(QueryBundle(query_str=q))
+            mem_out = retriever._retrieve(QueryBundle(query_str=q))
+            sql_pos = [(n.node.node_id, n.score) for n in sql_out if n.score > 1e-9]
+            mem_pos = [(n.node.node_id, n.score) for n in mem_out if n.score > 1e-9]
+
+            def tie_groups(pairs):
+                groups = []
+                for cid, s in pairs:
+                    key = round(s, 4)
+                    if groups and groups[-1][0] == key:
+                        groups[-1][1].add(cid)
+                    else:
+                        groups.append((key, {cid}))
+                return groups
+
+            gs, gm = tie_groups(sql_pos), tie_groups(mem_pos)
+            ok = len(gs) == len(gm)
+            if ok:
+                for gi, ((ks, ids_s), (km, ids_m)) in enumerate(zip(gs, gm)):
+                    if abs(ks - km) > 1e-3:
+                        ok = False
+                        break
+                    last = gi == len(gs) - 1
+                    truncated = len(sql_pos) == 1000 or len(mem_pos) == 1000
+                    if ids_s != ids_m and not (last and truncated):
+                        ok = False
+                        break
+            if not ok:
+                failures += 1
+                print(f"DB-FAIL {q[:50]!r} sql={len(sql_pos)} mem={len(mem_pos)} "
+                      f"groups={len(gs)}/{len(gm)}")
+            else:
+                print(f"DB-OK  {q[:50]!r} positive={len(sql_pos)} tie_groups={len(gs)}")
+
     print(f"\n{len(QUERIES) - failures}/{len(QUERIES)} queries score-identical")
     sys.exit(1 if failures else 0)
 
