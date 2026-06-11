@@ -6,7 +6,7 @@ export async function adminFetch<T = any>(path: string, init?: RequestInit): Pro
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   })
   if (res.status === 401) {
-    window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname)}`
+    window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
     throw new Error('unauthorized')
   }
   const body = await res.json().catch(() => ({}))

@@ -23,11 +23,13 @@ const CollectionsPage = () => {
   const [createDescription, setCreateDescription] = useState('')
   const [editId, setEditId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const [createBusy, setCreateBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
       const body = await adminFetch<{ collections: Collection[] }>('/api/admin/collections')
       setItems(body.collections)
+      setError(null)
     } catch (err: any) {
       setError(err.message)
     }
@@ -42,6 +44,7 @@ const CollectionsPage = () => {
     e.preventDefault()
     setNotice(null)
     setError(null)
+    setCreateBusy(true)
     try {
       await adminFetch('/api/admin/collections', {
         method: 'POST',
@@ -53,6 +56,8 @@ const CollectionsPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setCreateBusy(false)
     }
   }
 
@@ -175,7 +180,7 @@ const CollectionsPage = () => {
         />
         <button
           type='submit'
-          disabled={!createName}
+          disabled={!createName || createBusy}
           style={{ textDecoration: 'underline' }}
         >
           Create

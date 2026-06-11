@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
@@ -49,7 +49,10 @@ const CatalogInner = () => {
     }
   }, [])
 
+  const reqSeq = useRef(0)
+
   const load = useCallback(async (f: typeof filters) => {
+    const seq = ++reqSeq.current
     try {
       const params = new URLSearchParams()
       if (f.status) params.set('status', f.status)
@@ -57,8 +60,11 @@ const CatalogInner = () => {
       if (f.collectionId) params.set('collectionId', f.collectionId)
       if (f.search) params.set('search', f.search)
       const body = await adminFetch<{ items: DocItem[] }>(`/api/admin/documents?${params}`)
+      if (seq !== reqSeq.current) return
       setItems(body.items)
+      setError(null)
     } catch (err: any) {
+      if (seq !== reqSeq.current) return
       setError(err.message)
     }
   }, [])
@@ -66,7 +72,10 @@ const CatalogInner = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCollections()
-    load({ status: '', language: '', collectionId: initialCollectionId, search: '' })
+    const f = { status: '', language: '', collectionId: initialCollectionId, search: '' }
+    setFilters(f)
+    setSelected(new Set())
+    load(f)
   }, [load, loadCollections, initialCollectionId])
 
   const updateFilter = (key: keyof typeof filters, value: string) => {

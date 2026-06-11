@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../../lib/api'
@@ -45,16 +45,24 @@ const DocumentEditorPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [addTagId, setAddTagId] = useState<string>('')
   const [addCollectionId, setAddCollectionId] = useState<string>('')
+  const [busy, setBusy] = useState(false)
+  const formDirty = useRef(false)
 
-  const load = useCallback(async () => {
-    const body = await adminFetch<Detail>(`/api/admin/documents/${id}`)
-    setDetail(body)
-    setForm(Object.fromEntries(EDITABLE.map(({ key }) => [key, body.document[key] ?? ''])))
-  }, [id])
+  const load = useCallback(
+    async (opts: { resetForm?: boolean } = {}) => {
+      const body = await adminFetch<Detail>(`/api/admin/documents/${id}`)
+      setDetail(body)
+      if (opts.resetForm || !formDirty.current) {
+        setForm(Object.fromEntries(EDITABLE.map(({ key }) => [key, body.document[key] ?? ''])))
+        formDirty.current = false
+      }
+    },
+    [id],
+  )
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    load().catch((err: any) => setError(err.message))
+    load({ resetForm: true }).catch((err: any) => setError(err.message))
     adminFetch<{ tags: any[] }>('/api/admin/tags')
       .then((b) => setAllTags(b.tags))
       .catch((err: any) => setError(err.message))
@@ -62,11 +70,13 @@ const DocumentEditorPage = () => {
       .then((b) => setAllCollections(b.collections))
       .catch((err: any) => setError(err.message))
     fetch('/api/admin/auth/me')
-      .then((r) => r.json())
-      .then((b) => setMe(b.identity ?? {}))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setMe(b?.identity ?? {}))
+      .catch(() => setMe({}))
   }, [load])
 
   const saveMetadata = async () => {
+    setBusy(true)
     try {
       setError(null)
       setNotice(null)
@@ -80,13 +90,16 @@ const DocumentEditorPage = () => {
         body: JSON.stringify(patch),
       })
       setNotice(`Saved (${body.updated.length} field(s) changed).`)
-      await load()
+      await load({ resetForm: true })
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
   const decideTag = async (tagId: string, decision: 'accepted' | 'rejected') => {
+    setBusy(true)
     try {
       setError(null)
       await adminFetch(`/api/admin/documents/${id}/tags/${tagId}`, {
@@ -96,11 +109,14 @@ const DocumentEditorPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
   const addTag = async () => {
     if (!addTagId) return
+    setBusy(true)
     try {
       setError(null)
       await adminFetch(`/api/admin/documents/${id}/tags`, {
@@ -111,10 +127,13 @@ const DocumentEditorPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
   const setStatus = async (status: 'searchable' | 'withdrawn') => {
+    setBusy(true)
     try {
       setError(null)
       setNotice(null)
@@ -134,10 +153,13 @@ const DocumentEditorPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
   const reingest = async () => {
+    setBusy(true)
     try {
       setError(null)
       setNotice(null)
@@ -146,10 +168,13 @@ const DocumentEditorPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
   const removeFromCollection = async (collectionId: string) => {
+    setBusy(true)
     try {
       setError(null)
       await adminFetch(`/api/admin/collections/${collectionId}/documents`, {
@@ -159,11 +184,14 @@ const DocumentEditorPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
   const addToCollection = async () => {
     if (!addCollectionId) return
+    setBusy(true)
     try {
       setError(null)
       await adminFetch(`/api/admin/collections/${addCollectionId}/documents`, {
@@ -174,6 +202,8 @@ const DocumentEditorPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -224,7 +254,10 @@ const DocumentEditorPage = () => {
                   {key === 'abstract' ? (
                     <textarea
                       value={form[key] ?? ''}
-                      onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                      onChange={(e) => {
+                        formDirty.current = true
+                        setForm((f) => ({ ...f, [key]: e.target.value }))
+                      }}
                       rows={5}
                       style={{ width: '100%', fontFamily: 'inherit', fontSize: 'inherit' }}
                     />
@@ -232,7 +265,10 @@ const DocumentEditorPage = () => {
                     <input
                       type={EDITABLE.find((e) => e.key === key)?.type === 'number' ? 'number' : 'text'}
                       value={form[key] ?? ''}
-                      onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                      onChange={(e) => {
+                        formDirty.current = true
+                        setForm((f) => ({ ...f, [key]: e.target.value }))
+                      }}
                       style={{ width: '100%', fontFamily: 'inherit', fontSize: 'inherit' }}
                     />
                   )}
@@ -246,6 +282,7 @@ const DocumentEditorPage = () => {
         </table>
         <button
           onClick={saveMetadata}
+          disabled={busy}
           style={{ marginTop: 8, padding: '6px 16px', textDecoration: 'underline' }}
         >
           Save
@@ -284,17 +321,28 @@ const DocumentEditorPage = () => {
                         <>
                           <button
                             onClick={() => decideTag(tag.tagId, 'accepted')}
+                            disabled={busy}
                             style={{ marginRight: 8, textDecoration: 'underline' }}
                           >
                             Accept
                           </button>
                           <button
                             onClick={() => decideTag(tag.tagId, 'rejected')}
+                            disabled={busy}
                             style={{ textDecoration: 'underline' }}
                           >
                             Reject
                           </button>
                         </>
+                      )}
+                      {tag.status === 'rejected' && (
+                        <button
+                          onClick={() => decideTag(tag.tagId, 'accepted')}
+                          disabled={busy}
+                          style={{ textDecoration: 'underline' }}
+                        >
+                          Accept
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -316,7 +364,7 @@ const DocumentEditorPage = () => {
               </option>
             ))}
           </select>
-          <button onClick={addTag} style={{ textDecoration: 'underline' }}>
+          <button onClick={addTag} disabled={busy} style={{ textDecoration: 'underline' }}>
             Add
           </button>
         </div>
@@ -396,6 +444,7 @@ const DocumentEditorPage = () => {
           {doc?.status !== 'searchable' && (
             <button
               onClick={() => setStatus('searchable')}
+              disabled={busy}
               style={{ textDecoration: 'underline' }}
             >
               Promote
@@ -404,12 +453,13 @@ const DocumentEditorPage = () => {
           {me.role === 'admin' && (
             <button
               onClick={() => setStatus('withdrawn')}
+              disabled={busy}
               style={{ textDecoration: 'underline' }}
             >
               Withdraw
             </button>
           )}
-          <button onClick={reingest} style={{ textDecoration: 'underline' }}>
+          <button onClick={reingest} disabled={busy} style={{ textDecoration: 'underline' }}>
             Re-ingest
           </button>
           <a
@@ -439,6 +489,7 @@ const DocumentEditorPage = () => {
                   <td style={cell}>
                     <button
                       onClick={() => removeFromCollection(c.id)}
+                      disabled={busy}
                       style={{ textDecoration: 'underline' }}
                     >
                       Remove
@@ -462,7 +513,7 @@ const DocumentEditorPage = () => {
               </option>
             ))}
           </select>
-          <button onClick={addToCollection} style={{ textDecoration: 'underline' }}>
+          <button onClick={addToCollection} disabled={busy} style={{ textDecoration: 'underline' }}>
             Add
           </button>
         </div>

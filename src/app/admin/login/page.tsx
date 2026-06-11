@@ -16,18 +16,24 @@ const LoginForm = () => {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const res = await fetch('/api/admin/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    })
-    setBusy(false)
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      setError(body.error || 'login failed')
-      return
+    try {
+      const res = await fetch('/api/admin/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error || 'login failed')
+        return
+      }
+      const next = searchParams.get('next') || ''
+      router.push(next.startsWith('/') && !next.startsWith('//') ? next : '/admin/review')
+    } catch {
+      setError('network error — is the server up?')
+    } finally {
+      setBusy(false)
     }
-    router.push(searchParams.get('next') || '/admin/review')
   }
 
   return (
