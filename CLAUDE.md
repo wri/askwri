@@ -44,6 +44,7 @@ Admin auth: `SESSION_SECRET` (>= 32 chars, required for `/admin`), `ADMIN_API_TO
 
 ## Document management docs
 See `docs/document-management.md` (as-built reference, Phases 0-2 + sparse keyword lane) and `docs/runbooks/phase0-cutover.md` (cutover + local dev setup).
+Local testing without AWS: `docs/runbooks/local-testing.md` (substitutes, suites, lane checks, worker e2e).
 Deploys: `docs/runbooks/qa-push-deploy.md` (push ordering, migrations, sparse backfill, rollback).
 
 ## Out of scope for document-management work
