@@ -70,6 +70,11 @@ export interface RetrievalTestResult {
 
 export interface RetrievalEvalReport {
   timestamp: string;
+  /** EVAL_LABEL the run was tagged with, if any. */
+  label?: string | null;
+  /** Backends reported by the service /health at run start. */
+  keyword_backend?: string | null;
+  retrieval_backend?: string | null;
   test_cases_total: number;
   results: RetrievalTestResult[];
   aggregate: {

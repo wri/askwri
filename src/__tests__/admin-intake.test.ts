@@ -1,6 +1,10 @@
 /** @jest-environment node */
 import { NextRequest } from 'next/server'
+import { mkdtempSync, readdirSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { POST as intakeRoute } from '@/app/api/admin/intake/route'
+import { POST as addTagRoute } from '@/app/api/admin/documents/[id]/tags/route'
 import { isUuid } from '@/lib/api-error'
 
 beforeAll(() => {
@@ -62,6 +66,46 @@ describe('POST /api/admin/intake limits', () => {
     const body = await res.json()
     expect(body.error).toContain('fake.pdf')
     expect(body.error).toContain('not a valid PDF')
+  })
+
+  it('uploads nothing when one file in the batch is oversized', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'askwri-intake-test-'))
+    const prevDir = process.env.INTAKE_LOCAL_DIR
+    process.env.INTAKE_LOCAL_DIR = dir
+    try {
+      const good = pdfNamed('good.pdf')
+      const big = new File([new Uint8Array(50 * 1024 * 1024 + 1)], 'big.pdf', {
+        type: 'application/pdf',
+      })
+      const res = await intakeRoute(intakeReq([good, big]))
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error).toContain('big.pdf')
+      // The valid file must NOT have been written before the batch failed.
+      expect(readdirSync(dir)).toEqual([])
+    } finally {
+      process.env.INTAKE_LOCAL_DIR = prevDir
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('POST /api/admin/documents/[id]/tags body validation', () => {
+  it('400s on a non-UUID tagId', async () => {
+    const req = new NextRequest(
+      'http://localhost/api/admin/documents/3a0f0e4d-1111-4222-8333-444455556666/tags',
+      {
+        method: 'POST',
+        body: JSON.stringify({ tagId: 'not-a-uuid' }),
+        headers: { authorization: 'Bearer test-admin-token' },
+      },
+    )
+    const res = await addTagRoute(req, {
+      params: Promise.resolve({ id: '3a0f0e4d-1111-4222-8333-444455556666' }),
+    })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toContain('tagId')
   })
 })
 

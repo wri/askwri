@@ -117,19 +117,45 @@ def run(document_id):
             token_lists = [
                 tokenize(n.get_content(metadata_mode=MetadataMode.EMBED)) for n in nodes
             ]
-            new_tokens = sorted({t for toks in token_lists for t in toks})
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """INSERT INTO keyword_vocab (token, df, idf) VALUES (%s, 1, %s)
-                       ON CONFLICT (token) DO NOTHING""",
-                    [(t, lucene_idf(1, n_chunks)) for t in new_tokens],
-                )
+            doc_tokens = sorted({t for toks in token_lists for t in toks})
+            # Insert only genuinely-new tokens: ON CONFLICT burns one identity
+            # value per PROPOSED row, so proposing every distinct token of every
+            # doc per run would erode SPARSE_DIM headroom. Anti-join first;
+            # DO NOTHING stays only for race safety (concurrent embed/backfill).
             rows = conn.execute(
                 "SELECT token, token_id, idf FROM keyword_vocab WHERE token = ANY(%s)",
-                (new_tokens,),
+                (doc_tokens,),
             ).fetchall()
+            known = {t for t, _, _ in rows}
+            missing = [t for t in doc_tokens if t not in known]
+            if missing:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """INSERT INTO keyword_vocab (token, df, idf) VALUES (%s, 1, %s)
+                           ON CONFLICT (token) DO NOTHING""",
+                        [(t, lucene_idf(1, n_chunks)) for t in missing],
+                    )
+                rows += conn.execute(
+                    "SELECT token, token_id, idf FROM keyword_vocab WHERE token = ANY(%s)",
+                    (missing,),
+                ).fetchall()
             id_by_token = {t: i for t, i, _ in rows}
             idf_by_token = {t: idf for t, _, idf in rows}
+            max_token_id = max(id_by_token.values(), default=0)
+            if max_token_id >= SPARSE_DIM:
+                raise RuntimeError(
+                    f"keyword_vocab token_id {max_token_id} >= SPARSE_DIM {SPARSE_DIM} — "
+                    "sparse keyword dimension exhausted; run "
+                    "scripts/build_sparse_keyword.py to rebuild the vocab, or migrate "
+                    "document_chunks.sparse to a larger dimension"
+                )
+            if max_token_id >= 0.8 * SPARSE_DIM:
+                logger.warning(
+                    f"keyword_vocab token_id {max_token_id} is at "
+                    f"{max_token_id / SPARSE_DIM:.0%} of SPARSE_DIM {SPARSE_DIM} — "
+                    "headroom is running out; plan a rebuild via "
+                    "scripts/build_sparse_keyword.py or a dimension migration"
+                )
             sparse_vecs = [
                 SparseVector(
                     {id_by_token[t] - 1: w

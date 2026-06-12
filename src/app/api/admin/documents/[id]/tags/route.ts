@@ -15,6 +15,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
     const { tagId } = (await req.json().catch(() => ({}))) ?? {}
     if (!tagId) return NextResponse.json({ ok: false, error: 'tagId is required' }, { status: 400 })
+    if (!isUuid(String(tagId)))
+      return NextResponse.json({ ok: false, error: 'tagId must be a UUID' }, { status: 400 })
     await initializeDatabase()
     const result = await addHumanTag(id, String(tagId), identity!)
     if ('error' in result)

@@ -639,10 +639,23 @@ def load_from_postgres():
                    JOIN documents d ON d.id = dc.document_id
                    WHERE d.status = 'searchable' AND dc.sparse IS NOT NULL"""
             ).fetchone()[0]
+            null_sparse = conn.execute(
+                """SELECT count(*) FROM document_chunks dc
+                   JOIN documents d ON d.id = dc.document_id
+                   WHERE d.status = 'searchable' AND dc.sparse IS NULL"""
+            ).fetchone()[0]
         if not populated:
             raise RuntimeError(
                 "KEYWORD_BACKEND=sparse but document_chunks.sparse is unpopulated — "
                 "run scripts/build_sparse_keyword.py first"
+            )
+        if null_sparse:
+            # NULL rows are safely excluded from keyword retrieval, so partial
+            # coverage must not fail boot — but make it loudly visible.
+            logger.warning(
+                f"{null_sparse} searchable chunks have sparse IS NULL and are "
+                "excluded from keyword retrieval — run "
+                "scripts/build_sparse_keyword.py to backfill"
             )
         bm25_retriever = SparseKeywordRetriever(similarity_top_k=1000)
         logger.info(f"📊 Keyword lane: Postgres sparse ({populated} chunks; no in-memory build)")
@@ -777,6 +790,8 @@ async def health_check():
         "status": status,
         "service": "AskWRI Search Service",
         "environment": settings.environment,
+        "keyword_backend": settings.keyword_backend,
+        "retrieval_backend": settings.retrieval_backend,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": "2.0.0",
         "indexing": {

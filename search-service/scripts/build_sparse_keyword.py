@@ -1,6 +1,7 @@
 """Build/refresh the Postgres-resident BM25 keyword lane.
 
-Builds the exact boot-time bm25s index over current searchable chunks, then
+Builds the exact boot-time bm25s index over the chunks of ALL documents
+(weights don't depend on status; retrieval filters status per query), then
 persists it: keyword_vocab (df/idf; token_ids stable across refreshes),
 keyword_corpus_stats (frozen N/avgdl/k1/b), and per-chunk impact vectors in
 document_chunks.sparse.
@@ -20,20 +21,36 @@ import bm25s
 import numpy as np
 import scipy.sparse as sp
 import Stemmer
-from llama_index.core.schema import MetadataMode
+from llama_index.core.schema import MetadataMode, TextNode
 from pgvector import SparseVector
 
-from app import pg_store
 from app.db import get_pool
 from app.sparse_keyword import B, K1, SPARSE_DIM, TOKEN_PATTERN, lucene_idf
 
 BATCH = 1000
 
+# ALL documents, not just status='searchable' (pg_store.load_nodes is
+# searchable-only): impact weights don't depend on status, and backfilling a
+# needs_review doc now makes it keyword-ready the moment it is promoted.
+_ALL_CHUNKS_SQL = """
+    SELECT dc.legacy_chunk_id, dc.text, dc.node_metadata
+    FROM document_chunks dc
+    ORDER BY dc.corpus_order NULLS LAST, dc.legacy_chunk_id
+"""
+
+
+def _load_all_nodes():
+    nodes = []
+    with get_pool().connection() as conn:
+        for legacy_id, text, meta in conn.execute(_ALL_CHUNKS_SQL):
+            nodes.append(TextNode(id_=legacy_id, text=text, metadata=meta))
+    return nodes
+
 
 def main():
     t0 = time.time()
-    nodes = pg_store.load_nodes()
-    print(f"loaded {len(nodes)} searchable chunks in {time.time() - t0:.1f}s")
+    nodes = _load_all_nodes()
+    print(f"loaded {len(nodes)} chunks (all statuses) in {time.time() - t0:.1f}s")
 
     # Exactly what BM25Retriever.from_defaults does at boot (base.py:99-112)
     stemmer = Stemmer.Stemmer("english")
@@ -65,17 +82,33 @@ def main():
             df[tid] += 1
 
     with get_pool().connection() as conn:
-        # 1. vocab upsert — existing tokens keep their token_id (stable dims)
+        # 1. vocab refresh — existing tokens keep their token_id (stable dims).
+        # Split into UPDATE-existing + INSERT-only-missing: a full-vocab upsert
+        # burns one identity value per PROPOSED row (conflict or not), which
+        # erodes SPARSE_DIM headroom on every refresh. The anti-join makes
+        # refreshes burn ~zero identity values; ON CONFLICT DO NOTHING stays
+        # only for race safety against a concurrent embed-stage insert.
         vocab_rows = [
             (id_to_token[tid], int(df[tid]), lucene_idf(int(df[tid]), n_chunks))
             for tid in range(n_tokens)
         ]
+        existing_tokens = {
+            t for (t,) in conn.execute("SELECT token FROM keyword_vocab").fetchall()
+        }
+        update_rows = [(d, i, t) for t, d, i in vocab_rows if t in existing_tokens]
+        insert_rows = [r for r in vocab_rows if r[0] not in existing_tokens]
         with conn.cursor() as cur:
-            cur.executemany(
-                """INSERT INTO keyword_vocab (token, df, idf) VALUES (%s, %s, %s)
-                   ON CONFLICT (token) DO UPDATE SET df = EXCLUDED.df, idf = EXCLUDED.idf""",
-                vocab_rows,
-            )
+            if update_rows:
+                cur.executemany(
+                    "UPDATE keyword_vocab SET df = %s, idf = %s WHERE token = %s",
+                    update_rows,
+                )
+            if insert_rows:
+                cur.executemany(
+                    """INSERT INTO keyword_vocab (token, df, idf) VALUES (%s, %s, %s)
+                       ON CONFLICT (token) DO NOTHING""",
+                    insert_rows,
+                )
         max_id = conn.execute("SELECT max(token_id) FROM keyword_vocab").fetchone()[0]
         if max_id >= SPARSE_DIM:
             print(f"FATAL: vocab token_id {max_id} >= SPARSE_DIM {SPARSE_DIM}")

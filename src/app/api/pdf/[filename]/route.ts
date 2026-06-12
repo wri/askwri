@@ -28,10 +28,10 @@ export async function GET(
     try {
       await initializeDatabase()
       const [row] = await AppDataSource.query(
-        `SELECT status FROM documents WHERE s3_key = $1 OR s3_key LIKE '%/' || $1 LIMIT 1`,
+        `SELECT 1 FROM documents WHERE (s3_key = $1 OR substring(s3_key FROM '[^/]+$') = $1) AND status = 'withdrawn' LIMIT 1`,
         [filename],
       )
-      if (row && row.status === 'withdrawn') {
+      if (row) {
         return NextResponse.json({ error: 'PDF not found', filename }, { status: 404 })
       }
     } catch (dbErr) {

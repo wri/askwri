@@ -55,8 +55,24 @@ def run(document_id):
     url = os.getenv("SEARCH_SERVICE_URL", "")
     if url:
         try:
+            import time
+
             import httpx
-            httpx.post(f"{url}/reindex", timeout=10)
+            resp = httpx.post(f"{url}/reindex", timeout=10)
+            if resp.status_code == 409:
+                # already_running: a concurrent publish holds the reindex lock.
+                # Retry once after a short pause so this doc's texts are covered
+                # by a rebuild that started after its status flip.
+                time.sleep(3)
+                resp = httpx.post(f"{url}/reindex", timeout=10)
+            if not 200 <= resp.status_code < 300:
+                logger.warning(
+                    f"{doc['external_id']}: /reindex returned {resp.status_code} — "
+                    "in-memory passage context not refreshed for this doc"
+                )
         except Exception as exc:  # noqa: BLE001 — refresh is best-effort; retrieval lanes are already live
-            logger.warning(f"/reindex refresh failed (in-memory passage context not updated): {exc}")
+            logger.warning(
+                f"{doc['external_id']}: /reindex refresh failed "
+                f"(in-memory passage context not updated): {exc}"
+            )
     return None

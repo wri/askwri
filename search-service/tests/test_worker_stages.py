@@ -285,8 +285,9 @@ class TestIntakeSweepLocal:
             raise RuntimeError("simulated crash before commit")
 
         monkeypatch.setattr(intake_s3, "_register", crash_after_register)
-        with pytest.raises(RuntimeError, match="simulated crash"):
-            intake_s3.sweep()
+        # The per-file guard contains the crash (logged, not raised); the file
+        # was not successfully processed, so sweep reports no work done.
+        assert intake_s3.sweep() is False
 
         # Intake object survives (delete only happens after commit) ...
         assert (intake_dir / "report.pdf").exists(), "intake file must survive a pre-commit crash"
@@ -302,6 +303,42 @@ class TestIntakeSweepLocal:
         assert (tmp_path / "documents" / "report.pdf").exists()
         with psycopg.connect(stages_test_db) as conn:
             assert conn.execute("SELECT count(*) FROM documents").fetchone()[0] == 1
+
+    def test_poison_file_skipped_good_file_registered(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """A file whose processing raises is skipped (one log line) and left in
+        intake; the remaining files in the same sweep are still registered."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        (intake_dir / "a-poison.pdf").write_bytes(b"%PDF-1.4 poison")
+        (intake_dir / "b-good.pdf").write_bytes(b"%PDF-1.4 good content")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        from worker import intake_s3
+        real_register = intake_s3._register
+
+        def poison_register(conn, filename, content):
+            if filename == "a-poison.pdf":
+                raise RuntimeError("deterministic poison file")
+            return real_register(conn, filename, content)
+
+        monkeypatch.setattr(intake_s3, "_register", poison_register)
+        result = intake_s3.sweep()
+        assert result is True, "the good file was processed"
+
+        # Poison file stays in intake (re-swept next pass); good file moved
+        assert (intake_dir / "a-poison.pdf").exists(), "poison file must stay in intake"
+        assert not (intake_dir / "b-good.pdf").exists(), "good file must leave intake"
+        assert (tmp_path / "documents" / "b-good.pdf").exists()
+
+        with psycopg.connect(stages_test_db) as conn:
+            ids = [r[0] for r in conn.execute("SELECT external_id FROM documents").fetchall()]
+        assert ids == ["b-good"], f"only the good file should be registered, got {ids}"
 
     def test_same_filename_different_bytes_reenqueues_existing_doc(
         self, tmp_path, stages_test_db, monkeypatch
@@ -1236,6 +1273,70 @@ class TestEmbedStage:
         assert max_order_after_second > max_order_after_first, \
             f"corpus_order max should increase on rerun: first={max_order_after_first} second={max_order_after_second}"
         assert total_chunks == count_after_first, "No orphan chunks should remain"
+
+    def test_rerun_does_not_burn_vocab_identity(self, stages_test_db, monkeypatch):
+        """Two consecutive embed runs of the same doc must not increase
+        max(token_id), and must not advance the identity sequence at all:
+        only genuinely-missing tokens are proposed for INSERT (anti-join), so
+        a rerun proposes zero rows. The sentinel insert proves the sequence
+        did not silently burn values on the second run."""
+        def fake_embed(texts):
+            return [[0.01] * 1536 for _ in texts]
+
+        monkeypatch.setattr("worker.stages.embed._embed_texts", fake_embed)
+
+        from psycopg.types.json import Jsonb
+        page_boundaries = [{"page": 1, "end_pos": len(_EMBED_LONG_TEXT)}]
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute(
+                """INSERT INTO keyword_corpus_stats (id, n_chunks, avgdl, k1, b, sparse_dim)
+                   VALUES (1, 100, 250.0, 1.5, 0.75, 1000000)
+                   ON CONFLICT (id) DO NOTHING"""
+            )
+            doc_id = _insert_embed_document(
+                conn, external_id="embed-identity-doc", language="en",
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _EMBED_LONG_TEXT, len(_EMBED_LONG_TEXT), Jsonb(page_boundaries)),
+            )
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'Summary for identity test.', 'generated')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.embed import run
+
+        run(doc_id)
+        with psycopg.connect(stages_test_db) as conn:
+            vocab_first = dict(
+                conn.execute("SELECT token, token_id FROM keyword_vocab").fetchall()
+            )
+        max_first = max(vocab_first.values())
+
+        run(doc_id)
+        with psycopg.connect(stages_test_db) as conn:
+            vocab_second = dict(
+                conn.execute("SELECT token, token_id FROM keyword_vocab").fetchall()
+            )
+            # Sentinel: next identity value reveals whether the rerun burned ids
+            sentinel_id = conn.execute(
+                """INSERT INTO keyword_vocab (token, df, idf)
+                   VALUES ('zzz_identity_sentinel', 1, 1.0) RETURNING token_id"""
+            ).fetchone()[0]
+            conn.commit()
+
+        assert vocab_second == vocab_first, "rerun must not change token_ids"
+        assert max(vocab_second.values()) == max_first, \
+            "rerun must not increase max(token_id)"
+        assert sentinel_id == max_first + 1, (
+            f"identity sequence advanced from {max_first} to {sentinel_id - 1} "
+            "without inserting rows — the rerun burned identity values"
+        )
 
     def test_zh_normalization_simplified_in_chunks_traditional_in_document_texts(
         self, stages_test_db, monkeypatch

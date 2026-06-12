@@ -46,6 +46,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     const { documentId } = (await req.json().catch(() => ({}))) ?? {}
     if (!documentId)
       return NextResponse.json({ ok: false, error: 'documentId is required' }, { status: 400 })
+    if (!isUuid(String(documentId)))
+      return NextResponse.json({ ok: false, error: 'documentId must be a UUID' }, { status: 400 })
     await initializeDatabase()
     await removeDocumentFromCollection(id, String(documentId), identity!)
     return NextResponse.json({ ok: true })

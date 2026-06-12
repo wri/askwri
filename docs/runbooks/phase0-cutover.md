@@ -84,6 +84,22 @@ If the table is already populated, the script exits with a clear error. Use `--r
 
 `--reset` issues `TRUNCATE documents CASCADE`, `TRUNCATE tags CASCADE`, `TRUNCATE collections CASCADE`. The `audit_log` table is **not** truncated (preserved across resets).
 
+### 5b. Build the sparse keyword lane
+
+The default keyword backend is `KEYWORD_BACKEND=sparse` (Postgres-resident BM25 impact
+vectors in `document_chunks.sparse`). The sparse-mode boot guard refuses to start against
+an unpopulated corpus, so run the backfill once after the migration script:
+
+```bash
+cd search-service
+./venv/bin/python -m scripts.build_sparse_keyword
+```
+
+Expected output ends with `wrote <N> vectors …; vocab <V>; avgdl <…>` (~1–2 min on 30k
+chunks). Re-run after any `--reset` of the migration script. Alternative: set
+`KEYWORD_BACKEND=memory` in `search-service/.env` to use the legacy in-memory BM25 build
+(no backfill needed, but lifecycle changes then require `/reindex`).
+
 ### 6. Reranker backend on Macs
 
 The ONNX/CoreML reranker path is ~20x slower on Apple Silicon (MPS). Set `RERANKER_BACKEND=torch` in your local `.env` or shell for acceptable boot times:
@@ -97,6 +113,11 @@ The parity evaluation was run with `RERANKER_BACKEND=torch` on both backends; to
 ---
 
 ## Production cutover — step by step
+
+> **Deploy day:** this section covers the Phase 0 schema + corpus cutover only. For the
+> full first-push sequence (GitHub secrets, migration ordering vs. the deploy workflow,
+> sparse backfill, admin seeding, verification, rollback), follow
+> [qa-push-deploy.md](qa-push-deploy.md).
 
 ### Step 1: RDS preflight
 
@@ -118,7 +139,7 @@ DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" npm r
 
 Or set `DATABASE_URL` in your `.env` with `?sslmode=require` appended for RDS. The Node `data-source.ts` defaults to SSL-on; `?sslmode=require` on the URL also satisfies the Python psycopg side.
 
-Expected: `Migration Migration1781280000000 has been executed successfully.` and `Migration Migration1781290000000 has been executed successfully.`
+Expected: `Migration1781280000000` through `Migration1781310000000` execute successfully (`1781300000000` open-job dedupe + unique index, `1781310000000` keyword-lane tables — see [qa-push-deploy.md](qa-push-deploy.md) Step 2 for their operational notes). Check what is pending first with `npm run typeorm -- migration:show -d src/db/migration-data-source.ts`.
 
 ### Step 3: Stage S3 assets and run the migration script
 
@@ -134,6 +155,21 @@ DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
 ```
 
 The script exits non-zero on any error. Expected: `Done: 169 documents, <N> chunks.`
+
+### Step 3b: Sparse keyword backfill
+
+The search-service boots with `KEYWORD_BACKEND=sparse` by default and **refuses to start**
+if `document_chunks.sparse` is unpopulated. Run the backfill after the migration script and
+before any sparse-mode boot (the ingestion worker must be idle during refresh runs):
+
+```bash
+cd search-service
+DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
+  ./venv/bin/python -m scripts.build_sparse_keyword
+```
+
+Covers all documents regardless of status; idempotent; one atomic transaction. Full
+operational detail in [qa-push-deploy.md](qa-push-deploy.md) Step 3.
 
 ### Step 4: Verification SQL
 
@@ -192,7 +228,7 @@ Acceptance criteria (design §14.5):
 
 In the ECS task definitions:
 
-- Search-service task: add `RETRIEVAL_BACKEND=postgres` and `DATABASE_URL` (as a secret). Remove or keep `DOCUMENTS_S3_BUCKET`/`DOCUMENTS_S3_PREFIX`/`CACHE_S3_PREFIX` — the startup script (`start.sh`) skips the S3 sync when `RETRIEVAL_BACKEND=postgres`.
+- Search-service task: add `RETRIEVAL_BACKEND=postgres` and `DATABASE_URL` (as a secret). Remove or keep `DOCUMENTS_S3_BUCKET`/`DOCUMENTS_S3_PREFIX`/`CACHE_S3_PREFIX` — the startup script (`start.sh`) skips the S3 sync when `RETRIEVAL_BACKEND=postgres`. `KEYWORD_BACKEND` defaults to `sparse` (requires Step 3b's backfill); set `KEYWORD_BACKEND=memory` to use the legacy in-memory BM25 lane instead.
 - Next.js task: add `CATALOG_SOURCE=postgres` to serve `/api/catalog` from Postgres.
 
 Deploy both task definitions. The search-service boots in seconds (no CSV/PDF parsing, no OpenAI calls at startup).
@@ -218,14 +254,23 @@ Use `--reset` when: re-running after a schema change, correcting a migration err
 
 ### `/reindex` endpoint
 
-`POST /reindex` re-runs the active boot path in-process (synchronous, blocks until complete):
+`POST /reindex` re-runs the active boot path in-process (synchronous; build-then-swap —
+queries keep serving the old state during the rebuild; concurrent calls get `409
+already_running`):
 
-- **Legacy mode:** re-parses CSV + PDFs, rebuilds in-memory dense and BM25 indexes.
-- **Postgres mode:** re-reads `document_chunks` from Postgres, rebuilds the in-memory BM25 index, re-instantiates `PgVectorRetriever`. Dense vectors are not re-embedded.
+- **Legacy mode (`RETRIEVAL_BACKEND=legacy`):** re-parses CSV + PDFs, rebuilds in-memory dense and BM25 indexes.
+- **Postgres mode, `KEYWORD_BACKEND=sparse` (default):** skips any BM25 build — it re-instantiates the sparse retriever and refreshes the in-memory passage-context texts and document metadata (~11 s). Dense vectors are not re-embedded.
+- **Postgres mode, `KEYWORD_BACKEND=memory`:** as above, plus rebuilds the in-memory BM25 index from Postgres chunk rows (~18 s).
 
-Use `/reindex` after:
-- Withdrawing or adding documents (to update the BM25 lane — see [BM25 gotcha in the as-built reference](../document-management.md#4-document-lifecycle)).
-- Running the migration script with `--reset` while the service is live.
+When to call it:
+- **Not** for lifecycle changes under the default sparse backend — withdraw/promote take
+  effect on the next query in both lanes (`status='searchable'` filtered per query). The
+  only thing `/reindex` refreshes in sparse mode is the passage-context texts used for
+  answer synthesis (the worker's publish stage and the admin promote route already fire it
+  for that).
+- After withdrawing/adding documents **only** under `KEYWORD_BACKEND=memory` (the
+  in-memory BM25 index is stale until reindex or restart).
+- After running the migration script with `--reset` while the service is live.
 
 ---
 
@@ -235,47 +280,30 @@ Use `/reindex` after:
 
 | Suite | Command | Needs |
 |---|---|---|
-| Jest unit (23 tests) | `npm test` | nothing |
-| Jest DB integration (3 tests, catalog from Postgres) | `npm run test:db` | local migrated DB |
-| Python full suite (45 tests) | `npm run test:python` (or `cd search-service && ./venv/bin/python -m pytest tests/`) | local migrated DB for integration modules |
+| Jest (16 suites, 132 tests) | `npm test` | nothing for the 10 unit suites; the 6 `*.db.test.ts` suites (~33 tests) skip without a DB and run when `.env`/`DATABASE_URL` points at a migrated local DB |
+| Jest DB-only filter | `npm run test:db` | local migrated DB |
+| Python full suite (98 tests, 11 files) | `npm run test:python` (or `cd search-service && ./venv/bin/python -m pytest tests/`) | local migrated DB for the corpus-dependent modules; scratch-DB modules self-provision |
 | Python coverage | `cd search-service && ./venv/bin/python -m pytest tests/ --cov=app --cov=scripts --cov-report=term` | same |
 
 Python test layout:
-- `tests/test_indexing.py` — pure-unit chunking/node-build tests (no DB/network).
-- `tests/test_migration_script.py` — hermetic migration-script integration tests: creates a scratch `askwri_test` database, applies the TypeORM migrations via subprocess, runs the script against a synthetic 3-doc CSV with fake embeddings, asserts all data invariants (counts, chunk-id format, contiguous `corpus_order`, no null embeddings, tags/summaries/collection/audit) plus idempotency-guard and `--reset` behavior. Never touches the `qa` data.
-- `tests/test_query_e2e.py` — `/query` contract tests in postgres mode against the real local DB (stubbed rerankers + query embedding; read-only, except a withdrawn-doc test that restores state in `finally`). Covers cite/answer/diagnostic modes and dense-lane withdrawn-doc exclusion.
-- `tests/test_pg_store.py` — Postgres store loaders + `PgVectorRetriever` (the dense-retrieval test calls OpenAI once and needs `OPENAI_API_KEY`).
+- Hermetic, no DB: `test_indexing.py` (chunking/node build), `test_sparse_keyword.py` (BM25 weight math vs bm25s), `test_cite_doc_ids_filter.py` (request model + cite-doc filter).
+- Scratch-DB (create/migrate/drop their own database against `DATABASE_URL`; never touch `qa`): `test_migration_script.py`, `test_worker_queue.py`, `test_worker_stages.py`, `test_worker_pipeline.py`, `test_sparse_retriever.py`, `test_build_sparse_script.py`.
+- Migrated-corpus-dependent (need the real local 169-doc `qa` DB): `test_query_e2e.py` — `/query` contract tests in postgres mode (stubbed rerankers + query embedding; read-only except a withdrawn-doc test that restores state in `finally`); `test_pg_store.py` — store loaders + `PgVectorRetriever` (the dense-retrieval test calls OpenAI once and needs `OPENAI_API_KEY`).
 
-`tests/conftest.py` auto-loads `search-service/.env`, so no env exporting is needed locally. Integration modules skip when `DATABASE_URL` is unset — **set `REQUIRE_DB_TESTS=1` in CI to turn those skips into hard failures** (prevents false-green runs).
+`tests/conftest.py` auto-loads `search-service/.env`, so no env exporting is needed locally. DB modules skip when `DATABASE_URL` is unset — `REQUIRE_DB_TESTS=1` (set in CI) turns those skips into hard failures (prevents false-green runs).
 
-### CI recommendation
+### What CI runs
 
-CI exists in `.github/workflows/` (`pr-check.yml` and the deploy workflows run `npm run test:ci` + build), but the **Python suite is not wired in**. The Jest DB-gated tests skip gracefully when `DATABASE_URL` is absent, so current CI stays green without a database. Recommended addition to `pr-check.yml`:
+`pr-check.yml` runs four jobs on every PR:
 
-```yaml
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    env:
-      POSTGRES_USER: askwri
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: qa
-    ports:
-      - 5432:5432
-env:
-  DATABASE_URL: postgresql://askwri:password@localhost:5432/qa
-  DATABASE_SSL: "false"
-  REQUIRE_DB_TESTS: "1"
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-steps:
-  - run: npm run migration:run
-  - run: cd search-service && ./venv/bin/python -m scripts.migrate_csv_to_postgres
-  - run: npm test
-  - run: npm run test:db
-  - run: npm run test:python
-```
+- **test** — `npm run test:ci` (Jest) + `npm run build`. No database service, so the 6 Jest `*.db.test.ts` suites skip here.
+- **python-tests** — a `pgvector/pgvector:pg16` service container with `REQUIRE_DB_TESTS=1`, plus Node setup (the scratch-DB fixtures apply the TypeORM schema via `npm run migration:run` subprocess). Runs `test_indexing`, `test_worker_queue`, `test_worker_stages`, `test_sparse_keyword`, `test_cite_doc_ids_filter`, `test_migration_script`, `test_build_sparse_script` — the hermetic and scratch-DB modules.
+- **docker-build** — builds both Docker images (no push).
+- **terraform-validate** — `terraform fmt -check` + `validate` (`-backend=false`; no plan against real state).
 
-Note: the migration-script tests create their own scratch database, so the CI job only needs the empty migrated `qa` schema for the e2e/pg_store/catalog tests — except those expect the migrated corpus (169 docs). For corpus-dependent tests in CI, either stage the corpus via the migration script with real assets, or scope CI to the hermetic modules (`test_indexing.py`, `test_migration_script.py`) until an artifact pipeline exists. Without `OPENAI_API_KEY`, the one dense-retrieval test skips (acceptable — it incurs OpenAI spend per run).
+The deploy workflows (`deploy-qa.yml` / `deploy-production.yml`) run `npm run test:ci` + build, then build/push images, terraform apply, and force-new-deployment — see [qa-push-deploy.md](qa-push-deploy.md).
+
+**Still NOT in CI:** the Jest `test:db` suites, `test_pg_store.py`, and `test_query_e2e.py` (all need the migrated 169-doc corpus — local-only until an artifact pipeline exists), plus `test_worker_pipeline.py` and `test_sparse_retriever.py` (scratch-DB hermetic, candidates to add to the CI selection).
 
 ---
 

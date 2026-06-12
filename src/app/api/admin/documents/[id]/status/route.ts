@@ -27,6 +27,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if ('error' in result)
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
     // Keyword + dense lanes both filter status='searchable' per query (KEYWORD_BACKEND=sparse) — no reindex choreography.
+    if (toStatus === 'searchable') {
+      // Fire-and-forget: refreshes the search service's in-memory passage-context
+      // texts only (document_texts load at boot//reindex, filtered to searchable).
+      // /reindex is build-then-swap and coalesces concurrent calls via 409 — safe
+      // to fire blind without awaiting.
+      const searchServiceUrl =
+        process.env.SEARCH_SERVICE_URL || process.env.LLAMAINDEX_SERVICE_URL
+      if (searchServiceUrl) {
+        void fetch(`${searchServiceUrl}/reindex`, { method: 'POST' }).catch(() => {})
+      }
+    }
     return NextResponse.json({
       ok: true,
       fromStatus: result.fromStatus,

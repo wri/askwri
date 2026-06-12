@@ -28,8 +28,12 @@ def process_one_job() -> bool:
     if claimed is None:
         return False
     job_id, document_id, stage, attempts = claimed
-    next_stage = queue.next_stage(stage)
+    next_stage = stage  # fallback label if next_stage() itself raises below
     try:
+        # Inside the try: a malformed stage value (e.g. a manually-requeued job
+        # whose stage is already 'publish') must route to retry/error, not kill
+        # the worker.
+        next_stage = queue.next_stage(stage)
         # Claim-time guard: never run stages for a withdrawn document.
         with get_pool().connection() as conn:
             doc = fetch_document(conn, document_id)
@@ -58,11 +62,21 @@ def main() -> None:
     settings = get_settings()
     logger.info("Ingestion worker started")
     while True:
-        with get_pool().connection() as conn:
-            reclaimed = queue.reap_stale_jobs(conn)
-        if reclaimed:
-            logger.warning(f"reaped stale running jobs back to queued: {reclaimed}")
-        swept = intake_s3.sweep()
+        # Reap and sweep are each guarded: one poison object or transient DB
+        # error must cost a log line per poll, not an ECS crash-loop that
+        # blocks all ingestion.
+        try:
+            with get_pool().connection() as conn:
+                reclaimed = queue.reap_stale_jobs(conn, settings.worker_reap_minutes)
+            if reclaimed:
+                logger.warning(f"reaped stale running jobs back to queued: {reclaimed}")
+        except Exception:  # noqa: BLE001
+            logger.exception("reap_stale_jobs failed — continuing poll loop")
+        try:
+            swept = intake_s3.sweep()
+        except Exception:  # noqa: BLE001
+            logger.exception("intake sweep failed — continuing poll loop")
+            swept = False
         worked = process_one_job()
         if args.once:
             break

@@ -101,9 +101,14 @@ jobs:
         working-directory: search-service
         run: pip install -r requirements-dev.txt
 
+      # Selection: hermetic tests (test_sparse_keyword, test_cite_doc_ids_filter)
+      # plus scratch-DB tests that self-provision against DATABASE_URL
+      # (test_migration_script, test_build_sparse_script). test_pg_store and
+      # test_query_e2e need the migrated 169-doc corpus / qa DB and stay
+      # local-only.
       - name: Run tests
         working-directory: search-service
-        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py -v
+        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py tests/test_sparse_keyword.py tests/test_cite_doc_ids_filter.py tests/test_migration_script.py tests/test_build_sparse_script.py -v
 
   # ==========================================================================
   # Docker Build Test

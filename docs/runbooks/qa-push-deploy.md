@@ -1,0 +1,266 @@
+# QA Push + Deploy Runbook — first push of the document-management work
+
+**Scope:** the first `git push origin qa` of the local qa line (~90 commits: Phase 0 store +
+migration, Phase 1 ingestion worker, Phase 2 admin UI, sparse keyword lane, two review-fix
+waves). Follow the steps **in order** — the ordering is the point of this runbook.
+
+**Companion docs:** [phase0-cutover.md](phase0-cutover.md) (RDS preflight, corpus migration,
+local dev), [docs/document-management.md](../document-management.md) (as-built reference),
+[docs/plans/2026-06-11-keyword-lane-replacement-design-note.md](../plans/2026-06-11-keyword-lane-replacement-design-note.md)
+(sparse-lane evidence).
+
+---
+
+## Why ordering matters (read first)
+
+The deploy workflow (`.github/workflows/deploy-qa.yml`, triggered by any push to `qa`)
+contains **no migration step and no plan-only Terraform gate**: it runs Jest + build, builds
+and pushes both Docker images, then `terraform plan` + `terraform apply -auto-approve` in the
+same job, then `aws ecs update-service --force-new-deployment` for all three services
+(`askwri-app-qa-service`, `askwri-app-qa-search-service`, `askwri-app-qa-ingestion-worker`).
+
+The new code defaults to `KEYWORD_BACKEND=sparse` (`search-service/app/config.py`). The
+sparse boot path has a hard guard: if no searchable chunk has a populated
+`document_chunks.sparse` vector, boot raises
+`KEYWORD_BACKEND=sparse but document_chunks.sparse is unpopulated`. The service still
+accepts connections, but `/health` reports `degraded - indexing error` and every `/query`
+returns 500 (`Service not properly initialized`).
+
+Therefore the safe sequence is:
+
+1. **Migrate RDS** (Step 2) — the backfill script needs the `keyword_vocab` /
+   `keyword_corpus_stats` tables from migration `1781310000000`.
+2. **Run the sparse backfill against RDS** (Step 3).
+3. **Then push** (Step 4) — services come up against an already-prepared schema.
+
+If you cannot run the backfill before pushing, use the fallback in Step 5 instead
+(deploy with `KEYWORD_BACKEND=memory`, flip to sparse after backfilling).
+
+---
+
+## Step 1: Preflight
+
+### 1a. GitHub secrets
+
+All three are read by both `deploy-qa.yml` and `deploy-production.yml` and land as
+**plain-text environment variables** in the ECS task definitions (JSON-decoded by
+`terraform/infrastructure/ecs.tf`; SSM Parameter Store is deferred):
+
+| GitHub secret | Terraform var | Feeds | Must contain |
+|---|---|---|---|
+| `INGESTION_WORKER_ENV` | `ingestion_worker_secret_env` | ingestion-worker task env | **NEW — create it.** JSON: `{"DATABASE_URL": "postgresql://…?sslmode=require", "OPENAI_API_KEY": "sk-…"}` |
+| `ASKWRI_APP_ENV` | `askwri_app_secret_env` | Next.js task env | Existing JSON; **add** `SESSION_SECRET` (≥ 32 chars, generate with `openssl rand -hex 32`) and optionally `ADMIN_API_TOKEN` (machine-to-machine admin auth) |
+| `SEARCH_SERVICE_ENV` | `search_service_secret_env` | search-service task env | Verify it has `DATABASE_URL` and `RETRIEVAL_BACKEND=postgres`. A `KEYWORD_BACKEND` override (Step 5 fallback) also goes here |
+
+A missing/empty secret decodes to `{}` (`try(jsondecode(...), {})`) — the deploy succeeds
+but the task boots without those vars, so check these **before** pushing.
+
+### 1b. RDS preflight
+
+Same as [phase0-cutover.md Step 1](phase0-cutover.md#step-1-rds-preflight): `vector`
+extension available at ≥ 0.7.0 (the `sparsevec` column type requires it).
+
+### 1c. Check which migrations RDS already has
+
+```bash
+DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
+  npm run typeorm -- migration:show -d src/db/migration-data-source.ts
+```
+
+Expected pending (`[ ]`): `Migration1781300000000` and `Migration1781310000000`.
+
+If `Migration1781280000000` / `Migration1781290000000` are **also** pending, the Phase 0
+cutover never ran against this RDS instance — stop and execute
+[phase0-cutover.md Steps 1–4](phase0-cutover.md#production-cutover--step-by-step) (schema +
+corpus migration script) first, then return here.
+
+`DATABASE_SSL` note: the shell-prefixed `DATABASE_URL` wins over `.env` (dotenv never
+overrides existing env vars), but a local `.env` with `DATABASE_SSL=false` still disables
+SSL in `src/db/data-source.ts`. When targeting RDS, also export `DATABASE_SSL=true`
+(any value other than `false`), and `DATABASE_SSL_REJECT_UNAUTHORIZED=false` if the RDS CA
+is not in your local trust store.
+
+---
+
+## Step 2: Run migrations against RDS
+
+**Run in a quiet window** — migration `1781300000000` starts by **deleting** duplicate open
+(queued/running) `ingestion_jobs` rows (keeps a running job over a queued one, then the
+newest per document) before creating the partial unique index
+`ingestion_jobs_one_open_per_doc`. It also tightens the `documents` FK to
+`ON DELETE CASCADE`. Nothing should be writing ingestion jobs while it runs. (On first
+deploy the worker doesn't exist yet, so this is trivially satisfied.)
+
+```bash
+DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" npm run migration:run
+```
+
+Expected: `Migration1781300000000 has been executed successfully.` and
+`Migration1781310000000 has been executed successfully.`
+
+What they do:
+
+- `1781300000000` — open-job dedupe + unique index + `ingestion_jobs.document_id` FK
+  becomes `ON DELETE CASCADE`.
+- `1781310000000` — `keyword_vocab` and `keyword_corpus_stats` tables (sparse keyword lane).
+
+---
+
+## Step 3: Sparse keyword backfill against RDS
+
+```bash
+cd search-service
+DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
+  ./venv/bin/python -m scripts.build_sparse_keyword
+```
+
+Needs only `DATABASE_URL` (no S3, no OpenAI). Expected output ends with
+`wrote <N> vectors in …; searchable chunks with sparse: <M>; vocab <V>; avgdl <…>`
+(~1–2 min on 30k chunks; local reference run: 30,526 vectors, vocab 184,395, avgdl 192.5).
+
+Notes:
+
+- The script covers **ALL documents regardless of status** (weights don't depend on
+  status; retrieval filters `status='searchable'` per query), so docs promoted later are
+  already keyword-ready.
+- It writes everything in **one atomic transaction** and is idempotent — safe to re-run.
+- **The ingestion worker must be idle during any refresh run** (a concurrent embed stage
+  races the vocab/stats writes). On first deploy there is no worker yet; for later
+  refreshes, scale `askwri-app-qa-ingestion-worker` to 0 first.
+
+Verify:
+
+```sql
+SELECT count(*) FROM document_chunks dc
+JOIN documents d ON d.id = dc.document_id
+WHERE d.status = 'searchable' AND dc.sparse IS NOT NULL;
+-- expected: every searchable chunk (0 rows with sparse IS NULL)
+SELECT n_chunks, avgdl, sparse_dim, built_at FROM keyword_corpus_stats;
+```
+
+---
+
+## Step 4: Push qa
+
+```bash
+git push origin qa
+```
+
+This triggers `Deploy to QA`: test → build-and-push (app + search-service images, tagged
+with the commit short SHA **and** `latest`) → terraform plan+apply → force-new-deployment
+of all three ECS services → `aws ecs wait services-stable`.
+
+Watch it:
+
+```bash
+gh run watch
+```
+
+Deploy-window note: between `terraform apply` and the new tasks stabilizing, the **old**
+app/search-service code briefly runs against the **new** schema. Both new migrations are
+additive/compatible with the old code (new tables it never reads; an index and FK tightening
+on a table the old deployed code does not use), so this window is safe.
+
+---
+
+## Step 5: Fallback — deploy first, flip to sparse later
+
+Only if Step 3 could not run before the push:
+
+1. Add `"KEYWORD_BACKEND": "memory"` to the `SEARCH_SERVICE_ENV` GitHub secret JSON
+   **before pushing**. The memory backend hydrates the legacy in-memory BM25 index from
+   Postgres chunks at boot — no sparse vectors needed.
+2. Push (Step 4) and verify `/health` shows `keyword_backend=memory`.
+3. Run Step 3 (backfill) — scale the worker to 0 first.
+4. Remove the `KEYWORD_BACKEND` entry from `SEARCH_SERVICE_ENV` and redeploy
+   (re-run the workflow via `gh workflow run deploy-qa.yml` or push an empty commit).
+
+---
+
+## Step 6: Seed the prod admin user
+
+```bash
+DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
+  npm run seed:admin -- <username> <password>
+```
+
+Expected: `Created admin user '<username>'` (re-running with an existing username resets
+its password and re-activates it). **Known, accepted limitation:** the password lands in
+your shell history — clear it or prefix the command with a space if your shell honors
+`HIST_IGNORE_SPACE`.
+
+---
+
+## Step 7: Verify
+
+The search-service is **not** on the ALB (service-discovery only:
+`search-service.askwri-app-qa.local:8000`), so probe it from inside a task via ECS exec
+(`enable_execute_command` is on; the image has curl):
+
+```bash
+TASK=$(aws ecs list-tasks --cluster askwri-app-qa-cluster \
+  --service-name askwri-app-qa-search-service --query 'taskArns[0]' --output text)
+aws ecs execute-command --cluster askwri-app-qa-cluster --task "$TASK" \
+  --container askwri-app-qa-search-service --interactive \
+  --command "curl -s http://localhost:8000/health"
+```
+
+Checklist:
+
+1. **`/health`** → `"status": "healthy"`, `"keyword_backend": "sparse"`,
+   `"retrieval_backend": "postgres"` (the two backend fields are new in this push — their
+   absence means an old image is still running).
+2. **`/query` smoke** (same exec session):
+   `curl -s -X POST http://localhost:8000/query -H 'Content-Type: application/json' -d '{"query": "deforestation in the Amazon"}'`
+   → 200 with a non-empty `results` array. Then a query through the web UI.
+3. **Admin login** at `https://qa.askwri-app.org/admin` with the Step 6 credentials →
+   lands on the admin shell; `/admin/review`, `/admin/documents` render.
+4. **Worker poll loop**:
+   `aws logs tail /ecs/askwri-app-qa-ingestion-worker --follow` → periodic poll/sweep log
+   lines, no crash loop.
+5. **Audit rows**: make one admin mutation (e.g. edit a document title in
+   `/admin/documents/<id>`), then:
+   ```sql
+   SELECT actor_user_id, source, action, entity_type, at
+   FROM audit_log ORDER BY at DESC LIMIT 5;
+   ```
+   → a fresh `source='human'` row for the mutation.
+
+---
+
+## Step 8: Rollback (per step)
+
+| What broke | Rollback |
+|---|---|
+| Sparse keyword lane (bad rankings, boot failures) | Env flip: set `KEYWORD_BACKEND=memory` in `SEARCH_SERVICE_ENV` and redeploy. The legacy in-memory BM25 lane is intact; it hydrates from Postgres chunks at boot. (Memory-mode caveat: lifecycle changes then need `POST /reindex` — see document-management.md §4.) |
+| Schema | `DATABASE_URL=… npm run migration:revert` reverts **one migration per invocation** (run twice to undo both new ones; `1781310000000` reverts first). Caveat: `1781300000000`'s `down` restores the `ON DELETE SET NULL` FK and drops the unique index, but the duplicate open jobs its `up` **deleted are not restorable**. |
+| Bad image / bad code | Task definitions pin `:latest`, and every deploy also tags the image with the git commit short SHA. Re-point `latest` at the last good SHA in ECR, then force a new deployment: |
+
+```bash
+# for each of askwri-app-qa and askwri-app-qa-search-service:
+MANIFEST=$(aws ecr batch-get-image --repository-name askwri-app-qa \
+  --image-ids imageTag=<previous-short-sha> --query 'images[0].imageManifest' --output text)
+aws ecr put-image --repository-name askwri-app-qa --image-tag latest --image-manifest "$MANIFEST"
+aws ecs update-service --cluster askwri-app-qa-cluster \
+  --service askwri-app-qa-service --force-new-deployment
+```
+
+(Or `git revert` + push, which rebuilds and redeploys through the normal pipeline.)
+
+---
+
+## Known gaps (accepted for this push)
+
+- **No migration step in CI/CD** — schema changes are manual, per this runbook. A future
+  iteration should gate the deploy on `migration:run`.
+- **No plan-only Terraform gate** — the first `terraform plan` against real state happens
+  inside the apply job of the deploy run itself (`pr-check.yml` only does
+  `terraform validate` with `-backend=false`). Review the plan output in the Actions log
+  *while* it applies, not before.
+- **Old-code-on-new-schema window** during deploy (see Step 4 note) — safe this time
+  because both new migrations are additive/compatible: two new tables the old code never
+  touches, plus an index and FK tightening on `ingestion_jobs`, which the currently
+  deployed (pre-Phase-1) code does not use.
+- **Plain-text env secrets in task definitions** — the three secret JSONs become regular
+  `environment` entries, visible to anyone with `ecs:DescribeTaskDefinition`. SSM
+  Parameter Store migration is deferred.

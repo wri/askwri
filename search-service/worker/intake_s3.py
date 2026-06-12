@@ -73,18 +73,23 @@ def _sweep_local(intake_dir: Path) -> bool:
     docs_dir = intake_dir.parent / "documents"
     docs_dir.mkdir(exist_ok=True)
     for pdf in sorted(intake_dir.glob("*.pdf")):
-        content = pdf.read_bytes()
-        with get_pool().connection() as conn:
-            if _register(conn, pdf.name, content) == "new":
-                # Copy into documents/ BEFORE the registration commits (the
-                # connection context manager commits on exit). A crash in this
-                # window rolls the rows back and leaves the intake file to be
-                # re-swept; the copy is overwrite-idempotent.
-                (docs_dir / pdf.name).write_bytes(content)
-        # Duplicate: remove from intake WITHOUT copying — never clobber an
-        # existing documents/ object. New: delete only after the commit.
-        pdf.unlink()
-        processed = True
+        # Per-file guard: a poison file costs one log line per sweep and never
+        # blocks the rest of the batch (or crash-loops the worker).
+        try:
+            content = pdf.read_bytes()
+            with get_pool().connection() as conn:
+                if _register(conn, pdf.name, content) == "new":
+                    # Copy into documents/ BEFORE the registration commits (the
+                    # connection context manager commits on exit). A crash in this
+                    # window rolls the rows back and leaves the intake file to be
+                    # re-swept; the copy is overwrite-idempotent.
+                    (docs_dir / pdf.name).write_bytes(content)
+            # Duplicate: remove from intake WITHOUT copying — never clobber an
+            # existing documents/ object. New: delete only after the commit.
+            pdf.unlink()
+            processed = True
+        except Exception:  # noqa: BLE001
+            logger.exception(f"intake: failed to process {pdf.name} — skipping this sweep")
     return processed
 
 
@@ -100,18 +105,23 @@ def _sweep_s3() -> bool:
         key = obj["Key"]
         if not key.lower().endswith(".pdf"):
             continue
-        filename = key.split("/")[-1]
-        content = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-        with get_pool().connection() as conn:
-            if _register(conn, filename, content) == "new":
-                # Copy into documents/ BEFORE the registration commits (the
-                # connection context manager commits on exit). A crash in this
-                # window rolls the rows back and leaves the intake object to be
-                # re-swept; the copy is overwrite-idempotent.
-                s3.copy_object(Bucket=bucket, Key=f"{settings.documents_s3_prefix}{filename}",
-                               CopySource={"Bucket": bucket, "Key": key})
-        # Duplicate: remove from intake WITHOUT copying — never clobber an
-        # existing documents/ object. New: delete only after the commit.
-        s3.delete_object(Bucket=bucket, Key=key)
-        processed = True
+        # Per-object guard: a poison object costs one log line per sweep and
+        # never blocks the rest of the batch (or crash-loops the worker).
+        try:
+            filename = key.split("/")[-1]
+            content = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+            with get_pool().connection() as conn:
+                if _register(conn, filename, content) == "new":
+                    # Copy into documents/ BEFORE the registration commits (the
+                    # connection context manager commits on exit). A crash in this
+                    # window rolls the rows back and leaves the intake object to be
+                    # re-swept; the copy is overwrite-idempotent.
+                    s3.copy_object(Bucket=bucket, Key=f"{settings.documents_s3_prefix}{filename}",
+                                   CopySource={"Bucket": bucket, "Key": key})
+            # Duplicate: remove from intake WITHOUT copying — never clobber an
+            # existing documents/ object. New: delete only after the commit.
+            s3.delete_object(Bucket=bucket, Key=key)
+            processed = True
+        except Exception:  # noqa: BLE001
+            logger.exception(f"intake: failed to process {key} — skipping this sweep")
     return processed

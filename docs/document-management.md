@@ -1,7 +1,7 @@
 # AskWRI Document Management — As-Built Reference
 
 **Audience:** engineers working on Phase 1 or later.
-**Phases covered:** 0 — Store + Migration (shipped); 1 — Ingestion + Classification (shipped).
+**Phases covered:** 0 — Store + Migration (shipped); 1 — Ingestion + Classification (shipped); 2 — Admin UI + review queue (shipped, §11); plus the sparse keyword lane (shipped 2026-06-11, `KEYWORD_BACKEND=sparse` default).
 **Runbook:** [docs/runbooks/phase0-cutover.md](runbooks/phase0-cutover.md)
 **Design doc:** [docs/plans/2026-06-09-askwri-document-management-design.md](plans/2026-06-09-askwri-document-management-design.md)
 
@@ -33,7 +33,7 @@ Per design §20 lean-core cut:
 - `document_attributes` (typed attributes table) — deferred; categorical tags + fixed columns for now.
 - Tag-label localization (`tag_labels` table) — canonical English `value_id` only.
 - Authoritative-import precedence subtleties (dry-run diff, `source=external` overwrite protection) — tags seeded with `source='external'`, `status='accepted'`; overwrite precedence logic deferred to Phase 1.
-- `sparsevec` / BGE-M3 sparse lane — column exists in schema (`document_chunks.sparse`), not populated. BM25 stays in-memory (Phase 1 replaces it).
+- `sparsevec` / BGE-M3 sparse lane — column exists in schema (`document_chunks.sparse`), not populated at Phase 0. (Phase 1 did NOT replace the in-memory BM25 as predicted here; the keyword-lane workstream did on 2026-06-11 — `document_chunks.sparse` now holds BM25 impact vectors and `KEYWORD_BACKEND=sparse` is the default. BGE-M3 weights remain a future option on the same column.)
 - GROBID / layout-parser ingestion pipeline — Phase 1.
 - Admin UI, collections UI, auth — Phase 2.
 - Dense-model bake-off, CJK ingestion, versioning/lifecycle — Phase 3.
@@ -57,7 +57,7 @@ Two migrations: `1781280000000-Migration.ts` (initial 11 tables) and `1781290000
 | `documents` | One row per document. System of record. | `id` (uuid PK), `external_id` (unique, legacy doc_id), `s3_key`, `title`, `language`, `languages[]`, `status`, `source_metadata` (jsonb) | App tier |
 | `document_texts` | Full extracted text per document (for query-time passage context). | `document_id` (PK, FK → documents), `full_text`, `page_boundaries` (jsonb), `char_count` | Python migration script |
 | `document_summaries` | Per-language summaries (long/short). | `(document_id, language, kind)` composite PK, `text`, `source` | Python migration script |
-| `document_chunks` | Retrieval units (text chunks + embeddings). One row per chunk or summary node. | `id` (uuid PK), `document_id` (FK), `legacy_chunk_id` (unique, e.g. `2021_doc_chunk_0`), `chunk_index`, `unit_type` (`text`\|`summary`), `text`, `node_metadata` (jsonb, full legacy metadata verbatim), `embedding` (vector), `embedding_model`, `dimension`, `sparse` (sparsevec, unpopulated), `corpus_order` | Python migration script |
+| `document_chunks` | Retrieval units (text chunks + embeddings). One row per chunk or summary node. | `id` (uuid PK), `document_id` (FK), `legacy_chunk_id` (unique, e.g. `2021_doc_chunk_0`), `chunk_index`, `unit_type` (`text`\|`summary`), `text`, `node_metadata` (jsonb, full legacy metadata verbatim), `embedding` (vector), `embedding_model`, `dimension`, `sparse` (sparsevec — BM25 impact vectors, the live keyword lane; populated by `scripts/build_sparse_keyword.py` backfill and the worker embed stage), `corpus_order` | Python migration script |
 | `tags` | Controlled vocabulary. Taxonomy v1. | `id` (uuid PK), `facet`, `value_id`, `taxonomy_version` | App tier / migration script |
 | `document_tags` | Many-to-many docs↔tags with provenance. | `(document_id, tag_id)` composite PK, `source`, `confidence`, `status` | App tier / migration script |
 | `collections` | Curatorial containers. | `id`, `name`, `slug` (unique), `language_policy` (jsonb), `embedding_model_version` | App tier / migration script |
@@ -91,7 +91,7 @@ All retrieval queries in `pg_store.py` filter `WHERE d.status = 'searchable'`. T
 
 **Legacy memory backend note:** with `KEYWORD_BACKEND=memory`, the old staleness behavior returns. The BM25 index is hydrated at boot or `/reindex`; after a withdrawal, the in-memory index still holds those chunks until `/reindex` is called or the service restarts. A manual `POST /reindex` is required after any lifecycle change.
 
-**Frozen stats refresh:** under the sparse backend, new documents are weighted at embed time using IDF/avgdl statistics frozen by the last `build_sparse_keyword.py` run. Re-run that script after bulk corpus changes to refresh keyword statistics. This is never required for lifecycle correctness (promote/withdraw) — only for accurate weighting of newly ingested documents.
+**Frozen stats refresh:** under the sparse backend, new documents are weighted at embed time using IDF/avgdl statistics frozen by the last `build_sparse_keyword.py` run (tokens unseen at freeze time enter the vocab with `df=1`, i.e. maximal IDF, until the next refresh). Re-run that script after bulk corpus changes to refresh keyword statistics. The script covers **all** document statuses (not just searchable), is idempotent and transactional, and **the ingestion worker must be idle while it runs** (a concurrent embed stage races the vocab/stats writes). This is never required for lifecycle correctness (promote/withdraw) — only for accurate weighting of newly ingested documents.
 
 **Pre-backfill edge case:** a document ingested before `build_sparse_keyword.py` has ever run (e.g. during an initial cutover window) gets `sparse = NULL` chunks — absent from keyword-lane results (dense lane unaffected) until the next backfill run. The sparse-mode boot guard refuses to start against a fully unpopulated corpus, so this only arises for documents added mid-cutover.
 
@@ -117,7 +117,9 @@ Both backends serve the same frozen `/query` contract (`QueryRequest`/`QueryResp
 | `sparse` (default) | No BM25 build; sparse vectors already in `document_chunks.sparse` | Per-query SQL with `WHERE status='searchable'` filter; requires `build_sparse_keyword.py` to have run |
 | `memory` | Hydrates `BM25Retriever` from Postgres chunk rows at boot or `/reindex` | In-memory lookup; stale until next boot or `/reindex` |
 
-Under `KEYWORD_BACKEND=sparse`, the `/reindex` endpoint no longer rebuilds the BM25 index. It refreshes in-memory passage-context texts and metadata (build-then-swap, ~11 s) used for answer synthesis — the worker publish stage still calls it for that reason.
+Under `KEYWORD_BACKEND=sparse`, the `/reindex` endpoint no longer rebuilds the BM25 index. It refreshes in-memory passage-context texts and metadata (build-then-swap, ~11 s) used for answer synthesis — the worker publish stage still calls it for that reason (retrying once on `409 already_running`).
+
+`GET /health` reports the active backends — `keyword_backend` and `retrieval_backend` fields — alongside the index-readiness flags; the eval runners read these to stamp their reports.
 
 ---
 
@@ -169,6 +171,8 @@ Root cause: residual divergence is confined to marginal documents at the reranke
 
 Flagged for the retrieval workstream: chunk-adjacent F1 −2.4, q2 single-doc recall dip, top-20 overlap sensitivity at margins.
 
+Eval provenance note: eval reports are now identity-stamped (run label + the service's `keyword_backend`/`retrieval_backend` read from `/health`), and per-query checkpoints carry an identity (golden-set hash + service backend + label) — resuming a checkpoint under a different identity is rejected rather than silently mixing runs. Baselines drift with the corpus — compare against a fresh same-day baseline, not historical numbers.
+
 ---
 
 ## 9. Phase 1 prediction corrections
@@ -176,6 +180,7 @@ Flagged for the retrieval workstream: chunk-adjacent F1 −2.4, q2 single-doc re
 The original Phase 1 prediction in this section was partially wrong. Actual outcomes:
 
 - **Sparse lane (`document_chunks.sparse`):** NOT populated in Phase 1. The sparse/BGE-M3 swap is a separate eval-gated track, deferred pending bake-off results. BM25 remains in-memory.
+  **Superseded 2026-06-11:** the keyword-lane workstream replaced the in-memory BM25 with Postgres-resident BM25 impact vectors in `document_chunks.sparse` (`KEYWORD_BACKEND=sparse` default; eval gate PASS). See §5 and the design note `docs/plans/2026-06-11-keyword-lane-replacement-design-note.md`. The BGE-M3 question stays open — it would reuse the same column.
 - **GROBID / layout parser:** NOT adopted. PDFReader (LlamaIndex) is retained as the single parser. GROBID is deferred to a future phase.
 - **What did ship:** the queue-driven ingestion worker (`ingestion_jobs` activated), LLM auto-tagging (`source='llm'`), generated `document_summaries` for all languages including Indonesian, and the `RETRIEVAL_BACKEND=postgres` dense lane for new chunks. See §10 below.
 
@@ -221,6 +226,7 @@ queued → running → queued (next stage) → … → done | needs_review | err
 - On stage success: `stage` is updated to the completed stage, `status` reset to `queued` for the next stage (or `done` after publish).
 - On stage failure: same stage is requeued with `attempts+1`. After `WORKER_MAX_ATTEMPTS` (default 3) failures the job moves to `status='error'`.
 - `--once` flag: runs one intake sweep and one job-stage step, then exits. Useful for local iteration and smoke tests (run repeatedly until the job reaches `done`).
+- Stale-job reaper: each poll cycle requeues `running` jobs idle longer than `worker_reap_minutes` (default 15) — recovers jobs orphaned by a worker crash or deploy-time task replacement.
 
 ### 10.4 Stage pipeline
 
@@ -230,8 +236,8 @@ queued → running → queued (next stage) → … → done | needs_review | err
 | **language** | langdetect; supported set: `{en, es, zh, pt, id}` (Indonesian added in Phase 1). Unsupported languages fall back to `en`. |
 | **summarize** | Generates native-language + English long/short summaries via `WORKER_LLM_MODEL` (default `gpt-5-mini`), `source='generated'`. Skips rows that already exist (including CSV-seeded `source='external'` rows). For non-English docs, `title_en` is COALESCE'd to the original title — true translation is deferred. |
 | **classify** | LLM call constrained to the `tags` taxonomy v1 values. Writes `document_tags` with `source='llm'`; `status='accepted'` if `confidence ≥ TAG_CONFIDENCE_ACCEPT` (default 0.7), else `status='suggested'`. Never touches rows with `source='human'` or `source='external'`. |
-| **embed** | Phase 0-identical chunking: SimpleNodeParser 400/80 + summary node, legacy chunk id format, `node_metadata` verbatim, `text-embedding-3-small`. `corpus_order` appended after the current global max (advisory lock for concurrency). Re-ingest deletes prior chunks first. Chinese text and summaries are OpenCC t2s-normalized in chunks only (`document_texts` retains original). |
-| **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). If `< 0.7`: document status → `needs_review`. Otherwise: document status → `searchable` + best-effort `POST SEARCH_SERVICE_URL/reindex` to refresh the service's in-memory passage-context texts/metadata (both retrieval lanes pick up new chunks immediately via SQL under the default sparse backend). |
+| **embed** | Phase 0-identical chunking: SimpleNodeParser 400/80 + summary node, legacy chunk id format, `node_metadata` verbatim, `text-embedding-3-small`. `corpus_order` appended after the current global max (advisory lock for concurrency). Re-ingest deletes prior chunks first. Chinese text and summaries are OpenCC t2s-normalized in chunks only (`document_texts` retains original). Also writes sparse keyword vectors under the frozen corpus stats (new tokens get `df=1`); a token_id headroom guard **warns at 80% of `SPARSE_DIM`** and raises a clear error at the cap (run `build_sparse_keyword.py` or migrate the dimension). If `keyword_corpus_stats` is missing (backfill never ran), it writes `NULL` sparse with a warning. |
+| **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). If `< 0.7`: document status → `needs_review`. Otherwise: document status → `searchable` + best-effort `POST SEARCH_SERVICE_URL/reindex` (one retry on `409 already_running`) to refresh the service's in-memory passage-context texts/metadata (both retrieval lanes pick up new chunks immediately via SQL under the default sparse backend). |
 
 ### 10.5 Document lifecycle update
 
@@ -266,6 +272,7 @@ A review UI shipped in Phase 2; see §11 below.
 | `WORKER_LLM_MODEL` | `gpt-5-mini` | LLM used for summarize and classify stages |
 | `WORKER_POLL_SECONDS` | `10` | Seconds between intake sweeps when running in continuous mode |
 | `WORKER_MAX_ATTEMPTS` | `3` | Max stage attempts before job status → `error` |
+| `WORKER_REAP_MINUTES` | `15` | Stale-job reaper threshold: `running` jobs idle longer than this are requeued |
 | `INTAKE_S3_PREFIX` | `intake/` | S3 prefix the worker watches for new PDFs |
 | `INTAKE_LOCAL_DIR` | — | Local directory for intake in dev mode (e.g. `./intake`) |
 | `DOCUMENTS_S3_BUCKET` | — | S3 bucket for both intake and document storage |
@@ -284,7 +291,7 @@ Taxonomy v1 is the raw 18 CSV values seeded in Phase 0. A domain owner should cu
 
 The ingestion worker runs as a separate ECS service (`ingestion-worker`) using the same container image as the search-service, with command override `python -m worker.main`. It has no ALB or service-discovery endpoint; `desired_count=1`. The deploy workflows force-new-deployment for the worker alongside the other services.
 
-CI (`pr-check.yml`) runs a `python-tests` job covering the hermetic/unit worker tests; DB-dependent worker tests self-skip when `DATABASE_URL` is absent (same pattern as the search-service tests).
+CI (`pr-check.yml`) runs a `python-tests` job with a `pgvector/pgvector:pg16` service container and `REQUIRE_DB_TESTS=1` — the DB-dependent worker tests run for real against scratch databases (self-skipping is local-only behavior; in CI a missing DB fails loudly). See the runbook's [What CI runs](runbooks/phase0-cutover.md#what-ci-runs) for the exact module selection.
 
 ---
 
@@ -360,7 +367,7 @@ When an editor accepts or rejects a suggested LLM tag, the `document_tags` row h
 
 Promote (`needs_review → searchable`) and withdraw (`searchable → withdrawn`) are consistent on the next query under the default `KEYWORD_BACKEND=sparse` — both lanes filter `status='searchable'` per-query, so no reindex is needed for UI-driven or direct psql status changes.
 
-The admin status route no longer calls `/reindex` at all — the API response has no `reindex` field and the UI shows no staleness notices. The `/reindex` endpoint itself remains, called only by the worker's publish stage to refresh the service's in-memory passage-context texts and metadata after a new document publishes (build-then-swap, seconds under sparse mode). Under `KEYWORD_BACKEND=memory` (legacy path) `/reindex` also rebuilds the in-memory BM25 index, and a manual call after admin lifecycle changes is required for keyword-lane correctness in that mode (see §4).
+The admin status route fires a **non-blocking, fire-and-forget** `POST /reindex` on promote (status → `searchable`) only — purely to refresh the service's in-memory passage-context texts; the API response has no `reindex` field, the route never awaits the call, and the UI shows no staleness notices (both retrieval lanes are already consistent per query). Withdraw fires nothing. The worker's publish stage calls `/reindex` for the same passage-text reason (with one retry on `409 already_running`; build-then-swap, seconds under sparse mode). Under `KEYWORD_BACKEND=memory` (legacy path) `/reindex` also rebuilds the in-memory BM25 index, and a manual call after admin lifecycle changes is required for keyword-lane correctness in that mode (see §4).
 
 ### 11.8 Deferred
 
