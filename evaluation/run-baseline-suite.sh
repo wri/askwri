@@ -37,12 +37,31 @@ fi
 
 # Single-instance guard: the eval checkpoints below are label-blind, so two
 # concurrent suite runs (any labels) would corrupt each other's resume state.
+# A pidfile inside the lockdir lets us detect a lock left behind by a
+# non-graceful death (kill -9, reboot) and reclaim it.
 LOCKDIR="$REPO/evaluation/results/.suite-lock"
-if ! mkdir "$LOCKDIR" 2>/dev/null; then
-  echo "FATAL: another suite run appears active ($LOCKDIR exists). If stale, rmdir it."
-  exit 1
+PIDFILE="$LOCKDIR/pid"
+acquire_lock() {
+  mkdir "$LOCKDIR" 2>/dev/null && echo "$$" > "$PIDFILE"
+}
+if ! acquire_lock; then
+  HOLDER="$(cat "$PIDFILE" 2>/dev/null || true)"
+  if [ -n "$HOLDER" ] && kill -0 "$HOLDER" 2>/dev/null; then
+    echo "FATAL: another suite run is active (PID $HOLDER holds $LOCKDIR)."
+    exit 1
+  fi
+  echo "Stale lock detected (holder PID ${HOLDER:-unknown} not alive); reclaiming."
+  rm -rf "$LOCKDIR"
+  if ! acquire_lock; then
+    echo "FATAL: another suite run appears active ($LOCKDIR exists). If stale, rmdir it."
+    exit 1
+  fi
 fi
-trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+trap 'rm -rf "$LOCKDIR"' EXIT
+# INT/TERM: exit so the EXIT trap releases the lock (a bare trap would let
+# the script continue running without holding the lock).
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # The per-query eval checkpoints are label-blind: starting a fresh run under a
 # new label must not resume from another label's checkpoints. Existence of the
@@ -77,6 +96,27 @@ else
   fi
   log "search-service ready"
 fi
+
+# --- 1b. backend identity check: the label is free-form, so this is a loud
+# warning (not a hard fail) when the service backend contradicts the label.
+HEALTH_JSON="$(curl -sf --max-time 5 http://127.0.0.1:8000/health)"
+KEYWORD_BACKEND="$(printf '%s' "$HEALTH_JSON" | sed -n 's/.*"keyword_backend"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+RETRIEVAL_BACKEND="$(printf '%s' "$HEALTH_JSON" | sed -n 's/.*"retrieval_backend"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+log "label=$LABEL keyword_backend=${KEYWORD_BACKEND:-unknown} retrieval_backend=${RETRIEVAL_BACKEND:-unknown}"
+if [ "$LABEL" = "baseline" ] && [ "$KEYWORD_BACKEND" != "memory" ]; then
+  log "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  log "!!! WARNING: label 'baseline' but keyword_backend='${KEYWORD_BACKEND:-unknown}'"
+  log "!!! (expected 'memory'). Results may be measuring the WRONG backend."
+  log "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+elif [[ "$LABEL" == *sparse* ]] && [ "$KEYWORD_BACKEND" != "sparse" ]; then
+  log "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  log "!!! WARNING: label '$LABEL' mentions sparse but keyword_backend='${KEYWORD_BACKEND:-unknown}'"
+  log "!!! (expected 'sparse'). Results may be measuring the WRONG backend."
+  log "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+fi
+
+# Eval scripts stamp their checkpoints/reports with EVAL_LABEL.
+export EVAL_LABEL="$LABEL"
 
 # --- 2. cite eval ---
 if done_step cite; then
@@ -125,7 +165,11 @@ else
   T1=$(date +%s)
   echo "{\"http_status\": $HTTP, \"seconds\": $((T1 - T0))}" > "evaluation/results/reindex-timing-$LABEL.json"
   log "reindex: HTTP $HTTP in $((T1 - T0))s"
-  if [ "$HTTP" = "200" ]; then mark_step reindex; fi
+  if [ "$HTTP" = "200" ]; then
+    mark_step reindex
+  else
+    log "reindex FAILED (HTTP $HTTP) — suite FAILED (re-run this script to retry)"; exit 1
+  fi
 fi
 
 log "BASELINE SUITE COMPLETE"

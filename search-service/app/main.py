@@ -790,6 +790,8 @@ async def health_check():
         "status": status,
         "service": "AskWRI Search Service",
         "environment": settings.environment,
+        "keyword_backend": settings.keyword_backend,
+        "retrieval_backend": settings.retrieval_backend,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": "2.0.0",
         "indexing": {

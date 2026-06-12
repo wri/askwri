@@ -5,11 +5,11 @@
  * Generates precision, recall, F1 metrics and detailed report
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DocMeta } from '../src/lib/llamacloud';
 import {
-  checkPythonService,
   callPythonService as callPythonServiceRaw,
   transformToDocMeta,
   PYTHON_SERVICE_URL,
@@ -18,7 +18,10 @@ import { calculateUrlMetrics, extractUrlSlug } from './lib/metrics';
 
 // Load golden dataset
 const goldenDataPath = path.join(__dirname, 'golden-dataset.json');
-const goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
+const goldenDataRaw = fs.readFileSync(goldenDataPath, 'utf-8');
+const goldenData = JSON.parse(goldenDataRaw);
+const goldenSetHash = crypto.createHash('sha256').update(goldenDataRaw).digest('hex');
+const evalLabel = process.env.EVAL_LABEL ?? null;
 
 interface TestCase {
   id: string;
@@ -49,8 +52,27 @@ interface TestResult {
   error?: string;
 }
 
+interface ServiceHealth {
+  keyword_backend: string | null;
+  retrieval_backend: string | null;
+}
+
+interface CheckpointIdentity {
+  goldenSetHash: string;
+  serviceIdentity: string | null;
+  label: string | null;
+}
+
+interface CheckpointFile {
+  identity?: CheckpointIdentity;
+  results?: Record<string, TestResult>;
+}
+
 interface EvalReport {
   timestamp: string;
+  label: string | null;
+  keyword_backend: string | null;
+  retrieval_backend: string | null;
   test_cases_total: number;
   test_cases_passed: number;
   test_cases_failed: number;
@@ -74,6 +96,32 @@ function extractUrls(docs: DocMeta[]): string[] {
     .map(doc => doc.url || doc._url)
     .filter(Boolean)
     .map(url => url as string);
+}
+
+/**
+ * Fetch /health and extract the service's backend identity.
+ * Fails fast if /health is unreachable or the service is not healthy:
+ * checkpoint identity and report provenance depend on knowing the backend.
+ */
+async function fetchServiceHealth(): Promise<ServiceHealth> {
+  let data: any;
+  try {
+    const response = await fetch(`${PYTHON_SERVICE_URL}/health`, { method: 'GET' });
+    data = await response.json();
+  } catch (error: any) {
+    console.error(`FATAL: /health unreachable at ${PYTHON_SERVICE_URL} (${error.message})`);
+    console.error('Cannot verify the service backend identity. Start the service first:');
+    console.error('  npm run search-service   (or set LLAMAINDEX_SERVICE_URL)');
+    process.exit(1);
+  }
+  if (data.status !== 'healthy' && !data.ok) {
+    console.error(`FATAL: service at ${PYTHON_SERVICE_URL} reports status "${data.status}" — not ready`);
+    process.exit(1);
+  }
+  return {
+    keyword_backend: data.keyword_backend ?? null,
+    retrieval_backend: data.retrieval_backend ?? null,
+  };
 }
 
 /**
@@ -213,31 +261,49 @@ async function runEvaluation() {
   console.log(`Test cases: ${goldenData.test_cases.length}`);
   console.log(`Total expected documents: ${goldenData.metadata.total_expected_documents}\n`);
 
-  // Pre-flight check
+  // Pre-flight check: verify the service is up AND capture its backend identity.
   console.log('Checking Python service availability...');
-  const serviceAvailable = await checkPythonService();
-  if (!serviceAvailable) {
-    console.error(`Python service not available at ${PYTHON_SERVICE_URL}`);
-    console.error('   Please start the service with: npm run start:all');
-    console.error('   Or set LLAMAINDEX_SERVICE_URL environment variable');
-    process.exit(1);
-  }
-  console.log('Python service is running\n');
+  const serviceHealth = await fetchServiceHealth();
+  console.log(`Python service is running (keyword_backend=${serviceHealth.keyword_backend}, retrieval_backend=${serviceHealth.retrieval_backend})\n`);
 
   const results: TestResult[] = [];
 
   // Resume support: each completed query is checkpointed so an interrupted run
   // (session limit, crash) only re-pays the queries it hasn't finished.
+  // The checkpoint is stamped with an identity (golden-set hash, service backend,
+  // label): resuming under a different identity would silently mix runs, so a
+  // mismatch discards the checkpoint and starts fresh.
   const checkpointPath = path.join(__dirname, 'results', 'cite-eval-checkpoint.json');
-  const checkpoint: Record<string, TestResult> = fs.existsSync(checkpointPath)
-    ? JSON.parse(fs.readFileSync(checkpointPath, 'utf-8'))
-    : {};
+  const checkpointIdentity: CheckpointIdentity = {
+    goldenSetHash,
+    serviceIdentity: serviceHealth.keyword_backend,
+    label: evalLabel,
+  };
+  let checkpoint: Record<string, TestResult> = {};
+  if (fs.existsSync(checkpointPath)) {
+    const stored: CheckpointFile = JSON.parse(fs.readFileSync(checkpointPath, 'utf-8'));
+    if (JSON.stringify(stored.identity ?? null) === JSON.stringify(checkpointIdentity)) {
+      checkpoint = stored.results ?? {};
+    } else {
+      console.log('Checkpoint identity mismatch — golden set, service backend, or label changed.');
+      console.log(`  stored:  ${JSON.stringify(stored.identity ?? null)}`);
+      console.log(`  current: ${JSON.stringify(checkpointIdentity)}`);
+      console.log('Discarding the old checkpoint and starting fresh.\n');
+    }
+  }
+  const saveCheckpoint = () => {
+    fs.mkdirSync(path.dirname(checkpointPath), { recursive: true });
+    const tmpPath = `${checkpointPath}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify({ identity: checkpointIdentity, results: checkpoint }, null, 2));
+    fs.renameSync(tmpPath, checkpointPath);
+  };
   const resumed = Object.values(checkpoint).filter(r => !r.error).length;
   if (resumed > 0) {
     console.log(`Resuming from checkpoint: ${resumed} completed queries will be skipped\n`);
   }
 
-  // Run each test case
+  // Run each test case. Reuse is keyed by the CURRENT golden set's ids: only
+  // checkpoint entries whose id exists in goldenData.test_cases are consulted.
   for (const testCase of goldenData.test_cases as TestCase[]) {
     const prior = checkpoint[testCase.id];
     if (prior && !prior.error) {
@@ -248,8 +314,7 @@ async function runEvaluation() {
     const result = await runTestCase(testCase);
     results.push(result);
     checkpoint[testCase.id] = result;
-    fs.mkdirSync(path.dirname(checkpointPath), { recursive: true });
-    fs.writeFileSync(checkpointPath, JSON.stringify(checkpoint, null, 2));
+    saveCheckpoint();
 
     // Add delay between requests to avoid rate limiting
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -266,6 +331,9 @@ async function runEvaluation() {
   // Generate report
   const report: EvalReport = {
     timestamp: new Date().toISOString(),
+    label: evalLabel,
+    keyword_backend: serviceHealth.keyword_backend,
+    retrieval_backend: serviceHealth.retrieval_backend,
     test_cases_total: results.length,
     test_cases_passed: passed,
     test_cases_failed: failed,
@@ -277,7 +345,11 @@ async function runEvaluation() {
   };
 
   // Save report
-  const reportPath = path.join(__dirname, 'results', `eval-report-${Date.now()}.json`);
+  const reportPath = path.join(
+    __dirname,
+    'results',
+    `eval-report-${evalLabel ? `${evalLabel}-` : ''}${Date.now()}.json`
+  );
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
@@ -299,6 +371,17 @@ async function runEvaluation() {
   console.log(`   F1 Score: ${(overallF1 * 100).toFixed(1)}%`);
 
   console.log(`\nFull report saved to: ${reportPath}`);
+
+  // Per-query errors must fail the run: exiting 0 on a partial result would
+  // poison downstream comparisons. The checkpoint is preserved (it is only
+  // cleared above when every query succeeded), so a re-run resumes and
+  // retries exactly the errored queries.
+  const errored = results.filter(r => r.error);
+  if (errored.length > 0) {
+    console.error(`\n${errored.length} test case(s) errored: ${errored.map(r => r.test_case_id).join(', ')}`);
+    console.error('Checkpoint preserved — re-run to retry the errored queries.');
+    process.exit(1);
+  }
 
   return report;
 }
