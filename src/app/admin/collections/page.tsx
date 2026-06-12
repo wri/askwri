@@ -24,6 +24,7 @@ const CollectionsPage = () => {
   const [editId, setEditId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [createBusy, setCreateBusy] = useState(false)
+  const [renameBusy, setRenameBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +70,7 @@ const CollectionsPage = () => {
   const saveRename = async (id: string) => {
     setNotice(null)
     setError(null)
+    setRenameBusy(true)
     try {
       await adminFetch(`/api/admin/collections/${id}`, {
         method: 'PATCH',
@@ -79,6 +81,8 @@ const CollectionsPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setRenameBusy(false)
     }
   }
 
@@ -123,6 +127,7 @@ const CollectionsPage = () => {
                   <>
                     <button
                       onClick={() => saveRename(col.id)}
+                      disabled={renameBusy}
                       style={{ marginRight: 8, textDecoration: 'underline' }}
                     >
                       Save

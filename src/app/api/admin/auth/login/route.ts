@@ -30,7 +30,16 @@ function isThrottled(username: string): boolean {
 }
 
 function recordFailure(username: string): void {
+  // Don't let absurdly long usernames bloat the limiter map; the login itself
+  // is still processed normally.
+  if (username.length > 256) return
   const now = Date.now()
+  // Bound the map: sweep expired windows once it grows past 10k entries.
+  if (failedAttempts.size > 10_000) {
+    for (const [key, value] of failedAttempts) {
+      if (now - value.windowStart > WINDOW_MS) failedAttempts.delete(key)
+    }
+  }
   const entry = failedAttempts.get(username)
   if (!entry || now - entry.windowStart > WINDOW_MS) {
     failedAttempts.set(username, { count: 1, windowStart: now })

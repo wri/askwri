@@ -38,7 +38,9 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       )
     }
-    const uploaded: string[] = []
+    // Validate every file (and buffer its bytes once) before uploading any,
+    // so a bad file in the batch never leaves a partial upload behind.
+    const validated: { name: string; bytes: Uint8Array }[] = []
     for (const file of files) {
       const name = basename(file.name)
       if (!name.toLowerCase().endsWith('.pdf')) {
@@ -54,6 +56,11 @@ export async function POST(req: NextRequest) {
       if (bytes.length < PDF_MAGIC.length || !PDF_MAGIC.every((b, i) => bytes[i] === b)) {
         return NextResponse.json({ ok: false, error: `${name}: not a valid PDF` }, { status: 400 })
       }
+      validated.push({ name, bytes })
+    }
+
+    const uploaded: string[] = []
+    for (const { name, bytes } of validated) {
       if (bucket) {
         const s3 = new S3Client({})
         await s3.send(

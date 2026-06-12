@@ -5,13 +5,14 @@ export class Migration1781300000000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Clean any existing duplicate open jobs before the unique index lands
-    // (keep the newest open job per document).
+    // (keep a running job over a queued one, then the newest per document —
+    // never delete a job that is mid-flight in favor of a queued duplicate).
     await queryRunner.query(`
       WITH ranked AS (
         SELECT id,
                row_number() OVER (
                  PARTITION BY document_id
-                 ORDER BY created_at DESC, id DESC
+                 ORDER BY (status = 'running') DESC, created_at DESC, id DESC
                ) AS rn
         FROM ingestion_jobs
         WHERE status IN ('queued', 'running') AND document_id IS NOT NULL

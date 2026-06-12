@@ -28,7 +28,11 @@ const LoginForm = () => {
         return
       }
       const next = searchParams.get('next') || ''
-      router.push(next.startsWith('/') && !next.startsWith('//') ? next : '/admin/review')
+      router.push(
+        next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\')
+          ? next
+          : '/admin/review',
+      )
     } catch {
       setError('network error — is the server up?')
     } finally {
