@@ -54,7 +54,22 @@ def enqueue(conn, document_id, model_versions: dict | None = None) -> uuid.UUID:
            WHERE document_id = %s AND status IN ('queued', 'running')""",
         (document_id,),
     ).fetchone()
-    return existing[0]
+    if existing:
+        return existing[0]
+    # The open job that blocked the INSERT finished between the INSERT and the
+    # SELECT — retry the INSERT once.
+    row = conn.execute(
+        """INSERT INTO ingestion_jobs (id, document_id, stage, status, model_versions)
+           VALUES (%s, %s, NULL, 'queued', %s)
+           ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
+           RETURNING id""",
+        (job_id, document_id, Jsonb(model_versions or {})),
+    ).fetchone()
+    if row:
+        return row[0]
+    raise RuntimeError(
+        f"enqueue: could not create or find an open ingestion job for document {document_id}"
+    )
 
 
 def claim_job() -> Optional[Tuple]:
@@ -66,7 +81,8 @@ def reap_stale_jobs(conn, max_age_minutes: int = 15) -> list:
     """Requeue jobs stuck in 'running' (worker died mid-stage). Stages are
     idempotent, so a requeue is safe. updated_at is touched on every transition
     (claim/advance/fail), so age is measured from the last transition. Returns
-    the reclaimed job ids."""
+    the reclaimed job ids. Threshold comes from settings.worker_reap_minutes
+    (the poll loop passes it explicitly)."""
     rows = conn.execute(
         """UPDATE ingestion_jobs SET status = 'queued'
            WHERE status = 'running' AND updated_at < now() - make_interval(mins => %s)
@@ -83,12 +99,18 @@ def next_stage(completed_stage: Optional[str]) -> str:
 
 
 def advance(job_id, completed_stage: str) -> None:
-    """Stage done; requeue for the next stage."""
+    """Stage done; requeue for the next stage.
+
+    This and the mark_* transitions below carry AND status = 'running': a job
+    reaped (running -> queued) and reclaimed by another worker can't be flipped
+    backward by the original worker's late write. The guarded UPDATE simply
+    no-ops and the late worker's work is discarded (stages are idempotent).
+    """
     with get_pool().connection() as conn:
         conn.execute(
             """UPDATE ingestion_jobs
                SET status = 'queued', stage = %s, attempts = 0, error = NULL, updated_at = now()
-               WHERE id = %s""",
+               WHERE id = %s AND status = 'running'""",
             (completed_stage, job_id),
         )
 
@@ -96,7 +118,8 @@ def advance(job_id, completed_stage: str) -> None:
 def mark_done(job_id, completed_stage: str) -> None:
     with get_pool().connection() as conn:
         conn.execute(
-            "UPDATE ingestion_jobs SET status='done', stage=%s, error=NULL, updated_at=now() WHERE id=%s",
+            """UPDATE ingestion_jobs SET status='done', stage=%s, error=NULL, updated_at=now()
+               WHERE id=%s AND status='running'""",
             (completed_stage, job_id),
         )
 
@@ -104,7 +127,8 @@ def mark_done(job_id, completed_stage: str) -> None:
 def mark_needs_review(job_id, at_stage: str) -> None:
     with get_pool().connection() as conn:
         conn.execute(
-            "UPDATE ingestion_jobs SET status='needs_review', stage=%s, updated_at=now() WHERE id=%s",
+            """UPDATE ingestion_jobs SET status='needs_review', stage=%s, updated_at=now()
+               WHERE id=%s AND status='running'""",
             (at_stage, job_id),
         )
 
@@ -117,7 +141,7 @@ def mark_failed(job_id, at_stage: str, error: str, attempts: int, max_attempts: 
         conn.execute(
             """UPDATE ingestion_jobs
                SET status=%s, attempts=%s, error=%s, updated_at=now()
-               WHERE id=%s""",
+               WHERE id=%s AND status='running'""",
             (status, new_attempts, error[:2000], job_id),
         )
     logger.warning(f"job {job_id} stage '{at_stage}' -> {status} (attempt {new_attempts}): {error[:200]}")

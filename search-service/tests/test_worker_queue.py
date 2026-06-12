@@ -157,6 +157,8 @@ class TestWorkerQueue:
         assert count == 1
 
         # After marking done, a new enqueue should create a second row
+        # (mark_done requires status='running', so claim first)
+        assert queue.claim_job() is not None
         queue.mark_done(job_id_1, "publish")
 
         with psycopg.connect(worker_test_db) as conn:
@@ -386,6 +388,39 @@ class TestWorkerQueue:
             ).fetchone()[0]
         assert stale_status == "queued", "stale running job should be requeued"
         assert fresh_status == "running", "fresh running job should be untouched"
+
+    def test_done_job_not_resurrected_by_late_writes(self, worker_test_db):
+        """By-id transitions require status='running': a reaped-and-superseded
+        worker's late advance/mark_failed/mark_needs_review/mark_done must not
+        flip a finished job backward."""
+        from worker import queue
+
+        with psycopg.connect(worker_test_db) as conn:
+            doc_id = _insert_document(conn)
+            job_id = queue.enqueue(conn, doc_id)
+            conn.commit()
+
+        assert queue.claim_job() is not None
+        queue.mark_done(job_id, "publish")
+
+        # Late writes from the original (reaped) worker are all discarded
+        queue.advance(job_id, "embed")
+        queue.mark_failed(job_id, "embed", "late failure", attempts=0, max_attempts=3)
+        queue.mark_needs_review(job_id, "classify")
+        queue.mark_done(job_id, "embed")
+
+        with psycopg.connect(worker_test_db) as conn:
+            row = conn.execute(
+                "SELECT status, stage, attempts, error FROM ingestion_jobs WHERE id = %s",
+                (job_id,),
+            ).fetchone()
+        assert row[0] == "done", "late writes must not change a done job's status"
+        assert row[1] == "publish", "late writes must not change a done job's stage"
+        assert row[2] == 0, "late mark_failed must not increment attempts"
+        assert row[3] is None, "late mark_failed must not record an error"
+
+        # And the done job is not claimable again
+        assert queue.claim_job() is None
 
     def test_withdrawn_document_job_skipped_without_running_stages(self, worker_test_db):
         """process_one_job on a withdrawn document marks the job done without
