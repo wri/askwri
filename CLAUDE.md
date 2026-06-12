@@ -12,11 +12,14 @@ Deployed on AWS ECS Fargate via `terraform/`; RDS Postgres (provisioned OUTSIDE 
 Terraform); S3 for PDFs and derived artifacts.
 
 ## Commands
-- `npm run dev` / `npm run build` — Next.js
+- `npm run dev` / `npm run build` — Next.js. Local prod builds: `npx next build --webpack`
+  (Turbopack panics on the `search-service/venv` symlink).
 - `npm test` — Jest (jsdom); `npm run lint`; `npm run format:check`
 - `npm run migration:generate` / `migration:run` / `migration:revert` — TypeORM (needs `.env` DB vars)
-- `npm run search-service` — venv + run FastAPI on :8000 (`npm run search-service:stop` to kill)
-- `cd search-service && ./venv/bin/python -m pytest tests/ -v` — Python tests
+- Search service: `cd search-service && ./venv/bin/python -m app.main` on :8000
+  (`npm run search-service` is broken locally — venv has no `pip` shim;
+  `npm run search-service:stop` to kill)
+- `npm run test:python` (or `cd search-service && ./venv/bin/python -m pytest tests/ -v`) — Python tests
 - `npm run eval:cite` / `npm run eval:answer-retrieval` — retrieval evals (search-service must be running)
 
 ## Conventions (follow, don't invent)
@@ -34,11 +37,14 @@ Terraform); S3 for PDFs and derived artifacts.
 ## Env vars
 See `.env.example`. DB: `DATABASE_URL` (or `DB_HOST/PORT/USER/PASSWORD/NAME`). Search:
 `SEARCH_SERVICE_URL`, `LLAMAINDEX_SERVICE_URL`. OpenAI: `OPENAI_API_KEY` (+ model overrides).
-Search-service: `RETRIEVAL_BACKEND` (`legacy`|`postgres`), `DOCUMENTS_LOCAL_DIR`, `CACHE_DIR`,
+Search-service: `RETRIEVAL_BACKEND` (`legacy`|`postgres`), `KEYWORD_BACKEND` (`sparse` default |
+`memory` legacy), `DOCUMENTS_LOCAL_DIR`, `CACHE_DIR`,
 S3 sync vars (`DOCUMENTS_S3_BUCKET`, `DOCUMENTS_S3_PREFIX`, `CACHE_S3_PREFIX`).
+Admin auth: `SESSION_SECRET` (>= 32 chars, required for `/admin`), `ADMIN_API_TOKEN` (optional bearer).
 
 ## Document management docs
-See `docs/document-management.md` (Phase 0 as-built reference) and `docs/runbooks/phase0-cutover.md` (cutover + local dev setup).
+See `docs/document-management.md` (as-built reference, Phases 0-2 + sparse keyword lane) and `docs/runbooks/phase0-cutover.md` (cutover + local dev setup).
+Deploys: `docs/runbooks/qa-push-deploy.md` (push ordering, migrations, sparse backfill, rollback).
 
 ## Out of scope for document-management work
 Retrieval tuning (RRF weights, rerankers, thresholds/tiers), answer synthesis, and eval
