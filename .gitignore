@@ -33,6 +33,9 @@ yarn-error.log*
 .idea/
 .vscode/
 
+# Agent worktrees (local, not for commit)
+.claude/
+
 # Terraform
 terraform/.terraform/
 terraform/*.tfstate
