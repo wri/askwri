@@ -23,12 +23,15 @@ sync_from_s3() {
     echo "WARNING: S3 ${label} sync failed after $retries attempts, continuing anyway"
 }
 
-if [ "$RETRIEVAL_BACKEND" = "postgres" ]; then
-    echo "RETRIEVAL_BACKEND=postgres: skipping S3 documents/cache sync"
-elif [ -n "$DOCUMENTS_S3_BUCKET" ]; then
-    mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache
+if [ -n "$DOCUMENTS_S3_BUCKET" ]; then
+    mkdir -p /tmp/askWRI_docs
     sync_from_s3 "documents" "s3://${DOCUMENTS_S3_BUCKET}/${DOCUMENTS_S3_PREFIX:-}" /tmp/askWRI_docs
-    sync_from_s3 "cache" "s3://${DOCUMENTS_S3_BUCKET}/${CACHE_S3_PREFIX:-}" /tmp/askWRI_cache
+    if [ "$RETRIEVAL_BACKEND" != "postgres" ]; then
+        mkdir -p /tmp/askWRI_cache
+        sync_from_s3 "cache" "s3://${DOCUMENTS_S3_BUCKET}/${CACHE_S3_PREFIX:-}" /tmp/askWRI_cache
+    else
+        echo "RETRIEVAL_BACKEND=postgres: skipping cache sync (embeddings in pgvector)"
+    fi
 else
     echo "DOCUMENTS_S3_BUCKET not set, skipping S3 sync"
 fi
