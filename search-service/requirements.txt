@@ -17,7 +17,7 @@ sentence-transformers>=3.4.1
 rank-bm25>=0.2.2
 
 # ONNX Runtime for fast cross-encoder inference on CPU (Fargate)
-onnxruntime>=1.26.0
+onnxruntime>=1.27.0
 optimum[onnxruntime]>=1.27.0
 
 # Data processing
