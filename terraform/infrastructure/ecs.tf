@@ -178,6 +178,14 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
         Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.intake_s3_prefix}*"
       },
       {
+        Sid    = "PutIntakeObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.intake_s3_prefix}*"
+      },
+      {
         Sid    = "WorkerPutDocuments"
         Effect = "Allow"
         Action = [
