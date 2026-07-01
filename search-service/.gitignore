@@ -1,1 +1,3 @@
 .coverage
+# R1 start.sh test creates this sandbox at run time
+tests/_startsh_sandbox/
