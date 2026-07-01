@@ -15,18 +15,24 @@ different) and §3 (the confirmed scope) before touching anything.
 
 ## 1. Current state (verified 2026-07-01)
 
-- **Branch:** `qa-wip-david`, 5 local commits ahead of `origin/qa-wip-david` (not pushed):
+- **Branch:** `qa-wip-david`, local-only (not pushed). After the Phase A merge of
+  `origin/qa` + the B3 fix, the deploy-unblocking commits are:
   - `f091d4a` docs: review findings
   - `bbdc97d` fix(iam): PutObject on intake/* (B2)
   - `7b0707c` fix(pdf): keep documents sync in postgres mode (R1)
   - `07555d6` fix(worker): COPY worker/ into Docker image (B1)
   - `91bf7b6` test: cover B1/B2/R1 regressions
+  - `ea64bfa` docs: QA push plan (big-path cutover)
+  - `ebd07a5` merge: integrate origin/qa dependabot bumps (next 16.2.10, pg 8.22, chakra 3.36, postcss, eslint)
+  - `d4c717e` build: update next-env.d.ts route types for next 16.2.10
+  - `5a5d3a4` fix(config): ignore undeclared env vars so boot doesn't crash (B3) — surfaced by running the pr-check matrix locally; CI was blind to it (.env gitignored)
+- **All three deploy blockers (B1/B2/B3) + the R1 regression are fixed and tested.**
 - **Divergence from `origin/qa`:** merge base `e8e77e8` (June 3 react-upgrade).
-  - `qa-wip-david` is **99 commits ahead** of `origin/qa` (the entire doc-mgmt system).
+  - `qa-wip-david` is **100 commits ahead** of `origin/qa` (the entire doc-mgmt system + the Phase A merge).
   - `origin/qa` is **10 commits ahead** of `qa-wip-david` — all dependabot bumps from
     July 1, touching **only `package-lock.json`**: `next 16.2.6→16.2.10`, `pg 8.21→8.22`,
     `@chakra-ui/react 3.35→3.36`, `postcss 8.5.15→8.5.16`, `@typescript-eslint/eslint-plugin
-    8.59.2→8.62.1`.
+    8.59.2→8.62.1`. **Already merged into `qa-wip-david` (Phase A, commit `ebd07a5`).**
   - `git merge-tree --write-tree origin/qa qa-wip-david` → **exit 0, no conflicts**. The
     integration is mechanically clean (package-lock only).
 - **Never deployed:** the ingestion-worker ECS service, the admin surface, the 4 schema

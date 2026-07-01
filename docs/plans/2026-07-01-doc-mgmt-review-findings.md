@@ -59,6 +59,29 @@ These block a safe first QA deploy. None were captured in the runbook or qa-push
   (scoped to the app, or to the shared role if the worker also needs it). Alternative:
   upload directly to `documents/`, but that bypasses the intake→worker→documents flow.
 
+### B3 — Settings forbids undeclared env vars → search-service + worker crash at boot (FIXED 2026-07-01, commit 5a5d3a4)
+- **Where:** `search-service/app/config.py` `Settings` (pydantic-settings v2) used the
+  default `extra="forbid"`, so any env var in `.env` or the task-def env that isn't a
+  declared field raises `ValidationError: <name>: Extra inputs are not permitted` in
+  `get_settings()`. Surfaced by running the pr-check Python matrix locally against the
+  real `.env`, which carried `VOYAGE_API_KEY` (a leftover from the parallel
+  Voyage-reranker draft branch; referenced **nowhere** in `app/`/`worker/`/`scripts/`).
+- **Impact:** the search-service AND the ingestion worker crash at boot whenever an
+  undeclared env var is present in their environment. The runbook's `SEARCH_SERVICE_ENV` /
+  `INGESTION_WORKER_ENV` secret JSONs become plain-text task-def env vars — if
+  `VOYAGE_API_KEY` (or any unknown var) is there, **both services brick on deploy**.
+- **Why CI is blind to it:** `.env` is gitignored, so pr-check never sees `VOYAGE_API_KEY`;
+  it only sets `DATABASE_URL`/`REQUIRE_DB_TESTS`. The PR goes green, the deploy bricks.
+- **Fix (shipped):** `extra="ignore"` on `SettingsConfigDict` — the standard
+  pydantic-settings pattern for tolerating env vars meant for other services / future
+  features. Intentionally feature-agnostic: the Voyage draft PR will declare
+  `voyage_api_key` on `Settings` when it lands; this defensive fix does not depend on it.
+  TDD: `tests/test_config.py` (3 tests, red→green verified). Full search-service pytest:
+  32 passed, 0 failed (was crashing before).
+- **Hygiene follow-up (local, not in the commit):** removed the leaked `VOYAGE_API_KEY`
+  value from the gitignored `search-service/.env`. **ROTATE that key in the Voyage
+  dashboard** before re-adding it — it sat in plaintext on disk.
+
 ---
 
 ## 2. New findings — not documented elsewhere
