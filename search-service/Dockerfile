@@ -53,6 +53,7 @@ RUN groupadd --gid 1000 appgroup && \
 
 # Copy application code
 COPY --chown=appuser:appgroup app/ ./app/
+COPY --chown=appuser:appgroup worker/ ./worker/
 
 # Copy startup script and make executable (before USER switch)
 COPY --chown=appuser:appgroup start.sh /app/start.sh
