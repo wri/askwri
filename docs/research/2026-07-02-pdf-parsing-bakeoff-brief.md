@@ -49,7 +49,7 @@ Four parallel `researcher` subagents covered: (A) local layout parsers, (B) clou
 | **Local base parser** | **Docling** (IBM/LF AI & Data) | Replace `PDFReader`; layout + tables + reading order + its own OCR; native `DoclingReader` + structure-aware chunkers | **MIT** (code) | Free | ✅ `DOCLING_DEVICE=cpu` |
 | **Cloud escalation** | **LlamaParse** (LlamaIndex) | Hard subset only (table-heavy/scanned where Docling underperforms); same ecosystem as current `PDFReader` | proprietary | ~$0.003/pg; 1k pg/mo free | n/a (cloud) |
 | **OCR pre-process** | **ocrmypdf** (Tesseract) | If Docling's OCR is weak on the scanned subset: pre-process → searchable PDF → unchanged parse path | **MPL-2.0** + Apache-2.0 (Tesseract) | Free | ✅ CPU-native |
-| **References (optional)** | **GROBID** sidecar (CRF) | Only if citation-aware retrieval / reference-stripping-by-structure becomes a goal | **Apache-2.0** | Free | ✅ CRF backend (JVM sidecar) |
+| **References (optional)** | **GROBID** sidecar (CRF) | Only if citation-aware retrieval / reference-stripping-by-structure becomes a goal. (Note: design §7.5 also gives GROBID a broader **metadata-extraction** role — title/authors/DOI/abstract/sections feeding the metadata store + dedup identity key — which is a separate, later decision.) | **Apache-2.0** | Free | ✅ CRF backend (JVM sidecar) |
 
 ### 3.2 License is the real differentiator among local tools
 
@@ -97,7 +97,7 @@ Four parallel `researcher` subagents covered: (A) local layout parsers, (B) clou
 - For multi-column order, section boundaries, and tables (the RAG chunking wins), a **general layout parser (Docling)** captures ~all the value, is lighter to deploy, and has a native LlamaIndex reader + chunkers.
 - For **reference semantics** (parse bibliography into author/title/year/DOI + link citation callouts), only **GROBID** does this well (~0.87–0.90 F1). Worth adding **only if** citation-aware retrieval or reference-stripping-by-structure becomes a goal — not for plain chunking.
 
-**Net:** primary investment = Docling as the new base layer. Add GROBID (Docker JVM sidecar, CRF on CPU) as an optional references-only layer when citation semantics are in scope.
+**Net:** primary investment = Docling as the new base layer. Add GROBID (Docker JVM sidecar, CRF on CPU) as an optional references-and/or-metadata layer when citation or metadata semantics are in scope (design §7.5).
 
 ---
 
