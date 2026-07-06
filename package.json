@@ -16,10 +16,10 @@
     "test:ci": "jest --ci --coverage",
     "search-service": "cd search-service && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt && ./venv/bin/python -m app.main",
     "search-service:stop": "bash -c 'if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then kill $(lsof -t -i:8000) 2>/dev/null; echo \"✅ Search service stopped\"; else echo \"ℹ️  Search service not running\"; fi'",
-    "typeorm": "ts-node --project tsconfig.typeorm.json -r dotenv/config ./node_modules/typeorm/cli.js",
-    "migration:generate": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:generate src/db/migrations/Migration -d src/db/migration-data-source.ts",
-    "migration:run": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:run -d src/db/migration-data-source.ts",
-    "migration:revert": "DOTENV_CONFIG_PATH=.env npm run typeorm -- migration:revert -d src/db/migration-data-source.ts",
+    "typeorm": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js ./node_modules/typeorm/cli.js",
+    "migration:generate": "npm run typeorm -- migration:generate src/db/migrations/Migration -d src/db/migration-data-source.ts",
+    "migration:run": "npm run typeorm -- migration:run -d src/db/migration-data-source.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d src/db/migration-data-source.ts",
     "eval:baseline-suite": "bash evaluation/run-baseline-suite.sh --daemon",
     "eval:cite": "npx tsx --env-file-if-exists=.env evaluation/run-cite-eval.ts",
     "eval:report": "npx tsx --env-file-if-exists=.env evaluation/generate-report.ts",
@@ -37,7 +37,7 @@
     "eval:download": "npx tsx --env-file-if-exists=.env evaluation/download-eval-from-s3.ts",
     "test:python": "cd search-service && ./venv/bin/python -m pytest tests/ -v",
     "test:db": "DATABASE_URL=postgresql://askwri:password@localhost:5432/qa DATABASE_SSL=false jest --testPathPattern='db.test'",
-    "seed:admin": "ts-node --project tsconfig.typeorm.json -r dotenv/config scripts/seed-admin.ts"
+    "seed:admin": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/seed-admin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.997.0",
