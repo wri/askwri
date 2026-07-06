@@ -77,6 +77,16 @@ def _run_startsh(env: dict[str, str]) -> tuple[int, str, list[str]]:
         "PORT": "8000",
         "WORKERS": "1",
     }
+    # Neutralize start.sh-relevant vars leaked into os.environ by
+    # conftest's load_env() (which loads .env.local). Pop them BEFORE the
+    # caller's env is applied so each test fully controls these vars.
+    for _k in (
+        "RETRIEVAL_BACKEND",
+        "DOCUMENTS_S3_BUCKET",
+        "DOCUMENTS_S3_PREFIX",
+        "CACHE_S3_PREFIX",
+    ):
+        full_env.pop(_k, None)
     # Caller env wins for the variables under test.
     full_env.update(env)
     # Make sure no leftover .env is auto-loaded by the script (it doesn't load
