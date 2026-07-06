@@ -1,6 +1,6 @@
 """Shared pytest fixtures and helpers for search-service tests.
 
-Loads the .env file from the search-service directory early so that
+Loads .env.local then .env from the search-service directory early so that
 DATABASE_URL and other vars are available for skip markers evaluated at
 collection time.
 
@@ -8,16 +8,15 @@ Loud-skip guard: if REQUIRE_DB_TESTS=1 and DATABASE_URL is missing, fail
 loudly instead of silently skipping — prevents false-green CI.
 """
 import os
-from pathlib import Path
 
 import pytest
 
-# Load .env before any skip markers are evaluated — this file is imported
-# by pytest before test modules are collected.
-_env_path = Path(__file__).parent.parent / ".env"
-if _env_path.exists():
-    from dotenv import load_dotenv
-    load_dotenv(_env_path, override=False)
+# Load .env.local then .env before any skip markers are evaluated — this file
+# is imported by pytest before test modules are collected. See app/env.py for
+# the precedence rules.
+from app.env import load_env
+
+load_env()
 
 
 def _check_db_required():

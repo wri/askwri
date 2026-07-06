@@ -6,12 +6,12 @@ import time
 import pickle
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
+from app.env import load_env
 import certifi
 import httpx
 
 # Load environment variables from .env file
-load_dotenv()
+load_env()  # local dev: .env.local then .env into os.environ (see app/env.py)
 
 # SSL Certificate workaround for Zscaler VPN
 # This handles corporate proxy/VPN environments that insert custom SSL certificates

@@ -8,9 +8,9 @@ import argparse
 import logging
 import time
 
-from dotenv import load_dotenv
+from app.env import load_env
 
-load_dotenv()  # local dev: export .env (OPENAI_API_KEY etc.), same as app.main
+load_env()  # local dev: .env.local then .env into os.environ (see app/env.py)
 
 from app.config import get_settings  # noqa: E402
 from app.db import get_pool  # noqa: E402
