@@ -58,21 +58,32 @@ live in files Next.js already prefers and git already ignores:
   `DOCUMENTS_S3_BUCKET=askwri-data`, `DOCUMENTS_S3_PREFIX=` (empty).
 - **Root `.env.test.local`**: the same DB vars, for `next/jest` (see trap above).
 - **`search-service/.env.local`**: `DATABASE_URL` (local), `RETRIEVAL_BACKEND=postgres`,
-  `AWS_ENDPOINT_URL`, bucket vars, intake S3 prefix. **`INTAKE_LOCAL_DIR` must not be set** —
-  its presence silently switches the worker to the local-dir intake path and defeats the
-  S3-fidelity test.
+  `AWS_ENDPOINT_URL`, `DOCUMENTS_S3_BUCKET=askwri-data`, **`DOCUMENTS_S3_PREFIX=` (explicitly
+  empty — load-bearing, per the bare-filename `s3_key` scheme)**, intake S3 prefix, and
+  `REQUIRE_DB_TESTS=1` (makes pytest fail loudly instead of silently skipping if
+  `DATABASE_URL` ever goes missing). **`INTAKE_LOCAL_DIR` must not be set** — its presence
+  silently switches the worker to the local-dir intake path and defeats the S3-fidelity test.
 
-Three small code changes make every entry point honor the convention (each inert in prod,
+Four small code changes make every entry point honor the convention (each inert in prod,
 where none of these files exist):
 
 1. **pydantic-settings** (`search-service/app/config.py`): `env_file=(".env", ".env.local")` —
    later file wins; real env vars still win over both.
 2. **TypeORM/seed scripts** (`package.json` `typeorm`/`seed:admin`): replace `-r dotenv/config`
    with a ~5-line preload that loads `.env.local` then `.env`. dotenv never overrides real env,
-   so deploy-day `DATABASE_URL=… npm run migration:run` behaves exactly as today.
+   so deploy-day `DATABASE_URL=… npm run migration:run` behaves exactly as today. The now-dead
+   `DOTENV_CONFIG_PATH=.env` prefixes on the `migration:*` scripts are stripped in the same edit.
 3. **`src/lib/s3.ts`** (~10 lines): returns `S3Client` config — if `AWS_ENDPOINT_URL` is set,
-   `{ endpoint, forcePathStyle: true }`; else `{}`. Used by the 3 existing `new S3Client({})`
-   call sites (admin intake, admin file, eval-storage). No separate force-path-style variable.
+   `{ endpoint, forcePathStyle: true }`; else `{}`. Applied to the 3 app-tier
+   `new S3Client({})` call sites (admin intake, admin file, eval-storage). The 2 remaining
+   sites (`evaluation/upload-eval-to-s3.ts`, `download-eval-from-s3.ts`) are standalone
+   real-AWS sync scripts outside the validation gate and deliberately keep `new S3Client({})`.
+   No separate force-path-style variable.
+4. **`search-service/tests/conftest.py`**: its own hardcoded loader reads only
+   `search-service/.env`; extend it to load `.env.local` first (same `override=False`
+   semantics, so real env still wins). Without this, the DB-gated pytest suites
+   (`test_pg_store.py`, `test_query_e2e.py`) silently skip and the §4 gate is hollow —
+   `REQUIRE_DB_TESTS=1` in `.env.local` (above) is the backstop that makes any regression loud.
 
 Rejected alternative: a zero-code-change wrapper script (`./scripts/dev <cmd>`) — avoids the
 three edits but taxes every command ever run; the convention costs ~20 lines once.
@@ -94,8 +105,9 @@ containers, missing venv.
    destructive `178130` is a no-op on a fresh local DB.
 6. **Corpus:** skip if `documents` count is already 169; else
    `migrate_csv_to_postgres` (warm cache; **never `--reset`** — the D6 footgun).
-7. **Sparse backfill:** `build_sparse_keyword` (idempotent; skip if
-   `keyword_corpus_stats` is populated and fresh).
+7. **Sparse backfill:** `build_sparse_keyword` (idempotent; skip iff `keyword_corpus_stats`
+   has a row — weight *freshness* after later corpus changes stays a manual concern, per
+   runbook §6).
 8. **MinIO seed:** create bucket `askwri-data` and upload the 169 PDFs at bare-filename keys +
    ensure empty `intake/` prefix (one-shot `minio/mc` container).
 9. **Admin user:** `npm run seed:admin -- admin admin-local-password` (skip if exists is fine —
