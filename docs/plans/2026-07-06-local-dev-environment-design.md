@@ -32,9 +32,12 @@ terraform). Purpose: validate the ~104-commit document-management branch end-to-
   `DOCUMENTS_S3_PREFIX` empty.
 - **Jest env trap:** `next/jest` runs with `NODE_ENV=test` and Next.js *skips `.env.local` in
   test mode* — DB-backed Jest suites need `.env.test.local` (already gitignored; `.env.test` is not).
-- **boto3 needs no code change** for MinIO (honors `AWS_ENDPOINT_URL`, auto path-style). The
-  Node SDK does: `new S3Client({})` at 3 call sites, and SDK v3 has no env var for
-  `forcePathStyle`.
+- **boto3 honors `AWS_ENDPOINT_URL` from the *process env*** (auto path-style for custom
+  endpoints) — pydantic Settings values are invisible to it. This works today only because
+  `app/main.py:14` and `worker/main.py:13` call `load_dotenv()` to export `.env` into
+  `os.environ`; those loaders (and `tests/conftest.py`'s) need `.env.local`-first ordering.
+  The Node SDK needs a code change: `new S3Client({})` at 3 app-tier call sites, and SDK v3
+  has no env var for `forcePathStyle`.
 - Ready on this machine: docker compose v5, port 5432 free (other pg container is on 5435),
   `pgvector/pgvector:pg16` image pulled, venv healthy (Python 3.13.2), OpenAI key valid,
   173 GB disk. Node is v23.10 vs `engines >=24` — unenforced and working; note-only.
@@ -60,8 +63,10 @@ live in files Next.js already prefers and git already ignores:
   `DOCUMENTS_S3_BUCKET=askwri-data`, `DOCUMENTS_S3_PREFIX=` (empty).
 - **Root `.env.test.local`**: the same DB vars, for `next/jest` (see trap above).
 - **`search-service/.env.local`**: `DATABASE_URL` (local), `RETRIEVAL_BACKEND=postgres`,
-  `AWS_ENDPOINT_URL`, `DOCUMENTS_S3_BUCKET=askwri-data`, **`DOCUMENTS_S3_PREFIX=` (explicitly
-  empty — load-bearing, per the bare-filename `s3_key` scheme)**, intake S3 prefix, and
+  `AWS_ENDPOINT_URL`, `DOCUMENTS_S3_BUCKET=askwri-data` (`DOCUMENTS_S3_PREFIX` stays at its
+  `documents/` default — the worker records the same prefix it copies to as `s3_key`, so it is
+  self-consistent at any value; only *seeded* MinIO keys must match the migrated bare-filename
+  `s3_key`s), and
   `REQUIRE_DB_TESTS=1` (makes pytest fail loudly instead of silently skipping if
   `DATABASE_URL` ever goes missing). **`INTAKE_LOCAL_DIR` must not be set** — its presence
   silently switches the worker to the local-dir intake path and defeats the S3-fidelity test.
@@ -81,9 +86,11 @@ where none of these files exist):
    sites (`evaluation/upload-eval-to-s3.ts`, `download-eval-from-s3.ts`) are standalone
    real-AWS sync scripts outside the validation gate and deliberately keep `new S3Client({})`.
    No separate force-path-style variable.
-4. **`search-service/tests/conftest.py`**: its own hardcoded loader reads only
-   `search-service/.env`; extend it to load `.env.local` first (same `override=False`
-   semantics, so real env still wins). Without this, the DB-gated pytest suites
+4. **Shared process-env loader `search-service/app/env.py`** (~10 lines): loads `.env.local`
+   then `.env` with `override=False` (first-loaded wins; real env beats both). Replaces the
+   three independent hardcoded `.env`-only loaders in `app/main.py`, `worker/main.py`, and
+   `tests/conftest.py`. This is what makes boto3 see the MinIO endpoint (it reads only
+   `os.environ`), and without the conftest leg the DB-gated pytest suites
    (`test_pg_store.py`, `test_query_e2e.py`) silently skip and the §4 gate is hollow —
    `REQUIRE_DB_TESTS=1` in `.env.local` (above) is the backstop that makes any regression loud.
 
