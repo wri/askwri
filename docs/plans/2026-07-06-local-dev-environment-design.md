@@ -4,6 +4,8 @@
 **Companions:** [local-testing.md](../runbooks/local-testing.md) (current manual guide this supersedes-in-part),
 [phase0-cutover.md](../runbooks/phase0-cutover.md) (the setup steps this automates),
 [next-steps-qa-deploy.md](2026-07-02-next-steps-qa-deploy.md) (the deploy this de-risks).
+Bug IDs used below (B1–B3, R1, D6) are defined in the
+[review findings](2026-07-01-doc-mgmt-review-findings.md).
 
 ## Goal
 
