@@ -172,7 +172,9 @@ Also update the conftest module docstring's first paragraph to say "Loads .env.l
 ```bash
 cd search-service && ./venv/bin/python -m pytest tests/ -v
 ```
-Expected: 101 passed (98 + 3 new) OR passes-with-skips for DB-gated suites (DB not up yet — that's fine at this task; zero-skip enforcement comes with `.env.local` in Task 7).
+Expected: the 3 new tests pass, every previously-passing test still passes, and the DB-gated
+suites skip (DB not up yet — fine at this task; skip enforcement arrives with `.env.local` in
+Task 8, and the corrected suite arithmetic lives in Task 9 Step 3). No new failures.
 
 - [ ] **Step 7: Commit**
 
@@ -335,7 +337,9 @@ Expected: 2 passed
 npm test
 npm run lint
 ```
-Expected: 134 passed (132 + 2 new; DB suites may fail/skip until the DB is up — anything else red is a regression); lint clean.
+Expected: the 2 new tests pass and nothing previously passing regresses (judge by deltas —
+DB suites may skip/fail until the DB is up in Task 8; the measured full-suite baseline gets
+recorded in Task 9 Step 1). Lint clean.
 
 - [ ] **Step 7: Commit**
 
