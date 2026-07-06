@@ -21,6 +21,10 @@ Terraform); S3 for PDFs and derived artifacts.
   `npm run search-service:stop` to kill)
 - `npm run test:python` (or `cd search-service && ./venv/bin/python -m pytest tests/ -v`) — Python tests
 - `npm run eval:cite` / `npm run eval:answer-retrieval` — retrieval evals (search-service must be running)
+- `./scripts/local-bootstrap.sh` — one-command local stack (docker pgvector Postgres
+  \+ MinIO via `docker-compose.local.yml`, migrations, corpus, sparse backfill, bucket
+  seed, admin user `admin`/`admin-local-password`). Idempotent. Details:
+  `docs/runbooks/local-testing.md`.
 
 ## Conventions (follow, don't invent)
 - API routes: `src/app/api/<name>/route.ts` → call `initializeDatabase()` → call a function in
@@ -41,6 +45,23 @@ Search-service: `RETRIEVAL_BACKEND` (`legacy`|`postgres`), `KEYWORD_BACKEND` (`s
 `memory` legacy), `DOCUMENTS_LOCAL_DIR`, `CACHE_DIR`,
 S3 sync vars (`DOCUMENTS_S3_BUCKET`, `DOCUMENTS_S3_PREFIX`, `CACHE_S3_PREFIX`).
 Admin auth: `SESSION_SECRET` (>= 32 chars, required for `/admin`), `ADMIN_API_TOKEN` (optional bearer).
+
+## Local dev env files (no AWS)
+
+Gitignored overrides; precedence everywhere: real env > `.env.local` > `.env`.
+Never edit `.env` / `search-service/.env` for local values — they are the
+deploy-day reference.
+
+| File | Loaded by |
+|---|---|
+| `.env.local` | Next.js dev/prod; `scripts/load-env.js` (typeorm/seed CLIs) |
+| `.env.test.local` | Jest only — `NODE_ENV=test` makes Next.js skip `.env.local` |
+| `search-service/.env.local` | pydantic Settings (`app/config.py`) AND `app/env.py` → `os.environ` (boto3 reads the process env, not Settings) |
+
+S3 locally = MinIO (`AWS_ENDPOINT_URL=http://localhost:9000`, console :9001).
+Testing the worker's S3 intake lane requires `INTAKE_LOCAL_DIR` to be UNSET.
+Worker e2e PDFs: generate with `scripts.make_canary_pdf` (content-hash dedup
+rejects re-dropped identical files).
 
 ## Document management docs
 See `docs/document-management.md` (as-built reference, Phases 0-2 + sparse keyword lane) and `docs/runbooks/phase0-cutover.md` (cutover + local dev setup).
