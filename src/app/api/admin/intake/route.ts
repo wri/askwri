@@ -4,6 +4,7 @@ import { writeFile, mkdir } from 'fs/promises'
 import { join, basename } from 'path'
 import { requireIdentity, auditActor } from '../../../../lib/auth/identity'
 import { internalError } from '../../../../lib/api-error'
+import { s3ClientConfig } from '../../../../lib/s3'
 import { initializeDatabase } from '../../../../db/data-source'
 import { writeAudit } from '../../../../db/queries/audit'
 
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     const uploaded: string[] = []
     for (const { name, bytes } of validated) {
       if (bucket) {
-        const s3 = new S3Client({})
+        const s3 = new S3Client(s3ClientConfig())
         await s3.send(
           new PutObjectCommand({ Bucket: bucket, Key: `${intakePrefix}${name}`, Body: bytes }),
         )

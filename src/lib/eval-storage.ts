@@ -1,4 +1,5 @@
 import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { s3ClientConfig } from './s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -11,7 +12,7 @@ let s3Client: S3Client | null = null;
 
 function getS3Client(): S3Client {
   if (!s3Client) {
-    s3Client = new S3Client({});
+    s3Client = new S3Client(s3ClientConfig());
   }
   return s3Client;
 }

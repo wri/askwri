@@ -7,6 +7,7 @@ import { initializeDatabase, AppDataSource } from '../../../../../../db/data-sou
 import { Document } from '../../../../../../db/entities/Document.entity'
 import { requireIdentity } from '../../../../../../lib/auth/identity'
 import { internalError, isUuid } from '../../../../../../lib/api-error'
+import { s3ClientConfig } from '../../../../../../lib/s3'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     let body: Uint8Array
     if (bucket) {
-      const s3 = new S3Client({})
+      const s3 = new S3Client(s3ClientConfig())
       const obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: doc.s3Key }))
       body = new Uint8Array(await obj.Body!.transformToByteArray())
     } else {
