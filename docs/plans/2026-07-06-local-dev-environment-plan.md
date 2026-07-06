@@ -26,7 +26,14 @@ Tasks 11–13 are mandatory. A task that changes behavior and skips its docs ste
 - **Env precedence, everywhere, always:** real environment variable > `.env.local` > `.env`. Each loader implements this differently (dotenv `override=False` = first-loaded-wins → load `.env.local` FIRST; pydantic `env_file` tuple = later-file-wins → list `.env.local` LAST). Get the order right per mechanism.
 - **Jest trap:** `next/jest` runs with `NODE_ENV=test`; Next.js skips `.env.local` in test mode. That's why `.env.test.local` exists (and why it, not `.env.test`, is used — only the former is gitignored).
 - **boto3 reads `os.environ`, not pydantic Settings.** That's why Task 1's loader exports to the process env.
-- Pre-existing test baselines (must not regress): `npm test` 132 pass · `npm run test:db` 33 pass · `npm run test:python` 98 pass, 0 skips (once DB is up).
+- Pre-existing test baselines (must not regress): `npm run test:db` 33 pass (exact) ·
+  `npm run test:python` collects 110 items — with the DB up expect ~109 pass and **exactly 1 skip**
+  (`test_dockerfile_worker.py`, opt-in via `REQUIRE_DOCKER_TESTS=1` because it builds a ~860MB
+  image — do NOT set that var to chase the skip) · `npm test` docs claim 132 but this is
+  unverified against a live DB — measure it on the first DB-up run and judge by *deltas*
+  (+new tests, no regressions, `*.db.test` suites actually running), not the absolute.
+  Caveat: a stray `.claude/worktrees/` directory inside the repo can add duplicate suites to
+  `npm test` counts — ignore paths under it when reconciling.
 - `package-lock.json` has an unrelated pre-existing local modification — never `git add` it (stage files explicitly; no `git commit -am`).
 - Commit messages: plain conventional commits, **no Co-Authored-By trailers**.
 - Repo conventions in `CLAUDE.md` apply. Prod build locally is `npx next build --webpack` (Turbopack panics on the venv symlink).
@@ -785,16 +792,20 @@ No code changes expected in this task; it proves Tasks 1–8. Any failure → fi
 ```bash
 npm test
 ```
-Expected: 134 passed (132 baseline + 2 from Task 3), including every `*.db.test.ts` suite (they now reach local Postgres via `.env.test.local`). A hang or connection error here means the Jest env files are wrong.
+Expected: baseline + 2 (Task 3's new tests), with every `*.db.test.ts` suite **running, not pending/skipped** (they now reach local Postgres via `.env.test.local`) and zero failures. Record the measured total — it becomes the documented baseline in Task 11. A hang or connection error here means the Jest env files are wrong.
 
 - [ ] **Step 2: `npm run test:db`** — expected: 33 passed.
 
-- [ ] **Step 3: Python — zero skips is the whole point**
+- [ ] **Step 3: Python — zero DB-related skips is the whole point**
 
 ```bash
 npm run test:python
 ```
-Expected: 103 passed (98 baseline + 5 from Tasks 1–2), **0 skipped**. `REQUIRE_DB_TESTS=1` (from `search-service/.env.local`) turns any silent skip into a loud failure.
+Expected: ~114 passed (109 baseline + 5 from Tasks 1–2), **exactly 1 skipped** — the opt-in
+`test_dockerfile_worker.py` Docker-build test (`REQUIRE_DOCKER_TESTS!=1`; leave it skipped,
+Task 9 Step 5 covers Docker builds directly). Any *other* skip is a failure of this task —
+`REQUIRE_DB_TESTS=1` (from `search-service/.env.local`) turns DB-gated skips loud, and a
+`DATABASE_URL not set` skip means the env loaders are broken.
 
 - [ ] **Step 4: Lint + prod build**
 
@@ -912,7 +923,7 @@ are unaffected — explicit env always wins. The deploy-day `.env` is never touc
 | S3 documents bucket | MinIO container `askwri-minio` (bucket `askwri-data`, seeded by bootstrap) | `AWS_ENDPOINT_URL=http://localhost:9000` in the `.env.local` files; local-dir fallback still available via `DOCUMENTS_LOCAL_DIR` |
 | S3 intake drop | MinIO `intake/` prefix (the real S3 code path) | leave `INTAKE_LOCAL_DIR` unset; the worker sweeps MinIO. Legacy local-dir mode: set `INTAKE_LOCAL_DIR` |
 
-- [ ] **Step 3: Correct the stale claims** in the "Cannot be tested locally" list: remove "S3-backed Open PDF" (it works two ways now — MinIO S3 branch, or the `ADMIN_PDF_LOCAL_DIR`→`/tmp/askWRI_docs` fallback); the remaining deploy-only surface is IAM/task roles, Secrets-Manager JSON plumbing, ECS wiring, RDS SSL/extension state, and the deploy pipeline.
+- [ ] **Step 3: Correct the stale claims** in the "Cannot be tested locally" list: remove "S3-backed Open PDF" (it works two ways now — MinIO S3 branch, or the `ADMIN_PDF_LOCAL_DIR`→`/tmp/askWRI_docs` fallback); the remaining deploy-only surface is IAM/task roles, Secrets-Manager JSON plumbing, ECS wiring, RDS SSL/extension state, and the deploy pipeline. Also replace the §3 expected suite counts (`132 pass` / `98 pass, 0 skips`) with the values actually measured in Tasks 9 (the old numbers are stale: pytest really collects 110+new with 1 permanent opt-in Docker skip).
 
 - [ ] **Step 4: Add to §7 known gotchas:**
   - Node is pinned `>=24` in `package.json` engines but v23.10 works; unenforced — upgrade at leisure.
@@ -1023,7 +1034,8 @@ Include in this commit message body the Task 10 Step 6 validation record (suite 
 ## Definition of done
 
 1. `./scripts/local-bootstrap.sh` twice in a row: first run builds everything, second run all-skips in <1 min.
-2. All suites green with **zero DB skips**: Jest 134 (incl. `*.db.test`), test:db 33, pytest 103.
+2. All suites green with **zero DB-related skips**: Jest baseline+2 with `*.db.test` suites
+   running, test:db 33, pytest ~114 with only the opt-in Docker-build skip remaining.
 3. `/health` shows `postgres` + `sparse`; parity 26/26; non-English smoke at baseline.
 4. Canary PDF: MinIO intake → worker publish → both vector lanes → `/query` hit → admin Open PDF from MinIO. Public 404 on the canary understood and documented (R5).
 5. Docs shipped for both audiences (runbook §0 + CLAUDE.md) and consistent with as-built behavior.
