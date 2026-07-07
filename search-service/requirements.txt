@@ -13,7 +13,8 @@ openai>=1.109.1
 
 # Hybrid retrieval
 llama-index-retrievers-bm25>=0.7.1,<1.0.0
-sentence-transformers>=3.4.1
+# >=5.0: CrossEncoder activation_fn kwarg (OnnxReranker pins identity for raw logits)
+sentence-transformers>=5.0
 rank-bm25>=0.2.2
 
 # ONNX Runtime for fast cross-encoder inference on CPU (Fargate)
