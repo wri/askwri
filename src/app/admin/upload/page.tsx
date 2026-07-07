@@ -10,12 +10,13 @@ interface WorkerHealth {
   queueDepth: number
   lastProcessedAt: string | null
   intakeBacklog: number
-  status: 'idle' | 'processing' | 'stale'
+  status: 'idle' | 'processing' | 'pending' | 'stale'
 }
 
 const STATUS_STYLES: Record<WorkerHealth['status'], { color: string; label: string }> = {
   idle: { color: '#0A6640', label: 'idle (caught up)' },
   processing: { color: '#0050C8', label: 'processing' },
+  pending: { color: '#B7791F', label: 'pending — worker will pick up shortly' },
   stale: { color: '#C11101', label: 'NOT RUNNING — dropped files are NOT being processed' },
 }
 
@@ -76,7 +77,9 @@ const UploadPage = () => {
         `${n} file(s) dropped into the intake queue. ` +
           (health?.status === 'stale'
             ? '⚠ The ingestion worker is NOT running — your files will not be processed until it starts. See the worker status below.'
-            : 'The ingestion worker will register and process them shortly. Track progress in the Review queue.'),
+            : health?.status === 'pending'
+              ? 'Files are in the intake queue — the worker will pick them up shortly. Track progress in the Review queue.'
+              : 'The ingestion worker will register and process them shortly. Track progress in the Review queue.'),
       )
     } catch (err: any) {
       setError(err.message)
