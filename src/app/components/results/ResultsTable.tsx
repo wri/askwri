@@ -37,12 +37,7 @@ const columns = [
   },
   {
     key: 'short_summary',
-    label: (
-      <div>
-        <div>Summary</div>
-        {AiGeneratedTag}
-      </div>
-    ),
+    label: 'Summary',
   },
   {
     key: 'relevance',
