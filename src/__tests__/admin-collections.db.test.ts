@@ -161,4 +161,31 @@ d('collectionsAdmin (DB integration)', () => {
     expect(typeof found!.name).toBe('string')
     expect(typeof found!.slug).toBe('string')
   })
+
+  it('updateCollection regenerates the slug when the name changes', async () => {
+    // The collection was created with a timestamp-based name; rename it
+    const newName = `Renamed Collection ${Date.now()}`
+    const result = await updateCollection(collectionId, { name: newName }, identity)
+    expect(result).not.toBeNull()
+    expect(result!.name).toBe(newName)
+    expect(result!.slug).toBe(slugify(newName))
+
+    // Verify the DB row has the new slug
+    const [row] = await AppDataSource.query(
+      `SELECT name, slug FROM collections WHERE id = $1`,
+      [collectionId],
+    )
+    expect(row.slug).toBe(slugify(newName))
+    expect(row.name).toBe(newName)
+
+    // Verify audit captured the slug change
+    const [audit] = await AppDataSource.query(
+      `SELECT before, after FROM audit_log
+       WHERE entity_type = 'collection' AND entity_id = $1 AND action = 'update'
+       ORDER BY at DESC LIMIT 1`,
+      [collectionId],
+    )
+    expect(audit.after).toHaveProperty('name', newName)
+    expect(audit.after).toHaveProperty('slug', slugify(newName))
+  })
 })

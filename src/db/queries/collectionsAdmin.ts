@@ -68,6 +68,14 @@ export async function updateCollection(
       ;(collection as any)[key] = patch[key]
     }
   }
+  // Regenerate the slug when the name changes (N-D fix: previously the slug
+  // was never updated on rename, leaving a stale slug forever).
+  if (after.name !== undefined) {
+    const newSlug = slugify(after.name)
+    before.slug = collection.slug
+    after.slug = newSlug
+    collection.slug = newSlug
+  }
   if (Object.keys(after).length === 0) return collection
   await repo.save(collection)
   await writeAudit({

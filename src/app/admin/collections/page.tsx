@@ -88,7 +88,7 @@ const CollectionsPage = () => {
   }
 
   return (
-    <Box>
+    <Box style={{ paddingBottom: 48 }}>
       <Heading size='lg' style={{ marginBottom: 8 }}>
         Collections{' '}
         <Tooltip help='Collections are curated groups of documents (e.g. by topic, project, or language). They support bulk operations (re-tag, re-embed, export) and can carry a language policy and embedding-model version for staged migration.'>What are collections?</Tooltip>
