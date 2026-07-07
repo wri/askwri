@@ -8,7 +8,9 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  const { response } = await requireIdentity(req)
+  // D3 fix: admin-only — was requireIdentity(req) with no role arg (any editor
+  // could bulk-import and craft s3_key values for cross-prefix S3 reads).
+  const { identity, response } = await requireIdentity(req, 'admin')
   if (response) return response
   try {
     const body = await req.json()
@@ -22,7 +24,7 @@ export async function POST(req: NextRequest) {
     }
 
     await initializeDatabase()
-    const result = await importDocuments(rows, { dryRun })
+    const result = await importDocuments(rows, { dryRun }, identity)
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
     return internalError(err)

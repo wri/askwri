@@ -14,6 +14,7 @@ import {
   mapRowToDocument,
   classifyUpsert,
   importDocuments,
+  validateFilePath,
   ImportRow,
 } from '@/db/queries/importDocuments'
 import { AppDataSource } from '@/db/data-source'
@@ -205,8 +206,14 @@ describe('classifyUpsert', () => {
     languages: ['en'],
     yearPublished: 2021,
     publicationTitle: 'Pub',
-    s3Key: 'test.pdf',
+    s3Key: 'documents/test.pdf',
     sourceMetadata: {},
+    doi: null,
+    articleType: null,
+    wriPrimaryOffice: null,
+    authors: null,
+    url: null,
+    datePublished: null,
   }
 
   it('returns created when no existing doc', () => {
@@ -231,8 +238,100 @@ describe('classifyUpsert', () => {
       yearPublished: 2020,
       publicationTitle: 'Pub',
       sourceMetadata: { file_path: 'x' },
+      doi: '10.1234/x',
+      articleType: 'WP',
+      wriPrimaryOffice: 'WRI',
+      authors: 'A',
+      url: 'U',
+      datePublished: '2020-01-01',
     } as any
     expect(classifyUpsert(existing, mapped)).toBe('skipped')
+  })
+
+  it('returns updated when doi is null and mapped has doi', () => {
+    const existing = { title: 'X', language: 'en', languages: ['en'], yearPublished: 2020, publicationTitle: 'P', sourceMetadata: { file_path: 'x' }, doi: null, articleType: 'WP', wriPrimaryOffice: 'WRI', authors: 'A', url: 'U', datePublished: '2020-01-01' } as any
+    expect(classifyUpsert(existing, { ...mapped, doi: '10.1234/x' })).toBe('updated')
+  })
+
+  it('returns updated when authors is null and mapped has authors', () => {
+    const existing = { title: 'X', language: 'en', languages: ['en'], yearPublished: 2020, publicationTitle: 'P', sourceMetadata: { file_path: 'x' }, doi: 'D', articleType: 'WP', wriPrimaryOffice: 'WRI', authors: null, url: 'U', datePublished: '2020-01-01' } as any
+    expect(classifyUpsert(existing, { ...mapped, authors: 'Smith, J.' })).toBe('updated')
+  })
+})
+
+describe('mapRowToDocument — new column mapping', () => {
+  const fullRow: ImportRow = {
+    file_path: '2021_report_abc.pdf',
+    metadata: {
+      'Article Title': 'My Report',
+      'Publication Title': 'WRI Journal',
+      languages: 'English',
+      'YEAR published': '2021',
+      'DOI': 'https://doi.org/10.1234/test',
+      'article_type': 'Working Paper',
+      'wri_primary_office': 'WRI Global',
+      'All authors': 'Smith, John; Doe, Jane',
+      'URL': 'https://www.wri.org/research/test',
+      'Date published': '8/17/2021',
+    },
+    summary: 'A nice summary',
+  }
+
+  it('maps DOI → doi', () => {
+    expect(mapRowToDocument(fullRow).doi).toBe('https://doi.org/10.1234/test')
+  })
+  it('maps article_type → articleType', () => {
+    expect(mapRowToDocument(fullRow).articleType).toBe('Working Paper')
+  })
+  it('maps wri_primary_office → wriPrimaryOffice', () => {
+    expect(mapRowToDocument(fullRow).wriPrimaryOffice).toBe('WRI Global')
+  })
+  it('maps All authors → authors', () => {
+    expect(mapRowToDocument(fullRow).authors).toBe('Smith, John; Doe, Jane')
+  })
+  it('maps URL → url', () => {
+    expect(mapRowToDocument(fullRow).url).toBe('https://www.wri.org/research/test')
+  })
+  it('maps Date published → datePublished (ISO)', () => {
+    expect(mapRowToDocument(fullRow).datePublished).toBe('2021-08-17')
+  })
+  it('s3Key is sanitized to documents/ prefix', () => {
+    expect(mapRowToDocument(fullRow).s3Key).toBe('documents/2021_report_abc.pdf')
+  })
+  it('nulls missing optional fields', () => {
+    const minimalRow: ImportRow = {
+      file_path: 'minimal.pdf',
+      metadata: { languages: 'English' },
+      summary: '',
+    }
+    const m = mapRowToDocument(minimalRow)
+    expect(m.doi).toBeNull()
+    expect(m.articleType).toBeNull()
+    expect(m.wriPrimaryOffice).toBeNull()
+    expect(m.authors).toBeNull()
+    expect(m.url).toBeNull()
+    expect(m.datePublished).toBeNull()
+  })
+})
+
+describe('validateFilePath', () => {
+  it('accepts a bare .pdf basename', () => {
+    expect(validateFilePath('2021_report.pdf')).toEqual({ ok: true, base: '2021_report.pdf' })
+  })
+  it('accepts under the documents prefix', () => {
+    expect(validateFilePath('documents/foo.pdf')).toEqual({ ok: true, base: 'foo.pdf' })
+  })
+  it('rejects a non-.pdf file', () => {
+    expect(validateFilePath('foo.txt').ok).toBe(false)
+  })
+  it('rejects path traversal (..)', () => {
+    expect(validateFilePath('../etc/passwd.pdf').ok).toBe(false)
+  })
+  it('rejects a cross-prefix directory (eval-data/)', () => {
+    expect(validateFilePath('eval-data/secret.pdf').ok).toBe(false)
+  })
+  it('rejects an empty string', () => {
+    expect(validateFilePath('').ok).toBe(false)
   })
 })
 
