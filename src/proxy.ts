@@ -30,12 +30,14 @@ export async function proxy(req: NextRequest) {
 
   // Bearer-token path must stay: bearer-only API calls have no session cookie,
   // so removing this would 401 them here before the handler ever runs.
+  // RFC 7235: the auth scheme token is case-insensitive.
   const apiToken = process.env.ADMIN_API_TOKEN
   const authHeader = req.headers.get('authorization')
   if (
     apiToken &&
     authHeader &&
-    (await timingSafeEqual(authHeader, `Bearer ${apiToken}`))
+    authHeader.toLowerCase().startsWith('bearer ') &&
+    (await timingSafeEqual(authHeader.toLowerCase(), `bearer ${apiToken}`))
   ) {
     return NextResponse.next()
   }

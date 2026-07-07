@@ -53,6 +53,22 @@ describe('requireIdentity', () => {
     expect(result.identity).toEqual({ kind: 'token', role: 'admin' })
   })
 
+  it('accepts a lowercase bearer scheme (RFC 7235: scheme is case-insensitive)', async () => {
+    const headers = new Headers()
+    headers.set('authorization', 'bearer test-api-token')
+    const req = new NextRequest('http://localhost/api/admin/test', { headers })
+    const result = await requireIdentity(req)
+    expect(result.identity).toEqual({ kind: 'token', role: 'admin' })
+  })
+
+  it('accepts a mixed-case Bearer scheme', async () => {
+    const headers = new Headers()
+    headers.set('authorization', 'BeArEr test-api-token')
+    const req = new NextRequest('http://localhost/api/admin/test', { headers })
+    const result = await requireIdentity(req)
+    expect(result.identity).toEqual({ kind: 'token', role: 'admin' })
+  })
+
   it('bearer-token identities skip the DB revalidation', async () => {
     const result = await requireIdentity(reqWith({ bearer: 'test-api-token' }))
     expect(result.identity).toEqual({ kind: 'token', role: 'admin' })

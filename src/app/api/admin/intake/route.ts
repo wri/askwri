@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     // Validate every file (and buffer its bytes once) before uploading any,
     // so a bad file in the batch never leaves a partial upload behind.
     const validated: { name: string; bytes: Uint8Array }[] = []
+    const seenNames = new Set<string>()
     for (const file of files) {
       const name = basename(file.name)
       if (!name.toLowerCase().endsWith('.pdf')) {
@@ -53,6 +54,13 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         )
       }
+      if (seenNames.has(name)) {
+        return NextResponse.json(
+          { ok: false, error: `${name}: duplicate filename in batch (rename and retry)` },
+          { status: 400 },
+        )
+      }
+      seenNames.add(name)
       const bytes = new Uint8Array(await file.arrayBuffer())
       if (bytes.length < PDF_MAGIC.length || !PDF_MAGIC.every((b, i) => bytes[i] === b)) {
         return NextResponse.json({ ok: false, error: `${name}: not a valid PDF` }, { status: 400 })
@@ -61,17 +69,33 @@ export async function POST(req: NextRequest) {
     }
 
     const uploaded: string[] = []
-    for (const { name, bytes } of validated) {
-      if (bucket) {
-        const s3 = new S3Client(s3ClientConfig())
-        await s3.send(
-          new PutObjectCommand({ Bucket: bucket, Key: `${intakePrefix}${name}`, Body: bytes }),
-        )
-      } else {
-        await mkdir(localDir!, { recursive: true })
-        await writeFile(join(localDir!, name), bytes)
+    try {
+      for (const { name, bytes } of validated) {
+        if (bucket) {
+          const s3 = new S3Client(s3ClientConfig())
+          await s3.send(
+            new PutObjectCommand({ Bucket: bucket, Key: `${intakePrefix}${name}`, Body: bytes }),
+          )
+        } else {
+          await mkdir(localDir!, { recursive: true })
+          await writeFile(join(localDir!, name), bytes)
+        }
+        uploaded.push(name)
       }
-      uploaded.push(name)
+    } catch (uploadErr) {
+      // Even on a mid-batch S3 failure, audit the files that DID upload
+      // so there is a trail of what landed in intake/.
+      if (uploaded.length > 0) {
+        await initializeDatabase()
+        await writeAudit({
+          ...auditActor(identity!),
+          action: 'import',
+          entityType: 'intake_upload',
+          entityId: null,
+          after: { files: uploaded, partial: true },
+        })
+      }
+      return internalError(uploadErr)
     }
     await initializeDatabase()
     await writeAudit({

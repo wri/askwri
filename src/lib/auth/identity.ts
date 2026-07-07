@@ -23,8 +23,14 @@ function timingSafeStringEqual(a: string, b: string): boolean {
 export async function getIdentity(req: NextRequest): Promise<AdminIdentity | null> {
   const apiToken = process.env.ADMIN_API_TOKEN
   const bearer = req.headers.get('authorization')
-  if (apiToken && bearer && timingSafeStringEqual(bearer, `Bearer ${apiToken}`)) {
-    return { kind: 'token', role: 'admin' }
+  if (apiToken && bearer) {
+    // RFC 7235: the auth scheme token is case-insensitive. Compare the
+    // scheme case-insensitively, then the token exactly (timing-safe).
+    const lowerBearer = bearer.toLowerCase()
+    const expected = `bearer ${apiToken}`
+    if (lowerBearer.startsWith('bearer ') && timingSafeStringEqual(lowerBearer, expected)) {
+      return { kind: 'token', role: 'admin' }
+    }
   }
   const token = req.cookies.get(SESSION_COOKIE)?.value
   if (!token) return null

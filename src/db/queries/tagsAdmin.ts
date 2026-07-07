@@ -30,6 +30,10 @@ export async function createTag(
   valueId: string,
   identity: AdminIdentity,
 ): Promise<Tag | { error: string }> {
+  // Validate facet is non-empty and valueId is non-empty.
+  if (!facet.trim() || !valueId.trim()) {
+    return { error: 'facet and valueId must be non-empty' }
+  }
   const repo = AppDataSource.getRepository(Tag)
   const existing = await repo.findOne({ where: { facet, valueId, taxonomyVersion: 'v1' } })
   if (existing) return { error: 'tag already exists' }

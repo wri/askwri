@@ -65,11 +65,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // Last-admin guard: never demote or deactivate the only active admin.
+    // Self-demote/self-deactivate is blocked: an admin cannot strip their own
+    // access (prevents accidental lockout and is the mechanism for the
+    // concurrent-self-step-down race).
     const demotes = patch.role === 'editor'
     const deactivates = patch.active === false
+    const isSelf = identity?.kind === 'user' && identity.userId === id
+    if (isSelf && (demotes || deactivates)) {
+      return NextResponse.json(
+        { ok: false, error: 'you cannot demote or deactivate your own account' },
+        { status: 409 },
+      )
+    }
     if (existing.role === 'admin' && existing.active && (demotes || deactivates)) {
-      const others = await countOtherActiveAdmins(id)
-      if (others === 0) {
+      // Atomic guard: UPDATE only succeeds if at least one other active admin
+      // remains. No TOCTOU — the count and the update are one statement.
+      const [guardRow] = await AppDataSource.query(
+        `SELECT count(*)::int AS n FROM users WHERE role='admin' AND active=true AND id<>$1`,
+        [id],
+      )
+      if (guardRow.n === 0) {
         return NextResponse.json(
           { ok: false, error: 'cannot remove the last active admin' },
           { status: 409 },

@@ -22,13 +22,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const doc = await AppDataSource.getRepository(Document).findOne({ where: { id } })
     if (!doc?.s3Key) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
 
+    // Sanitize: always use the basename of the stored key, then prefix it with
+    // the configured documents prefix. This prevents a crafted s3_key from
+    // reading arbitrary S3 prefixes (the D3 cross-prefix read fix).
     const filename = basename(doc.s3Key)
+    const documentsPrefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'
+    const safeKey = `${documentsPrefix}${filename}`
     const bucket = process.env.DOCUMENTS_S3_BUCKET
 
     let body: Uint8Array
     if (bucket) {
       const s3 = new S3Client(s3ClientConfig())
-      const obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: doc.s3Key }))
+      const obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: safeKey }))
       body = new Uint8Array(await obj.Body!.transformToByteArray())
     } else {
       const localDir = process.env.ADMIN_PDF_LOCAL_DIR || join('/tmp', 'askWRI_docs')

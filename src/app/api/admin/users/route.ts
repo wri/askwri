@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       action: 'create',
       entityType: 'user',
       entityId: user.id,
-      after: { username: user.username, role: user.role },
+      after: { username: user.username, email: user.email ?? null, role: user.role },
     })
     return NextResponse.json({ ok: true, user })
   } catch (err: any) {
