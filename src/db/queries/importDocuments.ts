@@ -14,11 +14,44 @@ const LANGUAGE_MAP: Record<string, string> = {
   bahasa: 'id',
 }
 
+// ---------------------------------------------------------------------------
+// Row types
+// ---------------------------------------------------------------------------
+
+/** Legacy JSON-blob format: { file_path, metadata: {Article Title, ...}, summary } */
 export interface ImportRow {
   file_path: string
   metadata: Record<string, any>
   summary?: string
 }
+
+/** Flat CSV format: each column maps directly to a DB field (DB column names). */
+export interface FlatImportRow {
+  file_path?: string
+  external_id?: string
+  doi?: string
+  title?: string
+  authors?: string
+  year_published?: string | number
+  publication_title?: string
+  article_type?: string
+  wri_primary_office?: string
+  languages?: string
+  url?: string
+  date_published?: string
+  summary?: string
+  short_summary?: string
+  // Legacy human-name aliases (auto-mapped to the DB column names above)
+  'Article Title'?: string
+  'Publication Title'?: string
+  'All authors'?: string
+  'YEAR published'?: string
+  'Date published'?: string
+  [key: string]: string | number | undefined
+}
+
+/** Union type — the API accepts either shape. Auto-detected by isLegacyRow(). */
+export type AnyImportRow = ImportRow | FlatImportRow
 
 export interface MappedDocument {
   externalId: string
@@ -35,12 +68,27 @@ export interface MappedDocument {
   authors: string | null
   url: string | null
   datePublished: string | null
+  summary: string | null
+  shortSummary: string | null
+  /** Whether this row is flat (overwrite mode) or legacy (fill-only-empty). */
+  isFlat: boolean
+}
+
+export interface FieldChange {
+  field: string
+  before: string | null
+  after: string | null
+  overwrite: boolean
+  protected: boolean
 }
 
 export interface RowDecision {
   externalId: string
   action: 'created' | 'updated' | 'skipped' | 'error'
   reason?: string
+  changes?: FieldChange[]
+  warnings?: string[]
+  matchKey?: string
 }
 
 export interface ImportResult {
@@ -50,6 +98,10 @@ export interface ImportResult {
   jobs: number
   decisions?: RowDecision[]
 }
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
 
 // external_id = file_path minus trailing .pdf (case-insensitive, so CSV-imported
 // and intake-worker external_ids agree) and any directory part
@@ -126,14 +178,23 @@ export function validateFilePath(filePath: string): { ok: true; base: string } |
   return { ok: true, base }
 }
 
+// ---------------------------------------------------------------------------
+// Auto-detection: legacy (JSON blob) vs flat format
+// ---------------------------------------------------------------------------
+
+/** A row is legacy if it has a `metadata` property that's an object (not a string). */
+export function isLegacyRow(row: any): row is ImportRow {
+  return row && typeof row.metadata === 'object' && row.metadata !== null && !Array.isArray(row.metadata)
+}
+
+// ---------------------------------------------------------------------------
+// Legacy JSON-blob mapping (existing, unchanged)
+// ---------------------------------------------------------------------------
+
 export function mapRowToDocument(row: ImportRow): MappedDocument {
   const raw = row.metadata ?? {}
   const externalId = deriveExternalId(row.file_path)
   const { primary, all } = mapLanguages(raw['languages'])
-  // Same final fallback as the migration script: title defaults to the external id
-  // Match the migration script's _title(): prefer Publication Title when Article Title is
-  // a junk sentinel (Pre-EM / Not available / empty), else Article Title, else external_id.
-  // (F3-1/G-1: the migration fixed 37 junk titles; the live import path must not reintroduce them.)
   const JUNK_TITLES = new Set(['Pre-EM', 'Not available', '', undefined, null])
   const articleTitle = raw['Article Title'] as string | undefined
   const pubTitle = raw['Publication Title'] as string | undefined
@@ -166,8 +227,131 @@ export function mapRowToDocument(row: ImportRow): MappedDocument {
     authors: (raw['All authors'] as string | undefined) || null,
     url: (raw['URL'] as string | undefined) || null,
     datePublished: parseDatePublished(raw['Date published']),
+    summary: row.summary ?? null,
+    shortSummary: null,
+    isFlat: false,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Flat CSV mapping (NEW)
+// ---------------------------------------------------------------------------
+
+// Legacy alias → DB column name
+const LEGACY_ALIASES: Record<string, string> = {
+  'Article Title': 'title',
+  'Publication Title': 'publication_title',
+  'All authors': 'authors',
+  'YEAR published': 'year_published',
+  'Date published': 'date_published',
+  'short_summary': 'short_summary',
+}
+
+/** Resolve a flat row's column value, checking DB name first, then legacy aliases. */
+function resolveField(row: FlatImportRow, dbName: string, ...aliases: string[]): string | undefined {
+  if (row[dbName] !== undefined && row[dbName] !== '') return String(row[dbName])
+  for (const alias of aliases) {
+    if (row[alias] !== undefined && row[alias] !== '') return String(row[alias])
+  }
+  return undefined
+}
+
+export function mapFlatRowToDocument(row: FlatImportRow): MappedDocument {
+  // external_id: explicit column > derived from file_path
+  const externalId = resolveField(row, 'external_id') || (row.file_path ? deriveExternalId(row.file_path) : row.external_id || '')
+
+  // file_path: required for s3_key, but for flat import without a file (metadata-only update),
+  // we can construct it from external_id
+  const filePath = row.file_path || (externalId ? `${externalId}.pdf` : '')
+  const documentsS3Prefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'
+  const base = filePath ? (filePath.split('/').pop() ?? filePath) : `${externalId}.pdf`
+  const s3Key = `${documentsS3Prefix}${base}`
+
+  const langRaw = resolveField(row, 'languages') || 'English'
+  const { primary, all } = mapLanguages(langRaw)
+
+  const title = resolveField(row, 'title', 'Article Title') || null
+  const publicationTitle = resolveField(row, 'publication_title', 'Publication Title') || null
+  const yearRaw = resolveField(row, 'year_published', 'YEAR published')
+  const yearPublished = yearRaw ? parseYear(yearRaw) : null
+  const doi = resolveField(row, 'doi') || null
+  const articleType = resolveField(row, 'article_type') || null
+  const wriPrimaryOffice = resolveField(row, 'wri_primary_office') || null
+  const authors = resolveField(row, 'authors', 'All authors') || null
+  const url = resolveField(row, 'url') || null
+  const datePublishedRaw = resolveField(row, 'date_published', 'Date published')
+  const datePublished = datePublishedRaw ? parseDatePublished(datePublishedRaw) : null
+  const summary = resolveField(row, 'summary') || null
+  const shortSummary = resolveField(row, 'short_summary') || null
+
+  return {
+    externalId,
+    title,
+    language: primary,
+    languages: all,
+    yearPublished,
+    publicationTitle,
+    s3Key,
+    sourceMetadata: {
+      file_path: filePath,
+      summary: summary ?? '',
+      metadata: {
+        ...(title ? { 'Article Title': title } : {}),
+        ...(publicationTitle ? { 'Publication Title': publicationTitle } : {}),
+        ...(authors ? { 'All authors': authors } : {}),
+        ...(yearRaw ? { 'YEAR published': yearRaw } : {}),
+        ...(doi ? { 'DOI': doi } : {}),
+        ...(articleType ? { 'article_type': articleType } : {}),
+        ...(wriPrimaryOffice ? { 'wri_primary_office': wriPrimaryOffice } : {}),
+        ...(url ? { 'URL': url } : {}),
+        ...(datePublishedRaw ? { 'Date published': datePublishedRaw } : {}),
+        ...(langRaw ? { 'languages': langRaw } : {}),
+        ...(shortSummary ? { 'short_summary': shortSummary } : {}),
+      },
+    },
+    doi,
+    articleType,
+    wriPrimaryOffice,
+    authors,
+    url,
+    datePublished,
+    summary,
+    shortSummary,
+    isFlat: true,
+  }
+}
+
+/** Auto-detect legacy vs flat and map accordingly. */
+export function mapAnyRowToDocument(row: AnyImportRow): MappedDocument {
+  if (isLegacyRow(row)) {
+    return mapRowToDocument(row)
+  }
+  return mapFlatRowToDocument(row as FlatImportRow)
+}
+
+// ---------------------------------------------------------------------------
+// Matching: external_id OR doi
+// ---------------------------------------------------------------------------
+
+/** Find an existing document by external_id, or by doi if external_id doesn't match. */
+async function findExistingDoc(
+  mapped: MappedDocument,
+): Promise<{ doc: Document; matchKey: string } | null> {
+  const repo = AppDataSource.getRepository(Document)
+  // Try external_id first
+  let existing = await repo.findOne({ where: { externalId: mapped.externalId } })
+  if (existing) return { doc: existing, matchKey: 'external_id' }
+  // Try DOI (if the mapped row has a DOI and the existing doc has a matching DOI)
+  if (mapped.doi) {
+    existing = await repo.findOne({ where: { doi: mapped.doi } })
+    if (existing) return { doc: existing, matchKey: 'doi' }
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Seed semantics (legacy / fill-only-empty)
+// ---------------------------------------------------------------------------
 
 // SEED semantics: updated = doc exists and at least one currently-NULL column
 // would be filled by the new data. skipped = nothing to change.
@@ -194,12 +378,112 @@ export function classifyUpsert(
   return wouldFill ? 'updated' : 'skipped'
 }
 
+// ---------------------------------------------------------------------------
+// Overwrite semantics (flat format) — with warnings + human-field protection
+// ---------------------------------------------------------------------------
+
+// The metadata fields we can overwrite
+const OVERWRITABLE_FIELDS = [
+  'title',
+  'language',
+  'languages',
+  'yearPublished',
+  'publicationTitle',
+  'doi',
+  'articleType',
+  'wriPrimaryOffice',
+  'authors',
+  'url',
+  'datePublished',
+] as const
+
+type OverwritableField = (typeof OVERWRITABLE_FIELDS)[number]
+
+/** Check if the metadata_source column exists in the documents table. */
+async function metadataSourceExists(): Promise<boolean> {
+  try {
+    const [row] = await AppDataSource.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'documents' AND column_name = 'metadata_source'`,
+    )
+    return !!row
+  } catch {
+    return false
+  }
+}
+
+/** Read metadata_source for a doc (jsonb: {field: 'human'|'external'|'llm'}). */
+async function readMetadataSource(docId: string): Promise<Record<string, string>> {
+  try {
+    const [row] = await AppDataSource.query(
+      `SELECT metadata_source FROM documents WHERE id = $1`,
+      [docId],
+    )
+    return row?.metadata_source ?? {}
+  } catch {
+    return {}
+  }
+}
+
+/** Compute field changes for the overwrite preview (dry-run). */
+export function computeOverwriteChanges(
+  existing: Document,
+  mapped: MappedDocument,
+  metadataSource: Record<string, string> = {},
+): { changes: FieldChange[]; warnings: string[] } {
+  const changes: FieldChange[] = []
+  const warnings: string[] = []
+
+  for (const field of OVERWRITABLE_FIELDS) {
+    const mappedValue = mapped[field] as string | string[] | number | null
+    if (mappedValue === null || mappedValue === undefined) continue
+    const mappedStr = Array.isArray(mappedValue) ? mappedValue.join(',') : String(mappedValue)
+    const existingValue = existing[field] as string | string[] | number | null
+    const existingStr = existingValue === null ? null : (Array.isArray(existingValue) ? existingValue.join(',') : String(existingValue))
+
+    // Skip if values are the same
+    if (existingStr === mappedStr) continue
+
+    // Check metadata_source — protect human edits
+    const sourceForField = metadataSource[field]
+    if (sourceForField === 'human') {
+      warnings.push(`protected: ${field} (human edit, not overwritten)`)
+      changes.push({
+        field,
+        before: existingStr,
+        after: mappedStr,
+        overwrite: false,
+        protected: true,
+      })
+      continue
+    }
+
+    const isOverwrite = existingStr !== null
+    changes.push({
+      field,
+      before: existingStr,
+      after: mappedStr,
+      overwrite: isOverwrite,
+      protected: false,
+    })
+    if (isOverwrite) {
+      warnings.push(`⚠ ${field}: "${existingStr}" → "${mappedStr}" (overwrite)`)
+    }
+  }
+
+  return { changes, warnings }
+}
+
+// ---------------------------------------------------------------------------
+// Main import function — handles both legacy (seed) and flat (overwrite)
+// ---------------------------------------------------------------------------
+
 export async function importDocuments(
-  rows: ImportRow[],
+  rows: AnyImportRow[],
   options: { dryRun: boolean },
   identity?: AdminIdentity,
 ): Promise<ImportResult> {
   const docRepo = AppDataSource.getRepository(Document)
+  const hasMetadataSource = await metadataSourceExists()
 
   const decisions: RowDecision[] = []
   let created = 0
@@ -207,31 +491,46 @@ export async function importDocuments(
   let skipped = 0
   let jobs = 0
 
-  // Seed semantics, not atomic: a mid-import failure leaves earlier rows
-  // committed (safe — re-running is idempotent).
   for (const row of rows) {
-    // Per-row validation: bad rows get an error decision instead of throwing
-    // mid-loop (which would abandon the rest of the batch).
-    if (typeof row.file_path !== 'string' || row.file_path.trim() === '') {
+    // Validate file_path (if present)
+    const filePath = (row as any).file_path
+    if (filePath !== undefined && filePath !== null && filePath !== '') {
+      if (typeof filePath !== 'string' || filePath.trim() === '') {
+        decisions.push({ externalId: '', action: 'error', reason: 'invalid file_path' })
+        continue
+      }
+      const validation = validateFilePath(filePath)
+      if (!validation.ok) {
+        decisions.push({ externalId: deriveExternalId(filePath), action: 'error', reason: validation.error })
+        continue
+      }
+    } else if (!isLegacyRow(row)) {
+      // Flat row with no file_path — OK if external_id or doi is provided (metadata-only update)
+      const flatRow = row as FlatImportRow
+      if (!flatRow.external_id && !flatRow.doi) {
+        decisions.push({ externalId: '', action: 'error', reason: 'flat row must have file_path, external_id, or doi' })
+        continue
+      }
+    } else {
+      // Legacy row with no file_path
       decisions.push({ externalId: '', action: 'error', reason: 'invalid file_path' })
       continue
     }
-    // D3 security fix: validate file_path before using it as s3_key
-    const validation = validateFilePath(row.file_path)
-    if (!validation.ok) {
-      decisions.push({ externalId: deriveExternalId(row.file_path), action: 'error', reason: validation.error })
-      continue
-    }
 
-    const mapped = mapRowToDocument(row)
-    const existing = await docRepo.findOne({ where: { externalId: mapped.externalId } })
-    const action = classifyUpsert(existing, mapped)
-    decisions.push({ externalId: mapped.externalId, action })
+    const mapped = mapAnyRowToDocument(row)
 
-    if (!options.dryRun) {
-      let docId: string | null = null
+    // Match by external_id OR doi
+    const match = await findExistingDoc(mapped)
 
-      if (action === 'created') {
+    if (!match) {
+      // --- CREATED ---
+      decisions.push({
+        externalId: mapped.externalId,
+        action: 'created',
+        matchKey: mapped.doi ? `doi:${mapped.doi}` : `external_id:${mapped.externalId}`,
+      })
+
+      if (!options.dryRun) {
         const doc = docRepo.create({
           externalId: mapped.externalId,
           title: mapped.title,
@@ -250,46 +549,131 @@ export async function importDocuments(
           datePublished: mapped.datePublished,
         })
         const saved = await docRepo.save(doc)
-        docId = saved.id
-        created++
-      } else if (action === 'updated') {
-        const updates: Partial<Document> = {}
-        if (existing!.title === null && mapped.title !== null) updates.title = mapped.title
-        if (existing!.language === null) updates.language = mapped.language
-        if (existing!.languages === null) updates.languages = mapped.languages
-        if (existing!.yearPublished === null && mapped.yearPublished !== null) updates.yearPublished = mapped.yearPublished
-        if (existing!.publicationTitle === null && mapped.publicationTitle !== null) updates.publicationTitle = mapped.publicationTitle
-        if (existing!.sourceMetadata === null) updates.sourceMetadata = mapped.sourceMetadata
-        if (existing!.doi === null && mapped.doi !== null) updates.doi = mapped.doi
-        if (existing!.articleType === null && mapped.articleType !== null) updates.articleType = mapped.articleType
-        if (existing!.wriPrimaryOffice === null && mapped.wriPrimaryOffice !== null) updates.wriPrimaryOffice = mapped.wriPrimaryOffice
-        if (existing!.authors === null && mapped.authors !== null) updates.authors = mapped.authors
-        if (existing!.url === null && mapped.url !== null) updates.url = mapped.url
-        if (existing!.datePublished === null && mapped.datePublished !== null) updates.datePublished = mapped.datePublished
-        await docRepo.update({ externalId: mapped.externalId }, updates)
-        docId = existing!.id
-        updated++
-      } else {
-        // skipped — no doc write, but still attempt job creation (D2 fix:
-        // a parked needs_review job should NOT block re-ingestion).
-        docId = existing!.id
-        skipped++
-      }
 
-      // D2 fix: atomic job creation — ON CONFLICT (document_id) WHERE status IN
-      // ('queued','running') DO NOTHING. This replaces the old read-then-insert
-      // race (unhandled 23505) and drops needs_review from the open set (a
-      // parked needs_review job no longer blocks a fresh import). Mirrors
-      // documentsAdmin.ts reenqueueIngestion.
-      if (docId) {
+        // Set metadata_source = 'external' for all written fields (graceful if column absent)
+        if (hasMetadataSource && mapped.isFlat) {
+          const fields: Record<string, string> = {}
+          for (const f of OVERWRITABLE_FIELDS) {
+            if (mapped[f] !== null && mapped[f] !== undefined) fields[f] = 'external'
+          }
+          await AppDataSource.query(
+            `UPDATE documents SET metadata_source = $2::jsonb WHERE id = $1`,
+            [saved.id, JSON.stringify(fields)],
+          ).catch(() => {})
+        }
+
+        // Atomic job creation
         const [job] = await AppDataSource.query(
           `INSERT INTO ingestion_jobs (document_id, status) VALUES ($1, 'queued')
            ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
            RETURNING id`,
-          [docId],
+          [saved.id],
         )
-        if (job) {
-          jobs++
+        if (job) jobs++
+        created++
+      }
+    } else {
+      const { doc: existing, matchKey } = match
+
+      if (mapped.isFlat) {
+        // --- FLAT: OVERWRITE mode ---
+        const metaSource = hasMetadataSource ? await readMetadataSource(existing.id) : {}
+        const { changes, warnings } = computeOverwriteChanges(existing, mapped, metaSource)
+
+        const hasRealChanges = changes.some((c) => !c.protected)
+        if (hasRealChanges) {
+          decisions.push({
+            externalId: mapped.externalId || existing.externalId,
+            action: 'updated',
+            matchKey,
+            changes,
+            warnings,
+          })
+
+          if (!options.dryRun) {
+            // Apply overwrites (skip protected fields)
+            const updates: Partial<Document> & Record<string, any> = {}
+            const metaUpdates: Record<string, string> = {}
+            for (const c of changes) {
+              if (c.protected) continue
+              const field = c.field as any
+              // Handle array fields (languages)
+              if (field === 'languages') {
+                updates[field] = mapped.languages
+              } else {
+                updates[field] = mapped[field as keyof MappedDocument] as any
+              }
+              metaUpdates[field] = 'external'
+            }
+            if (Object.keys(updates).length > 0) {
+              // Always update sourceMetadata for flat imports
+              updates.sourceMetadata = mapped.sourceMetadata
+              await docRepo.update({ id: existing.id }, updates)
+
+              // Update metadata_source
+              if (hasMetadataSource) {
+                const mergedMeta = { ...metaSource, ...metaUpdates }
+                await AppDataSource.query(
+                  `UPDATE documents SET metadata_source = $2::jsonb WHERE id = $1`,
+                  [existing.id, JSON.stringify(mergedMeta)],
+                ).catch(() => {})
+              }
+            }
+
+            // Job creation (for updated docs, only if no open job)
+            const [job] = await AppDataSource.query(
+              `INSERT INTO ingestion_jobs (document_id, status) VALUES ($1, 'queued')
+               ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
+               RETURNING id`,
+              [existing.id],
+            )
+            if (job) jobs++
+            updated++
+          }
+        } else {
+          decisions.push({
+            externalId: mapped.externalId || existing.externalId,
+            action: 'skipped',
+            matchKey,
+            changes,
+            warnings: warnings.length > 0 ? warnings : undefined,
+          })
+          if (!options.dryRun) skipped++
+        }
+      } else {
+        // --- LEGACY: fill-only-empty (SEED mode, existing behavior) ---
+        const action = classifyUpsert(existing, mapped)
+        decisions.push({ externalId: mapped.externalId, action })
+
+        if (!options.dryRun) {
+          if (action === 'updated') {
+            const updates: Partial<Document> = {}
+            if (existing!.title === null && mapped.title !== null) updates.title = mapped.title
+            if (existing!.language === null) updates.language = mapped.language
+            if (existing!.languages === null) updates.languages = mapped.languages
+            if (existing!.yearPublished === null && mapped.yearPublished !== null) updates.yearPublished = mapped.yearPublished
+            if (existing!.publicationTitle === null && mapped.publicationTitle !== null) updates.publicationTitle = mapped.publicationTitle
+            if (existing!.sourceMetadata === null) updates.sourceMetadata = mapped.sourceMetadata
+            if (existing!.doi === null && mapped.doi !== null) updates.doi = mapped.doi
+            if (existing!.articleType === null && mapped.articleType !== null) updates.articleType = mapped.articleType
+            if (existing!.wriPrimaryOffice === null && mapped.wriPrimaryOffice !== null) updates.wriPrimaryOffice = mapped.wriPrimaryOffice
+            if (existing!.authors === null && mapped.authors !== null) updates.authors = mapped.authors
+            if (existing!.url === null && mapped.url !== null) updates.url = mapped.url
+            if (existing!.datePublished === null && mapped.datePublished !== null) updates.datePublished = mapped.datePublished
+            await docRepo.update({ id: existing.id }, updates)
+            updated++
+          } else {
+            skipped++
+          }
+
+          // Job creation
+          const [job] = await AppDataSource.query(
+            `INSERT INTO ingestion_jobs (document_id, status) VALUES ($1, 'queued')
+             ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
+             RETURNING id`,
+            [existing.id],
+          )
+          if (job) jobs++
         }
       }
     }
@@ -302,7 +686,7 @@ export async function importDocuments(
     return { created, updated, skipped, jobs: 0, decisions }
   }
 
-  // D5 fix: audit with the actor identity (was hardcoded 'external' with no actor).
+  // D5 fix: audit with the actor identity
   const actor = identity ? auditActor(identity) : { actorUserId: null, source: 'system' as const }
   await writeAudit({
     ...actor,

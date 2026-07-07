@@ -7,7 +7,7 @@
  */
 
 import { AppDataSource } from '@/db/data-source'
-import { importDocuments, ImportRow } from '@/db/queries/importDocuments'
+import { importDocuments, ImportRow, FlatImportRow } from '@/db/queries/importDocuments'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
 const hasDb = !!process.env.DATABASE_URL
@@ -192,5 +192,111 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
     expect(second.skipped).toBe(1)
     // ON CONFLICT DO NOTHING — existing queued job blocks a new one
     expect(second.jobs).toBe(0)
+  })
+
+  // --- Flat CSV format tests ---
+
+  // (a) flat CSV row with external_id matching an existing doc → overwrite title
+  it('flat format: overwrites title when external_id matches (with warning)', async () => {
+    // Create a doc first
+    const row: ImportRow = {
+      file_path: `${PREFIX}flat-overwrite.pdf`,
+      metadata: { 'Article Title': 'Original Title', languages: 'English', 'YEAR published': '2020' },
+      summary: '',
+    }
+    await importDocuments([row], { dryRun: false }, adminIdentity)
+
+    // Now flat-import with a new title
+    const flatRow: FlatImportRow = {
+      file_path: `${PREFIX}flat-overwrite.pdf`,
+      external_id: `${PREFIX}flat-overwrite`,
+      title: 'Overwritten Title',
+    }
+    const dryRun = await importDocuments([flatRow], { dryRun: true }, adminIdentity)
+    expect(dryRun.decisions![0].action).toBe('updated')
+    expect(dryRun.decisions![0].changes).toBeDefined()
+    const titleChange = dryRun.decisions![0].changes!.find((c) => c.field === 'title')
+    expect(titleChange).toBeDefined()
+    expect(titleChange!.overwrite).toBe(true)
+    expect(titleChange!.before).toBe('Original Title')
+    expect(titleChange!.after).toBe('Overwritten Title')
+
+    // Apply
+    const applied = await importDocuments([flatRow], { dryRun: false }, adminIdentity)
+    expect(applied.updated).toBe(1)
+
+    const [doc] = await AppDataSource.query(
+      `SELECT title FROM documents WHERE external_id = $1`,
+      [`${PREFIX}flat-overwrite`],
+    )
+    expect(doc.title).toBe('Overwritten Title')
+  })
+
+  // (b) flat CSV row with doi matching an existing doc (no external_id) → matched by DOI
+  it('flat format: matches by DOI when external_id does not match', async () => {
+    // Create a doc with a DOI
+    const createRow: ImportRow = {
+      file_path: `${PREFIX}doi-match.pdf`,
+      metadata: { 'Article Title': 'DOI Doc', DOI: '10.9999/doi-match-test', languages: 'English' },
+      summary: '',
+    }
+    await importDocuments([createRow], { dryRun: false }, adminIdentity)
+
+    // Flat-import with a DIFFERENT external_id but the SAME DOI
+    const flatRow: FlatImportRow = {
+      file_path: `${PREFIX}different-name.pdf`,
+      external_id: `${PREFIX}different-name`,
+      doi: '10.9999/doi-match-test',
+      title: 'Updated via DOI',
+    }
+    const dryRun = await importDocuments([flatRow], { dryRun: true }, adminIdentity)
+    expect(dryRun.decisions![0].action).toBe('updated')
+    expect(dryRun.decisions![0].matchKey).toBe('doi')
+  })
+
+  // (c) flat CSV row with no match → created
+  it('flat format: creates when no match by external_id or doi', async () => {
+    const flatRow: FlatImportRow = {
+      file_path: `${PREFIX}flat-new.pdf`,
+      external_id: `${PREFIX}flat-new`,
+      title: 'Brand New Doc',
+      authors: 'New Author',
+    }
+    const result = await importDocuments([flatRow], { dryRun: false }, adminIdentity)
+    expect(result.created).toBe(1)
+
+    const [doc] = await AppDataSource.query(
+      `SELECT title, authors FROM documents WHERE external_id = $1`,
+      [`${PREFIX}flat-new`],
+    )
+    expect(doc.title).toBe('Brand New Doc')
+    expect(doc.authors).toBe('New Author')
+  })
+
+  // (e) legacy JSON-blob row → fill-only-empty (backward compat, no overwrite)
+  it('legacy format: does NOT overwrite existing title (fill-only-empty)', async () => {
+    // Create a doc
+    const createRow: ImportRow = {
+      file_path: `${PREFIX}legacy-protect.pdf`,
+      metadata: { 'Article Title': 'Original', languages: 'English' },
+      summary: '',
+    }
+    await importDocuments([createRow], { dryRun: false }, adminIdentity)
+
+    // Legacy re-import with a different title → should NOT overwrite (fill-only-empty)
+    const reImport: ImportRow = {
+      file_path: `${PREFIX}legacy-protect.pdf`,
+      metadata: { 'Article Title': 'Should Not Overwrite', languages: 'English' },
+      summary: '',
+    }
+    const result = await importDocuments([reImport], { dryRun: false }, adminIdentity)
+    expect(result.skipped).toBe(1)
+    expect(result.updated).toBe(0)
+
+    const [doc] = await AppDataSource.query(
+      `SELECT title FROM documents WHERE external_id = $1`,
+      [`${PREFIX}legacy-protect`],
+    )
+    expect(doc.title).toBe('Original') // NOT overwritten
   })
 })

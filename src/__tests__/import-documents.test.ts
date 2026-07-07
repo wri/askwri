@@ -12,10 +12,14 @@ import {
   mapLanguages,
   parseYear,
   mapRowToDocument,
+  mapFlatRowToDocument,
+  isLegacyRow,
+  computeOverwriteChanges,
   classifyUpsert,
   importDocuments,
   validateFilePath,
   ImportRow,
+  FlatImportRow,
 } from '@/db/queries/importDocuments'
 import { AppDataSource } from '@/db/data-source'
 
@@ -371,6 +375,153 @@ describe('POST /api/import-documents auth', () => {
   it('passes auth with the bearer token (then 400s on empty rows)', async () => {
     const res = await importDocumentsRoute(importReq({ rows: [] }, 'test-admin-token'))
     expect(res.status).toBe(400)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Flat CSV format tests (NEW)
+// ---------------------------------------------------------------------------
+
+describe('isLegacyRow', () => {
+  it('returns true for legacy format (has metadata object)', () => {
+    expect(isLegacyRow({ file_path: 'x.pdf', metadata: {}, summary: '' })).toBe(true)
+  })
+  it('returns false for flat format (no metadata object)', () => {
+    expect(isLegacyRow({ file_path: 'x.pdf', title: 'T', doi: 'D' })).toBe(false)
+  })
+  it('returns false for a flat row with metadata as a string (not an object)', () => {
+    expect(isLegacyRow({ file_path: 'x.pdf', metadata: 'not-an-object', title: 'T' })).toBe(false)
+  })
+})
+
+describe('mapFlatRowToDocument', () => {
+  it('maps DB column names directly', () => {
+    const row: FlatImportRow = {
+      file_path: 'report.pdf',
+      external_id: 'report-2024',
+      doi: 'https://doi.org/10.1234/test',
+      title: 'My Report',
+      authors: 'Smith, J.',
+      year_published: '2024',
+      publication_title: 'WRI Journal',
+      article_type: 'Working Paper',
+      wri_primary_office: 'WRI Global',
+      languages: 'English',
+      url: 'https://example.com',
+      date_published: '3/15/2024',
+      summary: 'A summary',
+      short_summary: 'Short',
+    }
+    const m = mapFlatRowToDocument(row)
+    expect(m.externalId).toBe('report-2024')
+    expect(m.doi).toBe('https://doi.org/10.1234/test')
+    expect(m.title).toBe('My Report')
+    expect(m.authors).toBe('Smith, J.')
+    expect(m.yearPublished).toBe(2024)
+    expect(m.publicationTitle).toBe('WRI Journal')
+    expect(m.articleType).toBe('Working Paper')
+    expect(m.wriPrimaryOffice).toBe('WRI Global')
+    expect(m.url).toBe('https://example.com')
+    expect(m.datePublished).toBe('2024-03-15')
+    expect(m.summary).toBe('A summary')
+    expect(m.shortSummary).toBe('Short')
+    expect(m.isFlat).toBe(true)
+  })
+
+  it('maps legacy alias column names', () => {
+    const row: FlatImportRow = {
+      file_path: 'old.pdf',
+      'Article Title': 'Old Title',
+      'All authors': 'Doe, J.',
+      'YEAR published': '2020',
+      'Date published': '1/5/2020',
+      languages: 'Spanish',
+    }
+    const m = mapFlatRowToDocument(row)
+    expect(m.title).toBe('Old Title')
+    expect(m.authors).toBe('Doe, J.')
+    expect(m.yearPublished).toBe(2020)
+    expect(m.datePublished).toBe('2020-01-05')
+    expect(m.language).toBe('es')
+  })
+
+  it('DB column names take priority over legacy aliases', () => {
+    const row: FlatImportRow = {
+      file_path: 'x.pdf',
+      title: 'DB Title',
+      'Article Title': 'Alias Title',
+    }
+    const m = mapFlatRowToDocument(row)
+    expect(m.title).toBe('DB Title')
+  })
+
+  it('derives external_id from file_path when no external_id column', () => {
+    const m = mapFlatRowToDocument({ file_path: '2024_report.pdf' })
+    expect(m.externalId).toBe('2024_report')
+  })
+
+  it('uses explicit external_id when provided', () => {
+    const m = mapFlatRowToDocument({ file_path: 'foo.pdf', external_id: 'custom-id' })
+    expect(m.externalId).toBe('custom-id')
+  })
+
+  it('nulls missing optional fields', () => {
+    const m = mapFlatRowToDocument({ file_path: 'bare.pdf' })
+    expect(m.title).toBeNull()
+    expect(m.doi).toBeNull()
+    expect(m.authors).toBeNull()
+    expect(m.url).toBeNull()
+    expect(m.datePublished).toBeNull()
+  })
+})
+
+describe('computeOverwriteChanges', () => {
+  const existing = {
+    title: 'Old Title',
+    language: 'en',
+    languages: ['en'],
+    yearPublished: 2020,
+    publicationTitle: 'Old Pub',
+    doi: '10.1234/old',
+    articleType: 'Report',
+    wriPrimaryOffice: 'WRI',
+    authors: 'Old Author',
+    url: 'https://old.com',
+    datePublished: '2020-01-01',
+  } as any
+
+  it('flags a title overwrite (non-null → new value)', () => {
+    const mapped = { ...existing, title: 'New Title', isFlat: true } as any
+    const { changes, warnings } = computeOverwriteChanges(existing, mapped)
+    const titleChange = changes.find((c) => c.field === 'title')
+    expect(titleChange).toBeDefined()
+    expect(titleChange!.overwrite).toBe(true)
+    expect(titleChange!.before).toBe('Old Title')
+    expect(titleChange!.after).toBe('New Title')
+    expect(warnings.some((w) => w.includes('title:') && w.includes('overwrite'))).toBe(true)
+  })
+
+  it('flags a new field (null → value) as non-overwrite', () => {
+    const existingNull = { ...existing, authors: null } as any
+    const mapped = { ...existingNull, authors: 'New Author', isFlat: true } as any
+    const { changes } = computeOverwriteChanges(existingNull, mapped)
+    const authorsChange = changes.find((c) => c.field === 'authors')
+    expect(authorsChange!.overwrite).toBe(false)
+  })
+
+  it('protects a field whose metadata_source is human', () => {
+    const mapped = { ...existing, title: 'New Title', isFlat: true } as any
+    const { changes, warnings } = computeOverwriteChanges(existing, mapped, { title: 'human' })
+    const titleChange = changes.find((c) => c.field === 'title')
+    expect(titleChange!.protected).toBe(true)
+    expect(titleChange!.overwrite).toBe(false)
+    expect(warnings.some((w) => w.includes('protected'))).toBe(true)
+  })
+
+  it('skips fields with no change', () => {
+    const mapped = { ...existing, isFlat: true } as any
+    const { changes } = computeOverwriteChanges(existing, mapped)
+    expect(changes).toHaveLength(0)
   })
 })
 

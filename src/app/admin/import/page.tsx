@@ -4,10 +4,21 @@ import { useRef, useState } from 'react'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
 
+interface FieldChange {
+  field: string
+  before: string | null
+  after: string | null
+  overwrite: boolean
+  protected: boolean
+}
+
 interface RowDecision {
   externalId: string
   action: 'created' | 'updated' | 'skipped' | 'error'
   reason?: string
+  changes?: FieldChange[]
+  warnings?: string[]
+  matchKey?: string
 }
 
 interface ImportResult {
@@ -21,8 +32,7 @@ interface ImportResult {
 
 /**
  * Minimal CSV parser: handles quoted fields with embedded commas and
- * doubled-quote escaping (""), matching the documents.csv format
- * (file_path, metadata JSON, summary).
+ * doubled-quote escaping (""), matching the documents.csv format.
  */
 function parseCSV(text: string): string[][] {
   const rows: string[][] = []
@@ -47,33 +57,47 @@ function parseCSV(text: string): string[][] {
 }
 
 /**
- * Parse the CSV into the ImportRow shape the API expects:
- * { file_path, metadata (JSON object), summary }
+ * Parse the CSV into rows. Auto-detects legacy (JSON blob with a 'metadata'
+ * column) vs flat format (DB column names). Returns an array of row objects
+ * suitable for POSTing to /api/import-documents.
  */
-function csvToImportRows(text: string): { file_path: string; metadata: Record<string, any>; summary?: string }[] {
+function csvToRows(text: string): { rows: any[]; isFlat: boolean } {
   const rows = parseCSV(text)
-  if (rows.length < 2) return []
+  if (rows.length < 2) return { rows: [], isFlat: false }
   const headers = rows[0].map((h) => h.trim().toLowerCase())
-  const fpIdx = headers.indexOf('file_path')
-  const metaIdx = headers.indexOf('metadata')
-  const sumIdx = headers.indexOf('summary')
-  const out: { file_path: string; metadata: Record<string, any>; summary?: string }[] = []
+  const hasMetadataCol = headers.includes('metadata')
+  const out: any[] = []
   for (let r = 1; r < rows.length; r++) {
     const vals = rows[r]
     if (vals.every((v) => !v || !v.trim())) continue
-    const file_path = fpIdx >= 0 ? (vals[fpIdx] ?? '').trim() : ''
-    const metadataStr = metaIdx >= 0 ? (vals[metaIdx] ?? '').trim() : '{}'
-    const summary = sumIdx >= 0 ? (vals[sumIdx] ?? '').trim() : ''
-    let metadata: Record<string, any> = {}
-    try { metadata = JSON.parse(metadataStr) } catch { /* leave empty */ }
-    out.push({ file_path, metadata, summary: summary || undefined })
+    if (hasMetadataCol) {
+      // Legacy format: file_path, metadata (JSON), summary
+      const fpIdx = headers.indexOf('file_path')
+      const metaIdx = headers.indexOf('metadata')
+      const sumIdx = headers.indexOf('summary')
+      const file_path = fpIdx >= 0 ? (vals[fpIdx] ?? '').trim() : ''
+      const metadataStr = metaIdx >= 0 ? (vals[metaIdx] ?? '').trim() : '{}'
+      const summary = sumIdx >= 0 ? (vals[sumIdx] ?? '').trim() : ''
+      let metadata: Record<string, any> = {}
+      try { metadata = JSON.parse(metadataStr) } catch { /* leave empty */ }
+      out.push({ file_path, metadata, summary: summary || undefined })
+    } else {
+      // Flat format: each column maps directly to a field
+      const obj: Record<string, string> = {}
+      for (let c = 0; c < headers.length; c++) {
+        const val = (vals[c] ?? '').trim()
+        if (val) obj[headers[c]] = val
+      }
+      out.push(obj)
+    }
   }
-  return out
+  return { rows: out, isFlat: !hasMetadataCol }
 }
 
 const ImportPage = () => {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [parsedRows, setParsedRows] = useState<{ file_path: string; metadata: Record<string, any>; summary?: string }[] | null>(null)
+  const [parsedRows, setParsedRows] = useState<any[] | null>(null)
+  const [isFlat, setIsFlat] = useState(false)
   const [decisions, setDecisions] = useState<RowDecision[] | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -87,10 +111,14 @@ const ImportPage = () => {
     const reader = new FileReader()
     reader.onload = () => {
       const text = String(reader.result ?? '')
-      const rows = csvToImportRows(text)
-      if (rows.length === 0) { setError('No valid rows found. The CSV must have headers: file_path, metadata, summary.'); return }
+      const { rows, isFlat } = csvToRows(text)
+      if (rows.length === 0) {
+        setError('No valid rows found. Use the template (Download template) for the correct format.')
+        return
+      }
       setParsedRows(rows)
-      setNotice(`${rows.length} row(s) parsed from ${file.name}. Click "Preview" for a dry-run, or "Apply" to import.`)
+      setIsFlat(isFlat)
+      setNotice(`${rows.length} row(s) parsed from ${file.name} (${isFlat ? 'flat' : 'legacy'} format). Click "Preview" for a dry-run, or "Apply" to import.`)
     }
     reader.onerror = () => setError('Failed to read the CSV file.')
     reader.readAsText(file)
@@ -105,7 +133,7 @@ const ImportPage = () => {
         body: JSON.stringify({ rows: parsedRows, dryRun: true }),
       })
       setDecisions(body.decisions ?? [])
-      setNotice(`Dry-run complete: ${body.created} would be created, ${body.updated} updated, ${body.skipped} skipped, ${body.jobs} jobs queued.`)
+      setNotice(`Dry-run complete: ${body.created} would be created, ${body.updated} updated, ${body.skipped} skipped.`)
     } catch (err: any) { setError(err.message) }
     finally { setBusy(false) }
   }
@@ -119,7 +147,7 @@ const ImportPage = () => {
         body: JSON.stringify({ rows: parsedRows }),
       })
       setResult(body)
-      setNotice(`Import applied: ${body.created} created, ${body.updated} updated, ${body.skipped} skipped, ${body.jobs} jobs queued. Documents will appear in the Review queue as they are processed.`)
+      setNotice(`Import applied: ${body.created} created, ${body.updated} updated, ${body.skipped} skipped, ${body.jobs} jobs queued.`)
     } catch (err: any) { setError(err.message) }
     finally { setBusy(false) }
   }
@@ -134,16 +162,26 @@ const ImportPage = () => {
         Import metadata from CSV
       </Heading>
       <Text style={{ marginBottom: 8, color: '#555' }}>
-        Upload a CSV file with document metadata. Each row creates or updates a document and queues
-        it for ingestion. The CSV must have three columns: <code>file_path</code> (the PDF filename),
-        <code> metadata</code> (a JSON string with keys like Article Title, All authors, DOI, etc.),
-        and <code>summary</code> (the long summary text).
+        Upload a CSV file with document metadata. Each row creates or updates a document. The flat
+        format uses <strong>DB column names</strong> (file_path, external_id, doi, title, authors,
+        year_published, etc.) — flat imports <strong>overwrite</strong> existing values with
+        warnings. The legacy format (file_path, metadata JSON blob, summary) uses fill-only-empty
+        (seed) semantics.
       </Text>
       <Text style={{ marginBottom: 16, color: '#555', fontStyle: 'italic' }}>
         Click <strong>Preview</strong> for a safe dry-run (no changes are written), then{' '}
-        <strong>Apply</strong> to import for real. Imported documents appear in the Review queue as
-        the worker processes them.
+        <strong>Apply</strong> to import for real.
       </Text>
+
+      {/* Download template link */}
+      <Box style={{ marginBottom: 16 }}>
+        <a
+          href='/api/admin/import/template'
+          style={{ textDecoration: 'underline', color: '#0050C8', fontSize: 14 }}
+        >
+          ↓ Download CSV template
+        </a>
+      </Box>
 
       {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
       {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
@@ -178,7 +216,7 @@ const ImportPage = () => {
         </button>
       </div>
 
-      {/* Dry-run decisions table */}
+      {/* Dry-run decisions table with field changes + warnings */}
       {decisions && decisions.length > 0 && (
         <Box style={{ marginTop: 16 }}>
           <Heading size='sm' style={{ marginBottom: 8 }}>Dry-run preview ({decisions.length} rows)</Heading>
@@ -187,15 +225,36 @@ const ImportPage = () => {
               <tr>
                 <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 8px' }}>External ID</th>
                 <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 8px' }}>Action</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 8px' }}>Reason</th>
+                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 8px' }}>Match key</th>
+                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 8px' }}>Changes / Warnings</th>
               </tr>
             </thead>
             <tbody>
               {decisions.map((d, i) => (
                 <tr key={i}>
-                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>{d.externalId}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>{d.externalId || '—'}</td>
                   <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', color: actionColor[d.action] ?? '#333', fontWeight: 600 }}>{d.action}</td>
-                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', color: '#888', fontSize: 13 }}>{d.reason ?? '—'}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', color: '#888', fontSize: 13 }}>{d.matchKey ?? '—'}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontSize: 13 }}>
+                    {d.changes && d.changes.length > 0 ? (
+                      <Box>
+                        {d.changes.map((c, ci) => (
+                          <div key={ci} style={{
+                            color: c.protected ? '#C11101' : c.overwrite ? '#B8860B' : '#0A6640',
+                            marginBottom: 2,
+                          }}>
+                            {c.protected
+                              ? `🔒 ${c.field}: protected (human edit)`
+                              : c.overwrite
+                                ? `⚠ ${c.field}: "${c.before}" → "${c.after}" (overwrite)`
+                                : `${c.field}: → "${c.after}" (new)`}
+                          </div>
+                        ))}
+                      </Box>
+                    ) : (
+                      <span style={{ color: '#888' }}>{d.reason ?? '—'}</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
