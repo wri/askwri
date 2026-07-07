@@ -1,5 +1,6 @@
 import { AppDataSource } from '../data-source'
 import { Document } from '../entities/Document.entity'
+import { AuditLog } from '../entities/AuditLog.entity'
 import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
@@ -9,12 +10,14 @@ export const EDITABLE_FIELDS = [
   'title',
   'titleEn',
   'doi',
-  'abstract',
   'language',
   'yearPublished',
   'publicationTitle',
   'articleType',
   'wriPrimaryOffice',
+  'authors',
+  'url',
+  'datePublished',
 ] as const
 export type EditableField = (typeof EDITABLE_FIELDS)[number]
 
@@ -46,8 +49,8 @@ export async function listAdminDocuments(
     return `$${params.length}`
   }
   if (filters.status) where.push(`d.status = ${p(filters.status)}`)
-  if (filters.language) where.push(`d.language = ${p(filters.language)}`)
-  if (filters.search) where.push(`(d.title ILIKE ${p('%' + filters.search + '%')} OR d.external_id ILIKE ${p('%' + filters.search + '%')})`)
+  if (filters.language) where.push(`d.languages @> ARRAY[${p(filters.language)}]::text[]`)
+  if (filters.search) where.push(`(d.title ILIKE ${p('%' + filters.search + '%')} OR d.external_id ILIKE ${p('%' + filters.search + '%')} OR d.authors ILIKE ${p('%' + filters.search + '%')} OR d.doi ILIKE ${p('%' + filters.search + '%')} OR d.url ILIKE ${p('%' + filters.search + '%')})`)
   if (filters.collectionId)
     where.push(`EXISTS (SELECT 1 FROM document_collections dc
                 WHERE dc.document_id = d.id AND dc.collection_id = ${p(filters.collectionId)})`)
@@ -123,6 +126,12 @@ export async function updateDocumentFields(
     }
     patch.yearPublished = year
   }
+  if ('datePublished' in patch && patch.datePublished != null) {
+    const dateStr = String(patch.datePublished)
+    if (isNaN(Date.parse(dateStr))) {
+      return { error: 'datePublished must be a valid date (YYYY-MM-DD)' }
+    }
+  }
   const repo = AppDataSource.getRepository(Document)
   const doc = await repo.findOne({ where: { id } })
   if (!doc) return null
@@ -137,14 +146,20 @@ export async function updateDocumentFields(
   }
   const updated = Object.keys(after)
   if (updated.length === 0) return { updated }
-  await repo.save(doc)
-  await writeAudit({
-    ...auditActor(identity),
-    action: 'update',
-    entityType: 'document',
-    entityId: id,
-    before,
-    after,
+  // Transactional: the mutation and the audit row are committed atomically,
+  // so a failure in the audit INSERT rolls back the mutation (no unaudited
+  // mutation can persist).
+  await AppDataSource.transaction(async (em) => {
+    await em.getRepository(Document).save(doc)
+    await em.getRepository(AuditLog).insert({
+      actorUserId: auditActor(identity).actorUserId,
+      source: auditActor(identity).source,
+      action: 'update',
+      entityType: 'document',
+      entityId: id,
+      before,
+      after,
+    })
   })
   return { updated }
 }
@@ -169,15 +184,24 @@ export async function setDocumentStatus(
     return { forbidden: true }
   }
   if (fromStatus === toStatus) return { fromStatus }
+  // Promote is restricted: only needs_review → searchable (design §7.9/§11.311).
+  // Editors cannot bypass the pipeline by promoting draft/error/processing docs.
+  if (toStatus === 'searchable' && fromStatus !== 'needs_review' && fromStatus !== 'withdrawn') {
+    return { error: 'can only promote needs_review → searchable' }
+  }
   doc.status = toStatus
-  await repo.save(doc)
-  await writeAudit({
-    ...auditActor(identity),
-    action: 'lifecycle',
-    entityType: 'document',
-    entityId: id,
-    before: { status: fromStatus },
-    after: { status: toStatus },
+  // Transactional: mutation + audit committed atomically.
+  await AppDataSource.transaction(async (em) => {
+    await em.getRepository(Document).save(doc)
+    await em.getRepository(AuditLog).insert({
+      actorUserId: auditActor(identity).actorUserId,
+      source: auditActor(identity).source,
+      action: 'lifecycle',
+      entityType: 'document',
+      entityId: id,
+      before: { status: fromStatus },
+      after: { status: toStatus },
+    })
   })
   return { fromStatus }
 }

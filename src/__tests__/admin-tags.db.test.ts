@@ -145,4 +145,27 @@ d('tagsAdmin (DB integration)', () => {
     expect(row.source).toBe('human')
     expect(row.status).toBe('accepted')
   })
+
+  it('removeDocumentTag physically deletes the document_tags row', async () => {
+    // The tag is currently on the doc from the addHumanTag test
+    const { removeDocumentTag } = await import('@/db/queries/tagsAdmin')
+    const result = await removeDocumentTag(docId, tagId, identity)
+    expect(result).toEqual({ ok: true })
+
+    const rows = await AppDataSource.query(
+      `SELECT 1 FROM document_tags WHERE document_id = $1 AND tag_id = $2`,
+      [docId, tagId],
+    )
+    expect(rows).toHaveLength(0)
+
+    // Verify audit row was written
+    const [audit] = await AppDataSource.query(
+      `SELECT action, before FROM audit_log
+       WHERE entity_type = 'document' AND entity_id = $1
+       ORDER BY at DESC LIMIT 1`,
+      [docId],
+    )
+    expect(audit.action).toBe('tag_decision')
+    expect(audit.before).toMatchObject({ tagId })
+  })
 })

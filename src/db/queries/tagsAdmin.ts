@@ -135,3 +135,32 @@ export async function addHumanTag(
   })
   return { ok: true }
 }
+
+/** Physically remove a tag from a document (DELETE). Unlike accept/reject which
+ * flips status, this deletes the document_tags row entirely. Records a 'before'
+ * audit snapshot so the prior tag assignment is preserved. */
+export async function removeDocumentTag(
+  documentId: string,
+  tagId: string,
+  identity: AdminIdentity,
+): Promise<{ ok: true } | { error: string }> {
+  const [row] = await AppDataSource.query(
+    `SELECT source, status, confidence::float AS confidence, model_version AS "modelVersion"
+     FROM document_tags WHERE document_id = $1 AND tag_id = $2`,
+    [documentId, tagId],
+  )
+  if (!row) return { error: 'tag is not on this document' }
+  await AppDataSource.query(
+    `DELETE FROM document_tags WHERE document_id = $1 AND tag_id = $2`,
+    [documentId, tagId],
+  )
+  await writeAudit({
+    ...auditActor(identity),
+    action: 'tag_decision',
+    entityType: 'document',
+    entityId: documentId,
+    before: { tagId, ...row },
+    after: { tagId, removed: true },
+  })
+  return { ok: true }
+}
