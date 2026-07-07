@@ -67,6 +67,9 @@ export class Document {
   @Column('jsonb', { name: 'source_metadata', nullable: true })
   sourceMetadata!: Record<string, any> | null
 
+  @Column('jsonb', { name: 'metadata_source', default: '{}' })
+  metadataSource!: Record<string, string>
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date
 

@@ -27,11 +27,11 @@ def run_stage(name: str, document_id) -> str | None:
 def fetch_document(conn, document_id):
     """Common per-stage document fetch: returns dict row or raises."""
     row = conn.execute(
-        """SELECT id, external_id, s3_key, title, language, languages, status, source_metadata
+        """SELECT id, external_id, s3_key, title, language, languages, status, source_metadata, metadata_source
            FROM documents WHERE id = %s""",
         (document_id,),
     ).fetchone()
     if row is None:
         raise RuntimeError(f"document {document_id} not found")
-    keys = ["id", "external_id", "s3_key", "title", "language", "languages", "status", "source_metadata"]
+    keys = ["id", "external_id", "s3_key", "title", "language", "languages", "status", "source_metadata", "metadata_source"]
     return dict(zip(keys, row))
