@@ -66,12 +66,12 @@ def run(document_id):
             summary = (src.get("metadata") or {}).get("summary") or src.get("summary") or ""
             if not summary:
                 logger.warning(f"{doc['external_id']}: no file and no summary -> needs_review")
-                conn.execute("UPDATE documents SET status='needs_review', updated_at=now() WHERE id=%s",
+                conn.execute("UPDATE documents SET status='needs_review', updated_at=now() WHERE id=%s AND status <> 'withdrawn'",
                              (document_id,))
                 return "needs_review"
             full_text, boundaries = f"{doc['title']}\n\n{summary}", []
         if not full_text.strip():
-            conn.execute("UPDATE documents SET status='needs_review', updated_at=now() WHERE id=%s",
+            conn.execute("UPDATE documents SET status='needs_review', updated_at=now() WHERE id=%s AND status <> 'withdrawn'",
                          (document_id,))
             return "needs_review"
         conn.execute(

@@ -84,6 +84,12 @@ def run(document_id):
 
     with get_pool().connection() as conn:
         doc = fetch_document(conn, document_id)
+        # Never rewrite chunks for a withdrawn document (NEW-P2-5: an admin
+        # takedown must not be undone by a racing embed stage). The claim-time
+        # guard in main.py reduces but does not close the TOCTOU window.
+        if doc["status"] == "withdrawn":
+            logger.info(f"embed {doc['external_id']}: withdrawn — skipping chunk rewrite")
+            return None
         full_text, boundaries = conn.execute(
             "SELECT full_text, page_boundaries FROM document_texts WHERE document_id=%s",
             (document_id,),

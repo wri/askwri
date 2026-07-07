@@ -40,9 +40,12 @@ def run(document_id):
         score = round(_confidence(conn, document_id, doc["language"]), 3)
         if score < 0.7:
             # Never overwrite an admin takedown: a withdrawn doc stays withdrawn.
-            conn.execute(
+            cur = conn.execute(
                 """UPDATE documents SET status='needs_review', extraction_confidence=%s,
                    updated_at=now() WHERE id=%s AND status <> 'withdrawn'""", (score, document_id))
+            if cur.rowcount == 0:
+                logger.info(f"{doc['external_id']}: withdrawn — needs_review skipped")
+                return None  # job ends 'done', not parked in review for a withdrawn doc (NEW-P2-4)
             logger.warning(f"{doc['external_id']}: confidence {score} -> needs_review")
             return "needs_review"
         cur = conn.execute(

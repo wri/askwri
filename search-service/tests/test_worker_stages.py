@@ -527,6 +527,40 @@ class TestParseStage:
             ).fetchone()[0]
             assert status == "needs_review"
 
+    def test_parse_needs_review_does_not_overwrite_withdrawn(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """A withdrawn document with no file and no summary must STAY withdrawn —
+        the two needs_review writes in parse are guarded by status <> 'withdrawn'
+        (N-W4). The stage returns 'needs_review' (job routes to review) but the
+        document status is unchanged."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path / "nonexistent"))
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(
+                conn, s3_key="documents/missing.pdf", source_metadata={},
+            )
+            conn.execute("UPDATE documents SET status='withdrawn' WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        from worker.stages.parse import run
+        result = run(doc_id)
+        assert result == "needs_review"
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()[0]
+        assert status == "withdrawn", (
+            f"a withdrawn doc must not be flipped to needs_review by parse, got {status!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # --- language stage ---
@@ -1545,6 +1579,67 @@ class TestEmbedStage:
         assert "氣候變遷" in stored_full_text, \
             "Traditional form should be preserved in document_texts.full_text"
 
+    def test_withdrawn_doc_chunks_not_rewritten(
+        self, stages_test_db, monkeypatch
+    ):
+        """A withdrawn document's chunks must NOT be deleted/rewritten by the
+        embed stage (NEW-P2-5: embed has no withdrawn guard today). The stage
+        returns None and the pre-existing chunk text survives untouched."""
+        def fake_embed(texts):
+            return [[0.01] * 1536 for _ in texts]
+
+        monkeypatch.setattr("worker.stages.embed._embed_texts", fake_embed)
+
+        from psycopg.types.json import Jsonb
+        zero_vec = "[" + ",".join(["0.0"] * 1536) + "]"
+        page_boundaries = [{"page": 1, "end_pos": len(_EMBED_LONG_TEXT)}]
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute(
+                """INSERT INTO keyword_corpus_stats (id, n_chunks, avgdl, k1, b, sparse_dim)
+                   VALUES (1, 100, 250.0, 1.5, 0.75, 1000000)
+                   ON CONFLICT (id) DO NOTHING"""
+            )
+            doc_id = _insert_embed_document(
+                conn, external_id="embed-withdrawn-doc", language="en",
+            )
+            conn.execute("UPDATE documents SET status='withdrawn' WHERE id=%s", (doc_id,))
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _EMBED_LONG_TEXT, len(_EMBED_LONG_TEXT), Jsonb(page_boundaries)),
+            )
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'Summary for withdrawn test.', 'generated')""",
+                (doc_id,),
+            )
+            # Pre-existing chunk that must survive
+            conn.execute(
+                f"""INSERT INTO document_chunks
+                       (document_id, legacy_chunk_id, chunk_index, unit_type, page, text,
+                        language, node_metadata, embedding, embedding_model, dimension, corpus_order)
+                   VALUES (%s, 'embed-withdrawn-doc_chunk_0', 0, 'text', 1, 'PRE-EXISTING CHUNK TEXT',
+                           'en', '{{}}', '{zero_vec}'::vector(1536), 'text-embedding-3-small', 1536, 1)""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.embed import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT text FROM document_chunks WHERE document_id=%s", (doc_id,)
+            ).fetchall()
+        assert len(rows) == 1, (
+            f"withdrawn doc's chunks should not be deleted+rewritten; got {len(rows)} rows"
+        )
+        assert rows[0][0] == "PRE-EXISTING CHUNK TEXT", (
+            f"pre-existing chunk must survive untouched; got {rows[0][0]!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # --- publish stage ---
@@ -1693,3 +1788,33 @@ class TestPublishStage:
                 "SELECT status FROM documents WHERE id=%s", (doc_id,)
             ).fetchone()[0]
         assert status == "searchable", f"Expected 'searchable' despite /reindex failure, got '{status}'"
+
+    def test_low_confidence_withdrawn_doc_returns_none_not_needs_review(
+        self, stages_test_db, monkeypatch
+    ):
+        """A withdrawn doc with low confidence: the guarded UPDATE no-ops (status
+        stays withdrawn), so publish must return None (not 'needs_review') — so the
+        job ends 'done' (NEW-P2-4), not parked in the review queue for a withdrawn doc.
+
+        Arithmetic (same as sparse test): char_count=50, pages=1, no chunks → score=0.4 < 0.7.
+        """
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-withdrawn-low", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=50, pages=1)
+            # No chunks → 0.0 chunk weight → low score
+            conn.execute("UPDATE documents SET status='withdrawn' WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result is None, (
+            f"withdrawn doc with low confidence should return None (not 'needs_review'), got {result!r}"
+        )
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert status == "withdrawn", f"withdrawn doc must stay withdrawn, got {status!r}"
