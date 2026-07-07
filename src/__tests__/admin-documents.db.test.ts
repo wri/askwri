@@ -212,7 +212,7 @@ d('documentsAdmin (DB integration)', () => {
   // --- E1: search by author + DOI; language filter uses languages @> ---
 
   it('listAdminDocuments finds documents by author', async () => {
-    const items = await listAdminDocuments({ search: 'Test Author' })
+    const { items } = await listAdminDocuments({ search: 'Test Author' })
     const found = items.find((i) => i.id === docId)
     expect(found).toBeDefined()
   })
@@ -220,7 +220,7 @@ d('documentsAdmin (DB integration)', () => {
   it('listAdminDocuments finds documents by DOI', async () => {
     // Set a DOI on the test doc, then search for it
     await updateDocumentFields(docId, { doi: '10.9999/test-doi-xyz' }, identity)
-    const items = await listAdminDocuments({ search: '10.9999/test-doi' })
+    const { items } = await listAdminDocuments({ search: '10.9999/test-doi' })
     const found = items.find((i) => i.id === docId)
     expect(found).toBeDefined()
   })
@@ -236,7 +236,7 @@ d('documentsAdmin (DB integration)', () => {
     const mlId = mlRow.id
     try {
       // Filter by es — should find this doc even though primary is en
-      const items = await listAdminDocuments({ language: 'es' })
+      const { items } = await listAdminDocuments({ language: 'es' })
       const found = items.find((i) => i.id === mlId)
       expect(found).toBeDefined()
     } finally {
@@ -286,6 +286,81 @@ d('documentsAdmin transactional audit (DB integration)', () => {
     } finally {
       await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id=$1`, [txDocId])
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [txDocId])
+    }
+  })
+})
+
+d('documentsAdmin F2 filters + pagination (DB integration)', () => {
+  beforeAll(async () => {
+    if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+  })
+  afterAll(async () => {
+    if (AppDataSource.isInitialized) await AppDataSource.destroy()
+  })
+
+  // ===== F2: yearPublished filter, tagId filter, pagination + total =====
+  it('listAdminDocuments filters by yearPublished', async () => {
+    const extId = `yrfilt_${Date.now()}`
+    const [row] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status, year_published)
+       VALUES ($1, $2, 'Year Filter Test', 'searchable', 2020) RETURNING id`,
+      [extId, `documents/${extId}.pdf`],
+    )
+    const yDocId = row.id
+    try {
+      const { items } = await listAdminDocuments({ yearPublished: 2020 })
+      expect(items.some((d: any) => d.externalId === extId)).toBe(true)
+      const { items: all } = await listAdminDocuments({})
+      expect(all.some((d: any) => d.externalId === extId && d.yearPublished === 2020)).toBe(true)
+    } finally {
+      await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [yDocId])
+    }
+  })
+
+  it('listAdminDocuments filters by tagId (accepted tags only)', async () => {
+    const extId = `tagfilt_${Date.now()}`
+    const [docRow] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'Tag Filter Test', 'searchable') RETURNING id`,
+      [extId, `documents/${extId}.pdf`],
+    )
+    const tDocId = docRow.id
+    // Create a tag + document_tag (source=llm, status=accepted)
+    const [tagRow] = await AppDataSource.query(
+      `INSERT INTO tags (id, facet, value_id, taxonomy_version)
+       VALUES (gen_random_uuid(), 'testfacet_f2', 'testval_f2', 'v1') RETURNING id`,
+    )
+    const tagId = tagRow.id
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
+      [tDocId, tagId],
+    )
+    try {
+      const { items } = await listAdminDocuments({ tagId })
+      expect(items.some((d: any) => d.externalId === extId)).toBe(true)
+    } finally {
+      await AppDataSource.query(`DELETE FROM document_tags WHERE tag_id=$1`, [tagId])
+      await AppDataSource.query(`DELETE FROM tags WHERE id=$1`, [tagId])
+      await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [tDocId])
+    }
+  })
+
+  it('listAdminDocuments paginates and returns total count', async () => {
+    const { items, total } = await listAdminDocuments({}, { limit: 10, offset: 0 })
+    expect(items.length).toBeLessThanOrEqual(10)
+    expect(total).toBeGreaterThan(0)
+    expect(typeof total).toBe('number')
+  })
+
+  it('listAdminDocuments pagination offset skips rows', async () => {
+    const { items: page1, total: t1 } = await listAdminDocuments({}, { limit: 5, offset: 0 })
+    const { items: page2 } = await listAdminDocuments({}, { limit: 5, offset: 5 })
+    expect(page1.length).toBeLessThanOrEqual(5)
+    expect(page2.length).toBeLessThanOrEqual(5)
+    // Pages should not overlap (different external_ids)
+    if (page1.length > 0 && page2.length > 0) {
+      const ids1 = new Set(page1.map((d: any) => d.id))
+      expect(page2.some((d: any) => ids1.has(d.id))).toBe(false)
     }
   })
 })

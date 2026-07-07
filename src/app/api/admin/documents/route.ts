@@ -21,14 +21,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'tagId must be a UUID' }, { status: 400 })
     }
     await initializeDatabase()
-    const items = await listAdminDocuments({
-      status: sp.get('status') || undefined,
-      language: sp.get('language') || undefined,
-      collectionId,
-      tagId,
-      search: sp.get('search') || undefined,
-    })
-    return NextResponse.json({ ok: true, items })
+    const limitStr = sp.get('limit') || undefined
+    const offsetStr = sp.get('offset') || undefined
+    const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 500, 1), 500) : undefined
+    const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : undefined
+    const { items, total } = await listAdminDocuments(
+      {
+        status: sp.get('status') || undefined,
+        language: sp.get('language') || undefined,
+        collectionId,
+        tagId,
+        search: sp.get('search') || undefined,
+        yearPublished: sp.get('yearPublished') ? parseInt(sp.get('yearPublished')!, 10) : undefined,
+      },
+      limit != null || offset != null ? { limit, offset } : {},
+    )
+    return NextResponse.json({ ok: true, items, total })
   } catch (err) {
     return internalError(err)
   }

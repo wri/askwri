@@ -36,11 +36,23 @@ export interface AdminDocumentFilters {
   collectionId?: string
   tagId?: string
   search?: string
+  yearPublished?: number
+}
+
+export interface PaginationOptions {
+  limit?: number
+  offset?: number
+}
+
+export interface AdminDocumentListResult {
+  items: AdminDocumentListItem[]
+  total: number
 }
 
 export async function listAdminDocuments(
   filters: AdminDocumentFilters,
-): Promise<AdminDocumentListItem[]> {
+  pagination: PaginationOptions = {},
+): Promise<AdminDocumentListResult> {
   const where: string[] = ['1=1']
   const params: any[] = []
   const p = (v: any) => {
@@ -56,15 +68,29 @@ export async function listAdminDocuments(
   if (filters.tagId)
     where.push(`EXISTS (SELECT 1 FROM document_tags dt
                 WHERE dt.document_id = d.id AND dt.tag_id = ${p(filters.tagId)} AND dt.status = 'accepted')`)
-  return AppDataSource.query(
+  if (filters.yearPublished) where.push(`d.year_published = ${p(filters.yearPublished)}`)
+  const whereClause = where.join(' AND ')
+  const limit = pagination.limit ?? 500
+  const offset = pagination.offset ?? 0
+  // Items query: same WHERE + filter params, then LIMIT/OFFSET appended.
+  const itemsParams = [...params, limit, offset]
+  const limitParam = `$${params.length + 1}`
+  const offsetParam = `$${params.length + 2}`
+  const items = await AppDataSource.query(
     `SELECT d.id, d.external_id AS "externalId", d.title, d.language, d.status,
             d.year_published AS "yearPublished", d.created_at AS "createdAt"
      FROM documents d
-     WHERE ${where.join(' AND ')}
-     ORDER BY d.created_at DESC
-     LIMIT 500`,
+     WHERE ${whereClause}
+     ORDER BY d.created_at DESC, d.id DESC
+     LIMIT ${limitParam} OFFSET ${offsetParam}`,
+    itemsParams,
+  )
+  // Count query: same WHERE + filter params (no LIMIT/OFFSET).
+  const countRows = await AppDataSource.query(
+    `SELECT count(*)::int AS total FROM documents d WHERE ${whereClause}`,
     params,
   )
+  return { items, total: countRows[0]?.total ?? 0 }
 }
 
 export interface AdminDocumentDetail {

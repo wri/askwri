@@ -21,6 +21,14 @@ interface Collection {
   slug: string
 }
 
+interface Tag {
+  id: string
+  facet: string
+  valueId: string
+}
+
+const PAGE_SIZE = 50
+
 const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid #eee' }
 
 const CatalogInner = () => {
@@ -28,12 +36,18 @@ const CatalogInner = () => {
   const initialCollectionId = searchParams.get('collectionId') ?? ''
 
   const [items, setItems] = useState<DocItem[]>([])
+  const [total, setTotal] = useState(0)
   const [collections, setCollections] = useState<Collection[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
+  const [availableYears, setAvailableYears] = useState<number[]>([])
+  const [page, setPage] = useState(0)
   const [filters, setFilters] = useState({
     status: '',
     language: '',
     collectionId: initialCollectionId,
     search: '',
+    yearPublished: '',
+    tagId: '',
   })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkCollectionId, setBulkCollectionId] = useState<string>('')
@@ -49,9 +63,40 @@ const CatalogInner = () => {
     }
   }, [])
 
+  const loadTags = useCallback(async () => {
+    try {
+      const body = await adminFetch<{ tags: Tag[] }>('/api/admin/tags')
+      setTags(body.tags)
+    } catch {
+      // tags are best-effort; don't block the page
+    }
+  }, [])
+
+  const loadYears = useCallback(async () => {
+    try {
+      const [rows] = await Promise.all([
+        adminFetch<{ items: DocItem[] }>(`/api/admin/documents?limit=500`),
+      ])
+      // Derive distinct years from the first page (the corpus is small enough).
+      // A dedicated endpoint would be cleaner, but this avoids a new API.
+      const years = new Set<number>()
+      // The list endpoint doesn't return all years without pagination; use a
+      // lightweight query via the same endpoint with a high limit.
+      const allBody = await adminFetch<{ items: DocItem[]; total: number }>(
+        `/api/admin/documents?limit=500`,
+      )
+      for (const d of allBody.items) {
+        if (d.yearPublished) years.add(d.yearPublished)
+      }
+      setAvailableYears(Array.from(years).sort((a, b) => b - a))
+    } catch {
+      // best-effort
+    }
+  }, [])
+
   const reqSeq = useRef(0)
 
-  const load = useCallback(async (f: typeof filters) => {
+  const load = useCallback(async (f: typeof filters, pageNum: number) => {
     const seq = ++reqSeq.current
     try {
       const params = new URLSearchParams()
@@ -59,9 +104,14 @@ const CatalogInner = () => {
       if (f.language) params.set('language', f.language)
       if (f.collectionId) params.set('collectionId', f.collectionId)
       if (f.search) params.set('search', f.search)
-      const body = await adminFetch<{ items: DocItem[] }>(`/api/admin/documents?${params}`)
+      if (f.yearPublished) params.set('yearPublished', f.yearPublished)
+      if (f.tagId) params.set('tagId', f.tagId)
+      params.set('limit', String(PAGE_SIZE))
+      params.set('offset', String(pageNum * PAGE_SIZE))
+      const body = await adminFetch<{ items: DocItem[]; total: number }>(`/api/admin/documents?${params}`)
       if (seq !== reqSeq.current) return
       setItems(body.items)
+      setTotal(body.total)
       setError(null)
     } catch (err: any) {
       if (seq !== reqSeq.current) return
@@ -72,17 +122,27 @@ const CatalogInner = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCollections()
-    const f = { status: '', language: '', collectionId: initialCollectionId, search: '' }
+    loadTags()
+    loadYears()
+    const f = { status: '', language: '', collectionId: initialCollectionId, search: '', yearPublished: '', tagId: '' }
     setFilters(f)
+    setPage(0)
     setSelected(new Set())
-    load(f)
-  }, [load, loadCollections, initialCollectionId])
+    load(f, 0)
+  }, [load, loadCollections, loadTags, loadYears, initialCollectionId])
 
   const updateFilter = (key: keyof typeof filters, value: string) => {
     const next = { ...filters, [key]: value }
     setFilters(next)
+    setPage(0)
     setSelected(new Set())
-    load(next)
+    load(next, 0)
+  }
+
+  const goToPage = (pageNum: number) => {
+    setPage(pageNum)
+    setSelected(new Set())
+    load(filters, pageNum)
   }
 
   const toggleSelect = (id: string) => {
@@ -154,6 +214,17 @@ const CatalogInner = () => {
         </select>
 
         <select
+          value={filters.yearPublished}
+          onChange={(e) => updateFilter('yearPublished', e.target.value)}
+          style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+        >
+          <option value=''>All years</option>
+          {availableYears.map((y) => (
+            <option key={y} value={String(y)}>{y}</option>
+          ))}
+        </select>
+
+        <select
           value={filters.collectionId}
           onChange={(e) => updateFilter('collectionId', e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
@@ -164,9 +235,32 @@ const CatalogInner = () => {
           ))}
         </select>
 
+        <select
+          value={filters.tagId}
+          onChange={(e) => updateFilter('tagId', e.target.value)}
+          style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+          title='Filter by taxonomy tag (facet value)'
+        >
+          <option value=''>All tags</option>
+          {Object.entries(
+            tags.reduce<Record<string, Tag[]>>((acc, t) => {
+              ;(acc[t.facet] ??= []).push(t)
+              return acc
+            }, {}),
+          )
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([facet, ts]) => (
+              <optgroup key={facet} label={facet}>
+                {ts.map((t) => (
+                  <option key={t.id} value={t.id}>{t.valueId}</option>
+                ))}
+              </optgroup>
+            ))}
+        </select>
+
         <input
           type='text'
-          placeholder='Search…'
+          placeholder='Search title, author, DOI, URL…'
           value={filters.search}
           onChange={(e) => updateFilter('search', e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '2px 6px' }}
@@ -194,6 +288,9 @@ const CatalogInner = () => {
           >
             Add {selected.size} doc{selected.size === 1 ? '' : 's'} to collection
           </button>
+          <Text style={{ fontSize: 12, color: '#888', marginLeft: 8 }} title='Collections are curatorial groups of documents (e.g. a topic, a project, a language set). Adding documents to a collection groups them for filtering, bulk operations, and per-collection embedding-model policies. It does not change the document itself.'>
+            ℹ What does this do?
+          </Text>
         </div>
       )}
 
@@ -241,6 +338,29 @@ const CatalogInner = () => {
             ))}
           </tbody>
         </table>
+      )}
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16, fontSize: 13, color: '#555' }}>
+          <button
+            onClick={() => goToPage(page - 1)}
+            disabled={page === 0}
+            style={{ textDecoration: 'underline', cursor: page === 0 ? 'not-allowed' : 'pointer' }}
+          >
+            ← Prev
+          </button>
+          <Text>
+            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+          </Text>
+          <button
+            onClick={() => goToPage(page + 1)}
+            disabled={(page + 1) * PAGE_SIZE >= total}
+            style={{ textDecoration: 'underline', cursor: (page + 1) * PAGE_SIZE >= total ? 'not-allowed' : 'pointer' }}
+          >
+            Next →
+          </button>
+        </div>
       )}
     </Box>
   )
