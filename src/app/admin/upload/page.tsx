@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Box, Heading, Text } from '@chakra-ui/react'
 
+import { Tooltip } from '../components/Tooltip'
+
 interface WorkerHealth {
   queueDepth: number
   lastProcessedAt: string | null
@@ -88,7 +90,8 @@ const UploadPage = () => {
   return (
     <Box>
       <Heading size='lg' style={{ marginBottom: 8 }}>
-        Upload PDFs to intake
+        Upload PDFs to intake{' '}
+        <Tooltip help='Uploaded PDFs are placed in the S3 intake/ queue. The ingestion worker (a separate process) polls every ~10s, computes a content hash for dedup, registers a draft documents row, and drives the file through parse → language → summarize → classify → embed → publish. If the worker is not running, files sit in intake/ unprocessed — check the worker status panel below.'>How does upload work?</Tooltip>
       </Heading>
       <Text style={{ marginBottom: 16, color: '#555' }}>
         Select one or more PDF files. They will be placed in the intake queue and registered by the

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { Tooltip } from '../components/Tooltip'
 
 interface Collection {
   id: string
@@ -89,8 +90,12 @@ const CollectionsPage = () => {
   return (
     <Box>
       <Heading size='lg' style={{ marginBottom: 8 }}>
-        Collections
+        Collections{' '}
+        <Tooltip help='Collections are curated groups of documents (e.g. by topic, project, or language). They support bulk operations (re-tag, re-embed, export) and can carry a language policy and embedding-model version for staged migration.'>What are collections?</Tooltip>
       </Heading>
+      <Text style={{ marginBottom: 16, color: '#555' }}>
+        Collections group documents for management and bulk operations. A document can belong to multiple collections.
+      </Text>
 
       {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
       {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
