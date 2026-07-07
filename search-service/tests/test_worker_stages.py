@@ -656,6 +656,214 @@ class TestParseStage:
 
 
 # ---------------------------------------------------------------------------
+# --- parse stage: metadata extraction (J1) ---
+# ---------------------------------------------------------------------------
+
+import tempfile as _tempfile_mod
+
+def _make_pdf_with_metadata(path, *, title=None, author=None, content_text=None):
+    """Create a small PDF with embedded metadata via pypdf.
+    If content_text is given, it is placed as raw content (pypdf can't add text
+    streams easily, so we embed it in the Subject field as a fallback for tests
+    that just need a non-empty page — the extraction heuristics read page text,
+    not Subject). For the first-page-title heuristic we use the fixture PDF."""
+    from pypdf import PdfWriter
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    meta = {}
+    if title is not None:
+        meta["/Title"] = title
+    if author is not None:
+        meta["/Author"] = author
+    if content_text is not None:
+        meta["/Subject"] = content_text
+    if meta:
+        writer.add_metadata(meta)
+    with open(path, "wb") as f:
+        writer.write(f)
+    return path
+
+
+class TestParseExtractMetadata:
+    """Tests for automated metadata extraction in the parse stage (J1).
+    Fill-only-empty: columns are set only when currently NULL."""
+
+    def test_extracts_title_and_authors_from_pdf_metadata(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """(a) A PDF with embedded /Title and /Author metadata →
+        documents.title = the metadata title (not the slug),
+        documents.authors = the metadata author."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        pdf_path = docs_dir / "meta_test.pdf"
+        _make_pdf_with_metadata(
+            pdf_path, title="Real Title From Metadata", author="Jane Doe"
+        )
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            # Insert with title=external_id (slug) as intake_s3 does
+            doc_id = _insert_document(
+                conn, external_id="meta_test", s3_key="documents/meta_test.pdf",
+                title="meta_test",
+            )
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT title, authors FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()
+        assert row is not None
+        assert row[0] == "Real Title From Metadata", f"title should be metadata title, got {row[0]!r}"
+        assert row[1] == "Jane Doe", f"authors should be metadata author, got {row[1]!r}"
+
+    def test_extracts_title_from_first_page_when_no_metadata(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """(b) A PDF with NO metadata but a clear first-page title (the fixture
+        sample.pdf starts with 'World Resources Institute Research Report') →
+        title extracted from page 1 text (not the slug)."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "sample.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(
+                conn, external_id="sample", s3_key="documents/sample.pdf",
+                title="sample",  # the slug, as intake_s3 sets
+            )
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT title FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()
+        assert row is not None
+        # The fixture's first line is "World Resources Institute Research Report"
+        assert row[0] != "sample", "title should not be the slug"
+        assert "World Resources Institute" in row[0], f"title should come from page 1, got {row[0]!r}"
+
+    def test_pre_existing_title_not_overwritten(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """(c) A doc with a pre-existing title (e.g. set by CSV import) →
+        title NOT overwritten (fill-only-empty: the UPDATE is a no-op for title)."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "sample.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(
+                conn, external_id="sample", s3_key="documents/sample.pdf",
+                title="Pre-existing CSV Title",  # non-NULL, must be preserved
+            )
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT title FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()
+        assert row is not None
+        assert row[0] == "Pre-existing CSV Title", f"fill-only-empty: pre-existing title must survive, got {row[0]!r}"
+
+    def test_extracts_doi_and_year_from_text(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """(d) A PDF with a DOI pattern and a year in the first-page text →
+        doi and year_published extracted."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        # The fixture sample.pdf has "World Resources Institute Research Report"
+        # and doesn't have a DOI — we need a PDF with DOI/year in the text.
+        # Since pypdf can't add text streams easily, we test the extraction
+        # functions directly (unit-level) for the DOI/year regex.
+        shutil.copy(_FIXTURE_PDF, docs_dir / "sample.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        # Unit-test the extraction helpers directly
+        from worker.stages.parse import _extract_doi, _extract_year
+        assert _extract_doi("see doi:10.1234/foo for details") == "10.1234/foo"
+        assert _extract_doi("https://doi.org/10.46830/writn.22.00054") == "10.46830/writn.22.00054"
+        assert _extract_doi("no doi here") is None
+        assert _extract_year("Published in 2023 by WRI") == 2023
+        assert _extract_year("Copyright 2019") == 2019
+        assert _extract_year("no year") is None
+
+    def test_no_metadata_no_crash(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """(e) A PDF with no extractable metadata at all → columns stay as-is
+        (title stays the slug from intake; no crash)."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        # A blank PDF with no metadata and no text
+        blank_pdf = docs_dir / "blank.pdf"
+        _make_pdf_with_metadata(blank_pdf)  # no title/author/content
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(
+                conn, external_id="blank", s3_key="documents/blank.pdf",
+                title="blank",  # the slug
+            )
+
+        from worker.stages.parse import run
+        result = run(doc_id)
+        # Blank PDF: no text → needs_review, but must not crash
+        assert result == "needs_review"
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT title, authors, doi, year_published FROM documents WHERE id = %s",
+                (doc_id,),
+            ).fetchone()
+        assert row is not None
+        assert row[0] == "blank", "title stays the slug when nothing extracted"
+        assert row[1] is None, "authors stays NULL"
+        assert row[2] is None, "doi stays NULL"
+        assert row[3] is None, "year_published stays NULL"
+
+
+# ---------------------------------------------------------------------------
 # --- language stage ---
 # ---------------------------------------------------------------------------
 
