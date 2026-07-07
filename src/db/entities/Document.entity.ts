@@ -28,7 +28,13 @@ export class Document {
   titleEn!: string | null
 
   @Column('text', { nullable: true })
-  abstract!: string | null
+  authors!: string | null
+
+  @Column('text', { nullable: true })
+  url!: string | null
+
+  @Column('date', { name: 'date_published', nullable: true })
+  datePublished!: string | null
 
   @Column('text', { nullable: true })
   language!: string | null
