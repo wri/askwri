@@ -29,14 +29,20 @@ def detect(text: str) -> str:
 @stage("language")
 def run(document_id):
     with get_pool().connection() as conn:
-        fetch_document(conn, document_id)
+        doc = fetch_document(conn, document_id)
         row = conn.execute(
             "SELECT full_text FROM document_texts WHERE document_id = %s", (document_id,)
         ).fetchone()
         lang = detect(row[0])
+        # Merge the newly-detected language into the existing set; never shrink
+        # the array. Design §7.4 ("detect the set present") + §323 ("preserve
+        # existing languages"): a re-ingest must not drop a language a doc had.
+        # Order: detected primary first, then any pre-existing codes preserved.
+        existing = doc["languages"] or []
+        merged = list(dict.fromkeys([lang, *existing]))  # dedupe, preserve order
         conn.execute(
             "UPDATE documents SET language=%s, languages=%s, updated_at=now() WHERE id=%s",
-            (lang, [lang], document_id),
+            (lang, merged, document_id),
         )
-        logger.info(f"doc {document_id}: language={lang}")
+        logger.info(f"doc {document_id}: language={lang}, languages={merged}")
     return None

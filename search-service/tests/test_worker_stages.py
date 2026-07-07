@@ -640,6 +640,66 @@ class TestLanguageStageWrite:
             assert language == "en"
             assert languages == ["en"]
 
+    def test_language_stage_merges_existing_languages_never_shrinks(self, stages_test_db):
+        """A doc with languages=['en','es'] re-ingested and language detection returns 'en'
+        must MERGE (never shrink) — 'es' is preserved (design §7.4: detect the set
+        present; a re-ingest must not drop a language)."""
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="merge-lang-doc",
+                language="en", languages=["en", "es"], title="Merge Doc",
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _EN_TEXT, len(_EN_TEXT), []),
+            )
+            conn.commit()
+
+        from worker.stages.language import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT language, languages FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()
+            assert row is not None
+            language, languages = row
+            assert language == "en", f"primary language should be 'en', got {language!r}"
+            assert set(languages) == {"en", "es"}, (
+                f"languages[] must preserve 'es' (merge, never shrink); got {languages!r}"
+            )
+
+    def test_language_stage_adds_newly_detected_language(self, stages_test_db):
+        """A doc with languages=['en'] whose detected language is 'es' should
+        merge 'es' in (primary becomes 'es', array keeps 'en')."""
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="add-lang-doc",
+                language="en", languages=["en"], title="Add Lang Doc",
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _ES_TEXT, len(_ES_TEXT), []),
+            )
+            conn.commit()
+
+        from worker.stages.language import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT language, languages FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()
+            assert row is not None
+            language, languages = row
+            assert language == "es"
+            assert set(languages) == {"en", "es"}, (
+                f"existing 'en' must be preserved when 'es' is detected; got {languages!r}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # --- summarize stage ---
