@@ -396,6 +396,99 @@ class TestIntakeSweepLocal:
             assert queued_jobs >= 1, "A new queued job should be enqueued for re-ingestion"
 
 
+class FakeS3Client:
+    """A minimal in-memory S3 client for _sweep_s3 tests (paginated listing +
+    object get/copy/delete)."""
+    def __init__(self, objects: dict):
+        # objects: {key: bytes}
+        self.objects = dict(objects)
+        self.deleted = []
+        self.copied = []
+
+    def list_objects_v2(self, *, Bucket, Prefix, MaxKeys=50, ContinuationToken=None):
+        keys = sorted(k for k in self.objects if k.startswith(Prefix))
+        # Simple pagination: slice by MaxKeys, use token as start index
+        start = int(ContinuationToken) if ContinuationToken else 0
+        page = keys[start:start + MaxKeys]
+        truncated = start + MaxKeys < len(keys)
+        return {
+            "Contents": [{"Key": k} for k in page],
+            "IsTruncated": truncated,
+            "NextContinuationToken": str(start + MaxKeys) if truncated else None,
+        }
+
+    def get_object(self, *, Bucket, Key):
+        class Body:
+            def __init__(self, data): self._d = data
+            def read(self): return self._d
+        return {"Body": Body(self.objects[Key])}
+
+    def copy_object(self, *, Bucket, Key, CopySource):
+        self.objects[Key] = self.objects[CopySource["Key"]]
+        self.copied.append(Key)
+
+    def delete_object(self, *, Bucket, Key):
+        self.objects.pop(Key, None)
+        self.deleted.append(Key)
+
+    exceptions = type("exc", (), {"NoSuchKey": Exception})
+
+
+class TestIntakeSweepS3:
+
+    def test_pagination_processes_more_than_maxkeys(self, stages_test_db, monkeypatch):
+        """_sweep_s3 must paginate (ContinuationToken loop) when the intake prefix
+        has more than MaxKeys objects — all 60 PDFs are registered, not just 50
+        (NEW-P2-9)."""
+        from worker import intake_s3
+        # 60 PDFs in intake/ — more than MaxKeys=50
+        objs = {f"intake/doc_{i:03d}.pdf": b"%PDF-1.4 " + bytes([i]) for i in range(60)}
+        fake = FakeS3Client(objs)
+        monkeypatch.setattr(intake_s3, "s3", fake, raising=False)
+        # Patch boto3.client to return our fake
+        import boto3
+        monkeypatch.setattr(boto3, "client", lambda *a, **k: fake)
+        monkeypatch.delenv("INTAKE_LOCAL_DIR", raising=False)
+        monkeypatch.setenv("DOCUMENTS_S3_BUCKET", "test-bucket")
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        result = intake_s3.sweep()
+        assert result is True
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
+        assert doc_count == 60, f"all 60 PDFs should be registered (pagination), got {doc_count}"
+
+    def test_non_pdf_objects_deleted_from_intake(self, stages_test_db, monkeypatch):
+        """A non-PDF object in intake/ is deleted (not left orphaned) and not
+        registered as a document (NEW-P2-9)."""
+        from worker import intake_s3
+        objs = {
+            "intake/report.pdf": b"%PDF-1.4 real content",
+            "intake/readme.txt": b"not a pdf",
+            "intake/notes.json": b"{}",
+        }
+        fake = FakeS3Client(objs)
+        import boto3
+        monkeypatch.setattr(boto3, "client", lambda *a, **k: fake)
+        monkeypatch.delenv("INTAKE_LOCAL_DIR", raising=False)
+        monkeypatch.setenv("DOCUMENTS_S3_BUCKET", "test-bucket")
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        result = intake_s3.sweep()
+        assert result is True
+
+        # Non-PDF objects deleted from intake (not orphaned)
+        assert "intake/readme.txt" in fake.deleted, "non-PDF .txt should be deleted from intake"
+        assert "intake/notes.json" in fake.deleted, "non-PDF .json should be deleted from intake"
+        # Only the PDF registered as a document
+        with psycopg.connect(stages_test_db) as conn:
+            doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
+        assert doc_count == 1, f"only the PDF should register, got {doc_count} docs"
+
+
 # ---------------------------------------------------------------------------
 # --- parse stage ---
 # ---------------------------------------------------------------------------

@@ -451,3 +451,26 @@ class TestWorkerQueue:
 
         # Nothing left to claim
         assert queue.claim_job() is None
+
+
+class TestNextStageBounds:
+    """Unit tests for queue.next_stage bounds checking (no DB required)."""
+
+    def test_next_stage_from_none_returns_first(self):
+        from worker import queue
+        from worker.stages import STAGE_ORDER
+        assert queue.next_stage(None) == STAGE_ORDER[0]
+
+    def test_next_stage_terminal_raises_runtime_error(self):
+        """next_stage at the terminal stage ('publish') must raise a clear
+        RuntimeError, not an opaque IndexError (NEW-P2-6)."""
+        from worker import queue
+        from worker.stages import STAGE_ORDER
+        with pytest.raises(RuntimeError, match="terminal stage"):
+            queue.next_stage(STAGE_ORDER[-1])
+
+    def test_next_stage_unknown_raises_value_error(self):
+        """An unknown stage name raises ValueError (list.index), not IndexError."""
+        from worker import queue
+        with pytest.raises(ValueError):
+            queue.next_stage("nonexistent_stage")

@@ -95,6 +95,11 @@ def reap_stale_jobs(conn, max_age_minutes: int = 15) -> list:
 def next_stage(completed_stage: Optional[str]) -> str:
     if completed_stage is None:
         return STAGE_ORDER[0]
+    if completed_stage == STAGE_ORDER[-1]:
+        raise RuntimeError(
+            f"already at terminal stage '{completed_stage}'; the job should be "
+            "done (mark_done), not re-queued for a next stage"
+        )
     return STAGE_ORDER[STAGE_ORDER.index(completed_stage) + 1]
 
 

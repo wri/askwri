@@ -99,11 +99,33 @@ def _sweep_s3() -> bool:
     settings = get_settings()
     s3 = boto3.client("s3")
     bucket = settings.documents_s3_bucket
-    resp = s3.list_objects_v2(Bucket=bucket, Prefix=settings.intake_s3_prefix, MaxKeys=50)
+    # Collect the full listing first (paginate), then process. Paginating while
+    # mutating the listing (deleting processed objects) makes continuation tokens
+    # unreliable, so drain the listing into a key list up front (NEW-P2-9).
+    keys = []
+    continuation = None
+    while True:
+        kwargs = {"Bucket": bucket, "Prefix": settings.intake_s3_prefix, "MaxKeys": 50}
+        if continuation:
+            kwargs["ContinuationToken"] = continuation
+        resp = s3.list_objects_v2(**kwargs)
+        for obj in resp.get("Contents", []):
+            keys.append(obj["Key"])
+        if not resp.get("IsTruncated"):
+            break
+        continuation = resp.get("NextContinuationToken")
+        if not continuation:
+            break
+
     processed = False
-    for obj in resp.get("Contents", []):
-        key = obj["Key"]
+    for key in keys:
         if not key.lower().endswith(".pdf"):
+            # Non-PDF objects are removed from intake so they don't accumulate
+            # as orphaned clutter (NEW-P2-9). Never registered as documents.
+            try:
+                s3.delete_object(Bucket=bucket, Key=key)
+            except Exception:  # noqa: BLE001
+                logger.exception(f"intake: failed to delete non-PDF object {key}")
             continue
         # Per-object guard: a poison object costs one log line per sweep and
         # never blocks the rest of the batch (or crash-loops the worker).

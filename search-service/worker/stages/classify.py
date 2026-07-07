@@ -8,7 +8,6 @@ Logs a cost estimate before calling the LLM.
 """
 import logging
 
-from psycopg.types.json import Jsonb  # noqa: F401  (audit use below)
 from app.config import get_settings
 from app.db import get_pool
 from worker.llm import chat_json
