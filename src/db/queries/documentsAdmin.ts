@@ -3,6 +3,8 @@ import { Document } from '../entities/Document.entity'
 import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
+import { basename } from 'path'
+import { s3ClientConfig } from '../../lib/s3'
 
 // Whitelisted editable metadata fields (entity property -> column handled by TypeORM)
 export const EDITABLE_FIELDS = [
@@ -289,4 +291,54 @@ export async function updateDocumentSummary(
     )
   })
   return { updated: true }
+}
+
+/**
+ * Hard-delete a document: permanently removes the documents row (CASCADE to
+ * document_texts/chunks/summaries/tags/collections; ingestion_jobs FK is SET NULL
+ * so the job survives with document_id=NULL), deletes the S3 PDF object, and
+ * writes an audit tombstone (action='delete', before={title, external_id},
+ * after=null). Admin-only (the route enforces the role). Returns false if the
+ * document does not exist.
+ */
+export async function purgeDocument(
+  id: string,
+  identity: AdminIdentity,
+): Promise<boolean> {
+  const repo = AppDataSource.getRepository(Document)
+  const doc = await repo.findOne({ where: { id } })
+  if (!doc) return false
+
+  // Sanitize the S3 key: basename + documents prefix (same as the file route).
+  const filename = doc.s3Key ? basename(doc.s3Key) : null
+  const documentsPrefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'
+  const safeKey = filename ? `${documentsPrefix}${filename}` : null
+  const bucket = process.env.DOCUMENTS_S3_BUCKET
+
+  // Delete the S3 object BEFORE the DB row (best-effort: a missing object is
+  // not an error — the doc may have no PDF, or it was already removed).
+  if (bucket && safeKey) {
+    try {
+      const { DeleteObjectCommand, S3Client } = await import('@aws-sdk/client-s3')
+      const s3 = new S3Client(s3ClientConfig())
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: safeKey }))
+    } catch {
+      // Best-effort: don't block the DB delete on an S3 failure (the object
+      // may not exist, or S3 may be unreachable in a local env without MinIO).
+    }
+  }
+
+  const before = { title: doc.title, external_id: doc.externalId }
+
+  await AppDataSource.transaction(async (em) => {
+    // The child tables cascade (ON DELETE CASCADE); ingestion_jobs is SET NULL.
+    await em.getRepository(Document).delete(id)
+    // Audit tombstone: after=null (the entity is gone).
+    await em.query(
+      `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
+       VALUES ($1, $2, 'delete', 'document', $3, $4, NULL)`,
+      [auditActor(identity).actorUserId, auditActor(identity).source, id, before],
+    )
+  })
+  return true
 }

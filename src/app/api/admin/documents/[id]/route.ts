@@ -3,6 +3,7 @@ import { initializeDatabase } from '../../../../../db/data-source'
 import {
   getAdminDocumentDetail,
   updateDocumentFields,
+  purgeDocument,
 } from '../../../../../db/queries/documentsAdmin'
 import { requireIdentity } from '../../../../../lib/auth/identity'
 import { internalError, isUuid } from '../../../../../lib/api-error'
@@ -40,6 +41,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if ('error' in result)
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
     return NextResponse.json({ ok: true, updated: result.updated })
+  } catch (err) {
+    return internalError(err)
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: Params) {
+  // Hard-delete: admin-only. Permanently removes the document, its child rows
+  // (chunks/summaries/tags/collections), and the S3 PDF. Distinct from withdraw
+  // (soft/reversible). Writes an audit tombstone (no reason required).
+  const { identity, response } = await requireIdentity(req, 'admin')
+  if (response) return response
+  try {
+    const { id } = await params
+    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    await initializeDatabase()
+    const deleted = await purgeDocument(id, identity!)
+    if (!deleted) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    return NextResponse.json({ ok: true })
   } catch (err) {
     return internalError(err)
   }

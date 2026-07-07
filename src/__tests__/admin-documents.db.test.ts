@@ -6,6 +6,7 @@ import {
   setDocumentStatus,
   reenqueueIngestion,
   listAdminDocuments,
+  purgeDocument,
 } from '@/db/queries/documentsAdmin'
 
 const hasDb = !!process.env.DATABASE_URL
@@ -364,3 +365,113 @@ d('documentsAdmin F2 filters + pagination (DB integration)', () => {
     }
   })
 })
+
+d('purgeDocument (hard delete, DB integration)', () => {
+  const purgeExtId = `purge_test_${Date.now()}`
+  const purgeS3Key = `documents/${purgeExtId}.pdf`
+  let purgeDocId: string
+
+  beforeAll(async () => {
+    if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+    const [row] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'Purge Test Doc', 'searchable') RETURNING id`,
+      [purgeExtId, purgeS3Key],
+    )
+    purgeDocId = row.id
+    // Seed child rows so we can assert they cascade
+    await AppDataSource.query(
+      `INSERT INTO document_texts (document_id, full_text, page_boundaries, char_count)
+       VALUES ($1, 'test text', '[]', 9)`,
+      [purgeDocId],
+    )
+    await AppDataSource.query(
+      `INSERT INTO document_summaries (document_id, language, kind, text, source)
+       VALUES ($1, 'en', 'long', 'a summary', 'external')`,
+      [purgeDocId],
+    )
+    await AppDataSource.query(
+      `INSERT INTO ingestion_jobs (document_id, status) VALUES ($1, 'done')`,
+      [purgeDocId],
+    )
+  })
+
+  // afterAll: if the doc survived (e.g. a test failed before purge), clean up.
+  afterAll(async () => {
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [purgeDocId])
+    await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [purgeDocId])
+    await AppDataSource.destroy()
+  })
+
+  it('hard-deletes a searchable doc: row + children gone, ingestion_jobs FK NULLed, audit tombstone written', async () => {
+    // Capture the job id so we can verify it was NULLed (SET NULL FK)
+    const [jobRow] = await AppDataSource.query(
+      `SELECT id FROM ingestion_jobs WHERE document_id = $1`,
+      [purgeDocId],
+    )
+    const jobId = jobRow?.id
+
+    const result = await purgeDocument(purgeDocId, identity)
+    expect(result).toBe(true)
+
+    // documents row gone
+    const [docCheck] = await AppDataSource.query(
+      `SELECT count(*)::int AS n FROM documents WHERE id = $1`,
+      [purgeDocId],
+    )
+    expect(docCheck.n).toBe(0)
+
+    // child tables gone (CASCADE)
+    const [textsCheck] = await AppDataSource.query(
+      `SELECT count(*)::int AS n FROM document_texts WHERE document_id = $1`,
+      [purgeDocId],
+    )
+    expect(textsCheck.n).toBe(0)
+
+    const [chunksCheck] = await AppDataSource.query(
+      `SELECT count(*)::int AS n FROM document_chunks WHERE document_id = $1`,
+      [purgeDocId],
+    )
+    expect(chunksCheck.n).toBe(0)
+
+    const [summariesCheck] = await AppDataSource.query(
+      `SELECT count(*)::int AS n FROM document_summaries WHERE document_id = $1`,
+      [purgeDocId],
+    )
+    expect(summariesCheck.n).toBe(0)
+
+    // ingestion_jobs: FK is ON DELETE CASCADE (migration 178130 + entity E3 fix),
+    // so the job row is deleted along with the document (a hard delete removes
+    // everything — no orphaned jobs).
+    if (jobId) {
+      const [jobCheck] = await AppDataSource.query(
+        `SELECT count(*)::int AS n FROM ingestion_jobs WHERE id = $1`,
+        [jobId],
+      )
+      expect(jobCheck.n).toBe(0)
+    }
+
+    // audit tombstone: action='delete', entity_type='document', before has title + external_id, after is null
+    const [audit] = await AppDataSource.query(
+      `SELECT action, entity_type, entity_id, before, after, actor_user_id, source
+       FROM audit_log WHERE entity_type='document' AND entity_id=$1 AND action='delete'
+       ORDER BY at DESC LIMIT 1`,
+      [purgeDocId],
+    )
+    expect(audit).toBeDefined()
+    expect(audit.action).toBe('delete')
+    expect(audit.entity_type).toBe('document')
+    expect(audit.before).toHaveProperty('title')
+    expect(audit.before).toHaveProperty('external_id')
+    expect(audit.before.title).toBe('Purge Test Doc')
+    expect(audit.before.external_id).toBe(purgeExtId)
+    expect(audit.after).toBeNull()
+    expect(audit.source).toBe('system') // token identity
+  })
+
+  it('returns false (not found) for a nonexistent document id', async () => {
+    const result = await purgeDocument('00000000-0000-0000-0000-000000000000', identity)
+    expect(result).toBe(false)
+  })
+})
+

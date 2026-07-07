@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../../lib/api'
 
@@ -38,6 +38,7 @@ const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px soli
 
 const DocumentEditorPage = () => {
   const { id } = useParams<{ id: string }>()
+  const router = useRouter()
   const [detail, setDetail] = useState<Detail | null>(null)
   const [form, setForm] = useState<Record<string, any>>({})
   const [summaryEdits, setSummaryEdits] = useState<Record<string, string>>({})
@@ -194,6 +195,24 @@ const DocumentEditorPage = () => {
       await adminFetch(`/api/admin/documents/${id}/reingest`, { method: 'POST' })
       setNotice('Re-queued for ingestion.')
       await load()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deleteDoc = async () => {
+    if (!doc) return
+    const confirmed = window.confirm(
+      `Permanently delete "${doc.title || doc.externalId}"? This removes the document, its chunks/summaries, and the S3 PDF. This cannot be undone.`,
+    )
+    if (!confirmed) return
+    setBusy(true)
+    try {
+      setError(null)
+      await adminFetch(`/api/admin/documents/${id}`, { method: 'DELETE' })
+      router.push('/admin/documents')
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -538,6 +557,15 @@ const DocumentEditorPage = () => {
           >
             Open PDF
           </a>
+          {me.role === 'admin' && (
+            <button
+              onClick={deleteDoc}
+              disabled={busy}
+              style={{ textDecoration: 'underline', color: '#C11101' }}
+            >
+              Delete
+            </button>
+          )}
         </div>
       </section>
 

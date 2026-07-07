@@ -169,4 +169,15 @@ describe('DocumentEditorPage', () => {
       expect(summaryTextareas.length).toBeGreaterThan(0)
     })
   })
+
+  it('renders a Delete button for admins in the lifecycle panel', async () => {
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Delete')).toBeInTheDocument()
+    })
+  })
 })
