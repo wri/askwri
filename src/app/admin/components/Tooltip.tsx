@@ -10,14 +10,13 @@
  * Usage:
  *   <Tooltip help="The authors as listed in the source CSV.">Authors</Tooltip>
  */
-export function Tooltip({
+export const Tooltip = ({
   help,
   children,
 }: {
   help: string
   children: React.ReactNode
-}) {
-  return (
+}) => (
     <span
       title={help}
       style={{ cursor: 'help', borderBottom: '1px dotted #999' }}
@@ -26,6 +25,5 @@ export function Tooltip({
       <span style={{ color: '#888', marginLeft: 3, fontSize: '0.8em' }}>?</span>
     </span>
   )
-}
 
 export default Tooltip
