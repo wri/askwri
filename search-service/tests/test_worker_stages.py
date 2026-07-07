@@ -1348,6 +1348,160 @@ class TestEmbedStage:
             vocab_n = conn.execute("SELECT count(*) FROM keyword_vocab").fetchone()[0]
         assert vocab_n > 0
 
+    def test_node_metadata_parity_with_migration(
+        self, stages_test_db, monkeypatch
+    ):
+        """Worker node_metadata must match what the Phase-0 migration's
+        indexing.build_nodes would produce (R3): title from Publication Title
+        (not Article Title), full authors (not truncated to 100), file_path from
+        the CSV file_path (not the s3_key)."""
+        def fake_embed(texts):
+            return [[0.01] * 1536 for _ in texts]
+        monkeypatch.setattr("worker.stages.embed._embed_texts", fake_embed)
+
+        from psycopg.types.json import Jsonb
+        zero_vec = "[" + ",".join(["0.0"] * 1536) + "]"
+        page_boundaries = [{"page": 1, "end_pos": len(_EMBED_LONG_TEXT)}]
+        full_authors = "Author One; Author Two; Author Three With A Very Long Name That Exceeds One Hundred Characters Easily When You Include All The Semicolons And Commas"
+        src_meta = {
+            "file_path": "2021_real-report_1054.pdf",  # CSV bare file_path (no documents/ prefix)
+            "metadata": {
+                "Article Title": "Article Title Value",
+                "Publication Title": "Publication Title Value",
+                "All authors": full_authors,
+                "YEAR published": "2021",
+                "URL": "https://example.org/report",
+                "Sub-tag": "Transport decarbonization",
+            },
+        }
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute(
+                """INSERT INTO keyword_corpus_stats (id, n_chunks, avgdl, k1, b, sparse_dim)
+                   VALUES (1, 100, 250.0, 1.5, 0.75, 1000000)
+                   ON CONFLICT (id) DO NOTHING"""
+            )
+            # documents.title is set to the Article Title (as the migration does),
+            # but node_metadata.title must come from Publication Title.
+            doc_id = _insert_embed_document(
+                conn, external_id="parity-doc", language="en",
+                title="Article Title Value", source_metadata=src_meta,
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _EMBED_LONG_TEXT, len(_EMBED_LONG_TEXT), Jsonb(page_boundaries)),
+            )
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'Summary for parity test.', 'generated')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.embed import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT legacy_chunk_id, node_metadata FROM document_chunks WHERE document_id=%s ORDER BY corpus_order",
+                (doc_id,),
+            ).fetchall()
+        assert len(rows) > 0
+        for legacy_id, meta in rows:
+            meta = meta if isinstance(meta, dict) else __import__("json").loads(meta)
+            # title must be Publication Title (migration source), not Article Title
+            assert meta["title"] == "Publication Title Value", (
+                f"{legacy_id}: title should be Publication Title, got {meta.get('title')!r}"
+            )
+            # authors must be FULL (migration restores full in per-chunk update), not truncated to 100
+            assert meta["authors"] == full_authors, (
+                f"{legacy_id}: authors should be full ({len(full_authors)} chars), got {len(meta.get('authors', ''))} chars"
+            )
+            # file_path must be the CSV file_path (bare), not the s3_key (documents/ prefix)
+            assert meta["file_path"] == "2021_real-report_1054.pdf", (
+                f"{legacy_id}: file_path should be the CSV bare name, got {meta.get('file_path')!r}"
+            )
+
+    def test_zh_page_attribution_not_drifted_by_opencc(
+        self, stages_test_db, monkeypatch
+    ):
+        """R4: when OpenCC t2s changes text length, the embed stage must recompute
+        page boundaries on the Simplified text so chunk page numbers stay correct.
+        We simulate a length-changing conversion (Traditional 2 chars → Simplified 1)
+        to prove the recompute logic, since real t2s is mostly length-preserving."""
+        def fake_embed(texts):
+            return [[0.01] * 1536 for _ in texts]
+        monkeypatch.setattr("worker.stages.embed._embed_texts", fake_embed)
+
+        from psycopg.types.json import Jsonb
+
+        # Traditional text where every '電腦' (2 chars) collapses to '电' (1 char)
+        # under our simulated converter. Original is long enough to produce multiple
+        # chunks at 400/80 so page 3 content lands in its own chunk.
+        page1 = '電腦電腦電腦電腦電腦' * 50   # 500 chars Traditional → 250 after convert
+        page2 = 'B' * 500                  # 500 chars, unchanged
+        page3 = 'C' * 500                  # 500 chars, unchanged
+        full_text = page1 + '\n\n' + page2 + '\n\n' + page3
+        boundaries = [
+            {"page": 1, "end_pos": len(page1)},
+            {"page": 2, "end_pos": len(page1) + 2 + len(page2)},
+            {"page": 3, "end_pos": len(full_text)},
+        ]
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute(
+                """INSERT INTO keyword_corpus_stats (id, n_chunks, avgdl, k1, b, sparse_dim)
+                   VALUES (1, 100, 250.0, 1.5, 0.75, 1000000)
+                   ON CONFLICT (id) DO NOTHING"""
+            )
+            doc_id = _insert_embed_document(
+                conn, external_id="zh-drift-doc", language="zh", languages=["zh"],
+                title="頁面測試",
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, full_text, len(full_text), Jsonb(boundaries)),
+            )
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'zh', 'long', '摘要', 'generated')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        # Monkeypatch OpenCC to simulate a length-changing t2s: 電腦→电 (2→1)
+        import worker.stages.embed as embed_mod
+        real_opencc = embed_mod.OpenCC if hasattr(embed_mod, 'OpenCC') else None
+        class FakeCC:
+            def __init__(self, *a, **k): pass
+            def convert(self, text):
+                return text.replace('電腦', '电')
+        # Patch the OpenCC import inside the run() function's zh branch
+        import opencc as real_opencc_mod
+        monkeypatch.setattr(real_opencc_mod, 'OpenCC', FakeCC)
+
+        from worker.stages.embed import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT text, page FROM document_chunks WHERE document_id=%s AND unit_type='text' ORDER BY corpus_order",
+                (doc_id,),
+            ).fetchall()
+        assert len(rows) > 0, "expected text chunks"
+        for chunk_text, page in rows:
+            assert page in (1, 2, 3), f"chunk page {page} out of range (1-3) — drift"
+            # A chunk that is purely page-3 content (CCCCC) must map to page 3,
+            # proving the boundary recompute kept page 3 reachable.
+            if chunk_text.strip('C') == '' and chunk_text.strip():
+                assert page == 3, f"page3-only chunk mapped to page {page} — OpenCC drift"
+        # The recompute must have produced a chunk that lands on page 3
+        assert any(p == 3 for _, p in rows), "no chunk landed on page 3 — recompute failed"
+
     def test_rerun_replaces_chunks_corpus_order_increases(
         self, stages_test_db, monkeypatch
     ):

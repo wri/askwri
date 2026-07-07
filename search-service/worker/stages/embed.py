@@ -22,20 +22,73 @@ DIMENSION = 1536
 _LOCK_KEY = 0x636F7270  # 'corp' — corpus_order allocation lock
 
 
+def _recompute_boundaries_on_text(boundaries: list, original_text: str, normalized_text: str) -> list:
+    """Re-map page boundaries from the original text onto the normalized text.
+
+    For zh, parse produces boundaries in Traditional-character space but the
+    embed stage chunks the Simplified (t2s) text. If OpenCC changes any phrase
+    length, character offsets drift and get_page_number_for_position returns
+    the wrong page (R4). We re-derive boundaries by converting each page slice
+    of the original text and accumulating the normalized lengths, so positions
+    stay aligned with the text that's actually chunked.
+
+    `convert_fn` is the OpenCC convert callable (passed in to avoid re-importing).
+    """
+    if not boundaries or original_text == normalized_text:
+        return boundaries
+    # Slice the original text at each boundary, convert each slice independently,
+    # and accumulate the converted lengths into new boundary positions.
+    out, norm_pos, prev_end = [], 0, 0
+    for b in boundaries:
+        orig_slice = original_text[prev_end:b["end_pos"]]
+        # The normalized text is the full conversion; the slice's converted form
+        # is a contiguous run starting at norm_pos. Find its length by converting
+        # the slice directly (OpenCC is deterministic and stateless).
+        conv_len = len(_CONVERT_FN(orig_slice)) if _CONVERT_FN else len(orig_slice)
+        norm_pos += conv_len
+        out.append({"page": b["page"], "end_pos": norm_pos})
+        prev_end = b["end_pos"]
+    return out
+
+
+# Thread-local convert function pointer, set by the run() zh branch before
+# _build_nodes_for_doc is called (avoids passing it through the call chain).
+_CONVERT_FN = None
+
+
 def _build_nodes_for_doc(doc, full_text: str, boundaries: list, summary: str):
-    """Single-document version of app.indexing.build_nodes (same params/metadata)."""
+    """Single-document version of app.indexing.build_nodes (same params/metadata).
+
+    node_metadata must match what the Phase-0 migration's indexing.build_nodes
+    produces (R3): title from Publication Title (load_csv_metadata line 59),
+    full authors (the per-chunk update restores the full value, not the
+    Document-level [:100] truncation), file_path from the CSV file_path (not
+    the s3_key).
+    """
     from llama_index.core.node_parser import SimpleNodeParser
     from llama_index.core.schema import Document, TextNode
 
     from app.indexing import get_page_number_for_position
 
-    src = (doc["source_metadata"] or {}).get("metadata", {}) or {}
-    # Same fallback chain as app.indexing.prepare_documents (line 62)
+    src_meta = doc["source_metadata"] or {}
+    src = (src_meta.get("metadata") or {}) if isinstance(src_meta, dict) else {}
+    # title: prefer Publication Title (matches indexing.load_csv_metadata:59),
+    # fallback to Article Title, then the stored documents.title.
+    title = src.get("Publication Title") or src.get("Article Title") or doc["title"] or ""
+    # authors: full value (indexing.build_nodes restores full in the per-chunk
+    # node.metadata.update at line 365; the Document-level [:100] is only the
+    # embedding-time Document metadata, not the stored chunk metadata).
+    authors = src.get("All authors") or ""
+    # file_path: the CSV bare file_path (indexing uses doc['metadata']['file_path']),
+    # not the s3_key which carries the documents/ prefix.
+    file_path = src_meta.get("file_path") if isinstance(src_meta, dict) else ""
+    if not file_path:
+        file_path = doc["s3_key"]
     url = src.get("Source URL", src.get("URL", src.get("Attribution URL", "")))
     base = {
         "doc_id": doc["external_id"],
-        "title": (doc["title"] or "")[:100],
-        "authors": (src.get("All authors") or "")[:100],
+        "title": title[:100],  # Document-level metadata matches indexing:328 (truncated)
+        "authors": authors[:100],  # Document-level matches indexing:329 (truncated)
         "year": str(src.get("YEAR published") or ""),
         "subtag": (src.get("Sub-tag") or "")[:50] if isinstance(src.get("Sub-tag"), str) else "",
         "program_series": src.get("program_series", ""),
@@ -51,18 +104,22 @@ def _build_nodes_for_doc(doc, full_text: str, boundaries: list, summary: str):
             "chunk_index": idx, "total_chunks": len(nodes),
             "page": get_page_number_for_position(start, boundaries),
             "chunk_start_pos": start,
-            "authors": base["authors"], "year": base["year"],
-            "url": url, "file_path": doc["s3_key"],
+            # Per-chunk restore: FULL authors (indexing:365), not the truncated base.
+            "authors": authors, "year": base["year"],
+            "url": url, "file_path": file_path,
             "program_series": base["program_series"],
             "prev_chunk_id": f"{doc['external_id']}_chunk_{idx-1}" if idx else None,
             "next_chunk_id": f"{doc['external_id']}_chunk_{idx+1}" if idx < len(nodes) - 1 else None,
         })
     if summary:
         nodes.append(TextNode(
-            text=f"{doc['title']}\n\n{summary}" if doc["title"] else summary,
+            text=f"{title}\n\n{summary}" if title else summary,
             metadata={**base, "chunk_id": f"{doc['external_id']}_summary", "chunk_index": -1,
                       "total_chunks": -1, "page": 1, "chunk_start_pos": 0,
-                      "url": url, "file_path": doc["s3_key"],
+                      # Summary node carries FULL authors (indexing:392 uses the
+                      # full value, not the truncated Document-level base).
+                      "authors": authors,
+                      "url": url, "file_path": file_path,
                       "is_summary_node": True, "prev_chunk_id": None,
                       "next_chunk_id": f"{doc['external_id']}_chunk_0"},
         ))
@@ -106,6 +163,14 @@ def run(document_id):
             index_text = cc.convert(full_text)
             if summary:
                 summary = cc.convert(summary)
+            # Recompute page boundaries on the Simplified text so character
+            # offsets align with the text that's actually chunked (R4: reusing
+            # Traditional-text boundaries drifts page attribution if OpenCC
+            # changes any phrase length). Set the convert fn for the helper.
+            global _CONVERT_FN
+            _CONVERT_FN = cc.convert
+            boundaries = _recompute_boundaries_on_text(boundaries, full_text, index_text)
+            _CONVERT_FN = None
         nodes = _build_nodes_for_doc(doc, index_text, boundaries, summary)
         logger.info(f"embed {doc['external_id']}: {len(nodes)} chunks, "
                     f"~{sum(len(n.text) for n in nodes)//4} tokens to {EMBEDDING_MODEL}")
