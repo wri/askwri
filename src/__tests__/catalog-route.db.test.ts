@@ -51,7 +51,7 @@ describe('catalog route source selection', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.source).toBe('postgres')
-    expect(body.count).toBe(169) // 169 searchable docs
+    expect(body.count).toBeGreaterThanOrEqual(169) // ≥169 searchable docs (migrated + any uploads)
   })
 
   it('uses CSV fallback only on explicit CATALOG_SOURCE=csv', async () => {

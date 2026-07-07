@@ -29,7 +29,8 @@ def test_document_texts_cover_all_docs():
 
     texts = load_document_texts()
     meta = load_documents_metadata()
-    assert len(meta) == 169
+    # Covers every searchable doc (migrated baseline 169 + any worker-ingested uploads).
+    assert len(meta) >= 169
     assert set(texts) == set(meta)
     assert all(len(t) > 0 for t in texts.values())
 

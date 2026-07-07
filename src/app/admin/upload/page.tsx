@@ -1,15 +1,45 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Box, Heading, Text } from '@chakra-ui/react'
 
-const WORKER_POLL_SECONDS = 10
+interface WorkerHealth {
+  queueDepth: number
+  lastProcessedAt: string | null
+  intakeBacklog: number
+  status: 'idle' | 'processing' | 'stale'
+}
+
+const STATUS_STYLES: Record<WorkerHealth['status'], { color: string; label: string }> = {
+  idle: { color: '#0A6640', label: 'idle (caught up)' },
+  processing: { color: '#0050C8', label: 'processing' },
+  stale: { color: '#C11101', label: 'NOT RUNNING — dropped files are NOT being processed' },
+}
 
 const UploadPage = () => {
   const inputRef = useRef<HTMLInputElement>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [health, setHealth] = useState<WorkerHealth | null>(null)
+
+  const loadHealth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/worker-health')
+      if (res.ok) {
+        const body = await res.json()
+        if (body.ok) setHealth(body.health)
+      }
+    } catch {
+      // health is best-effort; don't block the page on it
+    }
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadHealth()
+  }, [loadHealth])
 
   const handleUpload = async () => {
     const files = inputRef.current?.files
@@ -35,16 +65,25 @@ const UploadPage = () => {
         throw new Error(body.error || `HTTP ${res.status}`)
       }
       const n = (body.uploaded as string[]).length
-      setNotice(
-        `${n} file(s) dropped into intake — the worker registers them within ~${WORKER_POLL_SECONDS}s (${WORKER_POLL_SECONDS}s default); duplicates are skipped by content hash.`,
-      )
+      // Refresh health immediately — the worker may have already picked them up
+      // (it polls every ~10s), or the status may flip to "stale" if the worker
+      // is down. Either way, show the real state instead of a fixed "10s" claim.
+      await loadHealth()
       if (inputRef.current) inputRef.current.value = ''
+      setNotice(
+        `${n} file(s) dropped into the intake queue. ` +
+          (health?.status === 'stale'
+            ? '⚠ The ingestion worker is NOT running — your files will not be processed until it starts. See the worker status below.'
+            : 'The ingestion worker will register and process them shortly. Track progress in the Review queue.'),
+      )
     } catch (err: any) {
       setError(err.message)
     } finally {
       setBusy(false)
     }
   }
+
+  const statusStyle = health ? STATUS_STYLES[health.status] : null
 
   return (
     <Box>
@@ -53,8 +92,37 @@ const UploadPage = () => {
       </Heading>
       <Text style={{ marginBottom: 16, color: '#555' }}>
         Select one or more PDF files. They will be placed in the intake queue and registered by the
-        worker automatically. Duplicates (by content hash) are skipped.
+        ingestion worker automatically. Duplicates (by content hash) are skipped.
       </Text>
+
+      {/* Worker health panel — shows the real state instead of a misleading "~10s" claim */}
+      <Box
+        style={{
+          marginBottom: 16,
+          padding: 12,
+          border: '1px solid #ddd',
+          borderRadius: 4,
+          background: '#f7f7f7',
+        }}
+      >
+        <Text style={{ fontWeight: 600, marginBottom: 4 }}>
+          Ingestion worker: {health ? statusStyle!.label : 'checking…'}
+        </Text>
+        {health && (
+          <Text style={{ fontSize: 13, color: '#666' }}>
+            Queue depth: {health.queueDepth} · Intake backlog: {health.intakeBacklog}
+            {health.lastProcessedAt && ` · Last processed: ${new Date(health.lastProcessedAt).toLocaleString()}`}
+          </Text>
+        )}
+        {health?.status === 'stale' && (
+          <Text style={{ fontSize: 13, color: '#C11101', marginTop: 4 }}>
+            Files have been dropped into intake but the worker is not processing them. Contact an
+            administrator to start the worker (`cd search-service && ./venv/bin/python -m
+            worker.main` locally, or check the ECS `ingestion-worker` service in production).
+          </Text>
+        )}
+      </Box>
+
       {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
       {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
       <div style={{ marginBottom: 12 }}>
@@ -67,6 +135,11 @@ const UploadPage = () => {
       >
         {busy ? 'Uploading…' : 'Upload'}
       </button>
+      <Box style={{ marginTop: 16, fontSize: 13 }}>
+        <Link href='/admin/review' style={{ textDecoration: 'underline' }}>
+          Go to the Review queue →
+        </Link>
+      </Box>
     </Box>
   )
 }

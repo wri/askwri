@@ -365,3 +365,109 @@ class TestWorkerPipeline:
             assert dup_audit[0]["intake"] == "sample.pdf", (
                 f"duplicate_skipped audit intake should be 'sample.pdf', got {dup_audit[0].get('intake')}"
             )
+
+    def test_files_in_intake_without_worker_create_no_documents(self, pipeline_test_db, monkeypatch, tmp_path):
+        """Regression test for the 'uploads vanish' bug: a file dropped into intake
+        but NOT swept by the worker (worker not running) creates NO documents row.
+        This is the exact symptom that made uploads invisible — the intake route
+        only puts files in S3; registration is the worker's job."""
+        intake_dir = tmp_path / "intake_no_worker"
+        intake_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, intake_dir / "orphan.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path / "nonexistent2"))
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        # Do NOT run intake_s3.sweep() — simulating the worker being down.
+        # The file sits in intake/ with no documents row and no job.
+        with psycopg.connect(pipeline_test_db) as conn:
+            doc_count = conn.execute(
+                "SELECT count(*) FROM documents WHERE external_id = 'orphan'"
+            ).fetchone()[0]
+            job_count = conn.execute("SELECT count(*) FROM ingestion_jobs").fetchone()[0]
+        assert doc_count == 0, (
+            "Without the worker, no documents row should exist for the dropped file"
+        )
+        assert job_count == 0, (
+            "Without the worker, no ingestion_jobs row should exist"
+        )
+
+    def test_worker_running_processes_intake_to_searchable(self, pipeline_test_db, monkeypatch, tmp_path):
+        """The happy path: a file in intake + the worker running → searchable with
+        chunks, summaries, and a done job. This is the e2e upload→process test."""
+        with psycopg.connect(pipeline_test_db) as conn:
+            _seed_tags(conn)
+
+        _run_full_pipeline(monkeypatch, tmp_path)
+
+        with psycopg.connect(pipeline_test_db) as conn:
+            doc_row = conn.execute(
+                """SELECT status, language FROM documents
+                   WHERE external_id = 'sample'"""
+            ).fetchone()
+            assert doc_row is not None, "worker should have registered the dropped file"
+            assert doc_row[0] == "searchable", (
+                f"Expected searchable, got '{doc_row[0]}'"
+            )
+            chunks = conn.execute(
+                "SELECT count(*) FROM document_chunks dc "
+                "JOIN documents d ON d.id = dc.document_id "
+                "WHERE d.external_id = 'sample'"
+            ).fetchone()[0]
+            assert chunks > 0, "searchable doc should have chunks"
+            job = conn.execute(
+                """SELECT j.status, j.stage FROM ingestion_jobs j
+                   JOIN documents d ON d.id = j.document_id
+                   WHERE d.external_id = 'sample'"""
+            ).fetchone()
+            assert job is not None
+            assert job[0] == "done"
+            assert job[1] == "publish"
+
+    def test_multiple_files_uploaded_then_processed(self, pipeline_test_db, monkeypatch, tmp_path):
+        """Two files dropped into intake are both processed to searchable by the worker —
+        the multi-file upload scenario from the bug report."""
+        with psycopg.connect(pipeline_test_db) as conn:
+            _seed_tags(conn)
+
+        # Drop two files into intake
+        intake_dir = tmp_path / "intake_multi"
+        intake_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, intake_dir / "file_a.pdf")
+        shutil.copy(_FIXTURE_PDF, intake_dir / "file_b.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path / "nonexistent3"))
+        monkeypatch.setattr("worker.stages.summarize.chat_json", _fake_chat_json)
+        monkeypatch.setattr("worker.stages.classify.chat_json", _fake_chat_json)
+        monkeypatch.setattr("worker.stages.embed._embed_texts", _fake_embed_texts)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        from worker import intake_s3
+        assert intake_s3.sweep() is True
+
+        from worker.main import process_one_job
+        iterations = 0
+        while process_one_job():
+            iterations += 1
+            assert iterations < 20, "Pipeline did not terminate within 20 iterations"
+
+        with psycopg.connect(pipeline_test_db) as conn:
+            # file_a is registered + processed to searchable
+            row_a = conn.execute(
+                "SELECT status FROM documents WHERE external_id = 'file_a'"
+            ).fetchone()
+            assert row_a is not None, "file_a should be registered"
+            assert row_a[0] == "searchable", f"file_a should be searchable, got '{row_a[0]}'"
+            # file_b is a content-hash duplicate of file_a -> deduped, no documents row
+            row_b = conn.execute(
+                "SELECT count(*) FROM documents WHERE external_id = 'file_b'"
+            ).fetchone()
+            assert row_b[0] == 0, (
+                "file_b (same content as file_a) should be deduped, not registered"
+            )
