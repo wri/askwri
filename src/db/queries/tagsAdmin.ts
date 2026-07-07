@@ -168,3 +168,47 @@ export async function removeDocumentTag(
   })
   return { ok: true }
 }
+
+/** Rename a tag's facet and/or valueId (admin-only). Writes an audit row with
+ * before/after. Validates non-empty values. */
+export async function renameTag(
+  id: string,
+  patch: Partial<{ facet: string; valueId: string }>,
+  identity: AdminIdentity,
+): Promise<Tag | null | { error: string }> {
+  const repo = AppDataSource.getRepository(Tag)
+  const tag = await repo.findOne({ where: { id } })
+  if (!tag) return null
+
+  const before: Record<string, any> = {}
+  const after: Record<string, any> = {}
+  if (patch.facet !== undefined) {
+    const trimmed = patch.facet.trim()
+    if (!trimmed) return { error: 'facet must be non-empty' }
+    if (trimmed !== tag.facet) {
+      before.facet = tag.facet
+      after.facet = trimmed
+      tag.facet = trimmed
+    }
+  }
+  if (patch.valueId !== undefined) {
+    const trimmed = patch.valueId.trim()
+    if (!trimmed) return { error: 'valueId must be non-empty' }
+    if (trimmed !== tag.valueId) {
+      before.valueId = tag.valueId
+      after.valueId = trimmed
+      tag.valueId = trimmed
+    }
+  }
+  if (Object.keys(after).length === 0) return tag // no-op
+  await repo.save(tag)
+  await writeAudit({
+    ...auditActor(identity),
+    action: 'update',
+    entityType: 'tag',
+    entityId: id,
+    before,
+    after,
+  })
+  return tag
+}

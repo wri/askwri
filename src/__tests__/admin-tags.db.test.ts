@@ -6,6 +6,7 @@ import {
   deleteTagIfUnused,
   decideDocumentTag,
   addHumanTag,
+  renameTag,
 } from '@/db/queries/tagsAdmin'
 
 const hasDb = !!process.env.DATABASE_URL
@@ -167,5 +168,95 @@ d('tagsAdmin (DB integration)', () => {
     )
     expect(audit.action).toBe('tag_decision')
     expect(audit.before).toMatchObject({ tagId })
+  })
+
+  it('renameTag updates the valueId and writes an audit row with before/after', async () => {
+    const ts = Date.now()
+    // Create a spare tag to rename (the main tag still has document_tags rows)
+    const [spareRow] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__test_rename_target_${ts}__`],
+    )
+    const spareId = spareRow.id
+
+    const result = await renameTag(spareId, { valueId: `__test_renamed_${ts}__` }, identity)
+    expect(result).not.toBeNull()
+    expect(result!.valueId).toBe(`__test_renamed_${ts}__`)
+
+    // Verify the DB row was updated
+    const [row] = await AppDataSource.query(
+      `SELECT facet, value_id FROM tags WHERE id = $1`,
+      [spareId],
+    )
+    expect(row.value_id).toBe(`__test_renamed_${ts}__`)
+    expect(row.facet).toBe('topic') // unchanged
+
+    // Verify audit row
+    const [audit] = await AppDataSource.query(
+      `SELECT action, before, after FROM audit_log
+       WHERE entity_type = 'tag' AND entity_id = $1
+       ORDER BY at DESC LIMIT 1`,
+      [spareId],
+    )
+    expect(audit.action).toBe('update')
+    expect(audit.before).toMatchObject({ valueId: `__test_rename_target_${ts}__` })
+    expect(audit.after).toMatchObject({ valueId: `__test_renamed_${ts}__` })
+
+    // Cleanup
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [spareId])
+    await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [spareId])
+  })
+
+  it('renameTag updates the facet and writes an audit row', async () => {
+    const ts = Date.now()
+    const [spareRow] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__test_facet_rename_${ts}__`],
+    )
+    const spareId = spareRow.id
+
+    const result = await renameTag(spareId, { facet: 'program' }, identity)
+    expect(result).not.toBeNull()
+    expect(result!.facet).toBe('program')
+
+    const [row] = await AppDataSource.query(
+      `SELECT facet FROM tags WHERE id = $1`,
+      [spareId],
+    )
+    expect(row.facet).toBe('program')
+
+    const [audit] = await AppDataSource.query(
+      `SELECT before, after FROM audit_log
+       WHERE entity_type = 'tag' AND entity_id = $1
+       ORDER BY at DESC LIMIT 1`,
+      [spareId],
+    )
+    expect(audit.before).toMatchObject({ facet: 'topic' })
+    expect(audit.after).toMatchObject({ facet: 'program' })
+
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [spareId])
+    await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [spareId])
+  })
+
+  it('renameTag returns null for a non-existent tag', async () => {
+    const result = await renameTag('00000000-0000-4000-8000-000000000000', { valueId: 'x' }, identity)
+    expect(result).toBeNull()
+  })
+
+  it('renameTag validates non-empty valueId', async () => {
+    const ts = Date.now()
+    const [spareRow] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__test_empty_validate_${ts}__`],
+    )
+    const spareId = spareRow.id
+
+    const result = await renameTag(spareId, { valueId: '   ' }, identity)
+    expect(result).toHaveProperty('error')
+
+    await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [spareId])
   })
 })

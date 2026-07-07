@@ -13,6 +13,9 @@ interface Tag {
   suggestedCount: number
 }
 
+/** The canonical taxonomy v1 facets (from the Phase-0 migration script's FACETS). */
+const CANONICAL_FACETS = ['program', 'office', 'topic', 'doc_type']
+
 const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid #eee' }
 
 const TagsPage = () => {
@@ -24,6 +27,14 @@ const TagsPage = () => {
   const [addNewFacet, setAddNewFacet] = useState('')
   const [addValue, setAddValue] = useState('')
   const [addBusy, setAddBusy] = useState(false)
+
+  // Rename state (admin-only)
+  const [renameId, setRenameId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameFacet, setRenameFacet] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+
+  const isAdmin = me.role === 'admin'
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +92,34 @@ const TagsPage = () => {
     }
   }
 
+  const startRename = (tag: Tag) => {
+    setRenameId(tag.id)
+    setRenameValue(tag.valueId)
+    setRenameFacet(tag.facet)
+  }
+
+  const saveRename = async (id: string) => {
+    setNotice(null)
+    setError(null)
+    setRenameBusy(true)
+    try {
+      const patch: Record<string, string> = {}
+      if (renameFacet.trim()) patch.facet = renameFacet.trim()
+      if (renameValue.trim()) patch.valueId = renameValue.trim()
+      await adminFetch(`/api/admin/tags/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      })
+      setRenameId(null)
+      setNotice('Tag renamed.')
+      await load()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setRenameBusy(false)
+    }
+  }
+
   // Group by facet
   const byFacet: Record<string, Tag[]> = {}
   for (const tag of tags) {
@@ -90,14 +129,27 @@ const TagsPage = () => {
 
   const distinctFacets = Object.keys(byFacet).sort()
 
+  // Build the facet dropdown: all canonical facets first, then any existing
+  // non-canonical facets, then "Create new facet…".
+  const dropdownFacets = [
+    ...CANONICAL_FACETS,
+    ...distinctFacets.filter((f) => !CANONICAL_FACETS.includes(f)),
+  ]
+
   return (
-    <Box>
+    <Box style={{ paddingBottom: 48 }}>
       <Heading size='lg' style={{ marginBottom: 8 }}>
         Tags
       </Heading>
-      <Text style={{ marginBottom: 16, color: '#555', fontStyle: 'italic' }}>
-        Taxonomy v1 (raw CSV values). Rename/merge and version bumps are deferred until a curation
-        owner is assigned — see docs/document-management.md §10.7.
+      <Text style={{ marginBottom: 8, color: '#555', fontStyle: 'italic' }}>
+        Taxonomy v1 — the controlled vocabulary of facets and values used to classify documents.
+        Facets are the categories (e.g. program, office, topic, doc_type); values are the entries
+        within each facet. Tags are language-neutral: a Chinese and an English paper on the same
+        topic carry the same tag (design §8).
+      </Text>
+      <Text style={{ marginBottom: 16, color: '#888', fontStyle: 'italic', fontSize: 13 }}>
+        Note: taxonomy v1 values are the raw CSV strings. Rename is available to admins; merge and
+        version bumps are deferred until a curation owner is assigned (design §10.7).
       </Text>
 
       {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
@@ -111,8 +163,15 @@ const TagsPage = () => {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                {['Value', 'Accepted', 'Suggested', 'Taxonomy version', ...(me.role === 'admin' ? [''] : [])].map((h) => (
-                  <th key={h} style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
+                {[
+                  'Value',
+                  'Facet',
+                  'Accepted',
+                  'Suggested',
+                  'Taxonomy version',
+                  ...(isAdmin ? [''] : []),
+                ].map((h, i) => (
+                  <th key={i} style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
                     {h}
                   </th>
                 ))}
@@ -121,19 +180,67 @@ const TagsPage = () => {
             <tbody>
               {byFacet[facet].map((tag) => (
                 <tr key={tag.id}>
-                  <td style={cell}>{tag.valueId}</td>
+                  <td style={cell}>
+                    {renameId === tag.id && isAdmin ? (
+                      <input
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        style={{ fontFamily: 'inherit', fontSize: 'inherit', width: '100%' }}
+                      />
+                    ) : (
+                      tag.valueId
+                    )}
+                  </td>
+                  <td style={cell}>
+                    {renameId === tag.id && isAdmin ? (
+                      <input
+                        value={renameFacet}
+                        onChange={(e) => setRenameFacet(e.target.value)}
+                        style={{ fontFamily: 'inherit', fontSize: 'inherit', width: '100%' }}
+                      />
+                    ) : (
+                      tag.facet
+                    )}
+                  </td>
                   <td style={cell}>{tag.acceptedCount}</td>
                   <td style={cell}>{tag.suggestedCount}</td>
                   <td style={cell}>{tag.taxonomyVersion ?? '—'}</td>
-                  {me.role === 'admin' && (
+                  {isAdmin && (
                     <td style={cell}>
-                      {tag.acceptedCount === 0 && tag.suggestedCount === 0 && (
-                        <button
-                          onClick={() => deleteTag(tag.id, tag.valueId)}
-                          style={{ textDecoration: 'underline', color: '#C11101' }}
-                        >
-                          Delete
-                        </button>
+                      {renameId === tag.id ? (
+                        <>
+                          <button
+                            onClick={() => saveRename(tag.id)}
+                            disabled={renameBusy}
+                            style={{ marginRight: 8, textDecoration: 'underline' }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setRenameId(null)}
+                            style={{ textDecoration: 'underline' }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => startRename(tag)}
+                            style={{ marginRight: 8, textDecoration: 'underline' }}
+                            title='Rename this tag value or facet (admin only)'
+                          >
+                            Rename
+                          </button>
+                          {tag.acceptedCount === 0 && tag.suggestedCount === 0 && (
+                            <button
+                              onClick={() => deleteTag(tag.id, tag.valueId)}
+                              style={{ textDecoration: 'underline', color: '#C11101' }}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </>
                       )}
                     </td>
                   )}
@@ -150,18 +257,24 @@ const TagsPage = () => {
       <Heading size='md' style={{ marginBottom: 12 }}>
         New tag
       </Heading>
-      <form onSubmit={addTag} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <form
+        onSubmit={addTag}
+        style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}
+      >
         <select
           value={addFacet}
           onChange={(e) => setAddFacet(e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
           required
+          aria-label='Facet'
         >
           <option value=''>— facet —</option>
-          {distinctFacets.map((f) => (
-            <option key={f} value={f}>{f}</option>
+          {dropdownFacets.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
           ))}
-          <option value='__new__'>New facet…</option>
+          <option value='__new__'>Create new facet…</option>
         </select>
         {addFacet === '__new__' && (
           <input
