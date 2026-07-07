@@ -74,11 +74,12 @@ const TagsPage = () => {
     setError(null)
     const facet = addFacet === '__new__' ? addNewFacet.trim() : addFacet
     if (!facet || !addValue.trim()) return
+    const isNewFacet = addFacet === '__new__'
     setAddBusy(true)
     try {
       await adminFetch('/api/admin/tags', {
         method: 'POST',
-        body: JSON.stringify({ facet, valueId: addValue.trim() }),
+        body: JSON.stringify({ facet, valueId: addValue.trim(), allowNewFacet: isNewFacet }),
       })
       setAddFacet('')
       setAddNewFacet('')

@@ -259,4 +259,19 @@ d('tagsAdmin (DB integration)', () => {
 
     await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [spareId])
   })
+
+  it('createTag rejects a non-canonical facet without allowNewFacet (NEW-9)', async () => {
+    const facet = `noncanonical_${Date.now()}`
+    const result = await createTag(facet, 'somevalue', identity)
+    expect(result).toHaveProperty('error')
+    expect((result as { error: string }).error).toMatch(/facet must be one of/)
+  })
+
+  it('createTag allows a new facet when allowNewFacet is true', async () => {
+    const facet = `newfacet_${Date.now()}`
+    const result = await createTag(facet, 'somevalue', identity, { allowNewFacet: true })
+    expect(result).not.toHaveProperty('error')
+    const created = result as { id: string }
+    await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [created.id])
+  })
 })

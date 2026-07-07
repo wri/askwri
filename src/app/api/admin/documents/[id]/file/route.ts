@@ -44,12 +44,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       body = Uint8Array.from(await readFile(localPath))
     }
 
+    // Status-aware caching: a withdrawn document must not be cached in the
+    // editor's browser (it could be re-served after a takedown). Searchable
+    // docs can be cached briefly for re-view. (N-G partial fix.)
+    const cacheControl = doc.status === 'withdrawn' ? 'no-store' : 'private, max-age=3600'
+
     return new NextResponse(body as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${filename}"`,
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': cacheControl,
       },
     })
   } catch (err) {
