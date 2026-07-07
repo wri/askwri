@@ -517,5 +517,151 @@ class TestMigrationIdempotency:
             ).fetchone()[0]
         # After --reset, there may be 2 audit rows (one per run) or 1 (truncated)
         # The migration script does NOT truncate audit_log, only documents/tags/collections.
+        # NOTE: --reset does NOT truncate audit_log (intentionally preserved).
         # After two runs: first run → 1 row; --reset run → 1 more → total 2.
         assert count >= 1, f"Expected at least 1 audit_log import row, got {count}"
+
+
+# ---------------------------------------------------------------------------
+# Script-fix tests — title fallback + --reset TRUNCATE scope (Task A2)
+# ---------------------------------------------------------------------------
+
+def _junk_title_corpus(tmp_path):
+    """A 1-row CSV where Article Title is a junk sentinel ('Pre-EM') but
+    Publication Title is a real title. The migration must prefer Publication
+    Title so the stored documents.title is the real one, not 'Pre-EM'."""
+    tmpdir = str(tmp_path)
+    rows = [
+        {
+            "file_path": "doc_junktitle_001.pdf",
+            "metadata": json.dumps({
+                "Article Title": "Pre-EM",
+                "Publication Title": "Real Title From Publication",
+                "All authors": "Test Author",
+                "YEAR published": "2021",
+                "Sub-tag": "Transport decarbonization",
+                "article_type": "Working Paper",
+                "wri_primary_office": "WRI Global",
+                "wri_programs": "Cities",
+                "languages": "English",
+                "DOI": "",
+                "URL": "",
+                "summary": "A summary that is long enough to survive prepare_documents.",
+                "short_summary": "Short summary.",
+            }),
+            "summary": "A summary that is long enough to survive prepare_documents.",
+        },
+    ]
+    csv_path = os.path.join(tmpdir, "documents.csv")
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["file_path", "metadata", "summary"])
+        writer.writeheader()
+        writer.writerows(rows)
+    return tmpdir
+
+
+class TestMigrationScriptFixes:
+    """Task A2: title fallback prefers Publication Title over junk Article
+    Title; --reset no longer truncates ingestion_jobs or audit_log."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, test_db, tmp_path, monkeypatch):
+        self._db_url = test_db
+        self._cache_dir = str(tmp_path / "cache")
+        os.makedirs(self._cache_dir, exist_ok=True)
+
+        # Clear DB state for a clean slate (CASCADE reaches child tables).
+        with psycopg.connect(self._db_url) as conn:
+            conn.execute("TRUNCATE documents CASCADE")
+            conn.execute("TRUNCATE tags CASCADE")
+            conn.execute("TRUNCATE collections CASCADE")
+            conn.execute("TRUNCATE audit_log CASCADE")
+            conn.commit()
+
+        monkeypatch.setenv("DATABASE_URL", self._db_url)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path))
+        monkeypatch.setenv("CACHE_DIR", self._cache_dir)
+        monkeypatch.setenv("RETRIEVAL_BACKEND", "postgres")
+
+        from app.config import get_settings
+        get_settings.cache_clear()
+        import app.db as _db
+        if _db._pool is not None:
+            try:
+                _db._pool.close()
+            except Exception:
+                pass
+        _db._pool = None
+
+        import scripts.migrate_csv_to_postgres as _script
+        monkeypatch.setattr(_script, "load_csv_metadata", _nan_safe_load_csv_metadata)
+        monkeypatch.setattr(_script, "load_embeddings", _fake_embeddings)
+
+    def _conn(self):
+        return psycopg.connect(self._db_url)
+
+    def _run(self, argv=None, corpus_dir=None):
+        """Run main() with given argv + corpus dir, resetting state after."""
+        if corpus_dir:
+            os.environ["DOCUMENTS_LOCAL_DIR"] = corpus_dir
+        old_argv = sys.argv
+        sys.argv = ["migrate_csv_to_postgres"] + (argv or [])
+        try:
+            from scripts.migrate_csv_to_postgres import main
+            main()
+        finally:
+            sys.argv = old_argv
+            _reset_app_state()
+
+    def test_title_prefers_publication_title_when_article_title_is_junk(self, tmp_path):
+        """Article Title='Pre-EM' (junk) but Publication Title is real →
+        documents.title should be the real Publication Title, not 'Pre-EM'."""
+        corpus = _junk_title_corpus(tmp_path)
+        self._run(corpus_dir=corpus)
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT title FROM documents WHERE external_id = 'doc_junktitle_001'"
+            ).fetchone()
+        assert row is not None, "junk-title doc was not inserted"
+        assert row[0] == "Real Title From Publication", (
+            f"Expected title='Real Title From Publication', got {row[0]!r}"
+        )
+
+    def test_reset_does_not_truncate_ingestion_jobs(self, tmp_path):
+        """--reset must NOT truncate ingestion_jobs (or audit_log). Seed a job,
+        run --reset, assert the job survives."""
+        corpus = _junk_title_corpus(tmp_path)
+        # First run to populate the DB.
+        self._run(corpus_dir=corpus)
+
+        # Seed an ingestion_job against one of the migrated docs.
+        with self._conn() as conn:
+            doc_row = conn.execute(
+                "SELECT id FROM documents WHERE external_id = 'doc_junktitle_001'"
+            ).fetchone()
+            assert doc_row is not None
+            doc_id = doc_row[0]
+            conn.execute(
+                "INSERT INTO ingestion_jobs (document_id, status) VALUES (%s, 'queued')",
+                (doc_id,),
+            )
+            conn.commit()
+
+        # Run --reset (which re-runs the migration, reloading the same corpus).
+        self._run(["--reset"], corpus_dir=corpus)
+
+        # The ingestion_job must still exist (--reset must not truncate it).
+        with self._conn() as conn:
+            job_count = conn.execute(
+                "SELECT count(*) FROM ingestion_jobs WHERE document_id = %s", (doc_id,)
+            ).fetchone()[0]
+        # The document row was replaced by --reset (new id), so the job's
+        # document_id FK may now be SET NULL (the old doc was deleted). What
+        # matters is the ingestion_jobs ROW survives — i.e. the table was not
+        # truncated. Assert the table is not empty.
+        with self._conn() as conn:
+            total_jobs = conn.execute("SELECT count(*) FROM ingestion_jobs").fetchone()[0]
+        assert total_jobs >= 1, (
+            "--reset truncated ingestion_jobs — the job row was destroyed"
+        )

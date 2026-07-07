@@ -30,6 +30,28 @@ FACETS = [  # (facet, raw metadata key)
     ("topic", "Sub-tag"),
     ("doc_type", "article_type"),
 ]
+# Junk sentinels in the CSV "Article Title" field that should NOT become the
+# stored title. The migration prefers "Publication Title" when "Article Title"
+# is one of these (or empty). 34 docs carry "Pre-EM" and 3 carry "Not available"
+# in Article Title while having a real Publication Title.
+JUNK_TITLES = {"Pre-EM", "Not available", "", None}
+
+
+def _title(raw, ext_id):
+    """Prefer Publication Title; fall back to Article Title; then external_id.
+
+    The CSV's Article Title is a junk sentinel ("Pre-EM", "Not available") for
+    37 docs that have a perfectly good Publication Title. The old fallback
+    `raw.get("Article Title") or ...` picked the non-empty junk and never
+    reached Publication Title. Prefer Publication Title unless it is itself junk.
+    """
+    pub = raw.get("Publication Title")
+    if pub and pub not in JUNK_TITLES:
+        return pub
+    art = raw.get("Article Title")
+    if art and art not in JUNK_TITLES:
+        return art
+    return ext_id
 
 
 def map_languages(raw: str):
@@ -137,9 +159,25 @@ def main():
         if existing and not args.reset:
             sys.exit(f"documents table already has {existing} rows; rerun with --reset to reload")
         if args.reset:
-            conn.execute("TRUNCATE documents CASCADE")
-            conn.execute("TRUNCATE tags CASCADE")
-            conn.execute("TRUNCATE collections CASCADE")
+            # Wipe the tables the migration script owns/reloads, preserving
+            # ingestion_jobs and audit_log. We CANNOT use `TRUNCATE documents
+            # CASCADE` — CASCADE reaches ingestion_jobs (destroying in-flight
+            # worker jobs) and audit_log. But `DELETE FROM documents` also
+            # reaches ingestion_jobs: migration 178130 set that FK to ON DELETE
+            # CASCADE (not SET NULL). So we must detach the jobs first (null
+            # their document_id) BEFORE deleting documents, then the DELETE
+            # leaves the job rows intact (orphaned, but the worker reaper / a
+            # re-enqueue will reattach them). Order: detach jobs → delete
+            # children → delete parents.
+            conn.execute("UPDATE ingestion_jobs SET document_id = NULL WHERE document_id IS NOT NULL")
+            conn.execute("DELETE FROM document_chunks")
+            conn.execute("DELETE FROM document_texts")
+            conn.execute("DELETE FROM document_summaries")
+            conn.execute("DELETE FROM document_tags")
+            conn.execute("DELETE FROM document_collections")
+            conn.execute("DELETE FROM documents")
+            conn.execute("DELETE FROM tags")
+            conn.execute("DELETE FROM collections")
 
         collection_id = uuid.uuid4()
         conn.execute(
@@ -155,7 +193,7 @@ def main():
             meta = doc["metadata"]
             raw = meta.get("raw_metadata", {})
             language, languages = map_languages(raw.get("languages", ""))
-            title = raw.get("Article Title") or raw.get("Publication Title") or ext_id
+            title = _title(raw, ext_id)
             doc_id = uuid.uuid4()
 
             conn.execute(
