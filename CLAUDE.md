@@ -33,8 +33,14 @@ Terraform); S3 for PDFs and derived artifacts.
 - Migrations: `src/db/migrations/<epoch_ms>-Migration.ts`, raw SQL through `queryRunner.query`.
   `synchronize` is always false. pgvector columns (`vector`, `sparsevec`) are NOT TypeORM-native:
   declare that DDL as raw SQL in migrations; no entity maps `document_chunks`/`document_texts`.
-- Write ownership: app tier owns relational tables; the Python side owns `document_chunks` rows
-  (raw SQL) and only those. One owner per domain.
+- Write ownership: app tier owns relational tables (`documents`, `document_summaries`, `tags`,
+  `document_tags`, `collections`, `document_collections`, `ingestion_jobs`, `users`, `audit_log`).
+  The Python side (search-service / ingestion worker) owns `document_chunks`, `document_texts`,
+  `document_summaries` (worker-generated), `keyword_vocab` (raw SQL), and may also write
+  `documents` (draft rows + status/language/title_en/extraction_confidence updates),
+  `document_tags` (`source='llm'` only), `ingestion_jobs`, and `audit_log`.
+  Never modify `document_tags` rows with `source='human'` or `source='external'`.
+  One owner per domain; two-writer tables are managed by precedence invariants.
 - Path alias `@/*` → `src/*`.
 - Search-service settings live in `search-service/app/config.py` (pydantic-settings, `.env`).
 

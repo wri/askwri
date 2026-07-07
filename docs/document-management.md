@@ -21,8 +21,13 @@ The design doc (`docs/plans/2026-06-09-askwri-document-management-design.md`, §
 
 | Addition | Rationale |
 |---|---|
-| `document_texts` table (full text in Postgres, not S3) | `/query` needs each doc's full text in memory for passage-context extraction at query time. One transactional store beats re-introducing an S3 boot sync at this corpus size (~50 MB total). Revisit if corpus grows 10×. |
 | `documents.source_metadata` jsonb | Stores the original CSV row verbatim (`{file_path, summary, metadata: {…raw keys…}}`). Lets the catalog API and future migrations access the original data without re-parsing CSV. |
+| `documents.authors`, `documents.url`, `documents.date_published` | Editable structured columns backfilled from `source_metadata.metadata` (CSV keys `All authors`, `URL`, `Date published`). Promoted from jsonb-only to first-class columns per the Phase 0 lean-core pattern (design §20: fixed columns for now; `document_attributes` deferred). |
+| `documents.content_hash` unique partial index | DB-level dedup enforcement (no two docs with the same content hash). |
+| `GET /api/admin/worker-health` | Worker liveness (`idle`/`processing`/`stale`), queue depth, intake backlog — catches the case where uploaded files sit in `intake/` unprocessed because the worker is down. |
+| `GET /api/admin/corpus-health` | Corpus health dashboard: counts by status/language, review-queue depth, missing-renditions (non-EN docs without native summaries), missing `title_en`, low-confidence docs. Surfaces the multilingual gaps the design §11.317 dashboard was meant to catch. |
+| `PATCH /api/admin/documents/[id]/summaries` | Edit a single summary (language, kind, text); `source='human'` rows are protected. |
+| `documents.abstract` column **dropped** | Dead column (0/170 populated, no reader/writer anywhere). The live summary store is `document_summaries`; `abstract` was intended for GROBID extraction (dropped, §9). Removed in migration `1781320000000`. |
 | `document_chunks.corpus_order` integer (migration `1781290000000`) | BM25 breaks score ties by corpus position. The chunk load order from Postgres must reproduce the legacy node build order exactly. Populated by the migration script from `enumerate(nodes)`. **Reordering the migration script WILL silently change retrieval tail rankings.** |
 
 ### DEFERRED — in the design, not in Phase 0
@@ -236,7 +241,7 @@ queued → running → queued (next stage) → … → done | needs_review | err
 | **language** | langdetect; supported set: `{en, es, zh, pt, id}` (Indonesian added in Phase 1). Unsupported languages fall back to `en`. |
 | **summarize** | Generates native-language + English long/short summaries via `WORKER_LLM_MODEL` (default `gpt-5-mini`), `source='generated'`. Skips rows that already exist (including CSV-seeded `source='external'` rows). For non-English docs, `title_en` is COALESCE'd to the original title — true translation is deferred. |
 | **classify** | LLM call constrained to the `tags` taxonomy v1 values. Writes `document_tags` with `source='llm'`; `status='accepted'` if `confidence ≥ TAG_CONFIDENCE_ACCEPT` (default 0.7), else `status='suggested'`. Never touches rows with `source='human'` or `source='external'`. |
-| **embed** | Phase 0-identical chunking: SimpleNodeParser 400/80 + summary node, legacy chunk id format, `node_metadata` verbatim, `text-embedding-3-small`. `corpus_order` appended after the current global max (advisory lock for concurrency). Re-ingest deletes prior chunks first. Chinese text and summaries are OpenCC t2s-normalized in chunks only (`document_texts` retains original). Also writes sparse keyword vectors under the frozen corpus stats (new tokens get `df=1`); a token_id headroom guard **warns at 80% of `SPARSE_DIM`** and raises a clear error at the cap (run `build_sparse_keyword.py` or migrate the dimension). If `keyword_corpus_stats` is missing (backfill never ran), it writes `NULL` sparse with a warning. |
+| **embed** | Phase 0-identical chunking *parameters* (SimpleNodeParser 400/80 + summary node, legacy chunk id format, `text-embedding-3-small`). Note: chunk *metadata* diverges from the Phase-0 migration in title source (worker uses `Publication Title` fallback, matching `indexing.build_nodes`; the migration used `Article Title`), authors (worker stores full, not truncated to 100), and `file_path` (worker stores the CSV `file_path`, not `s3_key`). `corpus_order` appended after the current global max (advisory lock for concurrency). Re-ingest deletes prior chunks first. Chinese text and summaries are OpenCC t2s-normalized in chunks only (`document_texts` retains original); page boundaries are recomputed on the Simplified text to avoid OpenCC length-change drift. Also writes sparse keyword vectors under the frozen corpus stats (new tokens get `df=1`); a token_id headroom guard **warns at 80% of `SPARSE_DIM`** and raises a clear error at the cap (run `build_sparse_keyword.py` or migrate the dimension). If `keyword_corpus_stats` is missing (backfill never ran), it writes `NULL` sparse with a warning. |
 | **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). If `< 0.7`: document status → `needs_review`. Otherwise: document status → `searchable` + best-effort `POST SEARCH_SERVICE_URL/reindex` (one retry on `409 already_running`) to refresh the service's in-memory passage-context texts/metadata (both retrieval lanes pick up new chunks immediately via SQL under the default sparse backend). |
 
 ### 10.5 Document lifecycle update
@@ -303,7 +308,7 @@ Authentication uses username/password against the existing `users` table. Passwo
 
 An optional `ADMIN_API_TOKEN` bearer token acts as an admin identity for machine-to-machine calls (`source='system'`, `actor=NULL` in audit rows). This is the same token used by the ingestion worker for upload intake.
 
-**Caveat:** JWT sessions are stateless and outlive deactivation by up to the 7-day TTL. The `users.active` flag gates new logins only — it does not invalidate existing cookies. This is acceptable for an internal tool; note it when deactivating accounts.
+**Caveat:** The edge layer (`src/proxy.ts`) validates the JWT signature only (no DB call). However, every admin API handler underneath calls `requireIdentity`→`getIdentity`, which **re-fetches the user from the DB on every request** and rejects `active===false` immediately, re-deriving `role` from the DB. So deactivation takes effect on the **next API call** (near-immediate), not after the 7-day TTL. The 7-day TTL is only the hard ceiling if the user is never deactivated. A stolen cookie is revoked by deactivating the user.
 
 ### 11.2 Route protection
 
@@ -341,21 +346,27 @@ All APIs are under `/api/admin`:
 | `POST /api/admin/auth/logout` | Clears session cookie |
 | `GET /api/admin/auth/me` | Returns current identity |
 | `GET /api/admin/review-queue` | Documents at `needs_review` with job details |
-| `GET/POST /api/admin/documents` | Catalog list with filters; bulk add-to-collection |
-| `GET/PATCH /api/admin/documents/[id]` | Fetch or update document metadata |
-| `POST /api/admin/documents/[id]/status` | Promote or withdraw |
+| `GET /api/admin/documents` | Catalog list with filters (status/language/collection/tag/search); bulk add-to-collection via `POST /api/admin/collections/[id]/documents` |
+| `GET/PATCH /api/admin/documents/[id]` | Fetch or update document metadata (whitelisted fields: title, titleEn, doi, authors, url, datePublished, language, yearPublished, publicationTitle, articleType, wriPrimaryOffice) |
+| `POST /api/admin/documents/[id]/status` | Promote (`needs_review → searchable` only) or withdraw (`searchable → withdrawn`, admin-only) |
 | `POST /api/admin/documents/[id]/reingest` | Re-queue for ingestion |
-| `GET/POST /api/admin/documents/[id]/tags` | List or add tags |
-| `DELETE /api/admin/documents/[id]/tags/[tagId]` | Remove a tag |
-| `GET /api/admin/documents/[id]/file` | Signed URL or redirect to the PDF |
+| `POST /api/admin/documents/[id]/tags` | Add a tag to a document |
+| `PATCH /api/admin/documents/[id]/tags/[tagId]` | Accept or reject a suggested tag (flips `source` to `human`) |
+| `DELETE /api/admin/documents/[id]/tags/[tagId]` | Remove a tag from a document |
+| `PATCH /api/admin/documents/[id]/summaries` | Edit a single summary (language, kind, text); `source='human'` rows are protected |
+| `GET /api/admin/documents/[id]/file` | Streams the PDF from S3 (via sanitized `s3_key`; withdrawn docs excluded) |
+| `GET /api/admin/worker-health` | Worker liveness (`idle`/`processing`/`stale`), queue depth, intake backlog |
+| `GET /api/admin/corpus-health` | Corpus health: counts by status/language, review-queue depth, missing renditions, missing `title_en`, low-confidence docs, worker status |
 | `GET/POST /api/admin/tags` | List taxonomy values; add a new value |
 | `DELETE /api/admin/tags/[id]` | Delete unused tag (admin only) |
+| `PATCH /api/admin/tags/[id]` | Rename a tag value or facet (admin only) |
 | `GET/POST /api/admin/collections` | List or create collections |
-| `GET/PATCH /api/admin/collections/[id]` | Fetch or rename a collection |
-| `GET/POST /api/admin/collections/[id]/documents` | List or add documents to a collection |
+| `PATCH /api/admin/collections/[id]` | Rename a collection (regenerates slug) |
+| `POST/DELETE /api/admin/collections/[id]/documents` | Add or remove documents from a collection |
 | `GET/POST /api/admin/users` | List or create users (admin only) |
-| `PATCH /api/admin/users/[id]` | Update user (admin only) |
-| `POST /api/admin/intake` | Upload a PDF (same as `/api/import-documents` intake path) |
+| `PATCH /api/admin/users/[id]` | Update user (admin only; self-demote blocked; last-admin guard) |
+| `POST /api/admin/intake` | Upload a PDF to the S3 intake queue |
+| `POST /api/import-documents` | CSV bulk import (admin-only; creates `documents` rows + `ingestion_jobs`; `s3_key` validated) |
 
 All mutating endpoints write `audit_log` rows (actor, `source: human|system`, action, entity type, before/after JSON snapshot).
 
