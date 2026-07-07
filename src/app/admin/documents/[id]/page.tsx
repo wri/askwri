@@ -320,9 +320,6 @@ const DocumentEditorPage = () => {
                     />
                   )}
                 </td>
-                <td style={{ ...cell, color: '#888', fontSize: 12, width: 200 }}>
-                  {doc ? String(doc[key] ?? '—') : ''}
-                </td>
               </tr>
             ))}
           </tbody>
