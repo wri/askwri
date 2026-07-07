@@ -58,6 +58,11 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
             </Link>
           ))}
           {me?.role === 'admin' && (
+            <Link href='/admin/import' title='Upload a CSV to bulk-create or update document metadata. Preview (dry-run) shows what would change before applying.' style={{ color: '#cbd5e0', textDecoration: 'none' }}>
+              Import
+            </Link>
+          )}
+          {me?.role === 'admin' && (
             <Link href='/admin/users' style={{ color: '#cbd5e0', textDecoration: 'none' }}>
               Users
             </Link>
