@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
-import { initializeDatabase, AppDataSource } from '../../../../db/data-source'
+import { initializeDatabase } from '../../../../db/data-source'
+import { getDocumentForPdf } from '../../../../db/queries/getDocumentForPdf'
+import { s3ClientConfig } from '../../../../lib/s3'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ filename: string }> },
 ) {
   try {
     const { filename } = await params
 
-    // Security: Only allow PDF files and prevent directory traversal
+    // Security: only PDF files, no directory traversal.
     if (
       !filename.endsWith('.pdf') ||
       filename.includes('..') ||
@@ -20,44 +26,67 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid filename' }, { status: 400 })
     }
 
-    // Withdrawn documents must not be served. Match the document whose s3_key
-    // basename equals the requested filename ('<external_id>.pdf' or
-    // 'documents/<file>.pdf'). Legacy CSV-only files have no documents row and
-    // are served as before. On DB failure, fail open (serve) so a database
-    // outage never breaks the public results UI.
-    try {
-      await initializeDatabase()
-      const [row] = await AppDataSource.query(
-        `SELECT 1 FROM documents WHERE (s3_key = $1 OR substring(s3_key FROM '[^/]+$') = $1) AND status = 'withdrawn' LIMIT 1`,
-        [filename],
-      )
-      if (row) {
-        return NextResponse.json({ error: 'PDF not found', filename }, { status: 404 })
-      }
-    } catch (dbErr) {
-      console.error('Error checking document status for PDF (failing open):', dbErr)
-    }
+    // Look up the document by external_id (the filename without .pdf).
+    // This is the source of truth — the DB holds the real s3_key and status.
+    await initializeDatabase()
+    const externalId = filename.replace(/\.pdf$/i, '')
+    const doc = await getDocumentForPdf(externalId)
 
-    // Construct path to PDF in data/documents directory
-    const pdfPath = join("/tmp", "askWRI_docs", filename)
-
-    // Check if file exists
-    if (!existsSync(pdfPath)) {
+    // Not found or withdrawn → 404 (withdrawn docs must not be served publicly).
+    if (!doc || doc.status === 'withdrawn') {
       return NextResponse.json(
         { error: 'PDF not found', filename },
         { status: 404 },
       )
     }
 
-    // Read and serve the PDF file
-    const pdfBuffer = await readFile(pdfPath)
+    // Serve from S3 via doc.s3Key — works under any DOCUMENTS_S3_PREFIX because
+    // the key is the actual stored value (bare filename for migrated docs,
+    // "documents/<name>.pdf" for worker-ingested docs). This eliminates the
+    // R5 boot-sync gap: no dependency on /tmp/askWRI_docs being populated.
+    const bucket = process.env.DOCUMENTS_S3_BUCKET
+    if (bucket) {
+      try {
+        const s3 = new S3Client(s3ClientConfig())
+        const obj = await s3.send(
+          new GetObjectCommand({ Bucket: bucket, Key: doc.s3Key }),
+        )
+        if (!obj.Body) throw new Error('S3 object body is empty')
+        const body = new Uint8Array(await obj.Body.transformToByteArray())
+        return new NextResponse(body as BodyInit, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="${filename}"`,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          },
+        })
+      } catch (s3Err) {
+        // S3 fetch failed — fall through to local filesystem (dev fallback).
+        console.error(
+          `PDF S3 fetch failed for "${doc.s3Key}" — trying local fallback:`,
+          s3Err,
+        )
+      }
+    }
 
+    // Local filesystem fallback (dev: /tmp/askWRI_docs is a symlink to
+    // search-service/data). Used only when DOCUMENTS_S3_BUCKET is unset or
+    // the S3 fetch failed.
+    const pdfPath = join('/tmp', 'askWRI_docs', filename)
+    if (!existsSync(pdfPath)) {
+      return NextResponse.json(
+        { error: 'PDF not found', filename },
+        { status: 404 },
+      )
+    }
+    const pdfBuffer = await readFile(pdfPath)
     return new NextResponse(Uint8Array.from(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${filename}"`,
-        'Cache-Control': 'public, max-age=31536000, immutable', // Cache for 1 year
+        'Cache-Control': 'public, max-age=31536000, immutable',
       },
     })
   } catch (error: any) {
