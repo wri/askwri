@@ -15,7 +15,7 @@ export class IngestionJob {
   @PrimaryGeneratedColumn('uuid')
   id!: string
 
-  @ManyToOne(() => Document, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Document, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({
     name: 'document_id',
     foreignKeyConstraintName: 'ingestion_jobs_document_id_fkey',

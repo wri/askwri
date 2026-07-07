@@ -37,13 +37,13 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string ; tagId: string }> },
+  { params }: { params: Promise<{ id: string; tagId: string }> },
 ) {
   const { identity, response } = await requireIdentity(req)
   if (response) return response
   try {
     const { id, tagId } = await params
-    if (!isUuid(id) || hypa -c "!isUuid(tagId)) {
+    if (!isUuid(id) || !isUuid(tagId)) {
       return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
     }
     await initializeDatabase()
@@ -55,4 +55,3 @@ export async function DELETE(
     return internalError(err)
   }
 }
-EOF"

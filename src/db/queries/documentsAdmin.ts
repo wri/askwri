@@ -1,6 +1,5 @@
 import { AppDataSource } from '../data-source'
 import { Document } from '../entities/Document.entity'
-import { AuditLog } from '../entities/AuditLog.entity'
 import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
@@ -151,15 +150,11 @@ export async function updateDocumentFields(
   // mutation can persist).
   await AppDataSource.transaction(async (em) => {
     await em.getRepository(Document).save(doc)
-    await em.getRepository(AuditLog).insert({
-      actorUserId: auditActor(identity).actorUserId,
-      source: auditActor(identity).source,
-      action: 'update',
-      entityType: 'document',
-      entityId: id,
-      before,
-      after,
-    })
+    await em.query(
+      `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
+       VALUES ($1, $2, 'update', 'document', $3, $4, $5)`,
+      [auditActor(identity).actorUserId, auditActor(identity).source, id, before, after],
+    )
   })
   return { updated }
 }
@@ -193,15 +188,11 @@ export async function setDocumentStatus(
   // Transactional: mutation + audit committed atomically.
   await AppDataSource.transaction(async (em) => {
     await em.getRepository(Document).save(doc)
-    await em.getRepository(AuditLog).insert({
-      actorUserId: auditActor(identity).actorUserId,
-      source: auditActor(identity).source,
-      action: 'lifecycle',
-      entityType: 'document',
-      entityId: id,
-      before: { status: fromStatus },
-      after: { status: toStatus },
-    })
+    await em.query(
+      `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
+       VALUES ($1, $2, 'lifecycle', 'document', $3, $4, $5)`,
+      [auditActor(identity).actorUserId, auditActor(identity).source, id, { status: fromStatus }, { status: toStatus }],
+    )
   })
   return { fromStatus }
 }

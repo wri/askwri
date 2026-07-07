@@ -47,4 +47,14 @@ d('admin entities (DB integration)', () => {
     expect(row.id).toBeTruthy()
     await repo.delete(row.id)
   })
+
+  it('IngestionJob entity onDelete is CASCADE (matches migration 178130 FK)', async () => {
+    // Verify the live DB FK is CASCADE (not SET NULL) — the entity annotation
+    // must match so `migration:generate` doesn't emit a spurious revert.
+    const [row] = await AppDataSource.query(
+      `SELECT delete_rule FROM information_schema.referential_constraints
+       WHERE constraint_name = 'ingestion_jobs_document_id_fkey'`,
+    )
+    expect(row.delete_rule).toBe('CASCADE')
+  })
 })
