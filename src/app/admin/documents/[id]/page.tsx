@@ -20,11 +20,13 @@ interface Detail {
   latestJob: { status: string; stage: string | null; error: string | null; attempts: number } | null
 }
 
-const EDITABLE: { key: string; label: string; type?: 'number' }[] = [
+const EDITABLE: { key: string; label: string; type?: 'number' | 'date' | 'textarea' }[] = [
   { key: 'title', label: 'Title' },
   { key: 'titleEn', label: 'Title (EN)' },
   { key: 'doi', label: 'DOI' },
-  { key: 'abstract', label: 'Abstract' },
+  { key: 'authors', label: 'Authors', type: 'textarea' },
+  { key: 'url', label: 'URL' },
+  { key: 'datePublished', label: 'Date published', type: 'date' },
   { key: 'language', label: 'Language (ISO 639-1)' },
   { key: 'yearPublished', label: 'Year published', type: 'number' },
   { key: 'publicationTitle', label: 'Publication' },
@@ -38,6 +40,7 @@ const DocumentEditorPage = () => {
   const { id } = useParams<{ id: string }>()
   const [detail, setDetail] = useState<Detail | null>(null)
   const [form, setForm] = useState<Record<string, any>>({})
+  const [summaryEdits, setSummaryEdits] = useState<Record<string, string>>({})
   const [allTags, setAllTags] = useState<{ id: string; facet: string; valueId: string }[]>([])
   const [allCollections, setAllCollections] = useState<{ id: string; name: string; slug: string }[]>([])
   const [me, setMe] = useState<{ role?: string }>({})
@@ -56,12 +59,21 @@ const DocumentEditorPage = () => {
         setForm(Object.fromEntries(EDITABLE.map(({ key }) => [key, body.document[key] ?? ''])))
         formDirty.current = false
       }
+      // Reset summary edits to the loaded values (only for keys not being edited)
+      setSummaryEdits((prev) => {
+        const next: Record<string, string> = {}
+        for (const s of body.summaries) {
+          const skey = `${s.language}::${s.kind}`
+          next[skey] = prev[skey] ?? s.text
+        }
+        return next
+      })
     },
     [id],
   )
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react/set-state-in-effect
     load({ resetForm: true }).catch((err: any) => setError(err.message))
     adminFetch<{ tags: any[] }>('/api/admin/tags')
       .then((b) => setAllTags(b.tags))
@@ -91,6 +103,27 @@ const DocumentEditorPage = () => {
       })
       setNotice(`Saved (${body.updated.length} field(s) changed).`)
       await load({ resetForm: true })
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const saveSummary = async (language: string, kind: string) => {
+    const skey = `${language}::${kind}`
+    const text = summaryEdits[skey]
+    if (text == null) return
+    setBusy(true)
+    try {
+      setError(null)
+      setNotice(null)
+      await adminFetch(`/api/admin/documents/${id}/summaries`, {
+        method: 'PATCH',
+        body: JSON.stringify({ language, kind, text }),
+      })
+      setNotice(`Summary ${language}/${kind} saved.`)
+      await load()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -222,7 +255,7 @@ const DocumentEditorPage = () => {
   const doc = detail?.document
 
   return (
-    <Box>
+    <Box style={{ paddingBottom: 48 }}>
       <Heading size='lg' style={{ marginBottom: 8 }}>
         Document editor
       </Heading>
@@ -242,23 +275,23 @@ const DocumentEditorPage = () => {
         </Heading>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <tbody>
-            {EDITABLE.map(({ key, label }) => (
+            {EDITABLE.map(({ key, label, type }) => (
               <tr key={key}>
                 <td style={{ ...cell, width: 200, fontWeight: 500 }}>{label}</td>
                 <td style={cell}>
-                  {key === 'abstract' ? (
+                  {type === 'textarea' ? (
                     <textarea
                       value={form[key] ?? ''}
                       onChange={(e) => {
                         formDirty.current = true
                         setForm((f) => ({ ...f, [key]: e.target.value }))
                       }}
-                      rows={5}
+                      rows={3}
                       style={{ width: '100%', fontFamily: 'inherit', fontSize: 'inherit' }}
                     />
                   ) : (
                     <input
-                      type={EDITABLE.find((e) => e.key === key)?.type === 'number' ? 'number' : 'text'}
+                      type={type === 'number' ? 'number' : type === 'date' ? 'date' : 'text'}
                       value={form[key] ?? ''}
                       onChange={(e) => {
                         formDirty.current = true
@@ -283,6 +316,30 @@ const DocumentEditorPage = () => {
           Save
         </button>
       </section>
+
+      {/* Source metadata (read-only) — the CSV-original values, so editors can
+          see the raw authors/URL/date that were migrated into source_metadata. */}
+      {doc?.sourceMetadata && (
+        <section style={{ marginBottom: 32 }}>
+          <details>
+            <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}>
+              Source metadata (read-only)
+            </summary>
+            <pre
+              style={{
+                background: '#f7f7f7',
+                padding: 12,
+                borderRadius: 4,
+                fontSize: 12,
+                overflow: 'auto',
+                maxHeight: 400,
+              }}
+            >
+              {JSON.stringify(doc.sourceMetadata, null, 2)}
+            </pre>
+          </details>
+        </section>
+      )}
 
       {/* Tags panel */}
       <section style={{ marginBottom: 32 }}>
@@ -365,31 +422,47 @@ const DocumentEditorPage = () => {
         </div>
       </section>
 
-      {/* Summaries panel */}
+      {/* Summaries panel — editable (was read-only). Editors can now fix
+          truncated/garbage summaries directly. Each row is a textarea with a
+          Save button; source='human' rows are protected server-side. */}
       <section style={{ marginBottom: 32 }}>
         <Heading size='md' style={{ marginBottom: 12 }}>
           Summaries
         </Heading>
         {(!detail || detail.summaries.length === 0) && <Text>No summaries.</Text>}
-        {detail?.summaries.map((s, i) => (
-          <div key={i} style={{ marginBottom: 16 }}>
-            <Text style={{ fontWeight: 600, marginBottom: 4 }}>
-              {s.language} · {s.kind} ({s.source ?? 'unknown'})
-            </Text>
-            <div
-              style={{
-                maxHeight: 200,
-                overflow: 'auto',
-                background: '#f7f7f7',
-                padding: '8px 12px',
-                borderRadius: 4,
-                fontSize: 14,
-              }}
-            >
-              {s.text}
+        {detail?.summaries.map((s, i) => {
+          const skey = `${s.language}::${s.kind}`
+          return (
+            <div key={i} style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: 600, marginBottom: 4 }}>
+                {s.language} · {s.kind} ({s.source ?? 'unknown'})
+              </Text>
+              <textarea
+                data-summary-key={skey}
+                value={summaryEdits[skey] ?? s.text}
+                onChange={(e) =>
+                  setSummaryEdits((prev) => ({ ...prev, [skey]: e.target.value }))
+                }
+                rows={4}
+                style={{
+                  width: '100%',
+                  fontFamily: 'inherit',
+                  fontSize: 'inherit',
+                  background: '#f7f7f7',
+                  padding: '8px 12px',
+                  borderRadius: 4,
+                }}
+              />
+              <button
+                onClick={() => saveSummary(s.language, s.kind)}
+                disabled={busy || summaryEdits[skey] === s.text}
+                style={{ marginTop: 4, padding: '4px 12px', textDecoration: 'underline' }}
+              >
+                Save {s.language}/{s.kind}
+              </button>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </section>
 
       {/* Lifecycle panel */}

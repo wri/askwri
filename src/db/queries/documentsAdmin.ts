@@ -223,3 +223,44 @@ export async function reenqueueIngestion(
   })
   return { jobId: job.id }
 }
+
+/**
+ * Update a single document_summaries row (by document_id + language + kind).
+ * Only `source='external'` and `source='generated'` rows are editable;
+ * `source='human'` rows are protected (immutable, like document_tags).
+ * The mutation and the audit row are committed atomically.
+ */
+export async function updateDocumentSummary(
+  documentId: string,
+  language: string,
+  kind: string,
+  text: string,
+  identity: AdminIdentity,
+): Promise<{ updated: boolean } | { error: string } | null> {
+  if (!text.trim()) return { error: 'summary text must not be empty' }
+  if (text.length > 5000) return { error: 'summary text must not exceed 5000 chars' }
+  const existing: { source: string; text: string }[] = await AppDataSource.query(
+    `SELECT source, text FROM document_summaries
+     WHERE document_id = $1 AND language = $2 AND kind = $3`,
+    [documentId, language, kind],
+  )
+  if (existing.length === 0) return null
+  const row = existing[0]
+  if (row.source === 'human') return { error: 'human-authored summaries are protected' }
+  if (row.text === text) return { updated: false }
+  const before = { language, kind, text: row.text, source: row.source }
+  const after = { language, kind, text, source: row.source }
+  await AppDataSource.transaction(async (em) => {
+    await em.query(
+      `UPDATE document_summaries SET text = $1
+       WHERE document_id = $2 AND language = $3 AND kind = $4`,
+      [text, documentId, language, kind],
+    )
+    await em.query(
+      `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
+       VALUES ($1, $2, 'update', 'document_summary', $3, $4, $5)`,
+      [auditActor(identity).actorUserId, auditActor(identity).source, documentId, before, after],
+    )
+  })
+  return { updated: true }
+}
