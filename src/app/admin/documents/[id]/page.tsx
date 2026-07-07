@@ -73,7 +73,7 @@ const DocumentEditorPage = () => {
   )
 
   useEffect(() => {
-    // eslint-disable-next-line react/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load({ resetForm: true }).catch((err: any) => setError(err.message))
     adminFetch<{ tags: any[] }>('/api/admin/tags')
       .then((b) => setAllTags(b.tags))

@@ -1,6 +1,5 @@
 import { AppDataSource } from '../data-source'
 import { Document } from '../entities/Document.entity'
-import { IngestionJob } from '../entities/IngestionJob.entity'
 import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
@@ -132,7 +131,16 @@ export function mapRowToDocument(row: ImportRow): MappedDocument {
   const externalId = deriveExternalId(row.file_path)
   const { primary, all } = mapLanguages(raw['languages'])
   // Same final fallback as the migration script: title defaults to the external id
-  const title = (raw['Article Title'] as string | undefined) || (raw['Publication Title'] as string | undefined) || externalId
+  // Match the migration script's _title(): prefer Publication Title when Article Title is
+  // a junk sentinel (Pre-EM / Not available / empty), else Article Title, else external_id.
+  // (F3-1/G-1: the migration fixed 37 junk titles; the live import path must not reintroduce them.)
+  const JUNK_TITLES = new Set(['Pre-EM', 'Not available', '', undefined, null])
+  const articleTitle = raw['Article Title'] as string | undefined
+  const pubTitle = raw['Publication Title'] as string | undefined
+  const title =
+    (pubTitle && !JUNK_TITLES.has(pubTitle)) ? pubTitle
+    : (articleTitle && !JUNK_TITLES.has(articleTitle)) ? articleTitle
+    : externalId
   const publicationTitle = (raw['Publication Title'] as string | undefined) || null
   const yearPublished = parseYear(raw['YEAR published'])
   const documentsS3Prefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'

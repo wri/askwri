@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Box, Heading, Text } from '@chakra-ui/react'
+import { Box, Heading } from '@chakra-ui/react'
 
 const NAV = [
   { href: '/admin/review', label: 'Review queue', help: 'Documents flagged for human review (low extraction confidence or worker errors). Promote to make them searchable, or re-ingest to retry.' },

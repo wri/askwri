@@ -155,18 +155,27 @@ describe('mapRowToDocument', () => {
     expect(mapped.externalId).toBe('2021_report_abc')
   })
 
-  it('prefers Article Title over Publication Title', () => {
+  it('prefers Publication Title over Article Title (parity with migration _title)', () => {
     const mapped = mapRowToDocument(baseRow)
+    expect(mapped.title).toBe('WRI Journal')
+  })
+
+  it('falls back to Article Title when Publication Title is absent', () => {
+    const row: ImportRow = {
+      ...baseRow,
+      metadata: { ...baseRow.metadata, 'Publication Title': undefined as any },
+    }
+    const mapped = mapRowToDocument(row)
     expect(mapped.title).toBe('My Report')
   })
 
-  it('falls back to Publication Title when Article Title is absent', () => {
+  it('prefers Publication Title when Article Title is a junk sentinel (Pre-EM / Not available) — G-1/F3-1 fix', () => {
     const row: ImportRow = {
       ...baseRow,
-      metadata: { ...baseRow.metadata, 'Article Title': undefined as any },
+      metadata: { ...baseRow.metadata, 'Article Title': 'Pre-EM' },
     }
     const mapped = mapRowToDocument(row)
-    expect(mapped.title).toBe('WRI Journal')
+    expect(mapped.title).toBe('WRI Journal') // not 'Pre-EM'
   })
 
   it('falls back to externalId when both title fields are absent (script parity)', () => {
@@ -450,9 +459,9 @@ describe('importDocuments() DB integration', () => {
     expect(docs).toHaveLength(2)
     expect(docs[0].external_id).toBe(`${PREFIX}doc-alpha`)
     expect(docs[0].status).toBe('draft')
-    expect(docs[0].title).toBe('Alpha Document')
+    expect(docs[0].title).toBe('WRI Test Journal') // Publication Title preferred over Article Title (parity with migration _title)
     expect(docs[1].external_id).toBe(`${PREFIX}doc-beta`)
-    expect(docs[1].title).toBe('Beta Journal') // falls back to Publication Title
+    expect(docs[1].title).toBe('Beta Journal')
 
     // Verify queued jobs
     const jobsRows = await AppDataSource.query(

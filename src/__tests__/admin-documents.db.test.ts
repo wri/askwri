@@ -353,7 +353,7 @@ d('documentsAdmin F2 filters + pagination (DB integration)', () => {
   })
 
   it('listAdminDocuments pagination offset skips rows', async () => {
-    const { items: page1, total: t1 } = await listAdminDocuments({}, { limit: 5, offset: 0 })
+    const { items: page1, total: _t1 } = await listAdminDocuments({}, { limit: 5, offset: 0 })
     const { items: page2 } = await listAdminDocuments({}, { limit: 5, offset: 5 })
     expect(page1.length).toBeLessThanOrEqual(5)
     expect(page2.length).toBeLessThanOrEqual(5)

@@ -75,7 +75,7 @@ d('migration 178132 — schema + data backfills', () => {
     )
     // The 33 native-language summaries (es/pt/zh, all English text) are now labeled en.
     // So es/pt/zh rows should be gone (for migrated docs); en should include all migrated.
-    const langs = sums.map((s: any) => s.language)
+    const _langs = sums.map((s: any) => s.language)
     // Note: the worker canary (askwri-canary-1783377155) has generated en summaries;
     // a future worker run may add native rows. Here we assert the migrated mislabel is gone:
     // no es/pt/zh rows whose source='external' (those were the mislabeled ones).

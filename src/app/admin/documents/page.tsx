@@ -74,9 +74,6 @@ const CatalogInner = () => {
 
   const loadYears = useCallback(async () => {
     try {
-      const [rows] = await Promise.all([
-        adminFetch<{ items: DocItem[] }>(`/api/admin/documents?limit=500`),
-      ])
       // Derive distinct years from the first page (the corpus is small enough).
       // A dedicated endpoint would be cleaner, but this avoids a new API.
       const years = new Set<number>()

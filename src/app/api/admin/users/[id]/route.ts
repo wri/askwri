@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { initializeDatabase, AppDataSource } from '../../../../../db/data-source'
-import { updateUser, countOtherActiveAdmins } from '../../../../../db/queries/users'
+import { updateUser } from '../../../../../db/queries/users'
 import { requireIdentity, auditActor } from '../../../../../lib/auth/identity'
 import { internalError, isUuid } from '../../../../../lib/api-error'
 import { writeAudit } from '../../../../../db/queries/audit'
@@ -78,18 +78,42 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       )
     }
     if (existing.role === 'admin' && existing.active && (demotes || deactivates)) {
-      // Atomic guard: UPDATE only succeeds if at least one other active admin
-      // remains. No TOCTOU — the count and the update are one statement.
-      const [guardRow] = await AppDataSource.query(
-        `SELECT count(*)::int AS n FROM users WHERE role='admin' AND active=true AND id<>$1`,
-        [id],
+      // Atomic last-admin guard: a single UPDATE … RETURNING that only commits
+      // if at least one other active admin remains. No TOCTOU — the existence
+      // check and the mutation are one statement (P2-40).
+      const guardResult = await AppDataSource.query(
+        `UPDATE users SET role = COALESCE($2::text, role),
+                          active = COALESCE($3::boolean, active),
+                          password_hash = COALESCE($4, password_hash)
+         WHERE id = $1
+           AND EXISTS (SELECT 1 FROM users WHERE role='admin' AND active=true AND id<>$1)
+         RETURNING id`,
+        [
+          id,
+          patch.role ?? null,
+          patch.active ?? null,
+          patch.passwordHash ?? null,
+        ],
       )
-      if (guardRow.n === 0) {
+      // TypeORM returns [rows[], rowCount] for a RETURNING query; a zero-row
+      // result (the guard fired — no other active admin) is rows=[].
+      const rows = Array.isArray(guardResult) ? guardResult[0] : guardResult
+      const result = Array.isArray(rows) && rows.length > 0 ? rows[0] : undefined
+      if (!result) {
         return NextResponse.json(
           { ok: false, error: 'cannot remove the last active admin' },
           { status: 409 },
         )
       }
+      await writeAudit({
+        ...auditActor(identity!),
+        action: 'update',
+        entityType: 'user',
+        entityId: id,
+        before: { role: existing.role, active: existing.active },
+        after: { role: patch.role ?? existing.role, active: patch.active ?? existing.active },
+      })
+      return NextResponse.json({ ok: true })
     }
 
     await updateUser(id, patch)

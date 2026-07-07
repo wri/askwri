@@ -59,7 +59,7 @@ const mockDetail = {
 }
 
 function setupFetchMock() {
-  const fetchMock = jest.fn((url: string, init?: RequestInit) => {
+  const fetchMock = jest.fn((url: string, _init?: RequestInit) => {
     // adminFetch calls fetch with the path directly; auth/me uses raw fetch
     if (url === '/api/admin/auth/me') {
       return Promise.resolve({
