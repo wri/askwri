@@ -777,10 +777,11 @@ class TestSummarizeStage:
             ).fetchone()[0]
             assert title_en is not None, "title_en should be set for non-English document"
 
-    def test_en_document_produces_two_rows_no_title_en(
+    def test_en_document_produces_two_rows_and_title_en(
         self, stages_test_db, monkeypatch
     ):
-        """en document → 2 rows (en long/short); 1 LLM call; title_en untouched (NULL)."""
+        """en document → 2 rows (en long/short); 1 LLM call; title_en set to title
+        (design §6: title_en always populated — NEW-P2-8 fixed the non-EN-only gap)."""
         calls = []
         monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
 
@@ -808,35 +809,109 @@ class TestSummarizeStage:
             title_en = conn.execute(
                 "SELECT title_en FROM documents WHERE id=%s", (doc_id,)
             ).fetchone()[0]
-            assert title_en is None, "title_en should remain NULL for English document"
+            assert title_en == "English Title", (
+                f"title_en should be set to title for English documents too, got {title_en!r}"
+            )
 
-    def test_idempotent_rerun_no_extra_rows_no_extra_calls(
+    def test_rerun_regenerates_generated_summaries(
         self, stages_test_db, monkeypatch
     ):
-        """Running summarize twice → same row count; second run makes 0 LLM calls."""
+        """Re-running summarize on a doc with source='generated' summaries REGENERATES
+        them (delete + re-insert) so a re-ingest with new content refreshes the
+        summaries (NEW-P1-A: stale summaries). Row count is stable; the LLM is called
+        again on the second run; the text reflects the new generation."""
         calls = []
         monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
 
         with psycopg.connect(stages_test_db) as conn:
             doc_id = _insert_document_with_lang(
-                conn, external_id="idem-doc", language="en", languages=["en"], title="Idempotent"
+                conn, external_id="rerun-doc", language="en", languages=["en"], title="Rerun"
             )
-            _insert_document_text(conn, doc_id, text="Some text for idempotency check.")
+            _insert_document_text(conn, doc_id, text="Some text for rerun check.")
 
         from worker.stages.summarize import run
         run(doc_id)
         first_call_count = len(calls)
+        assert first_call_count == 1
 
+        with psycopg.connect(stages_test_db) as conn:
+            first_texts = {
+                (r[0], r[1]): r[2] for r in conn.execute(
+                    "SELECT language, kind, text FROM document_summaries WHERE document_id=%s",
+                    (doc_id,),
+                ).fetchall()
+            }
+
+        # Second run — must regenerate the generated summaries
         run(doc_id)
         second_call_count = len(calls) - first_call_count
-
-        assert second_call_count == 0, f"Second run should make 0 LLM calls, got {second_call_count}"
+        assert second_call_count == 1, (
+            f"Second run should regenerate generated summaries (1 LLM call), got {second_call_count}"
+        )
 
         with psycopg.connect(stages_test_db) as conn:
             count = conn.execute(
                 "SELECT count(*) FROM document_summaries WHERE document_id=%s", (doc_id,)
             ).fetchone()[0]
             assert count == 2, f"Should still have exactly 2 rows after two runs, got {count}"
+            second_texts = {
+                (r[0], r[1]): r[2] for r in conn.execute(
+                    "SELECT language, kind, text FROM document_summaries WHERE document_id=%s",
+                    (doc_id,),
+                ).fetchall()
+            }
+        # The regenerated text differs from the first generation (call counter advances)
+        assert first_texts[("en", "long")] != second_texts[("en", "long")], (
+            "re-run should regenerate the long summary text (not keep the stale one)"
+        )
+
+    def test_generates_native_when_slot_empty_post_relabel(
+        self, stages_test_db, monkeypatch
+    ):
+        """After the migration relabels mislabeled summaries → en, a zh doc has
+        en summaries but NO zh summaries. The summarize stage must GENERATE the
+        native (zh) long+short so each language has a retrieval handle (design §7.5
+        native+English; #6). 1 LLM call for zh (en already exists)."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="post-relabel-zh", language="zh", languages=["zh"],
+                title="中文标题",
+            )
+            _insert_document_text(conn, doc_id, text="中文文档内容。")
+            # Simulate post-relabel state: en summaries exist (relabel target), zh empty
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'English long summary from CSV.', 'external'),
+                          (%s, 'en', 'short', 'English short.', 'external')""",
+                (doc_id, doc_id),
+            )
+            conn.commit()
+
+        from worker.stages.summarize import run
+        result = run(doc_id)
+        assert result is None
+
+        # 1 LLM call for zh (en is external → preserved, not regenerated)
+        assert len(calls) == 1, f"Expected 1 LLM call (for zh), got {len(calls)}"
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT language, kind, source FROM document_summaries WHERE document_id=%s ORDER BY language, kind",
+                (doc_id,),
+            ).fetchall()
+            langs_kinds = {(r[0], r[1]) for r in rows}
+            assert {("zh", "long"), ("zh", "short")} <= langs_kinds, (
+                f"native zh summaries must be generated; got {langs_kinds}"
+            )
+            zh_rows = [r for r in rows if r[0] == "zh"]
+            for r in zh_rows:
+                assert r[2] == "generated", f"zh summaries should be source='generated', got {r[2]}"
+            en_rows = [r for r in rows if r[0] == "en"]
+            for r in en_rows:
+                assert r[2] == "external", f"en summaries should stay 'external', got {r[2]}"
 
     def test_preexisting_external_rows_preserved(
         self, stages_test_db, monkeypatch
