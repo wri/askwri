@@ -300,6 +300,7 @@ export async function importDocuments(
     ...actor,
     action: 'import',
     entityType: 'documents',
+    entityId: null,
     after: { created, updated, skipped, jobs },
   })
 
