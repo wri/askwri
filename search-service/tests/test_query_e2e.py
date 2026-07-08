@@ -43,12 +43,17 @@ class _StubEmbedModel:
 
 
 class _StubReranker:
-    """Reranker stub: sort by existing score desc, slice to top_n."""
+    """Reranker stub: keep the fused order but emit 0-1 relevance scores like
+    the real Bedrock Cohere Rerank client — the cite floor/tiers downstream
+    are calibrated on that scale, and raw RRF scores (~0.008-0.03) would all
+    land below the floor."""
 
     def postprocess_nodes(self, nodes, query_bundle, top_n=None):
         sorted_nodes = sorted(nodes, key=lambda n: (n.score or 0.0), reverse=True)
         if top_n is not None:
-            return sorted_nodes[:top_n]
+            sorted_nodes = sorted_nodes[:top_n]
+        for i, node in enumerate(sorted_nodes):
+            node.score = max(0.05, 0.95 - i * 0.002)
         return sorted_nodes
 
 
@@ -232,6 +237,26 @@ class TestQueryEndpointCiteMode:
         for doc in data["docs"]:
             assert "relevance_tier" in doc["metadata"], (
                 f"Missing relevance_tier in metadata for doc {doc['doc_id']}"
+            )
+
+    @requires_db
+    def test_cite_mode_unreranked_skips_floor_and_tiers(self, booted_service):
+        """rerank=false (diagnostics/lane runs): scores are raw RRF
+        (~0.008-0.03), NOT the 0-1 relevance scale the floor/tiers are
+        calibrated on — the floor must not silently drop everything and no
+        tier should be claimed."""
+        client, _ = booted_service
+        resp = client.post(
+            "/query",
+            json={"query": "electric buses", "mode": "cite", "max_results": 10,
+                  "rerank": False},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["docs"], "unreranked cite results must not be floored away"
+        for doc in data["docs"]:
+            assert "relevance_tier" not in doc["metadata"], (
+                "tier labels are rerank-score-based; unreranked results must not carry one"
             )
 
     @requires_db

@@ -21,8 +21,12 @@ def _clear_settings_cache():
 # --- config ---------------------------------------------------------------
 
 def test_embedding_model_defaults_to_cohere_embed_v4(monkeypatch):
+    from app.config import Settings
+
     monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
-    settings = get_settings()
+    # _env_file=None: local .env.local pins EMBEDDING_MODEL until the
+    # re-embed cutover; this asserts the shipped DEFAULT, not the local pin.
+    settings = Settings(_env_file=None)
     assert settings.embedding_model == "cohere-embed-v4"
     assert settings.embedding_dimension == 1536
 

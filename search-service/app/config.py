@@ -68,16 +68,25 @@ class Settings(BaseSettings):
     bedrock_embed_region: str = "us-east-1"
     bedrock_embed_model_id: str = "cohere.embed-v4:0"
 
-    # Cite mode reranker logit thresholds (calibrated 2026-03-19)
-    cite_logit_floor: float = -9.0        # Drop docs below this raw logit
-    cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores
-    cite_partial_threshold: float = -7.8  # 25th percentile of relevant scores
+    # Bedrock placement for Cohere Rerank 3.5 (spec v3 §5): not hosted in
+    # us-east-2 — call the nearest hosting region.
+    bedrock_rerank_region: str = "us-west-2"
+    bedrock_rerank_model_id: str = "cohere.rerank-v3-5:0"
 
-    # Answer mode reranker model (swap for benchmarking)
-    answer_reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-12-v2"  # 33M params, 2x depth vs L-6
+    # Candidate-set size sent to the Rerank API. Cost/latency scale with doc
+    # count (spec §9: rerank dominates the per-query budget) — the fused RRF
+    # list is cut to this many before the call.
+    rerank_candidates: int = 100
 
-    # Reranker inference backend: "onnx" for Fargate (fast CPU), "torch" for local dev (Mac Accelerate)
-    reranker_backend: str = "onnx"
+    # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
+    # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
+    # values, e.g. floor -9.0, would pass everything on this scale).
+    # PROVISIONAL conservative (recall-first) values: derive on the
+    # non-English smoke set once Bedrock access is wired.
+    # TODO(golden-set): formal per-language floor/tier recalibration.
+    cite_logit_floor: float = 0.01        # Drop docs below this relevance score
+    cite_strong_threshold: float = 0.70
+    cite_partial_threshold: float = 0.30
 
     # SSL/Zscaler VPN Workaround
     use_custom_ssl_client: bool = False

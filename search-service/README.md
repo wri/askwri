@@ -157,7 +157,10 @@ Once running: http://localhost:8000/docs
 | `LOG_LEVEL` | `info` | Logging level |
 | `RETRIEVAL_BACKEND` | `legacy` | `legacy` (CSV + boot-time index build) or `postgres` (read chunks/embeddings from Postgres) |
 | `DATABASE_URL` | — | Postgres connection URL; required for `postgres` backend and the migration script (append `?sslmode=require` for RDS) |
-| `RERANKER_BACKEND` | `onnx` | `onnx` for Fargate CPU; use `torch` on local Macs (the CoreML/ONNX path is ~20x slower on Apple Silicon) |
+| `EMBEDDING_MODEL` | `cohere-embed-v4` | Dense model for chunk writes + query encode: `cohere-embed-v4` (Bedrock) or `text-embedding-3-small` (OpenAI rollback) |
+| `BEDROCK_EMBED_REGION` | `us-east-1` | Bedrock region hosting Cohere embed-v4 (infra runs in us-east-2; cross-region call) |
+| `BEDROCK_RERANK_REGION` | `us-west-2` | Bedrock region hosting Cohere Rerank 3.5 |
+| `RERANK_CANDIDATES` | `100` | Fused candidates sent to the Bedrock Rerank API (cost/latency scale with count) |
 
 ## Docs
 

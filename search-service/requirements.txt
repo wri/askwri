@@ -11,14 +11,10 @@ llama-index>=0.14.23
 llama-index-readers-file>=0.6.0
 openai>=1.109.1
 
-# Hybrid retrieval
+# Hybrid retrieval (dense encode + rerank are Bedrock API calls — spec v3;
+# no in-process models, so no sentence-transformers/onnxruntime/optimum)
 llama-index-retrievers-bm25>=0.7.1,<1.0.0
-sentence-transformers>=3.4.1
 rank-bm25>=0.2.2
-
-# ONNX Runtime for fast cross-encoder inference on CPU (Fargate)
-onnxruntime>=1.27.0
-optimum[onnxruntime]>=1.27.0
 
 # Data processing
 pandas>=2.3.3

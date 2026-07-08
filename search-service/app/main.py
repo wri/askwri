@@ -83,8 +83,8 @@ from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.postprocessor import SentenceTransformerRerank
 
+from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
 
 settings = get_settings()
@@ -169,44 +169,6 @@ class QueryResponse(BaseModel):
     bm25_results: Optional[List[Dict[str, Any]]] = None
     fusion_results: Optional[List[Dict[str, Any]]] = None
     reranked_results: Optional[List[Dict[str, Any]]] = None
-
-class OnnxReranker:
-    """Cross-encoder reranker using ONNX or PyTorch backend via sentence-transformers.
-
-    Unlike SentenceTransformerRerank, this does not mutate global state per-request.
-    top_n is passed per-call to avoid race conditions with concurrent requests.
-    """
-
-    def __init__(self, model: str, top_n: int = 20, backend: str = "onnx"):
-        from sentence_transformers import CrossEncoder
-        self.top_n = top_n
-        self.model_name = model
-        try:
-            self._cross_encoder = CrossEncoder(model, backend=backend)
-            logger.info(f"Loaded reranker {model} with {backend} backend")
-        except Exception as e:
-            logger.warning(f"Failed to load {backend} backend for {model}: {e}. Falling back to torch.")
-            self._cross_encoder = CrossEncoder(model, backend="torch")
-
-    def postprocess_nodes(self, nodes, query_bundle, top_n=None):
-        """Score and rerank nodes. top_n can be overridden per-call."""
-        if not nodes:
-            return []
-        if query_bundle is None:
-            return nodes
-
-        effective_top_n = top_n if top_n is not None else self.top_n
-        query = query_bundle.query_str
-        pairs = [[query, node.node.get_content()] for node in nodes]
-
-        scores = self._cross_encoder.predict(pairs)
-
-        for node, score in zip(nodes, scores):
-            node.score = float(score)
-
-        nodes.sort(key=lambda n: n.score, reverse=True)
-        return nodes[:effective_top_n]
-
 
 class HybridFusionRetriever(BaseRetriever):
     """Custom hybrid retriever combining dense and sparse results using RRF"""
@@ -430,35 +392,19 @@ def get_passage_with_context(chunk_text: str, full_document_text: str, context_c
     return result
 
 def init_rerankers():
-    """Load mode-specific cross-encoder rerankers. Returns (answer, cite)."""
-    logger.info(f"🔄 Loading cross-encoder rerankers (backend: {settings.reranker_backend})...")
-    step_start = time.time()
+    """Build mode-specific Bedrock Rerank clients. Returns (answer, cite).
 
-    answer_reranker_model = settings.answer_reranker_model
-    cite_reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-    if settings.reranker_backend == "onnx":
-        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, ONNX)...")
-        reranker_start = time.time()
-        reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend="onnx")
-        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
-
-        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
-        reranker_start = time.time()
-        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend="onnx")
-        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
-    else:
-        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
-        reranker_start = time.time()
-        reranker_answer = SentenceTransformerRerank(model=answer_reranker_model, top_n=20)
-        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
-
-        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
-        reranker_start = time.time()
-        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=1000)
-        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
-
-    logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
+    v3 (spec §4): rerank is Cohere Rerank 3.5 via the Bedrock Rerank API for
+    BOTH modes — nothing is loaded in-process, so this is instant. top_n
+    matches the prior mode defaults; the candidate cut happens inside
+    BedrockReranker (settings.rerank_candidates).
+    """
+    reranker_answer = BedrockReranker(top_n=20)
+    reranker_cite = BedrockReranker(top_n=1000)
+    logger.info(
+        f"✅ Bedrock rerankers ready ({settings.bedrock_rerank_model_id} in "
+        f"{settings.bedrock_rerank_region}; candidates={settings.rerank_candidates})"
+    )
     return reranker_answer, reranker_cite
 
 
@@ -895,7 +841,11 @@ async def hybrid_query(request: QueryRequest):
             stage1_results = [n for n in stage1_results if n.node.metadata.get("doc_id") in request.cite_doc_ids]
             logger.info(f"Answer mode: Filtered to cite_doc_ids ({before_filter} -> {len(stage1_results)})")
 
-        # Stage 2: Local Reranking
+        # Stage 2: Reranking (Bedrock Cohere Rerank — 0-1 relevance scores).
+        # rerank_applied gates the cite floor/tiers downstream: they are
+        # calibrated on the 0-1 relevance scale, and unreranked results carry
+        # raw RRF scores (~0.008-0.03) that would all land below the floor.
+        rerank_applied = False
         if request.rerank and stage1_results:
             base_reranker = (service_state["reranker_answer"] if request.mode == "answer"
                             else service_state["reranker_cite"])
@@ -903,21 +853,14 @@ async def hybrid_query(request: QueryRequest):
             if base_reranker:
                 try:
                     stage2_start = time.time()
-                    # Reranking is CPU-bound for tens of seconds — run in a
-                    # worker thread so the event loop stays responsive
-                    if isinstance(base_reranker, OnnxReranker):
-                        # OnnxReranker: pass top_n per-call (no global mutation)
-                        stage2_results = await asyncio.to_thread(
-                            base_reranker.postprocess_nodes,
-                            stage1_results, query_bundle, top_n=request.rerank_top_n
-                        )
-                    else:
-                        # SentenceTransformerRerank: call with default top_n, then slice
-                        stage2_results = await asyncio.to_thread(
-                            base_reranker.postprocess_nodes,
-                            stage1_results, query_bundle
-                        )
-                        stage2_results = stage2_results[:request.rerank_top_n]
+                    # BedrockReranker (and the e2e stub): per-call top_n, no
+                    # global mutation; candidate cut happens inside the client.
+                    # (The off-event-loop wrap from d214f3f is re-applied to
+                    # this call in the later L0 latency commit.)
+                    stage2_results = base_reranker.postprocess_nodes(
+                        stage1_results, query_bundle, top_n=request.rerank_top_n
+                    )
+                    rerank_applied = True
                     stage2_elapsed = time.time() - stage2_start
                     logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
                 except Exception as e:
@@ -960,22 +903,32 @@ async def hybrid_query(request: QueryRequest):
                 if doc_id not in doc_groups or node.score > doc_groups[doc_id].score:
                     doc_groups[doc_id] = node
 
-            # Apply logit floor: drop docs below the calibrated threshold
-            pre_floor = len(doc_groups)
-            doc_groups = {k: v for k, v in doc_groups.items()
-                          if v.score >= settings.cite_logit_floor}
-            logger.info(f"Stage 3 (Logit Floor {settings.cite_logit_floor}): {pre_floor} → {len(doc_groups)} docs")
+            # Floor + tiers are calibrated on the reranker's 0-1 relevance
+            # scale — apply them only when reranking actually ran. Unreranked
+            # results (rerank=false diagnostics, reranker outage fallback)
+            # pass through unfloored and untier'd (relevance_tier is optional
+            # in the contract).
+            if rerank_applied:
+                pre_floor = len(doc_groups)
+                doc_groups = {k: v for k, v in doc_groups.items()
+                              if v.score >= settings.cite_logit_floor}
+                logger.info(f"Stage 3 (Relevance Floor {settings.cite_logit_floor}): {pre_floor} → {len(doc_groups)} docs")
 
-            # Assign relevance tiers based on raw logit score
-            for node in doc_groups.values():
-                raw = node.score
-                if raw >= settings.cite_strong_threshold:
-                    tier = "strong"
-                elif raw >= settings.cite_partial_threshold:
-                    tier = "partial"
-                else:
-                    tier = "weak"
-                node.node.metadata["relevance_tier"] = tier
+                for node in doc_groups.values():
+                    raw = node.score
+                    if raw >= settings.cite_strong_threshold:
+                        tier = "strong"
+                    elif raw >= settings.cite_partial_threshold:
+                        tier = "partial"
+                    else:
+                        tier = "weak"
+                    node.node.metadata["relevance_tier"] = tier
+            else:
+                # Legacy in-memory mode shares node objects across requests —
+                # drop any tier a previous reranked query stamped on them.
+                for node in doc_groups.values():
+                    node.node.metadata.pop("relevance_tier", None)
+                logger.info("Stage 3 (Relevance Floor): skipped — results not reranked")
 
             filtered_results = list(doc_groups.values())[:request.max_results]
         else:
