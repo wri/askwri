@@ -2,6 +2,14 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Per-row document_chunks.embedding_model values and their vector dimensions.
+# Both models keep scoped HNSW indexes during the cutover window (spec v3 §8.1).
+EMBEDDING_DIMENSIONS = {
+    "cohere-embed-v4": 1536,
+    "text-embedding-3-small": 1536,
+}
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
@@ -47,6 +55,19 @@ class Settings(BaseSettings):
     tag_confidence_accept: float = 0.7         # >= -> accepted, else suggested
     quality_min_chars_per_page: int = 200      # extraction_confidence gate input
 
+    # Dense embedding model for BOTH worker chunk writes and query-side
+    # retrieval (spec v3 §4: Cohere embed-v4 via Bedrock — an API call, no
+    # self-hosted model). The English bm25s sparse lane is independent of
+    # this and unchanged. Rollback: EMBEDDING_MODEL=text-embedding-3-small
+    # while the 3-small rows/index still exist.
+    embedding_model: str = "cohere-embed-v4"
+
+    # Bedrock placement for embed-v4 (spec v3 §5): infra is us-east-2 but
+    # embed-v4 is not natively there — call the nearest hosting region
+    # (cross-region, still in-AWS/IAM).
+    bedrock_embed_region: str = "us-east-1"
+    bedrock_embed_model_id: str = "cohere.embed-v4:0"
+
     # Cite mode reranker logit thresholds (calibrated 2026-03-19)
     cite_logit_floor: float = -9.0        # Drop docs below this raw logit
     cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores
@@ -61,6 +82,10 @@ class Settings(BaseSettings):
     # SSL/Zscaler VPN Workaround
     use_custom_ssl_client: bool = False
     custom_ca_bundle: str = ""
+
+    @property
+    def embedding_dimension(self) -> int:
+        return EMBEDDING_DIMENSIONS[self.embedding_model]
 
 @lru_cache()
 def get_settings() -> Settings:

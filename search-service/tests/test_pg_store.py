@@ -37,11 +37,17 @@ def test_document_texts_cover_all_docs():
 
 @requires_db
 @requires_openai
-def test_dense_retrieval_returns_ranked_results():
+def test_dense_retrieval_returns_ranked_results(monkeypatch):
     from llama_index.core.schema import QueryBundle
     from llama_index.embeddings.openai import OpenAIEmbedding
 
+    from app.config import get_settings
     from app.pg_store import PgVectorRetriever
+
+    # This test exercises the LEGACY dense lane against the qa corpus rows;
+    # the retriever is model-aware since v3 B1 and defaults to cohere-embed-v4.
+    monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    get_settings.cache_clear()
 
     retriever = PgVectorRetriever(
         embed_model=OpenAIEmbedding(model="text-embedding-3-small"),

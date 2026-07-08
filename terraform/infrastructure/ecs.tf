@@ -117,6 +117,43 @@ resource "aws_iam_role_policy" "ecs_task_ssm" {
   })
 }
 
+# Bedrock permissions for the v3 retrieval substrate (multilingual spec v3 §11):
+# dense = Cohere embed-v4, rerank = Cohere Rerank 3.5 — both managed Bedrock
+# APIs. Neither model is hosted in us-east-2, so the services call the nearest
+# hosting region directly (embed: us-east-1, rerank: us-west-2) — hence
+# Resource covers the foundation-model ARNs in any region. bedrock:Rerank
+# (the bedrock-agent-runtime Rerank API) does not support resource-level
+# scoping beyond the model.
+resource "aws_iam_role_policy" "ecs_task_bedrock" {
+  name = "${var.project_name}-${var.environment}-ecs-task-bedrock-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "InvokeCohereModels"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
+          "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0"
+        ]
+      },
+      {
+        Sid    = "RerankApi"
+        Effect = "Allow"
+        Action = [
+          "bedrock:Rerank"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # S3 permissions for downloading documents
 resource "aws_iam_role_policy" "ecs_task_s3" {
   count = var.documents_s3_bucket != "" ? 1 : 0

@@ -85,6 +85,17 @@ def booted_service(tmp_path_factory):
 
     import app.main as _main
 
+    # These are CONTRACT tests: retrieval must run against whatever model the
+    # qa corpus rows actually carry (text-embedding-3-small before the v3 B1
+    # cutover, cohere-embed-v4 after), with all embedding calls stubbed.
+    with psycopg.connect(_QA_DB_URL) as _conn:
+        _row = _conn.execute(
+            """SELECT embedding_model FROM document_chunks
+               WHERE embedding_model IS NOT NULL
+               GROUP BY 1 ORDER BY count(*) DESC LIMIT 1"""
+        ).fetchone()
+    _corpus_model = _row[0] if _row else "text-embedding-3-small"
+
     # Patch the module-level settings reference in app.main (it captured
     # get_settings() at import time and won't re-read the env var).
     _orig_settings = _main.settings
@@ -92,12 +103,21 @@ def booted_service(tmp_path_factory):
         database_url=_QA_DB_URL,
         retrieval_backend="postgres",
         environment="test",
+        embedding_model=_corpus_model,
         OPENAI_API_KEY=os.environ.get("OPENAI_API_KEY", "test-key"),
     )
+    # pg_store retrievers read get_settings() per query — point the cached
+    # settings at the same model as the corpus rows.
+    os.environ["EMBEDDING_MODEL"] = _corpus_model
+    get_settings.cache_clear()
 
-    # Monkeypatch OpenAIEmbedding factory before calling load_from_postgres
+    # Monkeypatch both embedding entry points before load_from_postgres:
+    # the OpenAI factory (legacy) and the Bedrock adapter (cohere path).
+    import app.bedrock_embed as _bedrock_embed
     _orig_embed = _main.OpenAIEmbedding
     _main.OpenAIEmbedding = lambda **kw: _StubEmbedModel()
+    _orig_bedrock_adapter = _bedrock_embed.BedrockCohereQueryEmbedding
+    _bedrock_embed.BedrockCohereQueryEmbedding = lambda: _StubEmbedModel()
 
     # Patch init_rerankers to return stubs
     _orig_init_rerankers = _main.init_rerankers
@@ -111,6 +131,8 @@ def booted_service(tmp_path_factory):
         # Restore originals
         _main.settings = _orig_settings
         _main.OpenAIEmbedding = _orig_embed
+        _bedrock_embed.BedrockCohereQueryEmbedding = _orig_bedrock_adapter
+        os.environ.pop("EMBEDDING_MODEL", None)
         _main.init_rerankers = _orig_init_rerankers
         # Close pool
         if _db._pool is not None:

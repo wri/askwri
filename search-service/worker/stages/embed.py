@@ -12,13 +12,12 @@ import logging
 
 from psycopg.types.json import Jsonb
 
-from app.config import get_settings
+from app.config import EMBEDDING_DIMENSIONS, get_settings
 from app.db import get_pool
 from worker.stages import fetch_document, stage
 
 logger = logging.getLogger(__name__)
-EMBEDDING_MODEL = "text-embedding-3-small"
-DIMENSION = 1536
+LEGACY_EMBEDDING_MODEL = "text-embedding-3-small"
 _LOCK_KEY = 0x636F7270  # 'corp' — corpus_order allocation lock
 
 
@@ -130,8 +129,15 @@ def _embed_texts(texts: list) -> list:
     import os
     from llama_index.embeddings.openai import OpenAIEmbedding
 
-    return OpenAIEmbedding(model=EMBEDDING_MODEL, api_key=os.getenv("OPENAI_API_KEY")) \
+    return OpenAIEmbedding(model=LEGACY_EMBEDDING_MODEL, api_key=os.getenv("OPENAI_API_KEY")) \
         .get_text_embedding_batch(texts)
+
+
+def _embed_texts_bedrock(texts: list) -> list:
+    """Cohere embed-v4 via Bedrock (v3 dense lane — API call, no local model)."""
+    from app.bedrock_embed import embed_documents
+
+    return embed_documents(texts)
 
 
 @stage("embed")
@@ -172,9 +178,18 @@ def run(document_id):
             boundaries = _recompute_boundaries_on_text(boundaries, full_text, index_text)
             _CONVERT_FN = None
         nodes = _build_nodes_for_doc(doc, index_text, boundaries, summary)
+        # Dense model is config-driven (v3 B1): cohere-embed-v4 goes to
+        # Bedrock, the legacy model to OpenAI. Everything below the dense
+        # call — bm25s sparse machinery included — is identical on both paths.
+        model = get_settings().embedding_model
+        dimension = EMBEDDING_DIMENSIONS[model]
+        contents = [n.get_content(metadata_mode=MetadataMode.EMBED) for n in nodes]
         logger.info(f"embed {doc['external_id']}: {len(nodes)} chunks, "
-                    f"~{sum(len(n.text) for n in nodes)//4} tokens to {EMBEDDING_MODEL}")
-        vectors = _embed_texts([n.get_content(metadata_mode=MetadataMode.EMBED) for n in nodes])
+                    f"~{sum(len(n.text) for n in nodes)//4} tokens to {model}")
+        if model == "cohere-embed-v4":
+            vectors = _embed_texts_bedrock(contents)
+        else:
+            vectors = _embed_texts(contents)
 
         from pgvector import SparseVector
 
@@ -255,7 +270,7 @@ def run(document_id):
                 (document_id, node.metadata["chunk_id"], node.metadata.get("chunk_index", 0),
                  "summary" if is_summary else "text", node.metadata.get("page"),
                  node.text, doc["language"], Jsonb(dict(node.metadata)),
-                 np.array(vec, dtype=np.float32), EMBEDDING_MODEL, DIMENSION,
+                 np.array(vec, dtype=np.float32), model, dimension,
                  next_order + offset, sparse_vecs[offset]),
             )
     return None

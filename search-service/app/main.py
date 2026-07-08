@@ -616,7 +616,13 @@ def load_from_postgres():
 
     logger.info("Loading retrieval state from Postgres...")
 
-    if _use_custom_ssl_client and _ca_bundle:
+    if settings.embedding_model == "cohere-embed-v4":
+        # v3 dense lane: query encode is a Bedrock API call (spec §4) — the
+        # search-service stays model-free.
+        from app.bedrock_embed import BedrockCohereQueryEmbedding
+
+        embed_model = BedrockCohereQueryEmbedding()
+    elif _use_custom_ssl_client and _ca_bundle:
         http_client = httpx.Client(verify=_ca_bundle)
         embed_model = OpenAIEmbedding(
             model="text-embedding-3-small",
