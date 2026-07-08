@@ -1113,8 +1113,10 @@ class TestSummarizeStage:
         result = run(doc_id)
         assert result is None
 
-        # 1 LLM call for zh (en is external → preserved, not regenerated)
-        assert len(calls) == 1, f"Expected 1 LLM call (for zh), got {len(calls)}"
+        # 1 summary LLM call for zh (en is external → preserved, not regenerated).
+        # (A separate title-translation call also runs for the zh title_en.)
+        summary_calls = [c for c in calls if c["schema"] == {"long", "short"}]
+        assert len(summary_calls) == 1, f"Expected 1 zh summary call, got {len(summary_calls)}"
 
         with psycopg.connect(stages_test_db) as conn:
             rows = conn.execute(
