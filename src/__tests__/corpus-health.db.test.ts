@@ -4,6 +4,9 @@ import { getCorpusHealth } from '@/db/queries/corpusHealth'
 
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
+// Corpus-precondition tests: require the migrated 169-doc corpus, absent in
+// schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
+const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 
 d('getCorpusHealth (DB integration)', () => {
   beforeAll(async () => {
@@ -14,7 +17,7 @@ d('getCorpusHealth (DB integration)', () => {
     await AppDataSource.destroy()
   })
 
-  it('returns statusCounts keyed by document status', async () => {
+  corpusIt('returns statusCounts keyed by document status', async () => {
     const h = await getCorpusHealth()
     expect(h.statusCounts).toBeTruthy()
     expect(typeof h.statusCounts).toBe('object')
@@ -24,7 +27,7 @@ d('getCorpusHealth (DB integration)', () => {
     expect(h.statusCounts.searchable).toBeGreaterThan(0)
   })
 
-  it('returns languageCounts keyed by ISO language code', async () => {
+  corpusIt('returns languageCounts keyed by ISO language code', async () => {
     const h = await getCorpusHealth()
     expect(h.languageCounts).toBeTruthy()
     // The multilingual corpus has en, es, pt, zh.

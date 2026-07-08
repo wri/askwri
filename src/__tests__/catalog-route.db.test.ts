@@ -10,6 +10,9 @@ import { NextRequest } from 'next/server'
 import { AppDataSource } from '@/db/data-source'
 
 const DATABASE_URL = process.env.DATABASE_URL
+// Corpus-precondition tests: require the migrated 169-doc corpus, absent in
+// schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
+const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 
 describe('catalog route source selection', () => {
   if (!DATABASE_URL) {
@@ -42,7 +45,7 @@ describe('catalog route source selection', () => {
     }
   })
 
-  it('defaults to postgres when CATALOG_SOURCE is unset', async () => {
+  corpusIt('defaults to postgres when CATALOG_SOURCE is unset', async () => {
     delete process.env.CATALOG_SOURCE
     // Import after env is set (route reads process.env at call time)
     const { GET } = await import('@/app/api/catalog/route')

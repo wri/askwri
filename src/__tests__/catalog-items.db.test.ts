@@ -15,6 +15,9 @@ import { AppDataSource } from '@/db/data-source'
 import { getCatalogItems } from '@/db/queries/getCatalogItems'
 
 const DATABASE_URL = process.env.DATABASE_URL
+// Corpus-precondition tests: require the migrated 169-doc corpus, absent in
+// schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
+const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 
 describe('getCatalogItems() DB integration', () => {
   if (!DATABASE_URL) {
@@ -40,12 +43,12 @@ describe('getCatalogItems() DB integration', () => {
     }
   })
 
-  it('returns the migrated catalog items (≥169, tolerates worker uploads)', async () => {
+  corpusIt('returns the migrated catalog items (≥169, tolerates worker uploads)', async () => {
     const items = await getCatalogItems()
     expect(items.length).toBeGreaterThanOrEqual(169)
   })
 
-  it('first item has the expected CatalogItem shape', async () => {
+  corpusIt('first item has the expected CatalogItem shape', async () => {
     const items = await getCatalogItems()
     expect(items.length).toBeGreaterThan(0)
 

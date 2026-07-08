@@ -16,6 +16,9 @@ import { AppDataSource } from '@/db/data-source'
 
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
+// Corpus-precondition tests: require the migrated 169-doc corpus, absent in
+// schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
+const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 
 d('migration 178132 — schema + data backfills', () => {
   beforeAll(async () => {
@@ -38,7 +41,7 @@ d('migration 178132 — schema + data backfills', () => {
     expect(names).not.toContain('abstract')
   })
 
-  it('authors/url/date_published backfilled for all 169 migrated docs', async () => {
+  corpusIt('authors/url/date_published backfilled for all 169 migrated docs', async () => {
     const [r] = await AppDataSource.query(
       `SELECT
          count(*) FILTER (WHERE authors IS NOT NULL) AS a,
@@ -58,7 +61,7 @@ d('migration 178132 — schema + data backfills', () => {
     expect(Number(r.count)).toBe(0)
   })
 
-  it('33 non-English docs have title_en populated', async () => {
+  corpusIt('33 non-English docs have title_en populated', async () => {
     const [r] = await AppDataSource.query(
       `SELECT count(*) FILTER (WHERE language <> 'en' AND title_en IS NULL) AS bad_title_en,
               count(*) FILTER (WHERE language <> 'en') AS non_en

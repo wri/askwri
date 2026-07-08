@@ -6,6 +6,9 @@ import { AuditLog } from '@/db/entities/AuditLog.entity'
 
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
+// Corpus-precondition tests: require the migrated 169-doc corpus, absent in
+// schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
+const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 
 d('admin entities (DB integration)', () => {
   beforeAll(async () => {
@@ -25,7 +28,7 @@ d('admin entities (DB integration)', () => {
     await repo.delete(u.id)
   })
 
-  it('tags entity reads seeded taxonomy', async () => {
+  corpusIt('tags entity reads seeded taxonomy', async () => {
     const tags = await AppDataSource.getRepository(Tag).find({ take: 5 })
     expect(tags.length).toBeGreaterThan(0)
     expect(tags[0].facet).toBeTruthy()

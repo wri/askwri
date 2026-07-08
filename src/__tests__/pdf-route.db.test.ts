@@ -9,6 +9,9 @@ import { AppDataSource } from '@/db/data-source'
 import { getDocumentForPdf } from '@/db/queries/getDocumentForPdf'
 
 const DATABASE_URL = process.env.DATABASE_URL
+// Corpus-precondition tests: require the migrated 169-doc corpus, absent in
+// schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
+const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 
 describe('getDocumentForPdf (DB integration)', () => {
   if (!DATABASE_URL) {
@@ -33,7 +36,7 @@ describe('getDocumentForPdf (DB integration)', () => {
     }
   })
 
-  it('returns s3Key + status for a searchable migrated doc', async () => {
+  corpusIt('returns s3Key + status for a searchable migrated doc', async () => {
     const doc = await getDocumentForPdf(
       '2021_accelerating-innovation-in-urban-service-delivery_1054',
     )
@@ -49,7 +52,7 @@ describe('getDocumentForPdf (DB integration)', () => {
     expect(doc).toBeNull()
   })
 
-  it('returns status=withdrawn for the withdrawn canary', async () => {
+  corpusIt('returns status=withdrawn for the withdrawn canary', async () => {
     const doc = await getDocumentForPdf('askwri-canary-1783377155')
     expect(doc).not.toBeNull()
     expect(doc!.status).toBe('withdrawn')

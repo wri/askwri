@@ -46,10 +46,19 @@ def sparse_test_db():
     with psycopg.connect(_SUPERDB_URL, autocommit=True) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {_TEST_DB}")
         conn.execute(f"CREATE DATABASE {_TEST_DB}")
-    env = {**os.environ, "DATABASE_URL": _TEST_DB_URL}
-    subprocess.run(
+    env = {
+        **os.environ,
+        "DATABASE_URL": _TEST_DB_URL,
+        "DATABASE_SSL": "false",
+        "DOTENV_CONFIG_PATH": "",
+    }
+    result = subprocess.run(
         ["npm", "run", "migration:run"], cwd=_REPO_ROOT, env=env,
-        check=True, capture_output=True,
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, (
+        f"migration:run failed (exit {result.returncode}):\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
     _reset_app_state(_TEST_DB_URL)
     yield _TEST_DB_URL

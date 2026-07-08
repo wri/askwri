@@ -4,6 +4,9 @@ import { getWorkerHealth } from '@/db/queries/workerHealth'
 
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
+// Corpus-precondition tests: require the migrated 169-doc corpus, absent in
+// schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
+const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 
 d('getWorkerHealth (DB integration)', () => {
   beforeAll(async () => {
@@ -31,7 +34,7 @@ d('getWorkerHealth (DB integration)', () => {
     expect(health.queueDepth).toBeGreaterThanOrEqual(0)
   })
 
-  it('reports a non-null lastProcessedAt when any job has been processed', async () => {
+  corpusIt('reports a non-null lastProcessedAt when any job has been processed', async () => {
     const health = await getWorkerHealth()
     expect(health.lastProcessedAt).not.toBeNull()
   })

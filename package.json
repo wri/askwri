@@ -36,7 +36,7 @@
     "eval:upload": "npx tsx --env-file-if-exists=.env evaluation/upload-eval-to-s3.ts",
     "eval:download": "npx tsx --env-file-if-exists=.env evaluation/download-eval-from-s3.ts",
     "test:python": "cd search-service && ./venv/bin/python -m pytest tests/ -v",
-    "test:db": "DATABASE_URL=postgresql://askwri:password@localhost:5432/qa DATABASE_SSL=false jest --testPathPattern='db.test' --runInBand",
+    "test:db": "DATABASE_URL=postgresql://askwri:password@localhost:5432/qa DATABASE_SSL=false RUN_CORPUS_TESTS=1 jest --testPathPattern='db.test' --runInBand",
     "seed:admin": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/seed-admin.ts"
   },
   "dependencies": {

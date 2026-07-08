@@ -11,6 +11,9 @@ import {
 
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
+// Corpus-precondition tests: require the migrated 169-doc corpus, absent in
+// schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
+const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 const identity = { kind: 'token', role: 'admin' } as const
 
 d('documentsAdmin (DB integration)', () => {
@@ -346,7 +349,7 @@ d('documentsAdmin F2 filters + pagination (DB integration)', () => {
     }
   })
 
-  it('listAdminDocuments paginates and returns total count', async () => {
+  corpusIt('listAdminDocuments paginates and returns total count', async () => {
     const { items, total } = await listAdminDocuments({}, { limit: 10, offset: 0 })
     expect(items.length).toBeLessThanOrEqual(10)
     expect(total).toBeGreaterThan(0)
