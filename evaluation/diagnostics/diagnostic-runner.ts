@@ -287,7 +287,7 @@ async function analyzeReranking(
       docs_missing: missingDocs,
       details: {
         total_retrieved: docs.length,
-        reranker_model: 'BAAI/bge-reranker-v2-m3'
+        reranker_model: 'cross-encoder/ms-marco-MiniLM-L-6-v2'
       }
     };
   } catch (error: any) {

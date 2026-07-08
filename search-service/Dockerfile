@@ -31,20 +31,11 @@ FROM base as dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Export + int8-quantize the reranker at build time (answer and cite modes
-# share bge-reranker-v2-m3). The fp32 ONNX export is >2GB (external-data
-# format) and cannot be loaded when exported on the fly; the quantized model
-# is a single ~570MB file and is the CPU-serving path on Fargate. The fp32
-# intermediates are deleted to keep the image small.
+# Pre-download reranker models + ONNX exports (eliminates ~860MB runtime HF download)
 ENV HF_HOME=/opt/models
-ENV RERANKER_ONNX_DIR=/opt/models/bge-reranker-v2-m3-onnx
-RUN optimum-cli export onnx --model BAAI/bge-reranker-v2-m3 --task text-classification ${RERANKER_ONNX_DIR} && \
-    python -c "from optimum.onnxruntime import ORTQuantizer; \
-from optimum.onnxruntime.configuration import AutoQuantizationConfig; \
-import os; d = os.environ['RERANKER_ONNX_DIR']; \
-q = ORTQuantizer.from_pretrained(d, file_name='model.onnx'); \
-q.quantize(save_dir=d, quantization_config=AutoQuantizationConfig.avx512_vnni(is_static=False, per_channel=False))" && \
-    rm ${RERANKER_ONNX_DIR}/model.onnx ${RERANKER_ONNX_DIR}/model.onnx_data
+RUN python -c "from sentence_transformers import CrossEncoder; \
+    CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', backend='onnx'); \
+    CrossEncoder('cross-encoder/ms-marco-MiniLM-L-12-v2', backend='onnx')"
 
 # =============================================================================
 # Production stage

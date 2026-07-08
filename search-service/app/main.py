@@ -178,30 +178,15 @@ class OnnxReranker:
     """
 
     def __init__(self, model: str, top_n: int = 20, backend: str = "onnx"):
-        import sentence_transformers
-        import torch
+        from sentence_transformers import CrossEncoder
         self.top_n = top_n
         self.model_name = model
-        # Pin identity activation: the cite floor/tiers are calibrated on RAW
-        # logits, but some models (bge-reranker-v2-m3) default to sigmoid,
-        # which saturates strong matches at 1.0 and breaks tie-ranking.
-        identity = torch.nn.Identity()
-        # onnx backend: prefer the pre-exported (int8-quantized) local dir
-        # baked into the image — on-the-fly export of >2GB models fails.
-        model_kwargs = None
-        load_target = model
-        if backend == "onnx" and settings.reranker_onnx_dir:
-            load_target = settings.reranker_onnx_dir
-            model_kwargs = {"file_name": settings.reranker_onnx_file}
         try:
-            self._cross_encoder = sentence_transformers.CrossEncoder(
-                load_target, backend=backend, activation_fn=identity,
-                model_kwargs=model_kwargs)
-            logger.info(f"Loaded reranker {load_target} with {backend} backend")
+            self._cross_encoder = CrossEncoder(model, backend=backend)
+            logger.info(f"Loaded reranker {model} with {backend} backend")
         except Exception as e:
-            logger.warning(f"Failed to load {backend} backend for {load_target}: {e}. Falling back to torch.")
-            self._cross_encoder = sentence_transformers.CrossEncoder(
-                model, backend="torch", activation_fn=identity)
+            logger.warning(f"Failed to load {backend} backend for {model}: {e}. Falling back to torch.")
+            self._cross_encoder = CrossEncoder(model, backend="torch")
 
     def postprocess_nodes(self, nodes, query_bundle, top_n=None):
         """Score and rerank nodes. top_n can be overridden per-call."""
@@ -450,21 +435,28 @@ def init_rerankers():
     step_start = time.time()
 
     answer_reranker_model = settings.answer_reranker_model
-    cite_reranker_model = settings.cite_reranker_model
+    cite_reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
-    # Both backends use OnnxReranker: it pins identity activation (raw logits
-    # for the cite floor/tiers) and takes per-call top_n; only the inference
-    # backend ("onnx" on Fargate, "torch" locally) differs.
-    backend = settings.reranker_backend
-    logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, {backend})...")
-    reranker_start = time.time()
-    reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend=backend)
-    logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+    if settings.reranker_backend == "onnx":
+        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, ONNX)...")
+        reranker_start = time.time()
+        reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend="onnx")
+        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
 
-    logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, {backend})...")
-    reranker_start = time.time()
-    reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend=backend)
-    logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
+        reranker_start = time.time()
+        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend="onnx")
+        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
+    else:
+        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
+        reranker_start = time.time()
+        reranker_answer = SentenceTransformerRerank(model=answer_reranker_model, top_n=20)
+        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
+
+        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
+        reranker_start = time.time()
+        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=1000)
+        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
 
     logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
     return reranker_answer, reranker_cite

@@ -47,32 +47,16 @@ class Settings(BaseSettings):
     tag_confidence_accept: float = 0.7         # >= -> accepted, else suggested
     quality_min_chars_per_page: int = 200      # extraction_confidence gate input
 
-    # Cite mode reranker RAW-LOGIT thresholds for bge-reranker-v2-m3.
-    # Interim-calibrated 2026-07-07 on the non-English smoke set + en probes
-    # against the local corpus (relevant per-doc max 0.05..7.4 — the low tail
-    # is cross-lingual en→zh; distractor per-doc max p50=-8.5, p90=-5.3).
-    # Conservative (recall-first): floor sits 5 logits below the weakest
-    # observed relevant. TODO(golden-set): formal per-language floor/tier
-    # recalibration when the labeled golden set lands.
-    cite_logit_floor: float = -5.0        # Drop docs below this raw logit
-    cite_strong_threshold: float = 4.0    # ~median of relevant best-doc logits (p~0.98)
-    cite_partial_threshold: float = 0.0   # sigmoid midpoint: model says >=50% relevant
+    # Cite mode reranker logit thresholds (calibrated 2026-03-19)
+    cite_logit_floor: float = -9.0        # Drop docs below this raw logit
+    cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores
+    cite_partial_threshold: float = -7.8  # 25th percentile of relevant scores
 
-    # Mode rerankers (swap for benchmarking). bge-reranker-v2-m3 is the
-    # multilingual default (en/zh/es/pt) — the prior English-only ms-marco
-    # cross-encoders scored non-English pairs into the cite floor.
-    answer_reranker_model: str = "BAAI/bge-reranker-v2-m3"
-    cite_reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    # Answer mode reranker model (swap for benchmarking)
+    answer_reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-12-v2"  # 33M params, 2x depth vs L-6
 
     # Reranker inference backend: "onnx" for Fargate (fast CPU), "torch" for local dev (Mac Accelerate)
     reranker_backend: str = "onnx"
-
-    # Pre-exported ONNX dir (onnx backend only). The fp32 on-the-fly ONNX
-    # export of bge-reranker-v2-m3 is >2GB and fails to load (onnxruntime
-    # external-data limitation), so the Docker image exports + int8-quantizes
-    # at build time and points this at the result. Empty = load by model id.
-    reranker_onnx_dir: str = ""
-    reranker_onnx_file: str = "model_quantized.onnx"
 
     # SSL/Zscaler VPN Workaround
     use_custom_ssl_client: bool = False
