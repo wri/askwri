@@ -16,6 +16,7 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from psycopg.types.json import Jsonb
 
 from tests.conftest import _check_db_required
 
@@ -832,14 +833,16 @@ class TestLanguageStageWrite:
 # --- summarize stage ---
 # ---------------------------------------------------------------------------
 
-def _insert_document_with_lang(conn, *, external_id, language, languages, title="Test Title"):
+def _insert_document_with_lang(conn, *, external_id, language, languages, title="Test Title",
+                               metadata_source=None, title_en=None):
     """Insert a documents row with language/languages set; return id."""
     row = conn.execute(
         """INSERT INTO documents
-               (external_id, s3_key, title, status, content_hash, language, languages)
-           VALUES (%s, %s, %s, 'draft', 'abc123', %s, %s)
+               (external_id, s3_key, title, title_en, status, content_hash, language, languages, metadata_source)
+           VALUES (%s, %s, %s, %s, 'draft', 'abc123', %s, %s, %s)
            RETURNING id""",
-        (external_id, f"documents/{external_id}.pdf", title, language, languages),
+        (external_id, f"documents/{external_id}.pdf", title, title_en, language, languages,
+         Jsonb(metadata_source or {})),
     ).fetchone()
     conn.commit()
     return row[0]
@@ -863,16 +866,21 @@ class TestSummarizeStage:
         def fake(system, user, schema, model, max_tokens=1500):
             n = call_index["n"]
             call_index["n"] += 1
-            calls.append({"system": system, "user": user, "model": model, "n": n})
+            props = set((schema.get("properties") or {}).keys())
+            calls.append({"system": system, "user": user, "model": model, "n": n, "schema": props})
+            # Title-translation call (summarize._translate_title) vs summary call.
+            if props == {"title_en"}:
+                return {"title_en": f"English title {n}"}
             return {"long": f"Long summary call {n}.", "short": f"Short {n}."}
 
         return fake
 
-    def test_zh_document_produces_four_rows_and_title_en(
+    def test_zh_document_produces_four_rows_and_translated_title_en(
         self, stages_test_db, monkeypatch
     ):
         """zh document → 4 summary rows (zh long/short + en long/short),
-        all source='generated'; title_en set; exactly 2 LLM calls."""
+        all source='generated'; title_en is a translation (not the native title);
+        3 LLM calls (2 summaries + 1 title translation); provenance = 'llm'."""
         calls = []
         monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
 
@@ -886,7 +894,10 @@ class TestSummarizeStage:
         result = run(doc_id)
         assert result is None
 
-        assert len(calls) == 2, f"Expected 2 LLM calls, got {len(calls)}"
+        # 2 summary calls (en + zh) + 1 title-translation call.
+        assert len(calls) == 3, f"Expected 3 LLM calls, got {len(calls)}"
+        title_calls = [c for c in calls if c["schema"] == {"title_en"}]
+        assert len(title_calls) == 1, "expected exactly one title-translation call"
 
         with psycopg.connect(stages_test_db) as conn:
             rows = conn.execute(
@@ -899,10 +910,14 @@ class TestSummarizeStage:
             langs_kinds = {(r[0], r[1]) for r in rows}
             assert langs_kinds == {("en", "long"), ("en", "short"), ("zh", "long"), ("zh", "short")}
 
-            title_en = conn.execute(
-                "SELECT title_en FROM documents WHERE id=%s", (doc_id,)
-            ).fetchone()[0]
-            assert title_en is not None, "title_en should be set for non-English document"
+            title_en, prov = conn.execute(
+                "SELECT title_en, metadata_source->>'title_en' FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+            assert title_en.startswith("English title"), (
+                f"title_en should be the LLM translation, not the native title; got {title_en!r}"
+            )
+            assert title_en != "中文标题", "title_en must not be the untranslated native title"
+            assert prov == "llm", f"title_en provenance should be 'llm', got {prov!r}"
 
     def test_en_document_produces_two_rows_and_title_en(
         self, stages_test_db, monkeypatch
@@ -939,6 +954,83 @@ class TestSummarizeStage:
             assert title_en == "English Title", (
                 f"title_en should be set to title for English documents too, got {title_en!r}"
             )
+
+    def test_title_en_human_edit_not_overwritten(self, stages_test_db, monkeypatch):
+        """A human-edited title_en (metadata_source.title_en='human') is protected:
+        summarize never overwrites it and makes no translation call."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="zh-human", language="zh", languages=["zh"],
+                title="中文标题", title_en="Curated English Title",
+                metadata_source={"title_en": "human"},
+            )
+            _insert_document_text(conn, doc_id, text="中文内容。")
+
+        from worker.stages.summarize import run
+        run(doc_id)
+
+        assert [c for c in calls if c["schema"] == {"title_en"}] == [], \
+            "protected title_en must not trigger a translation call"
+        with psycopg.connect(stages_test_db) as conn:
+            title_en, prov = conn.execute(
+                "SELECT title_en, metadata_source->>'title_en' FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+        assert title_en == "Curated English Title"
+        assert prov == "human"
+
+    def test_title_en_external_provenance_not_overwritten(self, stages_test_db, monkeypatch):
+        """A CSV-imported title_en (metadata_source.title_en='external') is protected."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="es-external", language="es", languages=["es"],
+                title="Título en español", title_en="CSV English Title",
+                metadata_source={"title_en": "external"},
+            )
+            _insert_document_text(conn, doc_id, text="Contenido en español.")
+
+        from worker.stages.summarize import run
+        run(doc_id)
+
+        assert [c for c in calls if c["schema"] == {"title_en"}] == [], \
+            "external title_en must not trigger a translation call"
+        with psycopg.connect(stages_test_db) as conn:
+            title_en = conn.execute(
+                "SELECT title_en FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert title_en == "CSV English Title"
+
+    def test_title_en_llm_refreshed_when_title_changes_on_reingest(self, stages_test_db, monkeypatch):
+        """An 'llm' title_en is regenerated from the current title on re-ingest, so a
+        changed title can never leave a stale English title behind."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="zh-refresh", language="zh", languages=["zh"],
+                title="新的中文标题", title_en="Stale English Title",
+                metadata_source={"title_en": "llm"},
+            )
+            _insert_document_text(conn, doc_id, text="中文内容。")
+
+        from worker.stages.summarize import run
+        run(doc_id)
+
+        assert any(c["schema"] == {"title_en"} for c in calls), \
+            "an 'llm' title_en must be re-translated on re-ingest"
+        with psycopg.connect(stages_test_db) as conn:
+            title_en, prov = conn.execute(
+                "SELECT title_en, metadata_source->>'title_en' FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+        assert title_en != "Stale English Title", "stale llm title_en must be regenerated"
+        assert title_en.startswith("English title")
+        assert prov == "llm"
 
     def test_rerun_regenerates_generated_summaries(
         self, stages_test_db, monkeypatch

@@ -173,11 +173,40 @@ export async function updateDocumentFields(
   }
   const updated = Object.keys(after)
   if (updated.length === 0) return { updated }
+
+  // Provenance: mark every edited metadata field 'human' so the worker
+  // (parse/summarize) and CSV import never overwrite an admin edit. Both writers
+  // only protect metadata_source='human'|'external'; without this the field
+  // stays 'llm'/'external' and the next re-ingest silently clobbers the edit.
+  const provenance: Record<string, string> = {}
+  for (const field of updated) {
+    const col = FIELD_TO_COLUMN[field as EditableField]
+    if (col) provenance[col] = 'human'
+  }
+
+  // Keep title_en in sync when an English doc's title is renamed and the admin
+  // didn't set title_en explicitly: for English docs title_en === title. (Non-
+  // English titles need translation, which only the worker can do — those are
+  // refreshed on the next re-ingest, since their title_en provenance stays 'llm'.)
+  if ('title' in after && doc.language === 'en' && !('titleEn' in after)) {
+    before.titleEn = doc.titleEn
+    doc.titleEn = doc.title
+    after.titleEn = doc.titleEn
+    provenance['title_en'] = 'llm' // derived copy — leave it in the worker's domain
+    updated.push('titleEn')
+  }
+
   // Transactional: the mutation and the audit row are committed atomically,
   // so a failure in the audit INSERT rolls back the mutation (no unaudited
   // mutation can persist).
   await AppDataSource.transaction(async (em) => {
     await em.getRepository(Document).save(doc)
+    if (Object.keys(provenance).length > 0) {
+      await em.query(
+        `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
+        [id, JSON.stringify(provenance)],
+      )
+    }
     await em.query(
       `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
        VALUES ($1, $2, 'update', 'document', $3, $4, $5)`,
@@ -185,6 +214,21 @@ export async function updateDocumentFields(
     )
   })
   return { updated }
+}
+
+// Editable entity property → documents column, for metadata_source provenance.
+const FIELD_TO_COLUMN: Partial<Record<EditableField, string>> = {
+  title: 'title',
+  titleEn: 'title_en',
+  doi: 'doi',
+  language: 'language',
+  yearPublished: 'year_published',
+  publicationTitle: 'publication_title',
+  articleType: 'article_type',
+  wriPrimaryOffice: 'wri_primary_office',
+  authors: 'authors',
+  url: 'url',
+  datePublished: 'date_published',
 }
 
 const ALLOWED_TARGET_STATUSES = new Set(['searchable', 'withdrawn'])

@@ -65,6 +65,71 @@ d('documentsAdmin (DB integration)', () => {
     expect(audit.after).toEqual({ title: 'Renamed' })
   })
 
+  it('marks edited metadata fields as human provenance (protects from worker/import overwrite)', async () => {
+    await updateDocumentFields(docId, { authors: 'Ada Lovelace' }, identity)
+    const [row] = await AppDataSource.query(
+      `SELECT metadata_source->>'authors' AS a FROM documents WHERE id = $1`,
+      [docId],
+    )
+    expect(row.a).toBe('human')
+  })
+
+  it('syncs title_en = title when an English doc title is renamed', async () => {
+    const ext = `en_title_sync_${Date.now()}`
+    const [ins] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, title_en, language, status, metadata_source)
+       VALUES ($1, $2, 'Old EN Title', 'Old EN Title', 'en', 'needs_review', '{"title_en":"llm"}'::jsonb)
+       RETURNING id`,
+      [ext, `documents/${ext}.pdf`],
+    )
+    const id = ins.id
+    try {
+      const result = await updateDocumentFields(id, { title: 'New EN Title' }, identity)
+      expect((result as { updated: string[] }).updated).toEqual(
+        expect.arrayContaining(['title', 'titleEn']),
+      )
+      const [row] = await AppDataSource.query(
+        `SELECT title, title_en,
+                metadata_source->>'title' AS pt, metadata_source->>'title_en' AS pte
+         FROM documents WHERE id = $1`,
+        [id],
+      )
+      expect(row.title).toBe('New EN Title')
+      expect(row.title_en).toBe('New EN Title') // English doc: title_en tracks title
+      expect(row.pt).toBe('human') // the admin edit is protected from re-ingest
+      expect(row.pte).toBe('llm') // derived copy stays in the worker's domain
+    } finally {
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [id])
+      await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [id])
+    }
+  })
+
+  it('does NOT auto-sync title_en for a non-English doc title edit (worker re-translates on re-ingest)', async () => {
+    const ext = `es_title_nosync_${Date.now()}`
+    const [ins] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, title_en, language, status, metadata_source)
+       VALUES ($1, $2, 'Título viejo', 'Old English', 'es', 'needs_review', '{"title_en":"llm"}'::jsonb)
+       RETURNING id`,
+      [ext, `documents/${ext}.pdf`],
+    )
+    const id = ins.id
+    try {
+      const result = await updateDocumentFields(id, { title: 'Título nuevo' }, identity)
+      expect((result as { updated: string[] }).updated).toEqual(['title'])
+      const [row] = await AppDataSource.query(
+        `SELECT title_en, metadata_source->>'title_en' AS pte FROM documents WHERE id = $1`,
+        [id],
+      )
+      // title_en is left for the worker to regenerate (provenance stays 'llm');
+      // the app tier can't translate synchronously.
+      expect(row.title_en).toBe('Old English')
+      expect(row.pte).toBe('llm')
+    } finally {
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [id])
+      await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [id])
+    }
+  })
+
   it('rejects a non-numeric yearPublished', async () => {
     const result = await updateDocumentFields(docId, { yearPublished: 'abc' }, identity)
     expect(result).toEqual({ error: 'yearPublished must be an integer year' })

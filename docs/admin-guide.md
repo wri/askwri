@@ -103,8 +103,10 @@ document has:
   (`documents.languages[]`).
 - **Native + English summaries** (`document_summaries`) — the native summary
   is a per-language retrieval handle; the English summary is the bridge.
-- **`title_en`** — always populated (falls back to the native title; true
-  translation is deferred).
+- **`title_en`** — the English rendition of the title: for English docs it
+  equals `title`; for non-English docs the worker generates an LLM translation
+  at ingest (refreshed if `title` changes). Editable; an admin edit is protected
+  from future re-ingest overwrites.
 
 Chinese text is OpenCC Traditional→Simplified normalized in chunks only
 (`document_texts` retains the original).

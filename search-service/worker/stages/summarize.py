@@ -19,6 +19,11 @@ _SCHEMA = {
     "properties": {"long": {"type": "string"}, "short": {"type": "string"}},
     "required": ["long", "short"],
 }
+_TITLE_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"title_en": {"type": "string"}},
+    "required": ["title_en"],
+}
 _LANG_NAMES = {"en": "English", "es": "Spanish", "zh": "Simplified Chinese", "pt": "Portuguese", "id": "Indonesian"}
 
 
@@ -30,6 +35,22 @@ def _summarize(text: str, title: str, lang: str, model: str) -> dict:
         user=f"Title: {title}\n\nDocument text (truncated):\n{text[:24000]}",
         schema=_SCHEMA, model=model,
     )
+
+
+def _translate_title(title: str, lang: str, model: str) -> str | None:
+    """Translate a non-English publication title into English via one LLM call.
+    Returns the English title, or None if the model returns nothing usable."""
+    lang_name = _LANG_NAMES.get(lang, lang or "the source language")
+    result = chat_json(
+        system=("You translate research-publication titles into English. Return JSON "
+                "with 'title_en': a faithful English translation of the title, preserving "
+                "proper nouns, place names, and meaning. If the title is already English, "
+                "return it unchanged. Do not add quotes, commentary, or a trailing period."),
+        user=f"Source language: {lang_name}\nTitle: {title}",
+        schema=_TITLE_SCHEMA, model=model, max_tokens=200,
+    )
+    out = (result.get("title_en") or "").strip()
+    return out or None
 
 
 @stage("summarize")
@@ -75,10 +96,35 @@ def run(document_id):
                        VALUES (%s,%s,%s,%s,'generated',%s)""",
                     (document_id, lang, kind, result[kind], settings.worker_llm_model),
                 )
-        # title_en convenience (design §6: always populated; §7.5). Set for ALL
-        # docs (not just non-English) so worker-ingested EN docs also have it
-        # (NEW-P2-8). True translation is deferred (§10.4) — COALESCE to native title.
-        conn.execute(
-            """UPDATE documents SET title_en = COALESCE(title_en, title), updated_at=now()
-               WHERE id=%s""", (document_id,))
+        # title_en — the English rendition of the title (design §6: always
+        # populated; §7.5). English docs: title_en = title. Non-English docs:
+        # translate the title to English via the LLM. Provenance-guarded exactly
+        # like parse.py's metadata fields: overwrite only when
+        # metadata_source->>'title_en' is NULL or 'llm' — never 'human' (admin
+        # edit) or 'external' (CSV). On re-ingest an 'llm' value is refreshed from
+        # the current title, so title/title_en can never drift.
+        title = doc["title"]
+        prov = (doc["metadata_source"] or {}).get("title_en")
+        if title and prov not in ("human", "external"):
+            lang = doc["language"] or "en"
+            if lang == "en":
+                title_en = title
+            else:
+                try:
+                    title_en = _translate_title(title, lang, settings.worker_llm_model) or title
+                except Exception:
+                    logger.warning(
+                        f"{doc['external_id']}: title_en translation failed; "
+                        "falling back to native title (retried on next re-ingest)",
+                        exc_info=True,
+                    )
+                    title_en = title
+            conn.execute(
+                """UPDATE documents
+                   SET title_en = %s,
+                       metadata_source = metadata_source || jsonb_build_object('title_en', 'llm'),
+                       updated_at = now()
+                   WHERE id = %s""",
+                (title_en, document_id),
+            )
     return None
