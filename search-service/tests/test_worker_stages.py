@@ -2160,6 +2160,105 @@ class TestPublishStage:
             ).fetchone()[0]
         assert status == "withdrawn", f"withdrawn doc must stay withdrawn, got {status!r}"
 
+    def test_searchable_flip_writes_lifecycle_audit(self, stages_test_db, monkeypatch):
+        """Publishing a high-density doc to 'searchable' emits one system lifecycle
+        audit row: entity_type='document', source='system', actor NULL,
+        before={status:'processing'}, after={status:'searchable'}."""
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-audit-ok", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-audit-ok")
+
+        from worker.stages.publish import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT source, actor_user_id, before, after FROM audit_log "
+                "WHERE action='lifecycle' AND entity_type='document' AND entity_id=%s",
+                (doc_id,),
+            ).fetchall()
+        assert len(rows) == 1, f"expected exactly one lifecycle row, got {rows}"
+        source, actor, before, after = rows[0]
+        assert source == "system"
+        assert actor is None
+        assert before == {"status": "processing"}
+        assert after == {"status": "searchable"}
+
+    def test_needs_review_flip_writes_lifecycle_audit(self, stages_test_db, monkeypatch):
+        """A sparse doc flipped to 'needs_review' also emits a lifecycle row
+        (before=processing, after=needs_review)."""
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-audit-nr", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=50, pages=1)
+
+        from worker.stages.publish import run
+        assert run(doc_id) == "needs_review"
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT before, after FROM audit_log "
+                "WHERE action='lifecycle' AND entity_type='document' AND entity_id=%s",
+                (doc_id,),
+            ).fetchone()
+        assert row is not None, "needs_review flip should emit a lifecycle row"
+        assert row[0] == {"status": "processing"}
+        assert row[1] == {"status": "needs_review"}
+
+    def test_withdrawn_skip_emits_no_lifecycle_audit(self, stages_test_db, monkeypatch):
+        """The withdrawn-skip path (status UPDATE matches 0 rows) must emit NO
+        lifecycle audit row — no false 'became searchable' event for a takedown."""
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-audit-wd", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-audit-wd")
+            conn.execute("UPDATE documents SET status='withdrawn' WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        from worker.stages.publish import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            n = conn.execute(
+                "SELECT count(*) FROM audit_log WHERE action='lifecycle' AND entity_id=%s",
+                (doc_id,),
+            ).fetchone()[0]
+        assert n == 0, f"withdrawn-skip path must emit no lifecycle row, got {n}"
+
+    def test_failed_audit_write_does_not_fail_publish(self, stages_test_db, monkeypatch):
+        """A failed audit write is swallowed: the stage still flips to searchable
+        and returns None (auditing is observability, not a pipeline invariant)."""
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+        # Force the helper's insert to blow up by breaking jsonb adaptation.
+        def _boom(*a, **k):
+            raise RuntimeError("simulated audit serialize failure")
+        monkeypatch.setattr("worker.stages.Jsonb", _boom)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-audit-fail", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-audit-fail")
+
+        from worker.stages.publish import run
+        assert run(doc_id) is None  # must not raise
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+            n = conn.execute(
+                "SELECT count(*) FROM audit_log WHERE action='lifecycle' AND entity_id=%s",
+                (doc_id,),
+            ).fetchone()[0]
+        assert status == "searchable", "status flip must succeed despite audit failure"
+        assert n == 0, "the failed audit write left no row"
+
 
 class TestParseLLMExtraction:
     """Tests for the LLM metadata extraction in the parse stage.

@@ -14,7 +14,7 @@ import os
 
 from app.config import get_settings
 from app.db import get_pool
-from worker.stages import fetch_document, stage
+from worker.stages import audit_system_event, fetch_document, stage
 from worker.stages.language import SUPPORTED
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,8 @@ def run(document_id):
             if cur.rowcount == 0:
                 logger.info(f"{doc['external_id']}: withdrawn — needs_review skipped")
                 return None  # job ends 'done', not parked in review for a withdrawn doc (NEW-P2-4)
+            audit_system_event(conn, document_id, "lifecycle",
+                               {"status": doc["status"]}, {"status": "needs_review"})
             logger.warning(f"{doc['external_id']}: confidence {score} -> needs_review")
             return "needs_review"
         cur = conn.execute(
@@ -54,6 +56,8 @@ def run(document_id):
         if cur.rowcount == 0:
             logger.info(f"{doc['external_id']}: withdrawn — publishing skipped")
             return None
+        audit_system_event(conn, document_id, "lifecycle",
+                           {"status": doc["status"]}, {"status": "searchable"})
         logger.info(f"{doc['external_id']}: searchable (confidence {score})")
     url = os.getenv("SEARCH_SERVICE_URL", "")
     if url:

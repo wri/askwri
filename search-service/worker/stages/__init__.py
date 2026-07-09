@@ -1,5 +1,10 @@
 """Pipeline stage registry. STAGE_ORDER is the contract with worker.queue."""
+import logging
 from typing import Callable, Dict
+
+from psycopg.types.json import Jsonb
+
+logger = logging.getLogger(__name__)
 
 STAGE_ORDER = ["parse", "language", "summarize", "classify", "embed", "publish"]
 
@@ -35,3 +40,25 @@ def fetch_document(conn, document_id):
         raise RuntimeError(f"document {document_id} not found")
     keys = ["id", "external_id", "s3_key", "title", "language", "languages", "status", "source_metadata", "metadata_source"]
     return dict(zip(keys, row))
+
+
+def audit_system_event(conn, document_id, action, before, after):
+    """Best-effort 'system' audit row for a worker-driven document change.
+
+    Mirrors the Node writers (source='system', actor_user_id NULL,
+    entity_type='document', entity_id=<doc id>) so the History panel renders
+    it with zero UI changes. Wrapped in a SAVEPOINT so a failed insert rolls
+    back to the savepoint WITHOUT poisoning the stage's outer transaction, and
+    swallowed + logged so auditing is observability, never a pipeline invariant.
+    """
+    try:
+        with conn.transaction():
+            conn.execute(
+                """INSERT INTO audit_log (source, action, entity_type, entity_id, before, after)
+                   VALUES ('system', %s, 'document', %s, %s, %s)""",
+                (action, document_id, Jsonb(before), Jsonb(after)),
+            )
+    except Exception:  # noqa: BLE001 — auditing is observability, not a pipeline invariant
+        logger.warning(
+            "audit_system_event(%s, %s) failed (non-fatal)", action, document_id, exc_info=True
+        )
