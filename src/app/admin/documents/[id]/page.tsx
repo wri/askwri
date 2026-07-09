@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../../lib/api'
+import { actionButton, dangerButton } from '../../lib/buttonStyles'
 import { StatusChip } from '../../components/StatusChip'
 import { Tooltip } from '../../components/Tooltip'
 import { ReviewBar } from '../../components/ReviewBar'
@@ -574,7 +575,8 @@ const DocumentEditorPage = () => {
                   onClick={() => setStatus('searchable')}
                   disabled={busy}
                   title='Send this document to the public search corpus. Only reviewed documents can be promoted.'
-                  style={{ textDecoration: 'underline' }}
+                  className='admin-btn'
+                  style={actionButton}
                 >
                   Promote
                 </button>
@@ -584,7 +586,8 @@ const DocumentEditorPage = () => {
                   onClick={() => setStatus('searchable')}
                   disabled={busy}
                   title='Put this withdrawn document back in the public search corpus.'
-                  style={{ textDecoration: 'underline' }}
+                  className='admin-btn'
+                  style={actionButton}
                 >
                   Restore
                 </button>
@@ -602,7 +605,8 @@ const DocumentEditorPage = () => {
                   }}
                   disabled={busy}
                   title='Remove this document from public search immediately (reversible — admins can restore).'
-                  style={{ textDecoration: 'underline' }}
+                  className='admin-btn'
+                  style={actionButton}
                 >
                   Withdraw
                 </button>
@@ -611,7 +615,8 @@ const DocumentEditorPage = () => {
                 onClick={reingest}
                 disabled={busy}
                 title='Re-run the ingestion pipeline on the same PDF. AI summaries and AI-extracted metadata are regenerated; fields and summaries edited by a person are preserved.'
-                style={{ textDecoration: 'underline' }}
+                className='admin-btn'
+                style={actionButton}
               >
                 Re-ingest
               </button>
@@ -629,7 +634,8 @@ const DocumentEditorPage = () => {
                   onClick={deleteDoc}
                   disabled={busy}
                   title='Permanently delete this document, its search index entries, and its PDF. Cannot be undone.'
-                  style={{ textDecoration: 'underline', color: '#C11101' }}
+                  className='admin-btn'
+                  style={dangerButton}
                 >
                   Delete
                 </button>
@@ -742,11 +748,8 @@ const DocumentEditorPage = () => {
             <button
               onClick={saveMetadata}
               disabled={busy}
-              style={{
-                marginTop: 8,
-                padding: '6px 16px',
-                textDecoration: 'underline',
-              }}
+              className='admin-btn'
+              style={{ ...actionButton, marginTop: 8, padding: '6px 16px' }}
             >
               {dirty ? 'Save (unsaved changes)' : 'Save'}
             </button>
@@ -789,10 +792,8 @@ const DocumentEditorPage = () => {
                                 onClick={() => decideTag(tag.tagId, 'accepted')}
                                 disabled={busy}
                                 title='Keep this tag. It becomes a human decision the AI cannot override.'
-                                style={{
-                                  marginRight: 8,
-                                  textDecoration: 'underline',
-                                }}
+                                className='admin-btn'
+                                style={{ ...actionButton, marginRight: 8 }}
                               >
                                 Accept
                               </button>
@@ -800,7 +801,8 @@ const DocumentEditorPage = () => {
                                 onClick={() => decideTag(tag.tagId, 'rejected')}
                                 disabled={busy}
                                 title='Remove this suggestion. The AI will not re-suggest it.'
-                                style={{ textDecoration: 'underline' }}
+                                className='admin-btn'
+                                style={actionButton}
                               >
                                 Reject
                               </button>
@@ -811,7 +813,8 @@ const DocumentEditorPage = () => {
                               onClick={() => decideTag(tag.tagId, 'accepted')}
                               disabled={busy}
                               title='Keep this tag. It becomes a human decision the AI cannot override.'
-                              style={{ textDecoration: 'underline' }}
+                              className='admin-btn'
+                              style={actionButton}
                             >
                               Accept
                             </button>
@@ -846,7 +849,8 @@ const DocumentEditorPage = () => {
               <button
                 onClick={addTag}
                 disabled={busy}
-                style={{ textDecoration: 'underline' }}
+                className='admin-btn'
+                style={actionButton}
               >
                 Add
               </button>
@@ -906,10 +910,11 @@ const DocumentEditorPage = () => {
                   <button
                     onClick={() => saveSummary(s.language, s.kind)}
                     disabled={busy || summaryEdits[skey] === s.text}
+                    className='admin-btn'
                     style={{
+                      ...actionButton,
                       marginTop: 4,
                       padding: '4px 12px',
-                      textDecoration: 'underline',
                     }}
                   >
                     Save {s.language}/{s.kind}
@@ -993,7 +998,8 @@ const DocumentEditorPage = () => {
                         <button
                           onClick={() => removeFromCollection(c.id)}
                           disabled={busy}
-                          style={{ textDecoration: 'underline' }}
+                          className='admin-btn'
+                          style={actionButton}
                         >
                           Remove
                         </button>
@@ -1019,7 +1025,8 @@ const DocumentEditorPage = () => {
               <button
                 onClick={addToCollection}
                 disabled={busy}
-                style={{ textDecoration: 'underline' }}
+                className='admin-btn'
+                style={actionButton}
               >
                 Add
               </button>
@@ -1146,11 +1153,8 @@ const DocumentEditorPage = () => {
               {history && history.total > history.entries.length && (
                 <button
                   onClick={() => loadHistory(Math.min(history.total, 500))}
-                  style={{
-                    textDecoration: 'underline',
-                    marginTop: 8,
-                    fontSize: 13,
-                  }}
+                  className='admin-btn'
+                  style={{ ...actionButton, marginTop: 8, fontSize: 13 }}
                 >
                   {history.total > 500
                     ? `Show latest 500 of ${history.total}`
