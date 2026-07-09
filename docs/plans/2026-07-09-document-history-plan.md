@@ -132,17 +132,17 @@ export async function getDocumentHistory(
 }
 ```
 
-(If the summary-audit `entity_type` verification in Step 1 shows a different string than `document_summary`, adjust the IN list to what the code actually writes — check `updateDocumentSummary` in `src/db/queries/documentsAdmin.ts`.)
+(Verified: `updateDocumentSummary` writes `entity_type='document_summary'` with `entity_id = document id` — the IN list above is correct as written.)
 
 - [ ] **Step 4: Implement the route** — copy the auth/validation shape of the sibling `[id]/route.ts`:
 
 ```ts
 // src/app/api/admin/documents/[id]/history/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { initializeDatabase } from '@/db/init'          // match the sibling route's actual import
-import { getDocumentHistory } from '@/db/queries/documentHistory'
-import { requireIdentity } from '../../../../../../lib/auth/identity' // match sibling depth
 // GET /api/admin/documents/[id]/history?limit=20&offset=0
+// Imports: copy the sibling routes verbatim and adjust for one extra directory level —
+// they import from '../../../../../../db/data-source' and
+// '../../../../../../lib/auth/identity' (this route sits one level deeper: add one more '../').
+// There is NO '@/db/init' module — follow the siblings, not this sketch.
 ```
 
 Handler: `requireIdentity(req)`; UUID-validate `id` (copy the sibling's regex/404 behavior); parse `limit` (default 20, cap 500) and `offset` (default 0) from `req.nextUrl.searchParams`; `NextResponse.json({ ok: true, ...await getDocumentHistory(id, { limit, offset }) })`; wrap in the sibling's error helper. **Follow the sibling route's exact imports/helpers rather than the sketch above.**
@@ -165,7 +165,7 @@ git commit -m "feat(admin): document history endpoint over audit_log (attributab
 - Modify: `src/app/admin/documents/[id]/page.tsx` (new section after Collections)
 - Test: `src/__tests__/admin-editor.test.tsx` (extend)
 
-- [ ] **Step 1: Write the failing tests.** Extend `setupFetchMock` with a third optional param `history: { total: number; entries: any[] } = { total: 0, entries: [] }` answering `url.includes('/history')`. Tests:
+- [ ] **Step 1: Write the failing tests.** Extend `setupFetchMock` with a third optional param `history: { total: number; entries: any[] } = { total: 0, entries: [] }` answering `url.includes('/history')`. **Placement matters:** the mock's existing `url.startsWith('/api/admin/documents/test-doc-id-123')` branch also matches `…/history?…`, so the new `/history` check MUST come before that broad prefix branch — otherwise history fetches silently get the document detail payload and the tests fail with confusing shape mismatches. Tests:
 
 ```tsx
 it('does not fetch history until the panel is expanded', async () => {
