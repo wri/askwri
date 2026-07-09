@@ -606,7 +606,7 @@ export async function importDocuments(
               fields[PROVENANCE_KEY[f] ?? f] = 'external'
           }
           await AppDataSource.query(
-            `UPDATE documents SET metadata_source = $2::jsonb WHERE id = $1`,
+            `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
             [saved.id, JSON.stringify(fields)],
           ).catch(() => {})
         }
@@ -665,12 +665,12 @@ export async function importDocuments(
               updates.sourceMetadata = mapped.sourceMetadata
               await docRepo.update({ id: existing.id }, updates)
 
-              // Update metadata_source
+              // Update metadata_source — atomic jsonb merge so concurrent
+              // worker stamps are never clobbered by a stale read
               if (hasMetadataSource) {
-                const mergedMeta = { ...metaSource, ...metaUpdates }
                 await AppDataSource.query(
-                  `UPDATE documents SET metadata_source = $2::jsonb WHERE id = $1`,
-                  [existing.id, JSON.stringify(mergedMeta)],
+                  `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
+                  [existing.id, JSON.stringify(metaUpdates)],
                 ).catch(() => {})
               }
             }
