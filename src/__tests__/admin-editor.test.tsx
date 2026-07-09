@@ -11,9 +11,12 @@ import ChakraProvider from '@/app/Providers/ChakraProvider'
 
 // Mock next/navigation (useParams). `mockRouterPush` is a shared spy so tests can
 // assert navigation; the `mock` prefix lets Jest reference it in the hoisted factory.
+// `mockParamsId` is mutable so tests can simulate in-place [id] navigation
+// (the App Router keeps the page mounted across id changes).
 const mockRouterPush = jest.fn()
+let mockParamsId = 'test-doc-id-123'
 jest.mock('next/navigation', () => ({
-  useParams: () => ({ id: 'test-doc-id-123' }),
+  useParams: () => ({ id: mockParamsId }),
   useRouter: () => ({
     push: mockRouterPush,
     replace: jest.fn(),
@@ -121,7 +124,9 @@ function setupFetchMock(
         json: () => Promise.resolve({ ok: true, ...history }),
       } as any)
     }
-    if (url.startsWith('/api/admin/documents/test-doc-id-123')) {
+    // Broad prefix: serves the detail payload for any document id so tests can
+    // simulate navigating to a different [id] on the still-mounted page.
+    if (url.startsWith('/api/admin/documents/')) {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(detail),
@@ -141,6 +146,7 @@ describe('DocumentEditorPage', () => {
   beforeEach(() => {
     setupFetchMock()
     mockRouterPush.mockClear()
+    mockParamsId = 'test-doc-id-123'
   })
 
   it('renders an Authors field (textarea)', async () => {
@@ -563,5 +569,36 @@ describe('DocumentEditorPage', () => {
     )
     fireEvent.click(await screen.findByText('History'))
     expect(await screen.findByText('No recorded changes.')).toBeInTheDocument()
+  })
+
+  it('resets and refetches history when navigating to another document with the panel open', async () => {
+    setupFetchMock(undefined, [], historyFixture)
+    const view = render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    fireEvent.click(await screen.findByText('History'))
+    expect(await screen.findByText(/jane · updated title/)).toBeInTheDocument()
+
+    // Simulate ReviewBar navigation: the page stays mounted, only [id] changes.
+    // Doc B's backend has no history.
+    mockParamsId = 'other-doc-id-456'
+    const fetchMock2 = setupFetchMock(undefined, [], { total: 0, entries: [] })
+    view.rerender(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() => {
+      expect(
+        fetchMock2.mock.calls.some(([u]: any[]) =>
+          String(u).includes('/api/admin/documents/other-doc-id-456/history'),
+        ),
+      ).toBe(true)
+    })
+    // Doc A's entries are gone; doc B's (empty) history renders.
+    expect(await screen.findByText('No recorded changes.')).toBeInTheDocument()
+    expect(screen.queryByText(/jane · updated title/)).not.toBeInTheDocument()
   })
 })

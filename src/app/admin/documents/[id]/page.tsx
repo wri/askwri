@@ -184,16 +184,32 @@ const DocumentEditorPage = () => {
   const [historyError, setHistoryError] = useState<string | null>(null)
   const historyFetched = useRef(false)
 
-  const loadHistory = async (limit = 20) => {
-    try {
-      const body = await adminFetch<{ total: number; entries: any[] }>(
-        `/api/admin/documents/${id}/history?limit=${limit}`,
-      )
-      setHistory({ total: body.total, entries: body.entries ?? [] })
-    } catch (err: any) {
-      setHistoryError(err.message)
+  const loadHistory = useCallback(
+    async (limit = 20) => {
+      try {
+        const body = await adminFetch<{ total: number; entries: any[] }>(
+          `/api/admin/documents/${id}/history?limit=${limit}`,
+        )
+        setHistory({ total: body.total, entries: body.entries ?? [] })
+      } catch (err: any) {
+        setHistoryError(err.message)
+      }
+    },
+    [id],
+  )
+
+  // The App Router keeps this page mounted across [id] changes (ReviewBar
+  // navigation), so history state must reset per document. If the panel was
+  // already opened, refetch — a bare null-reset would strand the still-open
+  // <details> on "Loading…" forever.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHistoryError(null)
+    if (historyFetched.current) {
+      setHistory(null) // clear stale rows → Loading…
+      loadHistory() // closes over the new id
     }
-  }
+  }, [loadHistory])
 
   const load = useCallback(
     async (opts: { resetForm?: boolean } = {}) => {
@@ -1050,6 +1066,10 @@ const DocumentEditorPage = () => {
                             padding: '2px 8px',
                             color: '#C11101',
                             verticalAlign: 'top',
+                            maxWidth: 480,
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
                           }}
                         >
                           {e.before?.[k] == null
@@ -1063,6 +1083,10 @@ const DocumentEditorPage = () => {
                             padding: '2px 8px',
                             color: '#0A6640',
                             verticalAlign: 'top',
+                            maxWidth: 480,
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
                           }}
                         >
                           {e.after?.[k] == null
@@ -1086,14 +1110,16 @@ const DocumentEditorPage = () => {
             ))}
           {history && history.total > history.entries.length && (
             <button
-              onClick={() => loadHistory(history.total)}
+              onClick={() => loadHistory(Math.min(history.total, 500))}
               style={{
                 textDecoration: 'underline',
                 marginTop: 8,
                 fontSize: 13,
               }}
             >
-              Show all ({history.total})
+              {history.total > 500
+                ? `Show latest 500 of ${history.total}`
+                : `Show all (${history.total})`}
             </button>
           )}
         </details>
