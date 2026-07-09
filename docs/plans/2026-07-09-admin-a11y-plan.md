@@ -12,7 +12,7 @@ Concretely, do not start until these have landed and are present in `src/app/adm
 - **upload-journey** → a dropzone surface on the upload page; may introduce new buttons/links.
 - **table-ergonomics** → sortable column headers; these change `<th>` markup, which §5 (`scope='col'`) must cooperate with, and may add new underlined sort controls.
 
-**The underline-site decision table below is "as of spec time." RE-GREP at implementation** (`grep -rn "textDecoration: 'underline'" src/app/admin`) **and fold in every new site introduced by the intervening slices** (Flash component, dropzone, sortable headers). Apply the same keep-as-link / convert-to-button judgment to each new site. The counts here (41 underline sites, 14 `#888` sites) are a spec-time snapshot, not a target.
+**The underline-site decision table below is "as of spec time." RE-GREP at implementation** (`grep -rn "textDecoration: 'underline'" src/app/admin`) **and fold in every new site introduced by the intervening slices** (Flash component, dropzone, sortable headers). Apply the same keep-as-link / convert-to-button judgment to each new site. The counts here (44 underline sites, 14 `#888` sites) are a spec-time snapshot, not a target.
 
 ---
 
@@ -43,7 +43,7 @@ Concretely, do not start until these have landed and are present in `src/app/adm
 - **Tooltip call sites** (all pass PLAIN TEXT children, never interactive nodes — the upgrade must preserve this contract): `review/page.tsx`, `documents/[id]/page.tsx`, `collections/page.tsx`, `upload/page.tsx` (`grep -rln Tooltip src/app/admin`).
 - **Existing test** `src/__tests__/admin-tooltip.test.tsx` (31 lines): 3 tests — "renders trigger text", "exposes help via **title attribute**" (line 11-22), "renders ? marker". The **title-attribute test will break** (title is dropped per §1) → must be replaced with focus/blur/Escape + `role='tooltip'` assertions.
 - **`#888` sites — 14 total** (`grep -rn "#888" src/app/admin`): `collections/page.tsx:127`; `Tooltip.tsx:25` (the "?" marker — see collision note below); `documents/[id]/page.tsx:958,1021,1038,1102`; `documents/page.tsx:346`; `import/page.tsx:212,415,451`; `layout.tsx:149`; `review/page.tsx:181,517`; `tags/page.tsx:163`.
-- **`textDecoration: 'underline'` sites — 41 total** across 9 files (`grep -rn "textDecoration: 'underline'" src/app/admin`). Full keep/convert table in Task 2.
+- **`textDecoration: 'underline'` sites — 44 total** across 10 files (`grep -rn "textDecoration: 'underline'" src/app/admin`), including three on `users/page.tsx` (142, 149, 203). Full keep/convert table in Task 2.
 - **StatusChip** (`src/app/admin/components/StatusChip.tsx:7-42`): exports `STATUS_META` (importable by the contrast test). fg/bg pairs listed in Task 3.
 - **Provenance badges** (`src/app/admin/documents/[id]/page.tsx:112-119`): `PROVENANCE_BADGE` is a **module-local const, NOT exported**. Task 3 extracts it to a shared module so the contrast test can import it.
 - **Login form** (`src/app/admin/login/page.tsx:48-71`): two placeholder-only `<input>`s (Username / Password), no `<label>`.
@@ -351,8 +351,13 @@ Legend: **BUTTON** = action, convert to `actionButton`. **DANGER** = destructive
 | tags/page.tsx | 282 | `<button>` (`color:#C11101`) | Delete tag | DANGER |
 | tags/page.tsx | 357 | `<button type=submit>` | Add tag | BUTTON |
 | upload/page.tsx | 179 | `<Link>` | → Review queue | **LINK** |
+| users/page.tsx | 142 | `<button>` | Activate/Deactivate user | BUTTON |
+| users/page.tsx | 149 | `<button>` | Reset password | BUTTON |
+| users/page.tsx | 203 | `<button type=submit>` | Create user | BUTTON |
 
-Tally (spec-time): **32 convert-to-button** (30 `actionButton` + 2 `dangerButton`: doc[id]:608, tags:282), **9 keep-as-link**, **2 DARK groups** (ReviewBar `btn`, layout logout). = 41 sites + the two DARK groups counted once each. **Re-grep before starting; any new site the intervening slices added gets the same treatment (sort controls → BUTTON; new nav/download → LINK).**
+Tally (spec-time): **35 convert-to-button** (33 `actionButton` + 2 `dangerButton`: doc[id]:608, tags:282), **9 keep-as-link**, **2 DARK groups** (ReviewBar `btn`, layout logout). = 44 sites, with each DARK group counted once. **Re-grep before starting; any new site the intervening slices added gets the same treatment (sort controls → BUTTON; new nav/download → LINK).**
+
+**Note on the users/page.tsx rows:** these three sites (142/149/203) were a **pre-existing miss in this table's first draft**, not an intervening-slice addition — they exist in the spec-time grep. The corrected table above is complete against the spec-time grep; trust it directly rather than relying on the Task 4 verification gate to catch omissions.
 
 **DARK-background variant.** `ReviewBar.tsx:92-96` `btn` (white text on the dark review bar) and `layout.tsx:126-136` logout (light text on dark nav) must NOT take `actionButton` (white bg = invisible/clashing). Give them a bordered treatment that keeps the light foreground:
 
@@ -376,7 +381,7 @@ For `layout.tsx` logout, do the same inline (keep `color:'#cbd5e0'`, drop `textD
 Do one file (or a couple of closely related files) per edit batch, then Prettier, then commit. Suggested grouping:
 
 1. `buttonStyles.ts` + `globals.css` (foundation) — commit alone.
-2. `collections/page.tsx`, `tags/page.tsx` (CRUD list pages).
+2. `collections/page.tsx`, `tags/page.tsx`, `users/page.tsx` (CRUD list pages). The users button sweep belongs HERE in Task 2 — not in Task 3, even though Task 3e/3f touch the same file for form labels and `th` scope — so each commit stays single-concern (buttons vs. labels/semantics).
 3. `documents/[id]/page.tsx` (largest — many actions incl. 1 danger).
 4. `documents/page.tsx`, `review/page.tsx` (list + queue, incl. pagination + bulk).
 5. `components/ReviewBar.tsx`, `layout.tsx` (DARK variants) + `upload/page.tsx`/`import/page.tsx` (LINK-only files need no change unless a new site appeared — verify).
@@ -389,7 +394,7 @@ Commit messages (per group):
 git commit -m "feat(admin-a11y): shared actionButton/dangerButton styles + hover rule"
 ```
 ```
-git commit -m "refactor(admin-a11y): real buttons for collections/tags action controls"
+git commit -m "refactor(admin-a11y): real buttons for collections/tags/users action controls"
 ```
 ```
 git commit -m "refactor(admin-a11y): real buttons for document detail action controls"
@@ -565,7 +570,7 @@ git commit -m "test(admin-a11y): durable WCAG contrast assertions over shared co
 
 ## Task 4 — Verification sweep
 
-- [ ] Re-grep confirms **zero** un-converted action buttons: `grep -rn "textDecoration: 'underline'" src/app/admin` — every remaining hit is a **LINK** row (Link/anchor that navigates) or a newly-appeared site you've judged. No `<button …textDecoration:'underline'…>` remains.
+- [ ] Re-grep confirms **zero** un-converted action buttons: `grep -rn "textDecoration: 'underline'" src/app/admin` — every remaining hit is a **LINK** row (Link/anchor that navigates) or a newly-appeared site you've judged. No `<button …textDecoration:'underline'…>` remains. The expected-BUTTON set explicitly includes the three `users/page.tsx` sites (142 Activate/Deactivate, 149 Reset password, 203 Create) — if any of those still carry `textDecoration:'underline'`, Task 2 group 2 was incomplete.
 - [ ] Re-grep confirms **zero** `#888` in `src/app/admin`: `grep -rn "#888" src/app/admin` returns nothing.
 - [ ] Every admin `<th>` has `scope='col'`: `grep -rn "<th" src/app/admin` — spot-check each.
 - [ ] No native `title` on the Tooltip component: `grep -n "title" src/app/admin/components/Tooltip.tsx` returns nothing.
