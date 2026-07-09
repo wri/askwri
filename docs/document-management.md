@@ -47,7 +47,7 @@ Per design §20 lean-core cut:
 
 ## 3. Schema — the 11 tables
 
-Two migrations: `1781280000000-Migration.ts` (initial 11 tables) and `1781290000000-Migration.ts` (`corpus_order` column + index). Both are TypeORM raw-SQL migrations under `src/db/migrations/`.
+Migration history (all TypeORM raw-SQL under `src/db/migrations/`): `1781280000000` (initial 11 tables), `1781290000000` (`corpus_order` column + index), `1781300000000` (open-job unique index + FK cascade), `1781310000000` (keyword-lane tables), `1781320000000` (authors/url/date_published columns, title/summary data fixes, content-hash dedup index, drops dead `abstract`), `1781330000000` (`metadata_source` provenance), `1781340000000` (`metadata_source` key normalization).
 
 ### Write ownership rule
 

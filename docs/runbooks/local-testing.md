@@ -52,9 +52,9 @@ metadata extraction, summaries, tagging). `OPENAI_API_KEY` in
 `search-service/.env` or `search-service/.env.local` covers it (the bootstrap
 does not write it).
 Postgres state expected: all migrations applied — currently through
-`1781330000000` (sparse lane, authors/url/date columns, metadata-provenance
-`metadata_source`) — and the sparse backfill run (see §7 reset recipes if
-your db predates this).
+`1781340000000` (sparse lane, authors/url/date columns, metadata-provenance
+`metadata_source` + key normalization) — and the sparse backfill run (see §7
+reset recipes if your db predates this).
 
 Cannot be tested locally (deploy-only surface):
 
@@ -286,7 +286,7 @@ cd search-service && ./venv/bin/python -m scripts.build_sparse_keyword
 **Db predates the sparse lane** (boot fails with "sparse is unpopulated"):
 
 ```bash
-npm run migration:run                                  # applies 1781310000000
+npm run migration:run                                  # applies all pending (sparse lane = 1781310000000)
 cd search-service && ./venv/bin/python -m scripts.build_sparse_keyword
 ```
 

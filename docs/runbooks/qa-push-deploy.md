@@ -1,8 +1,9 @@
 # QA Push + Deploy Runbook — first push of the document-management work
 
-**Scope:** the first `git push origin qa` of the local qa line (~90 commits: Phase 0 store +
-migration, Phase 1 ingestion worker, Phase 2 admin UI, sparse keyword lane, two review-fix
-waves). Follow the steps **in order** — the ordering is the point of this runbook.
+**Scope:** the first `git push origin qa` of the local qa line (PR #240: Phase 0 store +
+migration, Phase 1 ingestion worker, Phase 2 admin UI, sparse keyword lane, review-fix
+waves, admin UX + metadata-provenance work). Follow the steps **in order** — the ordering
+is the point of this runbook.
 
 **Companion docs:** [phase0-cutover.md](phase0-cutover.md) (RDS preflight, corpus migration,
 local dev), [docs/document-management.md](../document-management.md) (as-built reference),
@@ -67,7 +68,8 @@ DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
   npm run typeorm -- migration:show -d src/db/migration-data-source.ts
 ```
 
-Expected pending (`[ ]`): `Migration1781300000000` and `Migration1781310000000`.
+Expected pending (`[ ]`): five migrations, `Migration1781300000000` through
+`Migration1781340000000`.
 
 If `Migration1781280000000` / `Migration1781290000000` are **also** pending, the Phase 0
 cutover never ran against this RDS instance — stop and execute
@@ -88,21 +90,32 @@ is not in your local trust store.
 (queued/running) `ingestion_jobs` rows (keeps a running job over a queued one, then the
 newest per document) before creating the partial unique index
 `ingestion_jobs_one_open_per_doc`. It also tightens the `documents` FK to
-`ON DELETE CASCADE`. Nothing should be writing ingestion jobs while it runs. (On first
-deploy the worker doesn't exist yet, so this is trivially satisfied.)
+`ON DELETE CASCADE`. Migrations `1781320000000`–`1781340000000` additionally rewrite
+`documents` / `document_summaries` rows (data fixes, see below). Nothing should be writing
+ingestion jobs or editing documents while they run. (On first deploy neither the worker nor
+the admin UI exists yet, so this is trivially satisfied.)
 
 ```bash
 DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" npm run migration:run
 ```
 
-Expected: `Migration1781300000000 has been executed successfully.` and
-`Migration1781310000000 has been executed successfully.`
+Expected: five `Migration<timestamp> has been executed successfully.` lines,
+`1781300000000` through `1781340000000`.
 
 What they do:
 
 - `1781300000000` — open-job dedupe + unique index + `ingestion_jobs.document_id` FK
   becomes `ON DELETE CASCADE`.
 - `1781310000000` — `keyword_vocab` and `keyword_corpus_stats` tables (sparse keyword lane).
+- `1781320000000` — drops the dead `documents.abstract` column; adds `authors` / `url` /
+  `date_published` (backfilled from the CSV `source_metadata`); fixes 37 junk titles
+  ("Pre-EM" / "Not available"); relabels 33 mislabeled summaries to `language='en'` (frees
+  the native-language slots so the worker regenerates real native summaries on the next
+  re-ingest); backfills `title_en`; unique partial index on `documents.content_hash`.
+- `1781330000000` — `documents.metadata_source` jsonb (per-field provenance
+  `external`/`llm`/`human`, read by the worker's re-ingest overwrite rules) + backfill.
+- `1781340000000` — data fix: normalizes camelCase `metadata_source` keys written by the
+  pre-fix CSV import to the canonical snake_case names. Idempotent.
 
 ---
 
@@ -157,9 +170,10 @@ gh run watch
 ```
 
 Deploy-window note: between `terraform apply` and the new tasks stabilizing, the **old**
-app/search-service code briefly runs against the **new** schema. Both new migrations are
-additive/compatible with the old code (new tables it never reads; an index and FK tightening
-on a table the old deployed code does not use), so this window is safe.
+app/search-service code briefly runs against the **new** schema. All five new migrations
+only touch tables the Phase 0 migrations created (`documents`, `document_summaries`,
+`ingestion_jobs`, the keyword tables), which the currently deployed pre-Phase-0 code never
+reads, so this window is safe.
 
 ---
 
@@ -177,7 +191,7 @@ Only if Step 3 could not run before the push:
 
 ---
 
-## Step 6: Seed the prod admin user
+## Step 6: Seed the admin user (against QA RDS)
 
 ```bash
 DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
@@ -233,7 +247,7 @@ Checklist:
 | What broke | Rollback |
 |---|---|
 | Sparse keyword lane (bad rankings, boot failures) | Env flip: set `KEYWORD_BACKEND=memory` in `SEARCH_SERVICE_ENV` and redeploy. The legacy in-memory BM25 lane is intact; it hydrates from Postgres chunks at boot. (Memory-mode caveat: lifecycle changes then need `POST /reindex` — see document-management.md §4.) |
-| Schema | `DATABASE_URL=… npm run migration:revert` reverts **one migration per invocation** (run twice to undo both new ones; `1781310000000` reverts first). Caveat: `1781300000000`'s `down` restores the `ON DELETE SET NULL` FK and drops the unique index, but the duplicate open jobs its `up` **deleted are not restorable**. |
+| Schema | `DATABASE_URL=… npm run migration:revert` reverts **one migration per invocation** (run up to five times to undo all new ones; newest — `1781340000000` — reverts first). Caveats: `1781300000000`'s `down` restores the `ON DELETE SET NULL` FK and drops the unique index, but the duplicate open jobs its `up` **deleted are not restorable**. `1781320000000`'s `down` drops the `authors`/`url`/`date_published` columns (losing any edits made since) and its title/summary data fixes are **one-way**. |
 | Bad image / bad code | Task definitions pin `:latest`, and every deploy also tags the image with the git commit short SHA. Re-point `latest` at the last good SHA in ECR, then force a new deployment: |
 
 ```bash
@@ -258,9 +272,8 @@ aws ecs update-service --cluster askwri-app-qa-cluster \
   `terraform validate` with `-backend=false`). Review the plan output in the Actions log
   *while* it applies, not before.
 - **Old-code-on-new-schema window** during deploy (see Step 4 note) — safe this time
-  because both new migrations are additive/compatible: two new tables the old code never
-  touches, plus an index and FK tightening on `ingestion_jobs`, which the currently
-  deployed (pre-Phase-1) code does not use.
+  because all five new migrations only touch Phase-0-created tables that the currently
+  deployed (pre-Phase-0) code never reads.
 - **Plain-text env secrets in task definitions** — the three secret JSONs become regular
   `environment` entries, visible to anyone with `ecs:DescribeTaskDefinition`. SSM
   Parameter Store migration is deferred.

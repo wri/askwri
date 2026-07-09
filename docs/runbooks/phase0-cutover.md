@@ -147,7 +147,7 @@ DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" npm r
 
 Or set `DATABASE_URL` in your `.env` with `?sslmode=require` appended for RDS. The Node `data-source.ts` defaults to SSL-on; `?sslmode=require` on the URL also satisfies the Python psycopg side.
 
-Expected: `Migration1781280000000` through `Migration1781330000000` execute successfully (`1781300000000` open-job dedupe + unique index, `1781310000000` keyword-lane tables — see [qa-push-deploy.md](qa-push-deploy.md) Step 2 for their operational notes; `1781320000000` authors/url/date_published columns + title/summary data fixes + content-hash dedup index; `1781330000000` `documents.metadata_source` provenance). Check what is pending first with `npm run typeorm -- migration:show -d src/db/migration-data-source.ts`.
+Expected: `Migration1781280000000` through `Migration1781340000000` execute successfully (`1781300000000` open-job dedupe + unique index, `1781310000000` keyword-lane tables — see [qa-push-deploy.md](qa-push-deploy.md) Step 2 for their operational notes; `1781320000000` authors/url/date_published columns + title/summary data fixes + content-hash dedup index; `1781330000000` `documents.metadata_source` provenance; `1781340000000` `metadata_source` key normalization data fix). Check what is pending first with `npm run typeorm -- migration:show -d src/db/migration-data-source.ts`.
 
 ### Step 3: Stage S3 assets and run the migration script
 
