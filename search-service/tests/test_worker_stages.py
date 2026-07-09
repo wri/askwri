@@ -2259,6 +2259,38 @@ class TestPublishStage:
         assert status == "searchable", "status flip must succeed despite audit failure"
         assert n == 0, "the failed audit write left no row"
 
+    def test_server_side_audit_failure_recovers_savepoint(self, stages_test_db):
+        """A genuine Postgres error inside the helper (NOT NULL violation on
+        audit_log.action via action=None) aborts only the SAVEPOINT: a write made
+        earlier in the same outer transaction survives, a write made after still
+        works, and the outer commit lands both — the transaction is not poisoned."""
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-audit-sp", language="en")
+
+        from worker.stages import audit_system_event
+
+        with psycopg.connect(stages_test_db) as conn:
+            # Statement 1 implicitly opens the outer transaction (autocommit off),
+            # so the helper's conn.transaction() issues a real SAVEPOINT.
+            conn.execute("UPDATE documents SET title='before-audit' WHERE id=%s", (doc_id,))
+            # action=None violates audit_log.action NOT NULL server-side; the
+            # aborted subtransaction must be rolled back to the savepoint.
+            audit_system_event(conn, doc_id, None, {}, {})  # must not raise
+            # The outer transaction must still accept statements...
+            conn.execute("UPDATE documents SET language='fr' WHERE id=%s", (doc_id,))
+            conn.commit()  # ...and commit cleanly.
+
+        with psycopg.connect(stages_test_db) as conn:
+            title, language = conn.execute(
+                "SELECT title, language FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+            n = conn.execute(
+                "SELECT count(*) FROM audit_log WHERE entity_id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert title == "before-audit", "pre-audit write must survive the savepoint rollback"
+        assert language == "fr", "post-audit write on the same connection must commit"
+        assert n == 0, "the failed audit insert left no row"
+
 
 _EXTRACT_FIELDS_FOR_TEST = [
     "title", "authors", "doi", "year_published", "article_type", "wri_primary_office"

@@ -211,8 +211,8 @@ def run(document_id):
                 # Capture current values BEFORE overwriting so the audit records a
                 # genuine before/after (advisory 2: filter no-op re-ingests).
                 old_row = conn.execute(
-                    "SELECT title, authors, doi, year_published, article_type, wri_primary_office "
-                    "FROM documents WHERE id=%s", (document_id,),
+                    f"SELECT {', '.join(_EXTRACT_FIELDS)} FROM documents WHERE id=%s",
+                    (document_id,),
                 ).fetchone()
                 old_values = dict(zip(_EXTRACT_FIELDS, old_row))
 

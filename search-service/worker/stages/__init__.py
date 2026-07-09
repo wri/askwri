@@ -50,6 +50,8 @@ def audit_system_event(conn, document_id, action, before, after):
     it with zero UI changes. Wrapped in a SAVEPOINT so a failed insert rolls
     back to the savepoint WITHOUT poisoning the stage's outer transaction, and
     swallowed + logged so auditing is observability, never a pipeline invariant.
+    The same-transaction guarantee assumes the pooled connection is not
+    autocommit (a stage statement has already opened the outer transaction).
     """
     try:
         with conn.transaction():
