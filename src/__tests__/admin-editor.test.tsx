@@ -80,6 +80,7 @@ const mockDetail = {
 function setupFetchMock(
   documentOverride?: Record<string, any>,
   queueItems: any[] = [],
+  history: { total: number; entries: any[] } = { total: 0, entries: [] },
 ) {
   const detail = documentOverride
     ? { ...mockDetail, document: { ...mockDocument, ...documentOverride } }
@@ -109,6 +110,15 @@ function setupFetchMock(
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ ok: true, collections: [] }),
+      } as any)
+    }
+    // NOTE: this /history branch MUST precede the broad
+    // '/api/admin/documents/test-doc-id-123' prefix branch below — otherwise
+    // history fetches fall through to the document-detail payload.
+    if (url.includes('/history')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, ...history }),
       } as any)
     }
     if (url.startsWith('/api/admin/documents/test-doc-id-123')) {
@@ -460,5 +470,98 @@ describe('DocumentEditorPage', () => {
     const idxs = markers.map((m) => text.indexOf(m))
     expect(idxs.every((v) => v >= 0)).toBe(true)
     expect([...idxs].sort((a, b) => a - b)).toEqual(idxs)
+  })
+
+  const historyFixture = {
+    total: 2,
+    entries: [
+      {
+        at: new Date().toISOString(),
+        action: 'update',
+        entityType: 'document',
+        actor: 'jane',
+        source: 'human',
+        before: { title: 'Old' },
+        after: { title: 'New' },
+      },
+      {
+        at: new Date().toISOString(),
+        action: 'lifecycle',
+        entityType: 'document',
+        actor: 'jane',
+        source: 'human',
+        before: { status: 'needs_review' },
+        after: { status: 'searchable' },
+      },
+    ],
+  }
+
+  it('does not fetch history until the panel is expanded', async () => {
+    const fetchMock = setupFetchMock()
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    await screen.findByText('Document editor')
+    expect(fetchMock.mock.calls.map(([u]) => String(u))).not.toContainEqual(
+      expect.stringContaining('/history'),
+    )
+  })
+
+  it('fetches and renders one-liners on first expand', async () => {
+    setupFetchMock(undefined, [], historyFixture)
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    fireEvent.click(await screen.findByText('History'))
+    expect(await screen.findByText(/jane · updated title/)).toBeInTheDocument()
+    expect(screen.getByText(/status → searchable/)).toBeInTheDocument()
+  })
+
+  it('expands an entry to show before/after values', async () => {
+    setupFetchMock(undefined, [], historyFixture)
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    fireEvent.click(await screen.findByText('History'))
+    fireEvent.click(await screen.findByText(/jane · updated title/))
+    expect(await screen.findByText('Old')).toBeInTheDocument()
+    expect(screen.getByText('New')).toBeInTheDocument()
+  })
+
+  it('shows Show all when total exceeds the page', async () => {
+    const entries = Array.from({ length: 20 }, (_, i) => ({
+      at: new Date().toISOString(),
+      action: 'update',
+      entityType: 'document',
+      actor: 'jane',
+      source: 'human',
+      before: { title: `Old ${i}` },
+      after: { title: `New ${i}` },
+    }))
+    setupFetchMock(undefined, [], { total: 25, entries })
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    fireEvent.click(await screen.findByText('History'))
+    expect(await screen.findByText('Show all (25)')).toBeInTheDocument()
+  })
+
+  it('renders the empty state', async () => {
+    setupFetchMock(undefined, [], { total: 0, entries: [] })
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    fireEvent.click(await screen.findByText('History'))
+    expect(await screen.findByText('No recorded changes.')).toBeInTheDocument()
   })
 })

@@ -131,6 +131,33 @@ const tagChipText = (tag: Detail['tags'][number]) => {
   return `${source} · ${tag.status}${conf}`
 }
 
+const HISTORY_VERB: Record<string, string> = {
+  update: 'updated',
+  lifecycle: 'status',
+  tag_decision: 'tag decision',
+  collection_change: 'collections',
+  import: 'import',
+  create: 'created',
+  delete: 'deleted',
+}
+
+const historyLine = (e: any) => {
+  const verb = HISTORY_VERB[e.action] ?? e.action
+  if (e.action === 'lifecycle')
+    return `${e.actor} · status → ${e.after?.status ?? '?'}`
+  const fields = e.after ? Object.keys(e.after).slice(0, 4).join(', ') : ''
+  return `${e.actor} · ${verb}${fields ? ` ${fields}` : ''}`
+}
+
+const historyWhen = (at: string) => {
+  const ms = Date.now() - +new Date(at)
+  const h = Math.floor(ms / 3600000)
+  if (h < 1) return 'just now'
+  if (h < 24) return `${h}h ago`
+  if (h < 24 * 7) return `${Math.floor(h / 24)}d ago`
+  return new Date(at).toLocaleDateString()
+}
+
 const DocumentEditorPage = () => {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -150,6 +177,23 @@ const DocumentEditorPage = () => {
   const [addCollectionId, setAddCollectionId] = useState<string>('')
   const [busy, setBusy] = useState(false)
   const formDirty = useRef(false)
+  const [history, setHistory] = useState<{
+    total: number
+    entries: any[]
+  } | null>(null)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const historyFetched = useRef(false)
+
+  const loadHistory = async (limit = 20) => {
+    try {
+      const body = await adminFetch<{ total: number; entries: any[] }>(
+        `/api/admin/documents/${id}/history?limit=${limit}`,
+      )
+      setHistory({ total: body.total, entries: body.entries ?? [] })
+    } catch (err: any) {
+      setHistoryError(err.message)
+    }
+  }
 
   const load = useCallback(
     async (opts: { resetForm?: boolean } = {}) => {
@@ -931,6 +975,128 @@ const DocumentEditorPage = () => {
             Add
           </button>
         </div>
+      </section>
+
+      {/* History panel — lazy: fetches on first expand */}
+      <section style={{ marginBottom: 32 }}>
+        <details
+          onToggle={(e) => {
+            if (
+              (e.target as HTMLDetailsElement).open &&
+              !historyFetched.current
+            ) {
+              historyFetched.current = true
+              loadHistory()
+            }
+          }}
+        >
+          <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 18 }}>
+            History
+          </summary>
+          <Text style={{ margin: '8px 0', color: '#555', fontSize: 13 }}>
+            Every recorded change to this document — who, what, and when.
+            Automated pipeline steps are not recorded; imports and intake events
+            are.
+          </Text>
+          {historyError && (
+            <Text style={{ color: '#C11101' }}>{historyError}</Text>
+          )}
+          {!history && !historyError && (
+            <Text style={{ color: '#888', fontSize: 13 }}>Loading…</Text>
+          )}
+          {history && history.entries.length === 0 && (
+            <Text style={{ color: '#555' }}>No recorded changes.</Text>
+          )}
+          {history &&
+            history.entries.map((e, i) => (
+              <details
+                key={i}
+                style={{
+                  padding: '6px 0',
+                  borderBottom: '1px solid #eee',
+                  fontSize: 13,
+                }}
+              >
+                <summary style={{ cursor: 'pointer' }}>
+                  {historyLine(e)} ·{' '}
+                  <span style={{ color: '#888' }}>{historyWhen(e.at)}</span>
+                </summary>
+                <table
+                  style={{
+                    borderCollapse: 'collapse',
+                    margin: '6px 0 6px 16px',
+                    fontSize: 12,
+                  }}
+                >
+                  <tbody>
+                    {Array.from(
+                      new Set([
+                        ...Object.keys(e.before ?? {}),
+                        ...Object.keys(e.after ?? {}),
+                      ]),
+                    ).map((k) => (
+                      <tr key={k}>
+                        <td
+                          style={{
+                            padding: '2px 8px',
+                            fontWeight: 500,
+                            verticalAlign: 'top',
+                          }}
+                        >
+                          {k}
+                        </td>
+                        <td
+                          style={{
+                            padding: '2px 8px',
+                            color: '#C11101',
+                            verticalAlign: 'top',
+                          }}
+                        >
+                          {e.before?.[k] == null
+                            ? '—'
+                            : typeof e.before[k] === 'string'
+                              ? e.before[k]
+                              : JSON.stringify(e.before[k])}
+                        </td>
+                        <td
+                          style={{
+                            padding: '2px 8px',
+                            color: '#0A6640',
+                            verticalAlign: 'top',
+                          }}
+                        >
+                          {e.after?.[k] == null
+                            ? '—'
+                            : typeof e.after[k] === 'string'
+                              ? e.after[k]
+                              : JSON.stringify(e.after[k])}
+                        </td>
+                      </tr>
+                    ))}
+                    {!e.before && !e.after && (
+                      <tr>
+                        <td style={{ padding: '2px 8px', color: '#888' }}>
+                          no field detail recorded
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </details>
+            ))}
+          {history && history.total > history.entries.length && (
+            <button
+              onClick={() => loadHistory(history.total)}
+              style={{
+                textDecoration: 'underline',
+                marginTop: 8,
+                fontSize: 13,
+              }}
+            >
+              Show all ({history.total})
+            </button>
+          )}
+        </details>
       </section>
     </Box>
   )
