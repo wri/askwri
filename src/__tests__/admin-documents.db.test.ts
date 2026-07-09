@@ -403,7 +403,7 @@ d('documentsAdmin (DB integration)', () => {
         `SELECT metadata_source FROM documents WHERE id = $1`,
         [noopDocId],
       )
-      expect(noop.metadata_source.doi).toBeUndefined()
+      expect(noop.metadata_source.title).toBeUndefined()
     } finally {
       await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id=$1`, [
         noopDocId,
