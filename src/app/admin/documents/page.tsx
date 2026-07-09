@@ -100,6 +100,7 @@ const CatalogInner = () => {
   }, [])
 
   const reqSeq = useRef(0)
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async (f: typeof filters, pageNum: number) => {
     const seq = ++reqSeq.current
@@ -147,7 +148,15 @@ const CatalogInner = () => {
     load(f, 0)
   }, [load, loadCollections, loadTags, loadYears, initialCollectionId])
 
+  const clearSearchDebounce = () => {
+    if (searchDebounce.current) {
+      clearTimeout(searchDebounce.current)
+      searchDebounce.current = null
+    }
+  }
+
   const updateFilter = (key: keyof typeof filters, value: string) => {
+    clearSearchDebounce()
     const next = { ...filters, [key]: value }
     setFilters(next)
     setPage(0)
@@ -155,11 +164,29 @@ const CatalogInner = () => {
     load(next, 0)
   }
 
+  const updateSearch = (value: string) => {
+    const next = { ...filters, search: value }
+    setFilters(next) // reflect keystrokes immediately in the input
+    setPage(0)
+    setSelected(new Set())
+    clearSearchDebounce()
+    searchDebounce.current = setTimeout(() => load(next, 0), 300)
+  }
+
   const goToPage = (pageNum: number) => {
+    clearSearchDebounce()
     setPage(pageNum)
     setSelected(new Set())
     load(filters, pageNum)
   }
+
+  // Cancel any pending search timer on unmount.
+  useEffect(
+    () => () => {
+      if (searchDebounce.current) clearTimeout(searchDebounce.current)
+    },
+    [],
+  )
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -305,7 +332,7 @@ const CatalogInner = () => {
           type='text'
           placeholder='Search title, author, DOI, URL…'
           value={filters.search}
-          onChange={(e) => updateFilter('search', e.target.value)}
+          onChange={(e) => updateSearch(e.target.value)}
           style={{
             fontFamily: 'inherit',
             fontSize: 'inherit',
