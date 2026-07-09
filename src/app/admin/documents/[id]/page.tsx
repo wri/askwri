@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../../lib/api'
 import { StatusChip } from '../../components/StatusChip'
+import { Tooltip } from '../../components/Tooltip'
+import { PROVENANCE_KEY, PROVENANCE_LABEL } from '@/lib/metadataProvenance'
 
 interface Detail {
   document: Record<string, any>
@@ -31,27 +33,101 @@ interface Detail {
   } | null
 }
 
+const LANGUAGES: { code: string; name: string }[] = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'id', name: 'Indonesian' },
+]
+
 const EDITABLE: {
   key: string
   label: string
-  type?: 'number' | 'date' | 'textarea'
+  type?: 'number' | 'date' | 'textarea' | 'select'
+  help: string
 }[] = [
-  { key: 'title', label: 'Title' },
-  { key: 'titleEn', label: 'Title (EN)' },
-  { key: 'doi', label: 'DOI' },
-  { key: 'authors', label: 'Authors', type: 'textarea' },
-  { key: 'url', label: 'URL' },
-  { key: 'datePublished', label: 'Date published', type: 'date' },
-  { key: 'language', label: 'Language (ISO 639-1)' },
-  { key: 'yearPublished', label: 'Year published', type: 'number' },
-  { key: 'publicationTitle', label: 'Publication' },
-  { key: 'articleType', label: 'Article type' },
-  { key: 'wriPrimaryOffice', label: 'WRI primary office' },
+  {
+    key: 'title',
+    label: 'Title',
+    help: 'The document title as shown in search results (in its original language).',
+  },
+  {
+    key: 'titleEn',
+    label: 'Title (EN)',
+    help: 'English version of the title, shown to English-language users. Falls back to the native title if empty.',
+  },
+  {
+    key: 'doi',
+    label: 'DOI',
+    help: 'Digital Object Identifier — the permanent link publishers assign (e.g. https://doi.org/10.46830/…). Also used to match rows in CSV imports.',
+  },
+  {
+    key: 'authors',
+    label: 'Authors',
+    type: 'textarea',
+    help: 'Author names, separated by semicolons (e.g. "Smith, John; Doe, Jane").',
+  },
+  {
+    key: 'url',
+    label: 'URL',
+    help: 'The public landing page for this publication on wri.org.',
+  },
+  {
+    key: 'datePublished',
+    label: 'Date published',
+    type: 'date',
+    help: 'Full publication date, if known. Year alone goes in "Year published".',
+  },
+  {
+    key: 'language',
+    label: 'Language',
+    type: 'select',
+    help: 'The document’s primary language.',
+  },
+  {
+    key: 'yearPublished',
+    label: 'Year published',
+    type: 'number',
+    help: 'Publication year (used by the year filter in the catalog).',
+  },
+  {
+    key: 'publicationTitle',
+    label: 'Publication',
+    help: 'The report or series this document belongs to.',
+  },
+  {
+    key: 'articleType',
+    label: 'Article type',
+    help: 'The kind of publication (e.g. Report, Working Paper, Technical Note).',
+  },
+  {
+    key: 'wriPrimaryOffice',
+    label: 'WRI primary office',
+    help: 'The WRI office or center primarily responsible (e.g. WRI Ross Center).',
+  },
 ]
+
+const PROVENANCE_BADGE: Record<
+  string,
+  { text: string; color: string; bg: string }
+> = {
+  human: { text: 'person', color: '#0A6640', bg: '#e4f2ea' },
+  external: { text: 'imported', color: '#0050C8', bg: '#e6f0ff' },
+  llm: { text: 'AI', color: '#B7791F', bg: '#fdf3e0' },
+}
 
 const cell: React.CSSProperties = {
   padding: '8px 12px',
   borderBottom: '1px solid #eee',
+}
+
+const tagChipText = (tag: Detail['tags'][number]) => {
+  const source =
+    tag.source === 'llm' ? 'AI' : tag.source === 'human' ? 'person' : 'imported'
+  const conf =
+    tag.confidence != null ? ` · ${Math.round(tag.confidence * 100)}%` : ''
+  return `${source} · ${tag.status}${conf}`
 }
 
 const DocumentEditorPage = () => {
@@ -318,6 +394,12 @@ const DocumentEditorPage = () => {
           {doc.title || doc.externalId}
         </Text>
       )}
+      <Text style={{ marginBottom: 16, color: '#555' }}>
+        Edit this document&apos;s metadata, summaries, tags, and lifecycle.
+        Fields you save here are marked &ldquo;edited by a person&rdquo; and are
+        never overwritten by CSV imports or by the AI when the document is
+        re-ingested. Saving takes effect immediately.
+      </Text>
 
       {notice && (
         <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
@@ -333,13 +415,30 @@ const DocumentEditorPage = () => {
         </Heading>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <tbody>
-            {EDITABLE.map(({ key, label, type }) => (
+            {EDITABLE.map(({ key, label, type, help }) => (
               <tr key={key}>
                 <td style={{ ...cell, width: 200, fontWeight: 500 }}>
-                  {label}
+                  <Tooltip help={help}>{label}</Tooltip>
                 </td>
                 <td style={cell}>
-                  {type === 'textarea' ? (
+                  {type === 'select' ? (
+                    <select
+                      aria-label={label}
+                      value={form[key] ?? ''}
+                      onChange={(e) => {
+                        formDirty.current = true
+                        setForm((f) => ({ ...f, [key]: e.target.value }))
+                      }}
+                      style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+                    >
+                      <option value=''>—</option>
+                      {LANGUAGES.map((l) => (
+                        <option key={l.code} value={l.code}>
+                          {l.name} ({l.code})
+                        </option>
+                      ))}
+                    </select>
+                  ) : type === 'textarea' ? (
                     <textarea
                       value={form[key] ?? ''}
                       onChange={(e) => {
@@ -375,6 +474,29 @@ const DocumentEditorPage = () => {
                     />
                   )}
                 </td>
+                <td style={{ ...cell, width: 90 }}>
+                  {(() => {
+                    const src =
+                      doc?.metadataSource?.[PROVENANCE_KEY[key] ?? key]
+                    const badge = src ? PROVENANCE_BADGE[src] : null
+                    return badge ? (
+                      <span
+                        title={PROVENANCE_LABEL[src] ?? src}
+                        style={{
+                          background: badge.bg,
+                          color: badge.color,
+                          borderRadius: 4,
+                          padding: '2px 6px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'help',
+                        }}
+                      >
+                        {badge.text}
+                      </span>
+                    ) : null
+                  })()}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -400,20 +522,39 @@ const DocumentEditorPage = () => {
             <summary
               style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}
             >
-              Source metadata (read-only)
+              Original imported metadata (read-only)
             </summary>
-            <pre
+            <Text style={{ marginBottom: 8, color: '#555', fontSize: 13 }}>
+              These are the values that came with the document when it was first
+              imported — kept for reference, never edited.
+            </Text>
+            <table
               style={{
-                background: '#f7f7f7',
-                padding: 12,
-                borderRadius: 4,
-                fontSize: 12,
-                overflow: 'auto',
-                maxHeight: 400,
+                borderCollapse: 'collapse',
+                width: '100%',
+                fontSize: 13,
               }}
             >
-              {JSON.stringify(doc.sourceMetadata, null, 2)}
-            </pre>
+              <tbody>
+                {Object.entries(doc.sourceMetadata).map(([k, v]) => (
+                  <tr key={k}>
+                    <td
+                      style={{
+                        ...cell,
+                        width: 220,
+                        fontWeight: 500,
+                        verticalAlign: 'top',
+                      }}
+                    >
+                      {k}
+                    </td>
+                    <td style={cell}>
+                      {typeof v === 'string' ? v : JSON.stringify(v)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </details>
         </section>
       )}
@@ -434,17 +575,16 @@ const DocumentEditorPage = () => {
                     <td style={cell}>{tag.valueId}</td>
                     <td style={cell}>
                       <span
+                        title='Who applied this tag and its review state. AI-suggested tags need a person to Accept or Reject them; accepting makes the tag permanent (the AI will never change it again).'
                         style={{
                           background: '#eee',
                           borderRadius: 4,
                           padding: '2px 6px',
                           fontSize: 12,
+                          cursor: 'help',
                         }}
                       >
-                        {tag.source}/{tag.status}
-                        {tag.confidence != null
-                          ? ` (${tag.confidence.toFixed(2)})`
-                          : ''}
+                        {tagChipText(tag)}
                       </span>
                     </td>
                     <td style={cell}>
@@ -453,6 +593,7 @@ const DocumentEditorPage = () => {
                           <button
                             onClick={() => decideTag(tag.tagId, 'accepted')}
                             disabled={busy}
+                            title='Keep this tag. It becomes a human decision the AI cannot override.'
                             style={{
                               marginRight: 8,
                               textDecoration: 'underline',
@@ -463,6 +604,7 @@ const DocumentEditorPage = () => {
                           <button
                             onClick={() => decideTag(tag.tagId, 'rejected')}
                             disabled={busy}
+                            title='Remove this suggestion. The AI will not re-suggest it.'
                             style={{ textDecoration: 'underline' }}
                           >
                             Reject
@@ -473,6 +615,7 @@ const DocumentEditorPage = () => {
                         <button
                           onClick={() => decideTag(tag.tagId, 'accepted')}
                           disabled={busy}
+                          title='Keep this tag. It becomes a human decision the AI cannot override.'
                           style={{ textDecoration: 'underline' }}
                         >
                           Accept
@@ -522,6 +665,12 @@ const DocumentEditorPage = () => {
         <Heading size='md' style={{ marginBottom: 12 }}>
           Summaries
         </Heading>
+        <Text style={{ marginBottom: 12, color: '#555', fontSize: 13 }}>
+          Each document carries a long and a short summary, in its own language
+          and in English. &ldquo;generated&rdquo; summaries were written by the
+          AI and are refreshed on re-ingest; once you save an edit, the summary
+          is yours and the AI never overwrites it.
+        </Text>
         {(!detail || detail.summaries.length === 0) && (
           <Text>No summaries.</Text>
         )}
@@ -634,19 +783,39 @@ const DocumentEditorPage = () => {
             alignItems: 'center',
           }}
         >
-          {doc?.status !== 'searchable' && (
+          {doc?.status === 'needs_review' && (
             <button
               onClick={() => setStatus('searchable')}
               disabled={busy}
+              title='Send this document to the public search corpus. Only reviewed documents can be promoted.'
               style={{ textDecoration: 'underline' }}
             >
               Promote
             </button>
           )}
-          {me.role === 'admin' && (
+          {doc?.status === 'withdrawn' && me.role === 'admin' && (
             <button
-              onClick={() => setStatus('withdrawn')}
+              onClick={() => setStatus('searchable')}
               disabled={busy}
+              title='Put this withdrawn document back in the public search corpus.'
+              style={{ textDecoration: 'underline' }}
+            >
+              Restore
+            </button>
+          )}
+          {me.role === 'admin' && doc?.status !== 'withdrawn' && (
+            <button
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Withdraw this document? It disappears from public search immediately. An admin can restore it later.',
+                  )
+                ) {
+                  setStatus('withdrawn')
+                }
+              }}
+              disabled={busy}
+              title='Remove this document from public search immediately (reversible — admins can restore).'
               style={{ textDecoration: 'underline' }}
             >
               Withdraw
@@ -655,6 +824,7 @@ const DocumentEditorPage = () => {
           <button
             onClick={reingest}
             disabled={busy}
+            title='Re-run the ingestion pipeline on the same PDF. AI summaries and AI-extracted metadata are regenerated; fields and summaries edited by a person are preserved.'
             style={{ textDecoration: 'underline' }}
           >
             Re-ingest
@@ -663,6 +833,7 @@ const DocumentEditorPage = () => {
             href={`/api/admin/documents/${id}/file`}
             target='_blank'
             rel='noreferrer'
+            title='Open the stored PDF in a new tab.'
             style={{ textDecoration: 'underline' }}
           >
             Open PDF
@@ -671,6 +842,7 @@ const DocumentEditorPage = () => {
             <button
               onClick={deleteDoc}
               disabled={busy}
+              title='Permanently delete this document, its search index entries, and its PDF. Cannot be undone.'
               style={{ textDecoration: 'underline', color: '#C11101' }}
             >
               Delete

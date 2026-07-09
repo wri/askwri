@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import DocumentEditorPage from '@/app/admin/documents/[id]/page'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
@@ -34,6 +34,7 @@ const mockDocument = {
   wriPrimaryOffice: 'WRI India',
   status: 'searchable',
   extractionConfidence: '1.00',
+  metadataSource: { title: 'llm', authors: 'human' },
   sourceMetadata: {
     file_path: 'test-doc.pdf',
     summary: 'A test summary.',
@@ -50,21 +51,35 @@ const mockDocument = {
 const mockDetail = {
   document: mockDocument,
   summaries: [
-    { language: 'en', kind: 'long', text: 'A long English summary.', source: 'external' },
-    { language: 'en', kind: 'short', text: 'A short summary.', source: 'external' },
+    {
+      language: 'en',
+      kind: 'long',
+      text: 'A long English summary.',
+      source: 'external',
+    },
+    {
+      language: 'en',
+      kind: 'short',
+      text: 'A short summary.',
+      source: 'external',
+    },
   ],
   tags: [],
   collections: [],
   latestJob: null,
 }
 
-function setupFetchMock() {
+function setupFetchMock(documentOverride?: Record<string, any>) {
+  const detail = documentOverride
+    ? { ...mockDetail, document: { ...mockDocument, ...documentOverride } }
+    : mockDetail
   const fetchMock = jest.fn((url: string, _init?: RequestInit) => {
     // adminFetch calls fetch with the path directly; auth/me uses raw fetch
     if (url === '/api/admin/auth/me') {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ identity: { username: 'admin', role: 'admin' } }),
+        json: () =>
+          Promise.resolve({ identity: { username: 'admin', role: 'admin' } }),
       } as any)
     }
     if (url === '/api/admin/tags') {
@@ -82,11 +97,14 @@ function setupFetchMock() {
     if (url.startsWith('/api/admin/documents/test-doc-id-123')) {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve(mockDetail),
+        json: () => Promise.resolve(detail),
       } as any)
     }
     // Default: empty ok response
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) } as any)
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ok: true }),
+    } as any)
   })
   global.fetch = fetchMock as any
   return fetchMock
@@ -149,7 +167,9 @@ describe('DocumentEditorPage', () => {
       </ChakraProvider>,
     )
     await waitFor(() => {
-      expect(screen.getByText(/Source metadata/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Original imported metadata \(read-only\)/i),
+      ).toBeInTheDocument()
     })
   })
 
@@ -165,7 +185,9 @@ describe('DocumentEditorPage', () => {
     })
     // There should be a "Save summaries" button or textarea elements within summaries
     await waitFor(() => {
-      const summaryTextareas = document.querySelectorAll('textarea[data-summary-key]')
+      const summaryTextareas = document.querySelectorAll(
+        'textarea[data-summary-key]',
+      )
       expect(summaryTextareas.length).toBeGreaterThan(0)
     })
   })
@@ -179,5 +201,47 @@ describe('DocumentEditorPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Delete')).toBeInTheDocument()
     })
+  })
+
+  it('shows a provenance badge for AI-extracted and human-edited fields', async () => {
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    expect(await screen.findByText('AI')).toBeInTheDocument()
+    expect(screen.getByText('person')).toBeInTheDocument()
+  })
+
+  it('renders Language as a dropdown of supported languages', async () => {
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    const select = await screen.findByLabelText(/language/i)
+    expect(select.tagName).toBe('SELECT')
+  })
+
+  it('hides Promote for a draft document', async () => {
+    setupFetchMock({ status: 'draft' })
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    await screen.findByText('Document editor')
+    expect(screen.queryByText('Promote')).not.toBeInTheDocument()
+  })
+
+  it('asks for confirmation before Withdraw', async () => {
+    window.confirm = jest.fn(() => false)
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    fireEvent.click(await screen.findByText('Withdraw'))
+    expect(window.confirm).toHaveBeenCalled()
   })
 })
