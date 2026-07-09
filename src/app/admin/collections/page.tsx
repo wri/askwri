@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
 import { Tooltip } from '../components/Tooltip'
+import { Flash } from '../components/Flash'
 
 interface Collection {
   id: string
@@ -14,7 +15,10 @@ interface Collection {
   documentCount: number
 }
 
-const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid #eee' }
+const cell: React.CSSProperties = {
+  padding: '8px 12px',
+  borderBottom: '1px solid #eee',
+}
 
 const CollectionsPage = () => {
   const [items, setItems] = useState<Collection[]>([])
@@ -26,14 +30,19 @@ const CollectionsPage = () => {
   const [editName, setEditName] = useState('')
   const [createBusy, setCreateBusy] = useState(false)
   const [renameBusy, setRenameBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     try {
-      const body = await adminFetch<{ collections: Collection[] }>('/api/admin/collections')
+      const body = await adminFetch<{ collections: Collection[] }>(
+        '/api/admin/collections',
+      )
       setItems(body.collections)
       setError(null)
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -50,7 +59,10 @@ const CollectionsPage = () => {
     try {
       await adminFetch('/api/admin/collections', {
         method: 'POST',
-        body: JSON.stringify({ name: createName, description: createDescription || null }),
+        body: JSON.stringify({
+          name: createName,
+          description: createDescription || null,
+        }),
       })
       setCreateName('')
       setCreateDescription('')
@@ -91,23 +103,39 @@ const CollectionsPage = () => {
     <Box style={{ paddingBottom: 48 }}>
       <Heading size='lg' style={{ marginBottom: 8 }}>
         Collections{' '}
-        <Tooltip help='Collections are curated groups of documents (e.g. by topic, project, or language). They support bulk operations (re-tag, re-embed, export) and can carry a language policy and embedding-model version for staged migration.'>What are collections?</Tooltip>
+        <Tooltip help='Collections are curated groups of documents (e.g. by topic, project, or language). They support bulk operations (re-tag, re-embed, export) and can carry a language policy and embedding-model version for staged migration.'>
+          What are collections?
+        </Tooltip>
       </Heading>
       <Text style={{ marginBottom: 16, color: '#555' }}>
-        Collections group documents for management and bulk operations. A document can belong to multiple collections.
+        Collections group documents for management and bulk operations. A
+        document can belong to multiple collections.
       </Text>
 
-      {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
-      {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
+      <Flash
+        notice={notice}
+        error={error}
+        onDismiss={() => {
+          setNotice(null)
+          setError(null)
+        }}
+      />
 
-      <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 24 }}>
+      <table
+        style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 24 }}
+      >
         <thead>
           <tr>
-            {['Name', 'Slug', 'Description', 'Documents', 'Actions'].map((h) => (
-              <th key={h} style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
-                {h}
-              </th>
-            ))}
+            {['Name', 'Slug', 'Description', 'Documents', 'Actions'].map(
+              (h) => (
+                <th
+                  key={h}
+                  style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
+                >
+                  {h}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody>
@@ -118,7 +146,11 @@ const CollectionsPage = () => {
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    style={{ fontFamily: 'inherit', fontSize: 'inherit', width: '100%' }}
+                    style={{
+                      fontFamily: 'inherit',
+                      fontSize: 'inherit',
+                      width: '100%',
+                    }}
                   />
                 ) : (
                   col.name
@@ -137,7 +169,10 @@ const CollectionsPage = () => {
                     >
                       Save
                     </button>
-                    <button onClick={() => setEditId(null)} style={{ textDecoration: 'underline' }}>
+                    <button
+                      onClick={() => setEditId(null)}
+                      style={{ textDecoration: 'underline' }}
+                    >
                       Cancel
                     </button>
                   </>
@@ -160,13 +195,19 @@ const CollectionsPage = () => {
               </td>
             </tr>
           ))}
-          {items.length === 0 && (
+          {loading ? (
+            <tr>
+              <td colSpan={5} style={cell}>
+                Loading…
+              </td>
+            </tr>
+          ) : items.length === 0 ? (
             <tr>
               <td colSpan={5} style={cell}>
                 No collections yet.
               </td>
             </tr>
-          )}
+          ) : null}
         </tbody>
       </table>
 
@@ -174,19 +215,36 @@ const CollectionsPage = () => {
       <Heading size='md' style={{ marginBottom: 12 }}>
         New collection
       </Heading>
-      <form onSubmit={create} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <form
+        onSubmit={create}
+        style={{
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+        }}
+      >
         <input
           placeholder='Name'
           value={createName}
           onChange={(e) => setCreateName(e.target.value)}
           required
-          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '4px 8px' }}
+          style={{
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            padding: '4px 8px',
+          }}
         />
         <input
           placeholder='Description (optional)'
           value={createDescription}
           onChange={(e) => setCreateDescription(e.target.value)}
-          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '4px 8px', minWidth: 240 }}
+          style={{
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            padding: '4px 8px',
+            minWidth: 240,
+          }}
         />
         <button
           type='submit'

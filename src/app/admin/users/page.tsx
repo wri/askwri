@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Box, Heading, Text } from '@chakra-ui/react'
+import { Box, Heading } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { Flash } from '../components/Flash'
 
 interface AdminUser {
   id: string
@@ -13,15 +14,24 @@ interface AdminUser {
   lastLogin: string | null
 }
 
-const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid #eee' }
+const cell: React.CSSProperties = {
+  padding: '8px 12px',
+  borderBottom: '1px solid #eee',
+}
 
 const UsersPage = () => {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [createForm, setCreateForm] = useState({ username: '', email: '', password: '', role: 'editor' })
+  const [createForm, setCreateForm] = useState({
+    username: '',
+    email: '',
+    password: '',
+    role: 'editor',
+  })
   const [busyId, setBusyId] = useState<string | null>(null)
   const [createBusy, setCreateBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     try {
@@ -29,6 +39,8 @@ const UsersPage = () => {
       setUsers(body.users)
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -55,7 +67,9 @@ const UsersPage = () => {
   }
 
   const resetPassword = async (id: string, username: string) => {
-    const pw = window.prompt(`New password for ${username} (min 12 characters):`)
+    const pw = window.prompt(
+      `New password for ${username} (min 12 characters):`,
+    )
     if (pw === null) return
     if (pw.length < 12) {
       setError('Password must be at least 12 characters.')
@@ -104,14 +118,32 @@ const UsersPage = () => {
         Users
       </Heading>
 
-      {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
-      {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
+      <Flash
+        notice={notice}
+        error={error}
+        onDismiss={() => {
+          setNotice(null)
+          setError(null)
+        }}
+      />
 
-      <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 32 }}>
+      <table
+        style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 32 }}
+      >
         <thead>
           <tr>
-            {['Username', 'Email', 'Role', 'Active', 'Last login', 'Actions'].map((h) => (
-              <th key={h} style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
+            {[
+              'Username',
+              'Email',
+              'Role',
+              'Active',
+              'Last login',
+              'Actions',
+            ].map((h) => (
+              <th
+                key={h}
+                style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
+              >
                 {h}
               </th>
             ))}
@@ -134,7 +166,9 @@ const UsersPage = () => {
                 </select>
               </td>
               <td style={cell}>{u.active ? 'Yes' : 'No'}</td>
-              <td style={cell}>{u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : '—'}</td>
+              <td style={cell}>
+                {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : '—'}
+              </td>
               <td style={cell}>
                 <button
                   onClick={() => patch(u.id, { active: !u.active })}
@@ -153,11 +187,19 @@ const UsersPage = () => {
               </td>
             </tr>
           ))}
-          {users.length === 0 && (
+          {loading ? (
             <tr>
-              <td colSpan={6} style={cell}>No users found.</td>
+              <td colSpan={6} style={cell}>
+                Loading…
+              </td>
             </tr>
-          )}
+          ) : users.length === 0 ? (
+            <tr>
+              <td colSpan={6} style={cell}>
+                No users found.
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
 
@@ -165,33 +207,61 @@ const UsersPage = () => {
       <Heading size='md' style={{ marginBottom: 12 }}>
         New user
       </Heading>
-      <form onSubmit={createUser} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <form
+        onSubmit={createUser}
+        style={{
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+        }}
+      >
         <input
           placeholder='Username'
           value={createForm.username}
-          onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))}
+          onChange={(e) =>
+            setCreateForm((f) => ({ ...f, username: e.target.value }))
+          }
           required
-          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '4px 8px' }}
+          style={{
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            padding: '4px 8px',
+          }}
         />
         <input
           placeholder='Email'
           type='email'
           value={createForm.email}
-          onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+          onChange={(e) =>
+            setCreateForm((f) => ({ ...f, email: e.target.value }))
+          }
           required
-          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '4px 8px' }}
+          style={{
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            padding: '4px 8px',
+          }}
         />
         <input
           placeholder='Password'
           type='password'
           value={createForm.password}
-          onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+          onChange={(e) =>
+            setCreateForm((f) => ({ ...f, password: e.target.value }))
+          }
           required
-          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '4px 8px' }}
+          style={{
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            padding: '4px 8px',
+          }}
         />
         <select
           value={createForm.role}
-          onChange={(e) => setCreateForm((f) => ({ ...f, role: e.target.value }))}
+          onChange={(e) =>
+            setCreateForm((f) => ({ ...f, role: e.target.value }))
+          }
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
         >
           <option value='editor'>editor</option>
@@ -199,7 +269,12 @@ const UsersPage = () => {
         </select>
         <button
           type='submit'
-          disabled={!createForm.username || !createForm.email || !createForm.password || createBusy}
+          disabled={
+            !createForm.username ||
+            !createForm.email ||
+            !createForm.password ||
+            createBusy
+          }
           style={{ textDecoration: 'underline' }}
         >
           Create
