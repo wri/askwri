@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
 import { StatusChip } from '../components/StatusChip'
+import { Tooltip } from '../components/Tooltip'
 
 interface QueueItem {
   id: string
@@ -42,6 +43,10 @@ const cell: React.CSSProperties = {
 const WORKER_STYLE: Record<string, { color: string; label: string }> = {
   idle: { color: '#0A6640', label: 'running (idle)' },
   processing: { color: '#0050C8', label: 'running (processing)' },
+  pending: {
+    color: '#B7791F',
+    label: 'files just dropped — worker should pick them up shortly',
+  },
   stale: {
     color: '#C11101',
     label: 'NOT RUNNING — dropped files are not being processed',
@@ -243,7 +248,7 @@ const ReviewQueuePage = () => {
                   color: health.docsMissingTitleEn > 0 ? '#C11101' : '#444',
                 }}
               >
-                Missing title_en: {health.docsMissingTitleEn}
+                Missing English title: {health.docsMissingTitleEn}
               </Text>
               <Text
                 style={{
@@ -260,11 +265,9 @@ const ReviewQueuePage = () => {
           {health.docsMissingNativeSummary > 0 && (
             <Text style={{ marginTop: 8, fontSize: 13, color: '#666' }}>
               {health.docsMissingNativeSummary} non-English document(s) have no
-              summary in their own language (only English). This is a
-              multilingual-renditions gap (design §7.5): the native-language
-              summary is a retrieval handle for same-language queries.
-              Re-ingesting these documents will regenerate the missing native
-              summaries.
+              summary in their own language (only English). A native-language
+              summary helps same-language search find the document. Re-ingesting
+              these documents regenerates the missing summaries.
             </Text>
           )}
         </Box>
@@ -284,9 +287,8 @@ const ReviewQueuePage = () => {
       {items.length === 0 ? (
         <Text style={{ color: '#555' }}>
           Queue is empty. 🎉 No documents are flagged for review. Check the
-          corpus-health panel above for the multilingual-renditions backlog
-          (missing native summaries) — those need a re-ingest to regenerate, not
-          a review action.
+          corpus-health panel above for documents missing a summary in their own
+          language — those need a re-ingest to regenerate, not a review action.
         </Text>
       ) : (
         <table
@@ -299,19 +301,26 @@ const ReviewQueuePage = () => {
           <thead>
             <tr>
               {[
-                'Document',
-                'Lang',
-                'Status',
-                'Confidence',
-                'Why flagged',
-                'Suggested tags',
-                'Actions',
-              ].map((h) => (
+                { key: 'document', node: 'Document' },
+                { key: 'lang', node: 'Lang' },
+                { key: 'status', node: 'Status' },
+                {
+                  key: 'confidence',
+                  node: (
+                    <Tooltip help='How cleanly the PDF text was extracted, from 0 to 1. Below 0.7 the document is held here for human review instead of going public automatically.'>
+                      Confidence
+                    </Tooltip>
+                  ),
+                },
+                { key: 'why-flagged', node: 'Why flagged' },
+                { key: 'suggested-tags', node: 'Suggested tags' },
+                { key: 'actions', node: 'Actions' },
+              ].map(({ key, node }) => (
                 <th
-                  key={h}
+                  key={key}
                   style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
                 >
-                  {h}
+                  {node}
                 </th>
               ))}
             </tr>

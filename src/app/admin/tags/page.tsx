@@ -16,7 +16,10 @@ interface Tag {
 /** The canonical taxonomy v1 facets (from the Phase-0 migration script's FACETS). */
 const CANONICAL_FACETS = ['program', 'office', 'topic', 'doc_type']
 
-const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid #eee' }
+const cell: React.CSSProperties = {
+  padding: '8px 12px',
+  borderBottom: '1px solid #eee',
+}
 
 const TagsPage = () => {
   const [tags, setTags] = useState<Tag[]>([])
@@ -56,7 +59,8 @@ const TagsPage = () => {
   }, [load])
 
   const deleteTag = async (id: string, valueId: string) => {
-    if (!window.confirm(`Delete tag "${valueId}"? This cannot be undone.`)) return
+    if (!window.confirm(`Delete tag "${valueId}"? This cannot be undone.`))
+      return
     setNotice(null)
     setError(null)
     try {
@@ -79,7 +83,11 @@ const TagsPage = () => {
     try {
       await adminFetch('/api/admin/tags', {
         method: 'POST',
-        body: JSON.stringify({ facet, valueId: addValue.trim(), allowNewFacet: isNewFacet }),
+        body: JSON.stringify({
+          facet,
+          valueId: addValue.trim(),
+          allowNewFacet: isNewFacet,
+        }),
       })
       setAddFacet('')
       setAddNewFacet('')
@@ -143,18 +151,30 @@ const TagsPage = () => {
         Tags
       </Heading>
       <Text style={{ marginBottom: 8, color: '#555', fontStyle: 'italic' }}>
-        Taxonomy v1 — the controlled vocabulary of facets and values used to classify documents.
-        Facets are the categories (e.g. program, office, topic, doc_type); values are the entries
-        within each facet. Tags are language-neutral: a Chinese and an English paper on the same
-        topic carry the same tag (design §8).
+        Taxonomy v1 — the controlled vocabulary of facets and values used to
+        classify documents. Facets are the categories (e.g. program, office,
+        topic, doc_type); values are the entries within each facet. Tags are
+        language-neutral: a Chinese and an English paper on the same topic carry
+        the same tag.
       </Text>
-      <Text style={{ marginBottom: 16, color: '#888', fontStyle: 'italic', fontSize: 13 }}>
-        Note: taxonomy v1 values are the raw CSV strings. Rename is available to admins; merge and
-        version bumps are deferred until a curation owner is assigned (design §10.7).
+      <Text
+        style={{
+          marginBottom: 16,
+          color: '#888',
+          fontStyle: 'italic',
+          fontSize: 13,
+        }}
+      >
+        Note: tag values are currently the raw imported strings. Admins can
+        rename them; merging duplicate values is planned but not built yet.
       </Text>
 
-      {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
-      {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
+      {notice && (
+        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
+      )}
+      {error && (
+        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
+      )}
 
       {distinctFacets.map((facet) => (
         <section key={facet} style={{ marginBottom: 24 }}>
@@ -172,7 +192,14 @@ const TagsPage = () => {
                   'Taxonomy version',
                   ...(isAdmin ? [''] : []),
                 ].map((h, i) => (
-                  <th key={i} style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
+                  <th
+                    key={i}
+                    style={{
+                      ...cell,
+                      textAlign: 'left',
+                      background: '#f7f7f7',
+                    }}
+                  >
                     {h}
                   </th>
                 ))}
@@ -186,7 +213,11 @@ const TagsPage = () => {
                       <input
                         value={renameValue}
                         onChange={(e) => setRenameValue(e.target.value)}
-                        style={{ fontFamily: 'inherit', fontSize: 'inherit', width: '100%' }}
+                        style={{
+                          fontFamily: 'inherit',
+                          fontSize: 'inherit',
+                          width: '100%',
+                        }}
                       />
                     ) : (
                       tag.valueId
@@ -197,7 +228,11 @@ const TagsPage = () => {
                       <input
                         value={renameFacet}
                         onChange={(e) => setRenameFacet(e.target.value)}
-                        style={{ fontFamily: 'inherit', fontSize: 'inherit', width: '100%' }}
+                        style={{
+                          fontFamily: 'inherit',
+                          fontSize: 'inherit',
+                          width: '100%',
+                        }}
                       />
                     ) : (
                       tag.facet
@@ -213,7 +248,10 @@ const TagsPage = () => {
                           <button
                             onClick={() => saveRename(tag.id)}
                             disabled={renameBusy}
-                            style={{ marginRight: 8, textDecoration: 'underline' }}
+                            style={{
+                              marginRight: 8,
+                              textDecoration: 'underline',
+                            }}
                           >
                             Save
                           </button>
@@ -228,19 +266,26 @@ const TagsPage = () => {
                         <>
                           <button
                             onClick={() => startRename(tag)}
-                            style={{ marginRight: 8, textDecoration: 'underline' }}
+                            style={{
+                              marginRight: 8,
+                              textDecoration: 'underline',
+                            }}
                             title='Rename this tag value or facet (admin only)'
                           >
                             Rename
                           </button>
-                          {tag.acceptedCount === 0 && tag.suggestedCount === 0 && (
-                            <button
-                              onClick={() => deleteTag(tag.id, tag.valueId)}
-                              style={{ textDecoration: 'underline', color: '#C11101' }}
-                            >
-                              Delete
-                            </button>
-                          )}
+                          {tag.acceptedCount === 0 &&
+                            tag.suggestedCount === 0 && (
+                              <button
+                                onClick={() => deleteTag(tag.id, tag.valueId)}
+                                style={{
+                                  textDecoration: 'underline',
+                                  color: '#C11101',
+                                }}
+                              >
+                                Delete
+                              </button>
+                            )}
                         </>
                       )}
                     </td>
@@ -260,7 +305,12 @@ const TagsPage = () => {
       </Heading>
       <form
         onSubmit={addTag}
-        style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}
+        style={{
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+        }}
       >
         <select
           value={addFacet}
@@ -283,7 +333,11 @@ const TagsPage = () => {
             value={addNewFacet}
             onChange={(e) => setAddNewFacet(e.target.value)}
             required
-            style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '2px 6px' }}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              padding: '2px 6px',
+            }}
           />
         )}
         <input
@@ -291,9 +345,17 @@ const TagsPage = () => {
           value={addValue}
           onChange={(e) => setAddValue(e.target.value)}
           required
-          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '2px 6px' }}
+          style={{
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            padding: '2px 6px',
+          }}
         />
-        <button type='submit' disabled={addBusy} style={{ textDecoration: 'underline' }}>
+        <button
+          type='submit'
+          disabled={addBusy}
+          style={{ textDecoration: 'underline' }}
+        >
           Add
         </button>
       </form>
