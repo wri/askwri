@@ -126,9 +126,13 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
           <button
             onClick={logout}
             style={{
+              font: 'inherit',
               marginTop: 8,
-              textDecoration: 'underline',
               color: '#cbd5e0',
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.55)',
+              borderRadius: 4,
+              padding: '3px 10px',
               cursor: 'pointer',
             }}
           >

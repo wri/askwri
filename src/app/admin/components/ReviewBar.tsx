@@ -90,8 +90,12 @@ export const ReviewBar = ({
     fontSize: 14,
   }
   const btn: React.CSSProperties = {
+    font: 'inherit',
     color: '#fff',
-    textDecoration: 'underline',
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.55)',
+    borderRadius: 4,
+    padding: '3px 10px',
     cursor: 'pointer',
   }
 
