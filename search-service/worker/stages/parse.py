@@ -25,7 +25,7 @@ from psycopg.types.json import Jsonb
 
 from app.config import get_settings
 from app.db import get_pool
-from worker.stages import fetch_document, stage
+from worker.stages import audit_system_event, fetch_document, stage
 
 logger = logging.getLogger(__name__)
 
@@ -208,12 +208,22 @@ def run(document_id):
                 if regex_doi:
                     meta["doi"] = regex_doi
 
+                # Capture current values BEFORE overwriting so the audit records a
+                # genuine before/after (advisory 2: filter no-op re-ingests).
+                old_row = conn.execute(
+                    "SELECT title, authors, doi, year_published, article_type, wri_primary_office "
+                    "FROM documents WHERE id=%s", (document_id,),
+                ).fetchone()
+                old_values = dict(zip(_EXTRACT_FIELDS, old_row))
+
+                changes = []  # (field, old, new) — fields the guard actually overwrote AND changed
                 for field in _EXTRACT_FIELDS:
                     value = meta.get(field)
                     if value is None:
                         continue
                     # Overwrite the column value only if provenance is NULL or 'llm'.
-                    conn.execute(
+                    # Advisory 1: the collect decision keys off THIS statement's rowcount.
+                    cur = conn.execute(
                         f"""UPDATE documents SET {field} = %s
                             WHERE id = %s AND (metadata_source->>'{field}' IS NULL OR metadata_source->>'{field}' = 'llm')""",
                         (value, document_id),
@@ -224,6 +234,17 @@ def run(document_id):
                         f"""UPDATE documents SET metadata_source = metadata_source || jsonb_build_object('{field}', 'llm')
                             WHERE id = %s AND (metadata_source->>'{field}' IS NULL OR metadata_source->>'{field}' = 'llm')""",
                         (document_id,),
+                    )
+                    # Audit only genuinely-overwritten fields: rowcount==1 (guard passed)
+                    # AND old != new (advisory 2: drop before==after no-op re-ingests).
+                    if cur.rowcount == 1 and old_values[field] != value:
+                        changes.append((field, old_values[field], value))
+
+                if changes:
+                    audit_system_event(
+                        conn, document_id, "update",
+                        {field: old for field, old, _ in changes},
+                        {field: new for field, _, new in changes},
                     )
 
                 if meta.get("title"):

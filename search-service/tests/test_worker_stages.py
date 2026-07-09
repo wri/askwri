@@ -2260,6 +2260,11 @@ class TestPublishStage:
         assert n == 0, "the failed audit write left no row"
 
 
+_EXTRACT_FIELDS_FOR_TEST = [
+    "title", "authors", "doi", "year_published", "article_type", "wri_primary_office"
+]
+
+
 class TestParseLLMExtraction:
     """Tests for the LLM metadata extraction in the parse stage.
     Mocks _load_pdf_bytes, _parse_pdf, and chat_json so tests are hermetic
@@ -2402,3 +2407,118 @@ class TestParseLLMExtraction:
             row = conn.execute("SELECT title, status FROM documents WHERE id=%s", (doc_id,)).fetchone()
         assert row[0] == "original-slug"  # title unchanged
         assert row[1] == "processing"  # status advanced normally
+
+    def test_extraction_writes_update_audit_of_overwritten_fields(self, stages_test_db, monkeypatch):
+        """Fresh ingest: LLM fills all six fields → one system 'update' audit row
+        whose before/after list exactly the overwritten fields with old→new values."""
+        self._mock_parse(monkeypatch)
+        import worker.llm as _llm
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+
+        doc_id = self._setup_doc(stages_test_db, metadata_source={}, title="old-slug")
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                "SELECT source, actor_user_id, before, after FROM audit_log "
+                "WHERE action='update' AND entity_type='document' AND entity_id=%s",
+                (doc_id,),
+            ).fetchall()
+        assert len(rows) == 1, f"expected exactly one update row, got {rows}"
+        source, actor, before, after = rows[0]
+        assert source == "system"
+        assert actor is None
+        # 'title' old value is the seeded slug; all six were None/slug before.
+        assert before["title"] == "old-slug"
+        assert after == self._FAKE_EXTRACTION
+        assert set(before) == set(after) == set(self._FAKE_EXTRACTION)
+
+    def test_provenance_protected_field_absent_from_audit(self, stages_test_db, monkeypatch):
+        """A field the provenance guard rejects (title='external') must NOT appear
+        in the update row's before/after — never 'system · updated title' for a
+        human/CSV-owned field. Other, genuinely-overwritten fields still appear."""
+        self._mock_parse(monkeypatch)
+        import worker.llm as _llm
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+
+        doc_id = self._setup_doc(
+            stages_test_db, metadata_source={"title": "external"}, title="My CSV Title",
+        )
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT before, after FROM audit_log "
+                "WHERE action='update' AND entity_id=%s", (doc_id,),
+            ).fetchone()
+        assert row is not None, "other fields were overwritten, so an update row exists"
+        before, after = row
+        assert "title" not in before, "protected title must be absent from before"
+        assert "title" not in after, "protected title must be absent from after"
+        assert after.get("doi") == self._FAKE_EXTRACTION["doi"], "unprotected fields still audited"
+
+    def test_noop_reingest_emits_no_update_audit(self, stages_test_db, monkeypatch):
+        """Re-ingest where every fresh LLM value equals the current column value:
+        the guarded UPDATE still matches (rowcount==1), but old==new for all fields
+        → the change list is empty → NO update audit row (before==after noise filter)."""
+        self._mock_parse(monkeypatch)
+        import worker.llm as _llm
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+
+        # Seed the doc so every column already holds the exact value the LLM returns,
+        # with 'llm' provenance so the guard permits (a no-op) overwrite.
+        doc_id = self._setup_doc(
+            stages_test_db,
+            metadata_source={f: "llm" for f in _EXTRACT_FIELDS_FOR_TEST},
+            title=self._FAKE_EXTRACTION["title"],
+        )
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute(
+                """UPDATE documents SET authors=%s, doi=%s, year_published=%s,
+                       article_type=%s, wri_primary_office=%s WHERE id=%s""",
+                (self._FAKE_EXTRACTION["authors"], self._FAKE_EXTRACTION["doi"],
+                 self._FAKE_EXTRACTION["year_published"], self._FAKE_EXTRACTION["article_type"],
+                 self._FAKE_EXTRACTION["wri_primary_office"], doc_id),
+            )
+            conn.commit()
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            n = conn.execute(
+                "SELECT count(*) FROM audit_log WHERE action='update' AND entity_id=%s",
+                (doc_id,),
+            ).fetchone()[0]
+        assert n == 0, f"a no-op re-ingest (old==new) must emit no update row, got {n}"
+
+    def test_failed_audit_write_does_not_fail_parse(self, stages_test_db, monkeypatch):
+        """A failed audit write is swallowed: extraction still lands in the columns
+        and the stage advances to 'processing' and returns None."""
+        self._mock_parse(monkeypatch)
+        import worker.llm as _llm
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+        def _boom(*a, **k):
+            raise RuntimeError("simulated audit serialize failure")
+        monkeypatch.setattr("worker.stages.Jsonb", _boom)
+
+        doc_id = self._setup_doc(stages_test_db, metadata_source={}, title="old-slug")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None  # must not raise
+
+        with psycopg.connect(stages_test_db) as conn:
+            title, status = conn.execute(
+                "SELECT title, status FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+            n = conn.execute(
+                "SELECT count(*) FROM audit_log WHERE action='update' AND entity_id=%s",
+                (doc_id,),
+            ).fetchone()[0]
+        assert title == self._FAKE_EXTRACTION["title"], "extraction still wrote the column"
+        assert status == "processing", "stage advanced normally despite audit failure"
+        assert n == 0, "the failed audit write left no row"
