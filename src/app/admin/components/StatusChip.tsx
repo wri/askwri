@@ -20,7 +20,7 @@ export const STATUS_META: Record<
     help: 'The ingestion pipeline is currently working on this document.',
   },
   needs_review: {
-    color: '#B7791F',
+    color: '#8a5a15',
     bg: '#fdf3e0',
     help: 'Held for human review — the PDF may not have parsed cleanly. Not publicly searchable until a person promotes it.',
   },

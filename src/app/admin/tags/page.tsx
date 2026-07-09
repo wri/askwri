@@ -165,7 +165,7 @@ const TagsPage = () => {
       <Text
         style={{
           marginBottom: 16,
-          color: '#888',
+          color: '#595959',
           fontStyle: 'italic',
           fontSize: 13,
         }}
@@ -206,6 +206,7 @@ const TagsPage = () => {
                   ].map((h, i) => (
                     <th
                       key={i}
+                      scope='col'
                       style={{
                         ...cell,
                         textAlign: 'left',

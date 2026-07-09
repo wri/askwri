@@ -183,7 +183,7 @@ const ReviewQueuePage = () => {
 
   const workerStyle = health
     ? (WORKER_STYLE[health.worker.status] ?? {
-        color: '#888',
+        color: '#595959',
         label: health.worker.status,
       })
     : null
@@ -428,7 +428,10 @@ const ReviewQueuePage = () => {
         >
           <thead>
             <tr>
-              <th style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
+              <th
+                scope='col'
+                style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
+              >
                 <input
                   type='checkbox'
                   aria-label='Select all'
@@ -455,6 +458,7 @@ const ReviewQueuePage = () => {
               ].map(({ key, node }) => (
                 <th
                   key={key}
+                  scope='col'
                   style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
                 >
                   {node}
@@ -527,7 +531,7 @@ const ReviewQueuePage = () => {
           </tbody>
         </table>
       )}
-      <Text style={{ fontSize: 13, color: '#888' }}>
+      <Text style={{ fontSize: 13, color: '#595959' }}>
         <strong>Promote</strong> = send to the public search corpus (the
         document becomes searchable). <strong>Re-ingest</strong> = re-queue for
         the worker to re-parse the PDF and re-run the pipeline (use this if the

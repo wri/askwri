@@ -210,7 +210,7 @@ const ImportPage = () => {
   const actionColor: Record<string, string> = {
     created: '#0A6640',
     updated: '#0050C8',
-    skipped: '#888',
+    skipped: '#595959',
     error: '#C11101',
   }
 
@@ -353,6 +353,7 @@ const ImportPage = () => {
             <thead>
               <tr>
                 <th
+                  scope='col'
                   style={{
                     textAlign: 'left',
                     borderBottom: '1px solid #ccc',
@@ -362,6 +363,7 @@ const ImportPage = () => {
                   External ID
                 </th>
                 <th
+                  scope='col'
                   style={{
                     textAlign: 'left',
                     borderBottom: '1px solid #ccc',
@@ -371,6 +373,7 @@ const ImportPage = () => {
                   Action
                 </th>
                 <th
+                  scope='col'
                   style={{
                     textAlign: 'left',
                     borderBottom: '1px solid #ccc',
@@ -380,6 +383,7 @@ const ImportPage = () => {
                   Match key
                 </th>
                 <th
+                  scope='col'
                   style={{
                     textAlign: 'left',
                     borderBottom: '1px solid #ccc',
@@ -415,7 +419,7 @@ const ImportPage = () => {
                     style={{
                       padding: '4px 8px',
                       borderBottom: '1px solid #eee',
-                      color: '#888',
+                      color: '#595959',
                       fontSize: 13,
                     }}
                   >
@@ -451,7 +455,9 @@ const ImportPage = () => {
                         ))}
                       </Box>
                     ) : (
-                      <span style={{ color: '#888' }}>{d.reason ?? '—'}</span>
+                      <span style={{ color: '#595959' }}>
+                        {d.reason ?? '—'}
+                      </span>
                     )}
                   </td>
                 </tr>

@@ -150,7 +150,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
             padding: '12px 24px',
             borderTop: '1px solid #eee',
             fontSize: 13,
-            color: '#888',
+            color: '#595959',
           }}
         >
           <Link href='/admin/guide' style={{ textDecoration: 'underline' }}>

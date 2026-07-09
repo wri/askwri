@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../../lib/api'
 import { actionButton, dangerButton } from '../../lib/buttonStyles'
+import { PROVENANCE_BADGE } from '../../lib/provenance'
 import { StatusChip } from '../../components/StatusChip'
 import { Tooltip } from '../../components/Tooltip'
 import { ReviewBar } from '../../components/ReviewBar'
@@ -110,15 +111,6 @@ const EDITABLE: {
     help: 'The WRI office or center primarily responsible (e.g. WRI Ross Center).',
   },
 ]
-
-const PROVENANCE_BADGE: Record<
-  string,
-  { text: string; color: string; bg: string }
-> = {
-  human: { text: 'person', color: '#0A6640', bg: '#e4f2ea' },
-  external: { text: 'imported', color: '#0050C8', bg: '#e6f0ff' },
-  llm: { text: 'AI', color: '#B7791F', bg: '#fdf3e0' },
-}
 
 const cell: React.CSSProperties = {
   padding: '8px 12px',
@@ -993,7 +985,7 @@ const DocumentEditorPage = () => {
                   {detail.collections.map((c) => (
                     <tr key={c.id}>
                       <td style={cell}>{c.name}</td>
-                      <td style={{ ...cell, color: '#888' }}>{c.slug}</td>
+                      <td style={{ ...cell, color: '#595959' }}>{c.slug}</td>
                       <td style={cell}>
                         <button
                           onClick={() => removeFromCollection(c.id)}
@@ -1060,7 +1052,7 @@ const DocumentEditorPage = () => {
                 <Text style={{ color: '#C11101' }}>{historyError}</Text>
               )}
               {!history && !historyError && (
-                <Text style={{ color: '#888', fontSize: 13 }}>Loading…</Text>
+                <Text style={{ color: '#595959', fontSize: 13 }}>Loading…</Text>
               )}
               {history && history.entries.length === 0 && (
                 <Text style={{ color: '#555' }}>No recorded changes.</Text>
@@ -1077,7 +1069,9 @@ const DocumentEditorPage = () => {
                   >
                     <summary style={{ cursor: 'pointer' }}>
                       {historyLine(e)} ·{' '}
-                      <span style={{ color: '#888' }}>{historyWhen(e.at)}</span>
+                      <span style={{ color: '#595959' }}>
+                        {historyWhen(e.at)}
+                      </span>
                     </summary>
                     <table
                       style={{
@@ -1141,7 +1135,9 @@ const DocumentEditorPage = () => {
                         ))}
                         {!e.before && !e.after && (
                           <tr>
-                            <td style={{ padding: '2px 8px', color: '#888' }}>
+                            <td
+                              style={{ padding: '2px 8px', color: '#595959' }}
+                            >
                               no field detail recorded
                             </td>
                           </tr>

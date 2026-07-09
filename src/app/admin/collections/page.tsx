@@ -131,6 +131,7 @@ const CollectionsPage = () => {
               (h) => (
                 <th
                   key={h}
+                  scope='col'
                   style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
                 >
                   {h}
@@ -157,7 +158,7 @@ const CollectionsPage = () => {
                   col.name
                 )}
               </td>
-              <td style={{ ...cell, color: '#888' }}>{col.slug}</td>
+              <td style={{ ...cell, color: '#595959' }}>{col.slug}</td>
               <td style={cell}>{col.description ?? '—'}</td>
               <td style={cell}>{col.documentCount}</td>
               <td style={cell}>
