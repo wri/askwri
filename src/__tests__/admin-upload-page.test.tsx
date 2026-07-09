@@ -14,6 +14,10 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: () => null }),
 }))
 
+// Mirrors the page's poll interval. Deliberately hard-coded — do not import
+// the page's private constant; keep the test decoupled.
+const POLL_INTERVAL_MS_TEST = 5000
+
 const healthOk = {
   ok: true,
   json: () =>
@@ -145,5 +149,140 @@ describe('UploadPage — dropzone + per-file results', () => {
     // ALL-OR-NOTHING: nothing was accepted, so no filename appears in a list row
     expect(screen.queryByText('ok.pdf')).not.toBeInTheDocument()
     expect(screen.queryByText('big.pdf')).not.toBeInTheDocument()
+  })
+})
+
+describe('UploadPage — polling + likely-duplicate', () => {
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  const dropOne = async (name: string) => {
+    const zone = screen.getByLabelText(
+      'Drop PDFs here or click to choose files',
+    )
+    await act(async () => {
+      fireEvent.drop(zone, { dataTransfer: { files: [pdf(name)] } })
+    })
+  }
+
+  it('flips an entry to its StatusChip + editor link when the doc registers', async () => {
+    let registered = false
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
+      if (url === '/api/admin/intake')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: ['doc.pdf'] }),
+        })
+      // documents poll
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            items: registered
+              ? [
+                  {
+                    id: 'doc-id-1',
+                    externalId: 'doc',
+                    title: 'Doc',
+                    language: 'en',
+                    status: 'processing',
+                  },
+                ]
+              : [],
+            total: registered ? 1 : 0,
+          }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+    await dropOne('doc.pdf')
+    expect(screen.getByText('doc.pdf')).toBeInTheDocument()
+
+    registered = true
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS_TEST)
+    })
+
+    expect(screen.getByText('processing')).toBeInTheDocument() // StatusChip
+    expect(screen.getByRole('link', { name: /open/i })).toHaveAttribute(
+      'href',
+      '/admin/documents/doc-id-1',
+    )
+  })
+
+  it('does NOT exact-match on an ILIKE substring near-miss', async () => {
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
+      if (url === '/api/admin/intake')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: ['doc.pdf'] }),
+        })
+      // search=doc returns a substring near-miss "doc-2023", not our stem
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            items: [
+              {
+                id: 'x',
+                externalId: 'doc-2023',
+                title: 'X',
+                language: 'en',
+                status: 'searchable',
+              },
+            ],
+          }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+    await dropOne('doc.pdf')
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS_TEST)
+    })
+    expect(screen.queryByText('searchable')).not.toBeInTheDocument()
+    expect(screen.getByText(/waiting to register/i)).toBeInTheDocument()
+  })
+
+  it('infers "likely duplicate" only after 90s with zero backlog', async () => {
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk) // backlog 0
+      if (url === '/api/admin/intake')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: ['dup.pdf'] }),
+        })
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, items: [] }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+    await dropOne('dup.pdf')
+
+    // At 60s: not yet flagged.
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(60000)
+    })
+    expect(screen.queryByText(/likely duplicate/i)).not.toBeInTheDocument()
+
+    // Past 90s: flagged, and polling stops (interval cleared).
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(40000)
+    })
+    expect(screen.getByText(/likely duplicate/i)).toBeInTheDocument()
+
+    // All entries are terminal now — advancing further must trigger NO
+    // additional fetches (the shared interval is actually cleared).
+    const callsAtTerminal = fetchMock.mock.calls.length
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS_TEST * 4)
+    })
+    expect(fetchMock.mock.calls.length).toBe(callsAtTerminal)
   })
 })

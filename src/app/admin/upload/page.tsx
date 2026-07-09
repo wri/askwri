@@ -6,6 +6,8 @@ import { Box, Heading, Text } from '@chakra-ui/react'
 
 import { Tooltip } from '../components/Tooltip'
 import { Flash } from '../components/Flash'
+import { StatusChip } from '../components/StatusChip'
+import { adminFetch } from '../lib/api'
 
 interface WorkerHealth {
   queueDepth: number
@@ -38,11 +40,24 @@ const STATUS_STYLES: Record<
   },
 }
 
+const POLL_INTERVAL_MS = 5000
+const DUPLICATE_TIMEOUT_MS = 90000
+const TERMINAL_DOC_STATUSES = new Set([
+  'searchable',
+  'needs_review',
+  'error',
+  'withdrawn',
+])
+
 // Strip ONLY a trailing ".pdf" (case-insensitive) — matches Python Path().stem
 // and workerHealth.ts:87, so names like "a.b.pdf" → "a.b".
 const stemOf = (filename: string) => filename.replace(/\.pdf$/i, '')
 
 const isPdf = (f: File) => f.name.toLowerCase().endsWith('.pdf')
+
+const isTerminal = (e: UploadEntry) =>
+  e.likelyDuplicate ||
+  (e.docStatus != null && TERMINAL_DOC_STATUSES.has(e.docStatus))
 
 const UploadPage = () => {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -52,6 +67,13 @@ const UploadPage = () => {
   const [dragOver, setDragOver] = useState(false)
   const [health, setHealth] = useState<WorkerHealth | null>(null)
   const [entries, setEntries] = useState<UploadEntry[]>([])
+
+  // Read entries inside the interval without re-arming it on every change.
+  // Written in an effect (not during render) to satisfy react-hooks/refs.
+  const entriesRef = useRef<UploadEntry[]>([])
+  useEffect(() => {
+    entriesRef.current = entries
+  }, [entries])
 
   const loadHealth = useCallback(async () => {
     try {
@@ -141,7 +163,73 @@ const UploadPage = () => {
     if (pdfs.length > 0) uploadFiles(pdfs)
   }
 
-  // TASK 2: shared poll interval goes here.
+  // Single shared interval for the whole list. Re-arms only when the set of
+  // non-terminal entries opens/closes (via `activePolling`), reading current
+  // entries through entriesRef so ticks always see fresh state.
+  const activePolling = entries.some((e) => !isTerminal(e))
+  useEffect(() => {
+    if (!activePolling) return
+    const tick = async () => {
+      const pending = entriesRef.current.filter((e) => !isTerminal(e))
+      if (pending.length === 0) return
+
+      // Fetch the (global, coarse) intake backlog once per tick. NOTE: this
+      // signal is 0 when other users have no queued files; it is ALSO always 0
+      // in INTAKE_LOCAL_DIR mode (no S3 bucket), so the duplicate inference can
+      // over-fire in local dev — that's a known local-only artifact.
+      let backlog: number | null = null
+      try {
+        const res = await fetch('/api/admin/worker-health')
+        if (res.ok) {
+          const body = await res.json()
+          if (body.ok) backlog = body.health.intakeBacklog
+        }
+      } catch {
+        // best-effort; leave backlog null (never triggers the duplicate inference)
+      }
+
+      const updates = new Map<string, Partial<UploadEntry>>()
+      await Promise.all(
+        pending.map(async (e) => {
+          try {
+            const body = await adminFetch<{
+              items: { id: string; externalId: string; status: string }[]
+            }>(
+              `/api/admin/documents?search=${encodeURIComponent(e.stem)}&limit=5`,
+            )
+            // `search` is an ILIKE substring match — exact-match the stem here.
+            const match = body.items.find((it) => it.externalId === e.stem)
+            if (match) {
+              updates.set(e.stem, { docId: match.id, docStatus: match.status })
+              return
+            }
+          } catch {
+            // poll failure: leave the entry at its last known state
+            return
+          }
+          // Not registered. Infer a likely (content-hash) duplicate only after
+          // the timeout AND when the worker reports an empty intake queue.
+          if (
+            backlog === 0 &&
+            Date.now() - e.uploadedAt > DUPLICATE_TIMEOUT_MS
+          ) {
+            updates.set(e.stem, { likelyDuplicate: true })
+          }
+        }),
+      )
+
+      if (updates.size > 0) {
+        setEntries((prev) =>
+          prev.map((e) => {
+            const u = updates.get(e.stem)
+            return u ? { ...e, ...u } : e
+          }),
+        )
+      }
+    }
+    const id = setInterval(tick, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [activePolling])
 
   const statusStyle = health ? STATUS_STYLES[health.status] : null
 
@@ -272,10 +360,27 @@ const UploadPage = () => {
                 <span style={{ fontFamily: 'monospace', flex: 1 }}>
                   {e.filename}
                 </span>
-                {/* TASK 2: StatusChip + editor link / likely-duplicate branch. */}
-                <span style={{ color: '#666' }}>
-                  uploaded — waiting to register…
-                </span>
+                {e.docStatus != null && e.docId != null ? (
+                  <>
+                    <StatusChip status={e.docStatus} />
+                    <Link
+                      href={`/admin/documents/${e.docId}`}
+                      style={{ textDecoration: 'underline' }}
+                    >
+                      open →
+                    </Link>
+                  </>
+                ) : e.likelyDuplicate ? (
+                  <Tooltip help='Not registered after 90s and the intake queue is empty — the worker most likely skipped this file as a content-hash duplicate of a document already in the system. This is an inference (dedup-skip is not queryable per file). To re-process, use Re-ingest on the existing document.'>
+                    <span style={{ color: '#B7791F', fontWeight: 600 }}>
+                      likely duplicate
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span style={{ color: '#666' }}>
+                    uploaded — waiting to register…
+                  </span>
+                )}
               </li>
             ))}
           </ul>
