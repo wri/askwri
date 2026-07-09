@@ -78,3 +78,7 @@
   outline: 2px solid #1a365d;
   outline-offset: 1px;
 }
+.admin-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

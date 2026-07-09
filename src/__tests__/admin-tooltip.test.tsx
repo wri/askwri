@@ -53,15 +53,30 @@ describe('Tooltip component', () => {
     expect(tip.style.display).toBe('none')
   })
 
-  it('toggles on tap/click and dismisses on Escape', () => {
-    render(<Tooltip help='Tap to toggle.'>Field</Tooltip>)
+  it('stays open on a real tap (focus then click) and dismisses on Escape', () => {
+    // A real touch tap fires focus THEN click. Click must be idempotent-open,
+    // not a toggle, or the first tap would flash the tooltip shut.
+    render(<Tooltip help='Tap to open.'>Field</Tooltip>)
     const trigger = screen.getByRole('button')
     const tip = document.getElementById(
       trigger.getAttribute('aria-describedby') as string,
     ) as HTMLElement
+    fireEvent.focus(trigger)
+    expect(tip.style.display).toBe('block')
     fireEvent.click(trigger)
     expect(tip.style.display).toBe('block')
     fireEvent.keyDown(trigger, { key: 'Escape' })
     expect(tip.style.display).toBe('none')
+  })
+
+  it('opens on a plain click', () => {
+    render(<Tooltip help='Click to open.'>Field</Tooltip>)
+    const trigger = screen.getByRole('button')
+    const tip = document.getElementById(
+      trigger.getAttribute('aria-describedby') as string,
+    ) as HTMLElement
+    expect(tip.style.display).toBe('none')
+    fireEvent.click(trigger)
+    expect(tip.style.display).toBe('block')
   })
 })

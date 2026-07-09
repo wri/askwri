@@ -9,7 +9,9 @@ import { useId, useState } from 'react'
  * Same API as before: <Tooltip help='…'>label</Tooltip>. The trigger is a real
  * <button> (natively focusable — no tabIndex, no role) wrapping ONLY the label
  * text + a "?" marker. The help text is a role='tooltip' popover, shown on
- * hover, focus, and tap (click toggles for touch), dismissed on blur/Escape.
+ * hover, focus, and tap, dismissed on blur/Escape. Click is idempotent-open
+ * (not a toggle): a real tap fires focus (open) then click — a toggle would
+ * flash the tooltip shut on the first tap. Blur/Escape already close it.
  * Per WAI-ARIA tooltip guidance. The native `title` is intentionally dropped
  * (it double-announces). children MUST be plain text — never interactive nodes.
  */
@@ -32,7 +34,7 @@ export const Tooltip = ({
         onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(true)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') setOpen(false)
         }}
