@@ -149,6 +149,20 @@ describe('DocumentEditorPage', () => {
     mockParamsId = 'test-doc-id-123'
   })
 
+  it('shows a loading line (and no sections) before the document detail resolves', () => {
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    // Load-bearing assertion: the collapsed History panel ALREADY renders a
+    // hidden 'Loading…' node in jsdom (page.tsx:1020-1022, RTL matches
+    // non-visible text), so getByText alone is green before the gate exists.
+    // Lifecycle renders synchronously today — its absence proves the gate.
+    expect(screen.queryByText('Lifecycle')).not.toBeInTheDocument()
+  })
+
   it('renders an Authors field (textarea)', async () => {
     render(
       <ChakraProvider>

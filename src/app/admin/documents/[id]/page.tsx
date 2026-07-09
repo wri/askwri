@@ -7,6 +7,7 @@ import { adminFetch } from '../../lib/api'
 import { StatusChip } from '../../components/StatusChip'
 import { Tooltip } from '../../components/Tooltip'
 import { ReviewBar } from '../../components/ReviewBar'
+import { Flash } from '../../components/Flash'
 import { PROVENANCE_KEY, PROVENANCE_LABEL } from '@/lib/metadataProvenance'
 
 interface Detail {
@@ -471,659 +472,679 @@ const DocumentEditorPage = () => {
         re-ingested. Saving takes effect immediately.
       </Text>
 
-      {notice && (
-        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
-      )}
-      {error && (
-        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
-      )}
+      <Flash
+        notice={notice}
+        error={error}
+        onDismiss={() => {
+          setNotice(null)
+          setError(null)
+        }}
+      />
 
-      {/* Lifecycle panel */}
-      <section style={{ marginBottom: 32 }}>
-        <Heading size='md' style={{ marginBottom: 12 }}>
-          Lifecycle
-        </Heading>
-        {doc && (
-          <table
-            style={{
-              borderCollapse: 'collapse',
-              width: '100%',
-              marginBottom: 12,
-            }}
-          >
-            <tbody>
-              <tr>
-                <td style={{ ...cell, width: 200, fontWeight: 500 }}>Status</td>
-                <td style={cell}>
-                  <StatusChip status={doc.status} />
-                </td>
-              </tr>
-              <tr>
-                <td style={{ ...cell, fontWeight: 500 }}>
-                  Extraction confidence
-                </td>
-                <td style={cell}>
-                  {doc.extractionConfidence != null
-                    ? Number(doc.extractionConfidence).toFixed(2)
-                    : '—'}
-                </td>
-              </tr>
-              {detail?.latestJob && (
-                <>
+      {!detail && !error ? (
+        <Text>Loading…</Text>
+      ) : (
+        <>
+          {/* Lifecycle panel */}
+          <section style={{ marginBottom: 32 }}>
+            <Heading size='md' style={{ marginBottom: 12 }}>
+              Lifecycle
+            </Heading>
+            {doc && (
+              <table
+                style={{
+                  borderCollapse: 'collapse',
+                  width: '100%',
+                  marginBottom: 12,
+                }}
+              >
+                <tbody>
+                  <tr>
+                    <td style={{ ...cell, width: 200, fontWeight: 500 }}>
+                      Status
+                    </td>
+                    <td style={cell}>
+                      <StatusChip status={doc.status} />
+                    </td>
+                  </tr>
                   <tr>
                     <td style={{ ...cell, fontWeight: 500 }}>
-                      Latest job status
+                      Extraction confidence
                     </td>
                     <td style={cell}>
-                      {detail.latestJob.status}
-                      {detail.latestJob.stage
-                        ? ` / ${detail.latestJob.stage}`
-                        : ''}
-                      {detail.latestJob.error
-                        ? ` ⚠ (${detail.latestJob.attempts} attempts)`
-                        : ''}
+                      {doc.extractionConfidence != null
+                        ? Number(doc.extractionConfidence).toFixed(2)
+                        : '—'}
                     </td>
                   </tr>
-                  {detail.latestJob.error && (
-                    <tr>
-                      <td style={{ ...cell, fontWeight: 500 }}>Job error</td>
-                      <td style={{ ...cell, color: '#C11101' }}>
-                        {detail.latestJob.error}
-                      </td>
-                    </tr>
+                  {detail?.latestJob && (
+                    <>
+                      <tr>
+                        <td style={{ ...cell, fontWeight: 500 }}>
+                          Latest job status
+                        </td>
+                        <td style={cell}>
+                          {detail.latestJob.status}
+                          {detail.latestJob.stage
+                            ? ` / ${detail.latestJob.stage}`
+                            : ''}
+                          {detail.latestJob.error
+                            ? ` ⚠ (${detail.latestJob.attempts} attempts)`
+                            : ''}
+                        </td>
+                      </tr>
+                      {detail.latestJob.error && (
+                        <tr>
+                          <td style={{ ...cell, fontWeight: 500 }}>
+                            Job error
+                          </td>
+                          <td style={{ ...cell, color: '#C11101' }}>
+                            {detail.latestJob.error}
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-            </tbody>
-          </table>
-        )}
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            flexWrap: 'wrap',
-            alignItems: 'center',
-          }}
-        >
-          {doc?.status === 'needs_review' && (
-            <button
-              onClick={() => setStatus('searchable')}
-              disabled={busy}
-              title='Send this document to the public search corpus. Only reviewed documents can be promoted.'
-              style={{ textDecoration: 'underline' }}
-            >
-              Promote
-            </button>
-          )}
-          {doc?.status === 'withdrawn' && me.role === 'admin' && (
-            <button
-              onClick={() => setStatus('searchable')}
-              disabled={busy}
-              title='Put this withdrawn document back in the public search corpus.'
-              style={{ textDecoration: 'underline' }}
-            >
-              Restore
-            </button>
-          )}
-          {me.role === 'admin' && doc?.status !== 'withdrawn' && (
-            <button
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Withdraw this document? It disappears from public search immediately. An admin can restore it later.',
-                  )
-                ) {
-                  setStatus('withdrawn')
-                }
+                </tbody>
+              </table>
+            )}
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                flexWrap: 'wrap',
+                alignItems: 'center',
               }}
-              disabled={busy}
-              title='Remove this document from public search immediately (reversible — admins can restore).'
-              style={{ textDecoration: 'underline' }}
             >
-              Withdraw
-            </button>
-          )}
-          <button
-            onClick={reingest}
-            disabled={busy}
-            title='Re-run the ingestion pipeline on the same PDF. AI summaries and AI-extracted metadata are regenerated; fields and summaries edited by a person are preserved.'
-            style={{ textDecoration: 'underline' }}
-          >
-            Re-ingest
-          </button>
-          <a
-            href={`/api/admin/documents/${id}/file`}
-            target='_blank'
-            rel='noreferrer'
-            title='Open the stored PDF in a new tab.'
-            style={{ textDecoration: 'underline' }}
-          >
-            Open PDF
-          </a>
-          {me.role === 'admin' && (
-            <button
-              onClick={deleteDoc}
-              disabled={busy}
-              title='Permanently delete this document, its search index entries, and its PDF. Cannot be undone.'
-              style={{ textDecoration: 'underline', color: '#C11101' }}
-            >
-              Delete
-            </button>
-          )}
-        </div>
-      </section>
+              {doc?.status === 'needs_review' && (
+                <button
+                  onClick={() => setStatus('searchable')}
+                  disabled={busy}
+                  title='Send this document to the public search corpus. Only reviewed documents can be promoted.'
+                  style={{ textDecoration: 'underline' }}
+                >
+                  Promote
+                </button>
+              )}
+              {doc?.status === 'withdrawn' && me.role === 'admin' && (
+                <button
+                  onClick={() => setStatus('searchable')}
+                  disabled={busy}
+                  title='Put this withdrawn document back in the public search corpus.'
+                  style={{ textDecoration: 'underline' }}
+                >
+                  Restore
+                </button>
+              )}
+              {me.role === 'admin' && doc?.status !== 'withdrawn' && (
+                <button
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Withdraw this document? It disappears from public search immediately. An admin can restore it later.',
+                      )
+                    ) {
+                      setStatus('withdrawn')
+                    }
+                  }}
+                  disabled={busy}
+                  title='Remove this document from public search immediately (reversible — admins can restore).'
+                  style={{ textDecoration: 'underline' }}
+                >
+                  Withdraw
+                </button>
+              )}
+              <button
+                onClick={reingest}
+                disabled={busy}
+                title='Re-run the ingestion pipeline on the same PDF. AI summaries and AI-extracted metadata are regenerated; fields and summaries edited by a person are preserved.'
+                style={{ textDecoration: 'underline' }}
+              >
+                Re-ingest
+              </button>
+              <a
+                href={`/api/admin/documents/${id}/file`}
+                target='_blank'
+                rel='noreferrer'
+                title='Open the stored PDF in a new tab.'
+                style={{ textDecoration: 'underline' }}
+              >
+                Open PDF
+              </a>
+              {me.role === 'admin' && (
+                <button
+                  onClick={deleteDoc}
+                  disabled={busy}
+                  title='Permanently delete this document, its search index entries, and its PDF. Cannot be undone.'
+                  style={{ textDecoration: 'underline', color: '#C11101' }}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          </section>
 
-      {/* Metadata panel */}
-      <section style={{ marginBottom: 32 }}>
-        <Heading size='md' style={{ marginBottom: 12 }}>
-          Metadata
-        </Heading>
-        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-          <tbody>
-            {EDITABLE.map(({ key, label, type, help }) => (
-              <tr key={key}>
-                <td style={{ ...cell, width: 200, fontWeight: 500 }}>
-                  <Tooltip help={help}>{label}</Tooltip>
-                </td>
-                <td style={cell}>
-                  {type === 'select' ? (
-                    <select
-                      aria-label={label}
-                      value={form[key] ?? ''}
-                      onChange={(e) => {
-                        formDirty.current = true
-                        setForm((f) => ({ ...f, [key]: e.target.value }))
-                      }}
-                      style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
-                    >
-                      <option value=''>—</option>
-                      {form[key] &&
-                        !LANGUAGES.some((l) => l.code === form[key]) && (
-                          <option value={form[key]}>
-                            {form[key]} (unsupported)
-                          </option>
-                        )}
-                      {LANGUAGES.map((l) => (
-                        <option key={l.code} value={l.code}>
-                          {l.name} ({l.code})
-                        </option>
-                      ))}
-                    </select>
-                  ) : type === 'textarea' ? (
-                    <textarea
-                      value={form[key] ?? ''}
-                      onChange={(e) => {
-                        formDirty.current = true
-                        setForm((f) => ({ ...f, [key]: e.target.value }))
-                      }}
-                      rows={3}
-                      style={{
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        fontSize: 'inherit',
-                      }}
-                    />
-                  ) : (
-                    <input
-                      type={
-                        type === 'number'
-                          ? 'number'
-                          : type === 'date'
-                            ? 'date'
-                            : 'text'
-                      }
-                      value={form[key] ?? ''}
-                      onChange={(e) => {
-                        formDirty.current = true
-                        setForm((f) => ({ ...f, [key]: e.target.value }))
-                      }}
-                      style={{
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        fontSize: 'inherit',
-                      }}
-                    />
-                  )}
-                </td>
-                <td style={{ ...cell, width: 90 }}>
-                  {(() => {
-                    const src =
-                      doc?.metadataSource?.[PROVENANCE_KEY[key] ?? key]
-                    const badge = src ? PROVENANCE_BADGE[src] : null
-                    return badge ? (
-                      <span
-                        title={PROVENANCE_LABEL[src] ?? src}
-                        style={{
-                          background: badge.bg,
-                          color: badge.color,
-                          borderRadius: 4,
-                          padding: '2px 6px',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          cursor: 'help',
-                        }}
-                      >
-                        {badge.text}
-                      </span>
-                    ) : null
-                  })()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <button
-          onClick={saveMetadata}
-          disabled={busy}
-          style={{
-            marginTop: 8,
-            padding: '6px 16px',
-            textDecoration: 'underline',
-          }}
-        >
-          Save
-        </button>
-      </section>
-
-      {/* Tags panel */}
-      <section style={{ marginBottom: 32 }}>
-        <Heading size='md' style={{ marginBottom: 12 }}>
-          Tags
-        </Heading>
-        {Object.keys(tagsByFacet).length === 0 && <Text>No tags.</Text>}
-        {Object.entries(tagsByFacet).map(([facet, tags]) => (
-          <div key={facet} style={{ marginBottom: 16 }}>
-            <Text style={{ fontWeight: 600, marginBottom: 4 }}>{facet}</Text>
+          {/* Metadata panel */}
+          <section style={{ marginBottom: 32 }}>
+            <Heading size='md' style={{ marginBottom: 12 }}>
+              Metadata
+            </Heading>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <tbody>
-                {tags.map((tag) => (
-                  <tr key={tag.tagId}>
-                    <td style={cell}>{tag.valueId}</td>
-                    <td style={cell}>
-                      <span
-                        title='Who applied this tag and its review state. AI-suggested tags need a person to Accept or Reject them; accepting makes the tag permanent (the AI will never change it again).'
-                        style={{
-                          background: '#eee',
-                          borderRadius: 4,
-                          padding: '2px 6px',
-                          fontSize: 12,
-                          cursor: 'help',
-                        }}
-                      >
-                        {tagChipText(tag)}
-                      </span>
+                {EDITABLE.map(({ key, label, type, help }) => (
+                  <tr key={key}>
+                    <td style={{ ...cell, width: 200, fontWeight: 500 }}>
+                      <Tooltip help={help}>{label}</Tooltip>
                     </td>
                     <td style={cell}>
-                      {tag.status === 'suggested' && (
-                        <>
-                          <button
-                            onClick={() => decideTag(tag.tagId, 'accepted')}
-                            disabled={busy}
-                            title='Keep this tag. It becomes a human decision the AI cannot override.'
+                      {type === 'select' ? (
+                        <select
+                          aria-label={label}
+                          value={form[key] ?? ''}
+                          onChange={(e) => {
+                            formDirty.current = true
+                            setForm((f) => ({ ...f, [key]: e.target.value }))
+                          }}
+                          style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+                        >
+                          <option value=''>—</option>
+                          {form[key] &&
+                            !LANGUAGES.some((l) => l.code === form[key]) && (
+                              <option value={form[key]}>
+                                {form[key]} (unsupported)
+                              </option>
+                            )}
+                          {LANGUAGES.map((l) => (
+                            <option key={l.code} value={l.code}>
+                              {l.name} ({l.code})
+                            </option>
+                          ))}
+                        </select>
+                      ) : type === 'textarea' ? (
+                        <textarea
+                          value={form[key] ?? ''}
+                          onChange={(e) => {
+                            formDirty.current = true
+                            setForm((f) => ({ ...f, [key]: e.target.value }))
+                          }}
+                          rows={3}
+                          style={{
+                            width: '100%',
+                            fontFamily: 'inherit',
+                            fontSize: 'inherit',
+                          }}
+                        />
+                      ) : (
+                        <input
+                          type={
+                            type === 'number'
+                              ? 'number'
+                              : type === 'date'
+                                ? 'date'
+                                : 'text'
+                          }
+                          value={form[key] ?? ''}
+                          onChange={(e) => {
+                            formDirty.current = true
+                            setForm((f) => ({ ...f, [key]: e.target.value }))
+                          }}
+                          style={{
+                            width: '100%',
+                            fontFamily: 'inherit',
+                            fontSize: 'inherit',
+                          }}
+                        />
+                      )}
+                    </td>
+                    <td style={{ ...cell, width: 90 }}>
+                      {(() => {
+                        const src =
+                          doc?.metadataSource?.[PROVENANCE_KEY[key] ?? key]
+                        const badge = src ? PROVENANCE_BADGE[src] : null
+                        return badge ? (
+                          <span
+                            title={PROVENANCE_LABEL[src] ?? src}
                             style={{
-                              marginRight: 8,
-                              textDecoration: 'underline',
+                              background: badge.bg,
+                              color: badge.color,
+                              borderRadius: 4,
+                              padding: '2px 6px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'help',
                             }}
                           >
-                            Accept
-                          </button>
-                          <button
-                            onClick={() => decideTag(tag.tagId, 'rejected')}
-                            disabled={busy}
-                            title='Remove this suggestion. The AI will not re-suggest it.'
-                            style={{ textDecoration: 'underline' }}
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
-                      {tag.status === 'rejected' && (
-                        <button
-                          onClick={() => decideTag(tag.tagId, 'accepted')}
-                          disabled={busy}
-                          title='Keep this tag. It becomes a human decision the AI cannot override.'
-                          style={{ textDecoration: 'underline' }}
-                        >
-                          Accept
-                        </button>
-                      )}
+                            {badge.text}
+                          </span>
+                        ) : null
+                      })()}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        ))}
-        <div
-          style={{
-            marginTop: 8,
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-          }}
-        >
-          <select
-            value={addTagId}
-            onChange={(e) => setAddTagId(e.target.value)}
-            style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
-          >
-            <option value=''>— add tag —</option>
-            {availableTags.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.facet} / {t.valueId}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={addTag}
-            disabled={busy}
-            style={{ textDecoration: 'underline' }}
-          >
-            Add
-          </button>
-        </div>
-      </section>
-
-      {/* Summaries panel — editable (was read-only). Editors can now fix
-          truncated/garbage summaries directly. Each row is a textarea with a
-          Save button; source='human' rows are protected server-side. */}
-      <section style={{ marginBottom: 32 }}>
-        <Heading size='md' style={{ marginBottom: 12 }}>
-          Summaries
-        </Heading>
-        <Text style={{ marginBottom: 12, color: '#555', fontSize: 13 }}>
-          Each document carries a long and a short summary, in its own language
-          and in English. &ldquo;generated&rdquo; summaries were written by the
-          AI and are refreshed on re-ingest; once you save an edit, the summary
-          is yours and the AI never overwrites it.
-        </Text>
-        {(!detail || detail.summaries.length === 0) && (
-          <Text>No summaries.</Text>
-        )}
-        {detail?.summaries.map((s, i) => {
-          const skey = `${s.language}::${s.kind}`
-          const sourceLabel =
-            s.source === 'generated'
-              ? 'AI'
-              : s.source === 'external'
-                ? 'imported'
-                : s.source === 'human'
-                  ? 'person'
-                  : (s.source ?? 'unknown')
-          return (
-            <div key={i} style={{ marginBottom: 16 }}>
-              <Text style={{ fontWeight: 600, marginBottom: 4 }}>
-                {s.language} · {s.kind} ({sourceLabel})
-              </Text>
-              <textarea
-                data-summary-key={skey}
-                value={summaryEdits[skey] ?? s.text}
-                onChange={(e) =>
-                  setSummaryEdits((prev) => ({
-                    ...prev,
-                    [skey]: e.target.value,
-                  }))
-                }
-                rows={4}
-                style={{
-                  width: '100%',
-                  fontFamily: 'inherit',
-                  fontSize: 'inherit',
-                  background: '#f7f7f7',
-                  padding: '8px 12px',
-                  borderRadius: 4,
-                }}
-              />
-              <button
-                onClick={() => saveSummary(s.language, s.kind)}
-                disabled={busy || summaryEdits[skey] === s.text}
-                style={{
-                  marginTop: 4,
-                  padding: '4px 12px',
-                  textDecoration: 'underline',
-                }}
-              >
-                Save {s.language}/{s.kind}
-              </button>
-            </div>
-          )
-        })}
-      </section>
-
-      {/* Source metadata (read-only) — the CSV-original values, so editors can
-          see the raw authors/URL/date that were migrated into source_metadata. */}
-      {doc?.sourceMetadata && (
-        <section style={{ marginBottom: 32 }}>
-          <details>
-            <summary
-              style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}
-            >
-              Original imported metadata (read-only)
-            </summary>
-            <Text style={{ marginBottom: 8, color: '#555', fontSize: 13 }}>
-              These are the values that came with the document when it was first
-              imported — kept for reference, never edited.
-            </Text>
-            <table
+            <button
+              onClick={saveMetadata}
+              disabled={busy}
               style={{
-                borderCollapse: 'collapse',
-                width: '100%',
-                fontSize: 13,
+                marginTop: 8,
+                padding: '6px 16px',
+                textDecoration: 'underline',
               }}
             >
-              <tbody>
-                {Object.entries(doc.sourceMetadata).map(([k, v]) => (
-                  <tr key={k}>
-                    <td
-                      style={{
-                        ...cell,
-                        width: 220,
-                        fontWeight: 500,
-                        verticalAlign: 'top',
-                      }}
-                    >
-                      {k}
-                    </td>
-                    <td style={cell}>
-                      {typeof v === 'string' ? v : JSON.stringify(v)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
-        </section>
-      )}
+              Save
+            </button>
+          </section>
 
-      {/* Collections panel */}
-      <section style={{ marginBottom: 32 }}>
-        <Heading size='md' style={{ marginBottom: 12 }}>
-          Collections
-        </Heading>
-        {(!detail || detail.collections.length === 0) && (
-          <Text>Not in any collections.</Text>
-        )}
-        {detail && detail.collections.length > 0 && (
-          <table
-            style={{
-              borderCollapse: 'collapse',
-              width: '100%',
-              marginBottom: 8,
-            }}
-          >
-            <tbody>
-              {detail.collections.map((c) => (
-                <tr key={c.id}>
-                  <td style={cell}>{c.name}</td>
-                  <td style={{ ...cell, color: '#888' }}>{c.slug}</td>
-                  <td style={cell}>
-                    <button
-                      onClick={() => removeFromCollection(c.id)}
-                      disabled={busy}
-                      style={{ textDecoration: 'underline' }}
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select
-            value={addCollectionId}
-            onChange={(e) => setAddCollectionId(e.target.value)}
-            style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
-          >
-            <option value=''>— add to collection —</option>
-            {availableCollections.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
+          {/* Tags panel */}
+          <section style={{ marginBottom: 32 }}>
+            <Heading size='md' style={{ marginBottom: 12 }}>
+              Tags
+            </Heading>
+            {Object.keys(tagsByFacet).length === 0 && <Text>No tags.</Text>}
+            {Object.entries(tagsByFacet).map(([facet, tags]) => (
+              <div key={facet} style={{ marginBottom: 16 }}>
+                <Text style={{ fontWeight: 600, marginBottom: 4 }}>
+                  {facet}
+                </Text>
+                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                  <tbody>
+                    {tags.map((tag) => (
+                      <tr key={tag.tagId}>
+                        <td style={cell}>{tag.valueId}</td>
+                        <td style={cell}>
+                          <span
+                            title='Who applied this tag and its review state. AI-suggested tags need a person to Accept or Reject them; accepting makes the tag permanent (the AI will never change it again).'
+                            style={{
+                              background: '#eee',
+                              borderRadius: 4,
+                              padding: '2px 6px',
+                              fontSize: 12,
+                              cursor: 'help',
+                            }}
+                          >
+                            {tagChipText(tag)}
+                          </span>
+                        </td>
+                        <td style={cell}>
+                          {tag.status === 'suggested' && (
+                            <>
+                              <button
+                                onClick={() => decideTag(tag.tagId, 'accepted')}
+                                disabled={busy}
+                                title='Keep this tag. It becomes a human decision the AI cannot override.'
+                                style={{
+                                  marginRight: 8,
+                                  textDecoration: 'underline',
+                                }}
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => decideTag(tag.tagId, 'rejected')}
+                                disabled={busy}
+                                title='Remove this suggestion. The AI will not re-suggest it.'
+                                style={{ textDecoration: 'underline' }}
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {tag.status === 'rejected' && (
+                            <button
+                              onClick={() => decideTag(tag.tagId, 'accepted')}
+                              disabled={busy}
+                              title='Keep this tag. It becomes a human decision the AI cannot override.'
+                              style={{ textDecoration: 'underline' }}
+                            >
+                              Accept
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ))}
-          </select>
-          <button
-            onClick={addToCollection}
-            disabled={busy}
-            style={{ textDecoration: 'underline' }}
-          >
-            Add
-          </button>
-        </div>
-      </section>
-
-      {/* History panel — lazy: fetches on first expand */}
-      <section style={{ marginBottom: 32 }}>
-        <details
-          onToggle={(e) => {
-            if (
-              (e.target as HTMLDetailsElement).open &&
-              !historyFetched.current
-            ) {
-              historyFetched.current = true
-              loadHistory()
-            }
-          }}
-        >
-          <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 18 }}>
-            History
-          </summary>
-          <Text style={{ margin: '8px 0', color: '#555', fontSize: 13 }}>
-            Every recorded change to this document — who, what, and when.
-            Automated pipeline steps are not recorded; imports and intake events
-            are.
-          </Text>
-          {historyError && (
-            <Text style={{ color: '#C11101' }}>{historyError}</Text>
-          )}
-          {!history && !historyError && (
-            <Text style={{ color: '#888', fontSize: 13 }}>Loading…</Text>
-          )}
-          {history && history.entries.length === 0 && (
-            <Text style={{ color: '#555' }}>No recorded changes.</Text>
-          )}
-          {history &&
-            history.entries.map((e, i) => (
-              <details
-                key={i}
-                style={{
-                  padding: '6px 0',
-                  borderBottom: '1px solid #eee',
-                  fontSize: 13,
-                }}
+            <div
+              style={{
+                marginTop: 8,
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+              }}
+            >
+              <select
+                value={addTagId}
+                onChange={(e) => setAddTagId(e.target.value)}
+                style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
               >
-                <summary style={{ cursor: 'pointer' }}>
-                  {historyLine(e)} ·{' '}
-                  <span style={{ color: '#888' }}>{historyWhen(e.at)}</span>
+                <option value=''>— add tag —</option>
+                {availableTags.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.facet} / {t.valueId}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={addTag}
+                disabled={busy}
+                style={{ textDecoration: 'underline' }}
+              >
+                Add
+              </button>
+            </div>
+          </section>
+
+          {/* Summaries panel — editable (was read-only). Editors can now fix
+          truncated/garbage summaries directly. Each row is a textarea with a
+          Save button; source='human' rows are protected server-side. */}
+          <section style={{ marginBottom: 32 }}>
+            <Heading size='md' style={{ marginBottom: 12 }}>
+              Summaries
+            </Heading>
+            <Text style={{ marginBottom: 12, color: '#555', fontSize: 13 }}>
+              Each document carries a long and a short summary, in its own
+              language and in English. &ldquo;generated&rdquo; summaries were
+              written by the AI and are refreshed on re-ingest; once you save an
+              edit, the summary is yours and the AI never overwrites it.
+            </Text>
+            {(!detail || detail.summaries.length === 0) && (
+              <Text>No summaries.</Text>
+            )}
+            {detail?.summaries.map((s, i) => {
+              const skey = `${s.language}::${s.kind}`
+              const sourceLabel =
+                s.source === 'generated'
+                  ? 'AI'
+                  : s.source === 'external'
+                    ? 'imported'
+                    : s.source === 'human'
+                      ? 'person'
+                      : (s.source ?? 'unknown')
+              return (
+                <div key={i} style={{ marginBottom: 16 }}>
+                  <Text style={{ fontWeight: 600, marginBottom: 4 }}>
+                    {s.language} · {s.kind} ({sourceLabel})
+                  </Text>
+                  <textarea
+                    data-summary-key={skey}
+                    value={summaryEdits[skey] ?? s.text}
+                    onChange={(e) =>
+                      setSummaryEdits((prev) => ({
+                        ...prev,
+                        [skey]: e.target.value,
+                      }))
+                    }
+                    rows={4}
+                    style={{
+                      width: '100%',
+                      fontFamily: 'inherit',
+                      fontSize: 'inherit',
+                      background: '#f7f7f7',
+                      padding: '8px 12px',
+                      borderRadius: 4,
+                    }}
+                  />
+                  <button
+                    onClick={() => saveSummary(s.language, s.kind)}
+                    disabled={busy || summaryEdits[skey] === s.text}
+                    style={{
+                      marginTop: 4,
+                      padding: '4px 12px',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Save {s.language}/{s.kind}
+                  </button>
+                </div>
+              )
+            })}
+          </section>
+
+          {/* Source metadata (read-only) — the CSV-original values, so editors can
+          see the raw authors/URL/date that were migrated into source_metadata. */}
+          {doc?.sourceMetadata && (
+            <section style={{ marginBottom: 32 }}>
+              <details>
+                <summary
+                  style={{
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    marginBottom: 8,
+                  }}
+                >
+                  Original imported metadata (read-only)
                 </summary>
+                <Text style={{ marginBottom: 8, color: '#555', fontSize: 13 }}>
+                  These are the values that came with the document when it was
+                  first imported — kept for reference, never edited.
+                </Text>
                 <table
                   style={{
                     borderCollapse: 'collapse',
-                    margin: '6px 0 6px 16px',
-                    fontSize: 12,
+                    width: '100%',
+                    fontSize: 13,
                   }}
                 >
                   <tbody>
-                    {Array.from(
-                      new Set([
-                        ...Object.keys(e.before ?? {}),
-                        ...Object.keys(e.after ?? {}),
-                      ]),
-                    ).map((k) => (
+                    {Object.entries(doc.sourceMetadata).map(([k, v]) => (
                       <tr key={k}>
                         <td
                           style={{
-                            padding: '2px 8px',
+                            ...cell,
+                            width: 220,
                             fontWeight: 500,
                             verticalAlign: 'top',
                           }}
                         >
                           {k}
                         </td>
-                        <td
-                          style={{
-                            padding: '2px 8px',
-                            color: '#C11101',
-                            verticalAlign: 'top',
-                            maxWidth: 480,
-                            overflow: 'auto',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {e.before?.[k] == null
-                            ? '—'
-                            : typeof e.before[k] === 'string'
-                              ? e.before[k]
-                              : JSON.stringify(e.before[k])}
-                        </td>
-                        <td
-                          style={{
-                            padding: '2px 8px',
-                            color: '#0A6640',
-                            verticalAlign: 'top',
-                            maxWidth: 480,
-                            overflow: 'auto',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {e.after?.[k] == null
-                            ? '—'
-                            : typeof e.after[k] === 'string'
-                              ? e.after[k]
-                              : JSON.stringify(e.after[k])}
+                        <td style={cell}>
+                          {typeof v === 'string' ? v : JSON.stringify(v)}
                         </td>
                       </tr>
                     ))}
-                    {!e.before && !e.after && (
-                      <tr>
-                        <td style={{ padding: '2px 8px', color: '#888' }}>
-                          no field detail recorded
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </details>
-            ))}
-          {history && history.total > history.entries.length && (
-            <button
-              onClick={() => loadHistory(Math.min(history.total, 500))}
-              style={{
-                textDecoration: 'underline',
-                marginTop: 8,
-                fontSize: 13,
+            </section>
+          )}
+
+          {/* Collections panel */}
+          <section style={{ marginBottom: 32 }}>
+            <Heading size='md' style={{ marginBottom: 12 }}>
+              Collections
+            </Heading>
+            {(!detail || detail.collections.length === 0) && (
+              <Text>Not in any collections.</Text>
+            )}
+            {detail && detail.collections.length > 0 && (
+              <table
+                style={{
+                  borderCollapse: 'collapse',
+                  width: '100%',
+                  marginBottom: 8,
+                }}
+              >
+                <tbody>
+                  {detail.collections.map((c) => (
+                    <tr key={c.id}>
+                      <td style={cell}>{c.name}</td>
+                      <td style={{ ...cell, color: '#888' }}>{c.slug}</td>
+                      <td style={cell}>
+                        <button
+                          onClick={() => removeFromCollection(c.id)}
+                          disabled={busy}
+                          style={{ textDecoration: 'underline' }}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select
+                value={addCollectionId}
+                onChange={(e) => setAddCollectionId(e.target.value)}
+                style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+              >
+                <option value=''>— add to collection —</option>
+                {availableCollections.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={addToCollection}
+                disabled={busy}
+                style={{ textDecoration: 'underline' }}
+              >
+                Add
+              </button>
+            </div>
+          </section>
+
+          {/* History panel — lazy: fetches on first expand */}
+          <section style={{ marginBottom: 32 }}>
+            <details
+              onToggle={(e) => {
+                if (
+                  (e.target as HTMLDetailsElement).open &&
+                  !historyFetched.current
+                ) {
+                  historyFetched.current = true
+                  loadHistory()
+                }
               }}
             >
-              {history.total > 500
-                ? `Show latest 500 of ${history.total}`
-                : `Show all (${history.total})`}
-            </button>
-          )}
-        </details>
-      </section>
+              <summary
+                style={{ cursor: 'pointer', fontWeight: 600, fontSize: 18 }}
+              >
+                History
+              </summary>
+              <Text style={{ margin: '8px 0', color: '#555', fontSize: 13 }}>
+                Every recorded change to this document — who, what, and when.
+                Automated pipeline steps are not recorded; imports and intake
+                events are.
+              </Text>
+              {historyError && (
+                <Text style={{ color: '#C11101' }}>{historyError}</Text>
+              )}
+              {!history && !historyError && (
+                <Text style={{ color: '#888', fontSize: 13 }}>Loading…</Text>
+              )}
+              {history && history.entries.length === 0 && (
+                <Text style={{ color: '#555' }}>No recorded changes.</Text>
+              )}
+              {history &&
+                history.entries.map((e, i) => (
+                  <details
+                    key={i}
+                    style={{
+                      padding: '6px 0',
+                      borderBottom: '1px solid #eee',
+                      fontSize: 13,
+                    }}
+                  >
+                    <summary style={{ cursor: 'pointer' }}>
+                      {historyLine(e)} ·{' '}
+                      <span style={{ color: '#888' }}>{historyWhen(e.at)}</span>
+                    </summary>
+                    <table
+                      style={{
+                        borderCollapse: 'collapse',
+                        margin: '6px 0 6px 16px',
+                        fontSize: 12,
+                      }}
+                    >
+                      <tbody>
+                        {Array.from(
+                          new Set([
+                            ...Object.keys(e.before ?? {}),
+                            ...Object.keys(e.after ?? {}),
+                          ]),
+                        ).map((k) => (
+                          <tr key={k}>
+                            <td
+                              style={{
+                                padding: '2px 8px',
+                                fontWeight: 500,
+                                verticalAlign: 'top',
+                              }}
+                            >
+                              {k}
+                            </td>
+                            <td
+                              style={{
+                                padding: '2px 8px',
+                                color: '#C11101',
+                                verticalAlign: 'top',
+                                maxWidth: 480,
+                                overflow: 'auto',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {e.before?.[k] == null
+                                ? '—'
+                                : typeof e.before[k] === 'string'
+                                  ? e.before[k]
+                                  : JSON.stringify(e.before[k])}
+                            </td>
+                            <td
+                              style={{
+                                padding: '2px 8px',
+                                color: '#0A6640',
+                                verticalAlign: 'top',
+                                maxWidth: 480,
+                                overflow: 'auto',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {e.after?.[k] == null
+                                ? '—'
+                                : typeof e.after[k] === 'string'
+                                  ? e.after[k]
+                                  : JSON.stringify(e.after[k])}
+                            </td>
+                          </tr>
+                        ))}
+                        {!e.before && !e.after && (
+                          <tr>
+                            <td style={{ padding: '2px 8px', color: '#888' }}>
+                              no field detail recorded
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </details>
+                ))}
+              {history && history.total > history.entries.length && (
+                <button
+                  onClick={() => loadHistory(Math.min(history.total, 500))}
+                  style={{
+                    textDecoration: 'underline',
+                    marginTop: 8,
+                    fontSize: 13,
+                  }}
+                >
+                  {history.total > 500
+                    ? `Show latest 500 of ${history.total}`
+                    : `Show all (${history.total})`}
+                </button>
+              )}
+            </details>
+          </section>
+        </>
+      )}
     </Box>
   )
 }

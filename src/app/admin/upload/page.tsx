@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Box, Heading, Text } from '@chakra-ui/react'
 
 import { Tooltip } from '../components/Tooltip'
+import { Flash } from '../components/Flash'
 
 interface WorkerHealth {
   queueDepth: number
@@ -156,12 +157,14 @@ const UploadPage = () => {
         )}
       </Box>
 
-      {notice && (
-        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
-      )}
-      {error && (
-        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
-      )}
+      <Flash
+        notice={notice}
+        error={error}
+        onDismiss={() => {
+          setNotice(null)
+          setError(null)
+        }}
+      />
       <div style={{ marginBottom: 12 }}>
         <input ref={inputRef} type='file' multiple accept='.pdf' />
       </div>

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { Flash } from '../components/Flash'
 
 interface FieldChange {
   field: string
@@ -290,12 +291,14 @@ const ImportPage = () => {
         </Text>
       </details>
 
-      {notice && (
-        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
-      )}
-      {error && (
-        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
-      )}
+      <Flash
+        notice={notice}
+        error={error}
+        onDismiss={() => {
+          setNotice(null)
+          setError(null)
+        }}
+      />
 
       <div style={{ marginBottom: 12 }}>
         <input
