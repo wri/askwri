@@ -5,7 +5,11 @@ import ChakraProvider from '@/app/Providers/ChakraProvider'
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    refresh: jest.fn(),
+  }),
   usePathname: () => '/admin/import',
   useSearchParams: () => ({ get: () => null }),
 }))
@@ -20,7 +24,8 @@ function setupFetchMock() {
     if (url === '/api/admin/auth/me') {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ identity: { username: 'admin', role: 'admin' } }),
+        json: () =>
+          Promise.resolve({ identity: { username: 'admin', role: 'admin' } }),
       } as any)
     }
     if (url === '/api/import-documents') {
@@ -28,32 +33,41 @@ function setupFetchMock() {
       if (body.dryRun) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            ok: true,
-            created: 1,
-            updated: 0,
-            skipped: 1,
-            jobs: 0,
-            decisions: [
-              { externalId: 'test-doc-one', action: 'created' },
-              { externalId: 'test-doc-two', action: 'skipped', reason: 'already exists' },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              created: 1,
+              updated: 0,
+              skipped: 1,
+              jobs: 0,
+              decisions: [
+                { externalId: 'test-doc-one', action: 'created' },
+                {
+                  externalId: 'test-doc-two',
+                  action: 'skipped',
+                  reason: 'already exists',
+                },
+              ],
+            }),
         } as any)
       }
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({
-          ok: true,
-          created: 1,
-          updated: 0,
-          skipped: 1,
-          jobs: 1,
-          decisions: undefined,
-        }),
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            created: 1,
+            updated: 0,
+            skipped: 1,
+            jobs: 1,
+            decisions: undefined,
+          }),
       } as any)
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) } as any)
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ok: true }),
+    } as any)
   })
   global.fetch = fetchMock as any
   return fetchMock
@@ -99,7 +113,9 @@ describe('ImportPage', () => {
       </ChakraProvider>,
     )
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Preview' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Preview' }),
+      ).toBeInTheDocument()
     })
 
     await loadCsv(SAMPLE_CSV)
@@ -139,7 +155,9 @@ describe('ImportPage', () => {
       expect(screen.getByText(/Jobs queued: 1/)).toBeInTheDocument()
     })
     // Verify an apply call (no dryRun) was made
-    const importCalls = fetchMock.mock.calls.filter((c: any[]) => c[0] === '/api/import-documents')
+    const importCalls = fetchMock.mock.calls.filter(
+      (c: any[]) => c[0] === '/api/import-documents',
+    )
     const applyCall = importCalls.find((c: any[]) => {
       const body = JSON.parse(c[1]?.body as string)
       return !body.dryRun
@@ -154,11 +172,16 @@ describe('ImportPage', () => {
 
     global.fetch = jest.fn((url: string) => {
       if (url === '/api/import-documents') {
-        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) } as any)
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          json: () => Promise.resolve({}),
+        } as any)
       }
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ identity: { username: 'admin', role: 'admin' } }),
+        json: () =>
+          Promise.resolve({ identity: { username: 'admin', role: 'admin' } }),
       } as any)
     }) as any
 
@@ -168,7 +191,9 @@ describe('ImportPage', () => {
       </ChakraProvider>,
     )
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Preview' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Preview' }),
+      ).toBeInTheDocument()
     })
 
     await loadCsv(SAMPLE_CSV)
@@ -177,7 +202,6 @@ describe('ImportPage', () => {
     await waitFor(() => {
       expect((window as any).location.href).toContain('/admin/login')
     })
-
     ;(window as any).location = originalLocation
   })
 })
