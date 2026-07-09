@@ -438,4 +438,27 @@ describe('DocumentEditorPage', () => {
     })
     expect(mockRouterPush).not.toHaveBeenCalled()
   })
+
+  it('renders panels in the approved order (Lifecycle first, Source metadata after Summaries)', async () => {
+    setupFetchMock()
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    await screen.findByText('Document editor')
+    await screen.findByText(/Original imported metadata \(read-only\)/i)
+    const markers = [
+      'Lifecycle',
+      'Metadata',
+      'Tags',
+      'Summaries',
+      'Original imported metadata (read-only)',
+      'Collections',
+    ]
+    const text = document.body.textContent ?? ''
+    const idxs = markers.map((m) => text.indexOf(m))
+    expect(idxs.every((v) => v >= 0)).toBe(true)
+    expect([...idxs].sort((a, b) => a - b)).toEqual(idxs)
+  })
 })

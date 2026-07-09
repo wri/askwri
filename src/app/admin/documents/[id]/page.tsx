@@ -418,6 +418,141 @@ const DocumentEditorPage = () => {
         <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
       )}
 
+      {/* Lifecycle panel */}
+      <section style={{ marginBottom: 32 }}>
+        <Heading size='md' style={{ marginBottom: 12 }}>
+          Lifecycle
+        </Heading>
+        {doc && (
+          <table
+            style={{
+              borderCollapse: 'collapse',
+              width: '100%',
+              marginBottom: 12,
+            }}
+          >
+            <tbody>
+              <tr>
+                <td style={{ ...cell, width: 200, fontWeight: 500 }}>Status</td>
+                <td style={cell}>
+                  <StatusChip status={doc.status} />
+                </td>
+              </tr>
+              <tr>
+                <td style={{ ...cell, fontWeight: 500 }}>
+                  Extraction confidence
+                </td>
+                <td style={cell}>
+                  {doc.extractionConfidence != null
+                    ? Number(doc.extractionConfidence).toFixed(2)
+                    : '—'}
+                </td>
+              </tr>
+              {detail?.latestJob && (
+                <>
+                  <tr>
+                    <td style={{ ...cell, fontWeight: 500 }}>
+                      Latest job status
+                    </td>
+                    <td style={cell}>
+                      {detail.latestJob.status}
+                      {detail.latestJob.stage
+                        ? ` / ${detail.latestJob.stage}`
+                        : ''}
+                      {detail.latestJob.error
+                        ? ` ⚠ (${detail.latestJob.attempts} attempts)`
+                        : ''}
+                    </td>
+                  </tr>
+                  {detail.latestJob.error && (
+                    <tr>
+                      <td style={{ ...cell, fontWeight: 500 }}>Job error</td>
+                      <td style={{ ...cell, color: '#C11101' }}>
+                        {detail.latestJob.error}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )}
+            </tbody>
+          </table>
+        )}
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
+          {doc?.status === 'needs_review' && (
+            <button
+              onClick={() => setStatus('searchable')}
+              disabled={busy}
+              title='Send this document to the public search corpus. Only reviewed documents can be promoted.'
+              style={{ textDecoration: 'underline' }}
+            >
+              Promote
+            </button>
+          )}
+          {doc?.status === 'withdrawn' && me.role === 'admin' && (
+            <button
+              onClick={() => setStatus('searchable')}
+              disabled={busy}
+              title='Put this withdrawn document back in the public search corpus.'
+              style={{ textDecoration: 'underline' }}
+            >
+              Restore
+            </button>
+          )}
+          {me.role === 'admin' && doc?.status !== 'withdrawn' && (
+            <button
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Withdraw this document? It disappears from public search immediately. An admin can restore it later.',
+                  )
+                ) {
+                  setStatus('withdrawn')
+                }
+              }}
+              disabled={busy}
+              title='Remove this document from public search immediately (reversible — admins can restore).'
+              style={{ textDecoration: 'underline' }}
+            >
+              Withdraw
+            </button>
+          )}
+          <button
+            onClick={reingest}
+            disabled={busy}
+            title='Re-run the ingestion pipeline on the same PDF. AI summaries and AI-extracted metadata are regenerated; fields and summaries edited by a person are preserved.'
+            style={{ textDecoration: 'underline' }}
+          >
+            Re-ingest
+          </button>
+          <a
+            href={`/api/admin/documents/${id}/file`}
+            target='_blank'
+            rel='noreferrer'
+            title='Open the stored PDF in a new tab.'
+            style={{ textDecoration: 'underline' }}
+          >
+            Open PDF
+          </a>
+          {me.role === 'admin' && (
+            <button
+              onClick={deleteDoc}
+              disabled={busy}
+              title='Permanently delete this document, its search index entries, and its PDF. Cannot be undone.'
+              style={{ textDecoration: 'underline', color: '#C11101' }}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      </section>
+
       {/* Metadata panel */}
       <section style={{ marginBottom: 32 }}>
         <Heading size='md' style={{ marginBottom: 12 }}>
@@ -529,51 +664,6 @@ const DocumentEditorPage = () => {
           Save
         </button>
       </section>
-
-      {/* Source metadata (read-only) — the CSV-original values, so editors can
-          see the raw authors/URL/date that were migrated into source_metadata. */}
-      {doc?.sourceMetadata && (
-        <section style={{ marginBottom: 32 }}>
-          <details>
-            <summary
-              style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}
-            >
-              Original imported metadata (read-only)
-            </summary>
-            <Text style={{ marginBottom: 8, color: '#555', fontSize: 13 }}>
-              These are the values that came with the document when it was first
-              imported — kept for reference, never edited.
-            </Text>
-            <table
-              style={{
-                borderCollapse: 'collapse',
-                width: '100%',
-                fontSize: 13,
-              }}
-            >
-              <tbody>
-                {Object.entries(doc.sourceMetadata).map(([k, v]) => (
-                  <tr key={k}>
-                    <td
-                      style={{
-                        ...cell,
-                        width: 220,
-                        fontWeight: 500,
-                        verticalAlign: 'top',
-                      }}
-                    >
-                      {k}
-                    </td>
-                    <td style={cell}>
-                      {typeof v === 'string' ? v : JSON.stringify(v)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
-        </section>
-      )}
 
       {/* Tags panel */}
       <section style={{ marginBottom: 32 }}>
@@ -740,140 +830,50 @@ const DocumentEditorPage = () => {
         })}
       </section>
 
-      {/* Lifecycle panel */}
-      <section style={{ marginBottom: 32 }}>
-        <Heading size='md' style={{ marginBottom: 12 }}>
-          Lifecycle
-        </Heading>
-        {doc && (
-          <table
-            style={{
-              borderCollapse: 'collapse',
-              width: '100%',
-              marginBottom: 12,
-            }}
-          >
-            <tbody>
-              <tr>
-                <td style={{ ...cell, width: 200, fontWeight: 500 }}>Status</td>
-                <td style={cell}>
-                  <StatusChip status={doc.status} />
-                </td>
-              </tr>
-              <tr>
-                <td style={{ ...cell, fontWeight: 500 }}>
-                  Extraction confidence
-                </td>
-                <td style={cell}>
-                  {doc.extractionConfidence != null
-                    ? Number(doc.extractionConfidence).toFixed(2)
-                    : '—'}
-                </td>
-              </tr>
-              {detail?.latestJob && (
-                <>
-                  <tr>
-                    <td style={{ ...cell, fontWeight: 500 }}>
-                      Latest job status
+      {/* Source metadata (read-only) — the CSV-original values, so editors can
+          see the raw authors/URL/date that were migrated into source_metadata. */}
+      {doc?.sourceMetadata && (
+        <section style={{ marginBottom: 32 }}>
+          <details>
+            <summary
+              style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}
+            >
+              Original imported metadata (read-only)
+            </summary>
+            <Text style={{ marginBottom: 8, color: '#555', fontSize: 13 }}>
+              These are the values that came with the document when it was first
+              imported — kept for reference, never edited.
+            </Text>
+            <table
+              style={{
+                borderCollapse: 'collapse',
+                width: '100%',
+                fontSize: 13,
+              }}
+            >
+              <tbody>
+                {Object.entries(doc.sourceMetadata).map(([k, v]) => (
+                  <tr key={k}>
+                    <td
+                      style={{
+                        ...cell,
+                        width: 220,
+                        fontWeight: 500,
+                        verticalAlign: 'top',
+                      }}
+                    >
+                      {k}
                     </td>
                     <td style={cell}>
-                      {detail.latestJob.status}
-                      {detail.latestJob.stage
-                        ? ` / ${detail.latestJob.stage}`
-                        : ''}
-                      {detail.latestJob.error
-                        ? ` ⚠ (${detail.latestJob.attempts} attempts)`
-                        : ''}
+                      {typeof v === 'string' ? v : JSON.stringify(v)}
                     </td>
                   </tr>
-                  {detail.latestJob.error && (
-                    <tr>
-                      <td style={{ ...cell, fontWeight: 500 }}>Job error</td>
-                      <td style={{ ...cell, color: '#C11101' }}>
-                        {detail.latestJob.error}
-                      </td>
-                    </tr>
-                  )}
-                </>
-              )}
-            </tbody>
-          </table>
-        )}
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            flexWrap: 'wrap',
-            alignItems: 'center',
-          }}
-        >
-          {doc?.status === 'needs_review' && (
-            <button
-              onClick={() => setStatus('searchable')}
-              disabled={busy}
-              title='Send this document to the public search corpus. Only reviewed documents can be promoted.'
-              style={{ textDecoration: 'underline' }}
-            >
-              Promote
-            </button>
-          )}
-          {doc?.status === 'withdrawn' && me.role === 'admin' && (
-            <button
-              onClick={() => setStatus('searchable')}
-              disabled={busy}
-              title='Put this withdrawn document back in the public search corpus.'
-              style={{ textDecoration: 'underline' }}
-            >
-              Restore
-            </button>
-          )}
-          {me.role === 'admin' && doc?.status !== 'withdrawn' && (
-            <button
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Withdraw this document? It disappears from public search immediately. An admin can restore it later.',
-                  )
-                ) {
-                  setStatus('withdrawn')
-                }
-              }}
-              disabled={busy}
-              title='Remove this document from public search immediately (reversible — admins can restore).'
-              style={{ textDecoration: 'underline' }}
-            >
-              Withdraw
-            </button>
-          )}
-          <button
-            onClick={reingest}
-            disabled={busy}
-            title='Re-run the ingestion pipeline on the same PDF. AI summaries and AI-extracted metadata are regenerated; fields and summaries edited by a person are preserved.'
-            style={{ textDecoration: 'underline' }}
-          >
-            Re-ingest
-          </button>
-          <a
-            href={`/api/admin/documents/${id}/file`}
-            target='_blank'
-            rel='noreferrer'
-            title='Open the stored PDF in a new tab.'
-            style={{ textDecoration: 'underline' }}
-          >
-            Open PDF
-          </a>
-          {me.role === 'admin' && (
-            <button
-              onClick={deleteDoc}
-              disabled={busy}
-              title='Permanently delete this document, its search index entries, and its PDF. Cannot be undone.'
-              style={{ textDecoration: 'underline', color: '#C11101' }}
-            >
-              Delete
-            </button>
-          )}
-        </div>
-      </section>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        </section>
+      )}
 
       {/* Collections panel */}
       <section style={{ marginBottom: 32 }}>
