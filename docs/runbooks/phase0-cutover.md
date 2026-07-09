@@ -7,6 +7,14 @@
 
 ## Local development setup
 
+> **Shortcut:** `./scripts/local-bootstrap.sh` does all of §1–5b in one
+> idempotent command (docker Postgres + MinIO, gitignored `.env.local` files,
+> migrations, corpus load from warm cache, sparse backfill, MinIO bucket seed,
+> admin user). See [local-testing.md](local-testing.md) §0. The manual steps
+> below remain for reference and partial rebuilds. Note the env-file rule:
+> local values go in the gitignored `.env.local` /
+> `search-service/.env.local`, never in `.env` (the deploy-day reference).
+
 ### 1. Start a pgvector Postgres container
 
 ```bash
@@ -139,7 +147,7 @@ DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" npm r
 
 Or set `DATABASE_URL` in your `.env` with `?sslmode=require` appended for RDS. The Node `data-source.ts` defaults to SSL-on; `?sslmode=require` on the URL also satisfies the Python psycopg side.
 
-Expected: `Migration1781280000000` through `Migration1781310000000` execute successfully (`1781300000000` open-job dedupe + unique index, `1781310000000` keyword-lane tables — see [qa-push-deploy.md](qa-push-deploy.md) Step 2 for their operational notes). Check what is pending first with `npm run typeorm -- migration:show -d src/db/migration-data-source.ts`.
+Expected: `Migration1781280000000` through `Migration1781330000000` execute successfully (`1781300000000` open-job dedupe + unique index, `1781310000000` keyword-lane tables — see [qa-push-deploy.md](qa-push-deploy.md) Step 2 for their operational notes; `1781320000000` authors/url/date_published columns + title/summary data fixes + content-hash dedup index; `1781330000000` `documents.metadata_source` provenance). Check what is pending first with `npm run typeorm -- migration:show -d src/db/migration-data-source.ts`.
 
 ### Step 3: Stage S3 assets and run the migration script
 
@@ -220,6 +228,7 @@ npm run eval:answer-retrieval
 ```
 
 Acceptance criteria (design §14.5):
+
 - Cite precision/F1: within ±1 point of legacy baseline.
 - Answer chunk-level P/R/F1: within ±2 points.
 - Answer doc-level P/R/F1: within ±2 points.
@@ -263,6 +272,7 @@ already_running`):
 - **Postgres mode, `KEYWORD_BACKEND=memory`:** as above, plus rebuilds the in-memory BM25 index from Postgres chunk rows (~18 s).
 
 When to call it:
+
 - **Not** for lifecycle changes under the default sparse backend — withdraw/promote take
   effect on the next query in both lanes (`status='searchable'` filtered per query). The
   only thing `/reindex` refreshes in sparse mode is the passage-context texts used for
@@ -278,15 +288,16 @@ When to call it:
 
 ### Suites
 
-| Suite | Command | Needs |
-|---|---|---|
-| Jest (16 suites, 132 tests) | `npm test` | nothing for the 10 unit suites; the 6 `*.db.test.ts` suites (~33 tests) skip without a DB and run when `.env`/`DATABASE_URL` points at a migrated local DB |
-| Jest DB-only filter | `npm run test:db` | local migrated DB |
-| Python full suite (98 tests, 11 files) | `npm run test:python` (or `cd search-service && ./venv/bin/python -m pytest tests/`) | local migrated DB for the corpus-dependent modules; scratch-DB modules self-provision |
-| Python coverage | `cd search-service && ./venv/bin/python -m pytest tests/ --cov=app --cov=scripts --cov-report=term` | same |
+| Suite                                                   | Command                                                                                             | Needs                                                                                                                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Jest (33 suites, 260 tests)                             | `npm test`                                                                                          | nothing for the unit suites; the 14 `*.db.test.ts` suites (99 tests) skip without a DB and run when `.env`/`DATABASE_URL` points at a migrated local DB |
+| Jest DB-only filter                                     | `npm run test:db`                                                                                   | local migrated DB; runs `--runInBand` (the DB suites race under parallel Jest workers)                                                                  |
+| Python full suite (140 tests + 1 opt-in skip, 21 files) | `npm run test:python` (or `cd search-service && ./venv/bin/python -m pytest tests/`)                | local migrated DB for the corpus-dependent modules; scratch-DB modules self-provision                                                                   |
+| Python coverage                                         | `cd search-service && ./venv/bin/python -m pytest tests/ --cov=app --cov=scripts --cov-report=term` | same                                                                                                                                                    |
 
 Python test layout:
-- Hermetic, no DB: `test_indexing.py` (chunking/node build), `test_sparse_keyword.py` (BM25 weight math vs bm25s), `test_cite_doc_ids_filter.py` (request model + cite-doc filter).
+
+- Hermetic, no DB: `test_indexing.py` (chunking/node build), `test_sparse_keyword.py` (BM25 weight math vs bm25s), `test_cite_doc_ids_filter.py` (request model + cite-doc filter), `test_config.py` / `test_config_env_local.py` / `test_env_loading.py` (settings + `.env.local` precedence), `test_startsh_sync.py` (start.sh S3-sync guard), `test_worker_llm.py` (chat_json retry/error contract), `test_iam_intake_put.py` (Terraform intake IAM policy), `test_dockerfile_worker.py` (opt-in Docker build, `REQUIRE_DOCKER_TESTS=1`).
 - Scratch-DB (create/migrate/drop their own database against `DATABASE_URL`; never touch `qa`): `test_migration_script.py`, `test_worker_queue.py`, `test_worker_stages.py`, `test_worker_pipeline.py`, `test_sparse_retriever.py`, `test_build_sparse_script.py`.
 - Migrated-corpus-dependent (need the real local 169-doc `qa` DB): `test_query_e2e.py` — `/query` contract tests in postgres mode (stubbed rerankers + query embedding; read-only except a withdrawn-doc test that restores state in `finally`); `test_pg_store.py` — store loaders + `PgVectorRetriever` (the dense-retrieval test calls OpenAI once and needs `OPENAI_API_KEY`).
 
@@ -296,14 +307,14 @@ Python test layout:
 
 `pr-check.yml` runs four jobs on every PR:
 
-- **test** — `npm run test:ci` (Jest) + `npm run build`. No database service, so the 6 Jest `*.db.test.ts` suites skip here.
-- **python-tests** — a `pgvector/pgvector:pg16` service container with `REQUIRE_DB_TESTS=1`, plus Node setup (the scratch-DB fixtures apply the TypeORM schema via `npm run migration:run` subprocess). Runs `test_indexing`, `test_worker_queue`, `test_worker_stages`, `test_sparse_keyword`, `test_cite_doc_ids_filter`, `test_migration_script`, `test_build_sparse_script` — the hermetic and scratch-DB modules.
+- **test** — `npm run test:ci` (Jest, `--runInBand`) + `npm run build`, against a `pgvector/pgvector:pg16` service container migrated via `npm run migration:run`, so the `*.db.test.ts` suites run here too (they'd otherwise self-skip and leave the app-tier DB query layer untested).
+- **python-tests** — a `pgvector/pgvector:pg16` service container with `REQUIRE_DB_TESTS=1`, plus Node setup (the scratch-DB fixtures apply the TypeORM schema via `npm run migration:run` subprocess). Runs the hermetic and scratch-DB modules: `test_indexing`, `test_worker_queue`, `test_worker_stages`, `test_sparse_keyword`, `test_cite_doc_ids_filter`, `test_migration_script`, `test_build_sparse_script`, `test_sparse_retriever`, `test_worker_pipeline`, `test_startsh_sync`, `test_config`, `test_config_env_local`, `test_env_loading`.
 - **docker-build** — builds both Docker images (no push).
 - **terraform-validate** — `terraform fmt -check` + `validate` (`-backend=false`; no plan against real state).
 
 The deploy workflows (`deploy-qa.yml` / `deploy-production.yml`) run `npm run test:ci` + build, then build/push images, terraform apply, and force-new-deployment — see [qa-push-deploy.md](qa-push-deploy.md).
 
-**Still NOT in CI:** the Jest `test:db` suites, `test_pg_store.py`, and `test_query_e2e.py` (all need the migrated 169-doc corpus — local-only until an artifact pipeline exists), plus `test_worker_pipeline.py` and `test_sparse_retriever.py` (scratch-DB hermetic, candidates to add to the CI selection).
+**Still NOT in CI:** `test_pg_store.py` and `test_query_e2e.py` (need the migrated 169-doc corpus — local-only until an artifact pipeline exists), plus `test_worker_llm.py` and `test_iam_intake_put.py` (hermetic, candidates to add to the CI selection) and the opt-in `test_dockerfile_worker.py`.
 
 ---
 
@@ -311,7 +322,13 @@ The deploy workflows (`deploy-qa.yml` / `deploy-production.yml`) run `npm run te
 
 This section covers running the ingestion worker locally. It assumes the Phase 0 local setup (§1–5 above) is already complete: Postgres container running, migrations applied, and the venv available at `search-service/venv/`.
 
-### Worker env vars (add to `.env`)
+### Worker env vars (add to `search-service/.env.local`)
+
+The worker reads the search-service env files (pydantic Settings), not the
+repo-root `.env`. With the bootstrap's default MinIO setup you can skip
+`INTAKE_LOCAL_DIR` entirely — the worker then sweeps the MinIO `intake/`
+prefix (the real S3 code path; see [local-testing.md](local-testing.md) §5).
+The local-dir mode below avoids MinIO:
 
 ```
 INTAKE_LOCAL_DIR=./intake
@@ -362,6 +379,13 @@ OPENAI_API_KEY=<your key>
 
    Stages in order: `parse → language → summarize → classify → embed → publish`. The `stage` column shows the last **completed** stage; `status` shows the job's current state (`queued`, `running`, `done`, `needs_review`, `error`).
 
+   The parse stage also extracts bibliographic metadata (title, authors, DOI,
+   year, article type, WRI office) via one LLM call, recording
+   `metadata_source='llm'` provenance per field. It never overwrites
+   CSV-imported (`'external'`) or human-edited (`'human'`) values; a prior LLM
+   value is overwritten on re-ingest. Extraction is best-effort — a failed LLM
+   call logs a warning and the stage continues.
+
 5. Repeat `--once` calls until `j.status = 'done'` (or `needs_review` / `error`). A full pipeline run takes 5–6 `--once` invocations.
 
    To run continuously instead of stepping:
@@ -383,9 +407,9 @@ OPENAI_API_KEY=<your key>
 
 ### Where files move
 
-| State | Location |
-|---|---|
-| Before worker runs | `INTAKE_LOCAL_DIR/` (e.g. `./intake/sample.pdf`) |
+| State              | Location                                            |
+| ------------------ | --------------------------------------------------- |
+| Before worker runs | `INTAKE_LOCAL_DIR/` (e.g. `./intake/sample.pdf`)    |
 | After intake sweep | `./documents/sample.pdf` (sibling `documents/` dir) |
 
 ### Retry behavior
