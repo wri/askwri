@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { actionButton } from '../lib/buttonStyles'
 import { StatusChip } from '../components/StatusChip'
 import { Tooltip } from '../components/Tooltip'
 import { Flash } from '../components/Flash'
@@ -379,7 +380,8 @@ const ReviewQueuePage = () => {
                 ? 'Selection includes a document with status "error" — those must be re-ingested before they can be promoted.'
                 : 'Send the selected documents to the public search corpus.'
             }
-            style={{ textDecoration: 'underline' }}
+            className='admin-btn'
+            style={actionButton}
           >
             Promote {selected.size}
           </button>
@@ -387,7 +389,8 @@ const ReviewQueuePage = () => {
             onClick={() => bulkAct('reingest')}
             disabled={bulkBusy || busyId !== null}
             title='Re-queue the selected documents for the ingestion pipeline.'
-            style={{ textDecoration: 'underline' }}
+            className='admin-btn'
+            style={actionButton}
           >
             Re-ingest {selected.size}
           </button>
@@ -503,7 +506,8 @@ const ReviewQueuePage = () => {
                   <button
                     disabled={busyId === item.id || bulkBusy}
                     onClick={() => act(item.id, 'promote')}
-                    style={{ marginRight: 8, textDecoration: 'underline' }}
+                    className='admin-btn'
+                    style={{ ...actionButton, marginRight: 8 }}
                     title='Send this document to the public search corpus'
                   >
                     Promote
@@ -511,7 +515,8 @@ const ReviewQueuePage = () => {
                   <button
                     disabled={busyId === item.id || bulkBusy}
                     onClick={() => act(item.id, 'reingest')}
-                    style={{ textDecoration: 'underline' }}
+                    className='admin-btn'
+                    style={actionButton}
                     title='Re-queue this document for the ingestion worker to re-parse and re-process'
                   >
                     Re-ingest

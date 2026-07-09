@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { actionButton } from '../lib/buttonStyles'
 import { StatusChip } from '../components/StatusChip'
 import { Flash } from '../components/Flash'
 
@@ -413,7 +414,8 @@ const CatalogInner = () => {
           <button
             onClick={addToCollection}
             disabled={!bulkCollectionId}
-            style={{ textDecoration: 'underline' }}
+            className='admin-btn'
+            style={actionButton}
           >
             Add {selected.size} doc{selected.size === 1 ? '' : 's'} to
             collection
@@ -528,8 +530,9 @@ const CatalogInner = () => {
           <button
             onClick={() => goToPage(page - 1)}
             disabled={page === 0}
+            className='admin-btn'
             style={{
-              textDecoration: 'underline',
+              ...actionButton,
               cursor: page === 0 ? 'not-allowed' : 'pointer',
             }}
           >
@@ -542,8 +545,9 @@ const CatalogInner = () => {
           <button
             onClick={() => goToPage(page + 1)}
             disabled={(page + 1) * PAGE_SIZE >= total}
+            className='admin-btn'
             style={{
-              textDecoration: 'underline',
+              ...actionButton,
               cursor:
                 (page + 1) * PAGE_SIZE >= total ? 'not-allowed' : 'pointer',
             }}
