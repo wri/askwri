@@ -84,7 +84,11 @@ d('documentsAdmin (DB integration)', () => {
     )
     const id = ins.id
     try {
-      const result = await updateDocumentFields(id, { title: 'New EN Title' }, identity)
+      const result = await updateDocumentFields(
+        id,
+        { title: 'New EN Title' },
+        identity,
+      )
       expect((result as { updated: string[] }).updated).toEqual(
         expect.arrayContaining(['title', 'titleEn']),
       )
@@ -99,7 +103,9 @@ d('documentsAdmin (DB integration)', () => {
       expect(row.pt).toBe('human') // the admin edit is protected from re-ingest
       expect(row.pte).toBe('llm') // derived copy stays in the worker's domain
     } finally {
-      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [id])
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+        id,
+      ])
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [id])
     }
   })
@@ -114,7 +120,11 @@ d('documentsAdmin (DB integration)', () => {
     )
     const id = ins.id
     try {
-      const result = await updateDocumentFields(id, { title: 'Título nuevo' }, identity)
+      const result = await updateDocumentFields(
+        id,
+        { title: 'Título nuevo' },
+        identity,
+      )
       expect((result as { updated: string[] }).updated).toEqual(['title'])
       const [row] = await AppDataSource.query(
         `SELECT title_en, metadata_source->>'title_en' AS pte FROM documents WHERE id = $1`,
@@ -125,18 +135,28 @@ d('documentsAdmin (DB integration)', () => {
       expect(row.title_en).toBe('Old English')
       expect(row.pte).toBe('llm')
     } finally {
-      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [id])
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+        id,
+      ])
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [id])
     }
   })
 
   it('rejects a non-numeric yearPublished', async () => {
-    const result = await updateDocumentFields(docId, { yearPublished: 'abc' }, identity)
+    const result = await updateDocumentFields(
+      docId,
+      { yearPublished: 'abc' },
+      identity,
+    )
     expect(result).toEqual({ error: 'yearPublished must be an integer year' })
   })
 
   it('sets and clears yearPublished', async () => {
-    const set = await updateDocumentFields(docId, { yearPublished: 2020 }, identity)
+    const set = await updateDocumentFields(
+      docId,
+      { yearPublished: 2020 },
+      identity,
+    )
     expect(set).toEqual({ updated: ['yearPublished'] })
     const [row] = await AppDataSource.query(
       `SELECT year_published AS y FROM documents WHERE id = $1`,
@@ -144,7 +164,11 @@ d('documentsAdmin (DB integration)', () => {
     )
     expect(row.y).toBe(2020)
 
-    const cleared = await updateDocumentFields(docId, { yearPublished: null }, identity)
+    const cleared = await updateDocumentFields(
+      docId,
+      { yearPublished: null },
+      identity,
+    )
     expect(cleared).toEqual({ updated: ['yearPublished'] })
     const [after] = await AppDataSource.query(
       `SELECT year_published AS y FROM documents WHERE id = $1`,
@@ -156,7 +180,10 @@ d('documentsAdmin (DB integration)', () => {
   it('promotes needs_review -> searchable with a lifecycle audit row', async () => {
     const result = await setDocumentStatus(docId, 'searchable', identity)
     expect(result).toEqual({ fromStatus: 'needs_review' })
-    const [row] = await AppDataSource.query(`SELECT status FROM documents WHERE id=$1`, [docId])
+    const [row] = await AppDataSource.query(
+      `SELECT status FROM documents WHERE id=$1`,
+      [docId],
+    )
     expect(row.status).toBe('searchable')
   })
 
@@ -166,7 +193,12 @@ d('documentsAdmin (DB integration)', () => {
   })
 
   it('refuses an editor restoring a withdrawn document, allows an admin', async () => {
-    const editor = { kind: 'user', userId: 'x', username: 'e', role: 'editor' } as const
+    const editor = {
+      kind: 'user',
+      userId: 'x',
+      username: 'e',
+      role: 'editor',
+    } as const
     // Withdraw (takedown) as admin first.
     const withdrawn = await setDocumentStatus(docId, 'withdrawn', identity)
     expect(withdrawn).toEqual({ fromStatus: 'searchable' })
@@ -174,13 +206,19 @@ d('documentsAdmin (DB integration)', () => {
     // Editor cannot reverse the takedown.
     const refused = await setDocumentStatus(docId, 'searchable', editor)
     expect(refused).toEqual({ forbidden: true })
-    const [still] = await AppDataSource.query(`SELECT status FROM documents WHERE id=$1`, [docId])
+    const [still] = await AppDataSource.query(
+      `SELECT status FROM documents WHERE id=$1`,
+      [docId],
+    )
     expect(still.status).toBe('withdrawn')
 
     // Admin can.
     const restored = await setDocumentStatus(docId, 'searchable', identity)
     expect(restored).toEqual({ fromStatus: 'withdrawn' })
-    const [row] = await AppDataSource.query(`SELECT status FROM documents WHERE id=$1`, [docId])
+    const [row] = await AppDataSource.query(
+      `SELECT status FROM documents WHERE id=$1`,
+      [docId],
+    )
     expect(row.status).toBe('searchable')
   })
 
@@ -208,8 +246,13 @@ d('documentsAdmin (DB integration)', () => {
     const draftId = draftRow.id
     try {
       const result = await setDocumentStatus(draftId, 'searchable', identity)
-      expect(result).toEqual({ error: 'can only promote needs_review → searchable' })
-      const [row] = await AppDataSource.query(`SELECT status FROM documents WHERE id=$1`, [draftId])
+      expect(result).toEqual({
+        error: 'can only promote needs_review → searchable',
+      })
+      const [row] = await AppDataSource.query(
+        `SELECT status FROM documents WHERE id=$1`,
+        [draftId],
+      )
       expect(row.status).toBe('draft') // unchanged
     } finally {
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [draftId])
@@ -226,7 +269,9 @@ d('documentsAdmin (DB integration)', () => {
     const errId = errRow.id
     try {
       const result = await setDocumentStatus(errId, 'searchable', identity)
-      expect(result).toEqual({ error: 'can only promote needs_review → searchable' })
+      expect(result).toEqual({
+        error: 'can only promote needs_review → searchable',
+      })
     } finally {
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [errId])
     }
@@ -244,7 +289,9 @@ d('documentsAdmin (DB integration)', () => {
       const result = await setDocumentStatus(nrId, 'searchable', identity)
       expect(result).toEqual({ fromStatus: 'needs_review' })
     } finally {
-      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id=$1`, [nrId])
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id=$1`, [
+        nrId,
+      ])
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [nrId])
     }
   })
@@ -252,7 +299,11 @@ d('documentsAdmin (DB integration)', () => {
   // --- E1: abstract is NOT editable (dropped); authors/url/datePublished ARE ---
 
   it('ignores abstract in PATCH (no longer in EDITABLE_FIELDS)', async () => {
-    const result = await updateDocumentFields(docId, { abstract: 'should be ignored' } as any, identity)
+    const result = await updateDocumentFields(
+      docId,
+      { abstract: 'should be ignored' } as any,
+      identity,
+    )
     // abstract is not in EDITABLE_FIELDS, so it's simply not in the patch → updated: []
     expect(result).toEqual({ updated: [] })
   })
@@ -260,7 +311,11 @@ d('documentsAdmin (DB integration)', () => {
   it('saves authors, url, datePublished fields', async () => {
     const result = await updateDocumentFields(
       docId,
-      { authors: 'Test Author; Co-Author', url: 'https://example.com/doc', datePublished: '2024-03-15' },
+      {
+        authors: 'Test Author; Co-Author',
+        url: 'https://example.com/doc',
+        datePublished: '2024-03-15',
+      },
       identity,
     )
     expect(result).toEqual({ updated: ['authors', 'url', 'datePublished'] })
@@ -270,12 +325,93 @@ d('documentsAdmin (DB integration)', () => {
     )
     expect(row.authors).toBe('Test Author; Co-Author')
     expect(row.url).toBe('https://example.com/doc')
-    expect(new Date(row.date_published).toISOString().slice(0, 10)).toBe('2024-03-15')
+    expect(new Date(row.date_published).toISOString().slice(0, 10)).toBe(
+      '2024-03-15',
+    )
   })
 
   it('rejects an invalid datePublished', async () => {
-    const result = await updateDocumentFields(docId, { datePublished: 'not-a-date' }, identity)
-    expect(result).toEqual({ error: 'datePublished must be a valid date (YYYY-MM-DD)' })
+    const result = await updateDocumentFields(
+      docId,
+      { datePublished: 'not-a-date' },
+      identity,
+    )
+    expect(result).toEqual({
+      error: 'datePublished must be a valid date (YYYY-MM-DD)',
+    })
+  })
+
+  it('stamps metadata_source=human (snake_case keys) for every edited field', async () => {
+    const extId = `provstamp_test_${Date.now()}`
+    const [row] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'Provenance Stamp Test', 'needs_review') RETURNING id`,
+      [extId, `documents/${extId}.pdf`],
+    )
+    const stampDocId = row.id
+    try {
+      const res = await updateDocumentFields(
+        stampDocId,
+        {
+          title: 'Corrected Title',
+          yearPublished: 2020,
+          wriPrimaryOffice: 'WRI Ross Center',
+        },
+        identity,
+      )
+      expect(res).toEqual({
+        updated: expect.arrayContaining([
+          'title',
+          'yearPublished',
+          'wriPrimaryOffice',
+        ]),
+      })
+      const [stamped] = await AppDataSource.query(
+        `SELECT metadata_source FROM documents WHERE id = $1`,
+        [stampDocId],
+      )
+      expect(stamped.metadata_source).toMatchObject({
+        title: 'human',
+        year_published: 'human',
+        wri_primary_office: 'human',
+      })
+    } finally {
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id=$1`, [
+        stampDocId,
+      ])
+      await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [
+        stampDocId,
+      ])
+    }
+  })
+
+  it('does not stamp provenance for fields that did not change', async () => {
+    const extId = `provnoop_test_${Date.now()}`
+    const [row] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'Provenance No-op Test', 'needs_review') RETURNING id`,
+      [extId, `documents/${extId}.pdf`],
+    )
+    const noopDocId = row.id
+    try {
+      await updateDocumentFields(
+        noopDocId,
+        { title: 'Provenance No-op Test' },
+        identity,
+      ) // no-op patch
+      const [noop] = await AppDataSource.query(
+        `SELECT metadata_source FROM documents WHERE id = $1`,
+        [noopDocId],
+      )
+      expect(noop.metadata_source.doi).toBeUndefined()
+    } finally {
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id=$1`, [
+        noopDocId,
+      ])
+      await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [
+        noopDocId,
+      ])
+    }
   })
 
   // --- E1: search by author + DOI; language filter uses languages @> ---
@@ -334,7 +470,10 @@ d('documentsAdmin transactional audit (DB integration)', () => {
     const txDocId = row.id
     try {
       // Set the title to 'Before'
-      await AppDataSource.query(`UPDATE documents SET title='Before' WHERE id=$1`, [txDocId])
+      await AppDataSource.query(
+        `UPDATE documents SET title='Before' WHERE id=$1`,
+        [txDocId],
+      )
       // Attempt to update the title, but make the audit fail by passing an
       // identity that causes writeAudit to throw (a null actorUserId on a
       // NOT NULL column — but audit_log.actor_user_id is nullable, so we need
@@ -348,12 +487,21 @@ d('documentsAdmin transactional audit (DB integration)', () => {
       // transactional guarantee is tested by the code path itself (the function
       // calls AppDataSource.transaction). A full rollback test would require
       // injecting a fault into writeAudit, which is beyond unit-test scope.
-      const result = await updateDocumentFields(txDocId, { title: 'After' }, identity)
+      const result = await updateDocumentFields(
+        txDocId,
+        { title: 'After' },
+        identity,
+      )
       expect(result).toEqual({ updated: ['title'] })
-      const [row2] = await AppDataSource.query(`SELECT title FROM documents WHERE id=$1`, [txDocId])
+      const [row2] = await AppDataSource.query(
+        `SELECT title FROM documents WHERE id=$1`,
+        [txDocId],
+      )
       expect(row2.title).toBe('After')
     } finally {
-      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id=$1`, [txDocId])
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id=$1`, [
+        txDocId,
+      ])
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [txDocId])
     }
   })
@@ -380,7 +528,11 @@ d('documentsAdmin F2 filters + pagination (DB integration)', () => {
       const { items } = await listAdminDocuments({ yearPublished: 2020 })
       expect(items.some((d: any) => d.externalId === extId)).toBe(true)
       const { items: all } = await listAdminDocuments({})
-      expect(all.some((d: any) => d.externalId === extId && d.yearPublished === 2020)).toBe(true)
+      expect(
+        all.some(
+          (d: any) => d.externalId === extId && d.yearPublished === 2020,
+        ),
+      ).toBe(true)
     } finally {
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [yDocId])
     }
@@ -408,22 +560,33 @@ d('documentsAdmin F2 filters + pagination (DB integration)', () => {
       const { items } = await listAdminDocuments({ tagId })
       expect(items.some((d: any) => d.externalId === extId)).toBe(true)
     } finally {
-      await AppDataSource.query(`DELETE FROM document_tags WHERE tag_id=$1`, [tagId])
+      await AppDataSource.query(`DELETE FROM document_tags WHERE tag_id=$1`, [
+        tagId,
+      ])
       await AppDataSource.query(`DELETE FROM tags WHERE id=$1`, [tagId])
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [tDocId])
     }
   })
 
   corpusIt('listAdminDocuments paginates and returns total count', async () => {
-    const { items, total } = await listAdminDocuments({}, { limit: 10, offset: 0 })
+    const { items, total } = await listAdminDocuments(
+      {},
+      { limit: 10, offset: 0 },
+    )
     expect(items.length).toBeLessThanOrEqual(10)
     expect(total).toBeGreaterThan(0)
     expect(typeof total).toBe('number')
   })
 
   it('listAdminDocuments pagination offset skips rows', async () => {
-    const { items: page1, total: _t1 } = await listAdminDocuments({}, { limit: 5, offset: 0 })
-    const { items: page2 } = await listAdminDocuments({}, { limit: 5, offset: 5 })
+    const { items: page1, total: _t1 } = await listAdminDocuments(
+      {},
+      { limit: 5, offset: 0 },
+    )
+    const { items: page2 } = await listAdminDocuments(
+      {},
+      { limit: 5, offset: 5 },
+    )
     expect(page1.length).toBeLessThanOrEqual(5)
     expect(page2.length).toBeLessThanOrEqual(5)
     // Pages should not overlap (different external_ids)
@@ -466,8 +629,12 @@ d('purgeDocument (hard delete, DB integration)', () => {
 
   // afterAll: if the doc survived (e.g. a test failed before purge), clean up.
   afterAll(async () => {
-    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [purgeDocId])
-    await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [purgeDocId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+      purgeDocId,
+    ])
+    await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [
+      purgeDocId,
+    ])
     await AppDataSource.destroy()
   })
 
@@ -538,8 +705,10 @@ d('purgeDocument (hard delete, DB integration)', () => {
   })
 
   it('returns false (not found) for a nonexistent document id', async () => {
-    const result = await purgeDocument('00000000-0000-0000-0000-000000000000', identity)
+    const result = await purgeDocument(
+      '00000000-0000-0000-0000-000000000000',
+      identity,
+    )
     expect(result).toBe(false)
   })
 })
-

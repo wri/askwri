@@ -5,6 +5,7 @@ import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
 import { basename } from 'path'
 import { s3ClientConfig } from '../../lib/s3'
+import { PROVENANCE_KEY } from '../../lib/metadataProvenance'
 
 // Whitelisted editable metadata fields (entity property -> column handled by TypeORM)
 export const EDITABLE_FIELDS = [
@@ -62,15 +63,20 @@ export async function listAdminDocuments(
     return `$${params.length}`
   }
   if (filters.status) where.push(`d.status = ${p(filters.status)}`)
-  if (filters.language) where.push(`d.languages @> ARRAY[${p(filters.language)}]::text[]`)
-  if (filters.search) where.push(`(d.title ILIKE ${p('%' + filters.search + '%')} OR d.external_id ILIKE ${p('%' + filters.search + '%')} OR d.authors ILIKE ${p('%' + filters.search + '%')} OR d.doi ILIKE ${p('%' + filters.search + '%')} OR d.url ILIKE ${p('%' + filters.search + '%')})`)
+  if (filters.language)
+    where.push(`d.languages @> ARRAY[${p(filters.language)}]::text[]`)
+  if (filters.search)
+    where.push(
+      `(d.title ILIKE ${p('%' + filters.search + '%')} OR d.external_id ILIKE ${p('%' + filters.search + '%')} OR d.authors ILIKE ${p('%' + filters.search + '%')} OR d.doi ILIKE ${p('%' + filters.search + '%')} OR d.url ILIKE ${p('%' + filters.search + '%')})`,
+    )
   if (filters.collectionId)
     where.push(`EXISTS (SELECT 1 FROM document_collections dc
                 WHERE dc.document_id = d.id AND dc.collection_id = ${p(filters.collectionId)})`)
   if (filters.tagId)
     where.push(`EXISTS (SELECT 1 FROM document_tags dt
                 WHERE dt.document_id = d.id AND dt.tag_id = ${p(filters.tagId)} AND dt.status = 'accepted')`)
-  if (filters.yearPublished) where.push(`d.year_published = ${p(filters.yearPublished)}`)
+  if (filters.yearPublished)
+    where.push(`d.year_published = ${p(filters.yearPublished)}`)
   const whereClause = where.join(' AND ')
   const limit = pagination.limit ?? 500
   const offset = pagination.offset ?? 0
@@ -97,7 +103,12 @@ export async function listAdminDocuments(
 
 export interface AdminDocumentDetail {
   document: Document
-  summaries: { language: string; kind: string; text: string; source: string | null }[]
+  summaries: {
+    language: string
+    kind: string
+    text: string
+    source: string | null
+  }[]
   tags: {
     tagId: string
     facet: string
@@ -108,11 +119,20 @@ export interface AdminDocumentDetail {
     modelVersion: string | null
   }[]
   collections: { id: string; name: string; slug: string }[]
-  latestJob: { status: string; stage: string | null; error: string | null; attempts: number } | null
+  latestJob: {
+    status: string
+    stage: string | null
+    error: string | null
+    attempts: number
+  } | null
 }
 
-export async function getAdminDocumentDetail(id: string): Promise<AdminDocumentDetail | null> {
-  const document = await AppDataSource.getRepository(Document).findOne({ where: { id } })
+export async function getAdminDocumentDetail(
+  id: string,
+): Promise<AdminDocumentDetail | null> {
+  const document = await AppDataSource.getRepository(Document).findOne({
+    where: { id },
+  })
   if (!document) return null
   const summaries = await AppDataSource.query(
     `SELECT language, kind, text, source FROM document_summaries
@@ -148,7 +168,12 @@ export async function updateDocumentFields(
 ): Promise<{ updated: string[] } | { error: string } | null> {
   if ('yearPublished' in patch && patch.yearPublished != null) {
     const year = Number(patch.yearPublished)
-    if (!Number.isFinite(year) || !Number.isInteger(year) || year < 1900 || year > 2100) {
+    if (
+      !Number.isFinite(year) ||
+      !Number.isInteger(year) ||
+      year < 1900 ||
+      year > 2100
+    ) {
       return { error: 'yearPublished must be an integer year' }
     }
     patch.yearPublished = year
@@ -178,10 +203,11 @@ export async function updateDocumentFields(
   // (parse/summarize) and CSV import never overwrite an admin edit. Both writers
   // only protect metadata_source='human'|'external'; without this the field
   // stays 'llm'/'external' and the next re-ingest silently clobbers the edit.
+  // Keys are snake_case column names via the shared PROVENANCE_KEY map — the
+  // convention the Python worker reads.
   const provenance: Record<string, string> = {}
   for (const field of updated) {
-    const col = FIELD_TO_COLUMN[field as EditableField]
-    if (col) provenance[col] = 'human'
+    provenance[PROVENANCE_KEY[field] ?? field] = 'human'
   }
 
   // Keep title_en in sync when an English doc's title is renamed and the admin
@@ -210,25 +236,16 @@ export async function updateDocumentFields(
     await em.query(
       `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
        VALUES ($1, $2, 'update', 'document', $3, $4, $5)`,
-      [auditActor(identity).actorUserId, auditActor(identity).source, id, before, after],
+      [
+        auditActor(identity).actorUserId,
+        auditActor(identity).source,
+        id,
+        before,
+        after,
+      ],
     )
   })
   return { updated }
-}
-
-// Editable entity property → documents column, for metadata_source provenance.
-const FIELD_TO_COLUMN: Partial<Record<EditableField, string>> = {
-  title: 'title',
-  titleEn: 'title_en',
-  doi: 'doi',
-  language: 'language',
-  yearPublished: 'year_published',
-  publicationTitle: 'publication_title',
-  articleType: 'article_type',
-  wriPrimaryOffice: 'wri_primary_office',
-  authors: 'authors',
-  url: 'url',
-  datePublished: 'date_published',
 }
 
 const ALLOWED_TARGET_STATUSES = new Set(['searchable', 'withdrawn'])
@@ -237,9 +254,13 @@ export async function setDocumentStatus(
   id: string,
   toStatus: string,
   identity: AdminIdentity,
-): Promise<{ fromStatus: string } | null | { error: string } | { forbidden: true }> {
+): Promise<
+  { fromStatus: string } | null | { error: string } | { forbidden: true }
+> {
   if (!ALLOWED_TARGET_STATUSES.has(toStatus)) {
-    return { error: `status must be one of: ${[...ALLOWED_TARGET_STATUSES].join(', ')}` }
+    return {
+      error: `status must be one of: ${[...ALLOWED_TARGET_STATUSES].join(', ')}`,
+    }
   }
   const repo = AppDataSource.getRepository(Document)
   const doc = await repo.findOne({ where: { id } })
@@ -253,7 +274,11 @@ export async function setDocumentStatus(
   if (fromStatus === toStatus) return { fromStatus }
   // Promote is restricted: only needs_review → searchable (design §7.9/§11.311).
   // Editors cannot bypass the pipeline by promoting draft/error/processing docs.
-  if (toStatus === 'searchable' && fromStatus !== 'needs_review' && fromStatus !== 'withdrawn') {
+  if (
+    toStatus === 'searchable' &&
+    fromStatus !== 'needs_review' &&
+    fromStatus !== 'withdrawn'
+  ) {
     return { error: 'can only promote needs_review → searchable' }
   }
   doc.status = toStatus
@@ -263,7 +288,13 @@ export async function setDocumentStatus(
     await em.query(
       `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
        VALUES ($1, $2, 'lifecycle', 'document', $3, $4, $5)`,
-      [auditActor(identity).actorUserId, auditActor(identity).source, id, { status: fromStatus }, { status: toStatus }],
+      [
+        auditActor(identity).actorUserId,
+        auditActor(identity).source,
+        id,
+        { status: fromStatus },
+        { status: toStatus },
+      ],
     )
   })
   return { fromStatus }
@@ -274,7 +305,9 @@ export async function reenqueueIngestion(
   id: string,
   identity: AdminIdentity,
 ): Promise<{ jobId: string } | { error: string } | null> {
-  const doc = await AppDataSource.getRepository(Document).findOne({ where: { id } })
+  const doc = await AppDataSource.getRepository(Document).findOne({
+    where: { id },
+  })
   if (!doc) return null
   // The partial unique index ingestion_jobs_one_open_per_doc is the arbiter:
   // ON CONFLICT (document_id) WHERE <index predicate> infers it, making the
@@ -310,15 +343,18 @@ export async function updateDocumentSummary(
   identity: AdminIdentity,
 ): Promise<{ updated: boolean } | { error: string } | null> {
   if (!text.trim()) return { error: 'summary text must not be empty' }
-  if (text.length > 5000) return { error: 'summary text must not exceed 5000 chars' }
-  const existing: { source: string; text: string }[] = await AppDataSource.query(
-    `SELECT source, text FROM document_summaries
+  if (text.length > 5000)
+    return { error: 'summary text must not exceed 5000 chars' }
+  const existing: { source: string; text: string }[] =
+    await AppDataSource.query(
+      `SELECT source, text FROM document_summaries
      WHERE document_id = $1 AND language = $2 AND kind = $3`,
-    [documentId, language, kind],
-  )
+      [documentId, language, kind],
+    )
   if (existing.length === 0) return null
   const row = existing[0]
-  if (row.source === 'human') return { error: 'human-authored summaries are protected' }
+  if (row.source === 'human')
+    return { error: 'human-authored summaries are protected' }
   if (row.text === text) return { updated: false }
   const before = { language, kind, text: row.text, source: row.source }
   const after = { language, kind, text, source: row.source }
@@ -331,7 +367,13 @@ export async function updateDocumentSummary(
     await em.query(
       `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
        VALUES ($1, $2, 'update', 'document_summary', $3, $4, $5)`,
-      [auditActor(identity).actorUserId, auditActor(identity).source, documentId, before, after],
+      [
+        auditActor(identity).actorUserId,
+        auditActor(identity).source,
+        documentId,
+        before,
+        after,
+      ],
     )
   })
   return { updated: true }
@@ -363,7 +405,8 @@ export async function purgeDocument(
   // not an error — the doc may have no PDF, or it was already removed).
   if (bucket && safeKey) {
     try {
-      const { DeleteObjectCommand, S3Client } = await import('@aws-sdk/client-s3')
+      const { DeleteObjectCommand, S3Client } =
+        await import('@aws-sdk/client-s3')
       const s3 = new S3Client(s3ClientConfig())
       await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: safeKey }))
     } catch {
@@ -381,7 +424,12 @@ export async function purgeDocument(
     await em.query(
       `INSERT INTO audit_log (actor_user_id, source, action, entity_type, entity_id, before, after)
        VALUES ($1, $2, 'delete', 'document', $3, $4, NULL)`,
-      [auditActor(identity).actorUserId, auditActor(identity).source, id, before],
+      [
+        auditActor(identity).actorUserId,
+        auditActor(identity).source,
+        id,
+        before,
+      ],
     )
   })
   return true
