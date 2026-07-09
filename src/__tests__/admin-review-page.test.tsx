@@ -125,6 +125,12 @@ describe('ReviewQueuePage (jsdom)', () => {
     const checkboxes = screen.getAllByRole('checkbox')
     // 1 header select-all + 3 row checkboxes
     expect(checkboxes).toHaveLength(4)
+    expect(
+      screen.getByRole('checkbox', { name: 'Select all' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Doc One' }),
+    ).toBeInTheDocument()
   })
 
   it('shows the bulk bar only when rows are selected', async () => {
@@ -134,9 +140,7 @@ describe('ReviewQueuePage (jsdom)', () => {
     await screen.findByText('Doc One')
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument()
 
-    const checkboxes = screen.getAllByRole('checkbox')
-    // index 0 = select-all header, 1 = d1's row checkbox
-    fireEvent.click(checkboxes[1])
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Doc One' }))
 
     expect(await screen.findByText('1 selected')).toBeInTheDocument()
     expect(
@@ -153,9 +157,8 @@ describe('ReviewQueuePage (jsdom)', () => {
     renderPage()
 
     await screen.findByText('Doc One')
-    const checkboxes = screen.getAllByRole('checkbox')
-    fireEvent.click(checkboxes[1]) // d1
-    fireEvent.click(checkboxes[2]) // d2
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Doc One' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Doc Two' }))
 
     const promoteButton = await screen.findByRole('button', {
       name: 'Promote 2',
@@ -189,9 +192,8 @@ describe('ReviewQueuePage (jsdom)', () => {
     renderPage()
 
     await screen.findByText('Doc One')
-    const checkboxes = screen.getAllByRole('checkbox')
-    fireEvent.click(checkboxes[1]) // d1
-    fireEvent.click(checkboxes[2]) // d2
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Doc One' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Doc Two' }))
 
     const reingestButton = await screen.findByRole('button', {
       name: 'Re-ingest 2',
@@ -205,10 +207,37 @@ describe('ReviewQueuePage (jsdom)', () => {
     })
     expect(screen.getByText(/1 re-queued, 1 failed/)).toBeInTheDocument()
 
-    const checkboxesAfter = screen.getAllByRole('checkbox')
-    // d1 (index 1) unchecked, d2 (index 2) still checked
-    expect(checkboxesAfter[1]).not.toBeChecked()
-    expect(checkboxesAfter[2]).toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Doc One' }),
+    ).not.toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Doc Two' }),
+    ).toBeChecked()
+  })
+
+  it('clears the selection after a fully successful bulk promote', async () => {
+    setupFetchMock()
+    window.confirm = jest.fn(() => true)
+    renderPage()
+
+    await screen.findByText('Doc One')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Doc One' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Doc Two' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Promote 2' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/2 promoted/)).toBeInTheDocument()
+    })
+
+    // Selection cleared → bulk bar gone
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Doc One' }),
+    ).not.toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Doc Two' }),
+    ).not.toBeChecked()
   })
 
   it('disables bulk Promote when the selection includes an error-status doc', async () => {
@@ -216,8 +245,7 @@ describe('ReviewQueuePage (jsdom)', () => {
     renderPage()
 
     await screen.findByText('Doc Three')
-    const checkboxes = screen.getAllByRole('checkbox')
-    fireEvent.click(checkboxes[3]) // d3, status = error
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Doc Three' })) // d3, status = error
 
     const promoteButton = await screen.findByRole('button', {
       name: 'Promote 1',

@@ -136,41 +136,44 @@ const ReviewQueuePage = () => {
     setBulkBusy(true)
     setNotice(null)
     setError(null)
-    const failures: { id: string; reason: string }[] = []
-    await Promise.allSettled(
-      ids.map(async (id) => {
-        try {
-          if (action === 'promote') {
-            await adminFetch(`/api/admin/documents/${id}/status`, {
-              method: 'POST',
-              body: JSON.stringify({ status: 'searchable' }),
-            })
-          } else {
-            await adminFetch(`/api/admin/documents/${id}/reingest`, {
-              method: 'POST',
-            })
+    try {
+      const failures: { id: string; reason: string }[] = []
+      await Promise.allSettled(
+        ids.map(async (id) => {
+          try {
+            if (action === 'promote') {
+              await adminFetch(`/api/admin/documents/${id}/status`, {
+                method: 'POST',
+                body: JSON.stringify({ status: 'searchable' }),
+              })
+            } else {
+              await adminFetch(`/api/admin/documents/${id}/reingest`, {
+                method: 'POST',
+              })
+            }
+          } catch (err: any) {
+            failures.push({ id, reason: err.message })
           }
-        } catch (err: any) {
-          failures.push({ id, reason: err.message })
-        }
-      }),
-    )
-    const ok = ids.length - failures.length
-    setSelected(new Set(failures.map((f) => f.id))) // failed rows stay selected
-    await load() // single refetch for the whole batch (also clears any stale page error)
-    if (failures.length === 0) {
-      setNotice(`${ok} ${action === 'promote' ? 'promoted' : 're-queued'}.`)
-    } else {
-      const titleOf = (id: string) =>
-        items.find((i) => i.id === id)?.title ??
-        items.find((i) => i.id === id)?.externalId ??
-        id
-      setError(
-        `${ok} ${action === 'promote' ? 'promoted' : 're-queued'}, ${failures.length} failed — ` +
-          failures.map((f) => `${titleOf(f.id)}: ${f.reason}`).join(' · '),
+        }),
       )
+      const ok = ids.length - failures.length
+      setSelected(new Set(failures.map((f) => f.id))) // failed rows stay selected
+      await load() // single refetch for the whole batch (also clears any stale page error)
+      if (failures.length === 0) {
+        setNotice(`${ok} ${action === 'promote' ? 'promoted' : 're-queued'}.`)
+      } else {
+        const titleOf = (id: string) =>
+          items.find((i) => i.id === id)?.title ??
+          items.find((i) => i.id === id)?.externalId ??
+          id
+        setError(
+          `${ok} ${action === 'promote' ? 'promoted' : 're-queued'}, ${failures.length} failed — ` +
+            failures.map((f) => `${titleOf(f.id)}: ${f.reason}`).join(' · '),
+        )
+      }
+    } finally {
+      setBulkBusy(false)
     }
-    setBulkBusy(false)
   }
 
   const workerStyle = health
@@ -364,7 +367,7 @@ const ReviewQueuePage = () => {
           <Text>{selected.size} selected</Text>
           <button
             onClick={() => bulkAct('promote')}
-            disabled={bulkBusy || selectionHasError}
+            disabled={bulkBusy || busyId !== null || selectionHasError}
             title={
               selectionHasError
                 ? 'Selection includes a document with status "error" — those must be re-ingested before they can be promoted.'
@@ -376,7 +379,7 @@ const ReviewQueuePage = () => {
           </button>
           <button
             onClick={() => bulkAct('reingest')}
-            disabled={bulkBusy}
+            disabled={bulkBusy || busyId !== null}
             title='Re-queue the selected documents for the ingestion pipeline.'
             style={{ textDecoration: 'underline' }}
           >
@@ -417,7 +420,9 @@ const ReviewQueuePage = () => {
               <th style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
                 <input
                   type='checkbox'
+                  aria-label='Select all'
                   checked={selected.size === items.length && items.length > 0}
+                  disabled={bulkBusy}
                   onChange={toggleAll}
                 />
               </th>
@@ -452,7 +457,9 @@ const ReviewQueuePage = () => {
                 <td style={cell}>
                   <input
                     type='checkbox'
+                    aria-label={`Select ${item.title || item.externalId}`}
                     checked={selected.has(item.id)}
+                    disabled={bulkBusy}
                     onChange={() => toggleSelect(item.id)}
                   />
                 </td>
@@ -486,7 +493,7 @@ const ReviewQueuePage = () => {
                 <td style={cell}>{item.suggestedTagCount}</td>
                 <td style={cell}>
                   <button
-                    disabled={busyId === item.id}
+                    disabled={busyId === item.id || bulkBusy}
                     onClick={() => act(item.id, 'promote')}
                     style={{ marginRight: 8, textDecoration: 'underline' }}
                     title='Send this document to the public search corpus'
@@ -494,7 +501,7 @@ const ReviewQueuePage = () => {
                     Promote
                   </button>
                   <button
-                    disabled={busyId === item.id}
+                    disabled={busyId === item.id || bulkBusy}
                     onClick={() => act(item.id, 'reingest')}
                     style={{ textDecoration: 'underline' }}
                     title='Re-queue this document for the ingestion worker to re-parse and re-process'
