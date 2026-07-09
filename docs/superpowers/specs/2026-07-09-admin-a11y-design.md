@@ -13,11 +13,11 @@ The help layer added this cycle lives entirely in native `title` tooltips — un
 
 ### 1. Reachable tooltips
 
-`src/app/admin/components/Tooltip.tsx` is upgraded in place (same `<Tooltip help='…'>label</Tooltip>` API, so all call sites keep working): the trigger becomes a focusable element (`tabIndex=0`, `role='note'` trigger button with `aria-describedby` pointing at an inline `<span role='tooltip'>`), and the help text becomes a CSS-positioned popover shown on `:hover` AND `:focus-visible` AND tap (click toggles on touch). Pure CSS/inline-style + a few lines of state — no dependency. The native `title` attribute is dropped from the component (it double-announces). Raw `title=` attributes on buttons elsewhere remain (they're supplements on already-focusable controls, acceptable), except where a Tooltip replacement is one line.
+`src/app/admin/components/Tooltip.tsx` is upgraded in place (same `<Tooltip help='…'>label</Tooltip>` API, so all four call-site files keep working): the trigger becomes a `<button type='button' aria-describedby={id}>` (naturally focusable — no `tabIndex`, no extra role, styled to render inline like the current span) wrapping ONLY the label text + "?" marker (never arbitrary interactive children — current call sites all pass plain text; the plan must not change that contract). The help text becomes `<span role='tooltip' id={id}>` positioned as a popover, shown on hover AND focus-visible AND tap (click toggles on touch), dismissed on blur/Escape. Pure CSS/inline-style + a few lines of state — no dependency, per WAI-ARIA tooltip guidance. The native `title` attribute is dropped from the component (it double-announces). Raw `title=` attributes on buttons elsewhere remain (they're supplements on already-focusable controls, acceptable), except where a Tooltip replacement is one line.
 
 ### 2. Real buttons
 
-A shared inline-style constant (`src/app/admin/lib/buttonStyles.ts`, e.g. `actionButton` / `dangerButton`) giving action buttons a visible button treatment: border, padding, radius, hover state — replacing bare `textDecoration: underline` on the ~30 admin action buttons. Links that navigate stay link-styled; things that DO stay button-styled. Mechanical sweep, no layout changes.
+A shared inline-style constant (`src/app/admin/lib/buttonStyles.ts`, e.g. `actionButton` / `dangerButton`) giving action buttons a visible button treatment: border, padding, radius, hover state — replacing bare `textDecoration: underline` on the admin action buttons (~44 raw underline sites exist across 10 files; a chunk are genuine navigation `<Link>`s that stay link-styled). Because the button-vs-link split is judgment-based, **the plan must enumerate every underline site with an explicit keep-as-link / convert-to-button decision** so the sweep can't silently restyle navigation. Things that DO get button styling; things that GO somewhere stay links. No layout changes.
 
 ### 3. Form labels
 
@@ -25,7 +25,7 @@ Login and user-creation forms get real `<label htmlFor>` elements (visible label
 
 ### 4. Contrast
 
-`#888`-on-white secondary text globally bumped to `#595959` (7:1, comfortably AA) via find/replace in the admin pages; the `#cbd5e0`-on-`#1a365d` nav already passes. StatusChip/provenance-badge color pairs verified against their tinted backgrounds and darkened only if any fail 4.5:1 (check with a contrast computation during implementation, record results in the commit message).
+`#888`-on-white secondary text globally bumped to `#595959` (≈7.1:1, comfortably AA) via find/replace in the admin pages; the `#cbd5e0`-on-`#1a365d` nav already passes. StatusChip/provenance-badge color pairs verified against their tinted backgrounds and darkened only if any fail 4.5:1 — the computed ratios are asserted in the contrast unit test (see Testing) so the check is durable, not just recorded in a commit message.
 
 ### 5. Table semantics
 
@@ -39,7 +39,7 @@ All admin data tables get `scope='col'` on header cells. (aria-live on notices i
 
 ## Testing
 
-Component tests: Tooltip shows its content on focus (not just hover) and hides on blur/Escape; login renders labels associated with inputs (`getByLabelText`); a spot-check test that a representative action button has the shared style applied. Contrast values asserted once in a small unit test over the shared style constants (guards regressions).
+Component tests: Tooltip shows its content on focus (not just hover) and hides on blur/Escape; login renders labels associated with inputs (`getByLabelText`); a spot-check test that a representative action button has the shared style applied. A contrast unit test computes WCAG ratios over the shared style constants AND the StatusChip/provenance-badge fg/bg pairs, asserting ≥ 4.5:1 (guards regressions).
 
 ## Acceptance
 
