@@ -260,6 +260,16 @@ describe('ReviewQueuePage (jsdom)', () => {
     expect(reingestButton).not.toBeDisabled()
   })
 
+  it('shows a loading line before the queue resolves', () => {
+    setupFetchMock()
+    render(
+      <ChakraProvider>
+        <ReviewQueuePage />
+      </ChakraProvider>,
+    )
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+  })
+
   it('renders a Start reviewing button linking to the first queue doc', async () => {
     setupFetchMock()
     renderPage()

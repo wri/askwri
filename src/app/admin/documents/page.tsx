@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
 import { StatusChip } from '../components/StatusChip'
+import { Flash } from '../components/Flash'
 
 interface DocItem {
   id: string
@@ -57,6 +58,7 @@ const CatalogInner = () => {
   const [bulkCollectionId, setBulkCollectionId] = useState<string>('')
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const loadCollections = useCallback(async () => {
     try {
@@ -121,6 +123,8 @@ const CatalogInner = () => {
     } catch (err: any) {
       if (seq !== reqSeq.current) return
       setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -200,12 +204,14 @@ const CatalogInner = () => {
         Document catalog
       </Heading>
 
-      {notice && (
-        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
-      )}
-      {error && (
-        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
-      )}
+      <Flash
+        notice={notice}
+        error={error}
+        onDismiss={() => {
+          setNotice(null)
+          setError(null)
+        }}
+      />
 
       {/* Filter bar */}
       <div
@@ -352,7 +358,9 @@ const CatalogInner = () => {
       )}
 
       {/* Table */}
-      {items.length === 0 ? (
+      {loading ? (
+        <Text>Loading…</Text>
+      ) : items.length === 0 ? (
         <Text>No documents found.</Text>
       ) : (
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>

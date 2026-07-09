@@ -6,6 +6,7 @@ import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
 import { StatusChip } from '../components/StatusChip'
 import { Tooltip } from '../components/Tooltip'
+import { Flash } from '../components/Flash'
 
 interface QueueItem {
   id: string
@@ -61,6 +62,7 @@ const ReviewQueuePage = () => {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     try {
@@ -73,6 +75,8 @@ const ReviewQueuePage = () => {
       setError(null)
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -345,12 +349,14 @@ const ReviewQueuePage = () => {
         </Box>
       )}
 
-      {notice && (
-        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
-      )}
-      {error && (
-        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
-      )}
+      <Flash
+        notice={notice}
+        error={error}
+        onDismiss={() => {
+          setNotice(null)
+          setError(null)
+        }}
+      />
 
       {selected.size > 0 && (
         <div
@@ -401,7 +407,9 @@ const ReviewQueuePage = () => {
           Start reviewing ({items.length}) →
         </Link>
       )}
-      {items.length === 0 ? (
+      {loading ? (
+        <Text>Loading…</Text>
+      ) : items.length === 0 ? (
         <Text style={{ color: '#555' }}>
           Queue is empty. 🎉 No documents are flagged for review. Check the
           corpus-health panel above for documents missing a summary in their own
