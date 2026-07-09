@@ -331,9 +331,8 @@ export async function reenqueueIngestion(
 
 /**
  * Update a single document_summaries row (by document_id + language + kind).
- * Only `source='external'` and `source='generated'` rows are editable;
- * `source='human'` rows are protected (immutable, like document_tags).
- * The mutation and the audit row are committed atomically.
+ * Any editable row (any source) can be saved. The mutation and the audit row
+ * are committed atomically.
  */
 export async function updateDocumentSummary(
   documentId: string,
@@ -353,14 +352,15 @@ export async function updateDocumentSummary(
     )
   if (existing.length === 0) return null
   const row = existing[0]
-  if (row.source === 'human')
-    return { error: 'human-authored summaries are protected' }
   if (row.text === text) return { updated: false }
   const before = { language, kind, text: row.text, source: row.source }
-  const after = { language, kind, text, source: row.source }
+  const after = { language, kind, text, source: 'human' }
   await AppDataSource.transaction(async (em) => {
+    // A person-edited summary must be stamped source='human' so the worker's
+    // summarize stage (which only preserves 'human'/'external') never
+    // overwrites it on re-ingest.
     await em.query(
-      `UPDATE document_summaries SET text = $1
+      `UPDATE document_summaries SET text = $1, source = 'human'
        WHERE document_id = $2 AND language = $3 AND kind = $4`,
       [text, documentId, language, kind],
     )

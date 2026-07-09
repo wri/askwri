@@ -27,12 +27,21 @@ d('updateDocumentSummary (DB integration)', () => {
   })
 
   afterAll(async () => {
-    await AppDataSource.query('DELETE FROM document_summaries WHERE document_id = $1', [docId])
+    await AppDataSource.query(
+      'DELETE FROM document_summaries WHERE document_id = $1',
+      [docId],
+    )
     await AppDataSource.query('DELETE FROM documents WHERE id = $1', [docId])
   })
 
   it('updates an external summary and writes an audit row', async () => {
-    const result = await updateDocumentSummary(docId, 'en', 'long', 'Updated long summary text.', identity)
+    const result = await updateDocumentSummary(
+      docId,
+      'en',
+      'long',
+      'Updated long summary text.',
+      identity,
+    )
     expect(result).toEqual({ updated: true })
     const [row] = await AppDataSource.query(
       `SELECT text FROM document_summaries WHERE document_id = $1 AND language = 'en' AND kind = 'long'`,
@@ -51,17 +60,68 @@ d('updateDocumentSummary (DB integration)', () => {
   })
 
   it('returns { updated: false } when text is unchanged', async () => {
-    const result = await updateDocumentSummary(docId, 'en', 'short', 'Original short.', identity)
+    const result = await updateDocumentSummary(
+      docId,
+      'en',
+      'short',
+      'Original short.',
+      identity,
+    )
     expect(result).toEqual({ updated: false })
   })
 
   it('returns null when the summary row does not exist', async () => {
-    const result = await updateDocumentSummary(docId, 'zh', 'long', 'No such summary.', identity)
+    const result = await updateDocumentSummary(
+      docId,
+      'zh',
+      'long',
+      'No such summary.',
+      identity,
+    )
     expect(result).toBeNull()
   })
 
   it('rejects empty text', async () => {
-    const result = await updateDocumentSummary(docId, 'en', 'long', '   ', identity)
+    const result = await updateDocumentSummary(
+      docId,
+      'en',
+      'long',
+      '   ',
+      identity,
+    )
     expect(result).toEqual({ error: 'summary text must not be empty' })
+  })
+
+  it('flips source to human when a summary is edited', async () => {
+    const result = await updateDocumentSummary(
+      docId,
+      'en',
+      'long',
+      'Human-edited long summary.',
+      identity,
+    )
+    expect(result).toEqual({ updated: true })
+    const [row] = await AppDataSource.query(
+      `SELECT source FROM document_summaries WHERE document_id = $1 AND language = 'en' AND kind = 'long'`,
+      [docId],
+    )
+    expect(row.source).toBe('human')
+  })
+
+  it('allows editing a summary whose source is already human', async () => {
+    const result = await updateDocumentSummary(
+      docId,
+      'en',
+      'long',
+      'Edited again.',
+      identity,
+    )
+    expect(result).toEqual({ updated: true })
+    const [row] = await AppDataSource.query(
+      `SELECT source, text FROM document_summaries WHERE document_id = $1 AND language = 'en' AND kind = 'long'`,
+      [docId],
+    )
+    expect(row.source).toBe('human')
+    expect(row.text).toBe('Edited again.')
   })
 })

@@ -237,9 +237,9 @@ const GuidePage = () => (
       <strong>The Promote button is missing.</strong>
     </p>
     <p style={{ marginBottom: 12 }}>
-      Promote only appears for documents in needs_review status — it&apos;s the
-      one-way move into searchable. A withdrawn document can&apos;t be promoted;
-      an admin has to Restore it first.
+      Promote only appears for documents in needs_review status — it moves a
+      reviewed document into searchable. A withdrawn document can&apos;t be
+      promoted; an admin has to Restore it first.
     </p>
     <p style={{ marginBottom: 4 }}>
       <strong>What does confidence mean?</strong>

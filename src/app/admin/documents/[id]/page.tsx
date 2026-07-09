@@ -682,10 +682,18 @@ const DocumentEditorPage = () => {
         )}
         {detail?.summaries.map((s, i) => {
           const skey = `${s.language}::${s.kind}`
+          const sourceLabel =
+            s.source === 'generated'
+              ? 'AI'
+              : s.source === 'external'
+                ? 'imported'
+                : s.source === 'human'
+                  ? 'person'
+                  : (s.source ?? 'unknown')
           return (
             <div key={i} style={{ marginBottom: 16 }}>
               <Text style={{ fontWeight: 600, marginBottom: 4 }}>
-                {s.language} · {s.kind} ({s.source ?? 'unknown'})
+                {s.language} · {s.kind} ({sourceLabel})
               </Text>
               <textarea
                 data-summary-key={skey}
