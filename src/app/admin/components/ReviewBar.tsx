@@ -31,10 +31,14 @@ export const ReviewBar = ({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Keyed on documentStatus too: lifecycle-panel actions change the status,
+    // which changes queue membership — refetch so the bar stays honest.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQueue(null) // don't render the new doc against the old queue mid-fetch
     adminFetch<{ items?: QueueRef[] }>('/api/admin/review-queue')
       .then((body) => setQueue(body.items ?? []))
       .catch(() => setQueue([])) // bar is best-effort; never block the editor
-  }, [documentId])
+  }, [documentId, documentStatus])
 
   const idx = queue ? queue.findIndex((q) => q.id === documentId) : -1
   const nextId =
@@ -124,10 +128,10 @@ export const ReviewBar = ({
         </button>
         <button
           style={{ ...btn, fontWeight: 700 }}
-          disabled={busy || documentStatus === 'error'}
+          disabled={busy || documentStatus !== 'needs_review'}
           title={
-            documentStatus === 'error'
-              ? 'This document errored during ingestion — re-ingest it before promoting.'
+            documentStatus !== 'needs_review'
+              ? 'Only documents in needs_review can be promoted. Re-ingest errored documents first.'
               : 'Promote to public search and move to the next flagged document.'
           }
           onClick={() => act('promote')}

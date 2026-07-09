@@ -391,7 +391,9 @@ const DocumentEditorPage = () => {
         documentId={id}
         documentStatus={doc?.status}
         onChanged={() =>
-          load({ resetForm: true }).catch((err: any) => setError(err.message))
+          // Plain load(): the formDirty gate inside load() preserves unsaved
+          // edits and resets the form otherwise.
+          load().catch((err: any) => setError(err.message))
         }
       />
       <Heading size='lg' style={{ marginBottom: 8 }}>

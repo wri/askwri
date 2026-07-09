@@ -386,4 +386,56 @@ describe('DocumentEditorPage', () => {
     fireEvent.click(bar.getByText('Next →'))
     expect(mockRouterPush).toHaveBeenCalledWith('/admin/documents/other-1')
   })
+
+  it('Re-ingest from the bar POSTs /reingest and advances to the next doc', async () => {
+    const fetchMock = setupFetchMock({ status: 'needs_review' }, [
+      { id: 'test-doc-id-123', status: 'needs_review' },
+      { id: 'other-2', status: 'needs_review' },
+    ])
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    const bar = within(await screen.findByTestId('review-bar'))
+    fireEvent.click(bar.getByText('Re-ingest'))
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith('/admin/documents/other-2')
+    })
+    expect(
+      fetchMock.mock.calls.some(
+        (c: any[]) => c[0] === '/api/admin/documents/test-doc-id-123/reingest',
+      ),
+    ).toBe(true)
+  })
+
+  it('Promote on the last doc reloads the editor instead of navigating', async () => {
+    const fetchMock = setupFetchMock({ status: 'needs_review' }, [
+      { id: 'test-doc-id-123', status: 'needs_review' },
+    ])
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    const bar = within(await screen.findByTestId('review-bar'))
+    const detailCalls = () =>
+      fetchMock.mock.calls.filter(
+        (c: any[]) => c[0] === '/api/admin/documents/test-doc-id-123',
+      ).length
+    const before = detailCalls()
+    fireEvent.click(bar.getByText('Promote'))
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(
+          (c: any[]) => c[0] === '/api/admin/documents/test-doc-id-123/status',
+        ),
+      ).toBe(true)
+    })
+    // onChanged → load() refetches the detail endpoint; no navigation happens
+    await waitFor(() => {
+      expect(detailCalls()).toBeGreaterThan(before)
+    })
+    expect(mockRouterPush).not.toHaveBeenCalled()
+  })
 })
