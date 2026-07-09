@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { StatusChip } from '../components/StatusChip'
 
 interface DocItem {
   id: string
@@ -29,7 +30,10 @@ interface Tag {
 
 const PAGE_SIZE = 50
 
-const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid #eee' }
+const cell: React.CSSProperties = {
+  padding: '8px 12px',
+  borderBottom: '1px solid #eee',
+}
 
 const CatalogInner = () => {
   const searchParams = useSearchParams()
@@ -56,7 +60,9 @@ const CatalogInner = () => {
 
   const loadCollections = useCallback(async () => {
     try {
-      const body = await adminFetch<{ collections: Collection[] }>('/api/admin/collections')
+      const body = await adminFetch<{ collections: Collection[] }>(
+        '/api/admin/collections',
+      )
       setCollections(body.collections)
     } catch (err: any) {
       setError(err.message)
@@ -105,7 +111,9 @@ const CatalogInner = () => {
       if (f.tagId) params.set('tagId', f.tagId)
       params.set('limit', String(PAGE_SIZE))
       params.set('offset', String(pageNum * PAGE_SIZE))
-      const body = await adminFetch<{ items: DocItem[]; total: number }>(`/api/admin/documents?${params}`)
+      const body = await adminFetch<{ items: DocItem[]; total: number }>(
+        `/api/admin/documents?${params}`,
+      )
       if (seq !== reqSeq.current) return
       setItems(body.items)
       setTotal(body.total)
@@ -121,7 +129,14 @@ const CatalogInner = () => {
     loadCollections()
     loadTags()
     loadYears()
-    const f = { status: '', language: '', collectionId: initialCollectionId, search: '', yearPublished: '', tagId: '' }
+    const f = {
+      status: '',
+      language: '',
+      collectionId: initialCollectionId,
+      search: '',
+      yearPublished: '',
+      tagId: '',
+    }
     setFilters(f)
     setPage(0)
     setSelected(new Set())
@@ -169,7 +184,9 @@ const CatalogInner = () => {
         body: JSON.stringify({ documentIds: Array.from(selected) }),
       })
       const col = collections.find((c) => c.id === bulkCollectionId)
-      setNotice(`Added ${selected.size} document${selected.size === 1 ? '' : 's'} to ${col?.name ?? bulkCollectionId}.`)
+      setNotice(
+        `Added ${selected.size} document${selected.size === 1 ? '' : 's'} to ${col?.name ?? bulkCollectionId}.`,
+      )
       setSelected(new Set())
       setBulkCollectionId('')
     } catch (err: any) {
@@ -183,19 +200,34 @@ const CatalogInner = () => {
         Document catalog
       </Heading>
 
-      {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
-      {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
+      {notice && (
+        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
+      )}
+      {error && (
+        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
+      )}
 
       {/* Filter bar */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div
+        style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}
+      >
         <select
           value={filters.status}
           onChange={(e) => updateFilter('status', e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
         >
           <option value=''>All statuses</option>
-          {['draft', 'processing', 'needs_review', 'searchable', 'withdrawn', 'error'].map((s) => (
-            <option key={s} value={s}>{s}</option>
+          {[
+            'draft',
+            'processing',
+            'needs_review',
+            'searchable',
+            'withdrawn',
+            'error',
+          ].map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
           ))}
         </select>
 
@@ -206,7 +238,9 @@ const CatalogInner = () => {
         >
           <option value=''>All languages</option>
           {['en', 'es', 'zh', 'pt', 'id'].map((l) => (
-            <option key={l} value={l}>{l}</option>
+            <option key={l} value={l}>
+              {l}
+            </option>
           ))}
         </select>
 
@@ -217,7 +251,9 @@ const CatalogInner = () => {
         >
           <option value=''>All years</option>
           {availableYears.map((y) => (
-            <option key={y} value={String(y)}>{y}</option>
+            <option key={y} value={String(y)}>
+              {y}
+            </option>
           ))}
         </select>
 
@@ -228,7 +264,9 @@ const CatalogInner = () => {
         >
           <option value=''>All collections</option>
           {collections.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
           ))}
         </select>
 
@@ -249,7 +287,9 @@ const CatalogInner = () => {
             .map(([facet, ts]) => (
               <optgroup key={facet} label={facet}>
                 {ts.map((t) => (
-                  <option key={t.id} value={t.id}>{t.valueId}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.valueId}
+                  </option>
                 ))}
               </optgroup>
             ))}
@@ -260,13 +300,27 @@ const CatalogInner = () => {
           placeholder='Search title, author, DOI, URL…'
           value={filters.search}
           onChange={(e) => updateFilter('search', e.target.value)}
-          style={{ fontFamily: 'inherit', fontSize: 'inherit', padding: '2px 6px' }}
+          style={{
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            padding: '2px 6px',
+          }}
         />
       </div>
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, padding: '8px 12px', background: '#f0f8ff', borderRadius: 4 }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginBottom: 12,
+            padding: '8px 12px',
+            background: '#f0f8ff',
+            borderRadius: 4,
+          }}
+        >
           <Text style={{ marginRight: 4 }}>{selected.size} selected</Text>
           <select
             value={bulkCollectionId}
@@ -275,7 +329,9 @@ const CatalogInner = () => {
           >
             <option value=''>— choose collection —</option>
             {collections.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
             ))}
           </select>
           <button
@@ -283,9 +339,13 @@ const CatalogInner = () => {
             disabled={!bulkCollectionId}
             style={{ textDecoration: 'underline' }}
           >
-            Add {selected.size} doc{selected.size === 1 ? '' : 's'} to collection
+            Add {selected.size} doc{selected.size === 1 ? '' : 's'} to
+            collection
           </button>
-          <Text style={{ fontSize: 12, color: '#888', marginLeft: 8 }} title='Collections are curatorial groups of documents (e.g. a topic, a project, a language set). Adding documents to a collection groups them for filtering, bulk operations, and per-collection embedding-model policies. It does not change the document itself.'>
+          <Text
+            style={{ fontSize: 12, color: '#888', marginLeft: 8 }}
+            title='Collections are curatorial groups of documents (e.g. a topic, a project, a language set). Adding documents to a collection groups them for filtering, bulk operations, and per-collection embedding-model policies. It does not change the document itself.'
+          >
             ℹ What does this do?
           </Text>
         </div>
@@ -305,11 +365,20 @@ const CatalogInner = () => {
                   onChange={toggleAll}
                 />
               </th>
-              {['External ID', 'Title', 'Language', 'Status', 'Year'].map((h) => (
-                <th key={h} style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
-                  {h}
-                </th>
-              ))}
+              {['External ID', 'Title', 'Language', 'Status', 'Year'].map(
+                (h) => (
+                  <th
+                    key={h}
+                    style={{
+                      ...cell,
+                      textAlign: 'left',
+                      background: '#f7f7f7',
+                    }}
+                  >
+                    {h}
+                  </th>
+                ),
+              )}
             </tr>
           </thead>
           <tbody>
@@ -324,12 +393,17 @@ const CatalogInner = () => {
                 </td>
                 <td style={cell}>{doc.externalId}</td>
                 <td style={cell}>
-                  <Link href={`/admin/documents/${doc.id}`} style={{ textDecoration: 'underline' }}>
+                  <Link
+                    href={`/admin/documents/${doc.id}`}
+                    style={{ textDecoration: 'underline' }}
+                  >
                     {doc.title || doc.externalId}
                   </Link>
                 </td>
                 <td style={cell}>{doc.language ?? '—'}</td>
-                <td style={cell}>{doc.status}</td>
+                <td style={cell}>
+                  <StatusChip status={doc.status} />
+                </td>
                 <td style={cell}>{doc.yearPublished ?? '—'}</td>
               </tr>
             ))}
@@ -339,21 +413,38 @@ const CatalogInner = () => {
 
       {/* Pagination */}
       {total > 0 && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16, fontSize: 13, color: '#555' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginTop: 16,
+            fontSize: 13,
+            color: '#555',
+          }}
+        >
           <button
             onClick={() => goToPage(page - 1)}
             disabled={page === 0}
-            style={{ textDecoration: 'underline', cursor: page === 0 ? 'not-allowed' : 'pointer' }}
+            style={{
+              textDecoration: 'underline',
+              cursor: page === 0 ? 'not-allowed' : 'pointer',
+            }}
           >
             ← Prev
           </button>
           <Text>
-            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+            Showing {page * PAGE_SIZE + 1}–
+            {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </Text>
           <button
             onClick={() => goToPage(page + 1)}
             disabled={(page + 1) * PAGE_SIZE >= total}
-            style={{ textDecoration: 'underline', cursor: (page + 1) * PAGE_SIZE >= total ? 'not-allowed' : 'pointer' }}
+            style={{
+              textDecoration: 'underline',
+              cursor:
+                (page + 1) * PAGE_SIZE >= total ? 'not-allowed' : 'pointer',
+            }}
           >
             Next →
           </button>

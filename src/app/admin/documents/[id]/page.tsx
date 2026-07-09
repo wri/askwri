@@ -4,10 +4,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../../lib/api'
+import { StatusChip } from '../../components/StatusChip'
 
 interface Detail {
   document: Record<string, any>
-  summaries: { language: string; kind: string; text: string; source: string | null }[]
+  summaries: {
+    language: string
+    kind: string
+    text: string
+    source: string | null
+  }[]
   tags: {
     tagId: string
     facet: string
@@ -17,10 +23,19 @@ interface Detail {
     confidence: number | null
   }[]
   collections: { id: string; name: string; slug: string }[]
-  latestJob: { status: string; stage: string | null; error: string | null; attempts: number } | null
+  latestJob: {
+    status: string
+    stage: string | null
+    error: string | null
+    attempts: number
+  } | null
 }
 
-const EDITABLE: { key: string; label: string; type?: 'number' | 'date' | 'textarea' }[] = [
+const EDITABLE: {
+  key: string
+  label: string
+  type?: 'number' | 'date' | 'textarea'
+}[] = [
   { key: 'title', label: 'Title' },
   { key: 'titleEn', label: 'Title (EN)' },
   { key: 'doi', label: 'DOI' },
@@ -34,7 +49,10 @@ const EDITABLE: { key: string; label: string; type?: 'number' | 'date' | 'textar
   { key: 'wriPrimaryOffice', label: 'WRI primary office' },
 ]
 
-const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid #eee' }
+const cell: React.CSSProperties = {
+  padding: '8px 12px',
+  borderBottom: '1px solid #eee',
+}
 
 const DocumentEditorPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -42,8 +60,12 @@ const DocumentEditorPage = () => {
   const [detail, setDetail] = useState<Detail | null>(null)
   const [form, setForm] = useState<Record<string, any>>({})
   const [summaryEdits, setSummaryEdits] = useState<Record<string, string>>({})
-  const [allTags, setAllTags] = useState<{ id: string; facet: string; valueId: string }[]>([])
-  const [allCollections, setAllCollections] = useState<{ id: string; name: string; slug: string }[]>([])
+  const [allTags, setAllTags] = useState<
+    { id: string; facet: string; valueId: string }[]
+  >([])
+  const [allCollections, setAllCollections] = useState<
+    { id: string; name: string; slug: string }[]
+  >([])
   const [me, setMe] = useState<{ role?: string }>({})
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +79,11 @@ const DocumentEditorPage = () => {
       const body = await adminFetch<Detail>(`/api/admin/documents/${id}`)
       setDetail(body)
       if (opts.resetForm || !formDirty.current) {
-        setForm(Object.fromEntries(EDITABLE.map(({ key }) => [key, body.document[key] ?? ''])))
+        setForm(
+          Object.fromEntries(
+            EDITABLE.map(({ key }) => [key, body.document[key] ?? '']),
+          ),
+        )
         formDirty.current = false
       }
       // Reset summary edits to the loaded values (only for keys not being edited)
@@ -98,10 +124,13 @@ const DocumentEditorPage = () => {
         const raw = form[key]
         patch[key] = raw === '' ? null : type === 'number' ? Number(raw) : raw
       }
-      const body = await adminFetch<{ updated: string[] }>(`/api/admin/documents/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patch),
-      })
+      const body = await adminFetch<{ updated: string[] }>(
+        `/api/admin/documents/${id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        },
+      )
       setNotice(`Saved (${body.updated.length} field(s) changed).`)
       await load({ resetForm: true })
     } catch (err: any) {
@@ -132,7 +161,10 @@ const DocumentEditorPage = () => {
     }
   }
 
-  const decideTag = async (tagId: string, decision: 'accepted' | 'rejected') => {
+  const decideTag = async (
+    tagId: string,
+    decision: 'accepted' | 'rejected',
+  ) => {
     setBusy(true)
     try {
       setError(null)
@@ -171,13 +203,10 @@ const DocumentEditorPage = () => {
     try {
       setError(null)
       setNotice(null)
-      await adminFetch(
-        `/api/admin/documents/${id}/status`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ status }),
-        },
-      )
+      await adminFetch(`/api/admin/documents/${id}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status }),
+      })
       setNotice(`Status set to ${status}.`)
       await load()
     } catch (err: any) {
@@ -192,7 +221,9 @@ const DocumentEditorPage = () => {
     try {
       setError(null)
       setNotice(null)
-      await adminFetch(`/api/admin/documents/${id}/reingest`, { method: 'POST' })
+      await adminFetch(`/api/admin/documents/${id}/reingest`, {
+        method: 'POST',
+      })
       setNotice('Re-queued for ingestion.')
       await load()
     } catch (err: any) {
@@ -268,8 +299,12 @@ const DocumentEditorPage = () => {
   const availableTags = allTags.filter((t) => !existingTagIds.has(t.id))
 
   // Collections already on the document
-  const existingCollectionIds = new Set(detail?.collections.map((c) => c.id) ?? [])
-  const availableCollections = allCollections.filter((c) => !existingCollectionIds.has(c.id))
+  const existingCollectionIds = new Set(
+    detail?.collections.map((c) => c.id) ?? [],
+  )
+  const availableCollections = allCollections.filter(
+    (c) => !existingCollectionIds.has(c.id),
+  )
 
   const doc = detail?.document
 
@@ -284,8 +319,12 @@ const DocumentEditorPage = () => {
         </Text>
       )}
 
-      {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
-      {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
+      {notice && (
+        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
+      )}
+      {error && (
+        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
+      )}
 
       {/* Metadata panel */}
       <section style={{ marginBottom: 32 }}>
@@ -296,7 +335,9 @@ const DocumentEditorPage = () => {
           <tbody>
             {EDITABLE.map(({ key, label, type }) => (
               <tr key={key}>
-                <td style={{ ...cell, width: 200, fontWeight: 500 }}>{label}</td>
+                <td style={{ ...cell, width: 200, fontWeight: 500 }}>
+                  {label}
+                </td>
                 <td style={cell}>
                   {type === 'textarea' ? (
                     <textarea
@@ -306,17 +347,31 @@ const DocumentEditorPage = () => {
                         setForm((f) => ({ ...f, [key]: e.target.value }))
                       }}
                       rows={3}
-                      style={{ width: '100%', fontFamily: 'inherit', fontSize: 'inherit' }}
+                      style={{
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        fontSize: 'inherit',
+                      }}
                     />
                   ) : (
                     <input
-                      type={type === 'number' ? 'number' : type === 'date' ? 'date' : 'text'}
+                      type={
+                        type === 'number'
+                          ? 'number'
+                          : type === 'date'
+                            ? 'date'
+                            : 'text'
+                      }
                       value={form[key] ?? ''}
                       onChange={(e) => {
                         formDirty.current = true
                         setForm((f) => ({ ...f, [key]: e.target.value }))
                       }}
-                      style={{ width: '100%', fontFamily: 'inherit', fontSize: 'inherit' }}
+                      style={{
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        fontSize: 'inherit',
+                      }}
                     />
                   )}
                 </td>
@@ -327,7 +382,11 @@ const DocumentEditorPage = () => {
         <button
           onClick={saveMetadata}
           disabled={busy}
-          style={{ marginTop: 8, padding: '6px 16px', textDecoration: 'underline' }}
+          style={{
+            marginTop: 8,
+            padding: '6px 16px',
+            textDecoration: 'underline',
+          }}
         >
           Save
         </button>
@@ -338,7 +397,9 @@ const DocumentEditorPage = () => {
       {doc?.sourceMetadata && (
         <section style={{ marginBottom: 32 }}>
           <details>
-            <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}>
+            <summary
+              style={{ cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}
+            >
               Source metadata (read-only)
             </summary>
             <pre
@@ -381,7 +442,9 @@ const DocumentEditorPage = () => {
                         }}
                       >
                         {tag.source}/{tag.status}
-                        {tag.confidence != null ? ` (${tag.confidence.toFixed(2)})` : ''}
+                        {tag.confidence != null
+                          ? ` (${tag.confidence.toFixed(2)})`
+                          : ''}
                       </span>
                     </td>
                     <td style={cell}>
@@ -390,7 +453,10 @@ const DocumentEditorPage = () => {
                           <button
                             onClick={() => decideTag(tag.tagId, 'accepted')}
                             disabled={busy}
-                            style={{ marginRight: 8, textDecoration: 'underline' }}
+                            style={{
+                              marginRight: 8,
+                              textDecoration: 'underline',
+                            }}
                           >
                             Accept
                           </button>
@@ -419,7 +485,14 @@ const DocumentEditorPage = () => {
             </table>
           </div>
         ))}
-        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div
+          style={{
+            marginTop: 8,
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+          }}
+        >
           <select
             value={addTagId}
             onChange={(e) => setAddTagId(e.target.value)}
@@ -432,7 +505,11 @@ const DocumentEditorPage = () => {
               </option>
             ))}
           </select>
-          <button onClick={addTag} disabled={busy} style={{ textDecoration: 'underline' }}>
+          <button
+            onClick={addTag}
+            disabled={busy}
+            style={{ textDecoration: 'underline' }}
+          >
             Add
           </button>
         </div>
@@ -445,7 +522,9 @@ const DocumentEditorPage = () => {
         <Heading size='md' style={{ marginBottom: 12 }}>
           Summaries
         </Heading>
-        {(!detail || detail.summaries.length === 0) && <Text>No summaries.</Text>}
+        {(!detail || detail.summaries.length === 0) && (
+          <Text>No summaries.</Text>
+        )}
         {detail?.summaries.map((s, i) => {
           const skey = `${s.language}::${s.kind}`
           return (
@@ -457,7 +536,10 @@ const DocumentEditorPage = () => {
                 data-summary-key={skey}
                 value={summaryEdits[skey] ?? s.text}
                 onChange={(e) =>
-                  setSummaryEdits((prev) => ({ ...prev, [skey]: e.target.value }))
+                  setSummaryEdits((prev) => ({
+                    ...prev,
+                    [skey]: e.target.value,
+                  }))
                 }
                 rows={4}
                 style={{
@@ -472,7 +554,11 @@ const DocumentEditorPage = () => {
               <button
                 onClick={() => saveSummary(s.language, s.kind)}
                 disabled={busy || summaryEdits[skey] === s.text}
-                style={{ marginTop: 4, padding: '4px 12px', textDecoration: 'underline' }}
+                style={{
+                  marginTop: 4,
+                  padding: '4px 12px',
+                  textDecoration: 'underline',
+                }}
               >
                 Save {s.language}/{s.kind}
               </button>
@@ -487,14 +573,24 @@ const DocumentEditorPage = () => {
           Lifecycle
         </Heading>
         {doc && (
-          <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 12 }}>
+          <table
+            style={{
+              borderCollapse: 'collapse',
+              width: '100%',
+              marginBottom: 12,
+            }}
+          >
             <tbody>
               <tr>
                 <td style={{ ...cell, width: 200, fontWeight: 500 }}>Status</td>
-                <td style={cell}>{doc.status}</td>
+                <td style={cell}>
+                  <StatusChip status={doc.status} />
+                </td>
               </tr>
               <tr>
-                <td style={{ ...cell, fontWeight: 500 }}>Extraction confidence</td>
+                <td style={{ ...cell, fontWeight: 500 }}>
+                  Extraction confidence
+                </td>
                 <td style={cell}>
                   {doc.extractionConfidence != null
                     ? Number(doc.extractionConfidence).toFixed(2)
@@ -504,10 +600,14 @@ const DocumentEditorPage = () => {
               {detail?.latestJob && (
                 <>
                   <tr>
-                    <td style={{ ...cell, fontWeight: 500 }}>Latest job status</td>
+                    <td style={{ ...cell, fontWeight: 500 }}>
+                      Latest job status
+                    </td>
                     <td style={cell}>
                       {detail.latestJob.status}
-                      {detail.latestJob.stage ? ` / ${detail.latestJob.stage}` : ''}
+                      {detail.latestJob.stage
+                        ? ` / ${detail.latestJob.stage}`
+                        : ''}
                       {detail.latestJob.error
                         ? ` ⚠ (${detail.latestJob.attempts} attempts)`
                         : ''}
@@ -516,7 +616,9 @@ const DocumentEditorPage = () => {
                   {detail.latestJob.error && (
                     <tr>
                       <td style={{ ...cell, fontWeight: 500 }}>Job error</td>
-                      <td style={{ ...cell, color: '#C11101' }}>{detail.latestJob.error}</td>
+                      <td style={{ ...cell, color: '#C11101' }}>
+                        {detail.latestJob.error}
+                      </td>
                     </tr>
                   )}
                 </>
@@ -524,7 +626,14 @@ const DocumentEditorPage = () => {
             </tbody>
           </table>
         )}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
           {doc?.status !== 'searchable' && (
             <button
               onClick={() => setStatus('searchable')}
@@ -543,7 +652,11 @@ const DocumentEditorPage = () => {
               Withdraw
             </button>
           )}
-          <button onClick={reingest} disabled={busy} style={{ textDecoration: 'underline' }}>
+          <button
+            onClick={reingest}
+            disabled={busy}
+            style={{ textDecoration: 'underline' }}
+          >
             Re-ingest
           </button>
           <a
@@ -571,9 +684,17 @@ const DocumentEditorPage = () => {
         <Heading size='md' style={{ marginBottom: 12 }}>
           Collections
         </Heading>
-        {(!detail || detail.collections.length === 0) && <Text>Not in any collections.</Text>}
+        {(!detail || detail.collections.length === 0) && (
+          <Text>Not in any collections.</Text>
+        )}
         {detail && detail.collections.length > 0 && (
-          <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 8 }}>
+          <table
+            style={{
+              borderCollapse: 'collapse',
+              width: '100%',
+              marginBottom: 8,
+            }}
+          >
             <tbody>
               {detail.collections.map((c) => (
                 <tr key={c.id}>
@@ -606,7 +727,11 @@ const DocumentEditorPage = () => {
               </option>
             ))}
           </select>
-          <button onClick={addToCollection} disabled={busy} style={{ textDecoration: 'underline' }}>
+          <button
+            onClick={addToCollection}
+            disabled={busy}
+            style={{ textDecoration: 'underline' }}
+          >
             Add
           </button>
         </div>
