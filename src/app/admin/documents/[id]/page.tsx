@@ -178,6 +178,7 @@ const DocumentEditorPage = () => {
   const [addCollectionId, setAddCollectionId] = useState<string>('')
   const [busy, setBusy] = useState(false)
   const formDirty = useRef(false)
+  const [dirty, setDirty] = useState(false)
   const [history, setHistory] = useState<{
     total: number
     entries: any[]
@@ -223,6 +224,7 @@ const DocumentEditorPage = () => {
           ),
         )
         formDirty.current = false
+        setDirty(false)
       }
       // Reset summary edits to the loaded values (only for keys not being edited)
       setSummaryEdits((prev) => {
@@ -251,6 +253,17 @@ const DocumentEditorPage = () => {
       .then((b) => setMe(b?.identity ?? {}))
       .catch(() => setMe({}))
   }, [load])
+
+  // Warn on tab close/refresh while there are unsaved metadata edits.
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
 
   const saveMetadata = async () => {
     setBusy(true)
@@ -643,6 +656,7 @@ const DocumentEditorPage = () => {
                           value={form[key] ?? ''}
                           onChange={(e) => {
                             formDirty.current = true
+                            setDirty(true)
                             setForm((f) => ({ ...f, [key]: e.target.value }))
                           }}
                           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
@@ -665,6 +679,7 @@ const DocumentEditorPage = () => {
                           value={form[key] ?? ''}
                           onChange={(e) => {
                             formDirty.current = true
+                            setDirty(true)
                             setForm((f) => ({ ...f, [key]: e.target.value }))
                           }}
                           rows={3}
@@ -686,6 +701,7 @@ const DocumentEditorPage = () => {
                           value={form[key] ?? ''}
                           onChange={(e) => {
                             formDirty.current = true
+                            setDirty(true)
                             setForm((f) => ({ ...f, [key]: e.target.value }))
                           }}
                           style={{
@@ -732,7 +748,7 @@ const DocumentEditorPage = () => {
                 textDecoration: 'underline',
               }}
             >
-              Save
+              {dirty ? 'Save (unsaved changes)' : 'Save'}
             </button>
           </section>
 

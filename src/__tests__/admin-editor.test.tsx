@@ -88,7 +88,7 @@ function setupFetchMock(
   const detail = documentOverride
     ? { ...mockDetail, document: { ...mockDocument, ...documentOverride } }
     : mockDetail
-  const fetchMock = jest.fn((url: string, _init?: RequestInit) => {
+  const fetchMock = jest.fn((url: string, init?: RequestInit) => {
     // adminFetch calls fetch with the path directly; auth/me uses raw fetch
     if (url === '/api/admin/auth/me') {
       return Promise.resolve({
@@ -126,7 +126,14 @@ function setupFetchMock(
     }
     // Broad prefix: serves the detail payload for any document id so tests can
     // simulate navigating to a different [id] on the still-mounted page.
+    // PATCH is the metadata save — it returns { updated }, not the detail.
     if (url.startsWith('/api/admin/documents/')) {
+      if (init?.method === 'PATCH') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, updated: ['url'] }),
+        } as any)
+      }
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(detail),
@@ -614,5 +621,50 @@ describe('DocumentEditorPage', () => {
     // Doc A's entries are gone; doc B's (empty) history renders.
     expect(await screen.findByText('No recorded changes.')).toBeInTheDocument()
     expect(screen.queryByText(/jane · updated title/)).not.toBeInTheDocument()
+  })
+
+  it('marks the Save button dirty after an edit and clears it after save', async () => {
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Authors')).toBeInTheDocument())
+
+    // Save starts clean.
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+
+    // Edit the URL field → dirty.
+    const url = screen.getByDisplayValue('https://example.com/test')
+    fireEvent.change(url, { target: { value: 'https://example.com/edited' } })
+    expect(
+      screen.getByRole('button', { name: 'Save (unsaved changes)' }),
+    ).toBeInTheDocument()
+
+    // Save → load({resetForm:true}) clears dirty.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save (unsaved changes)' }),
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument(),
+    )
+  })
+
+  it('registers a beforeunload handler only while dirty', async () => {
+    const addSpy = jest.spyOn(window, 'addEventListener')
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Authors')).toBeInTheDocument())
+
+    expect(addSpy.mock.calls.some(([e]) => e === 'beforeunload')).toBe(false)
+
+    fireEvent.change(screen.getByDisplayValue('https://example.com/test'), {
+      target: { value: 'https://example.com/edited' },
+    })
+    expect(addSpy.mock.calls.some(([e]) => e === 'beforeunload')).toBe(true)
+    addSpy.mockRestore()
   })
 })
