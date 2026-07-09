@@ -1,13 +1,21 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  within,
+} from '@testing-library/react'
 import '@testing-library/jest-dom'
 import DocumentEditorPage from '@/app/admin/documents/[id]/page'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
 
-// Mock next/navigation (useParams)
+// Mock next/navigation (useParams). `mockRouterPush` is a shared spy so tests can
+// assert navigation; the `mock` prefix lets Jest reference it in the hoisted factory.
+const mockRouterPush = jest.fn()
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'test-doc-id-123' }),
   useRouter: () => ({
-    push: jest.fn(),
+    push: mockRouterPush,
     replace: jest.fn(),
     refresh: jest.fn(),
   }),
@@ -69,7 +77,10 @@ const mockDetail = {
   latestJob: null,
 }
 
-function setupFetchMock(documentOverride?: Record<string, any>) {
+function setupFetchMock(
+  documentOverride?: Record<string, any>,
+  queueItems: any[] = [],
+) {
   const detail = documentOverride
     ? { ...mockDetail, document: { ...mockDocument, ...documentOverride } }
     : mockDetail
@@ -80,6 +91,12 @@ function setupFetchMock(documentOverride?: Record<string, any>) {
         ok: true,
         json: () =>
           Promise.resolve({ identity: { username: 'admin', role: 'admin' } }),
+      } as any)
+    }
+    if (url === '/api/admin/review-queue') {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, items: queueItems }),
       } as any)
     }
     if (url === '/api/admin/tags') {
@@ -113,6 +130,7 @@ function setupFetchMock(documentOverride?: Record<string, any>) {
 describe('DocumentEditorPage', () => {
   beforeEach(() => {
     setupFetchMock()
+    mockRouterPush.mockClear()
   })
 
   it('renders an Authors field (textarea)', async () => {
@@ -259,5 +277,113 @@ describe('DocumentEditorPage', () => {
     )
     fireEvent.click(await screen.findByText('Withdraw'))
     expect(window.confirm).toHaveBeenCalled()
+  })
+
+  it('shows no review bar when the doc is not in the review queue', async () => {
+    setupFetchMock()
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    await screen.findByText('Document editor')
+    expect(screen.queryByText(/Reviewing \d+ of \d+/)).not.toBeInTheDocument()
+  })
+
+  it('shows position and controls when the doc is in the queue', async () => {
+    setupFetchMock({ status: 'needs_review' }, [
+      { id: 'other-1', status: 'needs_review' },
+      { id: 'test-doc-id-123', status: 'needs_review' },
+      { id: 'other-2', status: 'needs_review' },
+    ])
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    expect(
+      await screen.findByText('Reviewing 2 of 3 flagged'),
+    ).toBeInTheDocument()
+    const bar = within(screen.getByTestId('review-bar'))
+    expect(bar.getByText('← Prev')).not.toBeDisabled()
+    expect(bar.getByText('Skip →')).not.toBeDisabled()
+  })
+
+  it('advances to the next queue doc after Promote succeeds', async () => {
+    const fetchMock = setupFetchMock({ status: 'needs_review' }, [
+      { id: 'other-1', status: 'needs_review' },
+      { id: 'test-doc-id-123', status: 'needs_review' },
+      { id: 'other-2', status: 'needs_review' },
+    ])
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    const bar = within(await screen.findByTestId('review-bar'))
+    fireEvent.click(bar.getByText('Promote'))
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith('/admin/documents/other-2')
+    })
+    expect(
+      fetchMock.mock.calls.some(
+        (c: any[]) => c[0] === '/api/admin/documents/test-doc-id-123/status',
+      ),
+    ).toBe(true)
+  })
+
+  it('Skip navigates without acting', async () => {
+    const fetchMock = setupFetchMock({ status: 'needs_review' }, [
+      { id: 'other-1', status: 'needs_review' },
+      { id: 'test-doc-id-123', status: 'needs_review' },
+      { id: 'other-2', status: 'needs_review' },
+    ])
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    const bar = within(await screen.findByTestId('review-bar'))
+    fireEvent.click(bar.getByText('Skip →'))
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith('/admin/documents/other-2')
+    })
+    expect(
+      fetchMock.mock.calls.some(
+        (c: any[]) =>
+          c[0] === '/api/admin/documents/test-doc-id-123/status' ||
+          c[0] === '/api/admin/documents/test-doc-id-123/reingest',
+      ),
+    ).toBe(false)
+  })
+
+  it('disables Prev at the first position and Skip at the last', async () => {
+    setupFetchMock({ status: 'needs_review' }, [
+      { id: 'test-doc-id-123', status: 'needs_review' },
+    ])
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    const bar = within(await screen.findByTestId('review-bar'))
+    expect(bar.getByText('← Prev')).toBeDisabled()
+    expect(bar.getByText('Skip →')).toBeDisabled()
+    expect(bar.getByText('Promote')).not.toBeDisabled()
+  })
+
+  it('shows the not-in-queue notice with a Next button when the queue has other docs but not this one', async () => {
+    setupFetchMock({ status: 'searchable' }, [
+      { id: 'other-1', status: 'needs_review' },
+    ])
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    const bar = within(await screen.findByTestId('review-bar'))
+    expect(bar.getByText('No longer in the review queue.')).toBeInTheDocument()
+    fireEvent.click(bar.getByText('Next →'))
+    expect(mockRouterPush).toHaveBeenCalledWith('/admin/documents/other-1')
   })
 })

@@ -6,6 +6,7 @@ import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../../lib/api'
 import { StatusChip } from '../../components/StatusChip'
 import { Tooltip } from '../../components/Tooltip'
+import { ReviewBar } from '../../components/ReviewBar'
 import { PROVENANCE_KEY, PROVENANCE_LABEL } from '@/lib/metadataProvenance'
 
 interface Detail {
@@ -386,6 +387,13 @@ const DocumentEditorPage = () => {
 
   return (
     <Box style={{ paddingBottom: 48 }}>
+      <ReviewBar
+        documentId={id}
+        documentStatus={doc?.status}
+        onChanged={() =>
+          load({ resetForm: true }).catch((err: any) => setError(err.message))
+        }
+      />
       <Heading size='lg' style={{ marginBottom: 8 }}>
         Document editor
       </Heading>
