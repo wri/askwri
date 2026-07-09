@@ -59,6 +59,8 @@ const ReviewQueuePage = () => {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -108,12 +110,79 @@ const ReviewQueuePage = () => {
     }
   }
 
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toggleAll = () =>
+    setSelected((prev) =>
+      prev.size === items.length ? new Set() : new Set(items.map((i) => i.id)),
+    )
+
+  const bulkAct = async (action: 'promote' | 'reingest') => {
+    const ids = Array.from(selected)
+    if (
+      !window.confirm(
+        action === 'promote'
+          ? `Promote ${ids.length} document(s) to public search?`
+          : `Re-ingest ${ids.length} document(s)? AI summaries and AI-extracted metadata will be regenerated.`,
+      )
+    )
+      return
+    setBulkBusy(true)
+    setNotice(null)
+    setError(null)
+    const failures: { id: string; reason: string }[] = []
+    await Promise.allSettled(
+      ids.map(async (id) => {
+        try {
+          if (action === 'promote') {
+            await adminFetch(`/api/admin/documents/${id}/status`, {
+              method: 'POST',
+              body: JSON.stringify({ status: 'searchable' }),
+            })
+          } else {
+            await adminFetch(`/api/admin/documents/${id}/reingest`, {
+              method: 'POST',
+            })
+          }
+        } catch (err: any) {
+          failures.push({ id, reason: err.message })
+        }
+      }),
+    )
+    const ok = ids.length - failures.length
+    setSelected(new Set(failures.map((f) => f.id))) // failed rows stay selected
+    await load() // single refetch for the whole batch (also clears any stale page error)
+    if (failures.length === 0) {
+      setNotice(`${ok} ${action === 'promote' ? 'promoted' : 're-queued'}.`)
+    } else {
+      const titleOf = (id: string) =>
+        items.find((i) => i.id === id)?.title ??
+        items.find((i) => i.id === id)?.externalId ??
+        id
+      setError(
+        `${ok} ${action === 'promote' ? 'promoted' : 're-queued'}, ${failures.length} failed — ` +
+          failures.map((f) => `${titleOf(f.id)}: ${f.reason}`).join(' · '),
+      )
+    }
+    setBulkBusy(false)
+  }
+
   const workerStyle = health
     ? (WORKER_STYLE[health.worker.status] ?? {
         color: '#888',
         label: health.worker.status,
       })
     : null
+
+  const selectionHasError = items.some(
+    (i) => selected.has(i.id) && i.status === 'error',
+  )
 
   return (
     <Box>
@@ -280,10 +349,55 @@ const ReviewQueuePage = () => {
         <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
       )}
 
+      {selected.size > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginBottom: 12,
+            padding: '8px 12px',
+            background: '#f0f8ff',
+            borderRadius: 4,
+          }}
+        >
+          <Text>{selected.size} selected</Text>
+          <button
+            onClick={() => bulkAct('promote')}
+            disabled={bulkBusy || selectionHasError}
+            title={
+              selectionHasError
+                ? 'Selection includes a document with status "error" — those must be re-ingested before they can be promoted.'
+                : 'Send the selected documents to the public search corpus.'
+            }
+            style={{ textDecoration: 'underline' }}
+          >
+            Promote {selected.size}
+          </button>
+          <button
+            onClick={() => bulkAct('reingest')}
+            disabled={bulkBusy}
+            title='Re-queue the selected documents for the ingestion pipeline.'
+            style={{ textDecoration: 'underline' }}
+          >
+            Re-ingest {selected.size}
+          </button>
+        </div>
+      )}
+
       {/* ── Review queue ── */}
-      <Heading size='md' style={{ marginBottom: 8 }}>
+      <Heading size='md' style={{ marginBottom: 8, display: 'inline-block' }}>
         Documents needing review
       </Heading>
+      {items.length > 0 && (
+        <Link
+          href={`/admin/documents/${items[0].id}`}
+          style={{ textDecoration: 'underline', fontSize: 14, marginLeft: 12 }}
+          title='Open the first flagged document. A review bar on the editor walks you through the rest.'
+        >
+          Start reviewing ({items.length}) →
+        </Link>
+      )}
       {items.length === 0 ? (
         <Text style={{ color: '#555' }}>
           Queue is empty. 🎉 No documents are flagged for review. Check the
@@ -300,6 +414,13 @@ const ReviewQueuePage = () => {
         >
           <thead>
             <tr>
+              <th style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
+                <input
+                  type='checkbox'
+                  checked={selected.size === items.length && items.length > 0}
+                  onChange={toggleAll}
+                />
+              </th>
               {[
                 { key: 'document', node: 'Document' },
                 { key: 'lang', node: 'Lang' },
@@ -328,6 +449,13 @@ const ReviewQueuePage = () => {
           <tbody>
             {items.map((item) => (
               <tr key={item.id}>
+                <td style={cell}>
+                  <input
+                    type='checkbox'
+                    checked={selected.has(item.id)}
+                    onChange={() => toggleSelect(item.id)}
+                  />
+                </td>
                 <td style={cell}>
                   <Link
                     href={`/admin/documents/${item.id}`}
