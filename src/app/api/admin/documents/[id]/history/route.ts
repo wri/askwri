@@ -21,8 +21,10 @@ export async function GET(req: NextRequest, { params }: Params) {
         { status: 404 },
       )
     const params_ = req.nextUrl.searchParams
-    const limit = Math.min(Math.max(Number(params_.get('limit')) || 20, 1), 500)
-    const offset = Math.max(Number(params_.get('offset')) || 0, 0)
+    const limit = Math.floor(
+      Math.min(Math.max(Number(params_.get('limit')) || 20, 1), 500),
+    )
+    const offset = Math.floor(Math.max(Number(params_.get('offset')) || 0, 0))
     await initializeDatabase()
     return NextResponse.json({
       ok: true,

@@ -7,6 +7,7 @@ const d = hasDb ? describe : describe.skip
 
 d('getDocumentHistory (DB integration)', () => {
   const externalId = `dochistory_test_${Date.now()}`
+  const username = `history_test_user_${Date.now()}`
   let docId: string
   let userId: string
   let jobId: string
@@ -14,6 +15,12 @@ d('getDocumentHistory (DB integration)', () => {
 
   beforeAll(async () => {
     if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+
+    // Defensive: a crashed prior run can leave a test user behind; the UNIQUE
+    // username constraint would then break every later run.
+    await AppDataSource.query(
+      `DELETE FROM users WHERE username LIKE 'history_test_user%'`,
+    )
 
     const [doc] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
@@ -33,7 +40,8 @@ d('getDocumentHistory (DB integration)', () => {
 
     const [user] = await AppDataSource.query(
       `INSERT INTO users (username, password_hash, role)
-       VALUES ('history_test_user', 'x', 'editor') RETURNING id`,
+       VALUES ($1, 'x', 'editor') RETURNING id`,
+      [username],
     )
     userId = user.id
 
@@ -121,7 +129,7 @@ d('getDocumentHistory (DB integration)', () => {
       ]),
     )
     const update = entries.find((e) => e.action === 'update')!
-    expect(update.actor).toBe('history_test_user') // username via JOIN
+    expect(update.actor).toBe(username) // username via JOIN
     const intake = entries.find((e) => e.action === 'import')!
     expect(intake.actor).toBe('system') // NULL actor falls back to source
     const ats = entries.map((e) => +new Date(e.at))

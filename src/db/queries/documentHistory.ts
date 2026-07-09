@@ -20,6 +20,7 @@ export interface DocumentHistoryResult {
 // (entity_id NULL, counts only) and intake duplicate-skip rows (external_id
 // string in after->>'of' only). Python writers use entity_type='documents'
 // (plural) — both spellings are matched.
+// TODO: switch to UNION ALL (+ GIN on after->'addedDocumentIds') if audit_log seq scans become hot — the OR defeats the (entity_type, entity_id) index.
 const SCOPE = `
   (al.entity_type IN ('document', 'documents', 'document_summary') AND al.entity_id = $1)
   OR (al.entity_type = 'ingestion_job'
