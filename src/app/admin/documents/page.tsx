@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
 import { StatusChip } from '../components/StatusChip'
@@ -36,24 +36,43 @@ const cell: React.CSSProperties = {
   borderBottom: '1px solid #eee',
 }
 
+// Only Title/Status/Year are sortable; created_at is the implicit default order
+// (no sort param) and never appears as a clickable header.
+const COLUMNS: { label: string; sortKey: string | null }[] = [
+  { label: 'External ID', sortKey: null },
+  { label: 'Title', sortKey: 'title' },
+  { label: 'Language', sortKey: null },
+  { label: 'Status', sortKey: 'status' },
+  { label: 'Year', sortKey: 'year_published' },
+]
+
 const CatalogInner = () => {
   const searchParams = useSearchParams()
-  const initialCollectionId = searchParams.get('collectionId') ?? ''
+  const router = useRouter()
+  const pathname = usePathname()
+
+  // The URL is the single source of truth for the view. Everything below is derived.
+  const filters = {
+    status: searchParams.get('status') ?? '',
+    language: searchParams.get('language') ?? '',
+    collectionId: searchParams.get('collectionId') ?? '',
+    search: searchParams.get('search') ?? '',
+    yearPublished: searchParams.get('yearPublished') ?? '',
+    tagId: searchParams.get('tagId') ?? '',
+  }
+  const sort = searchParams.get('sort') ?? ''
+  const dir = (searchParams.get('dir') as 'asc' | 'desc' | '') ?? ''
+  const page = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10) || 0)
 
   const [items, setItems] = useState<DocItem[]>([])
   const [total, setTotal] = useState(0)
   const [collections, setCollections] = useState<Collection[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [availableYears, setAvailableYears] = useState<number[]>([])
-  const [page, setPage] = useState(0)
-  const [filters, setFilters] = useState({
-    status: '',
-    language: '',
-    collectionId: initialCollectionId,
-    search: '',
-    yearPublished: '',
-    tagId: '',
-  })
+  // Live text the user is typing (feedback-layer seam). The committed value is
+  // filters.search (from the URL); the input must NOT bind to it directly, but
+  // is seeded from it on mount and re-synced on external URL changes below.
+  const [searchText, setSearchText] = useState(searchParams.get('search') ?? '')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkCollectionId, setBulkCollectionId] = useState<string>('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -102,83 +121,107 @@ const CatalogInner = () => {
   const reqSeq = useRef(0)
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const load = useCallback(async (f: typeof filters, pageNum: number) => {
-    const seq = ++reqSeq.current
-    try {
-      const params = new URLSearchParams()
-      if (f.status) params.set('status', f.status)
-      if (f.language) params.set('language', f.language)
-      if (f.collectionId) params.set('collectionId', f.collectionId)
-      if (f.search) params.set('search', f.search)
-      if (f.yearPublished) params.set('yearPublished', f.yearPublished)
-      if (f.tagId) params.set('tagId', f.tagId)
-      params.set('limit', String(PAGE_SIZE))
-      params.set('offset', String(pageNum * PAGE_SIZE))
-      const body = await adminFetch<{ items: DocItem[]; total: number }>(
-        `/api/admin/documents?${params}`,
-      )
-      if (seq !== reqSeq.current) return
-      setItems(body.items)
-      setTotal(body.total)
-      setError(null)
-    } catch (err: any) {
-      if (seq !== reqSeq.current) return
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const load = useCallback(
+    async (f: typeof filters, s: string, d: string, pageNum: number) => {
+      const seq = ++reqSeq.current
+      try {
+        const params = new URLSearchParams()
+        if (f.status) params.set('status', f.status)
+        if (f.language) params.set('language', f.language)
+        if (f.collectionId) params.set('collectionId', f.collectionId)
+        if (f.search) params.set('search', f.search)
+        if (f.yearPublished) params.set('yearPublished', f.yearPublished)
+        if (f.tagId) params.set('tagId', f.tagId)
+        if (s) params.set('sort', s)
+        if (d) params.set('dir', d)
+        params.set('limit', String(PAGE_SIZE))
+        params.set('offset', String(pageNum * PAGE_SIZE))
+        const body = await adminFetch<{ items: DocItem[]; total: number }>(
+          `/api/admin/documents?${params}`,
+        )
+        if (seq !== reqSeq.current) return
+        setItems(body.items)
+        setTotal(body.total)
+        setError(null)
+      } catch (err: any) {
+        if (seq !== reqSeq.current) return
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [],
+  )
 
+  // Load dropdown options once.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCollections()
     loadTags()
     loadYears()
-    const f = {
-      status: '',
-      language: '',
-      collectionId: initialCollectionId,
-      search: '',
-      yearPublished: '',
-      tagId: '',
-    }
-    setFilters(f)
-    setPage(0)
-    setSelected(new Set())
-    load(f, 0)
-  }, [load, loadCollections, loadTags, loadYears, initialCollectionId])
+  }, [loadCollections, loadTags, loadYears])
 
-  const clearSearchDebounce = () => {
+  // Single source of truth: whenever the URL query changes, reload the list.
+  // Derives filters/sort/dir/page from searchParams above; no imperative load()
+  // calls live anywhere else.
+  useEffect(() => {
+    // A pending search-debounce timer captured a stale URL snapshot; if it
+    // fired ~300ms after this URL-driven reload it would overwrite the fresh
+    // view with stale search params. Clear it on every URL change.
     if (searchDebounce.current) {
       clearTimeout(searchDebounce.current)
       searchDebounce.current = null
     }
-  }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load(filters, sort, dir, page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, load])
 
-  const updateFilter = (key: keyof typeof filters, value: string) => {
-    clearSearchDebounce()
-    const next = { ...filters, [key]: value }
-    setFilters(next)
-    setPage(0)
-    setSelected(new Set())
-    load(next, 0)
-  }
+  // Re-seed the live search text when the URL's committed search changes
+  // underneath us (back/forward, shared link) — but never mid-typing, so a
+  // pending debounce is not clobbered.
+  useEffect(() => {
+    if (searchDebounce.current) return
+    setSearchText(filters.search)
+  }, [filters.search])
+
+  // One URL writer: every view change (filter/sort/page) goes through here.
+  // Navigation clears the transient bulk selection, as before.
+  const setQuery = useCallback(
+    (patch: Record<string, string>) => {
+      const next = new URLSearchParams(searchParams.toString())
+      for (const [k, v] of Object.entries(patch)) {
+        if (v) next.set(k, v)
+        else next.delete(k)
+      }
+      setSelected(new Set())
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+    },
+    [searchParams, pathname, router],
+  )
+
+  // Changing any filter resets to page 0 (omit the param).
+  const updateFilter = (key: keyof typeof filters, value: string) =>
+    setQuery({ [key]: value, page: '' })
 
   const updateSearch = (value: string) => {
-    const next = { ...filters, search: value }
-    setFilters(next) // reflect keystrokes immediately in the input
-    setPage(0)
-    setSelected(new Set())
-    clearSearchDebounce()
-    searchDebounce.current = setTimeout(() => load(next, 0), 300)
+    setSearchText(value) // reflect keystrokes immediately in the input
+    if (searchDebounce.current) clearTimeout(searchDebounce.current)
+    searchDebounce.current = setTimeout(() => {
+      searchDebounce.current = null
+      setQuery({ search: value, page: '' })
+    }, 300)
   }
 
-  const goToPage = (pageNum: number) => {
-    clearSearchDebounce()
-    setPage(pageNum)
-    setSelected(new Set())
-    load(filters, pageNum)
+  // Sort cycle: asc → desc → default (third click clears sort), page-reset.
+  const toggleSort = (key: string) => {
+    if (sort !== key) setQuery({ sort: key, dir: 'asc', page: '' })
+    else if (dir === 'asc') setQuery({ sort: key, dir: 'desc', page: '' })
+    else setQuery({ sort: '', dir: '', page: '' })
   }
+
+  const goToPage = (pageNum: number) =>
+    setQuery({ page: pageNum <= 0 ? '' : String(pageNum) })
 
   // Cancel any pending search timer on unmount.
   useEffect(
@@ -331,7 +374,7 @@ const CatalogInner = () => {
         <input
           type='text'
           placeholder='Search title, author, DOI, URL…'
-          value={filters.search}
+          value={searchText}
           onChange={(e) => updateSearch(e.target.value)}
           style={{
             fontFamily: 'inherit',
@@ -400,20 +443,44 @@ const CatalogInner = () => {
                   onChange={toggleAll}
                 />
               </th>
-              {['External ID', 'Title', 'Language', 'Status', 'Year'].map(
-                (h) => (
+              {COLUMNS.map(({ label, sortKey }) => {
+                const active = sortKey && sort === sortKey
+                const ariaSort = !active
+                  ? undefined
+                  : dir === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                return (
                   <th
-                    key={h}
+                    key={label}
+                    aria-sort={ariaSort}
                     style={{
                       ...cell,
                       textAlign: 'left',
                       background: '#f7f7f7',
                     }}
                   >
-                    {h}
+                    {sortKey ? (
+                      <button
+                        onClick={() => toggleSort(sortKey)}
+                        style={{
+                          font: 'inherit',
+                          fontWeight: 'inherit',
+                          cursor: 'pointer',
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                        }}
+                      >
+                        {label}
+                        {active ? (dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                      </button>
+                    ) : (
+                      label
+                    )}
                   </th>
-                ),
-              )}
+                )
+              })}
             </tr>
           </thead>
           <tbody>
