@@ -432,6 +432,12 @@ const DocumentEditorPage = () => {
                       style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
                     >
                       <option value=''>—</option>
+                      {form[key] &&
+                        !LANGUAGES.some((l) => l.code === form[key]) && (
+                          <option value={form[key]}>
+                            {form[key]} (unsupported)
+                          </option>
+                        )}
                       {LANGUAGES.map((l) => (
                         <option key={l.code} value={l.code}>
                           {l.name} ({l.code})

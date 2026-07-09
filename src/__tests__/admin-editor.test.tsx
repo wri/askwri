@@ -221,6 +221,22 @@ describe('DocumentEditorPage', () => {
     )
     const select = await screen.findByLabelText(/language/i)
     expect(select.tagName).toBe('SELECT')
+    await waitFor(() => {
+      expect(select).toHaveDisplayValue(/English/)
+    })
+  })
+
+  it('keeps an out-of-list language visible as an unsupported option', async () => {
+    setupFetchMock({ language: 'fr' })
+    render(
+      <ChakraProvider>
+        <DocumentEditorPage />
+      </ChakraProvider>,
+    )
+    const select = await screen.findByLabelText(/language/i)
+    await waitFor(() => {
+      expect(select).toHaveDisplayValue(/fr \(unsupported\)/)
+    })
   })
 
   it('hides Promote for a draft document', async () => {
