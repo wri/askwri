@@ -13,11 +13,17 @@ interface WorkerHealth {
   status: 'idle' | 'processing' | 'pending' | 'stale'
 }
 
-const STATUS_STYLES: Record<WorkerHealth['status'], { color: string; label: string }> = {
+const STATUS_STYLES: Record<
+  WorkerHealth['status'],
+  { color: string; label: string }
+> = {
   idle: { color: '#0A6640', label: 'idle (caught up)' },
   processing: { color: '#0050C8', label: 'processing' },
   pending: { color: '#B7791F', label: 'pending — worker will pick up shortly' },
-  stale: { color: '#C11101', label: 'NOT RUNNING — dropped files are NOT being processed' },
+  stale: {
+    color: '#C11101',
+    label: 'NOT RUNNING — dropped files are NOT being processed',
+  },
 }
 
 const UploadPage = () => {
@@ -58,7 +64,10 @@ const UploadPage = () => {
       for (let i = 0; i < files.length; i++) {
         form.append('files', files[i])
       }
-      const res = await fetch('/api/admin/intake', { method: 'POST', body: form })
+      const res = await fetch('/api/admin/intake', {
+        method: 'POST',
+        body: form,
+      })
       if (res.status === 401) {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
@@ -94,11 +103,20 @@ const UploadPage = () => {
     <Box>
       <Heading size='lg' style={{ marginBottom: 8 }}>
         Upload PDFs to intake{' '}
-        <Tooltip help='Uploaded PDFs are placed in the S3 intake/ queue. The ingestion worker (a separate process) polls every ~10s, computes a content hash for dedup, registers a draft documents row, and drives the file through parse → language → summarize → classify → embed → publish. If the worker is not running, files sit in intake/ unprocessed — check the worker status panel below.'>How does upload work?</Tooltip>
+        <Tooltip help='Uploaded PDFs are placed in the S3 intake/ queue. The ingestion worker (a separate process) polls every ~10s, computes a content hash for dedup, registers a draft documents row, and drives the file through parse → language → summarize → classify → embed → publish. If the worker is not running, files sit in intake/ unprocessed — check the worker status panel below.'>
+          How does upload work?
+        </Tooltip>
       </Heading>
       <Text style={{ marginBottom: 16, color: '#555' }}>
-        Select one or more PDF files. They will be placed in the intake queue and registered by the
-        ingestion worker automatically. Duplicates (by content hash) are skipped.
+        Select one or more PDF files. They will be placed in the intake queue
+        and registered by the ingestion worker automatically.{' '}
+        <strong>
+          If a file is identical to a document already in the system, it is
+          silently skipped as a duplicate
+        </strong>{' '}
+        — it will not appear in the catalog a second time. To re-process an
+        existing document, use <strong>Re-ingest</strong> on its document page
+        instead of uploading the file again.
       </Text>
 
       {/* Worker health panel — shows the real state instead of a misleading "~10s" claim */}
@@ -116,28 +134,44 @@ const UploadPage = () => {
         </Text>
         {health && (
           <Text style={{ fontSize: 13, color: '#666' }}>
-            Queue depth: {health.queueDepth} · Intake backlog: {health.intakeBacklog}
-            {health.lastProcessedAt && ` · Last processed: ${new Date(health.lastProcessedAt).toLocaleString()}`}
+            <Tooltip help='Documents currently queued or being processed by the pipeline.'>
+              Queue depth
+            </Tooltip>
+            : {health.queueDepth} ·{' '}
+            <Tooltip help='Uploaded files the worker has not registered yet. A non-zero backlog right after an upload is normal.'>
+              Intake backlog
+            </Tooltip>
+            : {health.intakeBacklog}
+            {health.lastProcessedAt &&
+              ` · Last processed: ${new Date(health.lastProcessedAt).toLocaleString()}`}
           </Text>
         )}
         {health?.status === 'stale' && (
           <Text style={{ fontSize: 13, color: '#C11101', marginTop: 4 }}>
-            Files have been dropped into intake but the worker is not processing them. Contact an
-            administrator to start the worker (`cd search-service && ./venv/bin/python -m
-            worker.main` locally, or check the ECS `ingestion-worker` service in production).
+            Files have been dropped into intake but the worker is not processing
+            them. Contact an administrator to start the worker (`cd
+            search-service && ./venv/bin/python -m worker.main` locally, or
+            check the ECS `ingestion-worker` service in production).
           </Text>
         )}
       </Box>
 
-      {notice && <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>}
-      {error && <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>}
+      {notice && (
+        <Text style={{ color: '#0A6640', marginBottom: 12 }}>{notice}</Text>
+      )}
+      {error && (
+        <Text style={{ color: '#C11101', marginBottom: 12 }}>{error}</Text>
+      )}
       <div style={{ marginBottom: 12 }}>
         <input ref={inputRef} type='file' multiple accept='.pdf' />
       </div>
       <button
         disabled={busy}
         onClick={handleUpload}
-        style={{ padding: '6px 16px', cursor: busy ? 'not-allowed' : 'pointer' }}
+        style={{
+          padding: '6px 16px',
+          cursor: busy ? 'not-allowed' : 'pointer',
+        }}
       >
         {busy ? 'Uploading…' : 'Upload'}
       </button>
