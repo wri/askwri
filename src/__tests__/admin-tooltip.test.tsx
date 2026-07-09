@@ -1,31 +1,67 @@
 /** @jest-environment jsdom */
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { Tooltip } from '@/app/admin/components/Tooltip'
 
 describe('Tooltip component', () => {
-  it('renders its trigger text', () => {
-    render(<Tooltip help='The authors of the document, as listed in the source CSV.'>Authors</Tooltip>)
-    expect(screen.getByText('Authors')).toBeTruthy()
-  })
-
-  it('exposes the help text via title attribute (accessible without hover)', () => {
-    render(<Tooltip help='The DOI link, e.g. https://doi.org/10.x/y'>DOI</Tooltip>)
-    // The title attribute makes the help visible on hover and to screen readers.
-    // We find the element wrapping the trigger text.
-    const trigger = screen.getByText('DOI')
-    // Walk up to find the element with the title attribute.
-    let el: HTMLElement | null = trigger
-    while (el && !el.getAttribute('title')) {
-      el = el.parentElement
-    }
-    expect(el?.getAttribute('title')).toBe('The DOI link, e.g. https://doi.org/10.x/y')
-  })
-
-  it('renders an info marker so the tooltip is discoverable', () => {
+  it('renders its trigger text and a discoverable ? marker', () => {
     const { container } = render(
-      <Tooltip help='The full publication date (YYYY-MM-DD).'>Date published</Tooltip>,
+      <Tooltip help='The authors as listed in the source CSV.'>
+        Authors
+      </Tooltip>,
     )
-    // A small "?" marker indicates help is available.
+    expect(screen.getByText('Authors')).toBeTruthy()
     expect(container.textContent).toContain('?')
+  })
+
+  it('exposes the trigger as a real button that describes itself via the tooltip', () => {
+    render(<Tooltip help='The DOI link.'>DOI</Tooltip>)
+    const trigger = screen.getByRole('button')
+    const described = trigger.getAttribute('aria-describedby')
+    expect(described).toBeTruthy()
+    const tip = document.getElementById(described as string)
+    expect(tip?.getAttribute('role')).toBe('tooltip')
+    expect(tip?.textContent).toBe('The DOI link.')
+  })
+
+  it('does NOT use a native title attribute (it double-announces)', () => {
+    const { container } = render(<Tooltip help='No title here.'>Date</Tooltip>)
+    expect(container.querySelector('[title]')).toBeNull()
+  })
+
+  it('shows the tooltip on focus and hides it on blur', () => {
+    render(<Tooltip help='Shown on keyboard focus.'>Field</Tooltip>)
+    const trigger = screen.getByRole('button')
+    const tip = document.getElementById(
+      trigger.getAttribute('aria-describedby') as string,
+    ) as HTMLElement
+    expect(tip.style.display).toBe('none')
+    fireEvent.focus(trigger)
+    expect(tip.style.display).toBe('block')
+    fireEvent.blur(trigger)
+    expect(tip.style.display).toBe('none')
+  })
+
+  it('shows the tooltip on hover and hides it on mouse leave', () => {
+    render(<Tooltip help='Shown on hover.'>Field</Tooltip>)
+    const trigger = screen.getByRole('button')
+    const tip = document.getElementById(
+      trigger.getAttribute('aria-describedby') as string,
+    ) as HTMLElement
+    fireEvent.mouseEnter(trigger)
+    expect(tip.style.display).toBe('block')
+    fireEvent.mouseLeave(trigger)
+    expect(tip.style.display).toBe('none')
+  })
+
+  it('toggles on tap/click and dismisses on Escape', () => {
+    render(<Tooltip help='Tap to toggle.'>Field</Tooltip>)
+    const trigger = screen.getByRole('button')
+    const tip = document.getElementById(
+      trigger.getAttribute('aria-describedby') as string,
+    ) as HTMLElement
+    fireEvent.click(trigger)
+    expect(tip.style.display).toBe('block')
+    fireEvent.keyDown(trigger, { key: 'Escape' })
+    expect(tip.style.display).toBe('none')
   })
 })
