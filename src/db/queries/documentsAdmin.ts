@@ -47,6 +47,32 @@ export interface PaginationOptions {
   offset?: number
 }
 
+// Whitelisted sort columns. Values are interpolated directly into ORDER BY, so
+// this map is the ONLY source of column SQL — never a bound param (no injection).
+const SORT_COLUMNS = {
+  title: 'd.title',
+  year_published: 'd.year_published',
+  status: 'd.status',
+  created_at: 'd.created_at',
+} as const
+export type SortKey = keyof typeof SORT_COLUMNS
+
+export interface SortOptions {
+  sort?: string
+  dir?: string
+}
+
+/** True when sort/dir are absent or both in the whitelist. Route uses it for the 400. */
+export function validateSort(sort?: string, dir?: string): boolean {
+  // Object.hasOwn, NOT `sort in SORT_COLUMNS`: `in` traverses the prototype
+  // chain, so ?sort=constructor / toString / __proto__ would validate, then the
+  // lookup would interpolate a native-function string into ORDER BY → SQL
+  // error → 500 instead of the promised 400.
+  if (sort != null && !Object.hasOwn(SORT_COLUMNS, sort)) return false
+  if (dir != null && dir !== 'asc' && dir !== 'desc') return false
+  return true
+}
+
 export interface AdminDocumentListResult {
   items: AdminDocumentListItem[]
   total: number
@@ -55,6 +81,7 @@ export interface AdminDocumentListResult {
 export async function listAdminDocuments(
   filters: AdminDocumentFilters,
   pagination: PaginationOptions = {},
+  sort: SortOptions = {},
 ): Promise<AdminDocumentListResult> {
   const where: string[] = ['1=1']
   const params: any[] = []
@@ -84,12 +111,20 @@ export async function listAdminDocuments(
   const itemsParams = [...params, limit, offset]
   const limitParam = `$${params.length + 1}`
   const offsetParam = `$${params.length + 2}`
+  // Object.hasOwn guard here too (defense in depth): a bare bracket lookup
+  // would resolve prototype keys like 'constructor' to a function, not undefined.
+  const sortColumn =
+    sort.sort && Object.hasOwn(SORT_COLUMNS, sort.sort)
+      ? SORT_COLUMNS[sort.sort as SortKey]
+      : 'd.created_at'
+  const sortDir = sort.dir === 'asc' ? 'ASC' : 'DESC'
+  // d.id DESC stays as the deterministic tiebreaker (unchanged default: created_at DESC).
   const items = await AppDataSource.query(
     `SELECT d.id, d.external_id AS "externalId", d.title, d.language, d.status,
             d.year_published AS "yearPublished", d.created_at AS "createdAt"
      FROM documents d
      WHERE ${whereClause}
-     ORDER BY d.created_at DESC, d.id DESC
+     ORDER BY ${sortColumn} ${sortDir}, d.id DESC
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
     itemsParams,
   )

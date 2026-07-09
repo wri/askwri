@@ -7,6 +7,7 @@ import {
   reenqueueIngestion,
   listAdminDocuments,
   purgeDocument,
+  validateSort,
 } from '@/db/queries/documentsAdmin'
 
 const hasDb = !!process.env.DATABASE_URL
@@ -15,6 +16,64 @@ const d = hasDb ? describe : describe.skip
 // schema-only CI. Gated on RUN_CORPUS_TESTS (set by `npm run test:db`).
 const corpusIt = process.env.RUN_CORPUS_TESTS === '1' ? it : it.skip
 const identity = { kind: 'token', role: 'admin' } as const
+
+describe('validateSort (whitelist)', () => {
+  it('accepts whitelisted sort keys and directions', () => {
+    expect(validateSort('title', 'asc')).toBe(true)
+    expect(validateSort('year_published', 'desc')).toBe(true)
+    expect(validateSort('status', 'asc')).toBe(true)
+    expect(validateSort('created_at', 'desc')).toBe(true)
+    expect(validateSort(undefined, undefined)).toBe(true) // default
+    expect(validateSort('title', undefined)).toBe(true)
+  })
+  it('rejects unknown columns or directions (would 400 at the route)', () => {
+    expect(validateSort('id', 'asc')).toBe(false)
+    expect(validateSort('title; drop table', 'asc')).toBe(false)
+    expect(validateSort('title', 'sideways')).toBe(false)
+    expect(validateSort('title', 'ASC')).toBe(false) // lowercase only
+  })
+  it('rejects Object.prototype key names (prototype-chain bypass)', () => {
+    // `sort in SORT_COLUMNS` would pass these (inherited props) and then
+    // interpolate a native-function string into ORDER BY → SQL error → 500.
+    // Object.hasOwn must reject them so the route 400s instead.
+    expect(validateSort('constructor', 'asc')).toBe(false)
+    expect(validateSort('toString', 'asc')).toBe(false)
+    expect(validateSort('__proto__', 'asc')).toBe(false)
+    expect(validateSort('hasOwnProperty', 'desc')).toBe(false)
+  })
+})
+
+describe('GET /api/admin/documents sort validation (route, no DB)', () => {
+  const savedToken = process.env.ADMIN_API_TOKEN
+  beforeAll(() => {
+    process.env.ADMIN_API_TOKEN = 'sort-test-token'
+  })
+  afterAll(() => {
+    if (savedToken === undefined) delete process.env.ADMIN_API_TOKEN
+    else process.env.ADMIN_API_TOKEN = savedToken
+  })
+
+  const get = async (qs: string) => {
+    const { NextRequest } = await import('next/server')
+    const { GET } = await import('@/app/api/admin/documents/route')
+    const req = new NextRequest(`http://localhost/api/admin/documents?${qs}`, {
+      headers: { authorization: 'Bearer sort-test-token' },
+    })
+    return GET(req)
+  }
+
+  it('returns 400 (never 500) for a prototype-chain sort key', async () => {
+    const res = await get('sort=toString&dir=asc')
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.ok).toBe(false)
+  })
+
+  it('returns 400 for an unknown dir', async () => {
+    const res = await get('sort=title&dir=sideways')
+    expect(res.status).toBe(400)
+  })
+})
 
 d('documentsAdmin (DB integration)', () => {
   const externalId = `docadmin_test_${Date.now()}`
@@ -710,5 +769,56 @@ d('purgeDocument (hard delete, DB integration)', () => {
       identity,
     )
     expect(result).toBe(false)
+  })
+})
+
+d('listAdminDocuments sort (DB integration)', () => {
+  const marker = `sorttest_${Date.now()}` // unique title token to isolate our rows
+  const ids: string[] = []
+
+  beforeAll(async () => {
+    if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+    // Three docs, out-of-order years, distinct so ordering is deterministic.
+    for (const [ext, year] of [
+      [`${marker}_a`, 2021],
+      [`${marker}_b`, 2019],
+      [`${marker}_c`, 2020],
+    ] as const) {
+      const [row] = await AppDataSource.query(
+        `INSERT INTO documents (external_id, s3_key, title, status, year_published)
+         VALUES ($1, $2, $3, 'searchable', $4) RETURNING id`,
+        [ext, `documents/${ext}.pdf`, `${marker} title`, year],
+      )
+      ids.push(row.id)
+    }
+  })
+
+  afterAll(async () => {
+    for (const id of ids)
+      await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [id])
+    await AppDataSource.destroy()
+  })
+
+  const yearsFor = async (sort?: string, dir?: string) => {
+    const { items } = await listAdminDocuments(
+      { search: marker },
+      {},
+      { sort, dir },
+    )
+    return items.map((i: any) => i.yearPublished)
+  }
+
+  it('sorts by year_published ascending', async () => {
+    expect(await yearsFor('year_published', 'asc')).toEqual([2019, 2020, 2021])
+  })
+
+  it('sorts by year_published descending', async () => {
+    expect(await yearsFor('year_published', 'desc')).toEqual([2021, 2020, 2019])
+  })
+
+  it('falls back to the default order for an unknown sort (no injection, no throw)', async () => {
+    // Unknown key is ignored → default created_at DESC, id DESC tiebreaker.
+    const items = await yearsFor('nonsense', 'asc')
+    expect(items).toHaveLength(3) // returned rows, did not throw or inject
   })
 })
