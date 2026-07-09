@@ -18,6 +18,7 @@
 
 - The search box keeps its feedback-layer-owned local state for what the user is typing.
 - When the debounce settles, its committed value must be written to the **URL** (via `updateFilter('search', value)` / `setQuery`), not fetched imperatively.
+- **Round-trip both ways:** the local input state must also be seeded FROM the URL (`searchParams.get('search')`) on mount and on external URL changes — see the "Search input" note in Task 2 Step 2b. A shared `?search=foo` link must show "foo" in the box, not an empty input over filtered results.
 - Do **not** add a second debounce, and do **not** revert the feedback-layer's input handling. If you are executing this plan and the debounce is not yet present, stop and confirm the feedback-layer plan landed first.
 
 Rebase/verify against the current `page.tsx` before writing Task 2 code — line numbers below are from the pre-feedback-layer file and will have shifted.
@@ -61,12 +62,11 @@ Rebase/verify against the current `page.tsx` before writing Task 2 code — line
 
 #### Step 1 — Write the failing tests first
 
-Add to `src/__tests__/admin-documents.db.test.ts`. Import the new symbols alongside the existing import:
+Add to `src/__tests__/admin-documents.db.test.ts`. `listAdminDocuments` is **already imported** there (line 8) — only add `validateSort` to the existing import list:
 
 ```ts
 import {
-  // …existing…
-  listAdminDocuments,
+  // …existing (listAdminDocuments already at :8)…
   validateSort,
 } from '@/db/queries/documentsAdmin'
 ```
@@ -88,6 +88,51 @@ describe('validateSort (whitelist)', () => {
     expect(validateSort('title; drop table', 'asc')).toBe(false)
     expect(validateSort('title', 'sideways')).toBe(false)
     expect(validateSort('title', 'ASC')).toBe(false) // lowercase only
+  })
+  it('rejects Object.prototype key names (prototype-chain bypass)', () => {
+    // `sort in SORT_COLUMNS` would pass these (inherited props) and then
+    // interpolate a native-function string into ORDER BY → SQL error → 500.
+    // Object.hasOwn must reject them so the route 400s instead.
+    expect(validateSort('constructor', 'asc')).toBe(false)
+    expect(validateSort('toString', 'asc')).toBe(false)
+    expect(validateSort('__proto__', 'asc')).toBe(false)
+    expect(validateSort('hasOwnProperty', 'desc')).toBe(false)
+  })
+})
+```
+
+Route-level 400 test (also NOT DB-gated — `validateSort` runs BEFORE `initializeDatabase`, so this exercises the route without a database; auth via the `ADMIN_API_TOKEN` bearer path in `requireIdentity`):
+
+```ts
+describe('GET /api/admin/documents sort validation (route, no DB)', () => {
+  const savedToken = process.env.ADMIN_API_TOKEN
+  beforeAll(() => {
+    process.env.ADMIN_API_TOKEN = 'sort-test-token'
+  })
+  afterAll(() => {
+    if (savedToken === undefined) delete process.env.ADMIN_API_TOKEN
+    else process.env.ADMIN_API_TOKEN = savedToken
+  })
+
+  const get = async (qs: string) => {
+    const { NextRequest } = await import('next/server')
+    const { GET } = await import('@/app/api/admin/documents/route')
+    const req = new NextRequest(`http://localhost/api/admin/documents?${qs}`, {
+      headers: { authorization: 'Bearer sort-test-token' },
+    })
+    return GET(req)
+  }
+
+  it('returns 400 (never 500) for a prototype-chain sort key', async () => {
+    const res = await get('sort=toString&dir=asc')
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.ok).toBe(false)
+  })
+
+  it('returns 400 for an unknown dir', async () => {
+    const res = await get('sort=title&dir=sideways')
+    expect(res.status).toBe(400)
   })
 })
 ```
@@ -171,7 +216,11 @@ export interface SortOptions {
 
 /** True when sort/dir are absent or both in the whitelist. Route uses it for the 400. */
 export function validateSort(sort?: string, dir?: string): boolean {
-  if (sort != null && !(sort in SORT_COLUMNS)) return false
+  // Object.hasOwn, NOT `sort in SORT_COLUMNS`: `in` traverses the prototype
+  // chain, so ?sort=constructor / toString / __proto__ would validate, then the
+  // lookup would interpolate a native-function string into ORDER BY → SQL
+  // error → 500 instead of the promised 400.
+  if (sort != null && !Object.hasOwn(SORT_COLUMNS, sort)) return false
   if (dir != null && dir !== 'asc' && dir !== 'desc') return false
   return true
 }
@@ -190,7 +239,12 @@ export async function listAdminDocuments(
 Replace the hardcoded `ORDER BY` at `documentsAdmin.ts:92`. Before the items query, derive the clause safely (unknown/absent → default):
 
 ```ts
-  const sortColumn = SORT_COLUMNS[(sort.sort ?? '') as SortKey] ?? 'd.created_at'
+  // Object.hasOwn guard here too (defense in depth): a bare bracket lookup
+  // would resolve prototype keys like 'constructor' to a function, not undefined.
+  const sortColumn =
+    sort.sort && Object.hasOwn(SORT_COLUMNS, sort.sort)
+      ? SORT_COLUMNS[sort.sort as SortKey]
+      : 'd.created_at'
   const sortDir = sort.dir === 'asc' ? 'ASC' : 'DESC'
   // d.id DESC stays as the deterministic tiebreaker (unchanged default: created_at DESC).
 ```
@@ -328,7 +382,9 @@ describe('CatalogPage — URL-driven view state (jsdom)', () => {
   it('writes a filter change to the URL via router.replace (not push), resetting page', async () => {
     renderPage()
     await screen.findByText('Alpha')
-    fireEvent.change(screen.getByRole('combobox', { name: /status/i }) /* or getByDisplayValue('All statuses') */, {
+    // The filter selects have NO accessible name (no label/aria-label), so
+    // getByRole('combobox', { name }) will not match — select by displayed option.
+    fireEvent.change(screen.getByDisplayValue('All statuses'), {
       target: { value: 'needs_review' },
     })
     await waitFor(() => expect(mockReplace).toHaveBeenCalled())
@@ -338,19 +394,31 @@ describe('CatalogPage — URL-driven view state (jsdom)', () => {
   })
 
   it('cycles a sortable header asc → desc → default through the URL', async () => {
-    renderPage()
+    // The mocked useSearchParams reads module-level mockParams at render time,
+    // so after each reassignment we MUST rerender — otherwise the click handler
+    // sees stale params and the asc→desc→default assertions fail even against
+    // correct code.
+    const { rerender } = renderPage()
+    const rerenderPage = () =>
+      rerender(
+        <ChakraProvider>
+          <CatalogPage />
+        </ChakraProvider>,
+      )
     await screen.findByText('Alpha')
-    const titleBtn = screen.getByRole('button', { name: /^Title/ })
 
-    fireEvent.click(titleBtn) // first click → asc
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ })) // 1st click → asc
     expect(mockReplace.mock.calls.at(-1)![0]).toMatch(/sort=title.*dir=asc|dir=asc.*sort=title/)
 
     mockParams = new URLSearchParams('sort=title&dir=asc') // simulate URL settled
-    fireEvent.click(titleBtn) // second click → desc
+    rerenderPage()
+    // Re-query after rerender; label now includes the ▲ glyph, /^Title/ still matches.
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ })) // 2nd click → desc
     expect(mockReplace.mock.calls.at(-1)![0]).toContain('dir=desc')
 
     mockParams = new URLSearchParams('sort=title&dir=desc')
-    fireEvent.click(titleBtn) // third click → default (no sort/dir)
+    rerenderPage()
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ })) // 3rd click → default (no sort/dir)
     const cleared = mockReplace.mock.calls.at(-1)![0] as string
     expect(cleared).not.toContain('sort=')
     expect(cleared).not.toContain('dir=')
@@ -365,7 +433,7 @@ describe('CatalogPage — URL-driven view state (jsdom)', () => {
 })
 ```
 
-> Selector note: bind the status `<select>` however the current markup allows — `getByDisplayValue('All statuses')` is a robust fallback if the selects have no accessible name. Adjust the header button name matcher to whatever label text (with the ▲/▼ glyph) the implementation renders.
+> Selector note: `getByDisplayValue('All statuses')` is the PRIMARY selector for the status `<select>` — the filter selects have no accessible names, so `getByRole('combobox', { name })` won't match (only add `aria-label`s if the feedback-layer plan already did). Adjust the header button name matcher to whatever label text (with the ▲/▼ glyph) the implementation renders.
 
 Run and confirm failures:
 
@@ -404,7 +472,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 
 Keep `selected`, `bulkCollectionId`, `notice`, `error`, and the loaded-options state (`collections`, `tags`, `availableYears`, `items`, `total`) as `useState`.
 
-> **Search input:** its live text stays feedback-layer-owned local state (that is what the `<input value=…>` binds to). `filters.search` above is the *committed* value from the URL used to build the request. Do not bind the input directly to `filters.search`.
+> **Search input (feedback-layer seam — two directions, both required):** its live text stays feedback-layer-owned local state (that is what the `<input value=…>` binds to); `filters.search` above is the *committed* value from the URL used to build the request. Do not bind the input directly to `filters.search`. **But the local state must also be SEEDED from the URL**: initialize it from `searchParams.get('search') ?? ''` on mount, and re-sync it when the URL's `search` changes underneath it (e.g. back/forward) — otherwise a shared `?search=foo` link fetches filtered results while showing an EMPTY search box. Concretely: `useState(searchParams.get('search') ?? '')` plus a small effect that overwrites the local text when `filters.search` changes and the user isn't mid-typing (skip the sync while a debounce is pending, so it never clobbers keystrokes).
 
 **2c. One URL writer.** Replace `updateFilter` (and its imperative `load`) with a writer that only mutates the URL. Navigation clears transient selection:
 
@@ -585,4 +653,5 @@ If all green, the branch is ready for review. No migration, no backfill, no depl
 - **Why URL-as-source-of-truth, not hybrid:** deriving `filters/sort/page` from `useSearchParams` and firing a single URL-keyed effect removes the class of bugs where component state and the URL disagree, and guarantees shareable/refresh-safe views with no double-fetch. The `reqSeq` guard still protects against out-of-order responses when the URL changes rapidly.
 - **`router.replace`, not `push`:** filter/sort/page tweaks should not spam browser history (spec §3).
 - **Injection safety:** sort column + direction are only ever taken from the `SORT_COLUMNS` constant and the `'asc'|'desc'` literal — never from a bound param — so no user string reaches the SQL text.
+- **Known benign edge — back/forward keeps the selection:** `setQuery` clears `selected`, but a browser back/forward changes the URL without going through `setQuery`, so a checkbox selection can survive a view change until the refetched page renders. Harmless (selected ids simply may not be visible; bulk actions still target the chosen ids) — accepted, do not add code for it.
 - **DRY / YAGNI:** one `setQuery` writer backs filters, sort, and pagination; no new endpoints, no indexes, no multi-sort.
