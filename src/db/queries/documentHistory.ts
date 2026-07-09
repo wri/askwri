@@ -18,8 +18,10 @@ export interface DocumentHistoryResult {
 // Matches every audit row attributable to the document. Deliberately excluded
 // (no recoverable document reference in the row): bulk CSV-import summary rows
 // (entity_id NULL, counts only) and intake duplicate-skip rows (external_id
-// string in after->>'of' only). Python writers use entity_type='documents'
-// (plural) — both spellings are matched.
+// string in after->>'of' only). Python writers use both entity_type='documents'
+// (plural — bulk intake in worker/intake_s3.py) and 'document' (singular —
+// worker lifecycle/update audits from publish + parse stages); the SCOPE IN
+// list matches all spellings.
 // TODO: switch to UNION ALL (+ GIN on after->'addedDocumentIds') if audit_log seq scans become hot — the OR defeats the (entity_type, entity_id) index.
 const SCOPE = `
   (al.entity_type IN ('document', 'documents', 'document_summary') AND al.entity_id = $1)
