@@ -152,10 +152,10 @@ const GuidePage = () => (
       long/short summaries in both the native language and English. Tags are
       grouped by facet, where you can accept or reject AI-suggested tags or add
       your own. The lifecycle panel shows extraction confidence and the current
-      status, with buttons to promote, withdraw, re-ingest, or open the source
-      PDF. Admins also see a Delete button, which permanently removes the
-      document, its search index entries, and its stored PDF — this cannot be
-      undone.
+      status, with buttons to promote, withdraw, restore (admins, for withdrawn
+      documents), re-ingest, or open the source PDF. Admins also see a Delete
+      button, which permanently removes the document, its search index entries,
+      and its stored PDF — this cannot be undone.
     </p>
     <p style={{ marginBottom: 8 }}>
       <strong>Collections</strong> — curated groups of documents, for example by
