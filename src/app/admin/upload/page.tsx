@@ -14,6 +14,17 @@ interface WorkerHealth {
   status: 'idle' | 'processing' | 'pending' | 'stale'
 }
 
+// A file the user uploaded this session. In-memory only (gone on page leave,
+// per the approved scope). Tracked until it reaches a terminal state.
+interface UploadEntry {
+  filename: string
+  stem: string
+  uploadedAt: number
+  docId: string | null
+  docStatus: string | null // null until a documents row with external_id === stem appears
+  likelyDuplicate: boolean
+}
+
 const STATUS_STYLES: Record<
   WorkerHealth['status'],
   { color: string; label: string }
@@ -27,12 +38,20 @@ const STATUS_STYLES: Record<
   },
 }
 
+// Strip ONLY a trailing ".pdf" (case-insensitive) — matches Python Path().stem
+// and workerHealth.ts:87, so names like "a.b.pdf" → "a.b".
+const stemOf = (filename: string) => filename.replace(/\.pdf$/i, '')
+
+const isPdf = (f: File) => f.name.toLowerCase().endsWith('.pdf')
+
 const UploadPage = () => {
   const inputRef = useRef<HTMLInputElement>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   const [health, setHealth] = useState<WorkerHealth | null>(null)
+  const [entries, setEntries] = useState<UploadEntry[]>([])
 
   const loadHealth = useCallback(async () => {
     try {
@@ -51,52 +70,78 @@ const UploadPage = () => {
     loadHealth()
   }, [loadHealth])
 
-  const handleUpload = async () => {
-    const files = inputRef.current?.files
-    if (!files || files.length === 0) {
-      setError('Select at least one PDF file.')
-      return
-    }
-    setBusy(true)
-    setNotice(null)
-    setError(null)
-    try {
-      const form = new FormData()
-      for (let i = 0; i < files.length; i++) {
-        form.append('files', files[i])
-      }
-      const res = await fetch('/api/admin/intake', {
-        method: 'POST',
-        body: form,
-      })
-      if (res.status === 401) {
-        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+  const uploadFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) {
+        setError('Select at least one PDF file.')
         return
       }
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok || body.ok === false) {
-        throw new Error(body.error || `HTTP ${res.status}`)
+      setBusy(true)
+      setNotice(null)
+      setError(null)
+      try {
+        const form = new FormData()
+        for (const f of files) form.append('files', f)
+        const res = await fetch('/api/admin/intake', {
+          method: 'POST',
+          body: form,
+        })
+        if (res.status === 401) {
+          window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+          return
+        }
+        const body = await res.json().catch(() => ({}))
+        // Intake validation is ALL-OR-NOTHING: any bad file 400s the whole batch
+        // with a single error string and no `uploaded` list. Surface the error
+        // and leave the session list untouched — nothing was accepted.
+        if (!res.ok || body.ok === false) {
+          throw new Error(body.error || `HTTP ${res.status}`)
+        }
+        const uploaded = (body.uploaded as string[]) ?? []
+        const now = Date.now()
+        setEntries((prev) => [
+          ...prev,
+          ...uploaded.map((filename) => ({
+            filename,
+            stem: stemOf(filename),
+            uploadedAt: now,
+            docId: null,
+            docStatus: null,
+            likelyDuplicate: false,
+          })),
+        ])
+        await loadHealth()
+        if (inputRef.current) inputRef.current.value = ''
+        setNotice(
+          `${uploaded.length} file(s) dropped into the intake queue. Track each one below.`,
+        )
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setBusy(false)
       }
-      const n = (body.uploaded as string[]).length
-      // Refresh health immediately — the worker may have already picked them up
-      // (it polls every ~10s), or the status may flip to "stale" if the worker
-      // is down. Either way, show the real state instead of a fixed "10s" claim.
-      await loadHealth()
-      if (inputRef.current) inputRef.current.value = ''
-      setNotice(
-        `${n} file(s) dropped into the intake queue. ` +
-          (health?.status === 'stale'
-            ? '⚠ The ingestion worker is NOT running — your files will not be processed until it starts. See the worker status below.'
-            : health?.status === 'pending'
-              ? 'Files are in the intake queue — the worker will pick them up shortly. Track progress in the Review queue.'
-              : 'The ingestion worker will register and process them shortly. Track progress in the Review queue.'),
+    },
+    [loadHealth],
+  )
+
+  const handlePick = () =>
+    uploadFiles(Array.from(inputRef.current?.files ?? []))
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const all = Array.from(e.dataTransfer.files)
+    const pdfs = all.filter(isPdf)
+    const rejected = all.filter((f) => !isPdf(f))
+    if (rejected.length > 0) {
+      setError(
+        `Skipped non-PDF file(s): ${rejected.map((f) => f.name).join(', ')}`,
       )
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
     }
+    if (pdfs.length > 0) uploadFiles(pdfs)
   }
+
+  // TASK 2: shared poll interval goes here.
 
   const statusStyle = health ? STATUS_STYLES[health.status] : null
 
@@ -120,7 +165,7 @@ const UploadPage = () => {
         instead of uploading the file again.
       </Text>
 
-      {/* Worker health panel — shows the real state instead of a misleading "~10s" claim */}
+      {/* Worker health panel — unchanged */}
       <Box
         style={{
           marginBottom: 16,
@@ -165,19 +210,78 @@ const UploadPage = () => {
           setError(null)
         }}
       />
-      <div style={{ marginBottom: 12 }}>
-        <input ref={inputRef} type='file' multiple accept='.pdf' />
-      </div>
-      <button
-        disabled={busy}
-        onClick={handleUpload}
+
+      <div
+        role='button'
+        tabIndex={0}
+        aria-label='Drop PDFs here or click to choose files'
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            inputRef.current?.click()
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
         style={{
-          padding: '6px 16px',
-          cursor: busy ? 'not-allowed' : 'pointer',
+          marginBottom: 12,
+          padding: 32,
+          border: `2px dashed ${dragOver ? '#0050C8' : '#bbb'}`,
+          borderRadius: 6,
+          background: dragOver ? '#eef4ff' : '#fafafa',
+          textAlign: 'center',
+          cursor: 'pointer',
+          color: '#555',
         }}
       >
-        {busy ? 'Uploading…' : 'Upload'}
-      </button>
+        {busy ? 'Uploading…' : 'Drop PDFs here or click to choose'}
+        <input
+          ref={inputRef}
+          type='file'
+          multiple
+          accept='.pdf'
+          aria-label='Choose PDF files'
+          onChange={handlePick}
+          style={{ display: 'none' }}
+        />
+      </div>
+
+      {entries.length > 0 && (
+        <Box style={{ marginTop: 24 }}>
+          <Heading size='md' style={{ marginBottom: 8 }}>
+            This session&rsquo;s uploads
+          </Heading>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {entries.map((e) => (
+              <li
+                key={`${e.uploadedAt}-${e.filename}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 0',
+                  borderBottom: '1px solid #eee',
+                  fontSize: 14,
+                }}
+              >
+                <span style={{ fontFamily: 'monospace', flex: 1 }}>
+                  {e.filename}
+                </span>
+                {/* TASK 2: StatusChip + editor link / likely-duplicate branch. */}
+                <span style={{ color: '#666' }}>
+                  uploaded — waiting to register…
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Box>
+      )}
+
       <Box style={{ marginTop: 16, fontSize: 13 }}>
         <Link href='/admin/review' style={{ textDecoration: 'underline' }}>
           Go to the Review queue →
