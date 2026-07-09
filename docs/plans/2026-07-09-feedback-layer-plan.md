@@ -301,16 +301,21 @@ Replace the page's `{notice && …}{error && …}` block with:
 - [ ] **2.3 Editor + Upload + Import** (Flash on all three; loading line on the editor only)
   - **Failing test first** — add to `src/__tests__/admin-editor.test.tsx`:
     ```tsx
-    it('shows a loading line before the document detail resolves', () => {
+    it('shows a loading line (and no sections) before the document detail resolves', () => {
       render(
         <ChakraProvider>
           <DocumentEditorPage />
         </ChakraProvider>,
       )
       expect(screen.getByText('Loading…')).toBeInTheDocument()
+      // Load-bearing assertion: the collapsed History panel ALREADY renders a
+      // hidden 'Loading…' node in jsdom (page.tsx:1020-1022, RTL matches
+      // non-visible text), so getByText alone is green before the gate exists.
+      // Lifecycle renders synchronously today — its absence proves the gate.
+      expect(screen.queryByText('Lifecycle')).not.toBeInTheDocument()
     })
     ```
-    (Assert synchronously right after `render`, before any `await` — the fetch mock resolves on a microtask, so the first paint has `detail === null`.)
+    (Assert synchronously right after `render`, before any `await` — the fetch mock resolves on a microtask, so the first paint has `detail === null`. Note: after the gate lands, the first paint has exactly one visible `Loading…`; the History panel's node only exists once `detail` renders the sections, so `getByText` won't multi-match.)
   - Editor (`documents/[id]/page.tsx`): import Flash (`../../components/Flash`); replace block 474–479 with the Flash element. Then gate the section stack on the detail fetch — **no new state needed**, `detail === null` (164) already encodes "still loading". Immediately after the Flash element, wrap everything from the first `<section>` down to the last one (the end of the returned Box's children) as:
     ```tsx
     {!detail && !error ? (
