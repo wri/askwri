@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add visible, screen-reader-announced feedback (a shared Flash notice, loading lines, debounced search, and an unsaved-changes indicator) across the admin UI without introducing any new dependency.
-**Architecture:** One small shared client component (`Flash`) replaces the inline `{notice && …}{error && …}` pairs on the eight admin pages; each list page gains a `loading` boolean gating its table; the catalog search input is split off the synchronous `updateFilter` path onto a 300 ms debounce; the editor grows a `dirty` state (mirroring the existing `formDirty` ref) that drives the Save-button label and a `beforeunload` guard.
+**Architecture:** One small shared client component (`Flash`) replaces the inline `{notice && …}{error && …}` pairs on the eight admin pages; each list page gains a `loading` boolean gating its table (the editor gates its section stack on the existing `detail === null`); the catalog search input is split off the synchronous `updateFilter` path onto a 300 ms debounce; the editor grows a `dirty` state (mirroring the existing `formDirty` ref) that drives the Save-button label and a `beforeunload` guard.
 **Tech Stack:** Next.js 16 App Router, React client components, Chakra `Box`/`Heading`/`Text`, inline styles, Jest + @testing-library/react (jsdom), fake timers.
 **Spec:** docs/superpowers/specs/2026-07-09-feedback-layer-design.md
 
@@ -35,7 +35,7 @@
 - **Documents search is NOT a drop-in debounce.** Today the search `<input>` (page.tsx:298–308) calls `updateFilter('search', e.target.value)`; `updateFilter` (146–152) `setFilters` + `setPage(0)` + `setSelected(new Set())` + `load(next, 0)` — i.e. it loads **synchronously**, exactly like the status/language/year/collection/tag `<select>`s (216, 235, 249, 262, 275). The debounce must split *search only* onto a timer while the selects keep loading immediately. `load` is guarded by `reqSeq` (100, 103, 117, 122) for out-of-order **responses**, but that does NOT protect against a stale pending search timer firing with old **request params** after a select change — so the pending timer must be cleared whenever a select/pagination load fires. `load` currently has `try/catch` and **no `finally`**.
 - **Editor dirty facts** (`src/app/admin/documents/[id]/page.tsx`): `formDirty` is a ref (179) — a ref alone cannot re-render, hence the new `dirty` **state**. `formDirty.current = true` is set at the three field `onChange`s (634, 656, 677). The **reset** happens in exactly one place — inside `load()`'s branch `if (opts.resetForm || !formDirty.current) { … formDirty.current = false }` (218–225). Both dirty-reset points funnel through here: (a) initial/`resetForm` load (241), and (b) **post-save** `await load({ resetForm: true })` in `saveMetadata` (272). Setting `setDirty(false)` inside that branch covers both. The metadata Save button is at 715–725 (`onClick={saveMetadata}`, label `Save`). Editor `load` is a `useCallback` (214) and its mount effect (239–252) also fires tag/collection/me fetches.
 - **List-page `load` finally spots** (all are `useCallback` with `try/catch`, no `finally` — add `finally { setLoading(false) }`): documents 102–125, review 64–76, tags 42–50, collections 30–38, users 26–33.
-- **Loading applies to the five list/table pages** (documents, review, tags, collections, users) — each renders a table gated on a mount fetch. Upload (form; best-effort health fetch, upload/page.tsx:47–51) and Import (no mount fetch) and the Editor (progressive detail-gated panels) get **Flash only, no loading line** — recorded here so nobody adds a spurious one.
+- **Loading applies to the five list/table pages** (documents, review, tags, collections, users) — each renders a table gated on a mount fetch — **plus the editor**: it fetches its primary detail on mount and otherwise shows empty inputs + "No tags."/"No summaries.", exactly the empty shell the spec's acceptance forbids. The editor needs no new state — `detail === null` (page.tsx:164) already encodes "still loading"; gate the section stack on `!detail && !error` → `Loading…` (ReviewBar stays mounted above it). Justified exemptions: Upload (form, no gating mount fetch; its worker-health box has its own "checking…" affordance, upload/page.tsx:47–51) and Import (no mount fetch at all) get **Flash only, no loading line** — recorded here so nobody adds a spurious one.
 - Test infra: component-test model = `src/__tests__/admin-status-chip.test.tsx`. Editor suite `src/__tests__/admin-editor.test.tsx` has `setupFetchMock` (83–143) + `next/navigation` mock (16–27). Review suite `src/__tests__/admin-review-page.test.tsx`. **No documents-page component test exists yet** — this plan creates one.
 
 ---
@@ -298,12 +298,34 @@ Replace the page's `{notice && …}{error && …}` block with:
   - Lint + `npx prettier --write` the three pages.
   - [ ] Commit: `git commit -m "feat(admin): Flash + loading line on tags, collections, users"`
 
-- [ ] **2.3 Editor + Upload + Import** (Flash only — no loading line)
-  - Editor (`documents/[id]/page.tsx`): import Flash (`../../components/Flash`); replace block 474–479 with the Flash element. (Dirty/beforeunload come in Task 4.)
-  - Upload (`upload/page.tsx`): import Flash (`../components/Flash`); replace block 159–164.
-  - Import (`import/page.tsx`): import Flash (`../components/Flash`); replace block 293–298.
-  - Lint + `npx prettier --write` the three pages. Confirm `npm test -- --testPathPattern='admin-editor|admin-import'` stays green.
-  - [ ] Commit: `git commit -m "feat(admin): Flash on editor, upload, import"`
+- [ ] **2.3 Editor + Upload + Import** (Flash on all three; loading line on the editor only)
+  - **Failing test first** — add to `src/__tests__/admin-editor.test.tsx`:
+    ```tsx
+    it('shows a loading line before the document detail resolves', () => {
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      expect(screen.getByText('Loading…')).toBeInTheDocument()
+    })
+    ```
+    (Assert synchronously right after `render`, before any `await` — the fetch mock resolves on a microtask, so the first paint has `detail === null`.)
+  - Editor (`documents/[id]/page.tsx`): import Flash (`../../components/Flash`); replace block 474–479 with the Flash element. Then gate the section stack on the detail fetch — **no new state needed**, `detail === null` (164) already encodes "still loading". Immediately after the Flash element, wrap everything from the first `<section>` down to the last one (the end of the returned Box's children) as:
+    ```tsx
+    {!detail && !error ? (
+      <Text>Loading…</Text>
+    ) : (
+      <>
+        {/* …all existing sections, unchanged… */}
+      </>
+    )}
+    ```
+    The `<ReviewBar>`, `<Heading>`, intro `<Text>`s, and `<Flash>` stay mounted above the gate (ReviewBar fetches its own queue and must not unmount). The `!error` leg keeps the initial-load failure path (`load({resetForm:true}).catch(…setError…)`, 241) from stranding the page on `Loading…` — the error is shown by Flash. (Dirty/beforeunload come in Task 4.)
+  - Upload (`upload/page.tsx`): import Flash (`../components/Flash`); replace block 159–164. **No loading line** — justified exemption: no gating mount fetch; the worker-health box already has its own "checking…" affordance.
+  - Import (`import/page.tsx`): import Flash (`../components/Flash`); replace block 293–298. **No loading line** — justified exemption: no mount fetch at all.
+  - Run `npm test -- --testPathPattern='admin-editor'` — expect the new test to fail, then pass after the edit. Lint + `npx prettier --write` the three pages + the test. Confirm `npm test -- --testPathPattern='admin-editor|admin-import'` green.
+  - [ ] Commit: `git commit -m "feat(admin): Flash on editor, upload, import; editor loading line"`
 
 ---
 
@@ -436,9 +458,14 @@ describe('CatalogPage', () => {
       searchDebounce.current = setTimeout(() => load(next, 0), 300)
     }
     ```
-  - Cancel the timer on unmount (add near the mount effect):
+  - Cancel the timer on unmount (add near the mount effect). Inline the `clearTimeout` — do NOT call the render-recreated `clearSearchDebounce()` from inside the effect, or exhaustive-deps will warn (repo keeps lint output clean):
     ```tsx
-    useEffect(() => () => clearSearchDebounce(), [])
+    useEffect(
+      () => () => {
+        if (searchDebounce.current) clearTimeout(searchDebounce.current)
+      },
+      [],
+    )
     ```
   - Change the search `<input>` (302) `onChange` from `updateFilter('search', e.target.value)` to `updateSearch(e.target.value)`. Leave all `<select>`s on `updateFilter` (immediate).
 - [ ] **3.4 Run — expect pass:** `npm test -- --testPathPattern='admin-documents-page'`
@@ -453,7 +480,29 @@ describe('CatalogPage', () => {
 
 The `formDirty` ref can't re-render, so add a `dirty` state mirroring it. Reset happens only inside `load()`'s reset branch, which is reached by both the initial/`resetForm` load and the post-save `load({ resetForm: true })`. App Router exposes no route-change hook — in-app navigation is intentionally NOT intercepted (accepted limitation per spec); only tab close/refresh is guarded via `beforeunload`.
 
-- [ ] **4.1 Write the failing tests** — add to `src/__tests__/admin-editor.test.tsx`:
+- [ ] **4.1 Write the failing tests** — add to `src/__tests__/admin-editor.test.tsx`.
+
+  **REQUIRED mock change first:** `setupFetchMock`'s broad `/api/admin/documents/` branch (admin-editor.test.tsx:129–134) returns the document DETAIL payload for **every** method — including the metadata PATCH. But `saveMetadata` reads `body.updated.length` (page.tsx:264–271); with the detail payload that's a TypeError → caught by the `catch` → `load({ resetForm: true })` never runs → dirty never clears → the "clears after save" `waitFor` times out. Make the branch method-aware — `{ updated: [...] }` for PATCH, detail for GET:
+
+```tsx
+    // Broad prefix: serves the detail payload for any document id so tests can
+    // simulate navigating to a different [id] on the still-mounted page.
+    // PATCH is the metadata save — it returns { updated }, not the detail.
+    if (url.startsWith('/api/admin/documents/')) {
+      if (_init?.method === 'PATCH') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, updated: ['url'] }),
+        } as any)
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(detail),
+      } as any)
+    }
+```
+
+  (Rename the factory param `_init` to `init` if lint complains about using an underscore-prefixed param.) Then add the tests:
 
 ```tsx
 it('marks the Save button dirty after an edit and clears it after save', async () => {
@@ -556,7 +605,7 @@ it('registers a beforeunload handler only while dirty', async () => {
 - [ ] **5.2** Lint + format clean repo-wide: `npm run lint` then `npm run format:check`
 - [ ] **5.3** Grep for stragglers — no admin page should still render the old inline banner:
   `git grep -n "color: '#0A6640'" src/app/admin` and `git grep -n "color: '#C11101'" src/app/admin` should now only match `Flash.tsx` (and any intentionally-kept ReviewBar/import-row coloring, e.g. import/page.tsx's `error:'#C11101'` decision map at 213 and ReviewBar's `#feb2b2` — those are NOT notice banners, leave them).
-- [ ] **5.4** Confirm every list page shows `Loading…` on mount and each mutation surfaces a Flash (spot-check by reading the diff, or run the app per `docs/runbooks/local-testing.md`).
+- [ ] **5.4** Confirm every list page and the editor show `Loading…` on mount and each mutation surfaces a Flash (spot-check by reading the diff, or run the app per `docs/runbooks/local-testing.md`).
 - [ ] **5.5** If everything passes, no commit needed (work already committed per task). Otherwise commit fixups with a `fix(admin): …` message.
 
 ---
@@ -564,4 +613,4 @@ it('registers a beforeunload handler only while dirty', async () => {
 ### DRY / YAGNI notes
 - Flash is the single source of feedback rendering — do not reintroduce inline `{notice && …}` anywhere.
 - No toast queue, no context/provider, no route-change interception, no per-panel spinners, no optimistic updates, no public-app changes (spec non-goals).
-- Loading = one `<Text>Loading…</Text>` line, five list pages only. Do not add loading lines to editor/upload/import.
+- Loading = one `<Text>Loading…</Text>` line: the five list pages (via a `loading` boolean) plus the editor (via the existing `detail === null` gate — no new state). Do not add loading lines to upload/import (justified exemptions, see Task 2.3).
