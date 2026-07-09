@@ -150,6 +150,48 @@ describe('UploadPage — dropzone + per-file results', () => {
     expect(screen.queryByText('ok.pdf')).not.toBeInTheDocument()
     expect(screen.queryByText('big.pdf')).not.toBeInTheDocument()
   })
+
+  it('uploads the PDFs AND keeps the skip message on a mixed drop', async () => {
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
+      if (url === '/api/admin/intake') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: ['a.pdf'] }),
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, items: [] }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+
+    const zone = screen.getByLabelText(
+      'Drop PDFs here or click to choose files',
+    )
+    await act(async () => {
+      fireEvent.drop(zone, {
+        dataTransfer: {
+          files: [
+            pdf('a.pdf'),
+            new File(['x'], 'b.txt', { type: 'text/plain' }),
+          ],
+        },
+      })
+    })
+
+    // The PDF was uploaded and listed…
+    await screen.findByText('a.pdf')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/intake',
+      expect.anything(),
+    )
+    // …AND the non-PDF skip warning survived the upload's state resets.
+    expect(screen.getByText(/Skipped non-PDF/i)).toBeInTheDocument()
+    expect(screen.getByText(/b\.txt/)).toBeInTheDocument()
+  })
 })
 
 describe('UploadPage — polling + likely-duplicate', () => {
@@ -284,5 +326,46 @@ describe('UploadPage — polling + likely-duplicate', () => {
       await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS_TEST * 4)
     })
     expect(fetchMock.mock.calls.length).toBe(callsAtTerminal)
+  })
+
+  it('re-arms polling when a new batch arrives after all entries are terminal', async () => {
+    let uploadName = 'dup1.pdf'
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk) // backlog 0
+      if (url === '/api/admin/intake')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: [uploadName] }),
+        })
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, items: [] }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+
+    // First batch runs to terminal (likely duplicate) and the interval clears.
+    await dropOne('dup1.pdf')
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(100000)
+    })
+    expect(screen.getByText(/likely duplicate/i)).toBeInTheDocument()
+    const callsAtTerminal = fetchMock.mock.calls.length
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS_TEST * 3)
+    })
+    expect(fetchMock.mock.calls.length).toBe(callsAtTerminal)
+
+    // Second batch: the shared interval must re-arm and poll the new entry.
+    uploadName = 'dup2.pdf'
+    await dropOne('dup2.pdf')
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS_TEST)
+    })
+    const polledDup2 = fetchMock.mock.calls.some((c) =>
+      String(c[0]).includes('search=dup2'),
+    )
+    expect(polledDup2).toBe(true)
   })
 })

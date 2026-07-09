@@ -59,6 +59,10 @@ const isTerminal = (e: UploadEntry) =>
   e.likelyDuplicate ||
   (e.docStatus != null && TERMINAL_DOC_STATUSES.has(e.docStatus))
 
+// Unique per entry — stems can repeat across batches (same filename dropped
+// twice in one session), so never key poll updates by stem alone.
+const keyOf = (e: UploadEntry) => `${e.uploadedAt}-${e.filename}`
+
 const UploadPage = () => {
   const inputRef = useRef<HTMLInputElement>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -93,14 +97,17 @@ const UploadPage = () => {
   }, [loadHealth])
 
   const uploadFiles = useCallback(
-    async (files: File[]) => {
+    // `skipMessage` carries a non-PDF skip warning from a mixed drop; it must
+    // survive this function's error-state resets so the user sees BOTH the
+    // skip warning and the upload result.
+    async (files: File[], skipMessage?: string) => {
       if (files.length === 0) {
         setError('Select at least one PDF file.')
         return
       }
       setBusy(true)
       setNotice(null)
-      setError(null)
+      setError(skipMessage ?? null)
       try {
         const form = new FormData()
         for (const f of files) form.append('files', f)
@@ -138,7 +145,7 @@ const UploadPage = () => {
           `${uploaded.length} file(s) dropped into the intake queue. Track each one below.`,
         )
       } catch (err: any) {
-        setError(err.message)
+        setError(skipMessage ? `${skipMessage} — ${err.message}` : err.message)
       } finally {
         setBusy(false)
       }
@@ -155,12 +162,15 @@ const UploadPage = () => {
     const all = Array.from(e.dataTransfer.files)
     const pdfs = all.filter(isPdf)
     const rejected = all.filter((f) => !isPdf(f))
-    if (rejected.length > 0) {
-      setError(
-        `Skipped non-PDF file(s): ${rejected.map((f) => f.name).join(', ')}`,
-      )
+    const skipMessage =
+      rejected.length > 0
+        ? `Skipped non-PDF file(s): ${rejected.map((f) => f.name).join(', ')}`
+        : undefined
+    if (pdfs.length > 0) {
+      uploadFiles(pdfs, skipMessage)
+    } else if (skipMessage) {
+      setError(skipMessage)
     }
-    if (pdfs.length > 0) uploadFiles(pdfs)
   }
 
   // Single shared interval for the whole list. Re-arms only when the set of
@@ -182,7 +192,12 @@ const UploadPage = () => {
         const res = await fetch('/api/admin/worker-health')
         if (res.ok) {
           const body = await res.json()
-          if (body.ok) backlog = body.health.intakeBacklog
+          if (body.ok) {
+            backlog = body.health.intakeBacklog
+            // Keep the worker-health panel live while polling — we already
+            // paid for the fetch.
+            setHealth(body.health)
+          }
         }
       } catch {
         // best-effort; leave backlog null (never triggers the duplicate inference)
@@ -200,7 +215,10 @@ const UploadPage = () => {
             // `search` is an ILIKE substring match — exact-match the stem here.
             const match = body.items.find((it) => it.externalId === e.stem)
             if (match) {
-              updates.set(e.stem, { docId: match.id, docStatus: match.status })
+              updates.set(keyOf(e), {
+                docId: match.id,
+                docStatus: match.status,
+              })
               return
             }
           } catch {
@@ -213,7 +231,7 @@ const UploadPage = () => {
             backlog === 0 &&
             Date.now() - e.uploadedAt > DUPLICATE_TIMEOUT_MS
           ) {
-            updates.set(e.stem, { likelyDuplicate: true })
+            updates.set(keyOf(e), { likelyDuplicate: true })
           }
         }),
       )
@@ -221,7 +239,7 @@ const UploadPage = () => {
       if (updates.size > 0) {
         setEntries((prev) =>
           prev.map((e) => {
-            const u = updates.get(e.stem)
+            const u = updates.get(keyOf(e))
             return u ? { ...e, ...u } : e
           }),
         )
@@ -347,7 +365,7 @@ const UploadPage = () => {
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {entries.map((e) => (
               <li
-                key={`${e.uploadedAt}-${e.filename}`}
+                key={keyOf(e)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
