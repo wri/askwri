@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { actionButton } from '../lib/buttonStyles'
 import { Tooltip } from '../components/Tooltip'
 import { Flash } from '../components/Flash'
 
@@ -165,13 +166,15 @@ const CollectionsPage = () => {
                     <button
                       onClick={() => saveRename(col.id)}
                       disabled={renameBusy}
-                      style={{ marginRight: 8, textDecoration: 'underline' }}
+                      className='admin-btn'
+                      style={{ ...actionButton, marginRight: 8 }}
                     >
                       Save
                     </button>
                     <button
                       onClick={() => setEditId(null)}
-                      style={{ textDecoration: 'underline' }}
+                      className='admin-btn'
+                      style={actionButton}
                     >
                       Cancel
                     </button>
@@ -180,7 +183,8 @@ const CollectionsPage = () => {
                   <>
                     <button
                       onClick={() => startEdit(col)}
-                      style={{ marginRight: 8, textDecoration: 'underline' }}
+                      className='admin-btn'
+                      style={{ ...actionButton, marginRight: 8 }}
                     >
                       Rename
                     </button>
@@ -249,7 +253,8 @@ const CollectionsPage = () => {
         <button
           type='submit'
           disabled={!createName || createBusy}
-          style={{ textDecoration: 'underline' }}
+          className='admin-btn'
+          style={actionButton}
         >
           Create
         </button>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Box, Heading } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { actionButton } from '../lib/buttonStyles'
 import { Flash } from '../components/Flash'
 
 interface AdminUser {
@@ -173,14 +174,16 @@ const UsersPage = () => {
                 <button
                   onClick={() => patch(u.id, { active: !u.active })}
                   disabled={busyId === u.id}
-                  style={{ marginRight: 8, textDecoration: 'underline' }}
+                  className='admin-btn'
+                  style={{ ...actionButton, marginRight: 8 }}
                 >
                   {u.active ? 'Deactivate' : 'Activate'}
                 </button>
                 <button
                   onClick={() => resetPassword(u.id, u.username)}
                   disabled={busyId === u.id}
-                  style={{ textDecoration: 'underline' }}
+                  className='admin-btn'
+                  style={actionButton}
                 >
                   Reset password
                 </button>
@@ -275,7 +278,8 @@ const UsersPage = () => {
             !createForm.password ||
             createBusy
           }
-          style={{ textDecoration: 'underline' }}
+          className='admin-btn'
+          style={actionButton}
         >
           Create
         </button>

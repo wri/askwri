@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
+import { actionButton, dangerButton } from '../lib/buttonStyles'
 import { Flash } from '../components/Flash'
 
 interface Tag {
@@ -259,16 +260,15 @@ const TagsPage = () => {
                             <button
                               onClick={() => saveRename(tag.id)}
                               disabled={renameBusy}
-                              style={{
-                                marginRight: 8,
-                                textDecoration: 'underline',
-                              }}
+                              className='admin-btn'
+                              style={{ ...actionButton, marginRight: 8 }}
                             >
                               Save
                             </button>
                             <button
                               onClick={() => setRenameId(null)}
-                              style={{ textDecoration: 'underline' }}
+                              className='admin-btn'
+                              style={actionButton}
                             >
                               Cancel
                             </button>
@@ -277,10 +277,8 @@ const TagsPage = () => {
                           <>
                             <button
                               onClick={() => startRename(tag)}
-                              style={{
-                                marginRight: 8,
-                                textDecoration: 'underline',
-                              }}
+                              className='admin-btn'
+                              style={{ ...actionButton, marginRight: 8 }}
                               title='Rename this tag value or facet (admin only)'
                             >
                               Rename
@@ -289,10 +287,8 @@ const TagsPage = () => {
                               tag.suggestedCount === 0 && (
                                 <button
                                   onClick={() => deleteTag(tag.id, tag.valueId)}
-                                  style={{
-                                    textDecoration: 'underline',
-                                    color: '#C11101',
-                                  }}
+                                  className='admin-btn'
+                                  style={dangerButton}
                                 >
                                   Delete
                                 </button>
@@ -364,7 +360,8 @@ const TagsPage = () => {
         <button
           type='submit'
           disabled={addBusy}
-          style={{ textDecoration: 'underline' }}
+          className='admin-btn'
+          style={actionButton}
         >
           Add
         </button>
