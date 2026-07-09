@@ -33,7 +33,7 @@ const STATUS_STYLES: Record<
 > = {
   idle: { color: '#0A6640', label: 'idle (caught up)' },
   processing: { color: '#0050C8', label: 'processing' },
-  pending: { color: '#B7791F', label: 'pending — worker will pick up shortly' },
+  pending: { color: '#8a5a15', label: 'pending — worker will pick up shortly' },
   stale: {
     color: '#C11101',
     label: 'NOT RUNNING — dropped files are NOT being processed',
@@ -390,7 +390,7 @@ const UploadPage = () => {
                   </>
                 ) : e.likelyDuplicate ? (
                   <Tooltip help='Not registered after 90s and the intake queue is empty — the worker most likely skipped this file as a content-hash duplicate of a document already in the system. This is an inference (dedup-skip is not queryable per file). To re-process, use Re-ingest on the existing document.'>
-                    <span style={{ color: '#B7791F', fontWeight: 600 }}>
+                    <span style={{ color: '#8a5a15', fontWeight: 600 }}>
                       likely duplicate
                     </span>
                   </Tooltip>

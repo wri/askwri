@@ -46,7 +46,7 @@ const WORKER_STYLE: Record<string, { color: string; label: string }> = {
   idle: { color: '#0A6640', label: 'running (idle)' },
   processing: { color: '#0050C8', label: 'running (processing)' },
   pending: {
-    color: '#B7791F',
+    color: '#8a5a15',
     label: 'files just dropped — worker should pick them up shortly',
   },
   stale: {

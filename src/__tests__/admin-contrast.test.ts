@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'fs'
+import { join } from 'path'
 import { actionButton, dangerButton } from '@/app/admin/lib/buttonStyles'
 import { STATUS_META } from '@/app/admin/components/StatusChip'
 import { PROVENANCE_BADGE } from '@/app/admin/lib/provenance'
@@ -53,4 +55,31 @@ describe('admin colour contrast meets WCAG AA (>= 4.5:1)', () => {
       expect(contrast(badge.color, badge.bg)).toBeGreaterThanOrEqual(AA)
     },
   )
+
+  // Worker-health "pending" labels (review + upload STATUS/WORKER style maps)
+  // and the upload "likely duplicate" label render this amber on white.
+  it('pending/duplicate amber on white', () => {
+    expect(contrast('#8a5a15', '#fff')).toBeGreaterThanOrEqual(AA)
+  })
+
+  // The old amber #B7791F is only ~3.6:1 on white — make sure it never creeps
+  // back into any admin UI source file (the style maps that use it are
+  // module-local to page files, so they cannot be imported and asserted here).
+  it('failing amber #B7791F does not reappear in src/app/admin', () => {
+    const adminDir = join(__dirname, '..', 'app', 'admin')
+    const offenders: string[] = []
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) walk(full)
+        else if (/\.(tsx?|css)$/.test(entry.name)) {
+          if (readFileSync(full, 'utf8').toLowerCase().includes('#b7791f')) {
+            offenders.push(full)
+          }
+        }
+      }
+    }
+    walk(adminDir)
+    expect(offenders).toEqual([])
+  })
 })
