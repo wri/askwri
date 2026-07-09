@@ -179,8 +179,9 @@ const CatalogInner = () => {
   }, [searchParams, load])
 
   // Re-seed the live search text when the URL's committed search changes
-  // underneath us (back/forward, shared link) — but never mid-typing, so a
-  // pending debounce is not clobbered.
+  // underneath us (back/forward, shared link). The guard below is defensive
+  // only: the URL-keyed load effect above always clears the debounce ref
+  // before this effect runs, so the ref can't be set here in practice.
   useEffect(() => {
     if (searchDebounce.current) return
     setSearchText(filters.search)
@@ -292,6 +293,7 @@ const CatalogInner = () => {
           value={filters.status}
           onChange={(e) => updateFilter('status', e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+          aria-label='Filter by status'
         >
           <option value=''>All statuses</option>
           {[
@@ -312,6 +314,7 @@ const CatalogInner = () => {
           value={filters.language}
           onChange={(e) => updateFilter('language', e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+          aria-label='Filter by language'
         >
           <option value=''>All languages</option>
           {['en', 'es', 'zh', 'pt', 'id'].map((l) => (
@@ -325,6 +328,7 @@ const CatalogInner = () => {
           value={filters.yearPublished}
           onChange={(e) => updateFilter('yearPublished', e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+          aria-label='Filter by year published'
         >
           <option value=''>All years</option>
           {availableYears.map((y) => (
@@ -338,6 +342,7 @@ const CatalogInner = () => {
           value={filters.collectionId}
           onChange={(e) => updateFilter('collectionId', e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+          aria-label='Filter by collection'
         >
           <option value=''>All collections</option>
           {collections.map((c) => (
@@ -352,6 +357,7 @@ const CatalogInner = () => {
           onChange={(e) => updateFilter('tagId', e.target.value)}
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
           title='Filter by taxonomy tag (facet value)'
+          aria-label='Filter by tag'
         >
           <option value=''>All tags</option>
           {Object.entries(
@@ -421,7 +427,7 @@ const CatalogInner = () => {
             collection
           </button>
           <Text
-            style={{ fontSize: 12, color: '#888', marginLeft: 8 }}
+            style={{ fontSize: 12, color: '#595959', marginLeft: 8 }}
             title='Collections are curatorial groups of documents (e.g. a topic, a project, a language set). Adding documents to a collection groups them for filtering, bulk operations, and per-collection embedding-model policies. It does not change the document itself.'
           >
             ℹ What does this do?
@@ -438,7 +444,10 @@ const CatalogInner = () => {
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>
+              <th
+                scope='col'
+                style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
+              >
                 <input
                   type='checkbox'
                   checked={selected.size === items.length && items.length > 0}
@@ -455,6 +464,7 @@ const CatalogInner = () => {
                 return (
                   <th
                     key={label}
+                    scope='col'
                     aria-sort={ariaSort}
                     style={{
                       ...cell,

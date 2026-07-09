@@ -29,7 +29,9 @@ const LoginForm = () => {
       }
       const next = searchParams.get('next') || ''
       router.push(
-        next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\')
+        next.startsWith('/') &&
+          !next.startsWith('//') &&
+          !next.startsWith('/\\')
           ? next
           : '/admin/review',
       )
@@ -45,16 +47,31 @@ const LoginForm = () => {
       <Heading size='lg' style={{ marginBottom: 16 }}>
         AskWRI Admin
       </Heading>
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <form
+        onSubmit={submit}
+        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+      >
+        <label
+          htmlFor='login-username'
+          style={{ fontSize: 14, fontWeight: 600 }}
+        >
+          Username
+        </label>
         <input
-          placeholder='Username'
+          id='login-username'
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoFocus
           style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }}
         />
+        <label
+          htmlFor='login-password'
+          style={{ fontSize: 14, fontWeight: 600 }}
+        >
+          Password
+        </label>
         <input
-          placeholder='Password'
+          id='login-password'
           type='password'
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -63,7 +80,12 @@ const LoginForm = () => {
         <button
           type='submit'
           disabled={busy || !username || !password}
-          style={{ padding: 10, background: '#0A3C5C', color: 'white', borderRadius: 4 }}
+          style={{
+            padding: 10,
+            background: '#0A3C5C',
+            color: 'white',
+            borderRadius: 4,
+          }}
         >
           {busy ? 'Signing in…' : 'Sign in'}
         </button>

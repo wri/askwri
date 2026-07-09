@@ -143,6 +143,7 @@ const UsersPage = () => {
             ].map((h) => (
               <th
                 key={h}
+                scope='col'
                 style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
               >
                 {h}
@@ -219,57 +220,94 @@ const UsersPage = () => {
           alignItems: 'flex-start',
         }}
       >
-        <input
-          placeholder='Username'
-          value={createForm.username}
-          onChange={(e) =>
-            setCreateForm((f) => ({ ...f, username: e.target.value }))
-          }
-          required
-          style={{
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-            padding: '4px 8px',
-          }}
-        />
-        <input
-          placeholder='Email'
-          type='email'
-          value={createForm.email}
-          onChange={(e) =>
-            setCreateForm((f) => ({ ...f, email: e.target.value }))
-          }
-          required
-          style={{
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-            padding: '4px 8px',
-          }}
-        />
-        <input
-          placeholder='Password'
-          type='password'
-          value={createForm.password}
-          onChange={(e) =>
-            setCreateForm((f) => ({ ...f, password: e.target.value }))
-          }
-          required
-          style={{
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-            padding: '4px 8px',
-          }}
-        />
-        <select
-          value={createForm.role}
-          onChange={(e) =>
-            setCreateForm((f) => ({ ...f, role: e.target.value }))
-          }
-          style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
-        >
-          <option value='editor'>editor</option>
-          <option value='admin'>admin</option>
-        </select>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label
+            htmlFor='new-user-username'
+            style={{ fontSize: 13, fontWeight: 600 }}
+          >
+            Username
+          </label>
+          <input
+            id='new-user-username'
+            value={createForm.username}
+            onChange={(e) =>
+              setCreateForm((f) => ({ ...f, username: e.target.value }))
+            }
+            required
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              padding: '4px 8px',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label
+            htmlFor='new-user-email'
+            style={{ fontSize: 13, fontWeight: 600 }}
+          >
+            Email
+          </label>
+          <input
+            id='new-user-email'
+            type='email'
+            value={createForm.email}
+            onChange={(e) =>
+              setCreateForm((f) => ({ ...f, email: e.target.value }))
+            }
+            required
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              padding: '4px 8px',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label
+            htmlFor='new-user-password'
+            style={{ fontSize: 13, fontWeight: 600 }}
+          >
+            Password
+          </label>
+          <input
+            id='new-user-password'
+            type='password'
+            value={createForm.password}
+            onChange={(e) =>
+              setCreateForm((f) => ({ ...f, password: e.target.value }))
+            }
+            required
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              padding: '4px 8px',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label
+            htmlFor='new-user-role'
+            style={{ fontSize: 13, fontWeight: 600 }}
+          >
+            Role
+          </label>
+          <select
+            id='new-user-role'
+            value={createForm.role}
+            onChange={(e) =>
+              setCreateForm((f) => ({ ...f, role: e.target.value }))
+            }
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              padding: '4px 8px',
+            }}
+          >
+            <option value='editor'>editor</option>
+            <option value='admin'>admin</option>
+          </select>
+        </div>
         <button
           type='submit'
           disabled={
