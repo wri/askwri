@@ -7,13 +7,22 @@
  */
 
 import { AppDataSource } from '@/db/data-source'
-import { importDocuments, ImportRow, FlatImportRow } from '@/db/queries/importDocuments'
+import {
+  importDocuments,
+  ImportRow,
+  FlatImportRow,
+} from '@/db/queries/importDocuments'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
 const adminIdentity: AdminIdentity = { kind: 'token', role: 'admin' }
-const editorIdentity: AdminIdentity = { kind: 'user', userId: '00000000-0000-0000-0000-000000000000', username: 'test-editor', role: 'editor' }
+const editorIdentity: AdminIdentity = {
+  kind: 'user',
+  userId: '00000000-0000-0000-0000-000000000000',
+  username: 'test-editor',
+  role: 'editor',
+}
 
 d('importDocuments() DB integration — new columns + validation + audit', () => {
   const PREFIX = `test-impd1-${Date.now()}-`
@@ -24,8 +33,14 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
   })
 
   afterAll(async () => {
-    await AppDataSource.query(`DELETE FROM ingestion_jobs WHERE document_id IN (SELECT id FROM documents WHERE external_id LIKE $1)`, [`${PREFIX}%`])
-    await AppDataSource.query(`DELETE FROM documents WHERE external_id LIKE $1`, [`${PREFIX}%`])
+    await AppDataSource.query(
+      `DELETE FROM ingestion_jobs WHERE document_id IN (SELECT id FROM documents WHERE external_id LIKE $1)`,
+      [`${PREFIX}%`],
+    )
+    await AppDataSource.query(
+      `DELETE FROM documents WHERE external_id LIKE $1`,
+      [`${PREFIX}%`],
+    )
     // Don't destroy the connection — other test files may share it.
   })
 
@@ -38,11 +53,11 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
         'Publication Title': 'WRI Journal',
         languages: 'English',
         'YEAR published': '2022',
-        'DOI': 'https://doi.org/10.1234/full',
-        'article_type': 'Working Paper',
-        'wri_primary_office': 'WRI Global',
+        DOI: 'https://doi.org/10.1234/full',
+        article_type: 'Working Paper',
+        wri_primary_office: 'WRI Global',
         'All authors': 'Smith, John; Doe, Jane',
-        'URL': 'https://www.wri.org/research/full',
+        URL: 'https://www.wri.org/research/full',
         'Date published': '3/15/2022',
       },
       summary: 'Full meta summary',
@@ -59,7 +74,9 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
     expect(doc.wri_primary_office).toBe('WRI Global')
     expect(doc.authors).toBe('Smith, John; Doe, Jane')
     expect(doc.url).toBe('https://www.wri.org/research/full')
-    expect(new Date(doc.date_published).toISOString().split('T')[0]).toBe('2022-03-15')
+    expect(new Date(doc.date_published).toISOString().split('T')[0]).toBe(
+      '2022-03-15',
+    )
     expect(doc.s3_key).toBe(`documents/${PREFIX}full-meta.pdf`)
   })
 
@@ -106,7 +123,11 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
       metadata: { languages: 'English' },
       summary: '',
     }
-    const result = await importDocuments([row], { dryRun: false }, adminIdentity)
+    const result = await importDocuments(
+      [row],
+      { dryRun: false },
+      adminIdentity,
+    )
     expect(result.jobs).toBe(1)
 
     // Verify: the doc now has a queued job alongside the needs_review job
@@ -149,7 +170,11 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
       metadata: { languages: 'English' },
       summary: '',
     }
-    const result = await importDocuments([row], { dryRun: true }, editorIdentity)
+    const result = await importDocuments(
+      [row],
+      { dryRun: true },
+      editorIdentity,
+    )
     expect(result.decisions).toBeDefined()
     expect(result.decisions![0].action).toBe('created')
   })
@@ -170,8 +195,10 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
     // At least one should succeed; the other should either succeed or skip
     // Neither should throw an unhandled 23505
     expect(r1.status === 'fulfilled' || r2.status === 'fulfilled').toBe(true)
-    if (r1.status === 'rejected') expect(String(r1.reason)).not.toMatch(/23505|unique/i)
-    if (r2.status === 'rejected') expect(String(r2.reason)).not.toMatch(/23505|unique/i)
+    if (r1.status === 'rejected')
+      expect(String(r1.reason)).not.toMatch(/23505|unique/i)
+    if (r2.status === 'rejected')
+      expect(String(r2.reason)).not.toMatch(/23505|unique/i)
   })
 
   // (h) Re-import of same rows is idempotent — jobs stays 0 (existing queued jobs)
@@ -179,7 +206,11 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
     const rows: ImportRow[] = [
       {
         file_path: `${PREFIX}idempotent.pdf`,
-        metadata: { 'Article Title': 'Idempotent', languages: 'English', 'YEAR published': '2024' },
+        metadata: {
+          'Article Title': 'Idempotent',
+          languages: 'English',
+          'YEAR published': '2024',
+        },
         summary: '',
       },
     ]
@@ -201,7 +232,11 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
     // Create a doc first
     const row: ImportRow = {
       file_path: `${PREFIX}flat-overwrite.pdf`,
-      metadata: { 'Article Title': 'Original Title', languages: 'English', 'YEAR published': '2020' },
+      metadata: {
+        'Article Title': 'Original Title',
+        languages: 'English',
+        'YEAR published': '2020',
+      },
       summary: '',
     }
     await importDocuments([row], { dryRun: false }, adminIdentity)
@@ -211,25 +246,38 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
       file_path: `${PREFIX}flat-overwrite.pdf`,
       external_id: `${PREFIX}flat-overwrite`,
       title: 'Overwritten Title',
+      year_published: '2030',
     }
-    const dryRun = await importDocuments([flatRow], { dryRun: true }, adminIdentity)
+    const dryRun = await importDocuments(
+      [flatRow],
+      { dryRun: true },
+      adminIdentity,
+    )
     expect(dryRun.decisions![0].action).toBe('updated')
     expect(dryRun.decisions![0].changes).toBeDefined()
-    const titleChange = dryRun.decisions![0].changes!.find((c) => c.field === 'title')
+    const titleChange = dryRun.decisions![0].changes!.find(
+      (c) => c.field === 'title',
+    )
     expect(titleChange).toBeDefined()
     expect(titleChange!.overwrite).toBe(true)
     expect(titleChange!.before).toBe('Original Title')
     expect(titleChange!.after).toBe('Overwritten Title')
 
     // Apply
-    const applied = await importDocuments([flatRow], { dryRun: false }, adminIdentity)
+    const applied = await importDocuments(
+      [flatRow],
+      { dryRun: false },
+      adminIdentity,
+    )
     expect(applied.updated).toBe(1)
 
     const [doc] = await AppDataSource.query(
-      `SELECT title FROM documents WHERE external_id = $1`,
+      `SELECT title, metadata_source FROM documents WHERE external_id = $1`,
       [`${PREFIX}flat-overwrite`],
     )
     expect(doc.title).toBe('Overwritten Title')
+    // metadata_source keys must be snake_case (matches the Python worker), not camelCase
+    expect(doc.metadata_source.year_published).toBe('external')
   })
 
   // (b) flat CSV row with doi matching an existing doc (no external_id) → matched by DOI
@@ -237,7 +285,11 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
     // Create a doc with a DOI
     const createRow: ImportRow = {
       file_path: `${PREFIX}doi-match.pdf`,
-      metadata: { 'Article Title': 'DOI Doc', DOI: '10.9999/doi-match-test', languages: 'English' },
+      metadata: {
+        'Article Title': 'DOI Doc',
+        DOI: '10.9999/doi-match-test',
+        languages: 'English',
+      },
       summary: '',
     }
     await importDocuments([createRow], { dryRun: false }, adminIdentity)
@@ -249,7 +301,11 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
       doi: '10.9999/doi-match-test',
       title: 'Updated via DOI',
     }
-    const dryRun = await importDocuments([flatRow], { dryRun: true }, adminIdentity)
+    const dryRun = await importDocuments(
+      [flatRow],
+      { dryRun: true },
+      adminIdentity,
+    )
     expect(dryRun.decisions![0].action).toBe('updated')
     expect(dryRun.decisions![0].matchKey).toBe('doi')
   })
@@ -262,7 +318,11 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
       title: 'Brand New Doc',
       authors: 'New Author',
     }
-    const result = await importDocuments([flatRow], { dryRun: false }, adminIdentity)
+    const result = await importDocuments(
+      [flatRow],
+      { dryRun: false },
+      adminIdentity,
+    )
     expect(result.created).toBe(1)
 
     const [doc] = await AppDataSource.query(
@@ -286,10 +346,17 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
     // Legacy re-import with a different title → should NOT overwrite (fill-only-empty)
     const reImport: ImportRow = {
       file_path: `${PREFIX}legacy-protect.pdf`,
-      metadata: { 'Article Title': 'Should Not Overwrite', languages: 'English' },
+      metadata: {
+        'Article Title': 'Should Not Overwrite',
+        languages: 'English',
+      },
       summary: '',
     }
-    const result = await importDocuments([reImport], { dryRun: false }, adminIdentity)
+    const result = await importDocuments(
+      [reImport],
+      { dryRun: false },
+      adminIdentity,
+    )
     expect(result.skipped).toBe(1)
     expect(result.updated).toBe(0)
 

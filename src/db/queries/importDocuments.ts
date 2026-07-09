@@ -3,6 +3,7 @@ import { Document } from '../entities/Document.entity'
 import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
+import { PROVENANCE_KEY } from '../../lib/metadataProvenance'
 
 // Mirrors LANGUAGE_MAP in search-service/scripts/migrate_csv_to_postgres.py
 // plus Phase 1 amendment: bahasa → id
@@ -122,7 +123,9 @@ export function mapLanguages(raw: unknown): { primary: string; all: string[] } {
     .split(',')
     .map((p) => p.trim().toLowerCase())
     .filter((p) => p.length > 0)
-  const codes = parts.filter((p) => p in LANGUAGE_MAP).map((p) => LANGUAGE_MAP[p])
+  const codes = parts
+    .filter((p) => p in LANGUAGE_MAP)
+    .map((p) => LANGUAGE_MAP[p])
   if (codes.length === 0) {
     return { primary: 'en', all: ['en'] }
   }
@@ -159,12 +162,17 @@ export function parseDatePublished(value: unknown): string | null {
 // - the basename must end with .pdf
 // - if it has a directory prefix, it must be the documents_s3_prefix
 // Returns the sanitized basename on success, or an error message on failure.
-export function validateFilePath(filePath: string): { ok: true; base: string } | { ok: false; error: string } {
+export function validateFilePath(
+  filePath: string,
+): { ok: true; base: string } | { ok: false; error: string } {
   if (typeof filePath !== 'string' || filePath.trim() === '') {
     return { ok: false, error: 'invalid file_path' }
   }
   if (filePath.includes('..')) {
-    return { ok: false, error: 'file_path must not contain path traversal (..)' }
+    return {
+      ok: false,
+      error: 'file_path must not contain path traversal (..)',
+    }
   }
   const base = filePath.split('/').pop() ?? filePath
   if (!base.toLowerCase().endsWith('.pdf')) {
@@ -173,7 +181,10 @@ export function validateFilePath(filePath: string): { ok: true; base: string } |
   // If file_path has a directory prefix, it must be the documents prefix
   const documentsS3Prefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'
   if (filePath.includes('/') && !filePath.startsWith(documentsS3Prefix)) {
-    return { ok: false, error: `${base}: file_path must be a bare filename or under the documents prefix (${documentsS3Prefix})` }
+    return {
+      ok: false,
+      error: `${base}: file_path must be a bare filename or under the documents prefix (${documentsS3Prefix})`,
+    }
   }
   return { ok: true, base }
 }
@@ -184,7 +195,12 @@ export function validateFilePath(filePath: string): { ok: true; base: string } |
 
 /** A row is legacy if it has a `metadata` property that's an object (not a string). */
 export function isLegacyRow(row: any): row is ImportRow {
-  return row && typeof row.metadata === 'object' && row.metadata !== null && !Array.isArray(row.metadata)
+  return (
+    row &&
+    typeof row.metadata === 'object' &&
+    row.metadata !== null &&
+    !Array.isArray(row.metadata)
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -199,10 +215,13 @@ export function mapRowToDocument(row: ImportRow): MappedDocument {
   const articleTitle = raw['Article Title'] as string | undefined
   const pubTitle = raw['Publication Title'] as string | undefined
   const title =
-    (pubTitle && !JUNK_TITLES.has(pubTitle)) ? pubTitle
-    : (articleTitle && !JUNK_TITLES.has(articleTitle)) ? articleTitle
-    : externalId
-  const publicationTitle = (raw['Publication Title'] as string | undefined) || null
+    pubTitle && !JUNK_TITLES.has(pubTitle)
+      ? pubTitle
+      : articleTitle && !JUNK_TITLES.has(articleTitle)
+        ? articleTitle
+        : externalId
+  const publicationTitle =
+    (raw['Publication Title'] as string | undefined) || null
   const yearPublished = parseYear(raw['YEAR published'])
   const documentsS3Prefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'
   const base = row.file_path.split('/').pop() ?? row.file_path
@@ -237,19 +256,14 @@ export function mapRowToDocument(row: ImportRow): MappedDocument {
 // Flat CSV mapping (NEW)
 // ---------------------------------------------------------------------------
 
-// Legacy alias → DB column name
-const LEGACY_ALIASES: Record<string, string> = {
-  'Article Title': 'title',
-  'Publication Title': 'publication_title',
-  'All authors': 'authors',
-  'YEAR published': 'year_published',
-  'Date published': 'date_published',
-  'short_summary': 'short_summary',
-}
-
 /** Resolve a flat row's column value, checking DB name first, then legacy aliases. */
-function resolveField(row: FlatImportRow, dbName: string, ...aliases: string[]): string | undefined {
-  if (row[dbName] !== undefined && row[dbName] !== '') return String(row[dbName])
+function resolveField(
+  row: FlatImportRow,
+  dbName: string,
+  ...aliases: string[]
+): string | undefined {
+  if (row[dbName] !== undefined && row[dbName] !== '')
+    return String(row[dbName])
   for (const alias of aliases) {
     if (row[alias] !== undefined && row[alias] !== '') return String(row[alias])
   }
@@ -258,20 +272,25 @@ function resolveField(row: FlatImportRow, dbName: string, ...aliases: string[]):
 
 export function mapFlatRowToDocument(row: FlatImportRow): MappedDocument {
   // external_id: explicit column > derived from file_path
-  const externalId = resolveField(row, 'external_id') || (row.file_path ? deriveExternalId(row.file_path) : row.external_id || '')
+  const externalId =
+    resolveField(row, 'external_id') ||
+    (row.file_path ? deriveExternalId(row.file_path) : row.external_id || '')
 
   // file_path: required for s3_key, but for flat import without a file (metadata-only update),
   // we can construct it from external_id
   const filePath = row.file_path || (externalId ? `${externalId}.pdf` : '')
   const documentsS3Prefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'
-  const base = filePath ? (filePath.split('/').pop() ?? filePath) : `${externalId}.pdf`
+  const base = filePath
+    ? (filePath.split('/').pop() ?? filePath)
+    : `${externalId}.pdf`
   const s3Key = `${documentsS3Prefix}${base}`
 
   const langRaw = resolveField(row, 'languages') || 'English'
   const { primary, all } = mapLanguages(langRaw)
 
   const title = resolveField(row, 'title', 'Article Title') || null
-  const publicationTitle = resolveField(row, 'publication_title', 'Publication Title') || null
+  const publicationTitle =
+    resolveField(row, 'publication_title', 'Publication Title') || null
   const yearRaw = resolveField(row, 'year_published', 'YEAR published')
   const yearPublished = yearRaw ? parseYear(yearRaw) : null
   const doi = resolveField(row, 'doi') || null
@@ -280,7 +299,9 @@ export function mapFlatRowToDocument(row: FlatImportRow): MappedDocument {
   const authors = resolveField(row, 'authors', 'All authors') || null
   const url = resolveField(row, 'url') || null
   const datePublishedRaw = resolveField(row, 'date_published', 'Date published')
-  const datePublished = datePublishedRaw ? parseDatePublished(datePublishedRaw) : null
+  const datePublished = datePublishedRaw
+    ? parseDatePublished(datePublishedRaw)
+    : null
   const summary = resolveField(row, 'summary') || null
   const shortSummary = resolveField(row, 'short_summary') || null
 
@@ -300,13 +321,13 @@ export function mapFlatRowToDocument(row: FlatImportRow): MappedDocument {
         ...(publicationTitle ? { 'Publication Title': publicationTitle } : {}),
         ...(authors ? { 'All authors': authors } : {}),
         ...(yearRaw ? { 'YEAR published': yearRaw } : {}),
-        ...(doi ? { 'DOI': doi } : {}),
-        ...(articleType ? { 'article_type': articleType } : {}),
-        ...(wriPrimaryOffice ? { 'wri_primary_office': wriPrimaryOffice } : {}),
-        ...(url ? { 'URL': url } : {}),
+        ...(doi ? { DOI: doi } : {}),
+        ...(articleType ? { article_type: articleType } : {}),
+        ...(wriPrimaryOffice ? { wri_primary_office: wriPrimaryOffice } : {}),
+        ...(url ? { URL: url } : {}),
         ...(datePublishedRaw ? { 'Date published': datePublishedRaw } : {}),
-        ...(langRaw ? { 'languages': langRaw } : {}),
-        ...(shortSummary ? { 'short_summary': shortSummary } : {}),
+        ...(langRaw ? { languages: langRaw } : {}),
+        ...(shortSummary ? { short_summary: shortSummary } : {}),
       },
     },
     doi,
@@ -339,7 +360,9 @@ async function findExistingDoc(
 ): Promise<{ doc: Document; matchKey: string } | null> {
   const repo = AppDataSource.getRepository(Document)
   // Try external_id first
-  let existing = await repo.findOne({ where: { externalId: mapped.externalId } })
+  let existing = await repo.findOne({
+    where: { externalId: mapped.externalId },
+  })
   if (existing) return { doc: existing, matchKey: 'external_id' }
   // Try DOI (if the mapped row has a DOI and the existing doc has a matching DOI)
   if (mapped.doi) {
@@ -397,8 +420,6 @@ const OVERWRITABLE_FIELDS = [
   'datePublished',
 ] as const
 
-type OverwritableField = (typeof OVERWRITABLE_FIELDS)[number]
-
 /** Check if the metadata_source column exists in the documents table. */
 async function metadataSourceExists(): Promise<boolean> {
   try {
@@ -412,7 +433,9 @@ async function metadataSourceExists(): Promise<boolean> {
 }
 
 /** Read metadata_source for a doc (jsonb: {field: 'human'|'external'|'llm'}). */
-async function readMetadataSource(docId: string): Promise<Record<string, string>> {
+async function readMetadataSource(
+  docId: string,
+): Promise<Record<string, string>> {
   try {
     const [row] = await AppDataSource.query(
       `SELECT metadata_source FROM documents WHERE id = $1`,
@@ -436,15 +459,22 @@ export function computeOverwriteChanges(
   for (const field of OVERWRITABLE_FIELDS) {
     const mappedValue = mapped[field] as string | string[] | number | null
     if (mappedValue === null || mappedValue === undefined) continue
-    const mappedStr = Array.isArray(mappedValue) ? mappedValue.join(',') : String(mappedValue)
+    const mappedStr = Array.isArray(mappedValue)
+      ? mappedValue.join(',')
+      : String(mappedValue)
     const existingValue = existing[field] as string | string[] | number | null
-    const existingStr = existingValue === null ? null : (Array.isArray(existingValue) ? existingValue.join(',') : String(existingValue))
+    const existingStr =
+      existingValue === null
+        ? null
+        : Array.isArray(existingValue)
+          ? existingValue.join(',')
+          : String(existingValue)
 
     // Skip if values are the same
     if (existingStr === mappedStr) continue
 
     // Check metadata_source — protect human edits
-    const sourceForField = metadataSource[field]
+    const sourceForField = metadataSource[PROVENANCE_KEY[field] ?? field]
     if (sourceForField === 'human') {
       warnings.push(`protected: ${field} (human edit, not overwritten)`)
       changes.push({
@@ -496,24 +526,40 @@ export async function importDocuments(
     const filePath = (row as any).file_path
     if (filePath !== undefined && filePath !== null && filePath !== '') {
       if (typeof filePath !== 'string' || filePath.trim() === '') {
-        decisions.push({ externalId: '', action: 'error', reason: 'invalid file_path' })
+        decisions.push({
+          externalId: '',
+          action: 'error',
+          reason: 'invalid file_path',
+        })
         continue
       }
       const validation = validateFilePath(filePath)
       if (!validation.ok) {
-        decisions.push({ externalId: deriveExternalId(filePath), action: 'error', reason: validation.error })
+        decisions.push({
+          externalId: deriveExternalId(filePath),
+          action: 'error',
+          reason: validation.error,
+        })
         continue
       }
     } else if (!isLegacyRow(row)) {
       // Flat row with no file_path — OK if external_id or doi is provided (metadata-only update)
       const flatRow = row as FlatImportRow
       if (!flatRow.external_id && !flatRow.doi) {
-        decisions.push({ externalId: '', action: 'error', reason: 'flat row must have file_path, external_id, or doi' })
+        decisions.push({
+          externalId: '',
+          action: 'error',
+          reason: 'flat row must have file_path, external_id, or doi',
+        })
         continue
       }
     } else {
       // Legacy row with no file_path
-      decisions.push({ externalId: '', action: 'error', reason: 'invalid file_path' })
+      decisions.push({
+        externalId: '',
+        action: 'error',
+        reason: 'invalid file_path',
+      })
       continue
     }
 
@@ -527,7 +573,9 @@ export async function importDocuments(
       decisions.push({
         externalId: mapped.externalId,
         action: 'created',
-        matchKey: mapped.doi ? `doi:${mapped.doi}` : `external_id:${mapped.externalId}`,
+        matchKey: mapped.doi
+          ? `doi:${mapped.doi}`
+          : `external_id:${mapped.externalId}`,
       })
 
       if (!options.dryRun) {
@@ -554,7 +602,8 @@ export async function importDocuments(
         if (hasMetadataSource && mapped.isFlat) {
           const fields: Record<string, string> = {}
           for (const f of OVERWRITABLE_FIELDS) {
-            if (mapped[f] !== null && mapped[f] !== undefined) fields[f] = 'external'
+            if (mapped[f] !== null && mapped[f] !== undefined)
+              fields[PROVENANCE_KEY[f] ?? f] = 'external'
           }
           await AppDataSource.query(
             `UPDATE documents SET metadata_source = $2::jsonb WHERE id = $1`,
@@ -577,8 +626,14 @@ export async function importDocuments(
 
       if (mapped.isFlat) {
         // --- FLAT: OVERWRITE mode ---
-        const metaSource = hasMetadataSource ? await readMetadataSource(existing.id) : {}
-        const { changes, warnings } = computeOverwriteChanges(existing, mapped, metaSource)
+        const metaSource = hasMetadataSource
+          ? await readMetadataSource(existing.id)
+          : {}
+        const { changes, warnings } = computeOverwriteChanges(
+          existing,
+          mapped,
+          metaSource,
+        )
 
         const hasRealChanges = changes.some((c) => !c.protected)
         if (hasRealChanges) {
@@ -603,7 +658,7 @@ export async function importDocuments(
               } else {
                 updates[field] = mapped[field as keyof MappedDocument] as any
               }
-              metaUpdates[field] = 'external'
+              metaUpdates[PROVENANCE_KEY[field] ?? field] = 'external'
             }
             if (Object.keys(updates).length > 0) {
               // Always update sourceMetadata for flat imports
@@ -648,18 +703,41 @@ export async function importDocuments(
         if (!options.dryRun) {
           if (action === 'updated') {
             const updates: Partial<Document> = {}
-            if (existing!.title === null && mapped.title !== null) updates.title = mapped.title
+            if (existing!.title === null && mapped.title !== null)
+              updates.title = mapped.title
             if (existing!.language === null) updates.language = mapped.language
-            if (existing!.languages === null) updates.languages = mapped.languages
-            if (existing!.yearPublished === null && mapped.yearPublished !== null) updates.yearPublished = mapped.yearPublished
-            if (existing!.publicationTitle === null && mapped.publicationTitle !== null) updates.publicationTitle = mapped.publicationTitle
-            if (existing!.sourceMetadata === null) updates.sourceMetadata = mapped.sourceMetadata
-            if (existing!.doi === null && mapped.doi !== null) updates.doi = mapped.doi
-            if (existing!.articleType === null && mapped.articleType !== null) updates.articleType = mapped.articleType
-            if (existing!.wriPrimaryOffice === null && mapped.wriPrimaryOffice !== null) updates.wriPrimaryOffice = mapped.wriPrimaryOffice
-            if (existing!.authors === null && mapped.authors !== null) updates.authors = mapped.authors
-            if (existing!.url === null && mapped.url !== null) updates.url = mapped.url
-            if (existing!.datePublished === null && mapped.datePublished !== null) updates.datePublished = mapped.datePublished
+            if (existing!.languages === null)
+              updates.languages = mapped.languages
+            if (
+              existing!.yearPublished === null &&
+              mapped.yearPublished !== null
+            )
+              updates.yearPublished = mapped.yearPublished
+            if (
+              existing!.publicationTitle === null &&
+              mapped.publicationTitle !== null
+            )
+              updates.publicationTitle = mapped.publicationTitle
+            if (existing!.sourceMetadata === null)
+              updates.sourceMetadata = mapped.sourceMetadata
+            if (existing!.doi === null && mapped.doi !== null)
+              updates.doi = mapped.doi
+            if (existing!.articleType === null && mapped.articleType !== null)
+              updates.articleType = mapped.articleType
+            if (
+              existing!.wriPrimaryOffice === null &&
+              mapped.wriPrimaryOffice !== null
+            )
+              updates.wriPrimaryOffice = mapped.wriPrimaryOffice
+            if (existing!.authors === null && mapped.authors !== null)
+              updates.authors = mapped.authors
+            if (existing!.url === null && mapped.url !== null)
+              updates.url = mapped.url
+            if (
+              existing!.datePublished === null &&
+              mapped.datePublished !== null
+            )
+              updates.datePublished = mapped.datePublished
             await docRepo.update({ id: existing.id }, updates)
             updated++
           } else {
@@ -687,7 +765,9 @@ export async function importDocuments(
   }
 
   // D5 fix: audit with the actor identity
-  const actor = identity ? auditActor(identity) : { actorUserId: null, source: 'system' as const }
+  const actor = identity
+    ? auditActor(identity)
+    : { actorUserId: null, source: 'system' as const }
   await writeAudit({
     ...actor,
     action: 'import',

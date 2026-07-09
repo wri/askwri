@@ -239,7 +239,14 @@ describe('classifyUpsert', () => {
   })
 
   it('returns updated when yearPublished is null', () => {
-    const existing = { title: 'X', language: 'en', languages: ['en'], yearPublished: null, publicationTitle: 'P', sourceMetadata: {} } as any
+    const existing = {
+      title: 'X',
+      language: 'en',
+      languages: ['en'],
+      yearPublished: null,
+      publicationTitle: 'P',
+      sourceMetadata: {},
+    } as any
     expect(classifyUpsert(existing, mapped)).toBe('updated')
   })
 
@@ -262,13 +269,43 @@ describe('classifyUpsert', () => {
   })
 
   it('returns updated when doi is null and mapped has doi', () => {
-    const existing = { title: 'X', language: 'en', languages: ['en'], yearPublished: 2020, publicationTitle: 'P', sourceMetadata: { file_path: 'x' }, doi: null, articleType: 'WP', wriPrimaryOffice: 'WRI', authors: 'A', url: 'U', datePublished: '2020-01-01' } as any
-    expect(classifyUpsert(existing, { ...mapped, doi: '10.1234/x' })).toBe('updated')
+    const existing = {
+      title: 'X',
+      language: 'en',
+      languages: ['en'],
+      yearPublished: 2020,
+      publicationTitle: 'P',
+      sourceMetadata: { file_path: 'x' },
+      doi: null,
+      articleType: 'WP',
+      wriPrimaryOffice: 'WRI',
+      authors: 'A',
+      url: 'U',
+      datePublished: '2020-01-01',
+    } as any
+    expect(classifyUpsert(existing, { ...mapped, doi: '10.1234/x' })).toBe(
+      'updated',
+    )
   })
 
   it('returns updated when authors is null and mapped has authors', () => {
-    const existing = { title: 'X', language: 'en', languages: ['en'], yearPublished: 2020, publicationTitle: 'P', sourceMetadata: { file_path: 'x' }, doi: 'D', articleType: 'WP', wriPrimaryOffice: 'WRI', authors: null, url: 'U', datePublished: '2020-01-01' } as any
-    expect(classifyUpsert(existing, { ...mapped, authors: 'Smith, J.' })).toBe('updated')
+    const existing = {
+      title: 'X',
+      language: 'en',
+      languages: ['en'],
+      yearPublished: 2020,
+      publicationTitle: 'P',
+      sourceMetadata: { file_path: 'x' },
+      doi: 'D',
+      articleType: 'WP',
+      wriPrimaryOffice: 'WRI',
+      authors: null,
+      url: 'U',
+      datePublished: '2020-01-01',
+    } as any
+    expect(classifyUpsert(existing, { ...mapped, authors: 'Smith, J.' })).toBe(
+      'updated',
+    )
   })
 })
 
@@ -280,11 +317,11 @@ describe('mapRowToDocument — new column mapping', () => {
       'Publication Title': 'WRI Journal',
       languages: 'English',
       'YEAR published': '2021',
-      'DOI': 'https://doi.org/10.1234/test',
-      'article_type': 'Working Paper',
-      'wri_primary_office': 'WRI Global',
+      DOI: 'https://doi.org/10.1234/test',
+      article_type: 'Working Paper',
+      wri_primary_office: 'WRI Global',
       'All authors': 'Smith, John; Doe, Jane',
-      'URL': 'https://www.wri.org/research/test',
+      URL: 'https://www.wri.org/research/test',
       'Date published': '8/17/2021',
     },
     summary: 'A nice summary',
@@ -303,13 +340,17 @@ describe('mapRowToDocument — new column mapping', () => {
     expect(mapRowToDocument(fullRow).authors).toBe('Smith, John; Doe, Jane')
   })
   it('maps URL → url', () => {
-    expect(mapRowToDocument(fullRow).url).toBe('https://www.wri.org/research/test')
+    expect(mapRowToDocument(fullRow).url).toBe(
+      'https://www.wri.org/research/test',
+    )
   })
   it('maps Date published → datePublished (ISO)', () => {
     expect(mapRowToDocument(fullRow).datePublished).toBe('2021-08-17')
   })
   it('s3Key is sanitized to documents/ prefix', () => {
-    expect(mapRowToDocument(fullRow).s3Key).toBe('documents/2021_report_abc.pdf')
+    expect(mapRowToDocument(fullRow).s3Key).toBe(
+      'documents/2021_report_abc.pdf',
+    )
   })
   it('nulls missing optional fields', () => {
     const minimalRow: ImportRow = {
@@ -329,10 +370,16 @@ describe('mapRowToDocument — new column mapping', () => {
 
 describe('validateFilePath', () => {
   it('accepts a bare .pdf basename', () => {
-    expect(validateFilePath('2021_report.pdf')).toEqual({ ok: true, base: '2021_report.pdf' })
+    expect(validateFilePath('2021_report.pdf')).toEqual({
+      ok: true,
+      base: '2021_report.pdf',
+    })
   })
   it('accepts under the documents prefix', () => {
-    expect(validateFilePath('documents/foo.pdf')).toEqual({ ok: true, base: 'foo.pdf' })
+    expect(validateFilePath('documents/foo.pdf')).toEqual({
+      ok: true,
+      base: 'foo.pdf',
+    })
   })
   it('rejects a non-.pdf file', () => {
     expect(validateFilePath('foo.txt').ok).toBe(false)
@@ -358,7 +405,9 @@ describe('POST /api/import-documents auth', () => {
   })
 
   function importReq(body: unknown, bearer?: string) {
-    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
     if (bearer) headers.authorization = `Bearer ${bearer}`
     return new NextRequest('http://localhost/api/import-documents', {
       method: 'POST',
@@ -373,7 +422,9 @@ describe('POST /api/import-documents auth', () => {
   })
 
   it('passes auth with the bearer token (then 400s on empty rows)', async () => {
-    const res = await importDocumentsRoute(importReq({ rows: [] }, 'test-admin-token'))
+    const res = await importDocumentsRoute(
+      importReq({ rows: [] }, 'test-admin-token'),
+    )
     expect(res.status).toBe(400)
   })
 })
@@ -384,13 +435,23 @@ describe('POST /api/import-documents auth', () => {
 
 describe('isLegacyRow', () => {
   it('returns true for legacy format (has metadata object)', () => {
-    expect(isLegacyRow({ file_path: 'x.pdf', metadata: {}, summary: '' })).toBe(true)
+    expect(isLegacyRow({ file_path: 'x.pdf', metadata: {}, summary: '' })).toBe(
+      true,
+    )
   })
   it('returns false for flat format (no metadata object)', () => {
-    expect(isLegacyRow({ file_path: 'x.pdf', title: 'T', doi: 'D' })).toBe(false)
+    expect(isLegacyRow({ file_path: 'x.pdf', title: 'T', doi: 'D' })).toBe(
+      false,
+    )
   })
   it('returns false for a flat row with metadata as a string (not an object)', () => {
-    expect(isLegacyRow({ file_path: 'x.pdf', metadata: 'not-an-object', title: 'T' })).toBe(false)
+    expect(
+      isLegacyRow({
+        file_path: 'x.pdf',
+        metadata: 'not-an-object',
+        title: 'T',
+      }),
+    ).toBe(false)
   })
 })
 
@@ -461,7 +522,10 @@ describe('mapFlatRowToDocument', () => {
   })
 
   it('uses explicit external_id when provided', () => {
-    const m = mapFlatRowToDocument({ file_path: 'foo.pdf', external_id: 'custom-id' })
+    const m = mapFlatRowToDocument({
+      file_path: 'foo.pdf',
+      external_id: 'custom-id',
+    })
     expect(m.externalId).toBe('custom-id')
   })
 
@@ -490,6 +554,15 @@ describe('computeOverwriteChanges', () => {
     datePublished: '2020-01-01',
   } as any
 
+  it('protects a multi-word field via its snake_case provenance key', () => {
+    const mapped = { ...existing, yearPublished: 2030, isFlat: true } as any
+    const { changes } = computeOverwriteChanges(existing, mapped, {
+      year_published: 'human',
+    })
+    const change = changes.find((c) => c.field === 'yearPublished')
+    expect(change!.protected).toBe(true)
+  })
+
   it('flags a title overwrite (non-null → new value)', () => {
     const mapped = { ...existing, title: 'New Title', isFlat: true } as any
     const { changes, warnings } = computeOverwriteChanges(existing, mapped)
@@ -498,12 +571,18 @@ describe('computeOverwriteChanges', () => {
     expect(titleChange!.overwrite).toBe(true)
     expect(titleChange!.before).toBe('Old Title')
     expect(titleChange!.after).toBe('New Title')
-    expect(warnings.some((w) => w.includes('title:') && w.includes('overwrite'))).toBe(true)
+    expect(
+      warnings.some((w) => w.includes('title:') && w.includes('overwrite')),
+    ).toBe(true)
   })
 
   it('flags a new field (null → value) as non-overwrite', () => {
     const existingNull = { ...existing, authors: null } as any
-    const mapped = { ...existingNull, authors: 'New Author', isFlat: true } as any
+    const mapped = {
+      ...existingNull,
+      authors: 'New Author',
+      isFlat: true,
+    } as any
     const { changes } = computeOverwriteChanges(existingNull, mapped)
     const authorsChange = changes.find((c) => c.field === 'authors')
     expect(authorsChange!.overwrite).toBe(false)
@@ -511,7 +590,9 @@ describe('computeOverwriteChanges', () => {
 
   it('protects a field whose metadata_source is human', () => {
     const mapped = { ...existing, title: 'New Title', isFlat: true } as any
-    const { changes, warnings } = computeOverwriteChanges(existing, mapped, { title: 'human' })
+    const { changes, warnings } = computeOverwriteChanges(existing, mapped, {
+      title: 'human',
+    })
     const titleChange = changes.find((c) => c.field === 'title')
     expect(titleChange!.protected).toBe(true)
     expect(titleChange!.overwrite).toBe(false)
@@ -533,9 +614,7 @@ const DATABASE_URL = process.env.DATABASE_URL
 
 describe('importDocuments() DB integration', () => {
   if (!DATABASE_URL) {
-    console.warn(
-      '[import-documents.db.test] Skipping: DATABASE_URL not set.',
-    )
+    console.warn('[import-documents.db.test] Skipping: DATABASE_URL not set.')
     it.skip('requires DATABASE_URL', () => {})
     return
   }
@@ -641,14 +720,26 @@ describe('importDocuments() DB integration', () => {
       { file_path: null as any, metadata: {}, summary: '' },
       {
         file_path: `${PREFIX}doc-delta.pdf`,
-        metadata: { 'Article Title': 'Delta', languages: 'English', 'YEAR published': '2024' },
+        metadata: {
+          'Article Title': 'Delta',
+          languages: 'English',
+          'YEAR published': '2024',
+        },
         summary: '',
       },
     ]
     const result = await importDocuments(mixedRows, { dryRun: true })
     expect(result.decisions).toHaveLength(3)
-    expect(result.decisions![0]).toEqual({ externalId: '', action: 'error', reason: 'invalid file_path' })
-    expect(result.decisions![1]).toEqual({ externalId: '', action: 'error', reason: 'invalid file_path' })
+    expect(result.decisions![0]).toEqual({
+      externalId: '',
+      action: 'error',
+      reason: 'invalid file_path',
+    })
+    expect(result.decisions![1]).toEqual({
+      externalId: '',
+      action: 'error',
+      reason: 'invalid file_path',
+    })
     expect(result.decisions![2].action).toBe('created')
   })
 
@@ -656,7 +747,11 @@ describe('importDocuments() DB integration', () => {
     const freshRow: ImportRow[] = [
       {
         file_path: `${PREFIX}doc-gamma.pdf`,
-        metadata: { 'Article Title': 'Gamma', languages: 'Portuguese', 'YEAR published': '2024' },
+        metadata: {
+          'Article Title': 'Gamma',
+          languages: 'Portuguese',
+          'YEAR published': '2024',
+        },
         summary: '',
       },
     ]
