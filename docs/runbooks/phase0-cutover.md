@@ -83,6 +83,8 @@ DOCUMENTS_LOCAL_DIR=./data ./venv/bin/python -m scripts.migrate_csv_to_postgres
 ```
 
 Expected output: `Done: 169 documents, <N> chunks.` Warm-cache run makes zero OpenAI calls.
+(169 here, not 168: the repo's `./data` contains one duplicate PDF that S3 does not — see
+the note under "Production cutover" Step 3.)
 
 If the table is already populated, the script exits with a clear error. Use `--reset` to wipe and reload:
 
@@ -162,7 +164,14 @@ DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
   ./venv/bin/python -m scripts.migrate_csv_to_postgres
 ```
 
-The script exits non-zero on any error. Expected: `Done: 169 documents, <N> chunks.`
+The script exits non-zero on any error. Expected: `Done: 168 documents, 30436 chunks.`
+
+> **168, not 169.** The S3 corpus holds 168 unique documents. The repo's stale
+> `search-service/data/documents.csv` lists a 169th,
+> `2021_mexico-frontrunners-creating-safe-affordable-and_6429.pdf`, which is byte-identical
+> (SHA-256 `8a40f219…`) to `2021_mexico-frontrunners-adapting-to-climate-change-in_8904.pdf`,
+> is absent from S3, and would be rejected by migration `1781320000000`'s unique index on
+> `documents.content_hash` anyway. Confirmed during the QA cutover, 2026-07-21.
 
 ### Step 3b: Sparse keyword backfill
 
@@ -193,7 +202,8 @@ SELECT
   (SELECT count(*) FROM document_collections)                          AS in_collection;
 ```
 
-Expected: `docs=169`, `searchable=169`, `texts=169`, `missing_embeddings=0`, `in_collection=169`.
+Expected: `docs=168`, `searchable=168`, `texts=168`, `chunks=30436`, `missing_embeddings=0`,
+`in_collection=168` (see the note in Step 3 on why 168 rather than 169).
 
 Spot-check a chunk:
 

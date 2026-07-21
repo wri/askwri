@@ -80,3 +80,6 @@ Thumbs.db
 # task briefs, review packages, progress ledger). Never committed.
 .pi-subagents/
 .superpowers/
+
+# Microsoft Office lock/owner files (created while a .docx in docs/ is open)
+~$*

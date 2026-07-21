@@ -9,6 +9,13 @@ on:
   push:
     branches:
       - qa
+    # Documentation-only pushes do not change the images or the infrastructure,
+    # so skip the ~15 minute build/apply/redeploy cycle. Use workflow_dispatch to
+    # force a deploy regardless.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 env:

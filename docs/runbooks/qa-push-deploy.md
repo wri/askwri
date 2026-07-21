@@ -84,6 +84,26 @@ is not in your local trust store.
 
 ---
 
+## Connecting to a deployed database (use this everywhere below)
+
+`./scripts/with-remote-env.sh <qa|production> <command...>` reads host, port, user,
+database and password from that environment's ECS task definition, builds a correct
+`DATABASE_URL` (percent-encoded password, `?sslmode=require`), forces `DATABASE_SSL=true`,
+and also exports `PG*` so bare `psql` works:
+
+```bash
+./scripts/with-remote-env.sh qa npm run typeorm -- migration:show -d src/db/migration-data-source.ts
+./scripts/with-remote-env.sh qa npm run migration:run
+./scripts/with-remote-env.sh qa psql -c 'select count(*) from documents'
+./scripts/with-remote-env.sh qa npm run seed:admin -- alice 'a password'
+```
+
+It prints the target it resolved (`→ askwri@…/qa`) before running anything, which is the
+cheapest guard against running a QA command against production. The literal
+`DATABASE_URL=...` forms shown below still work; prefer the wrapper.
+
+---
+
 ## Step 2: Run migrations against RDS
 
 **Run in a quiet window** — migration `1781300000000` starts by **deleting** duplicate open
