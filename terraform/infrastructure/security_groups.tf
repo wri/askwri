@@ -127,6 +127,26 @@ resource "aws_security_group_rule" "rds_from_ecs" {
   description              = "PostgreSQL from ${var.environment} ECS tasks for Next.js"
 }
 
+# =============================================================================
+# RDS Access from Search Service
+# =============================================================================
+# Required once RETRIEVAL_BACKEND=postgres: the search service reads chunks,
+# embeddings and the sparse keyword lane straight from RDS. Without this rule it
+# starts, accepts requests, then fails background indexing with a connection
+# timeout ("couldn't get a connection after 30.00 sec") and answers /query with
+# 500 "Service not properly initialized".
+resource "aws_security_group_rule" "rds_from_search_service" {
+  count = var.rds_security_group_id != "" ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.search_service.id
+  security_group_id        = var.rds_security_group_id
+  description              = "PostgreSQL from ${var.environment} ECS tasks for Search Service"
+}
+
 # Add rule to allow Next.js to connect to Search Service
 resource "aws_security_group_rule" "ecs_to_search_service" {
   type                     = "egress"
