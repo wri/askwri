@@ -7,17 +7,29 @@ import {
   titleFrom,
 } from './utils'
 
-export function exportCitationsCsv({
+/**
+ * Build the citations CSV as a string. Extracted from exportCitationsCsv for
+ * testability (the download function uses browser APIs — Blob, URL — that
+ * aren't available in jsdom/node test envs).
+ *
+ * Summary selection: prefers the full long summary (row.summary, from the
+ * catalog) over the 240-char-truncated short summary (row.shortSummary).
+ * The CSV-source short summaries are mid-sentence-truncated upstream; using
+ * the long summary avoids propagating garbage to exported citations.
+ */
+export function buildCitationsCsv({
   docs,
   selectedIds,
   index,
   docSummary,
+  origin = 'http://localhost',
 }: {
   docs: DocMeta[]
   selectedIds: string[]
   index: ReturnType<typeof buildCatalogIndex> | null
   docSummary: Record<string, string>
-}) {
+  origin?: string
+}): string {
   const headers = [
     'Title (published title)',
     'Author(s)',
@@ -27,7 +39,7 @@ export function exportCitationsCsv({
     'DOI (not always available)',
     'URL',
     'WRI Office affiliation (primary)',
-    'Summary [note summary is static text generated in the tool, not part of the metadata]',
+    'Summary',
   ]
 
   function formatDate(dateStr: string) {
@@ -81,15 +93,20 @@ export function exportCitationsCsv({
     const doi = row?.raw?.doi || ''
     const relativeOrAbsoluteUrl = urlFrom(doc, row)
     const url = relativeOrAbsoluteUrl
-      ? new URL(relativeOrAbsoluteUrl, window.location.origin).toString()
+      ? new URL(relativeOrAbsoluteUrl, origin).toString()
       : ''
     const office = row?.office || ''
 
-    let summary =
-      row?.shortSummary ||
+    // Prefer the full long summary (row.summary) over the truncated short
+    // (row.shortSummary, which is 240-char-truncated mid-sentence in the
+    // CSV source). Fall back to docSummary, then firstSentence of the best
+    // snippet. No artificial 240-char truncation — the long summary is
+    // already a complete sentence.
+    const summary =
+      row?.summary ||
       docSummary[doc.doc_id] ||
+      row?.shortSummary ||
       firstSentence(doc.kps?.[0]?.snippet ?? '')
-    if (summary.length > 240) summary = `${summary.slice(0, 237)}...`
 
     return [
       title,
@@ -106,7 +123,27 @@ export function exportCitationsCsv({
       .join(',')
   })
 
-  const csvContent = [headers.map(csvEscape).join(','), ...rows].join('\r\n')
+  return [headers.map(csvEscape).join(','), ...rows].join('\r\n')
+}
+
+export function exportCitationsCsv({
+  docs,
+  selectedIds,
+  index,
+  docSummary,
+}: {
+  docs: DocMeta[]
+  selectedIds: string[]
+  index: ReturnType<typeof buildCatalogIndex> | null
+  docSummary: Record<string, string>
+}) {
+  const csvContent = buildCitationsCsv({
+    docs,
+    selectedIds,
+    index,
+    docSummary,
+    origin: window.location.origin,
+  })
   const blob = new Blob([csvContent], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

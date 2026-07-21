@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import path from 'node:path'
 import fs from 'node:fs/promises'
+import { initializeDatabase } from '../../../db/data-source'
+import { getCatalogItems } from '../../../db/queries/getCatalogItems'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -141,36 +143,52 @@ function normalizeRow(row: Record<string, string>) {
 
 export async function GET(_req: NextRequest) {
   try {
-    const p = await detectCatalogPath()
-    const buf = await fs.readFile(p, 'utf8')
-    let items: Array<Record<string, any>> = []
+    // Postgres is the default catalog source now that the corpus lives in
+    // the database. CSV fallback is only for the legacy retrieval backend
+    // (RETRIEVAL_BACKEND=legacy) or explicit opt-in via CATALOG_SOURCE=csv.
+    if (process.env.CATALOG_SOURCE === 'csv') {
+      const p = await detectCatalogPath()
+      const buf = await fs.readFile(p, 'utf8')
+      let items: Array<Record<string, any>> = []
 
-    if (p.endsWith('.json')) {
-      const arr = JSON.parse(buf)
-      if (!Array.isArray(arr)) throw new Error('JSON catalog must be an array')
-      items = arr.map((row: any) => normalizeRow(row))
-    } else {
-      const rows = parseCSV(buf)
-      items = rows.map(normalizeRow)
+      if (p.endsWith('.json')) {
+        const arr = JSON.parse(buf)
+        if (!Array.isArray(arr)) throw new Error('JSON catalog must be an array')
+        items = arr.map((row: any) => normalizeRow(row))
+      } else {
+        const rows = parseCSV(buf)
+        items = rows.map(normalizeRow)
+      }
+
+      // de-dupe by (file_id || file_name)
+      const seen = new Set<string>()
+      const uniq: typeof items = []
+      for (const it of items) {
+        const key = it.file_id || it.file_name
+        if (!key) continue
+        if (seen.has(key)) continue
+        seen.add(key)
+        uniq.push(it)
+      }
+
+      return NextResponse.json({
+        ok: true,
+        count: uniq.length,
+        updatedAt: new Date().toISOString(),
+        items: uniq,
+        source: path.basename(p),
+      })
     }
 
-    // de-dupe by (file_id || file_name)
-    const seen = new Set<string>()
-    const uniq: typeof items = []
-    for (const it of items) {
-      const key = it.file_id || it.file_name
-      if (!key) continue
-      if (seen.has(key)) continue
-      seen.add(key)
-      uniq.push(it)
-    }
-
+    // Default: postgres
+    await initializeDatabase()
+    const items = await getCatalogItems()
     return NextResponse.json({
       ok: true,
-      count: uniq.length,
+      count: items.length,
       updatedAt: new Date().toISOString(),
-      items: uniq,
-      source: path.basename(p),
+      items,
+      source: 'postgres',
     })
   } catch (err: any) {
     return NextResponse.json(

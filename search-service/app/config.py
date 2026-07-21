@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=(".env", ".env.local"), env_file_encoding="utf-8", extra="ignore")
 
     # Application
     environment: str = "development"
@@ -22,6 +22,30 @@ class Settings(BaseSettings):
     # Document storage paths (override for local dev, e.g. DOCUMENTS_LOCAL_DIR=./data)
     documents_local_dir: str = "/tmp/askWRI_docs"
     cache_dir: str = "/tmp/askWRI_cache"
+
+    # Postgres-backed retrieval (Phase 0 cutover)
+    database_url: str = ""          # postgresql://user:pass@host:5432/db (append ?sslmode=require for RDS)
+    retrieval_backend: str = "legacy"  # "legacy" (CSV + boot-time build) | "postgres"
+
+    # Keyword lane residency (postgres retrieval backend only):
+    # "sparse" = Postgres-resident BM25 impact vectors in document_chunks.sparse,
+    #            filtered per-query (status='searchable'); requires
+    #            scripts/build_sparse_keyword.py to have run at least once.
+    #            Rollback: set KEYWORD_BACKEND=memory to revert to legacy path.
+    # "memory" = in-memory bm25s built at boot//reindex (legacy behavior, kept intact)
+    keyword_backend: str = "sparse"  # "sparse" (default) | "memory"
+
+    # Phase 1 ingestion worker
+    worker_poll_seconds: int = 10
+    worker_max_attempts: int = 3
+    worker_reap_minutes: int = 15              # requeue 'running' jobs idle longer than this
+    worker_llm_model: str = "gpt-5-mini"      # summaries + tagging; override in env
+    intake_s3_prefix: str = "intake/"          # watched S3 prefix (bulk drop)
+    intake_local_dir: str = ""                 # local-dev alternative to S3 intake
+    documents_s3_bucket: str = ""              # reuse the existing env var name
+    documents_s3_prefix: str = "documents/"
+    tag_confidence_accept: float = 0.7         # >= -> accepted, else suggested
+    quality_min_chars_per_page: int = 200      # extraction_confidence gate input
 
     # Cite mode reranker logit thresholds (calibrated 2026-03-19)
     cite_logit_floor: float = -9.0        # Drop docs below this raw logit

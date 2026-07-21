@@ -75,3 +75,8 @@ evaluation/results/
 .DS_Store
 Thumbs.db
 .gstack/
+
+# Agent runtime artifacts (pi-subagents sessions; superpowers SDD scratch:
+# task briefs, review packages, progress ledger). Never committed.
+.pi-subagents/
+.superpowers/

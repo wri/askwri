@@ -19,6 +19,10 @@ export default [
       'next-env.d.ts',
       'search-service/**',
       'evaluation/results/**',
+      // Stray agent worktrees (e.g. .claude/worktrees/) are not part of this
+      // project's lint surface — keep them out of `eslint .` without deleting
+      // the directories.
+      '.claude/worktrees/**',
     ],
   },
   {

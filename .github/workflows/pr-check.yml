@@ -24,6 +24,28 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
 
+    # The *.db.test.ts gate on DATABASE_URL; without it they self-skip and the
+    # entire app-tier DB query layer goes untested in CI. The postgres service
+    # + migration:run step below give them a schema to test against.
+    env:
+      DATABASE_URL: postgresql://askwri:password@localhost:5432/postgres
+      DATABASE_SSL: 'false'
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: askwri
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -37,11 +59,87 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run database migrations
+        run: npm run migration:run
+
       - name: Run tests
         run: npm run test:ci
 
       - name: Build application
         run: npm run build
+
+  # ==========================================================================
+  # Python Tests (Search Service + Worker)
+  # ==========================================================================
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+
+    # DB-backed worker tests create scratch databases (askwri_worker_test etc.)
+    # against localhost:5432 as user askwri — POSTGRES_USER makes askwri the
+    # container superuser, so CREATE DATABASE works. REQUIRE_DB_TESTS=1 makes
+    # the conftest guard fail loudly instead of silently skipping.
+    env:
+      DATABASE_URL: postgresql://askwri:password@localhost:5432/postgres
+      REQUIRE_DB_TESTS: '1'
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: askwri
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The scratch-DB fixtures apply the TypeORM schema via `npm run migration:run`
+      # (subprocess from the repo root), so Node + npm deps are required here too.
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Install dependencies
+        working-directory: search-service
+        run: pip install -r requirements.txt
+
+      - name: Install dev dependencies
+        working-directory: search-service
+        run: pip install -r requirements-dev.txt
+
+      # Selection: hermetic tests (test_sparse_keyword, test_cite_doc_ids_filter)
+      # plus scratch-DB tests that self-provision against DATABASE_URL
+      # (test_migration_script, test_build_sparse_script, test_sparse_retriever,
+      # test_worker_pipeline, test_worker_stages, test_worker_queue, test_indexing).
+      #
+      # Added 2026-07-07 (Task G1): the keyword-lane contract (test_sparse_retriever),
+      # the full pipeline + upload e2e (test_worker_pipeline), the R1 regression
+      # (test_startsh_sync), and the B3 config regression (test_config,
+      # test_config_env_local, test_env_loading). All are hermetic / self-
+      # provisioning scratch DBs or pure config tests. test_pg_store and
+      # test_query_e2e remain local-only (they need the real 169-doc qa corpus).
+      - name: Run tests
+        working-directory: search-service
+        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py tests/test_sparse_keyword.py tests/test_cite_doc_ids_filter.py tests/test_migration_script.py tests/test_build_sparse_script.py tests/test_sparse_retriever.py tests/test_worker_pipeline.py tests/test_startsh_sync.py tests/test_config.py tests/test_config_env_local.py tests/test_env_loading.py -v
 
   # ==========================================================================
   # Docker Build Test
