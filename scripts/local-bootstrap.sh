@@ -143,7 +143,13 @@ counts=$(psql_local "SELECT (SELECT count(*) FROM documents) || '/' ||
   (SELECT count(*) FROM document_texts) || '/' ||
   (SELECT count(*) FROM document_chunks WHERE embedding IS NULL)")
 echo "docs/searchable/texts/missing_embeddings = $counts"
-case "$counts" in 169/169/169/0) echo "corpus verified";; *) fail "unexpected counts (want 169/169/169/0)";; esac
+IFS=/ read -r docs searchable texts missing <<<"$counts"
+[ "$missing" -eq 0 ]      || fail "$missing chunks missing embeddings — re-run the sparse/embedding backfill"
+[ "$docs" -ge 169 ]       || fail "only $docs documents (baseline corpus is 169) — corpus load incomplete"
+[ "$texts" -ge 169 ]      || fail "only $texts document_texts rows — text extraction incomplete"
+[ "$searchable" -ge 169 ] || fail "only $searchable searchable docs — baseline corpus not fully indexed"
+[ "$docs" -eq 169 ] || echo "note: $((docs - 169)) doc(s) above the 169 baseline (worker e2e canaries / drafts) — expected"
+echo "corpus verified"
 vocab=$(psql_local "SELECT count(*) FROM keyword_vocab" || echo "n/a")
 echo "sparse vocab terms: $vocab (expect ~184395)"
 

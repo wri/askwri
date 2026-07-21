@@ -78,3 +78,36 @@ Deploys: `docs/runbooks/qa-push-deploy.md` (push ordering, migrations, sparse ba
 Retrieval tuning (RRF weights, rerankers, thresholds/tiers), answer synthesis, and eval
 internals are separate workstreams. Preserve the `/query` request/response contract
 (`QueryRequest`/`QueryResponse` in `search-service/app/main.py`) exactly.
+
+<!-- BEGIN aws-agent-rules (AWS Agent Toolkit, added 2026-07-21) -->
+<!-- Source: https://raw.githubusercontent.com/aws/agent-toolkit-for-aws/refs/heads/main/rules/aws-agent-rules.md -->
+<!-- Regenerate by re-fetching that URL; edits below will be lost on refresh. -->
+
+# AWS Guidance
+
+- Prefer the AWS MCP Server for AWS interactions — it provides sandboxed
+  execution, observability, and audit logging. If unavailable, use the
+  AWS CLI directly.
+- Before starting a task, check whether a relevant AWS skill is available.
+  Load the skill with `retrieve_skill` and prefer its guidance over
+  general knowledge.
+- When uncertain about specific AWS details (API parameters, permissions,
+  limits, error codes), verify against documentation rather than guessing.
+  State uncertainty explicitly if you cannot confirm.
+- When creating infrastructure, prefer infrastructure-as-code (AWS CDK or
+  CloudFormation) over direct CLI commands.
+- When working with infrastructure, follow AWS Well-Architected Framework
+  principles.
+- Do not use em dashes in AWS resource names or descriptions. Use
+  hyphens instead.
+
+## Secret Safety
+
+- MUST load the `aws-secrets-manager` skill first for any secret,
+  credential, API key, token, or password task. MUST NOT call
+  `secretsmanager get-secret-value` or `batch-get-secret-value`, and MUST
+  NOT hit the Secrets Manager Agent daemon directly. MUST use
+  `{{resolve:secretsmanager:secret-id:SecretString:json-key}}` with
+  `asm-exec` so the secret resolves at runtime without entering context.
+
+<!-- END aws-agent-rules -->
