@@ -215,6 +215,43 @@ startup.
 
 Post-deploy verification: `qa-push-deploy.md` Step 7. Admin seeding: Step 6.
 
+### Verify these four things after the deploy, in this order
+
+Learned from the QA deploy, where the workflow reported success while the search service was
+in fact unusable. **A green pipeline only means ECS accepted the task definitions.**
+
+1. **The search-service RDS ingress rule exists.** See the box below — this is the one that
+   bit QA.
+   ```bash
+   aws ec2 describe-security-groups --group-ids sg-0575d778d3c2efb0c --region us-east-2 \
+     --query "SecurityGroups[0].IpPermissions[].UserIdGroupPairs[].{sg:GroupId,desc:Description}"
+   ```
+   Expect a row reading `PostgreSQL from production ECS tasks for Search Service`.
+2. **Secrets actually decoded.** A malformed secret JSON becomes `{}` silently, so check the
+   *names* landed in the task definitions: `SESSION_SECRET` on `askwri-app-production`,
+   `DATABASE_URL` + `RETRIEVAL_BACKEND` on `…-search-service`, `DATABASE_URL` +
+   `OPENAI_API_KEY` on `…-ingestion-worker`.
+3. **The search service finished background indexing.** In
+   `/ecs/askwri-app-production-search-service`, look for
+   `✅ Postgres-backed retrieval ready (N documents)`. The failure signature is
+   `Background indexing failed: couldn't get a connection after 30.00 sec` — it does **not**
+   crash the task, so ECS reports the service healthy while every `/query` returns
+   500 `Service not properly initialized`.
+4. **A real query returns real results**, not just a 200 from `/api/health`:
+   ```bash
+   curl -s -X POST https://<host>/api/llamaindex -H 'Content-Type: application/json' \
+     -d '{"query":"What have we published on hydrogen?","mode":"cite"}'
+   ```
+
+> **The search service needs its own RDS security-group rule.**
+> The first QA deploy failed here. `security_groups.tf` granted RDS ingress to the Next.js
+> SG (`rds_from_ecs`) and the ingestion-worker SG (`rds_from_worker`) but had no equivalent
+> for the search-service SG — even though pointing the search service at Postgres is the
+> entire premise of this cutover. Fixed in `3cc555c` by adding `rds_from_search_service`,
+> so **production will get the rule automatically on its first apply**; this note exists so
+> that the rule is understood rather than mistaken for cruft, and so step 1 above is
+> checked rather than assumed.
+
 ---
 
 ## 5. Corrections to the runbooks — apply these before following them
@@ -236,6 +273,9 @@ Found during the QA run; both runbooks are wrong on the first point.
    production workflows.** This is the sharpest edge in the whole process — see §6.
 4. **The S3 text cache did not hit** in QA; all 168 PDFs were re-parsed locally (~7 min).
    Budget for it. The node cache did hit.
+5. **A green deploy is not a working deploy.** The QA pipeline reported success with the
+   search service unable to reach RDS. Neither runbook has a post-deploy verification step
+   that would have caught it; §4 above now does.
 
 ---
 
@@ -288,4 +328,9 @@ mid-run leaves no partial state. Migrations roll back individually with
 - **Plaintext secrets in task definitions.** `OPENAI_API_KEY` and `DB_PASSWORD` sit in
   plaintext in the ECS task definitions by design (SSM Parameter Store was deferred).
   Production is the right place to stop deferring that.
+- **Boot-log noise** — the search service logs two `ERROR`-level HuggingFace cache warnings
+  on every start. Cosmetic (both rerankers load fine), but it is the kind of noise that
+  masks real startup failures, which this deploy demonstrated. Tracked in
+  [#242](https://github.com/wri/askwri/issues/242); worth clearing before production so its
+  logs start clean.
 - **Who runs the production cutover, and from where?** See §3 on running it inside the VPC.
