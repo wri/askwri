@@ -55,7 +55,17 @@ missing = [k for k in ("DB_HOST", "DB_PORT", "DB_USER", "DB_NAME", "DB_PASSWORD"
 if missing:
     sys.exit(f"echo 'Task definition is missing {', '.join(missing)}' >&2; exit 1")
 
-url = "postgresql://{u}:{p}@{h}:{port}/{db}?sslmode=require".format(
+# No sslmode= in the URL on purpose. node-postgres parses sslmode out of the
+# connection string and it then overrides the TypeORM ssl object, so
+# rejectUnauthorized:false is ignored and Node fails with
+# SELF_SIGNED_CERT_IN_CHAIN (the RDS CA is not in the local trust store).
+# TLS is still enforced for both runtimes: Node via DATABASE_SSL below, and
+# psycopg/psql via PGSSLMODE=require, which libpq reads from the environment.
+#
+# NOTE: this heredoc sits inside a $(...) substitution, so bash still scans it
+# for quotes and backticks. Keep apostrophes and backticks out of these comments
+# or the shell fails to parse the script.
+url = "postgresql://{u}:{p}@{h}:{port}/{db}".format(
     u=urllib.parse.quote(vars["DB_USER"], safe=""),
     p=urllib.parse.quote(vars["DB_PASSWORD"], safe=""),
     h=vars["DB_HOST"], port=vars["DB_PORT"], db=vars["DB_NAME"],
