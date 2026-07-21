@@ -10,6 +10,33 @@ happened in QA, with evidence).
 
 ---
 
+## Do these three things before you start
+
+Everything else in this plan is procedure. These are the decisions that change the outcome,
+and all three should be settled before the cutover is scheduled — not during it.
+
+1. **Run the corpus migration from inside the VPC, not from a laptop.** In QA it took ~37
+   minutes, almost entirely network round-trips: `migrate_csv_to_postgres` inserts
+   `document_chunks` row by row inside a single transaction, so wall-clock tracks latency,
+   not database throughput. Production shares a `db.t4g.small` with live traffic, so that
+   window is the main risk in this plan — and running from an EC2/ECS host in the VPC
+   collapses it without changing a line of code. This also answers the QA session's open
+   question about where deploy-day migrations should run from. Detail in §3.
+2. **Do not re-run the Step 5 parity gate as written.** It failed in QA (0.943 against a
+   0.95 threshold) for reasons we diagnosed as metric-related, not data-related, and it was
+   waived. Re-running a known mis-specified test against production produces no new
+   information while creating pressure to waive it again. Either fix the metric first
+   (containment instead of `|A∩B| / max(|A|,|B|)`; treat rank-1 near-ties as matches) or
+   rely on the eval suites, which passed. Detail in §8.
+3. **Add protection rules to the `production` GitHub Environment first.** It currently has
+   **none** — no required reviewers, no deployment branch policy — and
+   `deploy-production.yml` fires on any push to `main` or `production`. Right now the only
+   thing preventing an accidental production deploy is branch hygiene, and post-merge that
+   deploy would create a crash-looping ingestion worker. A required reviewer costs nothing
+   and removes the whole class of accident. Detail in §0.
+
+---
+
 ## 0. What makes production different from QA
 
 | | QA | Production |
@@ -28,7 +55,16 @@ Two facts deserve emphasis before anything else:
    serves production is the main risk in this whole plan — not the schema change.
 2. **Nothing gates a production deploy.** The `production` GitHub Environment has zero
    protection rules, so a push to `main` or `production` deploys immediately. Treat branch
-   hygiene as the safety mechanism, because nothing else is.
+   hygiene as the safety mechanism, because nothing else is — or better, fix it:
+
+   ```bash
+   gh api -X PUT repos/wri/askwri/environments/production \
+     -F 'reviewers[][type]=User' -F 'reviewers[][id]=<user-id>'
+   ```
+
+   Note this is *more* dangerous immediately after PR #240 merges than before: Terraform
+   will then create the ingestion-worker task family, and with `INGESTION_WORKER_ENV`
+   pinned to `{}` (see §2c) it boots without a `DATABASE_URL` and crash-loops.
 
 ---
 
