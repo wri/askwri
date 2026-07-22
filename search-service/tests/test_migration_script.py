@@ -682,14 +682,16 @@ def _non_english_corpus(tmp_path):
     tmpdir = str(tmp_path)
     common = {
         "Publication Title": "WRI China Transport",
-        "All authors": "Test Author",
+        "All authors": "Wei Li; Jing Chen",
         "YEAR published": "2019",
         "Sub-tag": "Transport decarbonization",
         "article_type": "Report",
         "wri_primary_office": "WRI China",
         "wri_programs": "Cities",
         "DOI": "",
-        "URL": "",
+        "URL": "https://wri.org/zhuzhou",
+        # Single-digit month/day, matching the real CSV's M/D/YYYY shape.
+        "Date published": "3/17/2021",
     }
     rows = [
         {
@@ -750,6 +752,15 @@ class TestS3KeyAndSummaryLanguage:
         import scripts.migrate_csv_to_postgres as _script
         monkeypatch.setattr(_script, "load_csv_metadata", _nan_safe_load_csv_metadata)
         monkeypatch.setattr(_script, "load_embeddings", _fake_embeddings)
+
+        # This corpus carries a URL but no PDF on disk, so prepare_documents
+        # would try to download it (app/indexing.py:203). Block the network so
+        # the suite stays hermetic; the documented summary-text fallback runs
+        # instead, which is what the real corpus does for an unfetchable PDF.
+        def _no_network(*args, **kwargs):
+            raise RuntimeError("network access disabled in tests")
+
+        monkeypatch.setattr("requests.get", _no_network)
 
     def _conn(self):
         return psycopg.connect(self._db_url)
@@ -819,3 +830,53 @@ class TestS3KeyAndSummaryLanguage:
             ).fetchone()
         assert row[0] == "zh", f"Expected language='zh', got {row[0]!r}"
         assert row[1] == ["zh"], f"Expected languages=['zh'], got {row[1]!r}"
+
+    def test_csv_metadata_columns_are_populated(self, tmp_path):
+        """authors/url/date_published come from the CSV and must be written at
+        insert time. Nothing else can supply url or date_published — they are
+        not in the worker's _EXTRACT_FIELDS, so a re-ingest never fills them."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT authors, url, date_published FROM documents "
+                "WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        assert row[0] == "Wei Li; Jing Chen", f"authors not backfilled: {row[0]!r}"
+        assert row[1] == "https://wri.org/zhuzhou", f"url not backfilled: {row[1]!r}"
+        assert str(row[2]) == "2021-03-17", f"date_published not parsed: {row[2]!r}"
+
+    def test_csv_fields_are_marked_external(self, tmp_path):
+        """metadata_source must mark the CSV-sourced columns 'external'.
+        Left NULL, worker/stages/parse.py treats authors as unowned and
+        overwrites the curated CSV value with its own LLM extraction."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT metadata_source FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        source = row[0] or {}
+        for column in ("authors", "url", "date_published"):
+            assert source.get(column) == "external", (
+                f"metadata_source[{column!r}] should be 'external', got {source.get(column)!r}"
+            )
+
+    def test_title_en_is_populated_without_blocking_translation(self, tmp_path):
+        """Non-English docs get the native title as an interim title_en, but no
+        title_en provenance — summarize.py skips 'human'/'external', so marking
+        it would permanently block the real translation."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT title, title_en, metadata_source FROM documents "
+                "WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        assert row[1] == row[0], f"title_en should fall back to the native title, got {row[1]!r}"
+        assert "title_en" not in (row[2] or {}), (
+            "title_en must not carry provenance or summarize.py will never translate it"
+        )

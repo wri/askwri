@@ -11,6 +11,7 @@ import json
 import pickle
 import sys
 import uuid
+from datetime import datetime
 from pathlib import PurePosixPath
 
 import numpy as np
@@ -73,6 +74,28 @@ def parse_year(raw):
     try:
         return int(str(raw).strip()[:4])
     except (TypeError, ValueError):
+        return None
+
+
+def _clean(value):
+    """CSV cell -> str or None. Pandas yields NaN (a float) for empty cells."""
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def parse_date(raw):
+    """'3/17/2021' -> date(2021, 3, 17). None for empty or unparseable cells.
+
+    The CSV uses M/D/YYYY with unpadded components.
+    """
+    text = _clean(raw)
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%m/%d/%Y").date()
+    except ValueError:
+        print(f"  ! unparseable date {text!r} — leaving date_published NULL")
         return None
 
 
@@ -216,17 +239,46 @@ def main():
             title = _title(raw, ext_id)
             doc_id = uuid.uuid4()
 
+            # CSV-sourced columns. These have no other writer: url and
+            # date_published are not in the worker's _EXTRACT_FIELDS, so a
+            # re-ingest can never fill them, and authors would be replaced by
+            # an LLM extraction from the PDF. Writing them here (rather than in
+            # a follow-up migration) keeps the cutover correct regardless of
+            # whether migrations run before or after the corpus load.
+            authors = _clean(raw.get("All authors"))
+            url = _clean(raw.get("URL"))
+            date_published = parse_date(raw.get("Date published"))
+
+            # 'external' marks a value as CSV-owned: protected from AI
+            # overwrite, still replaceable by a later CSV import. Without it
+            # worker/stages/parse.py reads the field as unowned and clobbers it.
+            # title_en is deliberately absent — summarize.py skips 'external',
+            # so marking it would permanently block the real translation of a
+            # non-English title.
+            provenance = {
+                column: "external"
+                for column, value in (
+                    ("authors", authors), ("url", url), ("date_published", date_published)
+                )
+                if value is not None
+            }
+
             conn.execute(
                 """INSERT INTO documents
                    (id, external_id, doi, s3_key, title, title_en, language, languages,
                     year_published, publication_title, article_type, wri_primary_office,
+                    authors, url, date_published, metadata_source,
                     status, source_metadata)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'searchable',%s)""",
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'searchable',%s)""",
                 (doc_id, ext_id, raw.get("DOI"),
                  s3_key_for(meta.get("file_path"), ext_id, settings.documents_s3_prefix),
-                 title, title if language == "en" else None, language, languages,
+                 # Non-English docs get the native title as an interim title_en
+                 # (design §6: title_en is always populated); the summarize
+                 # stage replaces it with a real translation on ingest.
+                 title, title, language, languages,
                  parse_year(raw.get("YEAR published")), raw.get("Publication Title"),
                  raw.get("article_type"), raw.get("wri_primary_office"),
+                 authors, url, date_published, Jsonb(provenance),
                  Jsonb({"file_path": meta.get("file_path", ""),
                         "summary": meta.get("summary", "") or "",
                         "metadata": raw})),
