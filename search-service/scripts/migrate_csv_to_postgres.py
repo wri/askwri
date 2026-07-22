@@ -37,6 +37,10 @@ FACETS = [  # (facet, raw metadata key)
 # is one of these (or empty). 34 docs carry "Pre-EM" and 3 carry "Not available"
 # in Article Title while having a real Publication Title.
 JUNK_TITLES = {"Pre-EM", "Not available", "", None}
+# The CSV writes a human-readable placeholder in the DOI column rather than
+# leaving it empty. Stored verbatim it becomes the document's DOI and is
+# rendered as one in the admin UI (80 of 168 docs on the QA cutover).
+JUNK_DOIS = {"No DOI listed", "Not available", "N/A", "none", "None"}
 
 
 def _title(raw, ext_id):
@@ -82,6 +86,14 @@ def _clean(value):
     if not isinstance(value, str):
         return None
     return value.strip() or None
+
+
+def clean_doi(raw):
+    """CSV DOI cell -> str or None, dropping the placeholder sentinels."""
+    text = _clean(raw)
+    if text is None or text in JUNK_DOIS:
+        return None
+    return text
 
 
 def parse_date(raw):
@@ -267,7 +279,7 @@ def main():
                 column: "external"
                 for column, value in (
                     ("title", title),
-                    ("doi", _clean(raw.get("DOI"))),
+                    ("doi", clean_doi(raw.get("DOI"))),
                     ("year_published", parse_year(raw.get("YEAR published"))),
                     ("article_type", _clean(raw.get("article_type"))),
                     ("wri_primary_office", _clean(raw.get("wri_primary_office"))),
@@ -285,7 +297,7 @@ def main():
                     authors, url, date_published, metadata_source,
                     status, source_metadata)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'searchable',%s)""",
-                (doc_id, ext_id, raw.get("DOI"),
+                (doc_id, ext_id, clean_doi(raw.get("DOI")),
                  s3_key_for(meta.get("file_path"), ext_id, settings.documents_s3_prefix),
                  # Non-English docs get the native title as an interim title_en
                  # (design §6: title_en is always populated); the summarize

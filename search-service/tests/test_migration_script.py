@@ -688,7 +688,8 @@ def _non_english_corpus(tmp_path):
         "article_type": "Report",
         "wri_primary_office": "WRI China",
         "wri_programs": "Cities",
-        "DOI": "",
+        # The CSV writes a placeholder here rather than leaving it empty.
+        "DOI": "No DOI listed",
         "URL": "https://wri.org/zhuzhou",
         # Single-digit month/day, matching the real CSV's M/D/YYYY shape.
         "Date published": "3/17/2021",
@@ -871,6 +872,21 @@ class TestS3KeyAndSummaryLanguage:
             assert source.get(column) == "external", (
                 f"metadata_source[{column!r}] should be 'external', got {source.get(column)!r}"
             )
+
+    def test_doi_placeholder_is_not_stored_as_a_doi(self, tmp_path):
+        """The CSV's DOI column carries 'No DOI listed' rather than an empty
+        cell. Stored verbatim it becomes the document's DOI and renders as one
+        in the admin UI, so it must land as NULL — and must not be claimed in
+        metadata_source, or parse.py could never fill in a real DOI."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT doi, metadata_source FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        assert row[0] is None, f"DOI placeholder was stored verbatim: {row[0]!r}"
+        assert "doi" not in (row[1] or {}), "an absent DOI must not be claimed as 'external'"
 
     def test_detected_fields_are_left_unowned(self, tmp_path):
         """language/languages come from detection, which beats the CSV, and
