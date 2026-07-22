@@ -69,16 +69,23 @@ check items off with a pointer to the commit/PR that resolved them.
   (recall exactly at baseline, best F1 recorded), answer doc-F1 77.5
   (+1.9), smoke 16/16 strong. Verdict + honest ledger in the Phase 0
   results doc. Local corpus is now Mistral-parsed.
-- [ ] **2 worker-uploaded docs are still pypdf-parsed locally** (bf38c0f8
-  whos-driving-this-bus…, 5da1ee93 climate-readiness-urban-transformation…).
-  PDFs are BACK in local MinIO (verified 2026-07-22: 3.8M + 1.3M objects
-  under `askwri-data/documents/`) — only the re-parse is outstanding: these
-  two lack Mistral markdown headers that the other 170 docs have. Repair
-  locally with `reingest_all --ids bf38c0f8-…,5da1ee93-…` + a worker running
-  `PARSE_BACKEND=mistral BEDROCK_EMBED_BATCH_SIZE=24 AWS_RETRY_MODE=adaptive`
-  (the `--ids` flag landed on `chore/reingest-ids`). DEPLOYED re-ingest is
-  unaffected (real S3 has them). Bootstrap should preserve worker-uploaded
-  objects.
+- [x] **2 worker-uploaded docs re-parsed locally — DONE 2026-07-22**
+  (bf38c0f8 whos-driving-this-bus…, 5da1ee93 climate-readiness…). Repaired via
+  `reingest_all --ids …` + a worker at `PARSE_BACKEND=mistral`. Both now
+  searchable, Mistral markdown, no glyph garbage, 100% cohere-embed-v4 chunks
+  + sparse (179 / 121). Local corpus is now uniform (172 docs: 171 with `#`
+  headers — the one without is a pre-existing headingless PDF, not pypdf).
+  **Credential footgun hit + solved**: the worker embed stage failed with
+  `UnrecognizedClientException` because `search-service/.env.local`'s FAKE
+  MinIO AWS keys load into `os.environ` and, since `app/env.py` uses
+  `load_dotenv(override=False)`, they only lose to REAL shell env. Fix:
+  inject real static SSO creds (`eval $(aws configure export-credentials
+  --format env)`) before launching, and RESUME at the embed stage (parse
+  already persisted Mistral text) so MinIO is never needed — the startup
+  intake sweep logs one harmless `InvalidAccessKeyId` against localhost:9000
+  and continues. Same class of footgun as the reembed_cohere note below, but
+  via the worker's dual-client (MinIO + Bedrock) path. DEPLOYED worker is
+  immune (task role, real S3, no fake keys).
 - [x] **`parse_backend` default stays `pypdf`** (decided 2026-07-22, post-
   merge). Flipping to mistral in config would hard-fail every ingest
   (`worker/stages/parse.py:159` raises without `MISTRAL_API_KEY`, and the
