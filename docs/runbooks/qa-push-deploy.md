@@ -95,7 +95,7 @@ and also exports `PG*` so bare `psql` works:
 ./scripts/with-remote-env.sh qa npm run typeorm -- migration:show -d src/db/migration-data-source.ts
 ./scripts/with-remote-env.sh qa npm run migration:run
 ./scripts/with-remote-env.sh qa psql -c 'select count(*) from documents'
-./scripts/with-remote-env.sh qa npm run seed:admin -- alice 'a password'
+ADMIN_PASSWORD='a password' ./scripts/with-remote-env.sh qa npm run seed:admin -- alice
 ```
 
 It prints the target it resolved (`→ askwri@…/qa`) before running anything, which is the
@@ -214,8 +214,12 @@ Only if Step 3 could not run before the push:
 ## Step 6: Seed the admin user (against QA RDS)
 
 ```bash
+# The password goes in via env or stdin, never as an argument — an argument
+# lands in shell history, in `ps`, and in npm's lifecycle banner.
+read -rs ADMIN_PASSWORD && export ADMIN_PASSWORD
 DATABASE_URL="postgresql://user:password@rds-host:5432/db?sslmode=require" \
-  npm run seed:admin -- <username> <password>
+  npm run seed:admin -- <username>
+unset ADMIN_PASSWORD
 ```
 
 Expected: `Created admin user '<username>'` (re-running with an existing username resets

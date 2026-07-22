@@ -91,7 +91,7 @@ curl -s localhost:8000/health
 ```
 
 Admin UI: `http://localhost:3000/admin`, login `admin` / `admin-local-password`
-(re-seed with `npm run seed:admin -- <user> <pw>`; requires `SESSION_SECRET`
+(re-seed with `ADMIN_PASSWORD=<pw> npm run seed:admin -- <user>`; requires `SESSION_SECRET`
 ≥ 32 chars in `.env.local` — the bootstrap writes one).
 
 ---

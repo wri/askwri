@@ -469,7 +469,10 @@ SESSION_SECRET=<output of above>
 Once the DB is migrated and `.env` is loaded:
 
 ```bash
-npm run seed:admin -- <username> <password>
+# Password via env or stdin, never as an argument (shell history / ps / npm banner).
+read -rs ADMIN_PASSWORD && export ADMIN_PASSWORD
+npm run seed:admin -- <username>
+unset ADMIN_PASSWORD
 ```
 
 This creates a `users` row with `role='admin'` and a bcryptjs (cost 12) password hash. The script reads `.env` for `DATABASE_URL`. Run it again with different credentials to add additional users. **Note:** if the username already exists, the script **resets the password, force-reactivates, and force-promotes to `role='admin'`** (it is not a no-op). It writes no `audit_log` row and does not enforce the 12-char minimum that the users API enforces.

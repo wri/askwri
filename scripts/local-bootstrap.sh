@@ -135,7 +135,7 @@ docker run --rm --network askwri-local -v "$DATA:/corpus:ro" --entrypoint /bin/s
   mc mirror --exclude 'cache/*' --exclude 'feedback/*' --exclude 'documents.csv' /corpus local/askwri-data"
 
 step "Admin user (admin / admin-local-password)"
-(cd "$REPO_ROOT" && npm run seed:admin -- admin admin-local-password)
+(cd "$REPO_ROOT" && ADMIN_PASSWORD=admin-local-password npm run seed:admin -- admin)
 
 step "Verify"
 counts=$(psql_local "SELECT (SELECT count(*) FROM documents) || '/' ||
