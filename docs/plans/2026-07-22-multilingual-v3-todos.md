@@ -64,10 +64,22 @@ check items off with a pointer to the commit/PR that resolved them.
   advancing (truncates long docs, slowest, priciest, no quality edge).
   **RATIFIED 2026-07-22 (dgutelius): Mistral OCR is the Phase C parser**;
   egress accepted (public corpus). Spec §7 amended.
-- [ ] **Phase 1 (binding gate)**: `parse_backend` flag + mistral branch in
-  `worker/stages/parse.py` (per-page emission — fixes R4 zh page
-  boundaries), `reingest_all.py`, full re-parse + sparse rebuild,
-  baseline suite under `parse-mistral` label, plan §7 gate.
+- [x] **Phase 1 gate: PASS (2026-07-22)** — full-corpus Mistral re-parse,
+  sparse rebuild, floor re-derived to 0.09, cite P30.6/R83.1/F1 43.2
+  (recall exactly at baseline, best F1 recorded), answer doc-F1 77.5
+  (+1.9), smoke 16/16 strong. Verdict + honest ledger in the Phase 0
+  results doc. Local corpus is now Mistral-parsed.
+- [ ] **2 worker-uploaded docs' PDFs are MISSING from local MinIO**
+  (whos-driving-this-bus…, climate-readiness-urban-transformation…) —
+  lost in a bootstrap bucket re-seed. They keep their pypdf parse +
+  cohere chunks and were manually restored to searchable after the
+  re-parse demoted them (file-not-found, not quality). Restore the PDFs
+  (from qa S3 or re-upload) and re-ingest; the DEPLOYED re-ingest is
+  unaffected (real S3 has them). Bootstrap should preserve or re-seed
+  worker-uploaded objects.
+- [ ] **Flip `parse_backend` default to mistral** (config) as part of PR
+  finalization now the gate passed — or keep flag-flip at deploy per the
+  runbook Phase D. Decide at PR time.
 - [ ] **Language-label vs content mismatches** (found in the Phase 1
   pilot): `detect()` was fooled by bilingual English covers (fixed —
   multi-window voting), but 3 fixture docs are genuinely ENGLISH-edition
