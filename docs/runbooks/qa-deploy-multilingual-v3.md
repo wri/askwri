@@ -14,15 +14,22 @@ done before pushing, and the embed cutover is a *separate, later* event.
 
 ## Phase A — before merging/pushing anything
 
-1. **GitHub secrets additions:**
-   - `SEARCH_SERVICE_ENV`: **add `EMBEDDING_MODEL=text-embedding-3-small`.**
-     The new code DEFAULTS to `cohere-embed-v4`; the RDS corpus is still
-     3-small until Step C. Without this pin the deployed dense lane queries
-     the (empty) cohere index — silent empty dense results.
-   - `INGESTION_WORKER_ENV`: add the same `EMBEDDING_MODEL` pin (worker
-     parity — new ingests must keep writing 3-small until the cutover), and
-     `MISTRAL_API_KEY` (parse stage; only used once `PARSE_BACKEND=mistral`
-     is set after the Phase 1 gate).
+1. **GitHub secrets additions — EXECUTED 2026-07-22 (pins only):**
+   - `SEARCH_SERVICE_ENV`: **`EMBEDDING_MODEL=text-embedding-3-small` added** ✅
+     (secret rebuilt from the live task definition minus terraform-static
+     keys: HOTJAR_ID, LLAMA_CLOUD_API_KEY, DATABASE_URL, OPENAI_API_KEY,
+     RETRIEVAL_BACKEND + the pin). The new code DEFAULTS to
+     `cohere-embed-v4`; the RDS corpus is still 3-small until Phase C.
+     Without this pin the deployed dense lane queries the (empty) cohere
+     index — silent empty dense results.
+   - `INGESTION_WORKER_ENV`: **same `EMBEDDING_MODEL` pin added** ✅
+     (DATABASE_URL, OPENAI_API_KEY + the pin). Worker parity — new ingests
+     must keep writing 3-small until the cutover.
+   - `MISTRAL_API_KEY`: **deliberately DEFERRED to Phase D.** Nothing
+     consumes it until `PARSE_BACKEND=mistral` is set, and the value lands
+     as PLAINTEXT in the ECS task definition — provision an **org/team
+     Mistral key** for it (never a personal key), then rotate the personal
+     key used during local Phase 0/1 work.
    - `INGESTION_WORKER_ENV` (post-cutover): also `AWS_RETRY_MODE=adaptive`,
      `AWS_MAX_ATTEMPTS=10`, `BEDROCK_EMBED_MODEL_ID=us.cohere.embed-v4:0` —
      the worker embed stage bursts 96-chunk batches and errors jobs on the
