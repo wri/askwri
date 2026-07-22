@@ -735,6 +735,22 @@ class TestDetectUnit:
         second = detect(_EN_TEXT)
         assert first == second
 
+    def test_bilingual_english_cover_does_not_mask_zh_body(self):
+        """WRI zh/es/pt reports carry English cover/title/abstract pages; a
+        head-only sample detects 'en' and a full re-ingest would corrupt
+        documents.language (found 2026-07-22 during the Phase 1 pilot —
+        4 of 9 non-EN fixture docs flipped, under BOTH parsers)."""
+        from worker.stages.language import detect
+        cover = _EN_TEXT * 30          # ~7.8k chars of English front matter
+        body = _ZH_SIMPLIFIED_TEXT * 120
+        assert detect(cover + body) == "zh"
+
+    def test_bilingual_english_cover_does_not_mask_es_body(self):
+        from worker.stages.language import detect
+        cover = _EN_TEXT * 30
+        body = _ES_TEXT * 60
+        assert detect(cover + body) == "es"
+
     def test_unsupported_language_falls_back_to_en(self):
         """German (not in SUPPORTED) falls back to 'en'."""
         from worker.stages.language import detect

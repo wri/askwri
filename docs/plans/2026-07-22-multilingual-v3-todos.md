@@ -66,6 +66,13 @@ check items off with a pointer to the commit/PR that resolved them.
   `worker/stages/parse.py` (per-page emission — fixes R4 zh page
   boundaries), `reingest_all.py`, full re-parse + sparse rebuild,
   baseline suite under `parse-mistral` label, plan §7 gate.
+- [ ] **Language-label vs content mismatches** (found in the Phase 1
+  pilot): `detect()` was fooled by bilingual English covers (fixed —
+  multi-window voting), but 3 fixture docs are genuinely ENGLISH-edition
+  PDFs carrying zh/es/pt CSV labels (3778, 2705, 6821 — each has a
+  native-edition sibling in the corpus). Re-ingest will re-label them
+  'en'; diff documents.language before/after the full run and review the
+  flips as corrections vs regressions with the team.
 - [ ] **8 production docs have pypdf glyph-ID garbage** (`/gid00017…`) in
   live `document_texts` (en 5 / es 2 / pt 1, ~2,600 occurrences) —
   discovered via the bake-off oracle diagnostics. Any re-parse fixes
