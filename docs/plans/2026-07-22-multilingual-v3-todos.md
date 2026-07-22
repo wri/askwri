@@ -69,17 +69,28 @@ check items off with a pointer to the commit/PR that resolved them.
   (recall exactly at baseline, best F1 recorded), answer doc-F1 77.5
   (+1.9), smoke 16/16 strong. Verdict + honest ledger in the Phase 0
   results doc. Local corpus is now Mistral-parsed.
-- [ ] **2 worker-uploaded docs' PDFs are MISSING from local MinIO**
-  (whos-driving-this-bus…, climate-readiness-urban-transformation…) —
-  lost in a bootstrap bucket re-seed. They keep their pypdf parse +
-  cohere chunks and were manually restored to searchable after the
-  re-parse demoted them (file-not-found, not quality). Restore the PDFs
-  (from qa S3 or re-upload) and re-ingest; the DEPLOYED re-ingest is
-  unaffected (real S3 has them). Bootstrap should preserve or re-seed
-  worker-uploaded objects.
-- [ ] **Flip `parse_backend` default to mistral** (config) as part of PR
-  finalization now the gate passed — or keep flag-flip at deploy per the
-  runbook Phase D. Decide at PR time.
+- [x] **2 worker-uploaded docs re-parsed locally — DONE 2026-07-22**
+  (bf38c0f8 whos-driving-this-bus…, 5da1ee93 climate-readiness…). Repaired via
+  `reingest_all --ids …` + a worker at `PARSE_BACKEND=mistral`. Both now
+  searchable, Mistral markdown, no glyph garbage, 100% cohere-embed-v4 chunks
+  + sparse (179 / 121). Local corpus is now uniform (172 docs: 171 with `#`
+  headers — the one without is a pre-existing headingless PDF, not pypdf).
+  **Credential footgun hit + solved**: the worker embed stage failed with
+  `UnrecognizedClientException` because `search-service/.env.local`'s FAKE
+  MinIO AWS keys load into `os.environ` and, since `app/env.py` uses
+  `load_dotenv(override=False)`, they only lose to REAL shell env. Fix:
+  inject real static SSO creds (`eval $(aws configure export-credentials
+  --format env)`) before launching, and RESUME at the embed stage (parse
+  already persisted Mistral text) so MinIO is never needed — the startup
+  intake sweep logs one harmless `InvalidAccessKeyId` against localhost:9000
+  and continues. Same class of footgun as the reembed_cohere note below, but
+  via the worker's dual-client (MinIO + Bedrock) path. DEPLOYED worker is
+  immune (task role, real S3, no fake keys).
+- [x] **`parse_backend` default stays `pypdf`** (decided 2026-07-22, post-
+  merge). Flipping to mistral in config would hard-fail every ingest
+  (`worker/stages/parse.py:159` raises without `MISTRAL_API_KEY`, and the
+  key is deliberately deferred to Phase D). The flip is a worker-env change
+  at Phase D per the runbook, not a code default.
 - [ ] **Language-label vs content mismatches** (found in the Phase 1
   pilot): `detect()` was fooled by bilingual English covers (fixed —
   multi-window voting), but 3 fixture docs are genuinely ENGLISH-edition
@@ -100,17 +111,18 @@ check items off with a pointer to the commit/PR that resolved them.
   `askwri-app-production-cluster` both live in 905418285725 (us-east-2) —
   the account where Bedrock invokes are verified live. "Enable model
   access" is genuinely done for both models.
-- [ ] Full re-embed used the `us.cohere.embed-v4:0` cross-region inference
-  profile (300k TPM bucket, ~4x observed throughput vs the drained
-  on-demand bucket). Consider defaulting `BEDROCK_EMBED_MODEL_ID` to the
-  profile for the deployed re-embed too (works with the same
-  `bedrock:InvokeModel` grant IF the terraform policy covers the profile
-  ARN + underlying regional model ARNs — verify before relying on it).
-- [ ] **Deploy ordering**: terraform apply (task-role `bedrock:InvokeModel`
-  + `bedrock:Rerank`) MUST precede the Phase B image deploy, or qa's rerank
-  silently degrades to fused results (graceful but invisible). Consider a
-  health-endpoint field exposing "rerank live vs degraded" so degradation
-  is observable.
+- [x] **Inference-profile ARN grant VERIFIED** (2026-07-22): the deployed
+  task-role policy (`terraform/infrastructure/ecs.tf:127-162`) grants
+  `bedrock:InvokeModel` on the `us.cohere.embed-v4:0` inference-profile ARN
+  AND the underlying `foundation-model/cohere.embed-v4:0` (wildcard region),
+  so the profile is usable for the deployed re-embed. Still a decision
+  whether to DEFAULT `BEDROCK_EMBED_MODEL_ID` to the profile, but the grant
+  no longer blocks it.
+- [x] **Deploy ordering ENFORCED by the workflow** (verified 2026-07-22):
+  `deploy-qa.yml` `deploy-service` declares `needs: deploy-infrastructure`,
+  so `terraform apply` (the bedrock grants) always lands before the ECS
+  force-new-deployment. No manual sequencing risk at merge. (Health-endpoint
+  "rerank live vs degraded" field still a nice-to-have.)
 - [ ] Local-dev footgun: service launched with exported SSO creds loses
   Bedrock when the session expires (~hourly) and quietly degrades to
   fused. Deployed env uses the task role (immune). Maybe log a WARNING on
@@ -124,11 +136,14 @@ check items off with a pointer to the commit/PR that resolved them.
   `CREATE TABLE document_chunks_embedding_backup_20260722 AS
    SELECT id, embedding, embedding_model FROM document_chunks;`
   Same insurance for the deployed cutover (RDS). Drop after validation.
-- [ ] **Dense lane has NO graceful degradation post-cutover** (verified:
-  `BedrockCohereQueryEmbedding.get_query_embedding` has no fallback; the
-  /query handler will 500 where rerank degrades to fused). Locally this is
-  guaranteed to bite when the SSO session expires. Decide before deploy:
-  sparse-only fallback + logged warning vs accept the hard dependency.
+- [x] **Dense lane graceful degradation — DONE** (decision + impl 2026-07-22,
+  shipped in #248). `main.py:244-255` catches any dense-lane failure, serves
+  sparse-only, logs a WARNING, and records `dense_degraded_at`/`dense_error`
+  in `service_state`, surfaced at `/health` (`main.py:830`). Recovery clears
+  the flags on the next successful dense call. Covered by
+  `tests/test_dense_fallback.py` (degrade + recover). Chose sparse-only
+  fallback over the hard dependency; sparse-only is English-keyword-only, so
+  it is intentionally visible via /health rather than silent.
 - [ ] **Refresh `aws login` immediately before the full run** — 45–60 min
   run vs ~hourly session expiry; exported creds are a static snapshot.
   The script IS resumable (skips already-cohere rows), so a mid-run death
