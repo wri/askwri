@@ -123,6 +123,10 @@ service_state = {
     "indexing_task": None,
     "pg_dense_ready": False,
     "embed_model": None,
+    # Dense-lane degradation marker (sparse-only fallback, 2026-07-22):
+    # set on a dense retrieve failure, cleared on the next success.
+    "dense_degraded_at": None,
+    "dense_error": None,
 }
 
 class QueryRequest(BaseModel):
@@ -218,7 +222,23 @@ class HybridFusionRetriever(BaseRetriever):
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             dense_future = executor.submit(self.vector_retriever.retrieve, query_bundle)
             sparse_future = executor.submit(self.bm25_retriever.retrieve, expanded_bundle)
-            dense_results = dense_future.result()
+            # Post-cutover the dense lane is a Bedrock API call with no local
+            # fallback (query embed via BedrockCohereQueryEmbedding). Degrade
+            # to sparse-only rather than 500 — mirrors the rerank lane's
+            # degradation to fused (decision 2026-07-22). Sparse-only is
+            # English-keyword-only, so surface it via /health, not silently.
+            try:
+                dense_results = dense_future.result()
+                service_state["dense_degraded_at"] = None
+                service_state["dense_error"] = None
+            except Exception as exc:  # noqa: BLE001 — any embed/DB failure degrades, sparse still raises below
+                from datetime import datetime, timezone
+                logger.warning(
+                    f"Dense lane failed ({exc}) — serving sparse-only results (degraded)"
+                )
+                service_state["dense_degraded_at"] = datetime.now(timezone.utc).isoformat()
+                service_state["dense_error"] = str(exc)
+                dense_results = []
             sparse_results = sparse_future.result()
 
         # Slice BM25 results to requested top_k (BM25Retriever is a singleton built
@@ -764,6 +784,11 @@ async def health_check():
             "answer_mode": service_state["reranker_answer"] is not None,
             "cite_mode": service_state["reranker_cite"] is not None,
         },
+        "dense_lane": ({"status": "degraded",
+                        "degraded_at": service_state["dense_degraded_at"],
+                        "error": service_state["dense_error"]}
+                       if service_state.get("dense_degraded_at")
+                       else {"status": "live"}),
         "cache_stats": service_state["cache"].get_cache_stats() if service_state.get("cache") else {}
     }
 
