@@ -44,7 +44,11 @@ retrieval eval on whichever candidate advances.
    orchestration — additional engineering the other two don't need — and
    at ≈10s/page it is by far the slowest and roughly the most expensive.
 
-## Recommendation
+## Recommendation — **RATIFIED 2026-07-22 (dgutelius): Mistral OCR is the Phase C parser**
+
+The spec (§7) carries a dated amendment pointing here; "Gemini parse"
+throughout the v3 spec now reads "Mistral OCR parse". The Mistral egress
+consideration below was accepted (published public corpus).
 
 **Advance Mistral OCR to Phase 1** (full-corpus, eval-gated, `PARSE_BACKend=mistral`
 behind the plan §6.1 flag): quality parity with Gemini on body text, equal

@@ -60,7 +60,8 @@ check items off with a pointer to the commit/PR that resolved them.
   quality/cost/coverage: **Mistral OCR** (advance to eval-gated Phase 1);
   BDA = AWS-boundary fallback (needs caption dedup); Gemini 3.1 Pro not
   advancing (truncates long docs, slowest, priciest, no quality edge).
-  Awaiting sign-off on the winner + the Mistral egress/vendor question.
+  **RATIFIED 2026-07-22 (dgutelius): Mistral OCR is the Phase C parser**;
+  egress accepted (public corpus). Spec §7 amended.
 - [ ] **Phase 1 (binding gate)**: `parse_backend` flag + mistral branch in
   `worker/stages/parse.py` (per-page emission — fixes R4 zh page
   boundaries), `reingest_all.py`, full re-parse + sparse rebuild,

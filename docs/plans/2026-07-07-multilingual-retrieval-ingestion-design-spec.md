@@ -120,7 +120,16 @@ SERVICES: app · search-service (thin) · ingest worker · RDS pgvector · Bedro
 
 ## 7. Ingestion upgrade (worker stages — parallel track, mostly one-shot)
 
-- **`parse.py` → Gemini API** (markdown + layout JSON, retained durably); keep pypdf text as the **validation oracle**.
+> **AMENDMENT 2026-07-22 (ratified by dgutelius): the parse API is Mistral
+> OCR, not Gemini.** The Phase 0 parse bake-off
+> (`docs/plans/2026-07-22-parse-bakeoff-phase0-results.md`) found Mistral
+> at structure/quality parity with Gemini 3.1 Pro, with no long-document
+> truncation, full graphics-manual coverage, and ~10× lower cost/latency
+> at corpus scale. BDA is the AWS-boundary fallback. Everywhere this spec
+> says "Gemini parse", read "Mistral OCR parse". Binding gate before
+> cutover: bake-off plan §7 (Phase 1 full-corpus retrieval eval).
+
+- **`parse.py` → Mistral OCR API** (markdown + per-page output, retained durably); keep pypdf text as the **validation oracle**.
 - **Validation sub-step:** char-overlap + **numeric-token equality** + length ratio → fail routes to `needs_review` (existing machinery).
 - **`embed.py` chunking → heading-aware** over parsed markdown; store `char_start`/`char_end` + `heading_path` (fixes the `find()` page-attribution bug).
 - **Per-chunk context line** (piggyback the summarize LLM pass), prepended to the indexed text (Anthropic contextual-retrieval pattern; benefits dense + the English sparse copy).
