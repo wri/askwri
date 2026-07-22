@@ -98,12 +98,20 @@ check items off with a pointer to the commit/PR that resolved them.
   (now in the runbook): default batch 96 bursts past the 150k tokens/min
   on-demand embed-v4 quota and dies on ThrottlingException. Ensure the
   deploy runbook's re-embed step inherits this before the qa cutover.
-- [ ] `reembed_cohere.py` stats bug: reported `{'chunks': 500, 'documents':
-  500}` but only 4 distinct document_ids were touched — the documents
-  counter is wrong when `--limit` is set.
-- [ ] `reembed_cohere.py` exits with psycopg "couldn't stop thread
-  'pool-1-worker-N'" warnings — pool never closed; wrap in `close()` or a
-  context manager.
+- [x] `reembed_cohere.py` stats bug (`documents` counted chunk ids under
+  `--limit`) — fixed with the per-batch-commit change (2026-07-22).
+- [x] `reembed_cohere.py` unclosed pool warnings — pool closed in main()
+  (2026-07-22).
+- [x] **`reembed_cohere.py` was NOT crash-safe** (found the hard way: the
+  first full-corpus attempt embedded for 13 min and persisted nothing —
+  single transaction, rolled back on credential expiry). Now commits per
+  batch; reruns resume from the last committed batch. Regression-tested.
+- [x] **`aws configure export-credentials` is a static ~1h snapshot** and
+  re-running it does NOT mint a fresh token while the cached one is valid
+  — useless for long runs. Long-running local Bedrock scripts use the
+  auto-refreshing `login` provider instead (`botocore[crt]` in
+  requirements-dev.txt + pop the fake .env.local AWS keys; runbook Step 2
+  updated).
 - [ ] Optional headroom: cross-region inference profile for embed-v4 has
   2× the TPM quota (300k) if the full re-embed ever needs to go faster.
 

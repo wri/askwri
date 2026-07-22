@@ -156,3 +156,57 @@ def test_reembed_is_idempotent(reembed_test_db, monkeypatch):
 
     stats = script.reembed_all(batch_size=2, force=True)
     assert stats["chunks"] == 3
+
+
+def _reset_to_3small(db_url):
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "UPDATE document_chunks SET embedding_model = 'text-embedding-3-small'"
+        )
+        conn.commit()
+
+
+def test_partial_run_commits_completed_batches(reembed_test_db, monkeypatch):
+    """A mid-run death (credential expiry, throttle exhaustion) must not roll
+    back completed batches — the 2026-07-22 full-corpus attempt embedded for
+    13 minutes and persisted nothing because the whole run was one
+    transaction. Each batch commits; a rerun picks up only the remainder."""
+    _reset_to_3small(reembed_test_db)
+    calls = {"n": 0}
+
+    def dying_embed(texts):
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise RuntimeError("credential expired mid-run")
+        return [[0.05] * 1536 for _ in texts]
+
+    import scripts.reembed_cohere as script
+    monkeypatch.setattr(script, "_embed", dying_embed)
+
+    with pytest.raises(RuntimeError):
+        script.reembed_all(batch_size=2)
+
+    with psycopg.connect(reembed_test_db) as conn:
+        n_cohere = conn.execute(
+            "SELECT count(*) FROM document_chunks WHERE embedding_model = 'cohere-embed-v4'"
+        ).fetchone()[0]
+    assert n_cohere == 2  # first batch survived the crash
+
+    monkeypatch.setattr(script, "_embed", lambda t: [[0.05] * 1536 for _ in t])
+    stats = script.reembed_all(batch_size=2)
+    assert stats["chunks"] == 1  # only the remainder
+
+
+def test_limit_stats_count_documents_not_chunks(reembed_test_db, monkeypatch):
+    """With --limit, stats['documents'] must count distinct document_ids of
+    the selected rows, not distinct chunk ids (the canary reported
+    'documents': 500 for 4 actual docs)."""
+    _reset_to_3small(reembed_test_db)
+
+    import scripts.reembed_cohere as script
+    monkeypatch.setattr(script, "_embed", lambda t: [[0.05] * 1536 for _ in t])
+
+    stats = script.reembed_all(batch_size=2, limit=2)
+    # corpus_order 0,1 are both doc A
+    assert stats["chunks"] == 2
+    assert stats["documents"] == 1

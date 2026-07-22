@@ -31,7 +31,7 @@ from app.db import get_pool
 logger = logging.getLogger(__name__)
 
 _PENDING_SQL = """
-    SELECT id, legacy_chunk_id, text, node_metadata
+    SELECT id, legacy_chunk_id, text, node_metadata, document_id
     FROM document_chunks
     WHERE {where}
     ORDER BY corpus_order NULLS LAST, legacy_chunk_id
@@ -66,12 +66,13 @@ def reembed_all(batch_size: int = 96, force: bool = False, limit: int = 0) -> di
         ).fetchall()
         n_docs = conn.execute(
             f"SELECT count(DISTINCT document_id) FROM document_chunks WHERE {where}"
-        ).fetchone()[0] if not limit else len({r[0] for r in rows})
+        ).fetchone()[0] if not limit else len({r[4] for r in rows})
 
         done = 0
         for i in range(0, len(rows), batch_size):
             batch = rows[i:i + batch_size]
-            contents = [_embed_content(lid, text, meta) for _, lid, text, meta in batch]
+            contents = [_embed_content(lid, text, meta)
+                        for _, lid, text, meta, _ in batch]
             vectors = _embed(contents)
             with conn.cursor() as cur:
                 cur.executemany(
@@ -81,9 +82,13 @@ def reembed_all(batch_size: int = 96, force: bool = False, limit: int = 0) -> di
                     [
                         (np.array(vec, dtype=np.float32), COHERE_EMBED_MODEL_NAME,
                          COHERE_EMBED_DIMENSION, chunk_id)
-                        for (chunk_id, _, _, _), vec in zip(batch, vectors)
+                        for (chunk_id, _, _, _, _), vec in zip(batch, vectors)
                     ],
                 )
+            # Commit per batch: a long run killed mid-flight (credential
+            # expiry, throttle exhaustion) must keep every finished batch —
+            # the WHERE clause makes reruns pick up only the remainder.
+            conn.commit()
             done += len(batch)
             if done % 960 < batch_size or done == len(rows):
                 logger.info(f"re-embedded {done}/{len(rows)} chunks "
@@ -116,8 +121,11 @@ def main():
                         help="re-embed at most N chunks (canary run)")
     args = parser.parse_args()
 
-    stats = reembed_all(batch_size=args.batch_size, force=args.force,
-                        limit=args.limit)
+    try:
+        stats = reembed_all(batch_size=args.batch_size, force=args.force,
+                            limit=args.limit)
+    finally:
+        get_pool().close()
     logger.info(f"done: {stats}")
     return 0
 

@@ -87,6 +87,16 @@ the exports. Retrieval, calibration, and the re-embed do not touch S3, and
 the Bedrock clients pin their own `endpoint_url`, so the MinIO
 `AWS_ENDPOINT_URL` never leaks into them.
 
+**Long-running scripts (the full re-embed): do NOT use static exports.**
+`aws configure export-credentials` snapshots a login-session token that
+expires ~hourly and is NOT refreshed by re-running the export while still
+valid — the 2026-07-22 full-corpus attempt died mid-run this way. Instead
+install `botocore[crt]` in the venv (in `requirements-dev.txt`) and run
+via a driver that pops the fake `.env.local` AWS_* keys from `os.environ`
+after the app imports — boto3 then falls through to the CLI's `login`
+credential provider, which auto-refreshes for as long as the refresh token
+lives. Verify with `boto3.Session().get_credentials().method == "login"`.
+
 ## Step 3 — Sanity-check both APIs through the repo's own code paths
 
 From the repo root, in the shell with the exports:
