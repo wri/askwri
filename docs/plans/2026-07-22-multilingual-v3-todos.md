@@ -53,6 +53,23 @@ check items off with a pointer to the commit/PR that resolved them.
   docs) is calibrated for a ~170-doc corpus; at 10× corpus size revisit
   rerank_candidates and the cap.
 
+## Phase C — parser selection (updated 2026-07-22)
+
+- [ ] **Re-open the parser choice before building Phase C.** The spec names
+  "Gemini parse" (a Gemini VISION model — NOT Gemini Embedding, which is
+  unused and only ever a dense-lane A/B challenger), but the spec predates
+  the 2026 wave of dedicated document parsers: on OmniDocBench v1.5,
+  GLM-OCR (0.9B specialist) 94.6 > Gemini 3 Pro 90.3 > GPT-5.2; Mistral
+  OCR 3 (Dec 2025) is a dedicated markdown-out parsing API with strong
+  multilingual claims. Run the existing Jul-2 bake-off harness (Phase 1a
+  parse-quality first, eval-gated) over a WRI sample incl. zh/es/pt +
+  scanned docs, with shortlist: Gemini 3 (spec default), Mistral OCR,
+  Bedrock Data Automation (AWS-boundary fit). GLM-OCR is benchmark leader
+  but self-hosting violates the no-self-hosted rule and the Zhipu API has
+  egress/compliance questions — name it, don't default into it. The
+  pypdf validation oracle + retained-artifact replay design de-risks
+  whichever wins.
+
 ## Deploy / ops
 
 - [x] **Deploy account confirmed 2026-07-22**: `askwri-app-qa-cluster` and
