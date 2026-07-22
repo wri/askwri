@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # (cross-region, still in-AWS/IAM).
     bedrock_embed_region: str = "us-east-1"
     bedrock_embed_model_id: str = "cohere.embed-v4:0"
+    # Per-call text batch for bulk document embeds (Cohere API cap 96 is the
+    # ceiling). Large docs at 96 blow the tokens/min bucket and error whole
+    # worker jobs — bulk re-ingests/re-embeds set 24 (with
+    # AWS_RETRY_MODE=adaptive).
+    bedrock_embed_batch_size: int = 96
 
     # Bedrock placement for Cohere Rerank 3.5 (spec v3 §5): not hosted in
     # us-east-2 — call the nearest hosting region.

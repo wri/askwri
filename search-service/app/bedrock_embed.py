@@ -22,6 +22,15 @@ COHERE_EMBED_MODEL_NAME = "cohere-embed-v4"   # document_chunks.embedding_model 
 COHERE_EMBED_DIMENSION = 1536
 _MAX_TEXTS_PER_CALL = 96                       # Cohere embed API cap
 
+
+def _batch_size() -> int:
+    """Per-call batch for bulk document embeds. 96-text bursts blow the
+    Bedrock tokens/min bucket on large docs (whole worker jobs errored on
+    ThrottlingException, 2026-07-22) — BEDROCK_EMBED_BATCH_SIZE lowers the
+    burst; the Cohere API cap (96) is the ceiling."""
+    return max(1, min(get_settings().bedrock_embed_batch_size,
+                      _MAX_TEXTS_PER_CALL))
+
 _client = None
 _client_lock = threading.Lock()
 
@@ -61,8 +70,9 @@ def _invoke(texts: List[str], input_type: str) -> List[List[float]]:
 def embed_documents(texts: List[str]) -> List[List[float]]:
     """Encode document chunks (input_type=search_document), batched at 96."""
     vectors: List[List[float]] = []
-    for i in range(0, len(texts), _MAX_TEXTS_PER_CALL):
-        vectors.extend(_invoke(texts[i:i + _MAX_TEXTS_PER_CALL], "search_document"))
+    step = _batch_size()
+    for i in range(0, len(texts), step):
+        vectors.extend(_invoke(texts[i:i + step], "search_document"))
     return vectors
 
 

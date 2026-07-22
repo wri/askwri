@@ -92,6 +92,32 @@ def test_embed_documents_batches_at_96(monkeypatch):
     assert all(c["body"]["input_type"] == "search_document" for c in stub.calls)
 
 
+def test_embed_documents_batch_size_configurable(monkeypatch):
+    """Bulk jobs (worker embed stage, re-embeds) must be able to shrink the
+    per-call burst: 96-chunk bursts blow the Bedrock tokens/min bucket on
+    large docs and error whole jobs (Phase 1 re-ingest, 2026-07-22). The
+    default stays 96 (the Cohere API cap); BEDROCK_EMBED_BATCH_SIZE lowers
+    it, values above 96 are clamped to the API cap."""
+    from app.config import get_settings
+    import app.bedrock_embed as be
+
+    stub = _StubBedrockClient()
+    monkeypatch.setattr(be, "get_client", lambda: stub)
+    monkeypatch.setenv("BEDROCK_EMBED_BATCH_SIZE", "24")
+    get_settings.cache_clear()
+
+    vectors = be.embed_documents([f"text {i}" for i in range(50)])
+    assert len(vectors) == 50
+    assert [len(c["body"]["texts"]) for c in stub.calls] == [24, 24, 2]
+
+    stub.calls.clear()
+    monkeypatch.setenv("BEDROCK_EMBED_BATCH_SIZE", "500")
+    get_settings.cache_clear()
+    be.embed_documents([f"text {i}" for i in range(100)])
+    assert [len(c["body"]["texts"]) for c in stub.calls] == [96, 4]
+    get_settings.cache_clear()
+
+
 def test_embed_query_uses_search_query_input_type(monkeypatch):
     import app.bedrock_embed as be
 
