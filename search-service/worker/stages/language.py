@@ -45,6 +45,18 @@ def detect(text: str) -> str:
         mid, late = n // 2, (4 * n) // 5
         windows = [text[:5000], text[mid:mid + 5000], text[late:late + 5000]]
 
+    # Character evidence beats langdetect for CJK: zh papers with English
+    # covers AND English reference/table sections lose the window vote
+    # [en, zh, en] because langdetect calls 35%-CJK mixed windows 'en'
+    # (2026-07-22: docs flipped zh->en on re-ingest). A substantial CJK
+    # fraction across the samples is unambiguous — no genuinely-English
+    # doc is 15% CJK characters.
+    sample = "".join(windows)
+    if sample:
+        cjk = sum(1 for c in sample if "一" <= c <= "鿿")
+        if cjk / len(sample) >= 0.15:
+            return "zh"
+
     votes = [c for c in (_one(w) for w in windows) if c]
     if not votes:
         return "en"

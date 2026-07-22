@@ -751,6 +751,23 @@ class TestDetectUnit:
         body = _ES_TEXT * 60
         assert detect(cover + body) == "es"
 
+    def test_interleaved_zh_en_detects_zh_by_cjk_fraction(self):
+        """zh papers with English covers AND English reference/table sections
+        can lose the window vote [en, zh, en] because langdetect calls
+        35%-CJK mixed windows 'en' (found 2026-07-22: docs 1665/5424 flipped
+        zh->en). Character evidence beats langdetect: substantial CJK
+        fraction across the samples means zh."""
+        from worker.stages.language import detect
+        mixed = _EN_TEXT + _ZH_SIMPLIFIED_TEXT  # ~35% CJK, like a real page
+        doc = (mixed * 40) + (_EN_TEXT * 20)    # en-heavy tail (references)
+        assert detect(doc) == "zh"
+
+    def test_english_doc_mentioning_china_stays_en(self):
+        """A few CJK terms in an English doc must not trip the zh gate."""
+        from worker.stages.language import detect
+        doc = (_EN_TEXT * 40) + "北京 上海 " + (_EN_TEXT * 40)
+        assert detect(doc) == "en"
+
     def test_unsupported_language_falls_back_to_en(self):
         """German (not in SUPPORTED) falls back to 'en'."""
         from worker.stages.language import detect

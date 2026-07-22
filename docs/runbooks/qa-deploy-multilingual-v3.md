@@ -29,6 +29,13 @@ done before pushing, and the embed cutover is a *separate, later* event.
      on-demand quota with default retries (hit during the local Phase 1
      bulk re-ingest: 8 of the first 17 docs errored on ThrottlingException
      until the drain env carried these).
+   - For BULK re-ingests specifically, also `BEDROCK_EMBED_BATCH_SIZE=24`:
+     large docs (500+ chunks) at batch 96 blow the 300k-TPM bucket within a
+     single embed stage and error-loop even with adaptive retries (11 docs
+     hit this locally). And run **ONE worker** for bulk jobs — parallel
+     workers multiply demand into the same shared token bucket (3 workers
+     tripled the throttle-error rate locally). Normal per-doc intake at the
+     default 96 with a single worker is fine.
 2. **Terraform sanity:** `ecs.tf` now grants `bedrock:InvokeModel` on the
    Cohere foundation models AND the `us.cohere.embed-v4:0` inference-profile
    ARN (the re-embed path of record — 300k tokens/min vs 150k on-demand),
