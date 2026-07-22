@@ -69,7 +69,7 @@ def parse_gemini(pdf_bytes: bytes, doc: dict) -> dict:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY not set")
     client = genai.Client(api_key=api_key)
-    model = os.environ.get("GEMINI_PARSE_MODEL", "gemini-3-flash")
+    model = os.environ.get("GEMINI_PARSE_MODEL", "gemini-3.1-pro-preview")
     prompt = (
         "Convert this PDF to clean GitHub-flavored markdown. Preserve the "
         "document's reading order, headings (as #/##/###), tables (as "

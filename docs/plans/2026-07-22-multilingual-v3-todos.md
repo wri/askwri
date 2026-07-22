@@ -55,20 +55,22 @@ check items off with a pointer to the commit/PR that resolved them.
 
 ## Phase C — parser selection (updated 2026-07-22)
 
-- [ ] **Re-open the parser choice before building Phase C.** The spec names
-  "Gemini parse" (a Gemini VISION model — NOT Gemini Embedding, which is
-  unused and only ever a dense-lane A/B challenger), but the spec predates
-  the 2026 wave of dedicated document parsers: on OmniDocBench v1.5,
-  GLM-OCR (0.9B specialist) 94.6 > Gemini 3 Pro 90.3 > GPT-5.2; Mistral
-  OCR 3 (Dec 2025) is a dedicated markdown-out parsing API with strong
-  multilingual claims. Run the existing Jul-2 bake-off harness (Phase 1a
-  parse-quality first, eval-gated) over a WRI sample incl. zh/es/pt +
-  scanned docs, with shortlist: Gemini 3 (spec default), Mistral OCR,
-  Bedrock Data Automation (AWS-boundary fit). GLM-OCR is benchmark leader
-  but self-hosting violates the no-self-hosted rule and the Zhipu API has
-  egress/compliance questions — name it, don't default into it. The
-  pypdf validation oracle + retained-artifact replay design de-risks
-  whichever wins.
+- [x] **Phase 0 parse bake-off RUN 2026-07-22** — results + recommendation:
+  `docs/plans/2026-07-22-parse-bakeoff-phase0-results.md`. Winner on
+  quality/cost/coverage: **Mistral OCR** (advance to eval-gated Phase 1);
+  BDA = AWS-boundary fallback (needs caption dedup); Gemini 3.1 Pro not
+  advancing (truncates long docs, slowest, priciest, no quality edge).
+  Awaiting sign-off on the winner + the Mistral egress/vendor question.
+- [ ] **Phase 1 (binding gate)**: `parse_backend` flag + mistral branch in
+  `worker/stages/parse.py` (per-page emission — fixes R4 zh page
+  boundaries), `reingest_all.py`, full re-parse + sparse rebuild,
+  baseline suite under `parse-mistral` label, plan §7 gate.
+- [ ] **8 production docs have pypdf glyph-ID garbage** (`/gid00017…`) in
+  live `document_texts` (en 5 / es 2 / pt 1, ~2,600 occurrences) —
+  discovered via the bake-off oracle diagnostics. Any re-parse fixes
+  them; prioritize regardless of parser choice.
+- [ ] Bake-off cleanup after the Phase 1 decision: delete BDA project
+  `07aee510a362` + scratch bucket `askwri-parse-bakeoff-905418285725`.
 
 ## Deploy / ops
 
