@@ -23,6 +23,12 @@ done before pushing, and the embed cutover is a *separate, later* event.
      parity — new ingests must keep writing 3-small until the cutover), and
      `MISTRAL_API_KEY` (parse stage; only used once `PARSE_BACKEND=mistral`
      is set after the Phase 1 gate).
+   - `INGESTION_WORKER_ENV` (post-cutover): also `AWS_RETRY_MODE=adaptive`,
+     `AWS_MAX_ATTEMPTS=10`, `BEDROCK_EMBED_MODEL_ID=us.cohere.embed-v4:0` —
+     the worker embed stage bursts 96-chunk batches and errors jobs on the
+     on-demand quota with default retries (hit during the local Phase 1
+     bulk re-ingest: 8 of the first 17 docs errored on ThrottlingException
+     until the drain env carried these).
 2. **Terraform sanity:** `ecs.tf` now grants `bedrock:InvokeModel` on the
    Cohere foundation models AND the `us.cohere.embed-v4:0` inference-profile
    ARN (the re-embed path of record — 300k tokens/min vs 150k on-demand),

@@ -1,5 +1,15 @@
 # Resuming the Multilingual v3 Retrieval Workstream
 
+> **STATUS 2026-07-22 — much of this document is now historical.** The
+> branch is rebased onto qa (mechanics section done); Phase B is live-
+> validated and cite-tuned; the LOCAL embed cutover is complete (corpus
+> all cohere-embed-v4); the parser is **Mistral OCR, not Gemini** (spec §7
+> amendment); the parse Phase 1 gate run is in flight. Current state
+> lives in: `2026-07-22-multilingual-v3-todos.md` (running list),
+> `2026-07-22-local-cohere-cutover-report.md` (cutover execution),
+> `2026-07-22-parse-bakeoff-phase0-results.md` (parser decision), and
+> `docs/runbooks/qa-deploy-multilingual-v3.md` (deploy ordering).
+
 **Branch:** `multilingual-v3` (this branch)
 **Split off:** `qa-wip-david` on 2026-07-08. The retrieval work was stacked on
 top of the doc-mgmt work; `qa-wip-david` was reset back to `0042875` (pure
