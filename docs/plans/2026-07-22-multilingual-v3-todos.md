@@ -42,13 +42,15 @@ check items off with a pointer to the commit/PR that resolved them.
 
 ## Performance / cost (flagged by dgutelius 2026-07-22 — "for later")
 
-- [ ] **Query latency & processing budget**: cite query = embed hop
-  (us-east-1) + 800+800 lane fetch + RRF + Bedrock rerank of 100 candidates
-  (us-west-2 cross-region) ≈ 1.0–1.6s local, plus ~2s cold-start spikes.
-  Ideas when we get there: co-locate rerank region with infra when Cohere
-  expands hosting; trim vector_top_k/bm25_top_k (800 each is generous for a
-  171-doc corpus but won't scale); cache query embeddings; parallelize the
-  embed hop with the sparse lane fetch.
+- [ ] **Query latency workstream — now PLANNED** (three-Opus-analysis
+  synthesis, 2026-07-22): `docs/plans/2026-07-22-query-latency-workstream.md`
+  (raw analyses in `docs/research/2026-07-22-latency-report-{1,2,3}-*.md`).
+  Headlines: merging v3 IS the ~100x fix for the deployed >300s reranker
+  problem; stranded off-event-loop fix `d214f3f` (branch fix/query-latency)
+  should be adopted onto v3; L0 quick wins (instrumentation, botocore
+  timeouts, client warmup, embed LRU) belong on this branch; the biggest
+  PERCEIVED lever is streaming the answer synthesis (frontend, separate
+  track).
 - [ ] Corpus-scale check: candidate diversification (cap=2, 100 slots ≈ 50
   docs) is calibrated for a ~170-doc corpus; at 10× corpus size revisit
   rerank_candidates and the cap.
