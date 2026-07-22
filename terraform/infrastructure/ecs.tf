@@ -137,9 +137,16 @@ resource "aws_iam_role_policy" "ecs_task_bedrock" {
         Action = [
           "bedrock:InvokeModel"
         ]
+        # The cross-region inference profile (us.cohere.embed-v4:0) is the
+        # re-embed path of record: 300k tokens/min quota vs 150k on-demand
+        # (measured 2026-07-22 — the on-demand bucket throttle-kills bulk
+        # re-embeds at batch 96, and even batch 24 runs ~2x slower). Profile
+        # invocation needs InvokeModel on BOTH the profile ARN and the
+        # underlying regional foundation-model ARNs.
         Resource = [
           "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
-          "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0"
+          "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.cohere.embed-v4:0"
         ]
       },
       {

@@ -1,0 +1,105 @@
+# QA Deploy Runbook — Multilingual v3 (all-Bedrock retrieval + Mistral parse)
+
+**Scope:** deploying the `multilingual-v3` branch to the qa environment: Bedrock
+Cohere embed-v4 dense lane, Bedrock Rerank 3.5 + tuned cite floor/tiers, the
+RDS corpus re-embed cutover, and (gate-dependent) the Mistral parse backend.
+Written 2026-07-22 from the LOCAL cutover execution — every gotcha below was
+hit for real; see `docs/plans/2026-07-22-local-cohere-cutover-report.md`.
+
+**Ordering is the point.** The deploy workflow runs terraform apply and image
+deploys in one push, so anything that must precede the new images has to be
+done before pushing, and the embed cutover is a *separate, later* event.
+
+---
+
+## Phase A — before merging/pushing anything
+
+1. **GitHub secrets additions:**
+   - `SEARCH_SERVICE_ENV`: **add `EMBEDDING_MODEL=text-embedding-3-small`.**
+     The new code DEFAULTS to `cohere-embed-v4`; the RDS corpus is still
+     3-small until Step C. Without this pin the deployed dense lane queries
+     the (empty) cohere index — silent empty dense results.
+   - `INGESTION_WORKER_ENV`: add the same `EMBEDDING_MODEL` pin (worker
+     parity — new ingests must keep writing 3-small until the cutover), and
+     `MISTRAL_API_KEY` (parse stage; only used once `PARSE_BACKEND=mistral`
+     is set after the Phase 1 gate).
+2. **Terraform sanity:** `ecs.tf` now grants `bedrock:InvokeModel` on the
+   Cohere foundation models AND the `us.cohere.embed-v4:0` inference-profile
+   ARN (the re-embed path of record — 300k tokens/min vs 150k on-demand),
+   plus `bedrock:Rerank` on `*`. This applies in the same push as the images
+   (single workflow), which is acceptable for rerank: worse case during the
+   window is graceful degradation to fused results. It is NOT acceptable to
+   push images that *require* Bedrock before the policy exists — don't
+   reorder the workflow steps.
+3. **Bedrock model access:** already effective in account 905418285725
+   (verified by live invokes 2026-07-22 — embed-v4 us-east-1, Rerank 3.5
+   us-west-2). Nothing to click.
+
+## Phase B — push (images + terraform + migration)
+
+4. Migration `1783454000000` (scoped cohere HNSW index) is PENDING on RDS and
+   sorts *before* already-applied migrations — TypeORM runs it anyway
+   (proven on the local DB). Run migrations per the existing deploy flow
+   BEFORE the service deploy completes serving traffic.
+5. After deploy: `/health` should be healthy; rerank live (check a cite
+   query returns `relevance_tier`); dense lane still 3-small via the pin.
+
+## Phase C — RDS embed cutover (separate event, after B soaks)
+
+6. **Back up the vectors first** (one-way door → two-way):
+   ```sql
+   CREATE TABLE document_chunks_embedding_backup_<date> AS
+   SELECT id, embedding, embedding_model FROM document_chunks;
+   ```
+   (~250MB per 30k chunks; drop after validation.)
+7. **Re-embed** with the settings that survived contact with the quota:
+   ```
+   AWS_RETRY_MODE=adaptive AWS_MAX_ATTEMPTS=10 \
+   BEDROCK_EMBED_MODEL_ID=us.cohere.embed-v4:0 \
+   python -m scripts.reembed_cohere --batch-size 24
+   ```
+   - Default batch 96 dies on ThrottlingException (150k tokens/min
+     on-demand); the cross-region profile bucket is 2×.
+   - The script commits PER BATCH and skips converted rows — a killed run
+     resumes losslessly.
+   - Credentials: run from an environment with role/auto-refreshing creds
+     (a static ~1h token WILL expire mid-run; that's how local take 1 died).
+8. **Flip the pins together**: remove `EMBEDDING_MODEL` from BOTH
+   `SEARCH_SERVICE_ENV` and `INGESTION_WORKER_ENV`, redeploy both services.
+   A worker left pinned silently writes 3-small rows into an all-cohere
+   corpus.
+9. **Re-validate the cite floor** — the embed-v4 candidate pool MOVES it
+   (locally: 0.08 → 0.10). Run `scripts/capture_cite_scores.py` with
+   `CITE_LOGIT_FLOOR=0` + `scripts/analyze_cite_scores.py`, adjust config
+   if the peak shifted, then run the full eval battery for the
+   before/after record.
+10. After soak: write the 3-small partial-index DROP migration (anticipated
+    in `1783454000000`'s comment) and drop the backup table.
+
+## Phase D — Mistral parse flip (only after the bake-off Phase 1 gate passes)
+
+11. Set `PARSE_BACKEND=mistral` in `INGESTION_WORKER_ENV`, redeploy the
+    worker. New ingests parse via Mistral OCR; existing docs re-parse via
+    `scripts/reingest_all.py` (per-batch pipeline; language stage now uses
+    multi-window detection so bilingual covers don't flip
+    `documents.language`).
+12. Diff `documents.language` before/after any bulk re-ingest; expected
+    legitimate flips: English-edition PDFs carrying native-language CSV
+    labels (see todos).
+
+## Open decision that gates this deploy
+
+- **Dense-lane failure mode**: post-cutover, a Bedrock embed failure 500s
+  `/query` (rerank degrades gracefully; dense does not). Decide: sparse-only
+  fallback + logged warning, or accept the hard dependency. Tracked in
+  `docs/plans/2026-07-22-multilingual-v3-todos.md`.
+
+## Rollback
+
+- Retrieval (pre-cutover): revert images; the pin means the corpus was
+  untouched.
+- Embed cutover: restore vectors from the backup table
+  (`UPDATE … FROM document_chunks_embedding_backup_<date>`), re-add the
+  pins, redeploy.
+- Parse flip: unset `PARSE_BACKEND`; previously parsed docs keep their
+  Mistral text until re-ingested (contract-compatible either way).
