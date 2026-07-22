@@ -47,7 +47,16 @@ changes gate on `npm run eval:answer-retrieval`.
 
 ## Sequenced plan
 
-### L0 — on the v3 branch before/at merge (small, zero quality risk)
+### L0 — DONE 2026-07-22 (commit `e7bcd6e`), on the v3 branch/PR #248
+
+All five items landed, quality verified byte-identical (cite
+P30.6/R83.1/F1 43.2), 204 tests green. First live measurements from the
+new instrumentation (laptop, cross-region): total 1322ms cold-ish →
+680ms on a repeat query (embed LRU hit: embed_ms 398.7 → 0.0);
+rerank ~780ms; sparse 149ms; dense DB 138ms; passage assembly 1.2ms.
+Notable: the embed hop measured ~400ms from a laptop — larger than the
+budget's 50–130ms in-region estimate; the deployed EMF histograms will
+settle the real number.
 1. **Adopt `d214f3f` (off-event-loop)** — cherry-pick/adapt onto v3 (23 lines
    in main.py + tests; expect a small conflict with the v3 rerank changes).
 2. **Instrumentation**: per-stage timers into the open-ended `debug` dict
