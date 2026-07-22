@@ -13,11 +13,10 @@ import numpy as np
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 
+from app.config import EMBEDDING_DIMENSIONS, get_settings
 from app.db import get_pool
 
 logger = logging.getLogger(__name__)
-
-EMBEDDING_MODEL = "text-embedding-3-small"
 
 _CHUNKS_SQL = """
     SELECT dc.legacy_chunk_id, dc.text, dc.node_metadata
@@ -29,14 +28,19 @@ _CHUNKS_SQL = """
 # corpus_order reproduces the legacy node build order: BM25 breaks score ties
 # by corpus position, so any other order changes tail rankings vs legacy.
 
-_DENSE_SQL = """
+# The vector(N) cast must match the configured model's dimension — it is
+# interpolated from EMBEDDING_DIMENSIONS (trusted ints, never user input) so
+# the model-scoped partial HNSW index can serve the query. The model filter
+# keeps the cutover window safe: cohere-embed-v4 and text-embedding-3-small
+# rows coexist until the re-embed is validated (spec v3 §8.1).
+_DENSE_SQL_TMPL = """
     SELECT dc.legacy_chunk_id, dc.text, dc.node_metadata,
-           1 - (dc.embedding::vector(1536) <=> %(q)s) AS similarity
+           1 - (dc.embedding::vector({dim}) <=> %(q)s) AS similarity
     FROM document_chunks dc
     JOIN documents d ON d.id = dc.document_id
     WHERE d.status = 'searchable'
       AND dc.embedding_model = %(model)s
-    ORDER BY dc.embedding::vector(1536) <=> %(q)s
+    ORDER BY dc.embedding::vector({dim}) <=> %(q)s
     LIMIT %(k)s
 """
 
@@ -98,20 +102,31 @@ class PgVectorRetriever(BaseRetriever):
         super().__init__(**kwargs)
         self._embed_model = embed_model
         self._similarity_top_k = similarity_top_k
+        # Per-request latency split (L0 instrumentation): instances are
+        # created per request, so these attrs are race-free.
+        self.embed_ms: float | None = None
+        self.db_ms: float | None = None
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        import time as _time
+
+        model = get_settings().embedding_model
+        t0 = _time.time()
         qvec = np.array(
             self._embed_model.get_query_embedding(query_bundle.query_str),
             dtype=np.float32,
         )
+        self.embed_ms = round((_time.time() - t0) * 1000, 1)
         results = []
+        t0 = _time.time()
         with get_pool().connection() as conn:
             # Near-exact ANN recall at this corpus size (ef_search cap is 1000).
             conn.execute("SET LOCAL hnsw.ef_search = 1000")
             rows = conn.execute(
-                _DENSE_SQL,
-                {"q": qvec, "model": EMBEDDING_MODEL, "k": self._similarity_top_k},
+                _DENSE_SQL_TMPL.format(dim=EMBEDDING_DIMENSIONS[model]),
+                {"q": qvec, "model": model, "k": self._similarity_top_k},
             ).fetchall()
+        self.db_ms = round((_time.time() - t0) * 1000, 1)
         for legacy_id, text, meta, similarity in rows:
             results.append(
                 NodeWithScore(

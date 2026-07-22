@@ -8,8 +8,14 @@
  * it turns ~3min/query (CPU rerank of a 500-candidate pool) into seconds.
  * Used to compare keyword-lane candidates before/after replacement.
  *
- * Usage: npx tsx evaluation/run-non-english-smoke.ts [--label baseline]
+ * Usage: npx tsx evaluation/run-non-english-smoke.ts [--label baseline] [--rerank]
  * (search-service must be running; see CLAUDE.md)
+ *
+ * --rerank: exercise the full cite pipeline (cross-encoder + logit floor +
+ * tiers) instead of lane comparison. Records the target's post-rerank doc
+ * rank, its relevance tier, and how many docs survived the floor. Used to
+ * compare rerankers/floors before/after a model swap (Phase B, multilingual
+ * spec 2026-07-07).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -29,6 +35,9 @@ interface LaneRanks {
   final_rank: number | null;
   bm25_top5: string[];
   latency_ms: number;
+  // --rerank only:
+  target_tier?: string | null;
+  docs_after_floor?: number;
 }
 
 function docRank(results: { doc_id: string }[], targets: string[]): number | null {
@@ -59,6 +68,7 @@ function docOrder(results: { doc_id: string }[], n: number): string[] {
 async function main() {
   const labelIdx = process.argv.indexOf('--label');
   const label = labelIdx >= 0 ? process.argv[labelIdx + 1] : 'run';
+  const rerank = process.argv.includes('--rerank');
   const smokePath = path.join(__dirname, 'non-english-smoke.json');
   const smoke = JSON.parse(fs.readFileSync(smokePath, 'utf-8'));
   const queries: SmokeQuery[] = smoke.queries;
@@ -77,7 +87,7 @@ async function main() {
         query: q.query,
         mode: 'cite',
         max_results: 150,
-        rerank: false,
+        rerank,
         return_intermediate_results: true,
       }),
     });
@@ -100,6 +110,9 @@ async function main() {
     if (denseRank !== null) denseHits += 1;
     if (finalRank !== null) finalHits += 1;
 
+    const targetDoc = (data.docs || []).find((d: { doc_id: string }) =>
+      q.target_doc_ids.includes(d.doc_id),
+    );
     results[q.id] = {
       query: q.query,
       language: q.language,
@@ -108,14 +121,24 @@ async function main() {
       final_rank: finalRank,
       bm25_top5: docOrder(data.bm25_results || [], 5),
       latency_ms: latency,
+      ...(rerank
+        ? {
+            target_tier: targetDoc?.metadata?.relevance_tier ?? null,
+            docs_after_floor: data.total_results,
+          }
+        : {}),
     };
+    const rerankInfo = rerank
+      ? `  tier=${targetDoc?.metadata?.relevance_tier ?? '-'}  floor_docs=${data.total_results}`
+      : '';
     console.log(
-      `${q.id}  bm25=${bm25Rank ?? '-'}  dense=${denseRank ?? '-'}  final=${finalRank ?? '-'}  (${latency}ms)  ${q.query}`,
+      `${q.id}  bm25=${bm25Rank ?? '-'}  dense=${denseRank ?? '-'}  final=${finalRank ?? '-'}${rerankInfo}  (${latency}ms)  ${q.query}`,
     );
   }
 
   const summary = {
     label,
+    rerank,
     timestamp: new Date().toISOString(),
     totals: {
       queries: queries.length,

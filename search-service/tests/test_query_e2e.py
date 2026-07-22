@@ -43,12 +43,17 @@ class _StubEmbedModel:
 
 
 class _StubReranker:
-    """Reranker stub: sort by existing score desc, slice to top_n."""
+    """Reranker stub: keep the fused order but emit 0-1 relevance scores like
+    the real Bedrock Cohere Rerank client — the cite floor/tiers downstream
+    are calibrated on that scale, and raw RRF scores (~0.008-0.03) would all
+    land below the floor."""
 
     def postprocess_nodes(self, nodes, query_bundle, top_n=None):
         sorted_nodes = sorted(nodes, key=lambda n: (n.score or 0.0), reverse=True)
         if top_n is not None:
-            return sorted_nodes[:top_n]
+            sorted_nodes = sorted_nodes[:top_n]
+        for i, node in enumerate(sorted_nodes):
+            node.score = max(0.05, 0.95 - i * 0.002)
         return sorted_nodes
 
 
@@ -85,6 +90,17 @@ def booted_service(tmp_path_factory):
 
     import app.main as _main
 
+    # These are CONTRACT tests: retrieval must run against whatever model the
+    # qa corpus rows actually carry (text-embedding-3-small before the v3 B1
+    # cutover, cohere-embed-v4 after), with all embedding calls stubbed.
+    with psycopg.connect(_QA_DB_URL) as _conn:
+        _row = _conn.execute(
+            """SELECT embedding_model FROM document_chunks
+               WHERE embedding_model IS NOT NULL
+               GROUP BY 1 ORDER BY count(*) DESC LIMIT 1"""
+        ).fetchone()
+    _corpus_model = _row[0] if _row else "text-embedding-3-small"
+
     # Patch the module-level settings reference in app.main (it captured
     # get_settings() at import time and won't re-read the env var).
     _orig_settings = _main.settings
@@ -92,12 +108,21 @@ def booted_service(tmp_path_factory):
         database_url=_QA_DB_URL,
         retrieval_backend="postgres",
         environment="test",
+        embedding_model=_corpus_model,
         OPENAI_API_KEY=os.environ.get("OPENAI_API_KEY", "test-key"),
     )
+    # pg_store retrievers read get_settings() per query — point the cached
+    # settings at the same model as the corpus rows.
+    os.environ["EMBEDDING_MODEL"] = _corpus_model
+    get_settings.cache_clear()
 
-    # Monkeypatch OpenAIEmbedding factory before calling load_from_postgres
+    # Monkeypatch both embedding entry points before load_from_postgres:
+    # the OpenAI factory (legacy) and the Bedrock adapter (cohere path).
+    import app.bedrock_embed as _bedrock_embed
     _orig_embed = _main.OpenAIEmbedding
     _main.OpenAIEmbedding = lambda **kw: _StubEmbedModel()
+    _orig_bedrock_adapter = _bedrock_embed.BedrockCohereQueryEmbedding
+    _bedrock_embed.BedrockCohereQueryEmbedding = lambda: _StubEmbedModel()
 
     # Patch init_rerankers to return stubs
     _orig_init_rerankers = _main.init_rerankers
@@ -111,6 +136,8 @@ def booted_service(tmp_path_factory):
         # Restore originals
         _main.settings = _orig_settings
         _main.OpenAIEmbedding = _orig_embed
+        _bedrock_embed.BedrockCohereQueryEmbedding = _orig_bedrock_adapter
+        os.environ.pop("EMBEDDING_MODEL", None)
         _main.init_rerankers = _orig_init_rerankers
         # Close pool
         if _db._pool is not None:
@@ -210,6 +237,26 @@ class TestQueryEndpointCiteMode:
         for doc in data["docs"]:
             assert "relevance_tier" in doc["metadata"], (
                 f"Missing relevance_tier in metadata for doc {doc['doc_id']}"
+            )
+
+    @requires_db
+    def test_cite_mode_unreranked_skips_floor_and_tiers(self, booted_service):
+        """rerank=false (diagnostics/lane runs): scores are raw RRF
+        (~0.008-0.03), NOT the 0-1 relevance scale the floor/tiers are
+        calibrated on — the floor must not silently drop everything and no
+        tier should be claimed."""
+        client, _ = booted_service
+        resp = client.post(
+            "/query",
+            json={"query": "electric buses", "mode": "cite", "max_results": 10,
+                  "rerank": False},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["docs"], "unreranked cite results must not be floored away"
+        for doc in data["docs"]:
+            assert "relevance_tier" not in doc["metadata"], (
+                "tier labels are rerank-score-based; unreranked results must not carry one"
             )
 
     @requires_db

@@ -129,7 +129,7 @@ def _load_pdf_bytes(doc) -> bytes | None:
     return local.read_bytes() if local.exists() else None
 
 
-def _parse_pdf(content: bytes) -> tuple[str, list]:
+def _parse_pdf_pypdf(content: bytes) -> tuple[str, list]:
     from llama_index.readers.file import PDFReader
 
     with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
@@ -144,6 +144,46 @@ def _parse_pdf(content: bytes) -> tuple[str, list]:
             pos += len(text) + 2
             boundaries.append({"page": i + 1, "end_pos": pos - 2})
     return "\n\n".join(page_texts), boundaries
+
+
+def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
+    """Mistral OCR (spec §7 as amended 2026-07-22): per-page markdown.
+    Boundaries carry the PARSER's page indices, so a page that comes back
+    empty (full-bleed graphic) doesn't shift later pages' labels — this is
+    what structurally fixes R4 (zh boundaries vs OpenCC length changes)."""
+    import base64
+
+    import requests
+
+    settings = get_settings()
+    if not settings.mistral_api_key:
+        raise RuntimeError("PARSE_BACKEND=mistral requires MISTRAL_API_KEY")
+    data_uri = ("data:application/pdf;base64,"
+                + base64.b64encode(content).decode())
+    r = requests.post(
+        "https://api.mistral.ai/v1/ocr",
+        headers={"Authorization": f"Bearer {settings.mistral_api_key}"},
+        json={"model": settings.mistral_ocr_model,
+              "document": {"type": "document_url", "document_url": data_uri}},
+        timeout=900,
+    )
+    r.raise_for_status()
+    pages = r.json().get("pages", [])
+    page_texts, boundaries, pos = [], [], 0
+    for i, page in enumerate(pages):
+        text = (page.get("markdown") or "").strip()
+        if text:
+            page_texts.append(text)
+            pos += len(text) + 2
+            boundaries.append({"page": int(page.get("index", i)) + 1,
+                               "end_pos": pos - 2})
+    return "\n\n".join(page_texts), boundaries
+
+
+def _parse_pdf(content: bytes) -> tuple[str, list]:
+    if get_settings().parse_backend == "mistral":
+        return _parse_pdf_mistral(content)
+    return _parse_pdf_pypdf(content)
 
 
 @stage("parse")

@@ -287,7 +287,7 @@ async function analyzeReranking(
       docs_missing: missingDocs,
       details: {
         total_retrieved: docs.length,
-        reranker_model: 'cross-encoder/ms-marco-MiniLM-L-6-v2'
+        reranker_model: 'cohere.rerank-v3-5:0 (Bedrock)'
       }
     };
   } catch (error: any) {

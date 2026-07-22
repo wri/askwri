@@ -735,6 +735,39 @@ class TestDetectUnit:
         second = detect(_EN_TEXT)
         assert first == second
 
+    def test_bilingual_english_cover_does_not_mask_zh_body(self):
+        """WRI zh/es/pt reports carry English cover/title/abstract pages; a
+        head-only sample detects 'en' and a full re-ingest would corrupt
+        documents.language (found 2026-07-22 during the Phase 1 pilot —
+        4 of 9 non-EN fixture docs flipped, under BOTH parsers)."""
+        from worker.stages.language import detect
+        cover = _EN_TEXT * 30          # ~7.8k chars of English front matter
+        body = _ZH_SIMPLIFIED_TEXT * 120
+        assert detect(cover + body) == "zh"
+
+    def test_bilingual_english_cover_does_not_mask_es_body(self):
+        from worker.stages.language import detect
+        cover = _EN_TEXT * 30
+        body = _ES_TEXT * 60
+        assert detect(cover + body) == "es"
+
+    def test_interleaved_zh_en_detects_zh_by_cjk_fraction(self):
+        """zh papers with English covers AND English reference/table sections
+        can lose the window vote [en, zh, en] because langdetect calls
+        35%-CJK mixed windows 'en' (found 2026-07-22: docs 1665/5424 flipped
+        zh->en). Character evidence beats langdetect: substantial CJK
+        fraction across the samples means zh."""
+        from worker.stages.language import detect
+        mixed = _EN_TEXT + _ZH_SIMPLIFIED_TEXT  # ~35% CJK, like a real page
+        doc = (mixed * 40) + (_EN_TEXT * 20)    # en-heavy tail (references)
+        assert detect(doc) == "zh"
+
+    def test_english_doc_mentioning_china_stays_en(self):
+        """A few CJK terms in an English doc must not trip the zh gate."""
+        from worker.stages.language import detect
+        doc = (_EN_TEXT * 40) + "北京 上海 " + (_EN_TEXT * 40)
+        assert detect(doc) == "en"
+
     def test_unsupported_language_falls_back_to_en(self):
         """German (not in SUPPORTED) falls back to 'en'."""
         from worker.stages.language import detect
@@ -1429,6 +1462,18 @@ def _insert_embed_document(conn, *, external_id, language="en", languages=None,
 
 class TestEmbedStage:
 
+    @pytest.fixture(autouse=True)
+    def _legacy_embedding_model(self, monkeypatch):
+        """These tests cover the LEGACY dense path (text-embedding-3-small);
+        the stage is model-aware since v3 B1 and defaults to cohere-embed-v4.
+        The Bedrock path is covered by TestEmbedStageCohere. The bm25s sparse
+        machinery is identical on both paths (v3: sparse unchanged)."""
+        monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-small")
+        from app.config import get_settings
+        get_settings.cache_clear()
+        yield
+        get_settings.cache_clear()
+
     def test_basic_chunks_written_with_correct_ids_and_corpus_order(
         self, stages_test_db, monkeypatch
     ):
@@ -1980,6 +2025,80 @@ class TestEmbedStage:
         assert rows[0][0] == "PRE-EXISTING CHUNK TEXT", (
             f"pre-existing chunk must survive untouched; got {rows[0][0]!r}"
         )
+
+
+class TestEmbedStageCohere:
+    """v3 B1: with EMBEDDING_MODEL=cohere-embed-v4 (the default) the embed
+    stage encodes dense via Bedrock and writes embedding_model=
+    'cohere-embed-v4'/dimension=1536. The English bm25s sparse machinery
+    (keyword_vocab upserts + impact vectors) runs UNCHANGED — v3 keeps the
+    sparse lane as-is."""
+
+    @pytest.fixture(autouse=True)
+    def _cohere_embedding_model(self, monkeypatch):
+        monkeypatch.setenv("EMBEDDING_MODEL", "cohere-embed-v4")
+        from app.config import get_settings
+        get_settings.cache_clear()
+        yield
+        get_settings.cache_clear()
+
+    def test_cohere_rows_written_with_bm25_sparse_intact(
+        self, stages_test_db, monkeypatch
+    ):
+        bedrock_calls = []
+
+        def fake_bedrock_embed(texts):
+            bedrock_calls.append(list(texts))
+            return [[0.02] * 1536 for _ in texts]
+
+        monkeypatch.setattr(
+            "worker.stages.embed._embed_texts_bedrock", fake_bedrock_embed
+        )
+
+        from psycopg.types.json import Jsonb
+        page_boundaries = [{"page": 1, "end_pos": len(_EMBED_LONG_TEXT)}]
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute(
+                """INSERT INTO keyword_corpus_stats (id, n_chunks, avgdl, k1, b, sparse_dim)
+                   VALUES (1, 100, 250.0, 1.5, 0.75, 1000000)
+                   ON CONFLICT (id) DO NOTHING"""
+            )
+            doc_id = _insert_embed_document(
+                conn, external_id="embed-cohere-doc", language="en",
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _EMBED_LONG_TEXT, len(_EMBED_LONG_TEXT), Jsonb(page_boundaries)),
+            )
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'en', 'long', 'A long summary of the document.', 'generated')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.embed import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            rows = conn.execute(
+                """SELECT legacy_chunk_id, embedding_model, dimension,
+                          sparse::text, vector_dims(embedding::vector(1536))
+                   FROM document_chunks WHERE document_id=%s""",
+                (doc_id,),
+            ).fetchall()
+            vocab_n = conn.execute("SELECT count(*) FROM keyword_vocab").fetchone()[0]
+
+        assert len(rows) >= 2
+        assert all(r[1] == "cohere-embed-v4" for r in rows), f"models: {[r[1] for r in rows]}"
+        assert all(r[2] == 1536 for r in rows)
+        assert all(r[4] == 1536 for r in rows)
+        # sparse lane UNCHANGED: bm25 impact vectors (/1000000) + vocab upserts
+        assert all(r[3] is not None and r[3].endswith("/1000000") for r in rows)
+        assert vocab_n > 0, "bm25 keyword_vocab machinery must still run (v3: sparse unchanged)"
+        assert len(bedrock_calls) == 1, "Expected exactly one Bedrock embed call"
 
 
 # ---------------------------------------------------------------------------

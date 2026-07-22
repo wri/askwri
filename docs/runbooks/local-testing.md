@@ -5,6 +5,18 @@ each AWS dependency is replaced by locally, the test commands in
 cheapest-first order, and the few things that genuinely cannot be tested
 without a deploy.
 
+> **Multilingual-v3 update (2026-07-22): "no AWS access" no longer covers
+> dense retrieval.** The local qa DB corpus is all `cohere-embed-v4` and the
+> dense lane + rerank are Bedrock API calls — live queries need AWS creds
+> (`aws login`; for long-running processes use the boto3 `login` provider
+> via `botocore[crt]`, see `docs/runbooks/bedrock-local-testing.md` Step 2).
+> Without creds the service now degrades: rerank falls back to fused,
+> dense falls back to sparse-only (`/health` reports `dense_lane`).
+> The **qa-branch main checkout cannot serve sane dense results against
+> this DB** until multilingual-v3 merges — run the search service from
+> `.worktrees/multilingual-v3`. Unit/integration test suites remain fully
+> offline (Bedrock is stubbed).
+
 Companions: `docs/runbooks/phase0-cutover.md` (initial local setup — docker
 Postgres, venv, data load) and `docs/runbooks/qa-push-deploy.md` (the deploy
 side). This guide assumes the cutover setup is done.

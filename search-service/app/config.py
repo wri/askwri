@@ -2,6 +2,14 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Per-row document_chunks.embedding_model values and their vector dimensions.
+# Both models keep scoped HNSW indexes during the cutover window (spec v3 §8.1).
+EMBEDDING_DIMENSIONS = {
+    "cohere-embed-v4": 1536,
+    "text-embedding-3-small": 1536,
+}
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
@@ -47,20 +55,78 @@ class Settings(BaseSettings):
     tag_confidence_accept: float = 0.7         # >= -> accepted, else suggested
     quality_min_chars_per_page: int = 200      # extraction_confidence gate input
 
-    # Cite mode reranker logit thresholds (calibrated 2026-03-19)
-    cite_logit_floor: float = -9.0        # Drop docs below this raw logit
-    cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores
-    cite_partial_threshold: float = -7.8  # 25th percentile of relevant scores
+    # Dense embedding model for BOTH worker chunk writes and query-side
+    # retrieval (spec v3 §4: Cohere embed-v4 via Bedrock — an API call, no
+    # self-hosted model). The English bm25s sparse lane is independent of
+    # this and unchanged. Rollback: EMBEDDING_MODEL=text-embedding-3-small
+    # while the 3-small rows/index still exist.
+    embedding_model: str = "cohere-embed-v4"
 
-    # Answer mode reranker model (swap for benchmarking)
-    answer_reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-12-v2"  # 33M params, 2x depth vs L-6
+    # PDF parse backend (bake-off 2026-07-22, spec §7 amendment):
+    # "pypdf" (legacy text-layer extraction, current default until the
+    # Phase 1 retrieval gate passes) | "mistral" (Mistral OCR markdown,
+    # per-page emission — parser page indices fix the R4 zh page-boundary
+    # bug). pypdf remains the validation oracle either way.
+    parse_backend: str = "pypdf"
+    mistral_api_key: str = ""
+    mistral_ocr_model: str = "mistral-ocr-latest"
 
-    # Reranker inference backend: "onnx" for Fargate (fast CPU), "torch" for local dev (Mac Accelerate)
-    reranker_backend: str = "onnx"
+    # Bedrock placement for embed-v4 (spec v3 §5): infra is us-east-2 but
+    # embed-v4 is not natively there — call the nearest hosting region
+    # (cross-region, still in-AWS/IAM).
+    bedrock_embed_region: str = "us-east-1"
+    bedrock_embed_model_id: str = "cohere.embed-v4:0"
+    # Per-call text batch for bulk document embeds (Cohere API cap 96 is the
+    # ceiling). Large docs at 96 blow the tokens/min bucket and error whole
+    # worker jobs — bulk re-ingests/re-embeds set 24 (with
+    # AWS_RETRY_MODE=adaptive).
+    bedrock_embed_batch_size: int = 96
+
+    # Bedrock placement for Cohere Rerank 3.5 (spec v3 §5): not hosted in
+    # us-east-2 — call the nearest hosting region.
+    bedrock_rerank_region: str = "us-west-2"
+    bedrock_rerank_model_id: str = "cohere.rerank-v3-5:0"
+
+    # Candidate-set size sent to the Rerank API. Cost/latency scale with doc
+    # count (spec §9: rerank dominates the per-query budget) — the fused RRF
+    # list is cut to this many before the call.
+    rerank_candidates: int = 100
+
+    # Cite-mode candidate diversification: fused chunk lists cluster in a
+    # handful of top docs (measured: 100 chunks from 5 docs on the golden
+    # set), so cap each doc's chunks in the candidate set to spread the
+    # slots across documents. Doc-level recall lever at unchanged API cost.
+    # Answer mode is uncapped — it wants the best chunks wherever they live.
+    cite_rerank_per_doc_cap: int = 2
+
+    # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
+    # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
+    # values, e.g. floor -9.0, would pass everything on this scale).
+    # Derived 2026-07-22 from live-Bedrock score capture (11 golden cite
+    # queries + 16-query non-EN smoke set, per-doc-capped candidates) and
+    # re-derived after EACH corpus change — the floor moves every time the
+    # chunk text or embedding model changes (0.08 on the 3-small corpus →
+    # 0.10 post-embed-cutover → 0.09 post-Mistral-re-parse, which holds the
+    # recall gate at R83.1 with P30.6/F1 44.7). Re-derive with
+    # scripts/capture_cite_scores.py + analyze_cite_scores.py after any
+    # candidate-pool change; the deployed cutover gets its own derivation.
+    # TODO(golden-set): formal per-language floor/tier recalibration.
+    cite_logit_floor: float = 0.09        # Drop docs below this relevance score
+    cite_strong_threshold: float = 0.70
+    cite_partial_threshold: float = 0.30
+
+    # CloudWatch EMF latency metrics: one pure-JSON stdout line per /query
+    # with per-stage timings (L0 latency instrumentation). The ECS awslogs
+    # driver ships it; CloudWatch parses the embedded metric format.
+    emit_emf_metrics: bool = True
 
     # SSL/Zscaler VPN Workaround
     use_custom_ssl_client: bool = False
     custom_ca_bundle: str = ""
+
+    @property
+    def embedding_dimension(self) -> int:
+        return EMBEDDING_DIMENSIONS[self.embedding_model]
 
 @lru_cache()
 def get_settings() -> Settings:

@@ -83,8 +83,8 @@ from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.postprocessor import SentenceTransformerRerank
 
+from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
 
 settings = get_settings()
@@ -123,6 +123,10 @@ service_state = {
     "indexing_task": None,
     "pg_dense_ready": False,
     "embed_model": None,
+    # Dense-lane degradation marker (sparse-only fallback, 2026-07-22):
+    # set on a dense retrieve failure, cleared on the next success.
+    "dense_degraded_at": None,
+    "dense_error": None,
 }
 
 class QueryRequest(BaseModel):
@@ -170,44 +174,6 @@ class QueryResponse(BaseModel):
     fusion_results: Optional[List[Dict[str, Any]]] = None
     reranked_results: Optional[List[Dict[str, Any]]] = None
 
-class OnnxReranker:
-    """Cross-encoder reranker using ONNX or PyTorch backend via sentence-transformers.
-
-    Unlike SentenceTransformerRerank, this does not mutate global state per-request.
-    top_n is passed per-call to avoid race conditions with concurrent requests.
-    """
-
-    def __init__(self, model: str, top_n: int = 20, backend: str = "onnx"):
-        from sentence_transformers import CrossEncoder
-        self.top_n = top_n
-        self.model_name = model
-        try:
-            self._cross_encoder = CrossEncoder(model, backend=backend)
-            logger.info(f"Loaded reranker {model} with {backend} backend")
-        except Exception as e:
-            logger.warning(f"Failed to load {backend} backend for {model}: {e}. Falling back to torch.")
-            self._cross_encoder = CrossEncoder(model, backend="torch")
-
-    def postprocess_nodes(self, nodes, query_bundle, top_n=None):
-        """Score and rerank nodes. top_n can be overridden per-call."""
-        if not nodes:
-            return []
-        if query_bundle is None:
-            return nodes
-
-        effective_top_n = top_n if top_n is not None else self.top_n
-        query = query_bundle.query_str
-        pairs = [[query, node.node.get_content()] for node in nodes]
-
-        scores = self._cross_encoder.predict(pairs)
-
-        for node, score in zip(nodes, scores):
-            node.score = float(score)
-
-        nodes.sort(key=lambda n: n.score, reverse=True)
-        return nodes[:effective_top_n]
-
-
 class HybridFusionRetriever(BaseRetriever):
     """Custom hybrid retriever combining dense and sparse results using RRF"""
 
@@ -252,11 +218,41 @@ class HybridFusionRetriever(BaseRetriever):
             logger.info(f"Query expansion: {query_bundle.query_str[:50]}... → {expanded_query[:80]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
 
-        # Run dense + sparse retrieval in parallel
+        # Run dense + sparse retrieval in parallel, timing each lane
+        # (L0 instrumentation: dense vs sparse were indistinguishable in the
+        # old coarse stage1 timer). self is per-request — attrs are race-free.
+        self.timings = {}
+
+        def _timed(fn, key, arg):
+            def run():
+                t0 = time.time()
+                out = fn(arg)
+                self.timings[key] = round((time.time() - t0) * 1000, 1)
+                return out
+            return run
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            dense_future = executor.submit(self.vector_retriever.retrieve, query_bundle)
-            sparse_future = executor.submit(self.bm25_retriever.retrieve, expanded_bundle)
-            dense_results = dense_future.result()
+            dense_future = executor.submit(
+                _timed(self.vector_retriever.retrieve, "dense_ms", query_bundle))
+            sparse_future = executor.submit(
+                _timed(self.bm25_retriever.retrieve, "sparse_ms", expanded_bundle))
+            # Post-cutover the dense lane is a Bedrock API call with no local
+            # fallback (query embed via BedrockCohereQueryEmbedding). Degrade
+            # to sparse-only rather than 500 — mirrors the rerank lane's
+            # degradation to fused (decision 2026-07-22). Sparse-only is
+            # English-keyword-only, so surface it via /health, not silently.
+            try:
+                dense_results = dense_future.result()
+                service_state["dense_degraded_at"] = None
+                service_state["dense_error"] = None
+            except Exception as exc:  # noqa: BLE001 — any embed/DB failure degrades, sparse still raises below
+                from datetime import datetime, timezone
+                logger.warning(
+                    f"Dense lane failed ({exc}) — serving sparse-only results (degraded)"
+                )
+                service_state["dense_degraded_at"] = datetime.now(timezone.utc).isoformat()
+                service_state["dense_error"] = str(exc)
+                dense_results = []
             sparse_results = sparse_future.result()
 
         # Slice BM25 results to requested top_k (BM25Retriever is a singleton built
@@ -430,35 +426,22 @@ def get_passage_with_context(chunk_text: str, full_document_text: str, context_c
     return result
 
 def init_rerankers():
-    """Load mode-specific cross-encoder rerankers. Returns (answer, cite)."""
-    logger.info(f"🔄 Loading cross-encoder rerankers (backend: {settings.reranker_backend})...")
-    step_start = time.time()
+    """Build mode-specific Bedrock Rerank clients. Returns (answer, cite).
 
-    answer_reranker_model = settings.answer_reranker_model
-    cite_reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-    if settings.reranker_backend == "onnx":
-        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, ONNX)...")
-        reranker_start = time.time()
-        reranker_answer = OnnxReranker(model=answer_reranker_model, top_n=20, backend="onnx")
-        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
-
-        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, ONNX)...")
-        reranker_start = time.time()
-        reranker_cite = OnnxReranker(model=cite_reranker_model, top_n=1000, backend="onnx")
-        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
-    else:
-        logger.info(f"   [1/2] Loading Answer mode reranker ({answer_reranker_model}, torch)...")
-        reranker_start = time.time()
-        reranker_answer = SentenceTransformerRerank(model=answer_reranker_model, top_n=20)
-        logger.info(f"   ✓ Answer reranker loaded in {time.time() - reranker_start:.1f}s")
-
-        logger.info(f"   [2/2] Loading Cite mode reranker ({cite_reranker_model}, torch)...")
-        reranker_start = time.time()
-        reranker_cite = SentenceTransformerRerank(model=cite_reranker_model, top_n=1000)
-        logger.info(f"   ✓ Cite reranker loaded in {time.time() - reranker_start:.1f}s")
-
-    logger.info(f"✅ All rerankers loaded in {time.time() - step_start:.1f}s")
+    v3 (spec §4): rerank is Cohere Rerank 3.5 via the Bedrock Rerank API for
+    BOTH modes — nothing is loaded in-process, so this is instant. top_n
+    matches the prior mode defaults; the candidate cut happens inside
+    BedrockReranker (settings.rerank_candidates).
+    """
+    reranker_answer = BedrockReranker(top_n=20)
+    reranker_cite = BedrockReranker(
+        top_n=1000, per_doc_cap=settings.cite_rerank_per_doc_cap
+    )
+    logger.info(
+        f"✅ Bedrock rerankers ready ({settings.bedrock_rerank_model_id} in "
+        f"{settings.bedrock_rerank_region}; candidates={settings.rerank_candidates}, "
+        f"cite per-doc cap={settings.cite_rerank_per_doc_cap})"
+    )
     return reranker_answer, reranker_cite
 
 
@@ -616,7 +599,13 @@ def load_from_postgres():
 
     logger.info("Loading retrieval state from Postgres...")
 
-    if _use_custom_ssl_client and _ca_bundle:
+    if settings.embedding_model == "cohere-embed-v4":
+        # v3 dense lane: query encode is a Bedrock API call (spec §4) — the
+        # search-service stays model-free.
+        from app.bedrock_embed import BedrockCohereQueryEmbedding
+
+        embed_model = BedrockCohereQueryEmbedding()
+    elif _use_custom_ssl_client and _ca_bundle:
         http_client = httpx.Client(verify=_ca_bundle)
         embed_model = OpenAIEmbedding(
             model="text-embedding-3-small",
@@ -676,7 +665,35 @@ def load_from_postgres():
     service_state["embed_model"] = embed_model
     service_state["vector_index"] = None
     service_state["pg_dense_ready"] = True
+    _warm_backends()
     logger.info(f"✅ Postgres-backed retrieval ready ({len(service_state['document_texts'])} documents)")
+
+
+def _warm_backends():
+    """Best-effort boot warmup (L0 latency): pre-build the Bedrock clients
+    and do one tiny embed so the first user query doesn't pay client
+    construction + TLS handshakes (~200-500ms cold tail). Never fails boot —
+    without creds (local dev) it logs and moves on; the tuned botocore
+    timeouts keep the failure fast."""
+    import time as _time
+
+    t0 = _time.time()
+    try:
+        from app import bedrock_embed, bedrock_rerank
+
+        bedrock_rerank.get_client()
+        if settings.embedding_model == "cohere-embed-v4":
+            bedrock_embed.embed_query("warmup")
+        logger.info(f"🔥 Bedrock clients warmed in {_time.time() - t0:.2f}s")
+    except Exception as exc:  # noqa: BLE001 — warmup is advisory
+        logger.warning(f"Bedrock warmup skipped ({exc}) — first query pays the cold start")
+    try:
+        from app.db import get_pool
+
+        with get_pool().connection() as conn:
+            conn.execute("SELECT 1")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"DB warmup skipped ({exc})")
 
 
 async def _run_indexing_in_background():
@@ -809,6 +826,11 @@ async def health_check():
             "answer_mode": service_state["reranker_answer"] is not None,
             "cite_mode": service_state["reranker_cite"] is not None,
         },
+        "dense_lane": ({"status": "degraded",
+                        "degraded_at": service_state["dense_degraded_at"],
+                        "error": service_state["dense_error"]}
+                       if service_state.get("dense_degraded_at")
+                       else {"status": "live"}),
         "cache_stats": service_state["cache"].get_cache_stats() if service_state.get("cache") else {}
     }
 
@@ -824,6 +846,47 @@ def make_dense_retriever(top_k: int):
     )
 
 
+def _emit_query_emf(mode: str, debug: dict) -> None:
+    """CloudWatch EMF metric line for per-stage /query latency histograms
+    (L0 instrumentation). Pure-JSON stdout line — the ECS awslogs driver
+    ships it and CloudWatch parses the embedded metric format; locally it
+    is one log line per query. Best-effort: never fails a request."""
+    if not settings.emit_emf_metrics:
+        return
+    try:
+        import json as _json
+
+        lanes = debug.get("lane_timings") or {}
+        metrics = {
+            "total_ms": debug.get("total_ms"),
+            "stage1_ms": (debug.get("stage1_time") or 0) * 1000,
+            "rerank_ms": (debug.get("stage2_time") or 0) * 1000,
+            "dense_ms": lanes.get("dense_ms"),
+            "sparse_ms": lanes.get("sparse_ms"),
+            "embed_ms": lanes.get("embed_ms"),
+            "dense_db_ms": lanes.get("dense_db_ms"),
+            "passage_ms": debug.get("passage_ms"),
+        }
+        metrics = {k: round(v, 1) for k, v in metrics.items() if v is not None}
+        if not metrics:
+            return
+        print(_json.dumps({
+            "_aws": {
+                "Timestamp": int(time.time() * 1000),
+                "CloudWatchMetrics": [{
+                    "Namespace": "AskWRI/Query",
+                    "Dimensions": [["mode"]],
+                    "Metrics": [{"Name": k, "Unit": "Milliseconds"}
+                                for k in metrics],
+                }],
+            },
+            "mode": mode,
+            **metrics,
+        }), flush=True)
+    except Exception:  # noqa: BLE001 — metrics must never break /query
+        logger.debug("EMF emit failed", exc_info=True)
+
+
 @app.post("/query", response_model=QueryResponse)
 async def hybrid_query(request: QueryRequest):
     """
@@ -836,6 +899,7 @@ async def hybrid_query(request: QueryRequest):
     if not dense_ready or not service_state["bm25_retriever"]:
         raise HTTPException(status_code=500, detail="Service not properly initialized")
 
+    request_start = time.time()
     try:
         logger.info(f"Processing hybrid query: '{request.query}' (mode: {request.mode})")
 
@@ -889,7 +953,11 @@ async def hybrid_query(request: QueryRequest):
             stage1_results = [n for n in stage1_results if n.node.metadata.get("doc_id") in request.cite_doc_ids]
             logger.info(f"Answer mode: Filtered to cite_doc_ids ({before_filter} -> {len(stage1_results)})")
 
-        # Stage 2: Local Reranking
+        # Stage 2: Reranking (Bedrock Cohere Rerank — 0-1 relevance scores).
+        # rerank_applied gates the cite floor/tiers downstream: they are
+        # calibrated on the 0-1 relevance scale, and unreranked results carry
+        # raw RRF scores (~0.008-0.03) that would all land below the floor.
+        rerank_applied = False
         if request.rerank and stage1_results:
             base_reranker = (service_state["reranker_answer"] if request.mode == "answer"
                             else service_state["reranker_cite"])
@@ -897,21 +965,16 @@ async def hybrid_query(request: QueryRequest):
             if base_reranker:
                 try:
                     stage2_start = time.time()
-                    # Reranking is CPU-bound for tens of seconds — run in a
-                    # worker thread so the event loop stays responsive
-                    if isinstance(base_reranker, OnnxReranker):
-                        # OnnxReranker: pass top_n per-call (no global mutation)
-                        stage2_results = await asyncio.to_thread(
-                            base_reranker.postprocess_nodes,
-                            stage1_results, query_bundle, top_n=request.rerank_top_n
-                        )
-                    else:
-                        # SentenceTransformerRerank: call with default top_n, then slice
-                        stage2_results = await asyncio.to_thread(
-                            base_reranker.postprocess_nodes,
-                            stage1_results, query_bundle
-                        )
-                        stage2_results = stage2_results[:request.rerank_top_n]
+                    # BedrockReranker (and the e2e stub): per-call top_n, no
+                    # global mutation; candidate cut happens inside the client.
+                    # The rerank is a blocking boto3 round-trip (~0.5s) — run
+                    # in a worker thread so the event loop stays responsive
+                    # (d214f3f adapted to the Bedrock reranker).
+                    stage2_results = await asyncio.to_thread(
+                        base_reranker.postprocess_nodes,
+                        stage1_results, query_bundle, top_n=request.rerank_top_n
+                    )
+                    rerank_applied = True
                     stage2_elapsed = time.time() - stage2_start
                     logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
                 except Exception as e:
@@ -954,22 +1017,32 @@ async def hybrid_query(request: QueryRequest):
                 if doc_id not in doc_groups or node.score > doc_groups[doc_id].score:
                     doc_groups[doc_id] = node
 
-            # Apply logit floor: drop docs below the calibrated threshold
-            pre_floor = len(doc_groups)
-            doc_groups = {k: v for k, v in doc_groups.items()
-                          if v.score >= settings.cite_logit_floor}
-            logger.info(f"Stage 3 (Logit Floor {settings.cite_logit_floor}): {pre_floor} → {len(doc_groups)} docs")
+            # Floor + tiers are calibrated on the reranker's 0-1 relevance
+            # scale — apply them only when reranking actually ran. Unreranked
+            # results (rerank=false diagnostics, reranker outage fallback)
+            # pass through unfloored and untier'd (relevance_tier is optional
+            # in the contract).
+            if rerank_applied:
+                pre_floor = len(doc_groups)
+                doc_groups = {k: v for k, v in doc_groups.items()
+                              if v.score >= settings.cite_logit_floor}
+                logger.info(f"Stage 3 (Relevance Floor {settings.cite_logit_floor}): {pre_floor} → {len(doc_groups)} docs")
 
-            # Assign relevance tiers based on raw logit score
-            for node in doc_groups.values():
-                raw = node.score
-                if raw >= settings.cite_strong_threshold:
-                    tier = "strong"
-                elif raw >= settings.cite_partial_threshold:
-                    tier = "partial"
-                else:
-                    tier = "weak"
-                node.node.metadata["relevance_tier"] = tier
+                for node in doc_groups.values():
+                    raw = node.score
+                    if raw >= settings.cite_strong_threshold:
+                        tier = "strong"
+                    elif raw >= settings.cite_partial_threshold:
+                        tier = "partial"
+                    else:
+                        tier = "weak"
+                    node.node.metadata["relevance_tier"] = tier
+            else:
+                # Legacy in-memory mode shares node objects across requests —
+                # drop any tier a previous reranked query stamped on them.
+                for node in doc_groups.values():
+                    node.node.metadata.pop("relevance_tier", None)
+                logger.info("Stage 3 (Relevance Floor): skipped — results not reranked")
 
             filtered_results = list(doc_groups.values())[:request.max_results]
         else:
@@ -990,6 +1063,7 @@ async def hybrid_query(request: QueryRequest):
             min_score = float(min(node.score for node in filtered_results))
             score_range = max_score - min_score if max_score != min_score else 1.0
 
+        passage_start = time.time()
         for node_with_score in filtered_results:
             node = node_with_score.node
             metadata = node.metadata or {}
@@ -1100,6 +1174,20 @@ async def hybrid_query(request: QueryRequest):
                 "similarity_threshold": request.similarity_threshold,
                 "stage1_time": round(stage1_elapsed, 2) if 'stage1_elapsed' in locals() else None,
                 "stage2_time": round(stage2_elapsed, 2) if 'stage2_elapsed' in locals() else None,
+                # L0 latency instrumentation: per-lane and per-stage splits
+                # the coarse stage timers can't provide.
+                "lane_timings": {
+                    **getattr(hybrid_retriever, "timings", {}),
+                    "embed_ms": getattr(
+                        getattr(hybrid_retriever, "vector_retriever", None),
+                        "embed_ms", None),
+                    "dense_db_ms": getattr(
+                        getattr(hybrid_retriever, "vector_retriever", None),
+                        "db_ms", None),
+                },
+                "passage_ms": round((time.time() - passage_start) * 1000, 1)
+                              if 'passage_start' in locals() else None,
+                "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,
                     "sparse_weight": request.sparse_weight,
@@ -1108,6 +1196,7 @@ async def hybrid_query(request: QueryRequest):
                 }
             }
         }
+        _emit_query_emf(request.mode, response_data["debug"])
 
         # Add intermediate results if diagnostic mode
         if request.return_intermediate_results:

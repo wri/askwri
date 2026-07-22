@@ -1,0 +1,20 @@
+{
+  "description": "Phase 0 parse-quality fixture (bake-off plan 2026-07-02 §5.1, shortlist updated 2026-07-22: pypdf baseline, Bedrock Data Automation, Gemini 3, Mistral OCR). Stratified over WRI layouts with extra weight on zh/es/pt (the v3 multilingual axis). NOTE: the local corpus has no scanned/image-only docs (all 171 searchable docs have healthy text layers), so the plan's scanned category is untestable locally — revisit when scanned intake documents exist.",
+  "pdf_dir": "/tmp/askWRI_docs",
+  "docs": [
+    {"external_id": "2016_towards-a-more-equal-city-framing-the-challenges_8659", "file": "2016_towards-a-more-equal-city-framing-the-challenges_8659.pdf", "language": "en", "pages": 4, "category": "born-digital multi-column flagship"},
+    {"external_id": "2019_how-to-enable-electric-bus-adoption-in-cities_4136", "file": "2019_how-to-enable-electric-bus-adoption-in-cities_4136.pdf", "language": "en", "pages": 12, "category": "journal-style, dense references"},
+    {"external_id": "2022_technical-note-for-a-dataset-of-us-school-bus_8896", "file": "2022_technical-note-for-a-dataset-of-us-school-bus_8896.pdf", "language": "en", "pages": 22, "category": "table-heavy technical note"},
+    {"external_id": "2023_calculating-indicators-from-global-geospatial_1820", "file": "2023_calculating-indicators-from-global-geospatial_1820.pdf", "language": "en", "pages": 36, "category": "table-heavy indicators + method"},
+    {"external_id": "2019_scaling-up-investment-for-sustainable-urban_2716", "file": "2019_scaling-up-investment-for-sustainable-urban_2716.pdf", "language": "en", "pages": 46, "category": "finance report, reference-heavy"},
+    {"external_id": "2021_zero-emission-logistic-vehicles-promotion_1319", "file": "2021_zero-emission-logistic-vehicles-promotion_1319.pdf", "language": "zh", "pages": 24, "category": "zh report"},
+    {"external_id": "2019_overcoming-the-operational-challenges-of-electric_2317", "file": "2019_overcoming-the-operational-challenges-of-electric_2317.pdf", "language": "zh", "pages": 40, "category": "zh report (smoke-set target doc)"},
+    {"external_id": "2022_toward-credible-transport-carbon-dioxide_3778", "file": "2022_toward-credible-transport-carbon-dioxide_3778.pdf", "language": "zh", "pages": 40, "category": "zh dense text + tables"},
+    {"external_id": "2019_zhuzhou-complete-street-design-manual_2976", "file": "2019_zhuzhou-complete-street-design-manual_2976.pdf", "language": "zh", "pages": 152, "category": "zh graphics-heavy design manual (hard case: 55k chars over 152pp)"},
+    {"external_id": "2021_el-costo-de-la-expansion-urbana-en-mexico_2705", "file": "2021_el-costo-de-la-expansion-urbana-en-mexico_2705.pdf", "language": "es", "pages": 8, "category": "es brief"},
+    {"external_id": "2023_ciencia-participativa-accion-para-un-aire-limpio_6722", "file": "2023_ciencia-participativa-accion-para-un-aire-limpio_6722.pdf", "language": "es", "pages": 23, "category": "es report (smoke-set adjacent)"},
+    {"external_id": "2020_indice-de-desigualdad-urbana_3387", "file": "2020_indice-de-desigualdad-urbana_3387.pdf", "language": "es", "pages": 68, "category": "es indicator/table-heavy"},
+    {"external_id": "2021_medindo-mp25-com-sensores-de-baixo-custo_6821", "file": "2021_medindo-mp25-com-sensores-de-baixo-custo_6821.pdf", "language": "pt", "pages": 24, "category": "pt sensor/method report"},
+    {"external_id": "2025_trinta-anos-de-expansao-vertical-e-horizontal-em_9049", "file": "2025_trinta-anos-de-expansao-vertical-e-horizontal-em_9049.pdf", "language": "pt", "pages": 20, "category": "pt data/analysis report"}
+  ]
+}

@@ -117,6 +117,50 @@ resource "aws_iam_role_policy" "ecs_task_ssm" {
   })
 }
 
+# Bedrock permissions for the v3 retrieval substrate (multilingual spec v3 §11):
+# dense = Cohere embed-v4, rerank = Cohere Rerank 3.5 — both managed Bedrock
+# APIs. Neither model is hosted in us-east-2, so the services call the nearest
+# hosting region directly (embed: us-east-1, rerank: us-west-2) — hence
+# Resource covers the foundation-model ARNs in any region. bedrock:Rerank
+# (the bedrock-agent-runtime Rerank API) does not support resource-level
+# scoping beyond the model.
+resource "aws_iam_role_policy" "ecs_task_bedrock" {
+  name = "${var.project_name}-${var.environment}-ecs-task-bedrock-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "InvokeCohereModels"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        # The cross-region inference profile (us.cohere.embed-v4:0) is the
+        # re-embed path of record: 300k tokens/min quota vs 150k on-demand
+        # (measured 2026-07-22 — the on-demand bucket throttle-kills bulk
+        # re-embeds at batch 96, and even batch 24 runs ~2x slower). Profile
+        # invocation needs InvokeModel on BOTH the profile ARN and the
+        # underlying regional foundation-model ARNs.
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
+          "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.cohere.embed-v4:0"
+        ]
+      },
+      {
+        Sid    = "RerankApi"
+        Effect = "Allow"
+        Action = [
+          "bedrock:Rerank"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # S3 permissions for downloading documents
 resource "aws_iam_role_policy" "ecs_task_s3" {
   count = var.documents_s3_bucket != "" ? 1 : 0
