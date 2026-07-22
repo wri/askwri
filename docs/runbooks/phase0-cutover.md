@@ -151,6 +151,21 @@ Or set `DATABASE_URL` in your `.env` with `?sslmode=require` appended for RDS. T
 
 Expected: `Migration1781280000000` through `Migration1781340000000` execute successfully (`1781300000000` open-job dedupe + unique index, `1781310000000` keyword-lane tables — see [qa-push-deploy.md](qa-push-deploy.md) Step 2 for their operational notes; `1781320000000` authors/url/date_published columns + title/summary data fixes + content-hash dedup index; `1781330000000` `documents.metadata_source` provenance; `1781340000000` `metadata_source` key normalization data fix). Check what is pending first with `npm run typeorm -- migration:show -d src/db/migration-data-source.ts`.
 
+> **Data-repair migrations are no-ops on a first-time cutover.** This step runs
+> before the corpus exists, so every `UPDATE` in a migration matches zero rows,
+> and TypeORM then stamps the migration as applied — re-running `migration:run`
+> after Step 3 will **not** replay it. This is exactly what happened during the
+> QA cutover on 2026-07-21: `1781320000000`'s backfills all matched zero rows,
+> and the corpus arrived afterward with no `authors`/`url`/`date_published`, no
+> `title_en` on the 33 non-English documents, and 66 summaries filed under the
+> document's language instead of English.
+>
+> The corpus load now writes all of those correctly at insert time
+> (`migrate_csv_to_postgres.py`), so a fresh cutover no longer depends on the
+> ordering. **Step 4's second query is the gate that proves it** — do not skip it.
+> If you are repairing an environment that already cut over, apply migration
+> `1784707200000` after the corpus load instead.
+
 ### Step 3: Stage S3 assets and run the migration script
 
 On a host with AWS access and the venv activated:
@@ -211,6 +226,39 @@ Spot-check a chunk:
 SELECT legacy_chunk_id, unit_type, page, left(text, 60), node_metadata->>'title'
 FROM document_chunks WHERE legacy_chunk_id LIKE '%_chunk_0' LIMIT 3;
 ```
+
+**Metadata gate — every column below must read 0.** These are the fields the
+Step 2 ordering trap silently left empty in QA. A non-zero count means the
+corpus load did not populate them and the documents will be missing metadata
+that no re-ingest can restore (`url` and `date_published` have no other writer,
+and `authors` would be overwritten by an LLM extraction from the PDF).
+
+```sql
+SELECT
+  (SELECT count(*) FROM documents WHERE s3_key NOT LIKE '%/%')            AS bare_s3_key,
+  (SELECT count(*) FROM documents
+    WHERE authors IS NULL
+      AND source_metadata->'metadata'->>'All authors' IS NOT NULL)        AS missing_authors,
+  (SELECT count(*) FROM documents
+    WHERE url IS NULL
+      AND coalesce(source_metadata->'metadata'->>'URL','') <> '')         AS missing_url,
+  (SELECT count(*) FROM documents
+    WHERE date_published IS NULL
+      AND coalesce(source_metadata->'metadata'->>'Date published','') <> '')
+                                                                          AS missing_date,
+  (SELECT count(*) FROM documents WHERE title_en IS NULL OR title_en='')  AS missing_title_en,
+  (SELECT count(*) FROM documents
+    WHERE authors IS NOT NULL AND metadata_source->>'authors' IS NULL)    AS unowned_authors,
+  (SELECT count(*) FROM document_summaries
+    WHERE source='external' AND language <> 'en')                         AS misfiled_summaries;
+```
+
+`bare_s3_key > 0` is the one that breaks re-ingest outright: the worker and the
+PDF routes call `get_object(Key=s3_key)` verbatim, and the ECS task role only
+grants `s3:GetObject` on `<bucket>/documents/*`. A bare key resolves to a
+nonexistent object at the bucket root, which S3 reports as `AccessDenied`
+naming `s3:ListBucket` (not `NoSuchKey`), because the role's `ListBucket` grant
+is conditioned on `s3:prefix` and a `GetObject` request never carries one.
 
 ### Step 5: Run parity harness and golden-set evals (release gate)
 
