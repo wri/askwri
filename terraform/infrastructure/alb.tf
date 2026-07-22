@@ -29,12 +29,23 @@ resource "aws_lb_target_group" "app" {
   vpc_id      = local.vpc_id
   target_type = "ip"
 
+  # Was the AWS default of 300s, which keeps a draining task registered for up
+  # to five minutes on every deployment. The app's longest request is bounded by
+  # the ALB idle_timeout above; 30s covers in-flight requests with room to spare.
+  deregistration_delay = 30
+
+  # interval: a new task cannot be declared healthy before
+  # healthy_threshold * interval, which sits directly on the deployment critical
+  # path — 60s at interval 30, 30s at 15. timeout stays at 10 (it must remain
+  # below interval) because /api/health queries the database, and
+  # unhealthy_threshold stays at 5 so failure tolerance is unchanged rather than
+  # traded away for deploy speed.
   health_check {
     enabled             = true
     healthy_threshold   = 2
     unhealthy_threshold = 5
     timeout             = 10
-    interval            = 30
+    interval            = 15
     path                = var.health_check_path
     protocol            = "HTTP"
     matcher             = "200"
