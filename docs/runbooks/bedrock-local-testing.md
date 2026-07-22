@@ -169,8 +169,17 @@ npm run eval:answer-retrieval
 
 ```bash
 cd search-service
-./venv/bin/python -m scripts.reembed_cohere --limit 500
+export AWS_RETRY_MODE=adaptive AWS_MAX_ATTEMPTS=10
+./venv/bin/python -m scripts.reembed_cohere --limit 500 --batch-size 24
 ```
+
+**Do not use the default `--batch-size 96`**: the on-demand embed-v4 quota
+is 150k tokens/min and a 96-chunk batch bursts past it — botocore's default
+standard retry mode (4 attempts) gives up with `ThrottlingException: Too
+many tokens`. Batch 24 + adaptive client-side rate limiting completes the
+500-chunk canary in ~45s (measured 2026-07-22); extrapolated full corpus
+(~30k chunks) ≈ 45–60 min. If more headroom is ever needed, the
+cross-region inference profile has a 300k tokens/min quota (2×).
 
 This rewrites 500 chunk rows in place to `embedding_model='cohere-embed-v4'`.
 While the corpus is mixed, the dense lane serves whichever model
@@ -185,7 +194,8 @@ after that point means re-embedding back via OpenAI, not a config flip).
 ## Step 6 — Full cutover (after review sign-off)
 
 ```bash
-./venv/bin/python -m scripts.reembed_cohere            # full corpus
+export AWS_RETRY_MODE=adaptive AWS_MAX_ATTEMPTS=10
+./venv/bin/python -m scripts.reembed_cohere --batch-size 24   # full corpus
 ```
 
 Then remove the pre-cutover pin: delete the `EMBEDDING_MODEL=text-embedding-3-small`
