@@ -96,8 +96,8 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=nextjs
+          cache-to: type=gha,mode=max,scope=nextjs
           build-args: |
             NEXT_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
 
@@ -143,8 +143,8 @@ jobs:
           context: ./search-service
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=search-service
+          cache-to: type=gha,mode=max,scope=search-service
 
   # ==========================================================================
   # Deploy Infrastructure with Terraform
