@@ -665,3 +665,258 @@ class TestMigrationScriptFixes:
         assert total_jobs >= 1, (
             "--reset truncated ingestion_jobs — the job row was destroyed"
         )
+
+
+# ---------------------------------------------------------------------------
+# s3_key prefix + imported-summary language
+# ---------------------------------------------------------------------------
+
+def _non_english_corpus(tmp_path):
+    """A 2-row CSV mirroring the real corpus shape for non-English documents.
+
+    The legacy pipeline wrote every CSV summary in ENGLISH regardless of the
+    document's own language, so doc_zh_001 is a Chinese document carrying an
+    English summary. doc_nofile_001 has no file_path, exercising the
+    "{external_id}.pdf" fallback branch.
+    """
+    tmpdir = str(tmp_path)
+    common = {
+        "Publication Title": "WRI China Transport",
+        "All authors": "Wei Li; Jing Chen",
+        "YEAR published": "2019",
+        "Sub-tag": "Transport decarbonization",
+        "article_type": "Report",
+        "wri_primary_office": "WRI China",
+        "wri_programs": "Cities",
+        # The CSV writes a placeholder here rather than leaving it empty.
+        "DOI": "No DOI listed",
+        "URL": "https://wri.org/zhuzhou",
+        # Single-digit month/day, matching the real CSV's M/D/YYYY shape.
+        "Date published": "3/17/2021",
+    }
+    rows = [
+        {
+            "file_path": "doc_zh_001.pdf",
+            "metadata": json.dumps({
+                **common,
+                "Article Title": "Zhuzhou Complete Street Design Manual",
+                "languages": "Chinese",
+                "summary": "Zhuzhou has only 12% car modal share yet private vehicles dominate street space.",
+                "short_summary": "Guidelines for Zhuzhou streets covering design goals and typologies.",
+            }),
+            "summary": "Zhuzhou has only 12% car modal share yet private vehicles dominate street space.",
+        },
+        {
+            "file_path": "",
+            "metadata": json.dumps({
+                **common,
+                "Article Title": "Document Without A File Path",
+                "languages": "English",
+                "summary": "A summary that is long enough to survive prepare_documents.",
+                "short_summary": "Short summary.",
+            }),
+            "summary": "A summary that is long enough to survive prepare_documents.",
+        },
+    ]
+    csv_path = os.path.join(tmpdir, "documents.csv")
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["file_path", "metadata", "summary"])
+        writer.writeheader()
+        writer.writerows(rows)
+    return tmpdir
+
+
+class TestS3KeyAndSummaryLanguage:
+    """s3_key must carry the documents/ prefix that the worker and the PDF
+    routes read verbatim; imported CSV summaries are English and must be
+    stored under language='en', not under the document's own language."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, test_db, tmp_path, monkeypatch):
+        self._db_url = test_db
+        self._cache_dir = str(tmp_path / "cache")
+        os.makedirs(self._cache_dir, exist_ok=True)
+
+        with psycopg.connect(self._db_url) as conn:
+            conn.execute("TRUNCATE documents CASCADE")
+            conn.execute("TRUNCATE tags CASCADE")
+            conn.execute("TRUNCATE collections CASCADE")
+            conn.execute("TRUNCATE audit_log CASCADE")
+            conn.commit()
+
+        monkeypatch.setenv("DATABASE_URL", self._db_url)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path))
+        monkeypatch.setenv("CACHE_DIR", self._cache_dir)
+        monkeypatch.setenv("RETRIEVAL_BACKEND", "postgres")
+        _reset_app_state()
+
+        import scripts.migrate_csv_to_postgres as _script
+        monkeypatch.setattr(_script, "load_csv_metadata", _nan_safe_load_csv_metadata)
+        monkeypatch.setattr(_script, "load_embeddings", _fake_embeddings)
+
+        # This corpus carries a URL but no PDF on disk, so prepare_documents
+        # would try to download it (app/indexing.py:203). Block the network so
+        # the suite stays hermetic; the documented summary-text fallback runs
+        # instead, which is what the real corpus does for an unfetchable PDF.
+        def _no_network(*args, **kwargs):
+            raise RuntimeError("network access disabled in tests")
+
+        monkeypatch.setattr("requests.get", _no_network)
+
+    def _conn(self):
+        return psycopg.connect(self._db_url)
+
+    def _run(self, corpus_dir):
+        os.environ["DOCUMENTS_LOCAL_DIR"] = corpus_dir
+        old_argv = sys.argv
+        sys.argv = ["migrate_csv_to_postgres"]
+        try:
+            from scripts.migrate_csv_to_postgres import main
+            main()
+        finally:
+            sys.argv = old_argv
+            _reset_app_state()
+
+    def test_s3_key_carries_documents_prefix(self, tmp_path):
+        """documents.s3_key must be 'documents/<file>', matching the object
+        layout in S3 and the IAM grant on documents/*. The worker does
+        get_object(Key=s3_key) with no prefix of its own."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT s3_key FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+        assert row is not None, "zh doc was not inserted"
+        assert row[0] == "documents/doc_zh_001.pdf", (
+            f"Expected s3_key='documents/doc_zh_001.pdf', got {row[0]!r}"
+        )
+
+    def test_s3_key_prefixes_the_external_id_fallback(self, tmp_path):
+        """The 'no file_path' fallback must be prefixed too."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            rows = conn.execute("SELECT s3_key FROM documents").fetchall()
+        bare = [r[0] for r in rows if "/" not in r[0]]
+        assert not bare, f"These s3_key values are missing the prefix: {bare!r}"
+
+    def test_imported_summaries_are_stored_as_english(self, tmp_path):
+        """The CSV summary is English even for a Chinese document, so it must
+        land in the 'en' slot — otherwise the native-language slot holds
+        English text and summarize.py will never overwrite it (source=
+        'external' is protected), leaving the document permanently wrong."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT ds.language, ds.kind FROM document_summaries ds "
+                "JOIN documents d ON d.id = ds.document_id "
+                "WHERE d.external_id = 'doc_zh_001' ORDER BY ds.kind"
+            ).fetchall()
+
+        assert rows, "no summaries inserted for the zh doc"
+        assert all(r[0] == "en" for r in rows), (
+            f"Imported summaries must be language='en', got {rows!r}"
+        )
+
+    def test_document_language_is_unchanged(self, tmp_path):
+        """Guard against over-correction: the DOCUMENT is still Chinese even
+        though its imported summary is English."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT language, languages FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+        assert row[0] == "zh", f"Expected language='zh', got {row[0]!r}"
+        assert row[1] == ["zh"], f"Expected languages=['zh'], got {row[1]!r}"
+
+    def test_csv_metadata_columns_are_populated(self, tmp_path):
+        """authors/url/date_published come from the CSV and must be written at
+        insert time. Nothing else can supply url or date_published — they are
+        not in the worker's _EXTRACT_FIELDS, so a re-ingest never fills them."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT authors, url, date_published FROM documents "
+                "WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        assert row[0] == "Wei Li; Jing Chen", f"authors not backfilled: {row[0]!r}"
+        assert row[1] == "https://wri.org/zhuzhou", f"url not backfilled: {row[1]!r}"
+        assert str(row[2]) == "2021-03-17", f"date_published not parsed: {row[2]!r}"
+
+    def test_csv_fields_are_marked_external(self, tmp_path):
+        """metadata_source must mark every CSV-sourced column 'external'.
+
+        Left unset, worker/stages/parse.py treats the field as unowned and
+        replaces the curated CSV value with its own PDF extraction — including
+        `title`, which is the only title the public catalog renders (nothing
+        outside the admin editor reads title_en). The set below is exactly
+        parse.py's _EXTRACT_FIELDS plus the three columns only the CSV supplies.
+        """
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT metadata_source FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        source = row[0] or {}
+        for column in (
+            "title", "year_published", "article_type", "wri_primary_office",
+            "authors", "url", "date_published",
+        ):
+            assert source.get(column) == "external", (
+                f"metadata_source[{column!r}] should be 'external', got {source.get(column)!r}"
+            )
+
+    def test_doi_placeholder_is_not_stored_as_a_doi(self, tmp_path):
+        """The CSV's DOI column carries 'No DOI listed' rather than an empty
+        cell. Stored verbatim it becomes the document's DOI and renders as one
+        in the admin UI, so it must land as NULL — and must not be claimed in
+        metadata_source, or parse.py could never fill in a real DOI."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT doi, metadata_source FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        assert row[0] is None, f"DOI placeholder was stored verbatim: {row[0]!r}"
+        assert "doi" not in (row[1] or {}), "an absent DOI must not be claimed as 'external'"
+
+    def test_detected_fields_are_left_unowned(self, tmp_path):
+        """language/languages come from detection, which beats the CSV, and
+        title_en must stay unowned so summarize.py still translates it."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT metadata_source FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        source = row[0] or {}
+        for column in ("title_en", "language", "languages"):
+            assert column not in source, (
+                f"metadata_source[{column!r}] should be unset, got {source.get(column)!r}"
+            )
+
+    def test_title_en_is_populated_without_blocking_translation(self, tmp_path):
+        """Non-English docs get the native title as an interim title_en, but no
+        title_en provenance — summarize.py skips 'human'/'external', so marking
+        it would permanently block the real translation."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT title, title_en, metadata_source FROM documents "
+                "WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        assert row[1] == row[0], f"title_en should fall back to the native title, got {row[1]!r}"
+        assert "title_en" not in (row[2] or {}), (
+            "title_en must not carry provenance or summarize.py will never translate it"
+        )

@@ -11,6 +11,8 @@ import json
 import pickle
 import sys
 import uuid
+from datetime import datetime
+from pathlib import PurePosixPath
 
 import numpy as np
 from psycopg.types.json import Jsonb
@@ -35,6 +37,10 @@ FACETS = [  # (facet, raw metadata key)
 # is one of these (or empty). 34 docs carry "Pre-EM" and 3 carry "Not available"
 # in Article Title while having a real Publication Title.
 JUNK_TITLES = {"Pre-EM", "Not available", "", None}
+# The CSV writes a human-readable placeholder in the DOI column rather than
+# leaving it empty. Stored verbatim it becomes the document's DOI and is
+# rendered as one in the admin UI (80 of 168 docs on the QA cutover).
+JUNK_DOIS = {"No DOI listed", "Not available", "N/A", "none", "None"}
 
 
 def _title(raw, ext_id):
@@ -73,6 +79,55 @@ def parse_year(raw):
         return int(str(raw).strip()[:4])
     except (TypeError, ValueError):
         return None
+
+
+def _clean(value):
+    """CSV cell -> str or None. Pandas yields NaN (a float) for empty cells."""
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def clean_doi(raw):
+    """CSV DOI cell -> str or None, dropping the placeholder sentinels."""
+    text = _clean(raw)
+    if text is None or text in JUNK_DOIS:
+        return None
+    return text
+
+
+def parse_date(raw):
+    """'3/17/2021' -> date(2021, 3, 17). None for empty or unparseable cells.
+
+    The CSV uses M/D/YYYY with unpadded components.
+    """
+    text = _clean(raw)
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%m/%d/%Y").date()
+    except ValueError:
+        print(f"  ! unparseable date {text!r} — leaving date_published NULL")
+        return None
+
+
+def s3_key_for(file_path, ext_id: str, prefix: str) -> str:
+    """Build documents.s3_key, which carries the configured documents prefix.
+
+    Readers use s3_key verbatim — worker/stages/parse.py and the PDF routes all
+    call get_object(Key=s3_key) with no prefix of their own, and the ECS task
+    role only grants s3:GetObject on <bucket>/documents/*. A bare filename here
+    therefore resolves to a nonexistent object at the bucket root, which S3
+    reports as AccessDenied (not NoSuchKey) because the role's s3:ListBucket
+    grant is conditioned on s3:prefix.
+
+    Only the basename is kept, matching mapRowToDocument in
+    src/db/queries/importDocuments.ts and keeping a crafted CSV file_path from
+    reaching across prefixes.
+    """
+    raw = file_path if isinstance(file_path, str) else ""  # pandas gives NaN for empty cells
+    base = PurePosixPath(raw.strip()).name or f"{ext_id}.pdf"
+    return f"{prefix}{base}"
 
 
 def load_embeddings(cache: AskWRICache, nodes, content_hash: str) -> dict:
@@ -196,16 +251,61 @@ def main():
             title = _title(raw, ext_id)
             doc_id = uuid.uuid4()
 
+            # CSV-sourced columns. These have no other writer: url and
+            # date_published are not in the worker's _EXTRACT_FIELDS, so a
+            # re-ingest can never fill them, and authors would be replaced by
+            # an LLM extraction from the PDF. Writing them here (rather than in
+            # a follow-up migration) keeps the cutover correct regardless of
+            # whether migrations run before or after the corpus load.
+            authors = _clean(raw.get("All authors"))
+            url = _clean(raw.get("URL"))
+            date_published = parse_date(raw.get("Date published"))
+
+            # 'external' marks a value as CSV-owned: protected from AI
+            # overwrite, still replaceable by a later CSV import. Without it
+            # worker/stages/parse.py reads the field as unowned and clobbers it
+            # on the first re-ingest. This covers parse.py's _EXTRACT_FIELDS
+            # plus the three columns only the CSV supplies.
+            #
+            # `title` matters most: it is the only title the public catalog
+            # renders (nothing outside the admin editor reads title_en), so
+            # letting the LLM replace it with the native-language title would
+            # put untranslated titles on the site for every non-English doc.
+            #
+            # Deliberately NOT marked: title_en (summarize.py skips 'external',
+            # so marking it would permanently block translation) and
+            # language/languages (detection beats the CSV's labels).
+            provenance = {
+                column: "external"
+                for column, value in (
+                    ("title", title),
+                    ("doi", clean_doi(raw.get("DOI"))),
+                    ("year_published", parse_year(raw.get("YEAR published"))),
+                    ("article_type", _clean(raw.get("article_type"))),
+                    ("wri_primary_office", _clean(raw.get("wri_primary_office"))),
+                    ("authors", authors),
+                    ("url", url),
+                    ("date_published", date_published),
+                )
+                if value is not None
+            }
+
             conn.execute(
                 """INSERT INTO documents
                    (id, external_id, doi, s3_key, title, title_en, language, languages,
                     year_published, publication_title, article_type, wri_primary_office,
+                    authors, url, date_published, metadata_source,
                     status, source_metadata)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'searchable',%s)""",
-                (doc_id, ext_id, raw.get("DOI"), meta.get("file_path") or f"{ext_id}.pdf",
-                 title, title if language == "en" else None, language, languages,
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'searchable',%s)""",
+                (doc_id, ext_id, clean_doi(raw.get("DOI")),
+                 s3_key_for(meta.get("file_path"), ext_id, settings.documents_s3_prefix),
+                 # Non-English docs get the native title as an interim title_en
+                 # (design §6: title_en is always populated); the summarize
+                 # stage replaces it with a real translation on ingest.
+                 title, title, language, languages,
                  parse_year(raw.get("YEAR published")), raw.get("Publication Title"),
                  raw.get("article_type"), raw.get("wri_primary_office"),
+                 authors, url, date_published, Jsonb(provenance),
                  Jsonb({"file_path": meta.get("file_path", ""),
                         "summary": meta.get("summary", "") or "",
                         "metadata": raw})),
@@ -217,13 +317,20 @@ def main():
                 (doc_id, doc["text"], Jsonb(meta.get("page_boundaries", [])), len(doc["text"])),
             )
 
+            # The legacy pipeline wrote every CSV summary in English, including
+            # the ones for non-English documents, so they belong in the 'en'
+            # slot rather than the document's own language. Filing them under
+            # `language` would park English prose in the native slot where
+            # summarize.py can never replace it (source='external' is protected
+            # by the precedence rules in worker/stages/summarize.py) and would
+            # leave the 'en' slot empty for the very documents that need it.
             for kind, key in (("long", "summary"), ("short", "short_summary")):
                 text = raw.get(key) or (meta.get("summary", "") if kind == "long" else "")
                 if text:
                     conn.execute(
                         """INSERT INTO document_summaries (document_id, language, kind, text, source)
-                           VALUES (%s,%s,%s,%s,'external')""",
-                        (doc_id, language, kind, text),
+                           VALUES (%s,'en',%s,%s,'external')""",
+                        (doc_id, kind, text),
                     )
 
             for facet, key in FACETS:
