@@ -393,8 +393,10 @@ resource "aws_ecs_task_definition" "app" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
-        interval    = 30
+        command = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
+        # 15s rather than 30s so a replacement task is declared healthy sooner
+        # on deploys; retries stays at 5 so failure tolerance is unchanged.
+        interval    = 15
         timeout     = 10
         retries     = 5
         startPeriod = 120
