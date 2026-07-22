@@ -16,9 +16,11 @@ openai>=1.109.1
 llama-index-retrievers-bm25>=0.7.1,<1.0.0
 rank-bm25>=0.2.2
 
-# Data processing
+# Data processing (scipy is a direct dep of the sparse-lane scripts —
+# scripts/build_sparse_keyword.py — not just a transitive of removed models)
 pandas>=2.3.3
 numpy>=1.26.4
+scipy>=1.14
 
 # HTTP client
 httpx>=0.28.1,<1.0.0
