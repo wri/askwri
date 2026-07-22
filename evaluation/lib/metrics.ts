@@ -150,21 +150,31 @@ export function calculateChunkMetrics(
   const retrievedSet = new Set(retrieved.map(r => r.chunk_id));
   const exact_matches: string[] = [];
   const adjacent_matches: string[] = [];
+  // Each retrieved chunk may be credited at most once. Seed with exact matches
+  // first, then let adjacent credit claim only chunks not already spent — so a
+  // single retrieved chunk can't count as both an exact match and an adjacent
+  // source, nor as the adjacent source for two expected chunks (the bug that
+  // let precision_with_adjacent exceed 1.0).
+  const consumedRetrieved = new Set<string>();
 
   for (const exp of expected) {
     if (retrievedSet.has(exp.chunk_id)) {
       exact_matches.push(exp.chunk_id);
-    } else {
-      const parsed = parseChunkId(exp.chunk_id);
-      if (parsed) {
-        for (let delta = -adjacentTolerance; delta <= adjacentTolerance; delta++) {
-          if (delta === 0) continue;
-          const adjId = `${parsed.docId}_chunk_${parsed.chunkIdx + delta}`;
-          if (retrievedSet.has(adjId)) {
-            adjacent_matches.push(exp.chunk_id);
-            break;
-          }
-        }
+      consumedRetrieved.add(exp.chunk_id);
+    }
+  }
+
+  for (const exp of expected) {
+    if (retrievedSet.has(exp.chunk_id)) continue; // already an exact match
+    const parsed = parseChunkId(exp.chunk_id);
+    if (!parsed) continue;
+    for (let delta = -adjacentTolerance; delta <= adjacentTolerance; delta++) {
+      if (delta === 0) continue;
+      const adjId = `${parsed.docId}_chunk_${parsed.chunkIdx + delta}`;
+      if (retrievedSet.has(adjId) && !consumedRetrieved.has(adjId)) {
+        adjacent_matches.push(exp.chunk_id);
+        consumedRetrieved.add(adjId);
+        break;
       }
     }
   }
@@ -175,10 +185,10 @@ export function calculateChunkMetrics(
   const recall = expected.length > 0 ? tp / expected.length : 0;
   const f1 = (precision + recall) > 0 ? 2 * precision * recall / (precision + recall) : 0;
 
-  // Lenient metrics (exact + adjacent at 0.5 weight).
-  // Adjacent matches add 0.5 to TP but don't reduce FP count,
-  // so precision_with_adjacent can slightly exceed strict precision
-  // while recall_with_adjacent gives partial credit for near-misses.
+  // Lenient metrics (exact + adjacent at 0.5 weight). Each match consumes a
+  // distinct retrieved chunk (see consumedRetrieved above), so
+  // tpAdj <= retrieved.length and precision_with_adjacent stays in [0, 1];
+  // recall_with_adjacent gives partial credit for near-misses.
   const tpAdj = exact_matches.length + adjacent_matches.length * 0.5;
   const precisionAdj = retrieved.length > 0 ? tpAdj / retrieved.length : 0;
   const recallAdj = expected.length > 0 ? tpAdj / expected.length : 0;
@@ -192,6 +202,28 @@ export function calculateChunkMetrics(
     recall_with_adjacent: recallAdj,
     f1_with_adjacent: f1Adj,
   };
+}
+
+/**
+ * Regression tripwire: chunk P/R/F1 must stay within [0, 1]. A value above 1
+ * means adjacency credit double-counted a retrieved chunk (the ans_008/ans_009
+ * bug). Call at each eval site so a future reintroduction fails loudly instead
+ * of silently reporting >100% precision.
+ */
+export function assertChunkMetricsValid(m: ChunkMetricsResult, label: string): void {
+  const EPS = 1e-9;
+  const keys = [
+    'precision', 'recall', 'f1',
+    'precision_with_adjacent', 'recall_with_adjacent', 'f1_with_adjacent',
+  ] as const;
+  for (const key of keys) {
+    const v = m[key];
+    if (v > 1 + EPS || v < -EPS) {
+      throw new Error(
+        `chunk metric ${key}=${v} out of [0,1] for ${label} — adjacency double-count regression?`
+      );
+    }
+  }
 }
 
 // --- Doc Metrics (coarse grain) ---

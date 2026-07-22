@@ -12,7 +12,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { callPythonService, PYTHON_SERVICE_URL } from './lib/service-client';
-import { calculateChunkMetrics, calculateDocMetrics, aggregateMetrics } from './lib/metrics';
+import { calculateChunkMetrics, calculateDocMetrics, aggregateMetrics, assertChunkMetricsValid } from './lib/metrics';
 import type {
   AnswerGoldenDataset,
   AnswerTestCase,
@@ -126,6 +126,7 @@ async function runTestCase(tc: AnswerTestCase): Promise<RetrievalTestResult> {
 
     // Calculate metrics
     const chunkMetrics = calculateChunkMetrics(expectedChunks, retrievedChunks, ADJACENT_TOLERANCE);
+    assertChunkMetricsValid(chunkMetrics, tc.id);
     const docMetrics = calculateDocMetrics(expectedDocIds, retrievedDocIds);
 
     const elapsed = Date.now() - start;
