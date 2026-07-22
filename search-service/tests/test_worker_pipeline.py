@@ -116,6 +116,9 @@ def _run_full_pipeline(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("worker.stages.summarize.chat_json", _fake_chat_json)
     monkeypatch.setattr("worker.stages.classify.chat_json", _fake_chat_json)
     monkeypatch.setattr("worker.stages.embed._embed_texts", _fake_embed_texts)
+    # Post-cutover the embed stage dispatches to Bedrock for the default
+    # cohere-embed-v4 model — stub that lane too (no AWS calls in tests).
+    monkeypatch.setattr("worker.stages.embed._embed_texts_bedrock", _fake_embed_texts)
 
     # 1. Intake sweep
     from worker import intake_s3
@@ -445,6 +448,7 @@ class TestWorkerPipeline:
         monkeypatch.setattr("worker.stages.summarize.chat_json", _fake_chat_json)
         monkeypatch.setattr("worker.stages.classify.chat_json", _fake_chat_json)
         monkeypatch.setattr("worker.stages.embed._embed_texts", _fake_embed_texts)
+        monkeypatch.setattr("worker.stages.embed._embed_texts_bedrock", _fake_embed_texts)
         from app.config import get_settings
         get_settings.cache_clear()
 

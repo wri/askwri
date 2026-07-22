@@ -42,10 +42,21 @@ def test_dense_retrieval_returns_ranked_results(monkeypatch):
     from llama_index.embeddings.openai import OpenAIEmbedding
 
     from app.config import get_settings
+    from app.db import get_pool
     from app.pg_store import PgVectorRetriever
 
     # This test exercises the LEGACY dense lane against the qa corpus rows;
     # the retriever is model-aware since v3 B1 and defaults to cohere-embed-v4.
+    # After the 2026-07-22 corpus cutover the local DB has no 3-small rows —
+    # the legacy lane is then legitimately empty, not broken.
+    with get_pool().connection() as conn:
+        n_legacy = conn.execute(
+            """SELECT count(*) FROM document_chunks
+               WHERE embedding_model = 'text-embedding-3-small'"""
+        ).fetchone()[0]
+    if n_legacy == 0:
+        pytest.skip("no text-embedding-3-small rows (post-cohere-cutover DB)")
+
     monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-small")
     get_settings.cache_clear()
 

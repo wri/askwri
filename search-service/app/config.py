@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     # while the 3-small rows/index still exist.
     embedding_model: str = "cohere-embed-v4"
 
+    # PDF parse backend (bake-off 2026-07-22, spec §7 amendment):
+    # "pypdf" (legacy text-layer extraction, current default until the
+    # Phase 1 retrieval gate passes) | "mistral" (Mistral OCR markdown,
+    # per-page emission — parser page indices fix the R4 zh page-boundary
+    # bug). pypdf remains the validation oracle either way.
+    parse_backend: str = "pypdf"
+    mistral_api_key: str = ""
+    mistral_ocr_model: str = "mistral-ocr-latest"
+
     # Bedrock placement for embed-v4 (spec v3 §5): infra is us-east-2 but
     # embed-v4 is not natively there — call the nearest hosting region
     # (cross-region, still in-AWS/IAM).
