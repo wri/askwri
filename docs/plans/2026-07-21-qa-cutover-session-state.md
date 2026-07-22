@@ -25,6 +25,50 @@ never ran against this instance. So the sequence is
 **phase0-cutover.md Steps 1–4 → back to qa-push-deploy.md Step 2 onward**, covering schema +
 169-doc corpus migration + sparse backfill.
 
+## STATUS 2026-07-21 end of session: QA is LIVE, admin UI has errors
+
+The cutover is **done and serving traffic**. PR #240 merged (`71d02dc`); `origin/qa` at
+`9a1367a`. Verified live on `qa.askwri-app.org`:
+
+| | |
+|---|---|
+| `/api/health` | healthy |
+| `/api/catalog` | `source: postgres`, 168 docs |
+| `/query` (cite) | 200, correct results (hydrogen query returns the two expected papers) |
+| search-service | `Postgres-backed retrieval ready (168 documents)`, 30436 sparse chunks |
+| ingestion worker | running, connected to Postgres, queue idle |
+| admin login | works — seeded user, HTTPS login, authenticated API call all verified |
+
+**Two fixes were needed after the first deploy**, both already merged:
+
+- `3cc555c` — the search-service SG had no RDS ingress rule, so it started, failed
+  background indexing with a connection timeout, and returned 500 on every query while ECS
+  reported the service healthy. Added `rds_from_search_service`.
+- `9a1367a` — `scripts/with-remote-env.sh` TLS and shell-quoting fixes.
+
+### NEXT SESSION: admin UI errors
+
+The user reports **errors when performing actions in the admin UI**. Not yet diagnosed —
+no error text captured. Start there, with `superpowers:systematic-debugging`.
+
+To gather first:
+- The exact error text / failing action from the UI.
+- Browser devtools network tab: which request, what status, what response body.
+- App logs: `aws logs tail /ecs/askwri-app-qa --region us-east-2 --since 30m --follow`
+- Worker logs: `/ecs/askwri-app-qa-ingestion-worker`; search-service:
+  `/ecs/askwri-app-qa-search-service`
+- DB state: `./scripts/with-remote-env.sh qa psql -c '<query>'`
+
+Known-suspicious areas, none confirmed:
+- `docsMissingTitleEn: 33` in corpus-health — expected per migration `1781320000000`, not
+  necessarily a fault.
+- The admin account is currently `admin`/`admin` on a **publicly reachable** host, with
+  withdraw / taxonomy-delete / user-management powers. Rotate.
+- `seed-admin.ts` takes the password as argv, so npm echoes it into logs and shell history.
+  Worth switching to stdin/env before production.
+
+---
+
 ## RESUME HERE (as of 2026-07-21, after Steps 2–4)
 
 **`phase0-cutover.md` Steps 2, 3, 3b and 4 are all DONE** against QA RDS on 2026-07-21.
