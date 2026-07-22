@@ -64,6 +64,31 @@ done before pushing, and the embed cutover is a *separate, later* event.
 5. After deploy: `/health` should be healthy; rerank live (check a cite
    query returns `relevance_tier`); dense lane still 3-small via the pin.
 
+### Phase B validation — EXECUTED 2026-07-22 (PASS)
+
+Deploy: PR #248 merged → qa run `29961853452`. Terraform apply (bedrock
+grants) landed before the ECS deploy per `deploy-qa.yml`
+`needs: deploy-infrastructure`. New search-service task rev `:134`.
+
+- **Migration**: `1783454000000` applied manually via
+  `./scripts/with-remote-env.sh qa npm run migration:run` (CI does NOT run
+  migrations). Verified `idx_chunks_embedding_hnsw_cohere_v4` present on RDS;
+  it is an empty partial index (corpus still 3-small under the pin), so no
+  build cost. (The stale main checkout had to be fast-forwarded to the merge
+  commit first — it lacked the migration file.)
+- **/health** (via `GET qa.askwri-app.org/api/llamaindex` →
+  `hybrid_service`): healthy, `dense_lane.status: "live"`, both rerankers
+  loaded, `retrieval_backend: postgres`, `keyword_backend: sparse`, 168 docs.
+- **Rerank live**: cite query `POST /api/llamaindex` → `reranking_applied:
+  true`, 23 docs, tiers strong 13 / partial 9 / weak 1; top hit on-topic,
+  rerank raw scores descending 0.95→0.85.
+- **Lanes**: dense 458ms (embed 149 via Bedrock + db 304 HNSW), sparse
+  252ms, **total 1122ms** — the ~100x fix over the old >300s reranker path.
+- **EMF**: `AskWRI/Query` namespace populated in CloudWatch (us-east-2):
+  total_ms, dense_ms, dense_db_ms, rerank_ms, stage1_ms, sparse_ms.
+- Bedrock grants (task-role `InvokeModel` + `Rerank`) proven live by the
+  working dense+rerank path.
+
 ## Phase C — RDS embed cutover (separate event, after B soaks)
 
 6. **Back up the vectors first** (one-way door → two-way):
