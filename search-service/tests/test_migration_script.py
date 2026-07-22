@@ -665,3 +665,157 @@ class TestMigrationScriptFixes:
         assert total_jobs >= 1, (
             "--reset truncated ingestion_jobs — the job row was destroyed"
         )
+
+
+# ---------------------------------------------------------------------------
+# s3_key prefix + imported-summary language
+# ---------------------------------------------------------------------------
+
+def _non_english_corpus(tmp_path):
+    """A 2-row CSV mirroring the real corpus shape for non-English documents.
+
+    The legacy pipeline wrote every CSV summary in ENGLISH regardless of the
+    document's own language, so doc_zh_001 is a Chinese document carrying an
+    English summary. doc_nofile_001 has no file_path, exercising the
+    "{external_id}.pdf" fallback branch.
+    """
+    tmpdir = str(tmp_path)
+    common = {
+        "Publication Title": "WRI China Transport",
+        "All authors": "Test Author",
+        "YEAR published": "2019",
+        "Sub-tag": "Transport decarbonization",
+        "article_type": "Report",
+        "wri_primary_office": "WRI China",
+        "wri_programs": "Cities",
+        "DOI": "",
+        "URL": "",
+    }
+    rows = [
+        {
+            "file_path": "doc_zh_001.pdf",
+            "metadata": json.dumps({
+                **common,
+                "Article Title": "Zhuzhou Complete Street Design Manual",
+                "languages": "Chinese",
+                "summary": "Zhuzhou has only 12% car modal share yet private vehicles dominate street space.",
+                "short_summary": "Guidelines for Zhuzhou streets covering design goals and typologies.",
+            }),
+            "summary": "Zhuzhou has only 12% car modal share yet private vehicles dominate street space.",
+        },
+        {
+            "file_path": "",
+            "metadata": json.dumps({
+                **common,
+                "Article Title": "Document Without A File Path",
+                "languages": "English",
+                "summary": "A summary that is long enough to survive prepare_documents.",
+                "short_summary": "Short summary.",
+            }),
+            "summary": "A summary that is long enough to survive prepare_documents.",
+        },
+    ]
+    csv_path = os.path.join(tmpdir, "documents.csv")
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["file_path", "metadata", "summary"])
+        writer.writeheader()
+        writer.writerows(rows)
+    return tmpdir
+
+
+class TestS3KeyAndSummaryLanguage:
+    """s3_key must carry the documents/ prefix that the worker and the PDF
+    routes read verbatim; imported CSV summaries are English and must be
+    stored under language='en', not under the document's own language."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, test_db, tmp_path, monkeypatch):
+        self._db_url = test_db
+        self._cache_dir = str(tmp_path / "cache")
+        os.makedirs(self._cache_dir, exist_ok=True)
+
+        with psycopg.connect(self._db_url) as conn:
+            conn.execute("TRUNCATE documents CASCADE")
+            conn.execute("TRUNCATE tags CASCADE")
+            conn.execute("TRUNCATE collections CASCADE")
+            conn.execute("TRUNCATE audit_log CASCADE")
+            conn.commit()
+
+        monkeypatch.setenv("DATABASE_URL", self._db_url)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path))
+        monkeypatch.setenv("CACHE_DIR", self._cache_dir)
+        monkeypatch.setenv("RETRIEVAL_BACKEND", "postgres")
+        _reset_app_state()
+
+        import scripts.migrate_csv_to_postgres as _script
+        monkeypatch.setattr(_script, "load_csv_metadata", _nan_safe_load_csv_metadata)
+        monkeypatch.setattr(_script, "load_embeddings", _fake_embeddings)
+
+    def _conn(self):
+        return psycopg.connect(self._db_url)
+
+    def _run(self, corpus_dir):
+        os.environ["DOCUMENTS_LOCAL_DIR"] = corpus_dir
+        old_argv = sys.argv
+        sys.argv = ["migrate_csv_to_postgres"]
+        try:
+            from scripts.migrate_csv_to_postgres import main
+            main()
+        finally:
+            sys.argv = old_argv
+            _reset_app_state()
+
+    def test_s3_key_carries_documents_prefix(self, tmp_path):
+        """documents.s3_key must be 'documents/<file>', matching the object
+        layout in S3 and the IAM grant on documents/*. The worker does
+        get_object(Key=s3_key) with no prefix of its own."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT s3_key FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+        assert row is not None, "zh doc was not inserted"
+        assert row[0] == "documents/doc_zh_001.pdf", (
+            f"Expected s3_key='documents/doc_zh_001.pdf', got {row[0]!r}"
+        )
+
+    def test_s3_key_prefixes_the_external_id_fallback(self, tmp_path):
+        """The 'no file_path' fallback must be prefixed too."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            rows = conn.execute("SELECT s3_key FROM documents").fetchall()
+        bare = [r[0] for r in rows if "/" not in r[0]]
+        assert not bare, f"These s3_key values are missing the prefix: {bare!r}"
+
+    def test_imported_summaries_are_stored_as_english(self, tmp_path):
+        """The CSV summary is English even for a Chinese document, so it must
+        land in the 'en' slot — otherwise the native-language slot holds
+        English text and summarize.py will never overwrite it (source=
+        'external' is protected), leaving the document permanently wrong."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT ds.language, ds.kind FROM document_summaries ds "
+                "JOIN documents d ON d.id = ds.document_id "
+                "WHERE d.external_id = 'doc_zh_001' ORDER BY ds.kind"
+            ).fetchall()
+
+        assert rows, "no summaries inserted for the zh doc"
+        assert all(r[0] == "en" for r in rows), (
+            f"Imported summaries must be language='en', got {rows!r}"
+        )
+
+    def test_document_language_is_unchanged(self, tmp_path):
+        """Guard against over-correction: the DOCUMENT is still Chinese even
+        though its imported summary is English."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT language, languages FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+        assert row[0] == "zh", f"Expected language='zh', got {row[0]!r}"
+        assert row[1] == ["zh"], f"Expected languages=['zh'], got {row[1]!r}"

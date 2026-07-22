@@ -11,6 +11,7 @@ import json
 import pickle
 import sys
 import uuid
+from pathlib import PurePosixPath
 
 import numpy as np
 from psycopg.types.json import Jsonb
@@ -73,6 +74,25 @@ def parse_year(raw):
         return int(str(raw).strip()[:4])
     except (TypeError, ValueError):
         return None
+
+
+def s3_key_for(file_path, ext_id: str, prefix: str) -> str:
+    """Build documents.s3_key, which carries the configured documents prefix.
+
+    Readers use s3_key verbatim — worker/stages/parse.py and the PDF routes all
+    call get_object(Key=s3_key) with no prefix of their own, and the ECS task
+    role only grants s3:GetObject on <bucket>/documents/*. A bare filename here
+    therefore resolves to a nonexistent object at the bucket root, which S3
+    reports as AccessDenied (not NoSuchKey) because the role's s3:ListBucket
+    grant is conditioned on s3:prefix.
+
+    Only the basename is kept, matching mapRowToDocument in
+    src/db/queries/importDocuments.ts and keeping a crafted CSV file_path from
+    reaching across prefixes.
+    """
+    raw = file_path if isinstance(file_path, str) else ""  # pandas gives NaN for empty cells
+    base = PurePosixPath(raw.strip()).name or f"{ext_id}.pdf"
+    return f"{prefix}{base}"
 
 
 def load_embeddings(cache: AskWRICache, nodes, content_hash: str) -> dict:
@@ -202,7 +222,8 @@ def main():
                     year_published, publication_title, article_type, wri_primary_office,
                     status, source_metadata)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'searchable',%s)""",
-                (doc_id, ext_id, raw.get("DOI"), meta.get("file_path") or f"{ext_id}.pdf",
+                (doc_id, ext_id, raw.get("DOI"),
+                 s3_key_for(meta.get("file_path"), ext_id, settings.documents_s3_prefix),
                  title, title if language == "en" else None, language, languages,
                  parse_year(raw.get("YEAR published")), raw.get("Publication Title"),
                  raw.get("article_type"), raw.get("wri_primary_office"),
@@ -217,13 +238,20 @@ def main():
                 (doc_id, doc["text"], Jsonb(meta.get("page_boundaries", [])), len(doc["text"])),
             )
 
+            # The legacy pipeline wrote every CSV summary in English, including
+            # the ones for non-English documents, so they belong in the 'en'
+            # slot rather than the document's own language. Filing them under
+            # `language` would park English prose in the native slot where
+            # summarize.py can never replace it (source='external' is protected
+            # by the precedence rules in worker/stages/summarize.py) and would
+            # leave the 'en' slot empty for the very documents that need it.
             for kind, key in (("long", "summary"), ("short", "short_summary")):
                 text = raw.get(key) or (meta.get("summary", "") if kind == "long" else "")
                 if text:
                     conn.execute(
                         """INSERT INTO document_summaries (document_id, language, kind, text, source)
-                           VALUES (%s,%s,%s,%s,'external')""",
-                        (doc_id, language, kind, text),
+                           VALUES (%s,'en',%s,%s,'external')""",
+                        (doc_id, kind, text),
                     )
 
             for facet, key in FACETS:
