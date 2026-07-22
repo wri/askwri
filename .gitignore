@@ -88,5 +88,8 @@ Thumbs.db
 .pi-subagents/
 .superpowers/
 
+# Git worktrees for isolated feature/bugfix work
+.worktrees/
+
 # Microsoft Office lock/owner files (created while a .docx in docs/ is open)
 ~$*
