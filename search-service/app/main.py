@@ -848,11 +848,15 @@ async def hybrid_query(request: QueryRequest):
         if request.return_intermediate_results:
             # Stage 1a: Vector search only
             vector_retriever_temp = make_dense_retriever(request.vector_top_k)
-            vector_only_results = vector_retriever_temp.retrieve(query_bundle)
+            vector_only_results = await asyncio.to_thread(
+                vector_retriever_temp.retrieve, query_bundle
+            )
             logger.info(f"Diagnostic - Vector only: {len(vector_only_results)} results")
 
             # Stage 1b: BM25 search only
-            bm25_only_results = service_state["bm25_retriever"].retrieve(query_bundle)
+            bm25_only_results = await asyncio.to_thread(
+                service_state["bm25_retriever"].retrieve, query_bundle
+            )
             logger.info(f"Diagnostic - BM25 only: {len(bm25_only_results)} results")
 
         # Stage 1: Hybrid Fusion Retrieval
@@ -870,8 +874,11 @@ async def hybrid_query(request: QueryRequest):
             bm25_top_k=request.bm25_top_k,
         )
 
-        # Retrieve with hybrid fusion
-        stage1_results = hybrid_retriever.retrieve(query_bundle)
+        # Retrieve with hybrid fusion (worker thread — keeps the event loop
+        # free for /health and concurrent requests)
+        stage1_results = await asyncio.to_thread(
+            hybrid_retriever.retrieve, query_bundle
+        )
         stage1_elapsed = time.time() - stage1_start
 
         logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results in {stage1_elapsed:.1f}s")
@@ -890,14 +897,18 @@ async def hybrid_query(request: QueryRequest):
             if base_reranker:
                 try:
                     stage2_start = time.time()
+                    # Reranking is CPU-bound for tens of seconds — run in a
+                    # worker thread so the event loop stays responsive
                     if isinstance(base_reranker, OnnxReranker):
                         # OnnxReranker: pass top_n per-call (no global mutation)
-                        stage2_results = base_reranker.postprocess_nodes(
+                        stage2_results = await asyncio.to_thread(
+                            base_reranker.postprocess_nodes,
                             stage1_results, query_bundle, top_n=request.rerank_top_n
                         )
                     else:
                         # SentenceTransformerRerank: call with default top_n, then slice
-                        stage2_results = base_reranker.postprocess_nodes(
+                        stage2_results = await asyncio.to_thread(
+                            base_reranker.postprocess_nodes,
                             stage1_results, query_bundle
                         )
                         stage2_results = stage2_results[:request.rerank_top_n]
