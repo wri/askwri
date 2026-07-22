@@ -107,12 +107,15 @@ done before pushing, and the embed cutover is a *separate, later* event.
     legitimate flips: English-edition PDFs carrying native-language CSV
     labels (see todos).
 
-## Open decision that gates this deploy
+## Open decision that gates this deploy — RESOLVED (2026-07-22, shipped in #248)
 
-- **Dense-lane failure mode**: post-cutover, a Bedrock embed failure 500s
-  `/query` (rerank degrades gracefully; dense does not). Decide: sparse-only
-  fallback + logged warning, or accept the hard dependency. Tracked in
-  `docs/plans/2026-07-22-multilingual-v3-todos.md`.
+- **Dense-lane failure mode**: RESOLVED via sparse-only fallback. A Bedrock
+  embed failure no longer 500s `/query`; `main.py:244-255` serves sparse-only,
+  logs a WARNING, and records `dense_degraded_at`/`dense_error` in
+  `service_state` (surfaced at `/health`). Recovery clears the flags on the
+  next successful dense call. Covered by `tests/test_dense_fallback.py`.
+  Sparse-only is English-keyword-only, hence visible at /health rather than
+  silent. No longer gates the deploy.
 
 ## Rollback
 
