@@ -78,13 +78,23 @@ class Settings(BaseSettings):
     # list is cut to this many before the call.
     rerank_candidates: int = 100
 
+    # Cite-mode candidate diversification: fused chunk lists cluster in a
+    # handful of top docs (measured: 100 chunks from 5 docs on the golden
+    # set), so cap each doc's chunks in the candidate set to spread the
+    # slots across documents. Doc-level recall lever at unchanged API cost.
+    # Answer mode is uncapped — it wants the best chunks wherever they live.
+    cite_rerank_per_doc_cap: int = 2
+
     # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
     # values, e.g. floor -9.0, would pass everything on this scale).
-    # PROVISIONAL conservative (recall-first) values: derive on the
-    # non-English smoke set once Bedrock access is wired.
+    # Derived 2026-07-22 from live-Bedrock score capture (11 golden cite
+    # queries + 16-query non-EN smoke set, per-doc-capped candidates):
+    # floor 0.08 is the macro-F1 peak (P28/R82 vs P24/R82 on the old ONNX
+    # lane); band precision ~15% below 0.30, ~40% in 0.30-0.70, ~65% above
+    # 0.70; all smoke primary targets score >= 0.77 in zh/es/pt.
     # TODO(golden-set): formal per-language floor/tier recalibration.
-    cite_logit_floor: float = 0.01        # Drop docs below this relevance score
+    cite_logit_floor: float = 0.08        # Drop docs below this relevance score
     cite_strong_threshold: float = 0.70
     cite_partial_threshold: float = 0.30
 

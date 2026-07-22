@@ -48,12 +48,41 @@ def get_client():
 class BedrockReranker:
     """Drop-in for the removed OnnxReranker: same postprocess_nodes surface
     (per-call top_n, no global mutation), scores from the Bedrock Rerank API.
+
+    per_doc_cap: fused chunk lists cluster many chunks of the same top docs,
+    so a plain top-N chunk cut can send only a handful of docs to the
+    reranker (measured on the cite golden set: 100 chunks from 5 docs),
+    capping doc-level recall. With a cap, candidate slots are filled in
+    fusion order but each doc contributes at most `cap` chunks; leftover
+    slots backfill in fusion order. Same slot count → same API cost/latency.
+    Cite mode sets this (doc-level scoring); answer mode leaves it None
+    (best chunks wherever they live).
     """
 
-    def __init__(self, top_n: int = 20):
+    def __init__(self, top_n: int = 20, per_doc_cap=None):
         self.top_n = top_n
+        self.per_doc_cap = per_doc_cap
         settings = get_settings()
         self.model_name = settings.bedrock_rerank_model_id
+
+    def _select_candidates(self, nodes, limit):
+        if self.per_doc_cap is None:
+            return nodes[:limit]
+        per_doc = {}
+        selected = []
+        skipped = []
+        for node in nodes:
+            if len(selected) >= limit:
+                break
+            key = (node.node.metadata or {}).get("doc_id") or node.node.node_id
+            if per_doc.get(key, 0) < self.per_doc_cap:
+                per_doc[key] = per_doc.get(key, 0) + 1
+                selected.append(node)
+            else:
+                skipped.append(node)
+        if len(selected) < limit:
+            selected.extend(skipped[: limit - len(selected)])
+        return selected
 
     def postprocess_nodes(self, nodes, query_bundle, top_n=None):
         if not nodes:
@@ -63,7 +92,7 @@ class BedrockReranker:
 
         settings = get_settings()
         effective_top_n = top_n if top_n is not None else self.top_n
-        candidates = nodes[: settings.rerank_candidates]
+        candidates = self._select_candidates(nodes, settings.rerank_candidates)
 
         model_arn = (f"arn:aws:bedrock:{settings.bedrock_rerank_region}::"
                      f"foundation-model/{settings.bedrock_rerank_model_id}")

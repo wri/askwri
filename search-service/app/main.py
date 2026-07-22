@@ -400,10 +400,13 @@ def init_rerankers():
     BedrockReranker (settings.rerank_candidates).
     """
     reranker_answer = BedrockReranker(top_n=20)
-    reranker_cite = BedrockReranker(top_n=1000)
+    reranker_cite = BedrockReranker(
+        top_n=1000, per_doc_cap=settings.cite_rerank_per_doc_cap
+    )
     logger.info(
         f"✅ Bedrock rerankers ready ({settings.bedrock_rerank_model_id} in "
-        f"{settings.bedrock_rerank_region}; candidates={settings.rerank_candidates})"
+        f"{settings.bedrock_rerank_region}; candidates={settings.rerank_candidates}, "
+        f"cite per-doc cap={settings.cite_rerank_per_doc_cap})"
     )
     return reranker_answer, reranker_cite
 
