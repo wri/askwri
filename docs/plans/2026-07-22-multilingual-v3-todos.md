@@ -59,6 +59,39 @@ check items off with a pointer to the commit/PR that resolved them.
   fused. Deployed env uses the task role (immune). Maybe log a WARNING on
   first rerank failure per process.
 
+## Pre-cutover checklist (FULL re-embed gate — added 2026-07-22 review)
+
+- [ ] **Back up the vectors first** — the re-embed rewrites in place and the
+  only documented rollback is re-embedding back through OpenAI. A one-liner
+  makes it a two-way door (~200MB locally):
+  `CREATE TABLE document_chunks_embedding_backup_20260722 AS
+   SELECT id, embedding, embedding_model FROM document_chunks;`
+  Same insurance for the deployed cutover (RDS). Drop after validation.
+- [ ] **Dense lane has NO graceful degradation post-cutover** (verified:
+  `BedrockCohereQueryEmbedding.get_query_embedding` has no fallback; the
+  /query handler will 500 where rerank degrades to fused). Locally this is
+  guaranteed to bite when the SSO session expires. Decide before deploy:
+  sparse-only fallback + logged warning vs accept the hard dependency.
+- [ ] **Refresh `aws login` immediately before the full run** — 45–60 min
+  run vs ~hourly session expiry; exported creds are a static snapshot.
+  The script IS resumable (skips already-cohere rows), so a mid-run death
+  loses nothing, but know that's the failure mode.
+- [ ] **Worker parity at cutover**: the ingestion worker's embed stage
+  reads EMBEDDING_MODEL too. When the pin is removed, the (deployed)
+  worker must pick up the same setting at the same time or new ingests
+  silently write 3-small rows post-cutover. Local: moot (worker not
+  running).
+- [ ] **Re-validate floor 0.08 post-cutover**: it was derived with the
+  3-small dense lane feeding the candidate pool; embed-v4 changes that
+  pool. Re-run `scripts/capture_cite_scores.py` (floor zeroed) +
+  `scripts/analyze_cite_scores.py` — ~10 min including eval reruns.
+- [ ] **Post-cutover index hygiene**: the 3-small partial HNSW index goes
+  empty after the rewrite — write the drop migration (anticipated in the
+  1783454000000 migration comment). Rewriting 30k rows also bloats the
+  cohere HNSW index — check size / consider REINDEX.
+- [ ] Decide whether to commit this session's before/after eval JSONs
+  (currently untracked in `evaluation/results/`) for provenance.
+
 ## Re-embed / Bedrock quotas (found during the canary, 2026-07-22)
 
 - [ ] **Deployed re-embed must use `--batch-size 24` + `AWS_RETRY_MODE=adaptive`**
