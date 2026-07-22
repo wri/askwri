@@ -102,14 +102,23 @@ class PgVectorRetriever(BaseRetriever):
         super().__init__(**kwargs)
         self._embed_model = embed_model
         self._similarity_top_k = similarity_top_k
+        # Per-request latency split (L0 instrumentation): instances are
+        # created per request, so these attrs are race-free.
+        self.embed_ms: float | None = None
+        self.db_ms: float | None = None
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        import time as _time
+
         model = get_settings().embedding_model
+        t0 = _time.time()
         qvec = np.array(
             self._embed_model.get_query_embedding(query_bundle.query_str),
             dtype=np.float32,
         )
+        self.embed_ms = round((_time.time() - t0) * 1000, 1)
         results = []
+        t0 = _time.time()
         with get_pool().connection() as conn:
             # Near-exact ANN recall at this corpus size (ef_search cap is 1000).
             conn.execute("SET LOCAL hnsw.ef_search = 1000")
@@ -117,6 +126,7 @@ class PgVectorRetriever(BaseRetriever):
                 _DENSE_SQL_TMPL.format(dim=EMBEDDING_DIMENSIONS[model]),
                 {"q": qvec, "model": model, "k": self._similarity_top_k},
             ).fetchall()
+        self.db_ms = round((_time.time() - t0) * 1000, 1)
         for legacy_id, text, meta, similarity in rows:
             results.append(
                 NodeWithScore(

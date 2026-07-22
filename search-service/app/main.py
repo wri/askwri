@@ -218,10 +218,24 @@ class HybridFusionRetriever(BaseRetriever):
             logger.info(f"Query expansion: {query_bundle.query_str[:50]}... → {expanded_query[:80]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
 
-        # Run dense + sparse retrieval in parallel
+        # Run dense + sparse retrieval in parallel, timing each lane
+        # (L0 instrumentation: dense vs sparse were indistinguishable in the
+        # old coarse stage1 timer). self is per-request — attrs are race-free.
+        self.timings = {}
+
+        def _timed(fn, key, arg):
+            def run():
+                t0 = time.time()
+                out = fn(arg)
+                self.timings[key] = round((time.time() - t0) * 1000, 1)
+                return out
+            return run
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            dense_future = executor.submit(self.vector_retriever.retrieve, query_bundle)
-            sparse_future = executor.submit(self.bm25_retriever.retrieve, expanded_bundle)
+            dense_future = executor.submit(
+                _timed(self.vector_retriever.retrieve, "dense_ms", query_bundle))
+            sparse_future = executor.submit(
+                _timed(self.bm25_retriever.retrieve, "sparse_ms", expanded_bundle))
             # Post-cutover the dense lane is a Bedrock API call with no local
             # fallback (query embed via BedrockCohereQueryEmbedding). Degrade
             # to sparse-only rather than 500 — mirrors the rerank lane's
@@ -651,7 +665,35 @@ def load_from_postgres():
     service_state["embed_model"] = embed_model
     service_state["vector_index"] = None
     service_state["pg_dense_ready"] = True
+    _warm_backends()
     logger.info(f"✅ Postgres-backed retrieval ready ({len(service_state['document_texts'])} documents)")
+
+
+def _warm_backends():
+    """Best-effort boot warmup (L0 latency): pre-build the Bedrock clients
+    and do one tiny embed so the first user query doesn't pay client
+    construction + TLS handshakes (~200-500ms cold tail). Never fails boot —
+    without creds (local dev) it logs and moves on; the tuned botocore
+    timeouts keep the failure fast."""
+    import time as _time
+
+    t0 = _time.time()
+    try:
+        from app import bedrock_embed, bedrock_rerank
+
+        bedrock_rerank.get_client()
+        if settings.embedding_model == "cohere-embed-v4":
+            bedrock_embed.embed_query("warmup")
+        logger.info(f"🔥 Bedrock clients warmed in {_time.time() - t0:.2f}s")
+    except Exception as exc:  # noqa: BLE001 — warmup is advisory
+        logger.warning(f"Bedrock warmup skipped ({exc}) — first query pays the cold start")
+    try:
+        from app.db import get_pool
+
+        with get_pool().connection() as conn:
+            conn.execute("SELECT 1")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"DB warmup skipped ({exc})")
 
 
 async def _run_indexing_in_background():
@@ -804,6 +846,47 @@ def make_dense_retriever(top_k: int):
     )
 
 
+def _emit_query_emf(mode: str, debug: dict) -> None:
+    """CloudWatch EMF metric line for per-stage /query latency histograms
+    (L0 instrumentation). Pure-JSON stdout line — the ECS awslogs driver
+    ships it and CloudWatch parses the embedded metric format; locally it
+    is one log line per query. Best-effort: never fails a request."""
+    if not settings.emit_emf_metrics:
+        return
+    try:
+        import json as _json
+
+        lanes = debug.get("lane_timings") or {}
+        metrics = {
+            "total_ms": debug.get("total_ms"),
+            "stage1_ms": (debug.get("stage1_time") or 0) * 1000,
+            "rerank_ms": (debug.get("stage2_time") or 0) * 1000,
+            "dense_ms": lanes.get("dense_ms"),
+            "sparse_ms": lanes.get("sparse_ms"),
+            "embed_ms": lanes.get("embed_ms"),
+            "dense_db_ms": lanes.get("dense_db_ms"),
+            "passage_ms": debug.get("passage_ms"),
+        }
+        metrics = {k: round(v, 1) for k, v in metrics.items() if v is not None}
+        if not metrics:
+            return
+        print(_json.dumps({
+            "_aws": {
+                "Timestamp": int(time.time() * 1000),
+                "CloudWatchMetrics": [{
+                    "Namespace": "AskWRI/Query",
+                    "Dimensions": [["mode"]],
+                    "Metrics": [{"Name": k, "Unit": "Milliseconds"}
+                                for k in metrics],
+                }],
+            },
+            "mode": mode,
+            **metrics,
+        }), flush=True)
+    except Exception:  # noqa: BLE001 — metrics must never break /query
+        logger.debug("EMF emit failed", exc_info=True)
+
+
 @app.post("/query", response_model=QueryResponse)
 async def hybrid_query(request: QueryRequest):
     """
@@ -816,6 +899,7 @@ async def hybrid_query(request: QueryRequest):
     if not dense_ready or not service_state["bm25_retriever"]:
         raise HTTPException(status_code=500, detail="Service not properly initialized")
 
+    request_start = time.time()
     try:
         logger.info(f"Processing hybrid query: '{request.query}' (mode: {request.mode})")
 
@@ -883,9 +967,11 @@ async def hybrid_query(request: QueryRequest):
                     stage2_start = time.time()
                     # BedrockReranker (and the e2e stub): per-call top_n, no
                     # global mutation; candidate cut happens inside the client.
-                    # (The off-event-loop wrap from d214f3f is re-applied to
-                    # this call in the later L0 latency commit.)
-                    stage2_results = base_reranker.postprocess_nodes(
+                    # The rerank is a blocking boto3 round-trip (~0.5s) — run
+                    # in a worker thread so the event loop stays responsive
+                    # (d214f3f adapted to the Bedrock reranker).
+                    stage2_results = await asyncio.to_thread(
+                        base_reranker.postprocess_nodes,
                         stage1_results, query_bundle, top_n=request.rerank_top_n
                     )
                     rerank_applied = True
@@ -977,6 +1063,7 @@ async def hybrid_query(request: QueryRequest):
             min_score = float(min(node.score for node in filtered_results))
             score_range = max_score - min_score if max_score != min_score else 1.0
 
+        passage_start = time.time()
         for node_with_score in filtered_results:
             node = node_with_score.node
             metadata = node.metadata or {}
@@ -1087,6 +1174,20 @@ async def hybrid_query(request: QueryRequest):
                 "similarity_threshold": request.similarity_threshold,
                 "stage1_time": round(stage1_elapsed, 2) if 'stage1_elapsed' in locals() else None,
                 "stage2_time": round(stage2_elapsed, 2) if 'stage2_elapsed' in locals() else None,
+                # L0 latency instrumentation: per-lane and per-stage splits
+                # the coarse stage timers can't provide.
+                "lane_timings": {
+                    **getattr(hybrid_retriever, "timings", {}),
+                    "embed_ms": getattr(
+                        getattr(hybrid_retriever, "vector_retriever", None),
+                        "embed_ms", None),
+                    "dense_db_ms": getattr(
+                        getattr(hybrid_retriever, "vector_retriever", None),
+                        "db_ms", None),
+                },
+                "passage_ms": round((time.time() - passage_start) * 1000, 1)
+                              if 'passage_start' in locals() else None,
+                "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,
                     "sparse_weight": request.sparse_weight,
@@ -1095,6 +1196,7 @@ async def hybrid_query(request: QueryRequest):
                 }
             }
         }
+        _emit_query_emf(request.mode, response_data["debug"])
 
         # Add intermediate results if diagnostic mode
         if request.return_intermediate_results:

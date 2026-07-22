@@ -37,10 +37,13 @@ def get_client():
                 import boto3
 
                 region = get_settings().bedrock_rerank_region
+                from app.bedrock_embed import _botocore_config
+
                 _client = boto3.client(
                     "bedrock-agent-runtime",
                     region_name=region,
                     endpoint_url=f"https://bedrock-agent-runtime.{region}.amazonaws.com",
+                    config=_botocore_config(),
                 )
     return _client
 

@@ -115,6 +115,11 @@ class Settings(BaseSettings):
     cite_strong_threshold: float = 0.70
     cite_partial_threshold: float = 0.30
 
+    # CloudWatch EMF latency metrics: one pure-JSON stdout line per /query
+    # with per-stage timings (L0 latency instrumentation). The ECS awslogs
+    # driver ships it; CloudWatch parses the embedded metric format.
+    emit_emf_metrics: bool = True
+
     # SSL/Zscaler VPN Workaround
     use_custom_ssl_client: bool = False
     custom_ca_bundle: str = ""

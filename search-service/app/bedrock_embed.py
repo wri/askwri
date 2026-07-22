@@ -12,6 +12,7 @@ MinIO (S3), which boto3 would otherwise apply to Bedrock too.
 import json
 import logging
 import threading
+from functools import lru_cache
 from typing import List
 
 from app.config import get_settings
@@ -35,6 +36,23 @@ _client = None
 _client_lock = threading.Lock()
 
 
+def _botocore_config():
+    """Tuned timeouts + retries (L0 latency): botocore defaults are 60s
+    read timeouts and legacy retries — a stalled call blocks a /query up
+    to a minute before the degradation paths can trigger. Bulk jobs
+    (re-embed, worker drains) still control pacing via AWS_RETRY_MODE /
+    AWS_MAX_ATTEMPTS env, which take precedence when set."""
+    import os
+
+    from botocore.config import Config
+
+    mode = os.environ.get("AWS_RETRY_MODE", "standard")
+    attempts = int(os.environ.get("AWS_MAX_ATTEMPTS", "2"))
+    return Config(connect_timeout=2, read_timeout=10,
+                  retries={"mode": mode, "max_attempts": attempts},
+                  max_pool_connections=10)
+
+
 def get_client():
     """Lazy singleton bedrock-runtime client pinned to the embed region."""
     global _client
@@ -48,6 +66,7 @@ def get_client():
                     "bedrock-runtime",
                     region_name=region,
                     endpoint_url=f"https://bedrock-runtime.{region}.amazonaws.com",
+                    config=_botocore_config(),
                 )
     return _client
 
@@ -76,9 +95,16 @@ def embed_documents(texts: List[str]) -> List[List[float]]:
     return vectors
 
 
+@lru_cache(maxsize=256)
+def _embed_query_cached(text: str) -> tuple:
+    return tuple(_invoke([text], "search_query")[0])
+
+
 def embed_query(text: str) -> List[float]:
-    """Encode one query (input_type=search_query)."""
-    return _invoke([text], "search_query")[0]
+    """Encode one query (input_type=search_query). LRU-cached (L0 latency):
+    repeat queries — re-searches, eval loops — skip the Bedrock hop.
+    Returns a fresh list so callers can't mutate the cached vector."""
+    return list(_embed_query_cached(text))
 
 
 class BedrockCohereQueryEmbedding:

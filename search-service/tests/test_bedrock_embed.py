@@ -118,6 +118,58 @@ def test_embed_documents_batch_size_configurable(monkeypatch):
     get_settings.cache_clear()
 
 
+def test_client_config_has_tuned_timeouts_and_env_retry_override(monkeypatch):
+    """L0 latency: default botocore config means a stalled embed blocks a
+    request up to 60s before the sparse-only fallback can trigger. The
+    client passes tuned timeouts + standard/2 retries; AWS_RETRY_MODE /
+    AWS_MAX_ATTEMPTS env (bulk-job pacing) still wins when set."""
+    import app.bedrock_embed as be
+
+    captured = {}
+
+    class _FakeBoto3:
+        @staticmethod
+        def client(name, **kw):
+            captured.update(kw)
+            return object()
+
+    monkeypatch.setitem(__import__("sys").modules, "boto3", _FakeBoto3)
+    monkeypatch.delenv("AWS_RETRY_MODE", raising=False)
+    monkeypatch.delenv("AWS_MAX_ATTEMPTS", raising=False)
+    be._client = None
+    be.get_client()
+    cfg = captured["config"]
+    assert cfg.connect_timeout == 2
+    assert cfg.read_timeout == 10
+    assert cfg.retries == {"mode": "standard", "max_attempts": 2}
+
+    captured.clear()
+    monkeypatch.setenv("AWS_RETRY_MODE", "adaptive")
+    monkeypatch.setenv("AWS_MAX_ATTEMPTS", "10")
+    be._client = None
+    be.get_client()
+    assert captured["config"].retries == {"mode": "adaptive", "max_attempts": 10}
+    be._client = None
+
+
+def test_embed_query_lru_caches_repeat_queries(monkeypatch):
+    """L0 latency: repeat queries (re-searches, eval loops) skip the
+    ~50-130ms Bedrock embed hop. Cache returns a fresh list per call so
+    callers can't mutate the cached vector."""
+    import app.bedrock_embed as be
+
+    stub = _StubBedrockClient()
+    monkeypatch.setattr(be, "get_client", lambda: stub)
+    be._embed_query_cached.cache_clear()
+
+    v1 = be.embed_query("repeated query")
+    v2 = be.embed_query("repeated query")
+    assert v1 == v2
+    assert v1 is not v2  # fresh list, not the cached object
+    assert len(stub.calls) == 1  # second call served from cache
+    be._embed_query_cached.cache_clear()
+
+
 def test_embed_query_uses_search_query_input_type(monkeypatch):
     import app.bedrock_embed as be
 
