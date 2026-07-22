@@ -251,14 +251,29 @@ def main():
 
             # 'external' marks a value as CSV-owned: protected from AI
             # overwrite, still replaceable by a later CSV import. Without it
-            # worker/stages/parse.py reads the field as unowned and clobbers it.
-            # title_en is deliberately absent — summarize.py skips 'external',
-            # so marking it would permanently block the real translation of a
-            # non-English title.
+            # worker/stages/parse.py reads the field as unowned and clobbers it
+            # on the first re-ingest. This covers parse.py's _EXTRACT_FIELDS
+            # plus the three columns only the CSV supplies.
+            #
+            # `title` matters most: it is the only title the public catalog
+            # renders (nothing outside the admin editor reads title_en), so
+            # letting the LLM replace it with the native-language title would
+            # put untranslated titles on the site for every non-English doc.
+            #
+            # Deliberately NOT marked: title_en (summarize.py skips 'external',
+            # so marking it would permanently block translation) and
+            # language/languages (detection beats the CSV's labels).
             provenance = {
                 column: "external"
                 for column, value in (
-                    ("authors", authors), ("url", url), ("date_published", date_published)
+                    ("title", title),
+                    ("doi", _clean(raw.get("DOI"))),
+                    ("year_published", parse_year(raw.get("YEAR published"))),
+                    ("article_type", _clean(raw.get("article_type"))),
+                    ("wri_primary_office", _clean(raw.get("wri_primary_office"))),
+                    ("authors", authors),
+                    ("url", url),
+                    ("date_published", date_published),
                 )
                 if value is not None
             }

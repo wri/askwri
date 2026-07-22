@@ -848,9 +848,14 @@ class TestS3KeyAndSummaryLanguage:
         assert str(row[2]) == "2021-03-17", f"date_published not parsed: {row[2]!r}"
 
     def test_csv_fields_are_marked_external(self, tmp_path):
-        """metadata_source must mark the CSV-sourced columns 'external'.
-        Left NULL, worker/stages/parse.py treats authors as unowned and
-        overwrites the curated CSV value with its own LLM extraction."""
+        """metadata_source must mark every CSV-sourced column 'external'.
+
+        Left unset, worker/stages/parse.py treats the field as unowned and
+        replaces the curated CSV value with its own PDF extraction — including
+        `title`, which is the only title the public catalog renders (nothing
+        outside the admin editor reads title_en). The set below is exactly
+        parse.py's _EXTRACT_FIELDS plus the three columns only the CSV supplies.
+        """
         self._run(corpus_dir=_non_english_corpus(tmp_path))
 
         with self._conn() as conn:
@@ -859,9 +864,28 @@ class TestS3KeyAndSummaryLanguage:
             ).fetchone()
 
         source = row[0] or {}
-        for column in ("authors", "url", "date_published"):
+        for column in (
+            "title", "year_published", "article_type", "wri_primary_office",
+            "authors", "url", "date_published",
+        ):
             assert source.get(column) == "external", (
                 f"metadata_source[{column!r}] should be 'external', got {source.get(column)!r}"
+            )
+
+    def test_detected_fields_are_left_unowned(self, tmp_path):
+        """language/languages come from detection, which beats the CSV, and
+        title_en must stay unowned so summarize.py still translates it."""
+        self._run(corpus_dir=_non_english_corpus(tmp_path))
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT metadata_source FROM documents WHERE external_id = 'doc_zh_001'"
+            ).fetchone()
+
+        source = row[0] or {}
+        for column in ("title_en", "language", "languages"):
+            assert column not in source, (
+                f"metadata_source[{column!r}] should be unset, got {source.get(column)!r}"
             )
 
     def test_title_en_is_populated_without_blocking_translation(self, tmp_path):
