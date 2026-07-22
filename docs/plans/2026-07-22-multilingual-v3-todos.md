@@ -20,6 +20,15 @@ check items off with a pointer to the commit/PR that resolved them.
 - [ ] **TODO(golden-set)**: formal per-language floor/tier recalibration
   once the redone golden set lands (markers in `app/config.py`).
 
+## Answer mode (post-cutover, 2026-07-22)
+
+- [ ] **ans_006 regression under embed-v4**: answer-mode doc-F1 dropped
+  85.8 → 75.6 at the corpus cutover, almost entirely ans_006
+  ("nature-based solutions": 5 retrieved docs → 1). embed-v4's chunk
+  ranking concentrates that query's top-15 chunks in one doc. Investigate
+  with (or fold into) the answer-golden-set redo — possibly an answer-mode
+  analog of the cite per-doc candidate cap.
+
 ## Eval infrastructure
 
 - [ ] **Answer golden set is flawed and needs a redo** (dgutelius
@@ -46,9 +55,16 @@ check items off with a pointer to the commit/PR that resolved them.
 
 ## Deploy / ops
 
-- [ ] **Confirm the deploy account is 905418285725** (where Bedrock model
-  access was verified) against terraform state before crossing "enable
-  model access" off the deploy checklist.
+- [x] **Deploy account confirmed 2026-07-22**: `askwri-app-qa-cluster` and
+  `askwri-app-production-cluster` both live in 905418285725 (us-east-2) —
+  the account where Bedrock invokes are verified live. "Enable model
+  access" is genuinely done for both models.
+- [ ] Full re-embed used the `us.cohere.embed-v4:0` cross-region inference
+  profile (300k TPM bucket, ~4x observed throughput vs the drained
+  on-demand bucket). Consider defaulting `BEDROCK_EMBED_MODEL_ID` to the
+  profile for the deployed re-embed too (works with the same
+  `bedrock:InvokeModel` grant IF the terraform policy covers the profile
+  ARN + underlying regional model ARNs — verify before relying on it).
 - [ ] **Deploy ordering**: terraform apply (task-role `bedrock:InvokeModel`
   + `bedrock:Rerank`) MUST precede the Phase B image deploy, or qa's rerank
   silently degrades to fused results (graceful but invisible). Consider a
@@ -81,10 +97,10 @@ check items off with a pointer to the commit/PR that resolved them.
   worker must pick up the same setting at the same time or new ingests
   silently write 3-small rows post-cutover. Local: moot (worker not
   running).
-- [ ] **Re-validate floor 0.08 post-cutover**: it was derived with the
-  3-small dense lane feeding the candidate pool; embed-v4 changes that
-  pool. Re-run `scripts/capture_cite_scores.py` (floor zeroed) +
-  `scripts/analyze_cite_scores.py` — ~10 min including eval reruns.
+- [x] **Floor re-validated post-cutover** (2026-07-22): embed-v4 candidate
+  pool moved the macro-F1 peak 0.08 → 0.10 (P29.5/R83.1); config updated,
+  tiers unchanged. The predicted shift was real — keep this re-validation
+  step in the deployed-cutover runbook too.
 - [ ] **Post-cutover index hygiene**: the 3-small partial HNSW index goes
   empty after the rewrite — write the drop migration (anticipated in the
   1783454000000 migration comment). Rewriting 30k rows also bloats the

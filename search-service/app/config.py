@@ -89,12 +89,15 @@ class Settings(BaseSettings):
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
     # values, e.g. floor -9.0, would pass everything on this scale).
     # Derived 2026-07-22 from live-Bedrock score capture (11 golden cite
-    # queries + 16-query non-EN smoke set, per-doc-capped candidates):
-    # floor 0.08 is the macro-F1 peak (P28/R82 vs P24/R82 on the old ONNX
-    # lane); band precision ~15% below 0.30, ~40% in 0.30-0.70, ~65% above
-    # 0.70; all smoke primary targets score >= 0.77 in zh/es/pt.
+    # queries + 16-query non-EN smoke set, per-doc-capped candidates),
+    # re-validated after the cohere-embed-v4 corpus cutover (the embed-v4
+    # candidate pool moved the macro-F1 peak from 0.08 to 0.10:
+    # P29.5/R83.1/F1 43.6 vs P24/R82 on the old ONNX lane). Band precision
+    # steps at ~0.30 and ~0.70; all smoke primary targets score >= 0.77.
+    # Re-derive with scripts/capture_cite_scores.py + analyze_cite_scores.py
+    # after candidate-pool changes.
     # TODO(golden-set): formal per-language floor/tier recalibration.
-    cite_logit_floor: float = 0.08        # Drop docs below this relevance score
+    cite_logit_floor: float = 0.10        # Drop docs below this relevance score
     cite_strong_threshold: float = 0.70
     cite_partial_threshold: float = 0.30
 
