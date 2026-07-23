@@ -130,7 +130,7 @@ check items off with a pointer to the commit/PR that resolved them.
 
 ## Pre-cutover checklist (FULL re-embed gate — added 2026-07-22 review)
 
-- [ ] **Back up the vectors first** — the re-embed rewrites in place and the
+- [x] **Back up the vectors first — RDS DONE 2026-07-23** (`document_chunks_embedding_backup_20260722`, 30,435 rows; drop after soak) — the re-embed rewrites in place and the
   only documented rollback is re-embedding back through OpenAI. A one-liner
   makes it a two-way door (~200MB locally):
   `CREATE TABLE document_chunks_embedding_backup_20260722 AS
@@ -144,15 +144,18 @@ check items off with a pointer to the commit/PR that resolved them.
   `tests/test_dense_fallback.py` (degrade + recover). Chose sparse-only
   fallback over the hard dependency; sparse-only is English-keyword-only, so
   it is intentionally visible via /health rather than silent.
-- [ ] **Refresh `aws login` immediately before the full run** — 45–60 min
-  run vs ~hourly session expiry; exported creds are a static snapshot.
-  The script IS resumable (skips already-cohere rows), so a mid-run death
-  loses nothing, but know that's the failure mode.
-- [ ] **Worker parity at cutover**: the ingestion worker's embed stage
-  reads EMBEDDING_MODEL too. When the pin is removed, the (deployed)
-  worker must pick up the same setting at the same time or new ingests
-  silently write 3-small rows post-cutover. Local: moot (worker not
-  running).
+- [x] **Refresh `aws login` immediately before the full run — DONE 2026-07-23
+  (moot in practice)**: the RDS run used the auto-refreshing `~/.aws` login
+  provider (aws configure list → TYPE `login`), which rotates every ~15 min
+  under a 12h umbrella — the opposite of the static-snapshot expiry this warns
+  about. Resumability still bore out: the run auto-resumed through 2 throttle
+  deaths losslessly.
+- [x] **Worker parity at cutover — DONE 2026-07-23**: `EMBEDDING_MODEL`
+  removed from `INGESTION_WORKER_ENV` in the SAME redeploy (`29968575474`) as
+  the search-service pin, so the worker now defaults to cohere-embed-v4. Also
+  added `AWS_RETRY_MODE=adaptive`/`AWS_MAX_ATTEMPTS=10`/`BEDROCK_EMBED_MODEL_ID=
+  us.cohere.embed-v4:0` to the worker secret for future bulk re-ingests
+  (normal single-doc intake at default batch 96 is fine without them).
 - [x] **Floor re-validated post-cutover** (2026-07-22): embed-v4 candidate
   pool moved the macro-F1 peak 0.08 → 0.10 (P29.5/R83.1); config updated,
   tiers unchanged. The predicted shift was real — keep this re-validation
@@ -166,10 +169,11 @@ check items off with a pointer to the commit/PR that resolved them.
 
 ## Re-embed / Bedrock quotas (found during the canary, 2026-07-22)
 
-- [ ] **Deployed re-embed must use `--batch-size 24` + `AWS_RETRY_MODE=adaptive`**
-  (now in the runbook): default batch 96 bursts past the 150k tokens/min
-  on-demand embed-v4 quota and dies on ThrottlingException. Ensure the
-  deploy runbook's re-embed step inherits this before the qa cutover.
+- [x] **Deployed re-embed used `--batch-size 24` + `AWS_RETRY_MODE=adaptive` +
+  the `us.cohere.embed-v4:0` profile — DONE 2026-07-23**: even the 300k-TPM
+  profile bucket threw ThrottlingException twice mid-run; the auto-resume loop
+  (per-batch commits + 45s backoff) carried it to 30,435/30,435 across 3
+  attempts. Batch 96 would have been worse. Confirms the runbook setting.
 - [x] `reembed_cohere.py` stats bug (`documents` counted chunk ids under
   `--limit`) — fixed with the per-batch-commit change (2026-07-22).
 - [x] `reembed_cohere.py` unclosed pool warnings — pool closed in main()
