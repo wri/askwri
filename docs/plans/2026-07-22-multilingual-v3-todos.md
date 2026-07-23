@@ -98,10 +98,16 @@ check items off with a pointer to the commit/PR that resolved them.
   native-edition sibling in the corpus). Re-ingest will re-label them
   'en'; diff documents.language before/after the full run and review the
   flips as corrections vs regressions with the team.
-- [ ] **8 production docs have pypdf glyph-ID garbage** (`/gid00017…`) in
-  live `document_texts` (en 5 / es 2 / pt 1, ~2,600 occurrences) —
-  discovered via the bake-off oracle diagnostics. Any re-parse fixes
-  them; prioritize regardless of parser choice.
+- [x] **8 production docs had pypdf glyph-ID garbage — FIXED on qa 2026-07-23.**
+  Confirmed the deployed RDS `document_texts` was pypdf all along (only 4/168
+  docs had markdown headers; Mistral had been local-only). Configured the qa
+  worker for Mistral (`PARSE_BACKEND=mistral` + `MISTRAL_API_KEY` + a bulk
+  `BEDROCK_EMBED_BATCH_SIZE=24`; deploy `29976819358`) and targeted-re-ingested
+  the 8 via `reingest_all --ids`. Result: 8 → 0 `/gid`, all clean Mistral
+  markdown, re-embedded `cohere-embed-v4`, `searchable`, languages unchanged.
+  Backups `document_texts/chunks_glyph_backup_20260723`. The worker is now
+  Mistral for all future ingests (personal key — rotation debt); the other ~160
+  docs stay pypdf (clean, and re-parse is recall-neutral).
 - [ ] Bake-off cleanup after the Phase 1 decision: delete BDA project
   `07aee510a362` + scratch bucket `askwri-parse-bakeoff-905418285725`.
 
