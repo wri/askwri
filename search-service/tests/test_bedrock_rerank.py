@@ -38,8 +38,10 @@ def test_bedrock_rerank_settings_defaults(monkeypatch):
     for var in ("BEDROCK_RERANK_REGION", "BEDROCK_RERANK_MODEL_ID", "RERANK_CANDIDATES"):
         monkeypatch.delenv(var, raising=False)
     settings = get_settings()
-    # infra is us-east-2; Rerank 3.5 lives in us-west-2 (spec §5 region nuance)
-    assert settings.bedrock_rerank_region == "us-west-2"
+    # infra is us-east-2; Rerank 3.5 is now live in us-east-1 (ACTIVE/ON_DEMAND,
+    # confirmed 2026-07-22) — co-located with the cluster, ~35-55ms less than the
+    # prior us-west-2 cross-continent hop (spec §5 region nuance).
+    assert settings.bedrock_rerank_region == "us-east-1"
     assert settings.bedrock_rerank_model_id == "cohere.rerank-v3-5:0"
     assert settings.rerank_candidates == 100
 
