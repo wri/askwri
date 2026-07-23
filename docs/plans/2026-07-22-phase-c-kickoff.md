@@ -1,5 +1,14 @@
 # Phase C — RDS embed cutover — new-session kickoff (2026-07-22)
 
+> **RETIRED 2026-07-23 — HISTORICAL ONLY. Do not paste this prompt.**
+> Phase C (RDS embed cutover) executed 2026-07-23 and Phase D (full corpus
+> Mistral re-parse) completed the same day. The corpus described below as
+> "still 3-small / still pypdf" no longer exists.
+>
+> Current pick-up doc: `docs/plans/2026-07-23-session-handoff.md`.
+> Execution logs: `docs/runbooks/qa-deploy-multilingual-v3.md`.
+> Kept only as a record of how the phase was scoped.
+
 Paste the block below into a fresh session.
 
 ```

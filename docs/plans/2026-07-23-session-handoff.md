@@ -1,155 +1,159 @@
-# Multilingual v3 — Session Handoff (2026-07-23)
+# Multilingual v3 — Session Handoff (updated 2026-07-23, post-Phase-D)
 
-Pick-up doc for a fresh agent. Companion planning notes:
-`docs/runbooks/qa-deploy-multilingual-v3.md` (Phase A-D runbook + Phase C execution log),
-`docs/plans/2026-07-22-multilingual-v3-todos.md` (running todos),
-`docs/plans/2026-07-22-phase-c-kickoff.md` (Phase C procedure, historical).
+Pick-up doc for a fresh agent. **Phase D is DONE** — the qa corpus is now
+uniformly Mistral-parsed and all-cohere, and the cite thresholds have been
+re-derived on it. Retrieval/latency tuning is unblocked.
+
+Companions: `docs/runbooks/qa-deploy-multilingual-v3.md` (Phase A-D runbook +
+execution logs), `docs/plans/2026-07-22-multilingual-v3-todos.md` (running
+todos), `docs/research/2026-07-23-cite-floor-rederivation.md` and
+`docs/research/2026-07-23-answer-golden-remap.md` (this session's derivations).
 
 Work happens in worktree `.worktrees/multilingual-v3`. RDS access:
 `./scripts/with-remote-env.sh qa <cmd>` (reads DB creds from the qa ECS task
 def, forces SSL; needs a live `aws login` + your IP on the RDS SG, us-east-2,
-acct 905418285725). AWS creds use the auto-refreshing `login` provider.
+acct 905418285725).
 
 ---
 
-## CURRENT STATE (verified 2026-07-23)
+## CURRENT STATE (verified 2026-07-23, post-Phase-D)
 
-**qa (RDS `qa` on askwri-db1):** 168 docs, 30,435 chunks, **100% `cohere-embed-v4`**
-(zero `text-embedding-3-small`). Parse layer: **8 docs Mistral, 160 pypdf**, 0 `/gid`
-glyph garbage. Deployed search-service on cohere dense + Cohere Rerank 3.5 **us-east-1**;
-cite floor **0.09**; total query latency ~1s.
+**qa (RDS `qa` on askwri-db1):** 168 docs, **27,878 chunks**, 100%
+`cohere-embed-v4`, **168/168 Mistral-parsed** (0 pypdf, 0 `/gid`), all
+`searchable`. Sparse rebuilt: `n_chunks` 27,878, `avgdl` 199.8, vocab 233,936
+(23% of `SPARSE_DIM`), 0 nulls. Languages: en 139, zh 16, es 9, pt 3, id 1.
 
-**local (docker `qa` on localhost:5432):** 172 docs, ~28.2k chunks, **171/172 Mistral**,
-all cohere. This is the Phase-1 full-Mistral corpus.
+**Retrieval config:** dense `cohere-embed-v4` via Bedrock us-east-1; sparse
+Postgres BM25 (English-only stemmer); RRF alpha 0.5; rerank Cohere Rerank 3.5
+via Bedrock **us-east-1**, `rerank_candidates=100`, cite `per_doc_cap=2`;
+cite floor **0.09**, tiers 0.30/0.70; `CITE_PRESET` fusionTopK **500**,
+rerankTopN 500, maxResults **25** (was 100 — see below).
 
-**Deployed worker** (`askwri-app-qa-ingestion-worker`): `PARSE_BACKEND=mistral` +
-`MISTRAL_API_KEY` (**personal key — rotation debt**) + `BEDROCK_EMBED_BATCH_SIZE=24` +
+**local (docker `qa` on localhost:5432):** 171 docs, ~28.2k chunks, Mistral,
+all cohere. Shares **zero** doc IDs with qa and has its own `keyword_vocab`,
+so rows are never copyable between them.
+
+**Deployed worker:** `PARSE_BACKEND=mistral` + `MISTRAL_API_KEY` (**personal
+key — rotation debt, now urgent**) + `BEDROCK_EMBED_BATCH_SIZE=24` +
 `AWS_RETRY_MODE=adaptive`/`AWS_MAX_ATTEMPTS=10`/`BEDROCK_EMBED_MODEL_ID=us.cohere.embed-v4:0`.
-So **all NEW qa ingests parse via Mistral**; the existing 160 pypdf docs stay pypdf until re-ingested.
 
-**GitHub secrets (repo-level; qa uses these, production has its own env-scoped copies that
-were NOT touched):** `SEARCH_SERVICE_ENV` (5 keys, no EMBEDDING_MODEL),
-`INGESTION_WORKER_ENV` (8 keys incl. the Mistral + bulk-embed vars).
-
-**RDS backup tables (rollback; keep until validated):**
-- `document_chunks_embedding_backup_20260722` (30,435 rows — pre-cohere vectors)
-- `document_texts_glyph_backup_20260723` (8) + `document_chunks_glyph_backup_20260723` (1736)
-
-**Branches / PRs:**
-- #248, #249 merged (multilingual-v3 + reingest --ids).
-- #251 MERGED — Phase C provenance + rerank region flip (us-east-1).
-- #252 MERGED — glyph-fix docs.
-- **#253 OPEN** — `CITE_PRESET.fusionTopK 200->500` (branch `fix/cite-fusion-topk-cohere`). **Merge decision pending.**
-- **#250 OPEN** — `fix(eval): chunk-precision double-count + q11 golden-set contradiction` (someone else's; relevant to golden-set cleanup).
+**RDS backup tables (keep until soak completes):**
+`document_chunks_embedding_backup_20260722` (30,435 — pre-cohere vectors),
+`document_texts/chunks_glyph_backup_20260723` (8 / 1,736),
+`reparse_pypdf_docs_20260723` (160 ids + pre-state),
+`document_texts_reparse_backup_20260723` (160),
+`document_chunks_reparse_backup_20260723` (28,699 / 281 MB),
+`document_chunks_sparse_backup_20260723` (27,878).
 
 ---
 
-## WHAT HAPPENED THIS SESSION
+## WHAT HAPPENED THIS SESSION (2026-07-23)
 
-**Phase C — RDS embed cutover (DONE, deployed).**
-1. Backed up RDS vectors -> re-embedded all 30,435 chunks to cohere-embed-v4 (batch 24 +
-   `us.cohere.embed-v4:0` profile; an auto-resume loop absorbed 2 ThrottlingExceptions —
-   even the 300k-TPM bucket throttles, so per-batch-commit resumability is essential).
-2. Flipped the `EMBEDDING_MODEL` pin out of both secrets + added worker bulk-embed vars;
-   redeployed both services (run 29968575474). Kept cite floor 0.09.
-3. Folded in the rerank region flip us-west-2 -> us-east-1 (#251, run 29970241143):
-   measured rerank stage2 **610ms -> 560ms** (~50ms), total ~1055 -> ~994ms.
+**Phase D — full corpus re-parse (DONE).** 160 pypdf docs re-parsed via the
+deployed Mistral worker. **160/160 done, ZERO errors**, ~2h50m, one worker.
+Chunks -8.2% on the re-parsed set, matching prediction. Full log in the runbook.
 
-**Phase D-lite — glyph repair (DONE, deployed).**
-- Discovered deployed RDS was pypdf all along (Mistral had only ever run locally). 8 docs
-  had `/gid` glyph garbage. Configured the worker for Mistral (run 29976819358) and
-  targeted-re-ingested the 8 (`reingest_all --ids`): now 0 `/gid`, clean Mistral markdown,
-  cohere chunks, searchable. This also flipped the deployed worker to Mistral for all future ingests.
+**Language flips went the OPPOSITE way to the prediction — and that was
+correct.** Expected: 3 docs (3778/2705/6821) flipping *to* `en`; they were
+already `en` on qa and correctly did not move (that prediction described the
+LOCAL corpus). What actually happened: **7 docs flipped `en` -> es/zh/id**,
+all verified corrections — pypdf's cover-biased text had genuinely non-English
+documents mislabeled. `documents.language` is metadata; it does not filter
+retrieval.
 
-**Recall gap — ROOT-CAUSED (the big finding).**
-- Deployed "cite recall 66.9 vs local 83.1" was a **measurement artifact**, NOT a
-  regression. The eval harness sends no `fusion_top_k` (-> service default **500**); the
-  production proxy uses `CITE_PRESET.fusionTopK=200`. **Evals measured a pool users never get.**
-- 0 of 70 golden expected docs are missing from the qa corpus — the gap is 100% retrieval.
-- The 200 cap was tuned for text-embedding-3-small (old comment "0.6% loss vs 500" true then);
-  cohere-embed-v4 spreads expected docs into the 200-500 fused band, so 200 now costs ~15pp.
-- Deployed sweep (denseTopK=500): recall **66.9@200 -> 78.9@300 -> 82.3@400/500 -> 83.1@700**;
-  **rerank latency FLAT** (rerank capped at `rerank_candidates=100` regardless of fusion depth).
-- Fix = #253: `fusionTopK 200->500` (matches eval default; satisfies `rerankTopN>=fusionTopK`;
-  real-user recall 66.9 -> 82.3, +15.4pp, ~0 latency).
-- A subagent fanout diagnosed the misses **at the wrong operating point (fusion 200 -> 23 misses);
-  at 500 it is 13.** Its category split (of the 23): 12 genuinely-relevant, 8 weak-labels, 3 negation.
-  Real retrieval lane = **LVC vocabulary drift**; WRR series-membership = metadata-facet; rest = golden-set artifacts.
+**Sparse rebuild is mandatory after a bulk re-parse.** `keyword_corpus_stats`
+was stale (30,435 vs 27,878 actual) and the embed stage assigns new tokens
+IDF from those frozen stats. Rebuilt before any threshold work.
 
-**META-LESSON:** any deployed measurement via `/api/llamaindex` MUST match the eval harness
-params (`fusion_top_k`=500, denseTopK/sparseTopK) or it under-reports. A constant (golden-set
-artifacts) can NEVER explain a delta between two measurements.
+**Cite re-derivation (DONE).** The structural finding: **the UI renders every
+returned doc** (`results/page.tsx` `pageDocs = supporting`, no slice), so
+`maxResults` — not the logit floor — bounds list length; at 100 lists ran from
+a handful to 46 docs. Shipped `maxResults` 100 -> **25**: recall IDENTICAL
+(83.3 macro / 90.2 excl-q11), precision 29.2 -> 32.0, F1 43.3 -> 46.2. Floor
+**held at 0.09** against a macro-F1 peak at 0.14 that costs 13pp recall —
+cite is recall-first by design, and 0.14 cuts into a 20.5%-precision band.
+
+**Recall ceiling is 90.7% (top-30):** 59/66 expected docs reach the reranker.
+**LVC vocabulary drift is now the biggest remaining lever**, bigger than any
+threshold tuning.
+
+**q11 excluded from threshold derivation.** 5 of its 7 expected docs never
+enter the candidate pool (3 are LVC docs); recall capped at 2/7 regardless of
+threshold. It informs the LVC + golden-set-rescope lanes, not thresholds.
+
+**SECURITY: both API keys were printed in plaintext** by a routine pytest
+failure (pydantic `Settings` repr). Masking fixed in #258; **the keys still
+need rotating**. See the todos' Security section.
+
+---
+
+## OPEN PRs (all green, none merged as of writing)
+
+| PR | What | Note |
+|---|---|---|
+| #250 | eval harness corrections (chunk double-count, q11) | **merge FIRST** — #257 is based on it |
+| #255 | configurable answer per-doc rerank cap | default `None`, no behaviour change |
+| #256 | conditional 3-small index drop migration | needs manual `migration:run` on qa after |
+| #257 | answer golden-set chunk-ID remap | needs #250 |
+| #258 | `SecretStr` masking for API keys | |
+| #259 | cite `maxResults` 100 -> 25 | |
+
+**Merge caveat:** every merge to `qa` triggers a full deploy and there is **no
+`concurrency:` guard** in `deploy-qa.yml`, so back-to-back merges race
+overlapping deploys. Merge all, then fire ONE
+`gh workflow run deploy-qa.yml --ref qa`.
 
 ---
 
 ## WHAT'S LEFT (prioritized)
 
-0. **Decide + merge #253** (fusion_top_k fix). It's a +15pp win on today's corpus and safe;
-   recommend merging now, then re-confirm post-reparse.
-1. **Full Phase D re-parse of the ~160 pypdf docs on qa** — the agreed **prerequisite** for any
-   retrieval/latency tuning (calibrate on the FINAL corpus, not one about to change under you).
-   - Approach: **re-parse on qa, do NOT copy local rows.** (Local shares ZERO document IDs with
-     qa — different UUIDs; only 157/168 match by URL — AND local sparse vectors index into
-     local's `keyword_vocab`, so copying would break qa's sparse lane. Copy = fragile + still
-     forces a downstream rebuild.)
-   - Procedure: back up `document_texts` + `document_chunks` for the pypdf docs -> `reingest_all`
-     the pypdf docs (select where `full_text NOT LIKE '%![%](%'` and status<>'withdrawn') ->
-     deployed Mistral worker re-parses from S3 -> re-chunk -> re-embed -> rebuild sparse against
-     qa vocab -> monitor `ingestion_jobs` -> verify uniform Mistral (md-images count == doc count).
-   - Cost: ~1-3 hrs on ONE worker, throttle-prone, personal Mistral key (API cost + rate),
-     in-place text mutation. Expect chunk count to drop ~9%.
-2. **Re-derive floor + re-confirm `fusion_top_k`** on the all-Mistral corpus (local floor moved
-   0.10->0.09 with Mistral, so tuning is parse-sensitive). Use `capture_cite_scores` +
-   `analyze_cite_scores` (needs a service with `CITE_LOGIT_FLOOR=0` — a local service pointed at
-   RDS, since the deployed floor can't be zeroed).
-3. **Retrieval quality lanes** (post-uniform-corpus): (a) LVC vocabulary-drift synonym/glossary
-   expansion (land-pooling/readjustment/Rail+Property <-> "land value capture"); (b) series/
-   collection metadata facet for enumeration queries (WRR case studies).
-4. **Latency L2** (frontend track): stream answer synthesis, result cache. L0 done; L1 partly done (rerank region).
-5. **Phase C step 10** (post-soak): 3-small partial-index DROP migration (TypeORM raw SQL,
-   synchronize=false, TDD); drop the 3 backup tables; consider REINDEX on the cohere HNSW (30k-row rewrite bloat).
-6. **Rotation debt:** swap the personal Mistral key for an ORG/team key + revoke the personal one.
-7. **Production cutover:** mirror Phase A->C on production (its OWN env-scoped secrets; re-embed production RDS).
-8. **Bake-off cleanup:** delete BDA project `07aee510a362` + scratch bucket `askwri-parse-bakeoff-905418285725`.
-9. **FULL DOCUMENTATION REVIEW after Phase D completes** (explicit ask 2026-07-23): reconcile
-   the runbook, todos, document-management.md, CLAUDE.md, and this handoff against the final
-   all-Mistral / all-cohere / us-east-1-rerank / fusion-500 reality; retire stale/interim notes.
+1. **Merge the six PRs + single redeploy**, then run `migration:run` against qa
+   for #256 (CI does not run migrations).
+2. **Rotate both API keys** (see todos Security). Mistral: provision an ORG key,
+   rebuild `INGESTION_WORKER_ENV`, redeploy, revoke the personal one. Mistral
+   OCR is **not** on Bedrock, so there is no task-role escape from the external
+   key — the AWS-native path is BDA + caption dedup.
+3. **LVC vocabulary drift** — the largest remaining recall lever. Synonym/
+   glossary expansion (land-pooling, readjustment, Rail+Property <-> "land
+   value capture"); query-side vs embed-time placement undecided.
+4. **Answer-mode calibration**: `ANSWER_PRESET.fusionTopK=100` and answer
+   thresholds have NEVER been re-derived on cohere. Plus the per-doc-cap A/B
+   (#255 added the setting; ans_006 doc-F1 is 28.6).
+5. **Tier boundaries (0.30/0.70) not re-derived** — only floor and cap were.
+6. **Latency L2**: stream answer synthesis, result cache.
+7. Phase C step 10 leftovers: drop the backup tables after soak; consider
+   `REINDEX` on the cohere HNSW (two full table rewrites).
+8. **Production cutover**: mirror Phase A->D on production (own env-scoped
+   secrets; re-embed + re-parse). #256's migration stays a no-op there until
+   that happens, by design.
+9. Bake-off cleanup: delete BDA project `07aee510a362` + scratch bucket
+   `askwri-parse-bakeoff-905418285725`.
 
 ---
 
-## OPEN QUESTIONS (emerged this session)
+## KEY GOTCHAS (so the next agent doesn't re-learn)
 
-- **Corpus completeness:** qa has 168 docs vs local's 172 (157 URL-matched; 11 qa docs lack a
-  URL). Do the missing ~4 belong on qa before freezing the corpus for tuning? (They do NOT
-  affect the golden set — 0 expected docs missing.)
-- **fusion_top_k 500 vs 700:** 700 gains +0.8pp (one borderline doc) but violates
-  `rerankTopN >= fusionTopK` unless rerankTopN is also raised. Revisit after re-parse.
-- **Answer-mode preset:** does `ANSWER_PRESET.fusionTopK=100` carry the same stale
-  3-small-era calibration? Re-derive answer-mode fusion/floor on cohere too.
-- **Does re-parse move floor/fusion_top_k materially?** Local floor moved 0.10->0.09 with Mistral;
-  re-validate both on the all-Mistral qa corpus.
-- **Candidate diversification** (per-doc cap=2, 100 slots ~= 50 docs) is calibrated for ~170 docs;
-  revisit `rerank_candidates` + cap at larger corpus scale (existing todo).
-- **LVC drift fix placement:** query-side synonym expansion vs embed-time — which?
-- **Metadata features vs golden-set rescope** for q9 (WRR membership), q10 (date "since 2020"),
-  q11 (negation) — retrieval doesn't claim these; build features or rescope the set? (see #250)
-- **Answer golden set is flawed** (ans_002 0% chunk-level every run; ans_008 >100% precision) — redo.
-- **ans_006 regression** under embed-v4 (85.8->75.6 doc-F1 locally) — fold into answer-set redo.
-
----
-
-## KEY GOTCHAS / MECHANISMS (so the next agent doesn't re-learn)
-
-- **Secret changes are classifier-blocked for the agent.** Rebuild GitHub secrets from the live
-  task def (values never printed) and have the USER run the script via `! bash <path>`. Redeploy
-  with `gh workflow run deploy-qa.yml --ref qa` (the sanctioned force-deploy; docs-only pushes skip it).
-- **Bulk Bedrock embed = batch 24 + AWS_RETRY_MODE=adaptive + the `us.cohere.embed-v4:0` profile
-  + ONE worker + an auto-resume loop.** Throttling is expected even on the 300k bucket.
-- **Credential footgun:** `search-service/.env.local` carries FAKE MinIO AWS keys; for local
-  scripts that need real Bedrock, comment them out so boto3 uses the `~/.aws` login provider
-  (restore after). Deployed uses the task role (immune).
-- **Measurement parity:** replay golden queries through `/api/llamaindex` with
-  `denseTopK/sparseTopK` AND `fusion_top_k=500` to match the eval harness. The stock
-  `npm run eval:cite` hits `/query` directly, which deployed qa does NOT expose publicly.
-- Preserve the `/query` request/response contract exactly. TDD; conventional commits, NO Co-Authored-By;
-  `git add <explicit paths>` (never -A); every threshold change re-derived via capture/analyze (don't hand-tune).
+- **Secret changes are classifier-blocked for the agent.** Rebuild GitHub
+  secrets from the live task def (values never printed) and have the USER run
+  the script via `! bash <path>`. Redeploy with
+  `gh workflow run deploy-qa.yml --ref qa`.
+- **Bulk Bedrock embed = batch 24 + `AWS_RETRY_MODE=adaptive` + the
+  `us.cohere.embed-v4:0` profile + ONE worker.** Phase D needed no throttle
+  intervention with these.
+- **Credential footgun:** `search-service/.env.local` carries FAKE MinIO AWS
+  keys that load via `load_dotenv(override=False)` and beat the real `~/.aws`
+  provider. Comment them out for local Bedrock work, **restore after**.
+  Deployed uses the task role (immune).
+- **`build_sparse_keyword.py` after ANY bulk re-ingest**, before threshold work.
+- **Bulk enqueue is not FIFO**: all ids insert in one transaction so
+  `created_at` is identical and claim order is arbitrary. `done` stays flat
+  then jumps — that is not a stall.
+- **Measurement parity**: `capture_cite_scores.py` sends no `fusion_top_k`, so
+  it uses the service default 500 — which now equals `CITE_PRESET.fusionTopK`.
+  Evals and users finally measure the same pool. Any OTHER deployed measurement
+  via `/api/llamaindex` must pass matching params or it under-reports.
+- **A constant can never explain a delta between two measurements** — the
+  lesson from the 66.9-vs-83.1 recall gap, which was a params artifact.
+- Preserve the `/query` contract exactly. TDD; conventional commits, NO
+  Co-Authored-By; `git add <explicit paths>` (never `-A`); re-derive thresholds,
+  never hand-tune.

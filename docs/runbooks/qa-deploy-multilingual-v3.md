@@ -171,6 +171,68 @@ grants) landed before the ECS deploy per `deploy-qa.yml`
     legitimate flips: English-edition PDFs carrying native-language CSV
     labels (see todos).
 
+### Phase D execution — EXECUTED 2026-07-23 (full corpus re-parse, PASS)
+
+Scope: the 160 still-pypdf qa docs (the other 8 were repaired in the
+2026-07-23 glyph fix). Deployed worker already on `PARSE_BACKEND=mistral` +
+`BEDROCK_EMBED_BATCH_SIZE=24` + `AWS_RETRY_MODE=adaptive` +
+`BEDROCK_EMBED_MODEL_ID=us.cohere.embed-v4:0`, **one** worker task.
+
+- **Backups first** (two-way door, all verified non-null):
+  `reparse_pypdf_docs_20260723` (160 ids + pre-state language/char/chunk counts),
+  `document_texts_reparse_backup_20260723` (160),
+  `document_chunks_reparse_backup_20260723` (28,699 rows / 281 MB),
+  and `document_chunks_sparse_backup_20260723` (27,878) before the sparse rebuild.
+- **Preflight**: all 160 source PDFs confirmed present in
+  `s3://askwri-data/documents/`; sparse vocab headroom 190,070 / 1,000,000.
+- **Enqueue**: `reingest_all --ids <160>` at 13:47:46Z. Ran ~2h50m.
+- **Result: 160/160 `done`, ZERO errors, zero `needs_review`** — no throttling
+  intervention needed (batch 24 + adaptive retries held).
+- **Verification**: 168/168 docs carry Mistral markdown, **0 pypdf, 0 `/gid`**;
+  27,878 chunks across all 168 docs, **0 non-cohere, 0 null embedding, 0 null
+  sparse**; all 168 `searchable`; chunk count -8.2% on the re-parsed set
+  (28,699 -> 26,346), matching the predicted ~9%; no doc lost all chunks or
+  shrank >60%.
+- **Language diff — 7 flips, all CORRECTIONS, and all in the opposite
+  direction to this runbook's prediction.** Expected was 3 docs (3778, 2705,
+  6821) flipping *to* `en`; those were **already `en` on qa** (that prediction
+  described the LOCAL corpus, whose CSV labels were stale) and correctly did
+  not move. What actually flipped was 7 docs `en` -> es/zh/id whose bodies are
+  genuinely non-English — pypdf's garbled/cover-biased text had them mislabeled,
+  and Mistral's clean body text lets multi-window detection read the real
+  language. Spot-verified: `mexican-cities...9595` (es body),
+  `deciphering-chinas...5424` (zh body), `panduan...4324` (id body).
+  Final distribution: en 139, zh 16, es 9, pt 3, id 1.
+  `documents.language` does not filter retrieval — it is metadata only.
+- **Sparse rebuild (REQUIRED, not optional)**: `build_sparse_keyword.py` —
+  `keyword_corpus_stats` was stale at `n_chunks` 30,435 vs an actual 27,878.
+  After: 27,878 / `avgdl` 199.8 / vocab 233,936 (23% of `SPARSE_DIM`) / 0 nulls.
+  Run this before ANY threshold derivation on a re-parsed corpus.
+
+### Phase D step 13 — cite re-derivation on the final corpus (2026-07-23)
+
+Full record: `docs/research/2026-07-23-cite-floor-rederivation.md`.
+
+- Method: local search-service pointed at RDS with `CITE_LOGIT_FLOOR=0` (the
+  deployed floor cannot be zeroed without a redeploy), corrected golden set
+  from #250 (66 expected docs, not 70 — q11 lost 4 self-contradicting entries).
+- **Outcome: `CITE_PRESET.maxResults` 100 -> 25; floor HELD at 0.09.**
+  The UI renders every returned doc (`results/page.tsx` `pageDocs = supporting`,
+  no slice), so `maxResults` — not the floor — bounds list length; at 100 the
+  lists ran from a handful to 46 docs. Capping at 25 is a Pareto improvement:
+  recall identical (83.3 macro / 90.2 excl-q11), precision 29.2 -> 32.0,
+  F1 43.3 -> 46.2. The discarded tail held no relevant docs.
+- Macro-F1 peaks at floor 0.14 (robust with and without q11) and was
+  **rejected**: it costs 13pp recall, and cite mode is recall-first by design.
+  Band precision agrees — 0.14 cuts into the [0.10,0.20) band (20.5% precise)
+  while the band below it is 3.9%.
+- Cross-lingual unaffected: smoke relevant minimums es 0.824 / pt 0.888 /
+  zh 0.516; **16/16 smoke targets present**.
+- **Recall ceiling is 90.7% (top-30)** — 59/66 expected docs reach the reranker
+  at `fusion_top_k=500`. The missing 7 are a fusion/vocabulary gap (LVC drift),
+  not a threshold or truncation problem. q11 alone accounts for 5 of them and
+  was excluded from the derivation.
+
 ## Open decision that gates this deploy — RESOLVED (2026-07-22, shipped in #248)
 
 - **Dense-lane failure mode**: RESOLVED via sparse-only fallback. A Bedrock
