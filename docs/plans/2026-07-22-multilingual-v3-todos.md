@@ -6,11 +6,33 @@ check items off with a pointer to the commit/PR that resolved them.
 
 ## Retrieval quality (cite)
 
-- [ ] **Fusion misses**: 6 of 70 golden expected docs are absent from the
-  top-500 fused chunks entirely (q5 ×1, q10 ×1, q11 ×4) — a retrieval-lane
-  (dense/sparse fusion) recall gap, NOT a rerank/floor issue (verified:
-  per-doc-cap=1 doubling doc coverage does not recover them). Revisit after
-  the cohere re-embed — embed-v4 may shift dense recall on these.
+- [ ] **Fusion misses — RE-MEASURED 2026-07-23 on the final all-Mistral corpus:
+  7 of 66 expected docs never reach the reranker** at `fusion_top_k=500`
+  (q5 ×1, q10 ×1, **q11 ×5**). Note the denominator changed 70 -> 66 (#250
+  removed q11's 4 self-contradicting expectations). Macro recall therefore
+  ceilings at **90.7% (top-30)**; top-40 adds nothing. Still a retrieval-lane
+  gap, unchanged by the cohere re-embed or the Mistral re-parse. **Three of
+  q11's five are land-value-capture docs** — this is the LVC vocabulary-drift
+  lane below, and it is now the single biggest recall lever, larger than any
+  remaining threshold tuning.
+- [x] **Cite thresholds re-derived on the all-Mistral corpus (2026-07-23)** —
+  `docs/research/2026-07-23-cite-floor-rederivation.md`. Shipped
+  `CITE_PRESET.maxResults` 100 -> 25 (Pareto: same recall, +2.8pp precision,
+  +2.9 F1, list bounded 46 -> 25); floor HELD at 0.09 against a macro-F1 peak
+  at 0.14 that would cost 13pp recall. Key structural finding: **the UI renders
+  every returned doc**, so `maxResults` — not the floor — is the list-length
+  control.
+- [ ] **Floor 0.06 as a deliberate recall purchase**: +2.3pp recall for
+  -2.2pp precision / -2.3 F1 vs the shipped config. Deferred as an independent
+  decision, not rejected on merits. Capture JSON retained — no re-run needed.
+- [ ] **Tier boundaries (0.30 / 0.70) were NOT re-derived** in the 2026-07-23
+  pass — only the floor and the cap. Band precision suggests the steps may
+  have moved (bands: <0.05 1.7%, 0.05-0.10 3.9%, 0.10-0.20 20.5%, 0.40-0.60
+  40-50%, 0.70+ 62.5%).
+- [ ] **Golden-set precision is systematically understated**: a returned doc
+  counts as relevant only if it is in `expected_urls`, so reported precision
+  conflates genuine noise with incomplete labelling. Treat cite precision
+  figures as a lower bound, not an estimate.
 - [ ] **Negation queries** (q11 "urban finance — exclude electric buses",
   R 45%): rerankers score topical similarity and cannot negate. Needs
   query-side handling (e.g. parse exclusions into `excluded_keywords`,
@@ -29,12 +51,75 @@ check items off with a pointer to the commit/PR that resolved them.
   with (or fold into) the answer-golden-set redo — possibly an answer-mode
   analog of the cite per-doc candidate cap.
 
+## Security / credentials (found 2026-07-23)
+
+- [ ] **ROTATE BOTH API KEYS — they were printed in plaintext.** pydantic
+  `BaseSettings` has no custom `__repr__`, so any exception embedding the
+  settings object renders every field. A routine `monkeypatch.setattr`
+  `AttributeError` in a normal pytest run printed the live `OPENAI_API_KEY`
+  and `MISTRAL_API_KEY`. Masking is fixed (PR #258, `SecretStr`), but the
+  values are exposed and need rotating. Scope: NOT leaked to git (only
+  `.env.example` is tracked) and NOT to CI (no real values there) — but CI
+  being clean is an accident of configuration, not a safeguard.
+  - `OPENAI_API_KEY` originates from the **shell profile**, so it is in every
+    local command's environment.
+  - `MISTRAL_API_KEY` is the **personal** key (see rotation debt below) and is
+    the same credential deployed to the qa worker.
+- [ ] **Keys are plaintext `environment` entries in the ECS task definitions**,
+  not `secrets` references — anyone with `ecs:DescribeTaskDefinition` can read
+  them with no failure required. Larger and more durable than the repr leak.
+  Move to Secrets Manager / SSM. (Out of scope for #258.)
+- [ ] **Mistral org-key rotation** (pre-existing debt, now urgent): provision
+  an org/team key, rebuild `INGESTION_WORKER_ENV`, redeploy, then revoke the
+  personal key. Sequence AFTER any in-flight re-parse — revoking mid-run 401s
+  every remaining parse. Note: **Mistral OCR is NOT on Bedrock** (verified
+  2026-07-23, zero `ocr` models in us-east-1/us-east-2), so there is no
+  task-role escape from the external key; the AWS-native path is BDA + caption
+  dedup per the bake-off.
+
+## Worker mechanics (found during the Phase D bulk run, 2026-07-23)
+
+- [ ] **Bulk enqueue defeats FIFO claim ordering.** `enqueue()` inserts every
+  id in ONE transaction and `created_at` defaults to `now()` — the
+  *transaction* timestamp — so all rows share an identical timestamp and
+  `_CLAIM_SQL`'s `ORDER BY created_at LIMIT 1` becomes arbitrary among the
+  batch. Benign (no starvation, stages idempotent) but it makes bulk runs
+  interleave stages instead of completing docs depth-first, so `done` stays
+  flat for a long stretch and then jumps. Not a stall.
+- [ ] **`reap_stale_jobs` vs slow OCR**: it requeues anything `running` for
+  >15 min, so a large-PDF Mistral call exceeding that gets reclaimed while
+  still in flight — duplicate work, not corruption (the chunk write takes an
+  advisory lock and deletes-then-inserts). Did not fire during Phase D; watch
+  `attempts` on larger corpora.
+
 ## Eval infrastructure
 
-- [ ] **Answer golden set is flawed and needs a redo** (dgutelius
-  2026-07-22). Known artifacts: ans_002 scores 0% at chunk level in every
-  run (old + new pipeline) — expected-chunk IDs likely don't match corpus
-  chunking; ans_008 chunk precision >100% (adjacent-tolerance double-count).
+- [x] **Answer golden-set chunk IDs remapped 2026-07-23** (PR #257,
+  `docs/research/2026-07-23-answer-golden-remap.md`). `chunk_id` is positional,
+  so the Mistral re-parse renumbered all 190. **ans_002 went 0% -> 26.7/28.6**
+  at chunk level, confirming it was a broken label set, not a retrieval
+  failure. No passage needed manual relabelling (min overlap 34.1%); doc IDs
+  byte-identical, so doc-F1 held at 77.5. Also deduped 190 -> 178 passages:
+  re-chunking collapsed 12 formerly-distinct passages into shared chunks, and
+  `calculateChunkMetrics` counts one exact match per EXPECTED passage against a
+  denominator that counts each retrieved chunk once — the same double-count
+  class #250 fixed for adjacent credit.
+- [ ] **Answer-mode chunk recall is capped by construction**: cases expect
+  14-29 passages but answer mode returns `maxResults: 15`, so recall above
+  ~50% is unreachable for the larger cases regardless of retrieval quality.
+  Rescope the expected sets or read chunk recall only against that ceiling.
+- [ ] **`ANSWER_PRESET` has never been re-derived on cohere** — `fusionTopK:
+  100` and answer-mode thresholds still carry text-embedding-3-small-era
+  calibration. The cite side was re-derived 2026-07-23; answer was not.
+- [ ] **Answer golden set still needs a broader redo** (dgutelius
+  2026-07-22). The chunk-ID remap above fixed ans_002 and the >100% precision
+  artifact; the remaining question is whether the expected sets themselves are
+  right.
+- [ ] **Two db tests carry stale expectations** (surfaced 2026-07-23):
+  `migration-178132.db.test.ts` expects 33 non-English docs (local has 29 after
+  the Mistral re-parse relabeled languages) and `pdf-route.db.test.ts` expects
+  an unprefixed `s3Key` (actual is `documents/`-prefixed). Neither relates to
+  indexes or retrieval.
 - [ ] Cite golden set: q9 (World Resources Report membership) and q10/q11
   (temporal cutoffs, negation) test capabilities the retrieval layer
   doesn't claim (program membership metadata, date filtering at query
@@ -166,10 +251,17 @@ check items off with a pointer to the commit/PR that resolved them.
   pool moved the macro-F1 peak 0.08 → 0.10 (P29.5/R83.1); config updated,
   tiers unchanged. The predicted shift was real — keep this re-validation
   step in the deployed-cutover runbook too.
-- [ ] **Post-cutover index hygiene**: the 3-small partial HNSW index goes
-  empty after the rewrite — write the drop migration (anticipated in the
-  1783454000000 migration comment). Rewriting 30k rows also bloats the
-  cohere HNSW index — check size / consider REINDEX.
+- [x] **Post-cutover index hygiene — drop migration WRITTEN 2026-07-23**
+  (PR #256, `1784815300000`). Deliberately **conditional**: it drops the
+  3-small partial HNSW index only where the corpus holds zero 3-small rows and
+  otherwise no-ops with a `NOTICE`. Production has not cut over and migrations
+  run there too — an unconditional drop would strip the index serving its live
+  dense lane and turn every dense query into a sequential scan. Both branches
+  verified against the local corpus (drop via real `migration:run`; keep via a
+  3-small row inside a rolled-back transaction). **Still TODO: run
+  `migration:run` against qa** (CI does not run migrations).
+- [ ] **Cohere HNSW bloat**: two full rewrites of the chunk table (Phase C
+  re-embed + Phase D re-parse) — check index size and consider `REINDEX`.
 - [ ] Decide whether to commit this session's before/after eval JSONs
   (currently untracked in `evaluation/results/`) for provenance.
 
