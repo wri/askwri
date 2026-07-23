@@ -11,11 +11,13 @@ The un-reranked tail is DROPPED rather than passed through — RRF scores and
 0-1 relevance scores must never mix in one ranked list, or the floor/tiers
 downstream become meaningless.
 
-Region nuance (spec §5): infra is us-east-2; Rerank 3.5 is hosted in
-us-west-2/ca-central/eu-central. The client targets
-settings.bedrock_rerank_region with an explicit endpoint_url — explicit
-because local dev sets AWS_ENDPOINT_URL for MinIO (S3), which boto3 would
-otherwise apply to Bedrock too.
+Region nuance (spec §5): infra is us-east-2; Rerank 3.5 is available in
+us-east-1 (ACTIVE/ON_DEMAND as of 2026-07-22), us-west-2, ca-central, and
+eu-central. The client targets settings.bedrock_rerank_region (us-east-1,
+co-located with the cluster — ~35-55ms less than the earlier us-west-2
+cross-continent hop) with an explicit endpoint_url — explicit because local
+dev sets AWS_ENDPOINT_URL for MinIO (S3), which boto3 would otherwise apply
+to Bedrock too.
 """
 import logging
 import threading

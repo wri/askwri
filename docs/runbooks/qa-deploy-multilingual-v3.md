@@ -121,6 +121,45 @@ grants) landed before the ECS deploy per `deploy-qa.yml`
 10. After soak: write the 3-small partial-index DROP migration (anticipated
     in `1783454000000`'s comment) and drop the backup table.
 
+### Phase C execution — EXECUTED 2026-07-23 (cutover done; step 10 pending soak)
+
+- **Backup** (step 6): `document_chunks_embedding_backup_20260722` on RDS,
+  30,435 rows (id, embedding, embedding_model), all embeddings non-null.
+  Rollback table intact until the soak completes.
+- **Re-embed** (step 7): 30,435 chunks → `cohere-embed-v4`, **zero**
+  `text-embedding-3-small` remaining; all 1536-dim, non-null. Ran ONE process,
+  `--batch-size 24` + `AWS_RETRY_MODE=adaptive AWS_MAX_ATTEMPTS=10` +
+  `BEDROCK_EMBED_MODEL_ID=us.cohere.embed-v4:0` (cross-region profile, 300k
+  TPM). Auto-resumed through 2 ThrottlingException deaths (per-batch commit =
+  lossless resume); ~1h wall across the resumes. Credentials: the
+  auto-refreshing `~/.aws` login provider (fake MinIO keys popped from
+  `.env.local` for the run, restored after) — the static-snapshot expiry that
+  killed the local take-1 was avoided.
+- **Pins flipped** (step 8): `EMBEDDING_MODEL` removed from BOTH
+  `SEARCH_SERVICE_ENV` (→ 5 keys) and `INGESTION_WORKER_ENV`; the worker
+  secret also GAINED `AWS_RETRY_MODE=adaptive` / `AWS_MAX_ATTEMPTS=10` /
+  `BEDROCK_EMBED_MODEL_ID=us.cohere.embed-v4:0` (bulk-safety for future
+  re-ingests). Secrets rebuilt from the live task defs (values never printed);
+  redeploy `29968575474` (workflow_dispatch) SUCCESS — both task defs
+  re-rendered without `EMBEDDING_MODEL`.
+- **Floor re-validation** (step 9): kept `cite_logit_floor = 0.09` (the
+  locally-derived optimum). Deployed measurement against RDS cohere (golden +
+  smoke replayed through `/api/llamaindex` at the eval config) shows cite macro
+  **P35.2 / R66.9 / F1 44.4** (F1 above the local 42.4) and non-English smoke
+  **16/16 present, 16/16 rank-1** — the cross-lingual win confirmed live. The
+  peak did not shift adversely, so no floor change (a floor=0 sweep against RDS
+  was not run — the deployed floor cannot be zeroed without a redeploy; the
+  deployed data + prior local sweep support 0.09). The lower recall vs the
+  local 83.1 is a corpus/parser difference (RDS text is still pypdf; Mistral is
+  Phase D) plus 4 fewer docs — not a cutover regression.
+- **Rerank region flip** (folded into step 9): `bedrock_rerank_region`
+  us-west-2 → us-east-1 (commit `7048fd6`) — deploys with this PR. Pre-flip
+  rerank baseline: server-side stage2 median **610ms** (warm, us-west-2);
+  expected ~35-55ms saving. Post-deploy `stage2_time` / EMF `rerank_ms` to be
+  recorded against that baseline.
+- **Latency**: post-cutover warm total **1055ms** (== pre-cutover 1054ms) —
+  envelope preserved; dense on cohere HNSW (`dense_db_ms` ~458).
+
 ## Phase D — Mistral parse flip (only after the bake-off Phase 1 gate passes)
 
 11. Set `PARSE_BACKEND=mistral` in `INGESTION_WORKER_ENV`, redeploy the

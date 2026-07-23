@@ -84,7 +84,7 @@ class Settings(BaseSettings):
 
     # Bedrock placement for Cohere Rerank 3.5 (spec v3 §5): not hosted in
     # us-east-2 — call the nearest hosting region.
-    bedrock_rerank_region: str = "us-west-2"
+    bedrock_rerank_region: str = "us-east-1"
     bedrock_rerank_model_id: str = "cohere.rerank-v3-5:0"
 
     # Candidate-set size sent to the Rerank API. Cost/latency scale with doc
