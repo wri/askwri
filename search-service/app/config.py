@@ -99,6 +99,13 @@ class Settings(BaseSettings):
     # Answer mode is uncapped — it wants the best chunks wherever they live.
     cite_rerank_per_doc_cap: int = 2
 
+    # Answer mode leaves this None by default (best chunks wherever they
+    # live). Set > 0 to diversify the reranker candidate pool when embed-v4
+    # concentrates a query's top chunks in one doc (ans_006: all 15 retrieved
+    # chunks came from a single doc after the cutover). Value tuned via the
+    # answer per-doc-cap A/B; None preserves the pre-existing behaviour.
+    answer_rerank_per_doc_cap: int | None = None
+
     # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
     # values, e.g. floor -9.0, would pass everything on this scale).

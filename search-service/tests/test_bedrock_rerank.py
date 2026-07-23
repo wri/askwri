@@ -174,6 +174,33 @@ def test_init_rerankers_returns_bedrock_rerankers_for_both_modes(monkeypatch):
     assert isinstance(cite, _FakeBedrockReranker)
 
 
+def test_answer_reranker_defaults_to_no_cap():
+    """Default stays uncapped: answer mode wants the best chunks wherever they
+    live. Making the cap configurable must not change behaviour on its own."""
+    import app.main as main
+
+    reranker_answer, _cite = main.init_rerankers()
+
+    assert reranker_answer.per_doc_cap is None
+
+
+def test_answer_reranker_uses_configured_per_doc_cap(monkeypatch):
+    """embed-v4 can concentrate a query's top chunks in a single doc (ans_006),
+    so the answer candidate pool needs the same diversification lever cite has.
+
+    init_rerankers() reads the module-level `settings` bound once at import, so
+    patching the env + clearing the lru_cache would not reach it — patch the
+    already-imported settings object instead.
+    """
+    import app.main as main
+
+    monkeypatch.setattr(main.settings, "answer_rerank_per_doc_cap", 3)
+
+    reranker_answer, _cite = main.init_rerankers()
+
+    assert reranker_answer.per_doc_cap == 3
+
+
 # --- per-doc candidate diversification (cite mode) -------------------------
 
 def _doc_nodes(chunks_per_doc):
