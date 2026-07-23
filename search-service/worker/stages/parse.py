@@ -146,6 +146,16 @@ def _parse_pdf_pypdf(content: bytes) -> tuple[str, list]:
     return "\n\n".join(page_texts), boundaries
 
 
+def _mistral_auth_header(settings) -> str:
+    """Build the Mistral bearer header from the SecretStr setting.
+
+    Deliberately NOT an f-string on the setting itself: str(SecretStr) renders
+    '**********', so interpolating it would send `Bearer **********` and fail
+    with a 401 rather than anything that names the real problem.
+    """
+    return f"Bearer {settings.mistral_api_key.get_secret_value()}"
+
+
 def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
     """Mistral OCR (spec §7 as amended 2026-07-22): per-page markdown.
     Boundaries carry the PARSER's page indices, so a page that comes back
@@ -162,7 +172,7 @@ def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
                 + base64.b64encode(content).decode())
     r = requests.post(
         "https://api.mistral.ai/v1/ocr",
-        headers={"Authorization": f"Bearer {settings.mistral_api_key}"},
+        headers={"Authorization": _mistral_auth_header(settings)},
         json={"model": settings.mistral_ocr_model,
               "document": {"type": "document_url", "document_url": data_uri}},
         timeout=900,

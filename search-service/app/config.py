@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Per-row document_chunks.embedding_model values and their vector dimensions.
@@ -25,7 +26,13 @@ class Settings(BaseSettings):
     # Next.js Backend URL for communication
     nextjs_backend_url: str = "http://localhost:3000"
 
-    OPENAI_API_KEY: str = ""
+    # SecretStr so the value never renders in repr()/str(). BaseSettings has no
+    # custom __repr__, so any exception embedding the settings object prints
+    # every field — on 2026-07-23 a monkeypatch AttributeError in a routine
+    # pytest run printed this key and the Mistral one in plaintext.
+    # Consumers read os.getenv("OPENAI_API_KEY") directly, so nothing unwraps
+    # this field today; it is declared for validation and must stay masked.
+    OPENAI_API_KEY: SecretStr = SecretStr("")
 
     # Document storage paths (override for local dev, e.g. DOCUMENTS_LOCAL_DIR=./data)
     documents_local_dir: str = "/tmp/askWRI_docs"
@@ -68,7 +75,9 @@ class Settings(BaseSettings):
     # per-page emission — parser page indices fix the R4 zh page-boundary
     # bug). pypdf remains the validation oracle either way.
     parse_backend: str = "pypdf"
-    mistral_api_key: str = ""
+    # SecretStr (see OPENAI_API_KEY above). Unwrap via _mistral_auth_header()
+    # in worker/stages/parse.py — a bare f-string would interpolate the mask.
+    mistral_api_key: SecretStr = SecretStr("")
     mistral_ocr_model: str = "mistral-ocr-latest"
 
     # Bedrock placement for embed-v4 (spec v3 §5): infra is us-east-2 but
