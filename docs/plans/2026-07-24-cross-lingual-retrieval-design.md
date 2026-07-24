@@ -1,14 +1,23 @@
 # Cross-Lingual Retrieval — Design (2026-07-24)
 
-**Status:** design approved in outline; **revised after review round 1** (2026-07-24) —
-three blockers and seven majors found and folded in. Not implemented.
+**Status:** **NO CORPUS MUTATION.** Two review rounds changed the plan materially. The
+bridge is not written to qa until an offline simulation quantifies it.
 
-**Review round 1 changed the design, not just the prose.** The three that matter:
-`embedding_model`/`dimension` were missing from the row spec, which would have made the
-bridge invisible to the dense lane (§5.4); the "additive means monotone" safety argument is
-**false** past the reranker — the bridge can demote its own targets (§5.5a); and a one-shot
-backfill would be silently deleted by any future re-ingest (§5.5b). §3's sparse-lane
-evidence is also corrected: the diagnostic lanes are not the lanes that feed RRF.
+### Decision log
+
+| # | decision | when | why |
+|---|---|---|---|
+| 1-5 | see §4 | 2026-07-24 | original session |
+| **6** | **REVERSED decision 4: simulate before mutating** | 2026-07-24, after review round 2 | Two facts that were not known when "ship the cheap bridge now" was chosen: the bridge **can demote its own targets** (§5.5a), and the eval as designed **cannot produce a positive result** (§5.1a). Mutating the corpus to run an experiment whose best outcome is "nothing changed", using a mechanism that can silently regress the thing it targets, is not a trade worth making. The simulation surfaces both effects with zero rows written. |
+
+**What the two reviews changed, beyond prose.** Round 1: `embedding_model`/`dimension` were
+missing from the row spec, which would have made the bridge invisible to the dense lane
+(§5.4); the "additive means monotone" safety argument is **false** past the reranker (§5.5a);
+a one-shot backfill would be silently deleted by any future re-ingest (§5.5b). Round 2:
+the acceptance criteria could not detect a win (§5.1a); the floor criterion was
+guaranteed-fail; `language='en'` was unreachable through the very helper that fixes the
+re-ingest hole; and answer mode is **not** inert. §3's sparse-lane evidence is retracted —
+the diagnostic sparse lane is not the lane that feeds RRF.
 **Branch:** `design/cross-lingual-retrieval` (worktree `.worktrees/multilingual-v3`, based on `qa`).
 **Problem:** queries arrive in English; the corpus is mixed-language. How do English
 queries resolve against non-English chunks, and how do we make that measurably better?
@@ -37,11 +46,17 @@ Measured this session against the deployed qa corpus (method in §3):
 | Same queries, after multilingual rerank | **13/15 rank-1, 15/15 present**, 14/15 top-10 |
 | Competitive topical, 16 (query, non-English doc) pairs | 14/16 present in final 25, 8/16 top-10 |
 
-The RRF asymmetry predicted in the session brief is **real and measurable** — a doc that
-can only place in the dense lane collects one RRF contribution while an English doc
-collects two. It just **does not survive to the user**, because a fused doc-rank of 6-15
-is far inside the ~55-doc rerank candidate window (`rerank_candidates=100`,
-cite `per_doc_cap=2`), and Cohere Rerank 3.5 is multilingual.
+Documents do lose ground between the dense lane and fusion — mean doc-rank 2.33 → 6.67,
+worse in 11 of 15. Both of those numbers come from real paths and stand. **The
+*explanation* does not.** That single-lane-placement account of the loss (a non-English doc
+collects one RRF contribution where an English doc collects two) is the natural reading and
+is probably right, but §3's sparse column does not evidence it — see the correction there.
+Treat it as a hypothesis pending the §5.2 fusion-path instrumentation.
+
+What is solid either way: the loss **does not survive to the user**. A fused doc-rank of
+6-15 sits well inside the rerank candidate window — at least the first 50 distinct
+documents in fusion order (`rerank_candidates=100`, cite `per_doc_cap=2`, so 50-100
+distinct docs depending on chunk distribution) — and Cohere Rerank 3.5 is multilingual.
 
 Consequence for the English-bridge hypothesis: on current evidence there is very little
 *measurable retrieval* headroom to buy. The bridge is worth shipping anyway (decision
@@ -236,7 +251,10 @@ English docs on the same topic ("how can cities make streets safer for pedestria
 Nothing here blocks the bridge; all of it becomes uninterpretable if run afterwards.
 
 - Build the eval set (§5.1) and runner (§5.2); run both passes against qa; commit the JSON
-  to `evaluation/results/`.
+  to `evaluation/results/`. **Sequencing note:** `_2276` and `_9425` are both §5.3
+  `title_en`-repair targets *and* `en-body` targets, and `_3254` is an `en-tr` target — so
+  run the repair BEFORE the before-capture, or those three documents confound the bridge's
+  effect with the repair's.
 - Run the 16-query non-English smoke set for the current record (expected 16/16).
 - **No new cite capture is needed.** The capture JSON retained from the 2026-07-23 floor
   re-derivation is still a valid "before" — the qa corpus has not changed since.
@@ -246,6 +264,35 @@ Nothing here blocks the bridge; all of it becomes uninterpretable if run afterwa
 
 Same file shape as `non-english-smoke.json` (`queries[]` with `id`, `language`, `query`,
 `target_doc_ids`, `note`), plus a `class` field.
+
+### 5.1a The class structure was wrong — and it is why decision 6 exists
+
+Round 2's decisive finding. The `en-body` queries were authored so that the query
+"cannot be satisfied by the English handle the bridge adds". **That control worked, and in
+working it removed the signal**: if a query deliberately avoids abstract vocabulary, a node
+containing the abstract cannot match it in sparse (BM25 needs shared tokens) and will not
+sit near it in dense (a specific-detail query is not close to a general topical abstract
+vector). `en-body` is therefore immune to the bridge *by construction*, `en-tr` is barred
+from claiming a win because it is circular, and every other suite is a regression guard.
+The best achievable measured outcome was "nothing changed."
+
+The root error is a category mistake, not a labelling one: the anti-circularity control was
+designed for **known-item** retrieval, but the bridge's value proposition is **topical**
+retrieval — a non-English document competing against English documents on a broad question.
+For a topical query, matching the English abstract is not circularity, it is the legitimate
+mechanism: the user's question really is topical, and the abstract really does describe the
+document. Probe 4 is exactly that shape, and it is where the only two genuine failures of
+the session appeared (`_5028`, `_1319`).
+
+**Corrected roles** (to be built once the simulation justifies proceeding):
+
+| class | role |
+|---|---|
+| **topical** (to build — Probe 4's shape, formalized) | **SIGNAL.** The only class that can show a bridge win. Broad English questions, target lists rather than full relevance labels. |
+| `en-body` (12, built) | **CONTROL.** Should NOT move. Material movement means something other than the intended mechanism is acting. |
+| `en-tr` (15, built) | **REGRESSION GUARD.** Circular; cannot evidence a win. |
+
+### 5.1b The set as built
 
 **BUILT 2026-07-24** — the file exists; counts below are measured, not estimated.
 
@@ -337,7 +384,50 @@ The 16 zh docs also show `title_en == title`, but there both values are already 
 Not a defect. It does mean the bridge contributes **no title signal for zh** — its value for
 those docs is purely the English summary body. For the 13 es/pt/id docs it contributes both.
 
-### 5.4 The bridge — `search-service/scripts/backfill_summary_en.py`
+### 5.3a THE NEXT STEP — `search-service/scripts/simulate_summary_en.py`
+
+Per decision 6, this runs **before** any row is written. It answers two questions that
+cannot be answered any other way without mutating qa: *would the bridge help?* and *how
+often does §5.5a's demotion actually fire?*
+
+**Method — a faithful offline replay of the cite pipeline with the bridge nodes injected.**
+
+1. Build the 29 `summary_en` nodes exactly as §5.4 specifies (shared helper, so the
+   simulation exercises the same construction the real backfill would).
+2. Embed them via `bedrock_embed.embed_documents` (`input_type=search_document`) — 29
+   vectors. Compute their sparse weights via `tokenize`/`chunk_weights` against the live
+   `keyword_vocab` and frozen `keyword_corpus_stats`.
+3. Per query, replay the pipeline **against the DB directly**, not through
+   `return_intermediate_results` (which reports a sparse lane that is not the fusion lane —
+   §3 correction):
+   - dense: `_DENSE_SQL_TMPL` for the real top-500 with scores; cosine the query vector
+     against the 29 simulated vectors and splice each into that ranking by score;
+   - sparse: `_SPARSE_KEYWORD_SQL` for the real ranking, using
+     `expand_query_conservative(query)` to match what fusion actually feeds the lane;
+     score each simulated node as the inner product of the query token-count vector with
+     its simulated sparse vector and splice in by score;
+   - RRF at alpha 0.5, `fusion_top_k` 500;
+   - **rerank for real** — `BedrockReranker` with `per_doc_cap=2`,
+     `rerank_candidates=100`. This step is not optional and not simulatable: §5.5a's
+     demotion only materializes here.
+   - floor 0.09, max-per-doc, `maxResults` 25.
+4. Report, per query and per document: rank **with** and **without** the injected node, at
+   each stage, plus every instance where a bridged document's score or tier *fell*.
+
+**Cost:** 29 document embeds + per query one query-embed and one rerank call. Tens of
+Bedrock calls total. **Corpus writes: zero.**
+
+**Credential note:** calls Bedrock locally — comment out `search-service/.env.local`'s fake
+MinIO AWS keys for the run and **restore afterwards** (they beat the real `~/.aws` provider
+via `load_dotenv(override=False)`).
+
+**What it decides.** If the simulation shows no meaningful gain on the topical class, or
+shows demotion firing on a material fraction of bridged documents, the bridge is dropped
+without a single row written and the workstream moves to the §8 alternatives. If it shows a
+real gain with rare demotion, §5.4 onwards executes as specified — with the simulation's
+numbers as the pre-registered prediction that the after-measurement must confirm.
+
+### 5.4 The bridge — `search-service/scripts/backfill_summary_en.py` (GATED on §5.3a)
 
 One additive `document_chunks` row per non-English searchable doc (29 on qa).
 
@@ -356,13 +446,22 @@ were missing from the first draft of this spec:
 | `unit_type` | `'summary'` |
 | `page` | `1` |
 | `text` | `{title_en}\n\n{english_long_summary}` |
-| `language` | `'en'` — the row's *indexed* language, distinct from the document's |
+| `language` | `doc["language"]` — **NOT `'en'`** (see below) |
 | `node_metadata` | see below |
 | `embedding` | the Bedrock vector |
 | **`embedding_model`** | **`get_settings().embedding_model`** (`'cohere-embed-v4'`) |
 | **`dimension`** | **`EMBEDDING_DIMENSIONS[model]`** (1536) |
 | `corpus_order` | appended after global max under advisory lock `0x636F7270` |
 | `sparse` | see below |
+
+**On `language`:** an earlier draft specified `'en'` here, to mark the row's *indexed*
+language as distinct from its document's. That is unreachable through the §5.5b shared
+helper: `embed.py:272` binds `doc["language"]` once for **every** node in the insert loop —
+there is no per-node language. The two round-1 blocker fixes were written against different
+implementations. Resolution: **drop the `'en'` marking.** The column has no readers anywhere
+in `app/`, `src/` or `evaluation/` (its only appearance is the write at `embed.py:272`), so
+it buys nothing worth a schema-shaped change. Identify bridge rows by the
+`_summary_en` suffix instead, which is what rollback already keys on.
 
 **`embedding_model` and `dimension` are not optional.** The dense SQL filters
 `AND dc.embedding_model = %(model)s` (`pg_store.py:42`) and the HNSW index is *partial* on
@@ -463,8 +562,21 @@ document is non-English and an English `long` summary exists, and call that help
 every re-ingest for free, and the backfill exists only to populate documents that will not
 otherwise be re-ingested.
 
-This costs little more than the one-shot script and converts a latent data-loss bug into an
-ordinary pipeline property.
+**This is more than a refactor — the helper cannot currently see either input it needs**
+(round 2). Both must be added, and neither is free:
+
+- **`title_en` is not fetched.** `worker/stages/__init__.py:35`'s `fetch_document` selects
+  `id, external_id, s3_key, title, language, languages, status, source_metadata,
+  metadata_source` — no `title_en`. `_build_nodes_for_doc` derives its title from
+  `src["Publication Title"]` (`embed.py:76`), the *native* catalog title. Adding `title_en`
+  touches a helper **every worker stage** uses.
+- **The English summary is not fetched.** `embed.py:160-163` binds the lookup to
+  `doc["language"]`, and `_build_nodes_for_doc` takes a single summary string. A second
+  lookup for `language='en'` plus a new parameter are required.
+
+Also specify: the helper must be **idempotent on re-ingest** (the embed stage's
+delete-then-insert makes double-writing impossible within a run, but the emit condition must
+not fire for documents already `en`), and `total_chunks` stays `-1` on both summary nodes.
 
 ### 5.6 Fix `main.py:917` — dense call outside the degradation guard
 
@@ -557,8 +669,8 @@ replaced.
 | `run-cross-lingual-eval.ts`, `en-tr` class | **REGRESSION GUARD ONLY.** PASS if no target leaves the final 25 and no target's final rank worsens. Improvements here are not evidence. |
 | `run-non-english-smoke.ts` | must hold **16/16 present, 16/16 rank-1**. Note this runner sends `max_results: 150` and **no** preset params (`run-non-english-smoke.ts:86-92`), i.e. server defaults, not `CITE_PRESET`. That is acceptable *as a regression guard* because before and after are measured identically — but it is NOT at user-facing parity, and no absolute claim may be made from it. Do not "fix" it mid-experiment; that would break comparability with the retained baseline. |
 | `run-cite-eval.ts` (golden set) | **REGRESSION GUARD.** English-doc-heavy, so §5.5a's global-slot displacement shows up here first. FAIL if macro recall falls at all. |
-| `capture_cite_scores.py` + `analyze_cite_scores.py` | floor **verification** per §4.5. PASS if the macro-F1 peak stays at 0.09-0.10 and no score band's precision moves by more than 5 percentage points. Otherwise stop and re-derive properly rather than shipping on a stale floor. |
-| `run-answer-retrieval-eval.ts` | answer mode strips summary nodes (`main.py:1051-1056`), so this should be **inert**. Run it to falsify that reasoning, not to tune. Any movement means the reasoning is wrong — investigate before proceeding. |
+| `capture_cite_scores.py` + `analyze_cite_scores.py` | floor **verification** per §4 item 5. PASS if the macro-F1 peak stays at **0.14** and no score band's precision moves by more than 5 percentage points. **0.14 is the peak; 0.09 is the floor we deliberately retain against it** (`docs/research/2026-07-23-cite-floor-rederivation.md:42-45`) — an earlier draft wrote "peak stays at 0.09-0.10", which conflated the two and would have failed on the unchanged corpus. |
+| `run-answer-retrieval-eval.ts` | **REGRESSION GUARD — not an inertness check.** An earlier draft called this inert because answer mode strips summary nodes; that is wrong. The strip runs on `stage2_results`, i.e. *after* rerank (`main.py:1049-1054`), so bridge nodes still compete for answer mode's candidate slots — in a **tighter** window than cite (`fusion_top_k=100`, `main.py:206-207`). Summary nodes are stripped from **display and synthesis, not from retrieval**. FAIL if chunk-level recall falls. |
 
 **Acceptance:** keep the bridge only if every rule above passes. Roll back on any failure.
 Given §5.5a, a mixed result (cross-lingual improves, cite recall falls) is a **rollback**,
