@@ -65,17 +65,25 @@ check items off with a pointer to the commit/PR that resolved them.
     local command's environment.
   - `MISTRAL_API_KEY` is the **personal** key (see rotation debt below) and is
     the same credential deployed to the qa worker.
+  - Procedure + secrets architecture: `docs/runbooks/secret-rotation.md`.
+- [ ] **OpenAI key still needs rotating** — the other key printed in the leak;
+  present in BOTH environments' secrets, local value from the shell profile.
+  Procedure in the rotation runbook; not yet done.
 - [ ] **Keys are plaintext `environment` entries in the ECS task definitions**,
   not `secrets` references — anyone with `ecs:DescribeTaskDefinition` can read
   them with no failure required. Larger and more durable than the repr leak.
-  Move to Secrets Manager / SSM. (Out of scope for #258.)
-- [ ] **Mistral org-key rotation** (pre-existing debt, now urgent): provision
-  an org/team key, rebuild `INGESTION_WORKER_ENV`, redeploy, then revoke the
-  personal key. Sequence AFTER any in-flight re-parse — revoking mid-run 401s
-  every remaining parse. Note: **Mistral OCR is NOT on Bedrock** (verified
-  2026-07-23, zero `ocr` models in us-east-1/us-east-2), so there is no
-  task-role escape from the external key; the AWS-native path is BDA + caption
-  dedup per the bake-off.
+  Move to Secrets Manager / SSM (also enables console rotation without a full
+  redeploy — see the rotation runbook). (Out of scope for #258.)
+- [x] **Mistral org-key rotation on qa — DONE 2026-07-23.** Personal -> org key;
+  validated against `api.mistral.ai`, deployed value confirmed changed (task-def
+  rev :4 -> :5, distinct digests), worker rolled to :5, canary re-ingest passed
+  the Mistral parse stage clean. Old personal key cleared for revocation after
+  the canary — **confirm revocation completed**. Production has NO Mistral key
+  (pypdf, no `PARSE_BACKEND=mistral`), so nothing to rotate there. Full record +
+  reusable procedure: `docs/runbooks/secret-rotation.md`. Note: **Mistral OCR is
+  NOT on Bedrock** (verified 2026-07-23, zero `ocr` models in us-east-1/us-east-2),
+  so there is no task-role escape from the external key; the AWS-native path is
+  BDA + caption dedup per the bake-off.
 
 ## Worker mechanics (found during the Phase D bulk run, 2026-07-23)
 
