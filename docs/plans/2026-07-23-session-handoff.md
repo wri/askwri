@@ -33,9 +33,11 @@ rerankTopN 500, maxResults **25** (was 100 — see below).
 all cohere. Shares **zero** doc IDs with qa and has its own `keyword_vocab`,
 so rows are never copyable between them.
 
-**Deployed worker:** `PARSE_BACKEND=mistral` + `MISTRAL_API_KEY` (**personal
-key — rotation debt, now urgent**) + `BEDROCK_EMBED_BATCH_SIZE=24` +
+**Deployed worker:** `PARSE_BACKEND=mistral` + `MISTRAL_API_KEY` (**org key —
+rotated from personal 2026-07-23, verified; confirm the old key is revoked**) +
+`BEDROCK_EMBED_BATCH_SIZE=24` +
 `AWS_RETRY_MODE=adaptive`/`AWS_MAX_ATTEMPTS=10`/`BEDROCK_EMBED_MODEL_ID=us.cohere.embed-v4:0`.
+Rotation record + reusable procedure: `docs/runbooks/secret-rotation.md`.
 
 **RDS backup tables (keep until soak completes):**
 `document_chunks_embedding_backup_20260722` (30,435 — pre-cohere vectors),
@@ -108,11 +110,15 @@ overlapping deploys. Merge all, then fire ONE
 ## WHAT'S LEFT (prioritized)
 
 1. **Merge the six PRs + single redeploy**, then run `migration:run` against qa
-   for #256 (CI does not run migrations).
-2. **Rotate both API keys** (see todos Security). Mistral: provision an ORG key,
-   rebuild `INGESTION_WORKER_ENV`, redeploy, revoke the personal one. Mistral
-   OCR is **not** on Bedrock, so there is no task-role escape from the external
-   key — the AWS-native path is BDA + caption dedup.
+   for #256 (CI does not run migrations). — DONE 2026-07-23 (PRs #250, #255-260
+   merged; single `workflow_dispatch` deploy; migration applied, 3-small index
+   dropped; live smoke green).
+2. **API key rotation.** Mistral (qa): **DONE 2026-07-23** — org key live and
+   canary-verified; confirm the old personal key is revoked. **OpenAI: still
+   pending** (both envs). Procedure + secrets architecture:
+   `docs/runbooks/secret-rotation.md`. Mistral OCR is **not** on Bedrock, so
+   there is no task-role escape from the external key — the AWS-native path is
+   BDA + caption dedup.
 3. **LVC vocabulary drift** — the largest remaining recall lever. Synonym/
    glossary expansion (land-pooling, readjustment, Rail+Property <-> "land
    value capture"); query-side vs embed-time placement undecided.
@@ -123,9 +129,13 @@ overlapping deploys. Merge all, then fire ONE
 6. **Latency L2**: stream answer synthesis, result cache.
 7. Phase C step 10 leftovers: drop the backup tables after soak; consider
    `REINDEX` on the cohere HNSW (two full table rewrites).
-8. **Production cutover**: mirror Phase A->D on production (own env-scoped
-   secrets; re-embed + re-parse). #256's migration stays a no-op there until
-   that happens, by design.
+8. **Production cutover**: bring prod to qa's validated state. Runbook written
+   2026-07-23: `docs/runbooks/prod-cutover-multilingual-v3.md` (PR #261).
+   Approach settled by design discussion — **clone qa's corpus into prod** (a
+   literal data mirror, no re-parse) + a **capability deploy** (v3 images +
+   proven config + org Mistral worker key) so prod is ready to become the
+   PRIMARY ingestion path + a **canary** to verify. #256's migration stays a
+   no-op on prod until then, by design. Not yet executed.
 9. Bake-off cleanup: delete BDA project `07aee510a362` + scratch bucket
    `askwri-parse-bakeoff-905418285725`.
 
