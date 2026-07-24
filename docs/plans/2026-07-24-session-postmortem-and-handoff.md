@@ -109,6 +109,11 @@ scale it stops), a user complaint, or WRI forming a view.
 Paste as-is. It is written to prevent this session's failure modes.
 
 ```
+This work lives on branch design/cross-lingual-retrieval, in the worktree
+.worktrees/multilingual-v3. Documents 3 and 4 below exist ONLY on that branch —
+they are NOT on qa. Work from that worktree and confirm you are on that branch
+before reading anything.
+
 Read these before doing ANYTHING else, in order, and tell me what you learned
 from each in one line:
   1. CLAUDE.md
