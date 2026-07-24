@@ -212,10 +212,26 @@ class HybridFusionRetriever(BaseRetriever):
         """Retrieve nodes using hybrid fusion with RRF"""
         import concurrent.futures
 
-        # BM25 query expansion (done before threading — pure string work)
-        expanded_query = expand_query_conservative(query_bundle.query_str, max_expansions=3)
+        # BM25 query expansion + optional translation. SPARSE LANE ONLY — the
+        # dense retriever below gets the ORIGINAL query_bundle, and so does the
+        # reranker. Dense (cohere-embed-v4) is already multilingual; feeding it
+        # or the reranker multilingual text displaced English documents and cut
+        # result lists ~40% in the 2026-07-24 probe. See query_expansion.py.
+        from app.query_expansion import build_sparse_query
+        from app.query_translate import get_translator
+
+        expanded_query = build_sparse_query(
+            query_bundle.query_str,
+            translate=get_translator(),
+            languages=tuple(
+                x.strip() for x in
+                (get_settings().query_translation_languages or "").split(",")
+                if x.strip()
+            ),
+            max_expansions=3,
+        )
         if expanded_query != query_bundle.query_str:
-            logger.info(f"Query expansion: {query_bundle.query_str[:50]}... → {expanded_query[:80]}...")
+            logger.info(f"Sparse query: {query_bundle.query_str[:50]}... → {expanded_query[:120]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
 
         # Run dense + sparse retrieval in parallel, timing each lane

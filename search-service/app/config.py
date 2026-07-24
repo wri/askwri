@@ -50,6 +50,20 @@ class Settings(BaseSettings):
     # "memory" = in-memory bm25s built at boot//reindex (legacy behavior, kept intact)
     keyword_backend: str = "sparse"  # "sparse" (default) | "memory"
 
+    # Query-side translation for the SPARSE lane only (cross-lingual, 2026-07-24).
+    # The BM25 lane is English-only by construction, so an English query cannot
+    # match a Spanish body — not because the stemmer cannot handle Spanish, but
+    # because nothing ever hands it Spanish. Translating the query moved bm25
+    # rank 93->1 / 61->2 / 43->1 and recovered 3 outright misses on a 10-pair
+    # probe. Dense (cohere-embed-v4) is already multilingual and is NOT affected.
+    # Ships dark: disabled -> build_sparse_query is byte-identical to
+    # expand_query_conservative. Never route this into the dense or rerank
+    # query — that cost 4 English competitors and ~40% of result-list length.
+    query_translation_enabled: bool = False
+    query_translation_languages: str = "es,pt,zh"   # corpus languages, comma-separated
+    query_translation_model: str = "gpt-5-mini"
+    query_translation_timeout_s: float = 3.0
+
     # Phase 1 ingestion worker
     worker_poll_seconds: int = 10
     worker_max_attempts: int = 3

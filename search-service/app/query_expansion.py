@@ -10,6 +10,9 @@ Design principles:
 3. Conservative: Only expand when clear semantic equivalence exists
 4. Cross-language: Include Spanish/Chinese equivalents for multilingual corpus
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Core domain concept mappings
 # Format: user_term -> [synonym1, synonym2, ...]
@@ -278,6 +281,77 @@ def expand_query_conservative(query: str, max_expansions: int = 3) -> str:
         return query
 
     return " OR ".join(expanded_terms)
+
+
+# ---------------------------------------------------------------------------
+# Query-side translation — SPARSE LANE ONLY
+# ---------------------------------------------------------------------------
+#
+# The Postgres BM25 lane is English-only by construction (English Snowball
+# stemmer, English stopwords, (?u)\b\w\w+\b). That is NOT a structural
+# inability to match non-English text: stemming Spanish with an English stemmer
+# is wrong but *deterministic*, so index side and query side agree. The lane was
+# only ever missing a query in the right language.
+#
+# Measured 2026-07-24 on 10 known-item pairs (English question vs the same
+# question in the document's language): bm25 rank 93->1, 61->2, 43->1, and three
+# outright misses -> rank 1. 10/10 improved, 0/10 worse. Dense was already
+# multilingual (cohere-embed-v4) and barely moved: 2/10.
+#
+# WHY SPARSE-ONLY. The same probe on 12 competitive topical queries put the
+# translations into request.query — reaching sparse, dense AND the reranker. It
+# lifted 13/17 non-English targets but displaced 4 English competitors and cut
+# result lists ~40%, because the reranker scores a multilingual jumble as a
+# worse query and more documents fall under the cite floor. main.py:216 already
+# feeds the expanded bundle to the sparse lane alone; translations belong there
+# and nowhere else. tests/test_query_translation.py guards this.
+
+DEFAULT_TRANSLATION_LANGUAGES = ("es", "pt", "zh")
+
+
+def build_sparse_query(
+    query: str,
+    translate=None,
+    languages=DEFAULT_TRANSLATION_LANGUAGES,
+    max_expansions: int = 3,
+) -> str:
+    """The query text for the SPARSE lane: domain expansion + translations.
+
+    `translate` is a callable (query, languages) -> {lang: text}. Passing None
+    (the default) reproduces expand_query_conservative byte-for-byte, so the
+    feature ships dark and the flag is a true no-op when off.
+
+    A translation failure degrades to the untranslated query rather than
+    failing the search — same posture as the dense lane's sparse-only
+    degradation (main.py:244).
+    """
+    base = expand_query_conservative(query, max_expansions=max_expansions)
+
+    if translate is None or not languages or not query or not query.strip():
+        return base
+
+    try:
+        translations = translate(query, languages) or {}
+    except Exception as exc:  # noqa: BLE001 — never fail a search on translation
+        logger.warning(f"Query translation failed ({exc}) — sparse lane using untranslated query")
+        return base
+
+    seen = {t.lower() for t in _split_or(base)}
+    extra = []
+    for lang in languages:
+        text = (translations.get(lang) or "").strip()
+        if not text or text.lower() in seen:
+            continue
+        seen.add(text.lower())
+        extra.append(text)
+
+    if not extra:
+        return base
+    return " OR ".join([base] + extra)
+
+
+def _split_or(text: str):
+    return [p.strip() for p in text.split(" OR ") if p.strip()]
 
 
 # Test cases (for development verification)
