@@ -1,6 +1,14 @@
 # Cross-Lingual Retrieval — Design (2026-07-24)
 
-**Status:** design approved, not implemented.
+**Status:** design approved in outline; **revised after review round 1** (2026-07-24) —
+three blockers and seven majors found and folded in. Not implemented.
+
+**Review round 1 changed the design, not just the prose.** The three that matter:
+`embedding_model`/`dimension` were missing from the row spec, which would have made the
+bridge invisible to the dense lane (§5.4); the "additive means monotone" safety argument is
+**false** past the reranker — the bridge can demote its own targets (§5.5a); and a one-shot
+backfill would be silently deleted by any future re-ingest (§5.5b). §3's sparse-lane
+evidence is also corrected: the diagnostic lanes are not the lanes that feed RRF.
 **Branch:** `design/cross-lingual-retrieval` (worktree `.worktrees/multilingual-v3`, based on `qa`).
 **Problem:** queries arrive in English; the corpus is mixed-language. How do English
 queries resolve against non-English chunks, and how do we make that measurably better?
@@ -161,9 +169,24 @@ English docs on the same topic ("how can cities make streets safer for pedestria
   the one with misses.
 - **Fused-rank measurement.** Probes 1-3 read fused rank from a 150-chunk cut while dense
   rank came from the full 500. Truncation can only cause *misses*, never inflate a
-  position, so the reported fused ranks are valid — but "absent from fused" in Probe 4's
-  rerank-off pass may be a truncation artifact rather than true absence. **The production
-  runner must pass matching params on both passes.**
+  position, so the reported fused ranks are valid as positions — but "absent from fused" in
+  Probe 4's rerank-off pass may be a truncation artifact rather than true absence.
+- **CORRECTION (review round 1): the reported bm25 ranks are not the ranking that fed
+  RRF.** The fusion path passes the sparse lane `expanded_bundle` — the query after
+  `expand_query_conservative` (`main.py:216-219`, consumed at `main.py:238`) — while the
+  `return_intermediate_results` diagnostic passes the raw `query_bundle`
+  (`main.py:924-926`) and never applies `request.bm25_top_k` (applied only inside the
+  fusion path at `main.py:260-261`). So every "bm25" column in §3 measures a *different*
+  retrieval than the one that produced the fused column beside it.
+
+  **What survives:** the dense-lane numbers (15/15 top-10, 11/15 rank-1) and the final,
+  post-rerank numbers (13/15 rank-1, 15/15 present; Probe 4's 14/16). Those come from the
+  dense retriever and the real pipeline output respectively and are unaffected.
+  **What does not:** the sparse-rank and dense-vs-fused *attribution*. The claim that RRF
+  dilution is caused by single-lane placement is still the best explanation, but §3 does
+  not evidence it — it must be re-measured before it is asserted anywhere.
+
+  Sending matching params cannot fix this. §5.2 specifies the actual fix.
 - **n is small** (15 and 16). These justify a direction, not a threshold.
 - **Author bias.** The queries were written by the same agent that formed the hypothesis.
   The committed eval set should be reviewed by a human before it becomes a gate.
@@ -189,7 +212,12 @@ English docs on the same topic ("how can cities make streets safer for pedestria
    newly ingested document — and do **not** run `build_sparse_keyword.py`. Then run
    `capture_cite_scores.py` and *verify* 0.09 rather than re-derive it.
 
-   Rationale: the runbook rule ("rebuild after ANY bulk re-ingest") exists because Phase D
+   Rationale: the rule as written is "after any BULK re-ingest, run
+   `build_sparse_keyword.py` **before any threshold derivation**"
+   (`docs/document-management.md:247`, `docs/plans/2026-07-23-session-handoff.md:157`) —
+   quoted precisely because §7 *does* run threshold work (`capture_cite_scores.py` +
+   `analyze_cite_scores.py`) on stats that will be 0.10% drifted. That is a knowing
+   deviation, not an oversight: the rule exists because Phase D
    rewrote all 27,878 chunks. 29 additive rows through the sanctioned new-doc path is
    ordinary ingestion, which never triggers a rebuild. A full rebuild would re-weight all
    27,907 chunks and perturb the sparse lane corpus-wide — a **larger** change than the
@@ -219,16 +247,37 @@ Nothing here blocks the bridge; all of it becomes uninterpretable if run afterwa
 Same file shape as `non-english-smoke.json` (`queries[]` with `id`, `language`, `query`,
 `target_doc_ids`, `note`), plus a `class` field.
 
-- **`en-tr-*`** — the 16 `non-english-smoke.json` queries translated to English, targets
-  byte-identical. Purpose: a controlled native-vs-English delta on the same documents.
-- **`en-body-*`** — body-derived English queries for the non-English docs the 16 do not
-  reach. The smoke set covers 19 of the 29 non-English docs, so ~10 need new queries
-  (compute the exact uncovered set at implementation time; do not trust this count).
-  Each query authored from a real body chunk, avoiding title/slug/abstract vocabulary, with
-  the source chunk recorded in `note` for auditability.
+**BUILT 2026-07-24** — the file exists; counts below are measured, not estimated.
 
-Documented in the file header as a **known-item retrieval set, not a relevance-labelled
-golden set** — the same honesty the smoke set carries.
+- **`en-tr-*` (15 queries, 17 docs) — REGRESSION GUARD ONLY, not a signal class.**
+  The smoke queries translated to English. These are translated **titles**, and the bridge
+  indexes `title_en`, so a translated native title approximates `title_en` by construction
+  ("índice de desigualdad urbana" → "urban inequality index" vs `title_en`
+  "Urban Inequality Index - UII"). **Any bridge improvement measured here is circular.**
+  The zh subset is circular even *without* the bridge, since zh docs already carry English
+  catalog titles and slugs in every chunk's metadata header (§2.2) — `nq-zh-01` translates
+  to "Zhuzhou Complete Street Design Manual", which is both. And the native baseline is
+  already 16/16 rank-1, so the achievable delta is bounded at zero improvement.
+
+  Two smoke targets were **dropped** after verifying against qa: `nq-pt-02` entirely (its
+  sole target `..._6821` is `language='en'` on qa — an English-edition PDF with a
+  Portuguese title, the same class as the `3778`/`5852`/`2130` caveat the smoke set already
+  records; it was authored in the pypdf era when its extracted text still looked
+  Portuguese), and `nq-es-01`'s `..._2705` target for the same reason (the query survives
+  via `..._9471`, which is `es`). Left in, both would have been English→English tests
+  inflating a cross-lingual headline.
+
+- **`en-body-*` (12 queries, 12 docs) — THE SIGNAL CLASS.** The only class from which a
+  bridge result may be claimed. Each authored from a real body chunk with
+  `source_chunk_index` and `source_evidence` recorded for audit, avoiding title, slug and
+  abstract vocabulary. For zh targets the source chunk was required to contain CJK
+  characters, so no query can have been drawn from the English executive-summary section
+  those documents carry.
+
+15 + 12 = 27 queries covering all **29** non-English searchable qa documents exactly once
+(verified). The file header documents it as a **known-item retrieval set, not a
+relevance-labelled golden set** — precision is meaningless here; read rank and presence
+only — and records the author-bias caveat from §3.
 
 ### 5.2 Runner — `evaluation/run-cross-lingual-eval.ts`
 
@@ -237,9 +286,19 @@ Modelled on `run-non-english-smoke.ts`. Two passes per query:
 - `--lanes` (`rerank: false`) → dense rank, sparse rank, fused rank
 - `--full` (`rerank: true`) → final rank, relevance tier, docs surviving the floor
 
-Both passes send **identical** retrieval params at explicit `CITE_PRESET` parity. This is
-the fix for the Probe 1-3 caveat and is non-negotiable: a constant can never explain a delta
-between two measurements, but a mismatched parameter silently can.
+Both passes send **identical** retrieval params at explicit `CITE_PRESET` parity.
+
+**But param parity alone does not give lane parity, and the runner must not pretend it
+does.** The `return_intermediate_results` block reports lanes that are not the lanes that
+fed RRF (§3 correction): the diagnostic bm25 call passes the raw query while fusion passes
+the expansion-augmented one, and it ignores `bm25_top_k`. The runner must therefore read
+lane ranks **from the fusion path**, which means adding the per-lane rank of each returned
+node to the `/query` `debug` payload rather than inferring it from `bm25_results` /
+`vector_results`.
+
+`debug` is already `Dict[str, Any]` in `QueryResponse`, so this is contract-preserving.
+Until that exists, any dense-vs-sparse-vs-fused attribution is unevidenced and must not be
+reported as a finding.
 
 Headline metric: the **dense → fused → final rank delta**, per class and per language.
 That triple is the dilution the bridge is meant to move and the only quantity with visible
@@ -256,11 +315,21 @@ eligibility is 100%. But three es docs carry a **Spanish** `title_en`:
 | `2023_base-de-datos-ajustada-de-la-encuesta-origen_2276` | `Base de Datos Ajustada de la Encuesta Origen-Destino…` |
 | `2025_aire-limpio-en-barrios-vitales_9425` | `Aire Limpio en Barrios Vitales` |
 
-Cause: `summarize.py:110` sets `title_en = title` when `lang == 'en'`. These are among the 7
-documents whose language flipped `en` → `es` during the Phase D re-parse, so `title_en` was
-frozen from the pre-flip run. Provenance is `'llm'` (not `'human'`/`'external'`), so the
-existing guard at `summarize.py:108` permits overwrite — re-running the title path repairs
-them in 3 LLM calls.
+Cause: `summarize.py:110-111` sets `title_en = title` when `lang == 'en'`. These are among
+the 7 documents whose language flipped `en` → `es` during the Phase D re-parse, so
+`title_en` was frozen from the pre-flip run. Provenance is `'llm'` (not
+`'human'`/`'external'`), so the existing guard at `summarize.py:108` permits overwrite.
+
+**The repair must be targeted, not a `summarize.run()` re-run.** `summarize.run()`
+regenerates both `en` and native `long`+`short` summaries *first* (deleting and re-inserting
+every `source='generated'` row, `summarize.py:88-98`) and only then reaches the `title_en`
+block. That is ~3 LLM calls **per document** (9 total, not 3) and — critically — it would
+**rewrite the English `long` summary that the bridge is about to embed**, changing the
+bridge's input mid-experiment.
+
+Write a small repair script that calls `_translate_title` plus the provenance-guarded
+`UPDATE` only, touching no summary row. Back up `(id, title_en, metadata_source)` for the 3
+documents first.
 
 Without this, 3 of 29 bridge rows carry a Spanish "English title."
 
@@ -276,21 +345,41 @@ One additive `document_chunks` row per non-English searchable doc (29 on qa).
 `document_summaries` row with `language='en' AND kind='long'` exists. Docs failing the last
 condition are skipped and logged, never silently dropped.
 
-**Row:**
+**Row — the FULL column set `embed.py:264-275` writes.** Two of these are load-bearing and
+were missing from the first draft of this spec:
 
 | column | value |
 |---|---|
 | `document_id` | the non-English doc (unchanged) |
 | `legacy_chunk_id` | `{external_id}_summary_en` |
-| `unit_type` | `'summary'` |
-| `language` | `'en'` — the row's *indexed* language, distinct from the document's |
-| `text` | `{title_en}\n\n{english_long_summary}` |
 | `chunk_index` | `-2` (native summary node uses `-1`) |
+| `unit_type` | `'summary'` |
+| `page` | `1` |
+| `text` | `{title_en}\n\n{english_long_summary}` |
+| `language` | `'en'` — the row's *indexed* language, distinct from the document's |
+| `node_metadata` | see below |
+| `embedding` | the Bedrock vector |
+| **`embedding_model`** | **`get_settings().embedding_model`** (`'cohere-embed-v4'`) |
+| **`dimension`** | **`EMBEDDING_DIMENSIONS[model]`** (1536) |
 | `corpus_order` | appended after global max under advisory lock `0x636F7270` |
+| `sparse` | see below |
 
-**`node_metadata`:** the document's existing `base` metadata with `title` → `title_en`,
-`chunk_id` → `{external_id}_summary_en`, `total_chunks` `-1`, `page` `1`,
-`is_summary_node` `true`, `prev_chunk_id` `null`, `next_chunk_id` `{external_id}_chunk_0`.
+**`embedding_model` and `dimension` are not optional.** The dense SQL filters
+`AND dc.embedding_model = %(model)s` (`pg_store.py:42`) and the HNSW index is *partial* on
+`WHERE embedding_model = 'cohere-embed-v4'` (`1783454000000-Migration.ts:12-14`). A row
+without them is **invisible to the dense lane** — the bridge would silently do nothing on
+the only lane that currently carries cross-lingual retrieval.
+
+**`node_metadata` — the full key set, mirroring `embed.py:114-124`.** The document's `base`
+(`embed.py:87-94`) carries only `doc_id`, `title[:100]`, `authors[:100]`, `year`, `subtag`,
+`program_series`; `url`, `file_path` and the **full untruncated** `authors` are added
+per-node. "base with title swapped" would therefore silently drop `url`/`file_path` and
+truncate authors, producing a different `MetadataMode.EMBED` header from every other node
+in the corpus — and defeating the §6.1 parity test. Enumerate explicitly: `doc_id`,
+`title` → **`title_en`**, `authors` (full), `year`, `subtag`, `program_series`, `url`,
+`file_path`, `chunk_id` → `{external_id}_summary_en`, `chunk_index` `-2`, `total_chunks`
+`-1`, `page` `1`, `chunk_start_pos` `0`, `is_summary_node` `true`, `prev_chunk_id` `null`,
+`next_chunk_id` `{external_id}_chunk_0`.
 
 **Embedding:** `app.bedrock_embed.embed_documents` on
 `node.get_content(metadata_mode=MetadataMode.EMBED)` — `input_type=search_document`,
@@ -324,7 +413,58 @@ provider. Comment them out for the run and **restore afterwards**.
 - **The HNSW index covers new rows automatically**; the sparse lane is an exact scan with
   no index to rebuild.
 - **RRF is chunk-level and the final list dedupes to docs**, so a document that gains a
-  second placing can only improve or hold its doc-rank.
+  second placing can only improve or hold its **pre-rerank fused** doc-rank.
+
+### 5.5a The bridge is NOT monotone — it can demote the documents it targets
+
+An earlier draft of this spec claimed the operation "can only improve or hold" a doc's
+rank. That is false past the reranker, and the correction is the single most important
+result of review round 1. Verified against the code:
+
+`BedrockReranker._select_candidates` (`bedrock_rerank.py:73-90`) fills
+`settings.rerank_candidates` (100) slots **in fusion order**, taking at most
+`cite_rerank_per_doc_cap = 2` chunks per document, then backfilling leftover slots with
+skipped chunks. Cite then scores each document as the **max** over its surviving chunks
+(`main.py:1017-1021`) and drops anything below `cite_logit_floor = 0.09`
+(`main.py:1030-1031`).
+
+So for a bridged document:
+
+- **before:** reranked set `{body₁, body₂}` → score `max(rerank(body₁), rerank(body₂))`
+- **after:** if `summary_en` places high in fusion — which is the entire point of the
+  bridge — it takes one of the two slots → `{summary_en, body₁}` → score
+  `max(rerank(summary_en), rerank(body₁))`
+
+If `body₂` was the document's best chunk for that query, its score **drops**, and can drop
+below the floor. **The bridge can demote the very documents it exists to promote.**
+
+Second-order: each bridge node also consumes one of the 100 *global* candidate slots, so an
+unrelated (most likely English) document can be pushed out of the rerank window entirely.
+This is the mechanism by which the bridge could regress the cite golden set.
+
+**Consequence for the safety argument.** Safety does not come from the operation being
+additive. It comes from (a) the golden-set and per-document regression checks in §7, which
+are therefore the *primary* safety mechanism and not a formality, and (b) rollback being a
+single instant `DELETE`. This remains a genuine two-way door — but it is one we walk
+through with measurement, not one that is safe by construction.
+
+### 5.5b Re-ingest silently destroys the bridge — fold it into the worker
+
+`embed.py:258` runs `DELETE FROM document_chunks WHERE document_id=%s` on **every** embed
+stage run. A one-shot backfill script therefore creates rows that any future re-ingest,
+admin re-upload or re-embed of that document deletes, with nothing to recreate them — a
+data-lane invariant known only to whoever wrote the script.
+
+**Design response:** do not build the summary_en node in a standalone script. Extract the
+summary-node construction out of `_build_nodes_for_doc` into a shared helper (the §6.1
+refactor already requires this for parity), have it emit a `summary_en` node whenever the
+document is non-English and an English `long` summary exists, and call that helper from
+**both** `embed.py` and the backfill script. The worker then regenerates the bridge on
+every re-ingest for free, and the backfill exists only to populate documents that will not
+otherwise be re-ingested.
+
+This costs little more than the one-shot script and converts a latent data-loss bug into an
+ordinary pipeline property.
 
 ### 5.6 Fix `main.py:917` — dense call outside the degradation guard
 
@@ -345,16 +485,37 @@ Fix: wrap the diagnostic dense call in the same degradation handling, returning 
 
 ### 5.7 Presentation layer
 
-**`/query`:** `DocumentResult.metadata` gains `language` and `title_en`, joined from
-`documents` at hydration. No re-index required.
+**`/query`:** `DocumentResult.metadata` gains `language` and `title_en`. This
+**preserves the contract exactly**: `QueryRequest`, `QueryResponse` and `DocumentResult`
+shapes are untouched, and `metadata` is already typed `Dict[str, Any]`
+(`main.py:161`), so adding keys breaks no consumer.
 
-This **preserves the `/query` contract exactly**: `QueryRequest`, `QueryResponse` and
-`DocumentResult` shapes are untouched, and `metadata` is already typed `Dict[str, Any]`, so
-adding keys breaks no consumer.
+**"Joined from `documents` at hydration" was hand-waving — no such mechanism exists.**
+`DocumentResult` is built purely from node metadata (`main.py:1133-1141`). The only
+documents-derived state is `service_state["documents_metadata"]`, hydrated once at startup
+by `load_documents_metadata` (`pg_store.py:69-90`), which selects only
+`external_id, source_metadata` — no `language`, no `title_en` — and is not consulted in the
+result loop at all. Three changes are required:
+
+1. extend `load_documents_metadata` to select `language` and `title_en`;
+2. look the doc up by `doc_id` in the result-construction loop and merge the two keys;
+3. pass them through `route.ts:167-198`, which projects a fixed field set to the UI — new
+   keys otherwise reach the client only inside `meta.raw`.
+
+**Consequence:** because this path is startup-hydrated, the §5.3 `title_en` repair requires
+a **service restart** to become visible in responses. §5.5's "no restart" property applies
+to the retrieval lanes only, not to this metadata.
 
 **UI** (`src/app/results/page.tsx`, `CitePanel`): a language badge on non-English results;
 the English title as the primary label with the native title secondary; the English abstract
 as the snippet for non-English documents.
+
+**Note the interaction with §5.5a:** cite mode does *not* strip summary nodes — only answer
+mode does (`main.py:1051-1056`). So a bridged document whose `summary_en` node wins will
+render with `title = title_en` and its content set to the English abstract, while the same
+document retrieved via a body chunk renders with the native title. Without the presentation
+layer that reads as an inconsistency bug; with it, it is the desired behaviour. This is an
+argument for shipping §5.7 in the *same* change as the bridge, not after it.
 
 ---
 
@@ -385,28 +546,44 @@ extraction.
 
 **After the backfill, re-run and compare against §5.0:**
 
-| suite | expectation |
-|---|---|
-| `run-cross-lingual-eval.ts` (both passes) | **primary**: dense→fused→final rank delta narrows; no target regresses out of the final 25 |
-| `run-non-english-smoke.ts` | must hold **16/16 present, 16/16 rank-1** — native-language retrieval must not regress |
-| `run-cite-eval.ts` (golden set) | **regression guard**. The golden set is English-doc-heavy, so a bridge-induced ranking shift shows up here first. Recall must not fall. |
-| `capture_cite_scores.py` + `analyze_cite_scores.py` | floor **verification** per §4.5: if the macro-F1 curve and band precisions are unmoved, 0.09 stands. If they moved, stop and re-derive properly. |
-| `run-answer-retrieval-eval.ts` | answer mode strips summary nodes by construction, so this should be inert. Run it to confirm that reasoning, not to tune. |
+Every criterion below is stated as a decidable pass/fail on the §5.0 before-numbers. The
+first draft's "rank delta narrows" and "band precisions unmoved" were not checkable and are
+replaced.
 
-**Acceptance:** the bridge is kept if the cross-lingual delta improves or holds *and*
-neither the smoke set nor cite recall regresses. It is rolled back otherwise — this is a
-two-way door and should be treated as one.
+| suite | decision rule |
+|---|---|
+| `run-cross-lingual-eval.ts`, **`en-body` class only** | **PRIMARY SIGNAL.** PASS if mean final rank does not increase AND the count of targets outside the final top-10 does not increase AND no target leaves the final 25. `en-tr` is circular vs the bridge (§5.1) and cannot be used to claim a win. |
+| `run-cross-lingual-eval.ts`, **per-document** | **§5.5a demotion guard.** FAIL if ANY bridged document's final rank worsens or its `relevance_tier` drops, on any query in either class. This is the check that catches the `per_doc_cap` displacement; it is the primary safety mechanism, not a formality. |
+| `run-cross-lingual-eval.ts`, `en-tr` class | **REGRESSION GUARD ONLY.** PASS if no target leaves the final 25 and no target's final rank worsens. Improvements here are not evidence. |
+| `run-non-english-smoke.ts` | must hold **16/16 present, 16/16 rank-1**. Note this runner sends `max_results: 150` and **no** preset params (`run-non-english-smoke.ts:86-92`), i.e. server defaults, not `CITE_PRESET`. That is acceptable *as a regression guard* because before and after are measured identically — but it is NOT at user-facing parity, and no absolute claim may be made from it. Do not "fix" it mid-experiment; that would break comparability with the retained baseline. |
+| `run-cite-eval.ts` (golden set) | **REGRESSION GUARD.** English-doc-heavy, so §5.5a's global-slot displacement shows up here first. FAIL if macro recall falls at all. |
+| `capture_cite_scores.py` + `analyze_cite_scores.py` | floor **verification** per §4.5. PASS if the macro-F1 peak stays at 0.09-0.10 and no score band's precision moves by more than 5 percentage points. Otherwise stop and re-derive properly rather than shipping on a stale floor. |
+| `run-answer-retrieval-eval.ts` | answer mode strips summary nodes (`main.py:1051-1056`), so this should be **inert**. Run it to falsify that reasoning, not to tune. Any movement means the reasoning is wrong — investigate before proceeding. |
+
+**Acceptance:** keep the bridge only if every rule above passes. Roll back on any failure.
+Given §5.5a, a mixed result (cross-lingual improves, cite recall falls) is a **rollback**,
+not a trade to be negotiated — the golden set represents the traffic the product actually
+serves.
 
 **Rollback:**
 
 ```sql
-DELETE FROM document_chunks WHERE legacy_chunk_id LIKE '%\_summary\_en';
+DELETE FROM document_chunks
+WHERE unit_type = 'summary' AND legacy_chunk_id LIKE '%\_summary\_en';
 ```
 
-29 rows, immediate, no restart, no reindex, no re-embed. Back up first per the
-non-negotiables (`CREATE TABLE document_chunks_summary_en_backup_<date> AS SELECT …`),
-even though the operation is purely additive. The `title_en` repair rolls back from the
-same backup-table pattern the runbook already uses.
+29 rows, immediate, no restart, no reindex, no re-embed. Scoped to `unit_type='summary'`
+as well as the suffix, so a future `legacy_chunk_id` convention cannot widen the blast
+radius. Back up first per the non-negotiables
+(`CREATE TABLE document_chunks_summary_en_backup_<date> AS SELECT …`), even though the
+operation is additive. The `title_en` repair rolls back from its own 3-row backup (§5.3).
+
+**What rollback does NOT undo:** the `keyword_vocab` rows the run inserts for
+genuinely-new tokens (via the `embed.py:217-223` pattern). Those persist with `df=1` and
+permanently consume `token_id`s. This is **intentional** — vocab is append-only and shared,
+and reclaiming ids would corrupt every existing `sparse` vector. Headroom is ample
+(233,936 of 1,000,000 used), so the leak is immaterial; it is recorded here so the §6
+rollback test asserts vocab rows *remain* rather than flagging them as damage.
 
 ---
 
@@ -464,8 +641,20 @@ harder failure, and the reason LVC remains the larger recall lever.
 
 ## 11. Non-negotiables checklist
 
-- [x] qa is the proving ground; nothing here touches production
-      (`docs/runbooks/prod-cutover-multilingual-v3.md` governs that mirror).
+- [x] qa is the proving ground; no step here runs against production.
+      **Caveat surfaced in review:** if the prod mirror
+      (`docs/runbooks/prod-cutover-multilingual-v3.md`) copies data rather than re-running
+      ingestion, the bridge rows would reach production without this script ever executing
+      there. Confirm which it is before the prod cutover, and record the bridge in that
+      runbook either way.
+- [x] **Environment presupposition stated:** this design requires
+      `RETRIEVAL_BACKEND=postgres` **and** `KEYWORD_BACKEND=sparse`. §5.5's live-query
+      property holds only for `SparseKeywordRetriever` (`main.py:652`). Under
+      `KEYWORD_BACKEND=memory` (`main.py:659`, hydrates via `pg_store.load_nodes()`) or the
+      legacy CSV boot (`main.py:575`), new rows are invisible until restart — and
+      `config.py:43` still defaults `retrieval_backend` to `"legacy"`. The stale comment at
+      `main.py:258-259` ("BM25Retriever is a singleton built at startup") describes those
+      other paths and should be corrected in the same change.
 - [x] `/query` request/response contract preserved exactly (§5.7).
 - [x] Thresholds re-derived, never hand-tuned — floor is **verified**, and if it moved the
       design says stop and re-derive properly (§7).
