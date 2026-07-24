@@ -31,11 +31,10 @@ rerank candidate window. Only **two genuine failures** were found across the
 whole session: `ruas-completas_5028` (pt) on pedestrian safety and
 `zero-emission-logistic-vehicles_1319` (zh) on freight decarbonization.
 
-**The clearest defect found is not retrieval.** `/query` and the UI carry
-neither `language` nor `title_en`. Spanish documents are already being retrieved
-successfully for English-speaking users and shown with a Spanish title, a
-Spanish snippet, and no language indication — while a curated English abstract
-and an English title sit unused in the same database row.
+**A presentation gap exists but is NARROWER than an earlier version of this
+document claimed. See §5.6 for the correction** — the assertion that "a curated
+English abstract sits unused" was **false**: English abstracts already render.
+What is actually missing is an English *title* and a language label.
 
 ---
 
@@ -213,11 +212,49 @@ session.
 - `document_chunks.language` has **no readers** anywhere in `app/`, `src/` or
   `evaluation/`; its only appearance is that write.
 
-**Presentation**
-- Neither `language` nor `title_en` appears in `/query`'s response or the UI.
+**Presentation — CORRECTED 2026-07-24, see §5.6**
+- Neither `language` nor `title_en` appears in `/query`'s response.
   `DocumentResult` is built purely from node metadata (`main.py:1133-1141`);
   `load_documents_metadata` (`pg_store.py:69-90`) selects only `external_id`
   and `source_metadata` and is not consulted in the result loop.
+- **But `/query` is not the only path to the UI**, which is what the earlier
+  claim missed entirely. See §5.6.
+
+## 5.6 CORRECTION — the UI has a second metadata source
+
+An earlier version of this document asserted, repeatedly and in two commits,
+that "a curated English abstract and an English title sit unused in the same
+database row." **The abstract half is false.** The error came from reasoning
+about `/query`'s response without tracing the frontend data flow.
+
+The UI loads a **client-side catalog index** built from the documents CSV
+(`src/app/utils/utils.tsx`, `buildCatalogIndex` / `matchCatalogRow`), entirely
+independent of `/query`. Verified:
+
+- The CSV metadata carries `short_summary` for **169/169** documents, and for
+  non-English documents it is **already English** (spot-checked: `_2940`,
+  `_3387`, `_5028`, `_2976`, `_4324`).
+- `utils.tsx` maps it to `CatalogRow.shortSummary`; `CitePanel.tsx:92-96` sets
+  `short_summary` from it; `SelectableResultRow.tsx:143` renders it.
+- **English abstracts are therefore already displayed** for non-English
+  documents. They were never unused.
+- The CSV metadata also carries `languages` (`'Spanish'`, `'Chinese'`,
+  `'English, Portuguese'`, …) — already client-side, simply never rendered.
+
+What is **actually** missing, verified:
+
+- **The displayed title is native.** `CitePanel.tsx:88` uses
+  `titleFrom(doc, row)`, which resolves to `doc.title` (node metadata — native
+  for es/pt/id per `embed.py:76`) or the catalog `publicationTitle` (also
+  native). `documents.title_en` is in **neither** the CSV nor node metadata, so
+  no English title can reach the UI without new plumbing.
+- **No language label is rendered**, though the data is already present.
+- The passage snippet (`kps[].snippet`) is native chunk text. Inherent to
+  quoting a non-English document; mitigable by labelling, not by data.
+
+Net user experience: headline `Índice de Desigualdad Urbana`, an English
+abstract beneath it, no language indication. Inconsistent, not unusable — a
+materially smaller defect than this document originally claimed.
 
 **Operational**
 - `gpt-5-mini` exceeded a 3s request-path budget for a one-line translation.
@@ -293,5 +330,10 @@ pypdf era when the extracted text still looked non-English.
 - **Interaction with other `/query` ideas** — further expansion and tuning are
   planned and touch the same sparse query path; they may conflict with a third
   lane.
-- **Presentation** — `language` + `title_en` through `DocumentResult.metadata`.
-  Cheap, contract-preserving, and the clearest user-facing defect found.
+- **Presentation** (scope corrected, §5.6) — a language badge is
+  **frontend-only**, since `languages` is already in the client-side catalog.
+  An English title is larger: `title_en` is DB-only, so it needs either
+  plumbing through `load_documents_metadata` → `DocumentResult.metadata` →
+  `route.ts` → `titleFrom()` plus a service restart and a repair of 3 Spanish
+  `title_en` values, or adding `title_en` to the CSV catalog (which would make
+  it frontend-only too). Not scoped further; the session ended here.

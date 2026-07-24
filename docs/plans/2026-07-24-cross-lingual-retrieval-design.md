@@ -64,11 +64,15 @@ recorded in §4) because its true cost is far below what the handoff assumed —
 not a re-parse/re-embed cycle — and because the two genuine topical misses and future
 corpus growth are exactly the cases it protects.
 
-**The highest-value defect found this session is not retrieval at all.** `/query` and the
-UI carry neither `language` nor `title_en`. We already successfully retrieve Spanish
-documents for English-speaking users and then show them a Spanish title, a Spanish
-snippet, and no indication of the language — while a curated English abstract and an
-English title sit unused in the same database row.
+**CORRECTED — this document's original presentation claim was wrong.** It asserted that
+"a curated English abstract and an English title sit unused in the same database row."
+The abstract half is **false**: the UI loads a client-side catalog index from the CSV
+(`utils.tsx` `buildCatalogIndex`), whose `short_summary` is already English for
+non-English documents (169/169) and is already rendered
+(`SelectableResultRow.tsx:143`). Only the **title** is native, and only the **language
+label** is missing. Full correction and evidence:
+`docs/research/2026-07-24-cross-lingual-findings.md` §5.6. Treat §5.7 below as scoped on
+a false premise.
 
 ---
 
@@ -595,7 +599,11 @@ Fix: wrap the diagnostic dense call in the same degradation handling, returning 
 `vector_results` and setting the same `service_state` markers. Cover with a test alongside
 `tests/test_dense_fallback.py`.
 
-### 5.7 Presentation layer
+### 5.7 Presentation layer — SCOPED ON A FALSE PREMISE, see the header correction
+
+Retained as written only so the error is legible. The English abstract this section
+proposes surfacing is **already displayed** via the client-side catalog. Re-scope from
+`docs/research/2026-07-24-cross-lingual-findings.md` §5.6 before acting on any of it.
 
 **`/query`:** `DocumentResult.metadata` gains `language` and `title_en`. This
 **preserves the contract exactly**: `QueryRequest`, `QueryResponse` and `DocumentResult`
