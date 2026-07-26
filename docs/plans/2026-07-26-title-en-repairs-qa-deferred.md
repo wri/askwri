@@ -1,4 +1,14 @@
-# title_en repairs — qa leg DEFERRED (2026-07-26)
+# title_en repairs — qa leg EXECUTED 2026-07-26 (~20:15 UTC)
+
+> **EXECUTED.** All THREE repairs were applied to qa RDS (provenance
+> `human`), verified by SELECT. The pre-flight below proved its worth: qa
+> still had all three Spanish `title_en` values (matching findings §2.3),
+> including `_2276`, which the local mirror had already repaired — the
+> "no change needed for `_2276`" call recorded below was a local-mirror
+> artifact, and `_2276` received the English title on qa. Historical
+> content kept below unchanged.
+
+# (original note) title_en repairs — qa leg DEFERRED (2026-07-26)
 
 Task 9 of `2026-07-26-sparse-lane-english-handles-plan.md`. The LOCAL mirror
 (docker `askwri-pg`, db `qa`) was repaired 2026-07-26 with user-approved
