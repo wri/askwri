@@ -1,6 +1,7 @@
 # Sparse-lane cross-lingual reach — English handles design (2026-07-26)
 
-**Status:** DRAFT — pending review
+**Status:** IMPLEMENTED + VALIDATED — all §3.4 gates PASS on the local corpus 2026-07-26
+(`docs/plans/2026-07-26-sparse-en-handles-gate-results.md`); qa activation pending
 **Branch:** `design/cross-lingual-retrieval` (worktree `.worktrees/multilingual-v3`)
 **Predecessors:** `docs/research/2026-07-24-cross-lingual-findings.md` (measurements),
 `docs/plans/2026-07-24-session-postmortem-and-handoff.md` (process rules),
