@@ -139,6 +139,9 @@ rollback.
 3. Floor re-derivation, then re-run gate 1 at the new floor.
 4. Competitor displacement check from the probe report: english_competitors
    in `en-topical` must not systematically lose top-10 positions.
+5. run-non-english-smoke.ts BEFORE/AFTER — guards the known cost: injecting
+   the English summary inflates summary-chunk dl (~40% median on es/pt),
+   reducing native-term impact weights ~15% in those chunks.
 
 **Rollback:** flag off + rebuild (minutes). No schema change, no data loss.
 

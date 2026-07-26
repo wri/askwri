@@ -216,7 +216,7 @@ A BEFORE/AFTER delta instrument over `evaluation/cross-lingual-en.json`. Model c
  * dense lane, fused list (rerank=false default), or the final reranked list
  * (--rerank). Writes evaluation/results/cross-lingual-probe-<label>.json.
  *
- * This is a DIRECTIONAL instrument: n=27, agent-authored, unreviewed
+ * This is a DIRECTIONAL instrument: n=39, agent-authored, unreviewed
  * (the file's own caveats). It reports BEFORE/AFTER deltas via --compare;
  * it has NO pass/fail thresholds by design. Do not add any.
  *
@@ -368,7 +368,7 @@ Note: field names for the intermediate lists must be verified against `QueryResp
 Start the service if not running (per `reference_search_service_startup` memory / CLAUDE.md). Then:
 
 Run: `npx tsx evaluation/run-cross-lingual-probe.ts --label smoke`
-Expected: 27 minus skipped-defect queries print lane ranks; JSON written under `evaluation/results/`. (`cross-lingual-en.json` has no `defect` fields — the skip path is exercised only if Task 2's annotations are later mirrored there; the filter is still correct to have.)
+Expected: 39 minus skipped-defect queries print lane ranks; JSON written under `evaluation/results/`. (`cross-lingual-en.json` has no `defect` fields — the skip path is exercised only if Task 2's annotations are later mirrored there; the filter is still correct to have.)
 
 - [ ] **Step 3: Commit**
 
@@ -924,6 +924,7 @@ With the service running, flag off:
 ```bash
 npx tsx evaluation/run-cross-lingual-probe.ts --label before
 npx tsx evaluation/run-cross-lingual-probe.ts --label before-rerank --rerank
+npx tsx evaluation/run-non-english-smoke.ts --label before
 npm run eval:cite
 npm run eval:answer-retrieval
 ```
@@ -938,7 +939,7 @@ In `search-service/.env.local` set `SPARSE_EN_HANDLES=true` (never `.env`). Work
 cd search-service && ./venv/bin/python -m scripts.build_sparse_keyword
 ```
 
-Expected: `sparse_en_handles ON — ~29 non-EN docs with handles` and the usual vector-count summary. Restart the search service so Settings reload.
+Expected: `sparse_en_handles ON — ~29 non-EN docs; N inject a title handle, M an English summary` and the usual vector-count summary. No service restart needed — nothing on the query path reads the flag; it must be set in the rebuild process's env only (and the worker's, for subsequent re-ingests).
 
 - [ ] **Step 3: AFTER capture + deltas**
 
@@ -947,6 +948,7 @@ npx tsx evaluation/run-cross-lingual-probe.ts --label after
 npx tsx evaluation/run-cross-lingual-probe.ts --label after-rerank --rerank
 npx tsx evaluation/run-cross-lingual-probe.ts --compare before after
 npx tsx evaluation/run-cross-lingual-probe.ts --compare before-rerank after-rerank
+npx tsx evaluation/run-non-english-smoke.ts --label after
 npm run eval:cite
 npm run eval:answer-retrieval
 ```
@@ -957,6 +959,7 @@ Read against spec §3.4 expectations: `en-topical`/`en-tr` targets should improv
 
 - Cite/answer evals: no regression vs Step 1 (same harness, same corpus, same day).
 - If cite metrics moved at all: floor re-derivation per existing policy (`scripts/capture_cite_scores.py` + `analyze_cite_scores.py`, `config.py:137-143`), then re-run `npm run eval:cite` at the derived floor.
+- Non-English smoke set: no systematic target-rank degradation (the summary-dl inflation cost — final review I4 — is only visible here).
 - Write the BEFORE/AFTER summary into a short results note under `docs/plans/` (date-stamped), including which DB the probes ran against.
 - STOP: qa deploy (secrets/env flip + qa rebuild + floor config change) is a separate runbook exercise with its own user approval — not part of this plan.
 

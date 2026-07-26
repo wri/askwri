@@ -27,6 +27,7 @@ interface SmokeQuery {
   query: string;
   target_doc_ids: string[];
   note?: string;
+  defect?: string;
 }
 
 interface LaneRanks {
@@ -71,7 +72,10 @@ async function main() {
   const rerank = process.argv.includes('--rerank');
   const smokePath = path.join(__dirname, 'non-english-smoke.json');
   const smoke = JSON.parse(fs.readFileSync(smokePath, 'utf-8'));
-  const queries: SmokeQuery[] = smoke.queries;
+  const queries: SmokeQuery[] = smoke.queries.filter((q: SmokeQuery) => {
+    if (q.defect) console.log(`skip ${q.id}: ${q.defect.slice(0, 60)}…`);
+    return !q.defect;
+  });
 
   const results: Record<string, LaneRanks & { query: string; language: string }> = {};
   let bm25Hits = 0;

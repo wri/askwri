@@ -178,7 +178,8 @@ def run(document_id):
         # a non-EN doc would silently strip the handles the backfill added.
         # SPARSE ONLY — see the _sparse_content wrapper below.
         en_handle = None
-        if get_settings().sparse_en_handles and doc["language"] != "en":
+        # NULL language ⇒ treated as en ⇒ no handles (both sites must agree)
+        if get_settings().sparse_en_handles and (doc["language"] or "en") != "en":
             en_row = conn.execute(
                 """SELECT text FROM document_summaries
                    WHERE document_id=%s AND language='en' AND kind='long'""",
@@ -243,7 +244,7 @@ def run(document_id):
                 if not en_handle:
                     return base
                 extra = handle_text(
-                    en_handle["indexed_title"], en_handle,
+                    en_handle,
                     is_summary_chunk=n.metadata.get("chunk_index") == -1,
                 )
                 return f"{base}\n{extra}" if extra else base

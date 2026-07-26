@@ -30,7 +30,8 @@ _HANDLES_SQL = """
     FROM documents d
     LEFT JOIN document_summaries s
       ON s.document_id = d.id AND s.language = 'en' AND s.kind = 'long'
-    WHERE d.language != 'en'
+    -- NULL language ⇒ treated as en ⇒ no handles (both sites must agree)
+    WHERE COALESCE(d.language, 'en') != 'en'
 """
 
 
@@ -50,10 +51,11 @@ def load_english_handles(conn) -> Dict[str, dict]:
     return out
 
 
-def handle_text(indexed_title: str, handle: dict, is_summary_chunk: bool) -> str:
+def handle_text(handle: dict, is_summary_chunk: bool) -> str:
     """The English text to append to ONE chunk's sparse tokenization string."""
     parts = []
     title_en = handle.get("title_en") or ""
+    indexed_title = handle.get("indexed_title") or ""
     if title_en and _norm(title_en) != _norm(indexed_title):
         parts.append(title_en)
     if is_summary_chunk and (handle.get("en_summary") or ""):

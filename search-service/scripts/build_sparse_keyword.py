@@ -63,7 +63,11 @@ def main():
     if get_settings().sparse_en_handles:
         with get_pool().connection() as conn:
             handles = load_english_handles(conn)
-        print(f"sparse_en_handles ON — {len(handles)} non-EN docs with handles")
+        n_title = sum(1 for h in handles.values()
+                      if handle_text(h, is_summary_chunk=False))
+        n_summary = sum(1 for h in handles.values() if h["en_summary"])
+        print(f"sparse_en_handles ON — {len(handles)} non-EN docs; "
+              f"{n_title} inject a title handle, {n_summary} an English summary")
 
     def _sparse_content(n):
         base = n.get_content(metadata_mode=MetadataMode.EMBED)
@@ -71,7 +75,7 @@ def main():
         if not h:
             return base
         extra = handle_text(
-            h["indexed_title"], h, is_summary_chunk=n.metadata.get("chunk_index") == -1
+            h, is_summary_chunk=n.metadata.get("chunk_index") == -1
         )
         return f"{base}\n{extra}" if extra else base
 
