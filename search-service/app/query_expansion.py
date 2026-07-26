@@ -350,6 +350,28 @@ def build_sparse_query(
     return " OR ".join([base] + extra)
 
 
+def sparse_query_for(query: str) -> str:
+    """THE sparse-lane query string — single source of truth.
+
+    Both the fusion path (HybridFusionRetriever._retrieve) and the
+    return_intermediate_results diagnostic must call this, so per-lane
+    attribution from the diagnostic stays valid (findings 2026-07-24 §5:
+    the diagnostic historically passed the raw query and was unusable for
+    cross-lane comparison).
+    """
+    from app.config import get_settings
+    from app.query_translate import get_translator
+
+    languages = tuple(
+        x.strip()
+        for x in (get_settings().query_translation_languages or "").split(",")
+        if x.strip()
+    )
+    return build_sparse_query(
+        query, translate=get_translator(), languages=languages, max_expansions=3
+    )
+
+
 def _split_or(text: str):
     return [p.strip() for p in text.split(" OR ") if p.strip()]
 

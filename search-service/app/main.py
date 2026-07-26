@@ -217,19 +217,9 @@ class HybridFusionRetriever(BaseRetriever):
         # reranker. Dense (cohere-embed-v4) is already multilingual; feeding it
         # or the reranker multilingual text displaced English documents and cut
         # result lists ~40% in the 2026-07-24 probe. See query_expansion.py.
-        from app.query_expansion import build_sparse_query
-        from app.query_translate import get_translator
+        from app.query_expansion import sparse_query_for
 
-        expanded_query = build_sparse_query(
-            query_bundle.query_str,
-            translate=get_translator(),
-            languages=tuple(
-                x.strip() for x in
-                (get_settings().query_translation_languages or "").split(",")
-                if x.strip()
-            ),
-            max_expansions=3,
-        )
+        expanded_query = sparse_query_for(query_bundle.query_str)
         if expanded_query != query_bundle.query_str:
             logger.info(f"Sparse query: {query_bundle.query_str[:50]}... → {expanded_query[:120]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
@@ -936,10 +926,15 @@ async def hybrid_query(request: QueryRequest):
             )
             logger.info(f"Diagnostic - Vector only: {len(vector_only_results)} results")
 
-            # Stage 1b: BM25 search only
+            # Stage 1b: BM25 search only — MUST mirror the fusion lane:
+            # same expanded query, same bm25_top_k (spec F7; findings §5).
+            from app.query_expansion import sparse_query_for as _sqf
             bm25_only_results = await asyncio.to_thread(
-                service_state["bm25_retriever"].retrieve, query_bundle
+                service_state["bm25_retriever"].retrieve,
+                QueryBundle(query_str=_sqf(request.query)),
             )
+            if request.bm25_top_k is not None:
+                bm25_only_results = bm25_only_results[:request.bm25_top_k]
             logger.info(f"Diagnostic - BM25 only: {len(bm25_only_results)} results")
 
         # Stage 1: Hybrid Fusion Retrieval
