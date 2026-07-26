@@ -301,10 +301,17 @@ def expand_query_conservative(query: str, max_expansions: int = 3) -> str:
 # WHY SPARSE-ONLY. The same probe on 12 competitive topical queries put the
 # translations into request.query — reaching sparse, dense AND the reranker. It
 # lifted 13/17 non-English targets but displaced 4 English competitors and cut
-# result lists ~40%, because the reranker scores a multilingual jumble as a
-# worse query and more documents fall under the cite floor. main.py:216 already
-# feeds the expanded bundle to the sparse lane alone; translations belong there
-# and nowhere else. tests/test_query_translation.py guards this.
+# result lists ~40%. main.py already feeds the expanded bundle to the sparse
+# lane alone; translations belong there and nowhere else.
+# tests/test_query_translation.py guards this.
+#
+# NOT SHIPPABLE AS-IS. Sparse-only routing does NOT fix the damage — P7
+# (sparse-only) left the −42% list shrinkage unchanged, and the flag-on cite
+# eval (P8) regressed recall 83.3 → 76.5. The cause is that RRF scores by
+# RANK, not membership: translated terms push English chunks down the one
+# sparse ranking, and their fused contribution collapses even though they
+# never leave the list (findings 2026-07-24 §4). Enabling this flag needs the
+# recorded design direction — a SEPARATE translated RRF lane — not a toggle.
 
 DEFAULT_TRANSLATION_LANGUAGES = ("es", "pt", "zh")
 

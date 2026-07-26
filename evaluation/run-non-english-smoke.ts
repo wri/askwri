@@ -28,6 +28,7 @@ interface SmokeQuery {
   target_doc_ids: string[];
   note?: string;
   defect?: string;
+  defect_target_doc_ids?: string[];
 }
 
 interface LaneRanks {
@@ -72,10 +73,26 @@ async function main() {
   const rerank = process.argv.includes('--rerank');
   const smokePath = path.join(__dirname, 'non-english-smoke.json');
   const smoke = JSON.parse(fs.readFileSync(smokePath, 'utf-8'));
-  const queries: SmokeQuery[] = smoke.queries.filter((q: SmokeQuery) => {
-    if (q.defect) console.log(`skip ${q.id}: ${q.defect.slice(0, 60)}…`);
-    return !q.defect;
-  });
+  // Defect handling is per-TARGET: a query with one bad target keeps its
+  // valid ones (nq-es-01: _2705 is language='en' on qa, _9471 is genuinely
+  // es); the query drops only when no valid target remains (nq-pt-02).
+  const queries: SmokeQuery[] = smoke.queries
+    .map((q: SmokeQuery) => ({
+      ...q,
+      target_doc_ids: q.target_doc_ids.filter(
+        (id) => !(q.defect_target_doc_ids ?? []).includes(id),
+      ),
+    }))
+    .filter((q: SmokeQuery) => {
+      if (q.defect && q.target_doc_ids.length === 0) {
+        console.log(`skip ${q.id}: ${q.defect.slice(0, 60)}…`);
+        return false;
+      }
+      if (q.defect) {
+        console.log(`${q.id}: defective target(s) removed, ${q.target_doc_ids.length} valid kept`);
+      }
+      return true;
+    });
 
   const results: Record<string, LaneRanks & { query: string; language: string }> = {};
   let bm25Hits = 0;

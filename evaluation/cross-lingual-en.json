@@ -1,6 +1,6 @@
 {
   "description": "ENGLISH query -> NON-ENGLISH document known-item retrieval set. Built 2026-07-24. This is the usage pattern the corpus actually sees (queries arrive in English; the corpus is mixed-language) and it had no coverage before this file: non-english-smoke.json tests non-English query -> non-English doc, which is a different thing. This is a KNOWN-ITEM set, not a relevance-labelled golden set: each query has a document it is meant to retrieve, and there is no labelling of which other documents are also relevant. Precision is therefore meaningless here; read rank and presence only.",
-  "usage": "npx tsx evaluation/run-cross-lingual-eval.ts [--lanes|--full] [--label <name>] (search-service must be running)",
+  "usage": "npx tsx evaluation/run-cross-lingual-probe.ts --label <name> [--rerank] | --compare <a> <b> (search-service must be running)",
   "classes": {
     "en-tr": {
       "count": 15,

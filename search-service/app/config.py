@@ -65,10 +65,21 @@ class Settings(BaseSettings):
     # rank 93->1 / 61->2 / 43->1 and recovered 3 outright misses on a 10-pair
     # probe. Dense (cohere-embed-v4) is already multilingual and is NOT affected.
     # Ships dark: disabled -> build_sparse_query is byte-identical to
-    # expand_query_conservative. Never route this into the dense or rerank
-    # query — that cost 4 English competitors and ~40% of result-list length.
+    # expand_query_conservative.
+    # DO NOT ENABLE AS-IS: sparse-only routing did not fix the cost — P7 left
+    # the −42% result-list shrinkage unchanged and the flag-on cite eval (P8)
+    # regressed recall 83.3 → 76.5, because RRF scores by rank and translated
+    # terms push English chunks down the one sparse ranking (findings
+    # 2026-07-24 §4). Enabling requires a separate translated RRF lane (the
+    # recorded design direction), not this toggle. Also: zh translation is
+    # useless to the sparse lane (CJK tokenizes as whole clauses).
     query_translation_enabled: bool = False
     query_translation_languages: str = "es,pt,zh"   # corpus languages, comma-separated
+    # This default model+timeout PAIR is known-unusable: gpt-5-mini measured
+    # >3s for a one-line translation (findings §5 Operational), so at 3.0s
+    # every first-hit translation times out and degrades to the untranslated
+    # query. Kept as the failure-soft reference config; a real enablement
+    # needs a faster model or a precomputed dictionary.
     query_translation_model: str = "gpt-5-mini"
     query_translation_timeout_s: float = 3.0
 
