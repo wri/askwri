@@ -54,7 +54,28 @@ def main():
 
     # Exactly what BM25Retriever.from_defaults does at boot (base.py:99-112)
     stemmer = Stemmer.Stemmer("english")
-    contents = [n.get_content(metadata_mode=MetadataMode.EMBED) for n in nodes]
+    # English handles (spec 2026-07-26 §3): appended to the SPARSE tokenization
+    # string only — dense embeddings and stored chunk text are untouched.
+    from app.config import get_settings
+    from app.sparse_handles import handle_text, load_english_handles
+
+    handles = {}
+    if get_settings().sparse_en_handles:
+        with get_pool().connection() as conn:
+            handles = load_english_handles(conn)
+        print(f"sparse_en_handles ON — {len(handles)} non-EN docs with handles")
+
+    def _sparse_content(n):
+        base = n.get_content(metadata_mode=MetadataMode.EMBED)
+        h = handles.get(n.metadata.get("doc_id"))
+        if not h:
+            return base
+        extra = handle_text(
+            h["indexed_title"], h, is_summary_chunk=n.metadata.get("chunk_index") == -1
+        )
+        return f"{base}\n{extra}" if extra else base
+
+    contents = [_sparse_content(n) for n in nodes]
     corpus_tokens = bm25s.tokenize(
         contents, stopwords="en", stemmer=stemmer,
         token_pattern=TOKEN_PATTERN, show_progress=False,
