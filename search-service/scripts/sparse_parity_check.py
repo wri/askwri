@@ -48,6 +48,15 @@ QUERIES = [
 
 
 def main():
+    from app.config import get_settings
+
+    if get_settings().sparse_en_handles:
+        print("sparse_en_handles is ON: stored sparse vectors intentionally "
+              "diverge from raw-text BM25 (English handles injected — spec "
+              "2026-07-26 §3.3). Run parity with SPARSE_EN_HANDLES=false "
+              "against a flag-off rebuild.")
+        raise SystemExit(2)
+
     import bm25s
     import scipy.sparse as sp
     from app import pg_store

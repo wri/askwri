@@ -212,10 +212,16 @@ class HybridFusionRetriever(BaseRetriever):
         """Retrieve nodes using hybrid fusion with RRF"""
         import concurrent.futures
 
-        # BM25 query expansion (done before threading — pure string work)
-        expanded_query = expand_query_conservative(query_bundle.query_str, max_expansions=3)
+        # BM25 query expansion + optional translation. SPARSE LANE ONLY — the
+        # dense retriever below gets the ORIGINAL query_bundle, and so does the
+        # reranker. Dense (cohere-embed-v4) is already multilingual; feeding it
+        # or the reranker multilingual text displaced English documents and cut
+        # result lists ~40% in the 2026-07-24 probe. See query_expansion.py.
+        from app.query_expansion import sparse_query_for
+
+        expanded_query = sparse_query_for(query_bundle.query_str)
         if expanded_query != query_bundle.query_str:
-            logger.info(f"Query expansion: {query_bundle.query_str[:50]}... → {expanded_query[:80]}...")
+            logger.info(f"Sparse query: {query_bundle.query_str[:50]}... → {expanded_query[:120]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
 
         # Run dense + sparse retrieval in parallel, timing each lane
@@ -920,10 +926,15 @@ async def hybrid_query(request: QueryRequest):
             )
             logger.info(f"Diagnostic - Vector only: {len(vector_only_results)} results")
 
-            # Stage 1b: BM25 search only
+            # Stage 1b: BM25 search only — MUST mirror the fusion lane:
+            # same expanded query, same bm25_top_k (spec F7; findings §5).
+            from app.query_expansion import sparse_query_for as _sqf
             bm25_only_results = await asyncio.to_thread(
-                service_state["bm25_retriever"].retrieve, query_bundle
+                service_state["bm25_retriever"].retrieve,
+                QueryBundle(query_str=_sqf(request.query)),
             )
+            if request.bm25_top_k is not None:
+                bm25_only_results = bm25_only_results[:request.bm25_top_k]
             logger.info(f"Diagnostic - BM25 only: {len(bm25_only_results)} results")
 
         # Stage 1: Hybrid Fusion Retrieval

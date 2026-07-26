@@ -12,10 +12,18 @@ without a deploy.
 > via `botocore[crt]`, see `docs/runbooks/bedrock-local-testing.md` Step 2).
 > Without creds the service now degrades: rerank falls back to fused,
 > dense falls back to sparse-only (`/health` reports `dense_lane`).
-> The **qa-branch main checkout cannot serve sane dense results against
-> this DB** until multilingual-v3 merges — run the search service from
-> `.worktrees/multilingual-v3`. Unit/integration test suites remain fully
-> offline (Bedrock is stubbed).
+> Unit/integration test suites remain fully offline (Bedrock is stubbed).
+>
+> **Creds footgun (bit twice — 2026-07-22 worker, 2026-07-26 probes):**
+> `search-service/.env.local` carries MinIO placeholder `AWS_ACCESS_KEY_ID`/
+> `AWS_SECRET_ACCESS_KEY` for the S3 lane, and `app/env.py` loads them into
+> the process env — boto3 then uses them for **Bedrock** too and every dense
+> call fails `UnrecognizedClientException`. Because the dense lane degrades
+> gracefully, `/query` still returns 200 — a passing curl is NOT proof the
+> dense lane ran; check the service log or `/health`. Fix: start the service
+> from a shell with real creds exported (they take precedence over
+> `.env.local`): `eval "$(aws configure export-credentials --format env)"`
+> then `./venv/bin/python -m app.main`.
 
 Companions: `docs/runbooks/phase0-cutover.md` (initial local setup — docker
 Postgres, venv, data load) and `docs/runbooks/qa-push-deploy.md` (the deploy

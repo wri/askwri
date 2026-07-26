@@ -48,7 +48,8 @@ Terraform); S3 for PDFs and derived artifacts.
 See `.env.example`. DB: `DATABASE_URL` (or `DB_HOST/PORT/USER/PASSWORD/NAME`). Search:
 `SEARCH_SERVICE_URL`, `LLAMAINDEX_SERVICE_URL`. OpenAI: `OPENAI_API_KEY` (+ model overrides).
 Search-service: `RETRIEVAL_BACKEND` (`legacy`|`postgres`), `KEYWORD_BACKEND` (`sparse` default |
-`memory` legacy), `DOCUMENTS_LOCAL_DIR`, `CACHE_DIR`,
+`memory` legacy), `SPARSE_EN_HANDLES` (`false` default — English handles into sparse weights,
+must match across backfill shell + worker env), `DOCUMENTS_LOCAL_DIR`, `CACHE_DIR`,
 S3 sync vars (`DOCUMENTS_S3_BUCKET`, `DOCUMENTS_S3_PREFIX`, `CACHE_S3_PREFIX`).
 Admin auth: `SESSION_SECRET` (>= 32 chars, required for `/admin`), `ADMIN_API_TOKEN` (optional bearer).
 

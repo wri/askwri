@@ -13,6 +13,7 @@ export type RowData = {
   confidence?: number
   row_number?: number
   year?: number | string
+  language?: string
   fullDoc: DocMeta
 }
 

@@ -161,6 +161,21 @@ Notes:
   races the vocab/stats writes). On first deploy there is no worker yet; for later
   refreshes, scale `askwri-app-qa-ingestion-worker` to 0 first.
 
+**`SPARSE_EN_HANDLES`** (spec 2026-07-26): if this flag is on, it must be set
+consistently in **both** the backfill operator's shell above **and** the
+ingestion-worker task env (`INGESTION_WORKER_ENV` / `ingestion_worker_secret_env`
+in the table above — a different surface from the search service's
+`SEARCH_SERVICE_ENV`/`search_service_secret_env`) — otherwise the next re-ingest
+silently strips the handles the backfill just added. Two other gotchas:
+
+- `scripts/sparse_parity_check.py` only guards the env of the process running it.
+  After a flag-on rebuild, running parity from a flag-off shell will legitimately
+  fail — only run parity against a flag-off rebuild.
+- A flag-on-then-off rollback leaves residual, unused rows in `keyword_vocab`.
+  This is harmless: their dimensions are zero-weight in every chunk's sparse
+  vector, and `document_chunks.sparse` itself is byte-identical to a flag-off
+  rebuild.
+
 Verify:
 
 ```sql

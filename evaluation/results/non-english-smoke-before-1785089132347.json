@@ -1,0 +1,212 @@
+{
+  "label": "before",
+  "rerank": false,
+  "timestamp": "2026-07-26T18:05:32.346Z",
+  "totals": {
+    "queries": 14,
+    "bm25_target_found": 7,
+    "dense_target_found": 14,
+    "final_target_found": 14
+  },
+  "results": {
+    "nq-zh-01": {
+      "query": "株洲完整街道设计指南",
+      "language": "zh",
+      "bm25_rank": null,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2017_confronting-the-urban-housing-crisis-in-the_9318",
+        "2017_connected-urban-growth-public-private_1272",
+        "2018_ahmedabad-town-planning-schemes-for-equitable_3120",
+        "2018_including-the-excluded-supporting-informal_6798"
+      ],
+      "latency_ms": 579
+    },
+    "nq-zh-02": {
+      "query": "电动公交车运营挑战",
+      "language": "zh",
+      "bm25_rank": null,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2017_confronting-the-urban-housing-crisis-in-the_9318",
+        "2017_connected-urban-growth-public-private_1272",
+        "2018_ahmedabad-town-planning-schemes-for-equitable_3120",
+        "2018_including-the-excluded-supporting-informal_6798"
+      ],
+      "latency_ms": 574
+    },
+    "nq-zh-03": {
+      "query": "北京零排放货运",
+      "language": "zh",
+      "bm25_rank": null,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2017_confronting-the-urban-housing-crisis-in-the_9318",
+        "2017_connected-urban-growth-public-private_1272",
+        "2018_ahmedabad-town-planning-schemes-for-equitable_3120",
+        "2018_including-the-excluded-supporting-informal_6798"
+      ],
+      "latency_ms": 563
+    },
+    "nq-zh-04": {
+      "query": "出行即服务平台商业模式",
+      "language": "zh",
+      "bm25_rank": null,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2017_confronting-the-urban-housing-crisis-in-the_9318",
+        "2017_connected-urban-growth-public-private_1272",
+        "2018_ahmedabad-town-planning-schemes-for-equitable_3120",
+        "2018_including-the-excluded-supporting-informal_6798"
+      ],
+      "latency_ms": 577
+    },
+    "nq-zh-05": {
+      "query": "深圳港集装箱运输脱碳",
+      "language": "zh",
+      "bm25_rank": null,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2017_confronting-the-urban-housing-crisis-in-the_9318",
+        "2017_connected-urban-growth-public-private_1272",
+        "2018_ahmedabad-town-planning-schemes-for-equitable_3120",
+        "2018_including-the-excluded-supporting-informal_6798"
+      ],
+      "latency_ms": 619
+    },
+    "nq-zh-06": {
+      "query": "轨道交通站点安全可达性设计",
+      "language": "zh",
+      "bm25_rank": null,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2017_confronting-the-urban-housing-crisis-in-the_9318",
+        "2017_connected-urban-growth-public-private_1272",
+        "2018_ahmedabad-town-planning-schemes-for-equitable_3120",
+        "2018_including-the-excluded-supporting-informal_6798"
+      ],
+      "latency_ms": 546
+    },
+    "nq-zh-07": {
+      "query": "广东道路交通深度减排路径",
+      "language": "zh",
+      "bm25_rank": null,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2017_confronting-the-urban-housing-crisis-in-the_9318",
+        "2017_connected-urban-growth-public-private_1272",
+        "2018_ahmedabad-town-planning-schemes-for-equitable_3120",
+        "2018_including-the-excluded-supporting-informal_6798"
+      ],
+      "latency_ms": 630
+    },
+    "nq-es-02": {
+      "query": "las mujeres y el transporte en Bogotá",
+      "language": "es",
+      "bm25_rank": 1,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2020_las-mujeres-y-el-transporte-en-bogota-las-cuentas_3254",
+        "2022_guia-de-entornos-caminables-seguros_2940",
+        "2023_base-de-datos-ajustada-de-la-encuesta-origen_2276",
+        "2025_aire-limpio-en-barrios-vitales_9425",
+        "2021_mexican-cities-expansion-trends-and-their-impacts_9595"
+      ],
+      "latency_ms": 583
+    },
+    "nq-es-03": {
+      "query": "entornos caminables seguros",
+      "language": "es",
+      "bm25_rank": 1,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2022_guia-de-entornos-caminables-seguros_2940",
+        "2020_indice-de-desigualdad-urbana_3387",
+        "2021_ruas-completas-no-brasil-promovendo-uma-mudanca_5028",
+        "2024_manual-da-pesquisa-de-satisfacao-qualionibus_7600",
+        "2025_aire-limpio-en-barrios-vitales_9425"
+      ],
+      "latency_ms": 568
+    },
+    "nq-es-04": {
+      "query": "ciencia participativa para un aire limpio",
+      "language": "es",
+      "bm25_rank": 1,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2023_ciencia-participativa-accion-para-un-aire-limpio_6722",
+        "2025_aire-limpio-en-barrios-vitales_9425",
+        "2022_guia-de-entornos-caminables-seguros_2940",
+        "2020_acciones-federales-para-la-planeacion-urbana_3682",
+        "2018_porto-alegre-participatory-budgeting-and-the_5101"
+      ],
+      "latency_ms": 589
+    },
+    "nq-es-05": {
+      "query": "índice de desigualdad urbana",
+      "language": "es",
+      "bm25_rank": 1,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2020_indice-de-desigualdad-urbana_3387",
+        "2021_mexican-cities-expansion-trends-and-their-impacts_9595",
+        "2021_el-costo-de-la-expansion-urbana-en-mexico_9471",
+        "2025_trinta-anos-de-expansao-vertical-e-horizontal-em_9049",
+        "2019_guadalajara-revisiting-public-space-interventions_9381"
+      ],
+      "latency_ms": 574
+    },
+    "nq-pt-01": {
+      "query": "ruas completas no Brasil",
+      "language": "pt",
+      "bm25_rank": 1,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2021_ruas-completas-no-brasil-promovendo-uma-mudanca_5028",
+        "2021_seizing-brazils-urban-opportunity_3268",
+        "2024_accelerating-nature-based-solutions-in-brazilian_3331",
+        "2024_manual-da-pesquisa-de-satisfacao-qualionibus_7600",
+        "2025_trinta-anos-de-expansao-vertical-e-horizontal-em_9049"
+      ],
+      "latency_ms": 578
+    },
+    "nq-pt-03": {
+      "query": "pesquisa de satisfação QualiÔnibus",
+      "language": "pt",
+      "bm25_rank": 1,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2024_manual-da-pesquisa-de-satisfacao-qualionibus_7600"
+      ],
+      "latency_ms": 562
+    },
+    "nq-pt-04": {
+      "query": "expansão vertical e horizontal em cidades brasileiras",
+      "language": "pt",
+      "bm25_rank": 1,
+      "dense_rank": 1,
+      "final_rank": 1,
+      "bm25_top5": [
+        "2025_trinta-anos-de-expansao-vertical-e-horizontal-em_9049",
+        "2021_ruas-completas-no-brasil-promovendo-uma-mudanca_5028",
+        "2024_manual-da-pesquisa-de-satisfacao-qualionibus_7600",
+        "2025_accessibility-to-public-green-areas-case-study-in_6254",
+        "2019_upward-and-outward-growth-managing-urban_2841"
+      ],
+      "latency_ms": 559
+    }
+  }
+}
