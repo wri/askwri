@@ -75,7 +75,8 @@ For every document with `language != 'en'`, inject English handle text into
 the **sparse weight computation only**:
 
 - **Every chunk:** append `documents.title_en` (skip when it equals the
-  already-indexed title, e.g. most zh docs — F3).
+  already-indexed title after casefold + whitespace normalization, e.g. most
+  zh docs — F3).
 - **The summary chunk** (`chunk_index = -1`): additionally append the English
   long summary (`document_summaries` row `language='en', kind='long'`).
 
@@ -100,6 +101,15 @@ Two write sites, both flag-gated by a new setting `sparse_en_handles: bool`
    re-ingested docs must apply the same injection before `chunk_weights`, or
    the next re-ingest silently strips the handles (drift). Same source data,
    same flag.
+
+Implementation callout (spec-review advisory): today both sites derive ONE
+content string per node via `get_content(MetadataMode.EMBED)` and feed it to
+dense embedding and sparse tokenization alike (`worker/stages/embed.py:186,204`).
+This design requires the sparse-side string to **diverge** from the dense-side
+string for the same node. The plan must make "build a separate
+sparse-tokenization content string at each call site" an explicit task —
+injecting into the shared string would silently change dense embeddings and
+force a re-embed.
 
 Query side (`SparseKeywordRetriever`) is unchanged. `KEYWORD_BACKEND=memory`
 is unchanged (it hydrates from raw chunk text) — flag off + one rebuild
