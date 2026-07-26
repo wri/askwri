@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     # "memory" = in-memory bm25s built at boot//reindex (legacy behavior, kept intact)
     keyword_backend: str = "sparse"  # "sparse" (default) | "memory"
 
+    # English handles into SPARSE weights only (spec 2026-07-26 §3): when
+    # true, build_sparse_keyword.py and the worker embed stage append
+    # title_en (+ the curated English long summary, summary chunk only) to
+    # the text that feeds sparse tokenization for language != 'en' docs.
+    # Dense embeddings, chunk text and /query are untouched. Default OFF:
+    # flag-off rebuild restores byte-identical current weights (rollback).
+    sparse_en_handles: bool = False
+
     # Query-side translation for the SPARSE lane only (cross-lingual, 2026-07-24).
     # The BM25 lane is English-only by construction, so an English query cannot
     # match a Spanish body — not because the stemmer cannot handle Spanish, but
