@@ -13,6 +13,7 @@ import {
   firstSentence,
   urlFrom,
   yearFrom,
+  languageLabel,
 } from '../utils/utils'
 
 const CitePanel = ({
@@ -100,6 +101,7 @@ const CitePanel = ({
           relevance_score: docRel,
           row_number: idx + 1,
           year: yearFrom(doc, row),
+          language: languageLabel(row?.raw),
           fullDoc: doc,
         }
       }),

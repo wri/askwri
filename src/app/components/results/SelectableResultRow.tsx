@@ -124,6 +124,11 @@ export const SelectableResultRow = ({
           {rowData.publication_title}
         </Heading>
         <div>{rowData.year}</div>
+        {rowData.language ? (
+          <div style={{ width: 'fit-content' }}>
+            <Tag label={rowData.language} variant='info-grey' />
+          </div>
+        ) : null}
         <div
           style={{
             display: '-webkit-box',

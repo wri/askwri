@@ -117,6 +117,15 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
     raw: meta,
   }
 }
+/** Language label for a result row, from the client-side catalog's raw CSV
+ *  metadata ('languages' key survives parseMetaJSON's norm()). Empty for
+ *  English-only or unknown — the badge renders only when it informs. */
+export function languageLabel(raw?: Record<string, any>): string {
+  const v = String(raw?.['languages'] ?? '').trim()
+  if (!v || v.toLowerCase() === 'english') return ''
+  return v
+}
+
 export function buildCatalogIndex(items: CatalogRow[]) {
   const byBase = new Map<string, CatalogRow>() // basename + noExt
   const bySlug = new Map<string, CatalogRow>() // title slug
