@@ -1437,6 +1437,32 @@ _ZH_TRADITIONAL_EMBED_TEXT = (
     "基於自然的解決方案，如濕地恢復和植樹造林，為氣候和社區提供了多重協同效益。"
 ) * 3  # repeat to ensure sufficient length
 
+# Spanish body text for the English-handle tests. Deliberately free of any word
+# that stems to 'inequ'/'unequ' so those tokens can only arrive via injection.
+_ES_EMBED_TEXT = (
+    "El transporte urbano segregado limita el acceso al empleo formal en las periferias. "
+    "Las ciudades latinoamericanas enfrentan retos crecientes de movilidad y vivienda asequible. "
+    "La expansion sin planificacion incrementa los costos de infraestructura para los municipios. "
+    "Los sistemas de autobuses de transito rapido han demostrado beneficios ambientales claros. "
+    "El financiamiento climatico debe llegar a los barrios mas vulnerables de la region. "
+    "La calidad del aire mejora cuando se reducen los viajes en vehiculos particulares. "
+    "Los espacios verdes urbanos mitigan el efecto de isla de calor en zonas densas. "
+    "La gobernanza metropolitana requiere coordinacion entre municipios vecinos y el estado. "
+    "El acceso al agua potable sigue siendo desigual entre distritos ricos y pobres. "
+    "Las politicas de suelo pueden orientar el crecimiento hacia corredores bien servidos. "
+) * 3
+
+
+def _sparse_dims(sparse_text):
+    """{token_id} from a sparsevec text value '{i:w,i:w}/dim'.
+
+    sparsevec indices are 1-based and equal the keyword_vocab token_id (see
+    app/sparse_keyword.py). Parsed, never substring-matched — '17' is a
+    substring of '170'. Mirrors tests/test_build_sparse_script.py.
+    """
+    body = sparse_text.split("}")[0].lstrip("{")
+    return {int(pair.split(":")[0]) for pair in body.split(",") if pair}
+
 
 def _insert_embed_document(conn, *, external_id, language="en", languages=None,
                             title="Embed Test Doc", source_metadata=None):
@@ -2025,6 +2051,140 @@ class TestEmbedStage:
         assert rows[0][0] == "PRE-EXISTING CHUNK TEXT", (
             f"pre-existing chunk must survive untouched; got {rows[0][0]!r}"
         )
+
+    def test_embed_injects_en_handles_sparse_only(self, stages_test_db, monkeypatch):
+        """Flag on: sparse vectors carry title_en tokens; the DENSE content strings
+        and stored chunk text do NOT (spec 2026-07-26 §3.2 divergence callout).
+
+        Also pins the flag-off inverse: no injected weights at all, and dense
+        content is byte-identical across the two runs (dense is invariant to
+        the flag, so turning it on can never force a re-embed).
+        """
+        dense_runs = []
+
+        def fake_embed(texts):
+            dense_runs.append(list(texts))
+            return [[0.01] * 1536 for _ in texts]
+
+        monkeypatch.setattr("worker.stages.embed._embed_texts", fake_embed)
+
+        from psycopg.types.json import Jsonb
+        page_boundaries = [{"page": 1, "end_pos": len(_ES_EMBED_TEXT)}]
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute(
+                """INSERT INTO keyword_corpus_stats (id, n_chunks, avgdl, k1, b, sparse_dim)
+                   VALUES (1, 100, 250.0, 1.5, 0.75, 1000000)
+                   ON CONFLICT (id) DO NOTHING"""
+            )
+            doc_id = _insert_embed_document(
+                conn, external_id="embed-es-handle-doc", language="es",
+                languages=["es"], title="Índice de Desigualdad",
+            )
+            conn.execute(
+                "UPDATE documents SET title_en = %s WHERE id = %s",
+                ("Urban Inequality Index", doc_id),
+            )
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, char_count, page_boundaries)
+                   VALUES (%s, %s, %s, %s)""",
+                (doc_id, _ES_EMBED_TEXT, len(_ES_EMBED_TEXT), Jsonb(page_boundaries)),
+            )
+            # Native summary drives the summary chunk; the curated en/long row is
+            # the handle source injected into that chunk only.
+            conn.execute(
+                """INSERT INTO document_summaries (document_id, language, kind, text, source)
+                   VALUES (%s, 'es', 'long', 'Resumen del indice de desigualdad urbana.', 'generated'),
+                          (%s, 'en', 'long', 'Measures unequal access to services.', 'external')""",
+                (doc_id, doc_id),
+            )
+            conn.commit()
+
+        from app.config import get_settings
+        from worker.stages.embed import run
+
+        # --- Baseline: flag OFF (default) ---
+        get_settings.cache_clear()
+        assert run(doc_id) is None
+        with psycopg.connect(stages_test_db) as conn:
+            off_vectors = dict(
+                conn.execute(
+                    "SELECT legacy_chunk_id, sparse::text FROM document_chunks "
+                    "WHERE document_id=%s",
+                    (doc_id,),
+                ).fetchall()
+            )
+            off_vocab = dict(
+                conn.execute(
+                    "SELECT token, token_id FROM keyword_vocab "
+                    "WHERE token IN ('inequ', 'unequ')"
+                ).fetchall()
+            )
+        for token_id in off_vocab.values():
+            for chunk_id, sparse_text in off_vectors.items():
+                assert token_id not in _sparse_dims(sparse_text), (
+                    f"flag off must inject nothing, but {chunk_id} carries a handle token"
+                )
+
+        # --- Flag ON ---
+        monkeypatch.setenv("SPARSE_EN_HANDLES", "true")
+        get_settings.cache_clear()
+        assert run(doc_id) is None
+
+        assert len(dense_runs) == 2, f"expected one dense call per run, got {len(dense_runs)}"
+        # Dense NEVER sees the handle...
+        assert all("Urban Inequality Index" not in t for t in dense_runs[1]), (
+            "handle text leaked into the dense embedding content string"
+        )
+        assert all("unequal access" not in t for t in dense_runs[1])
+        # ...and is byte-identical to the flag-off run (no re-embed forced).
+        assert dense_runs[1] == dense_runs[0], (
+            "dense content must be invariant to SPARSE_EN_HANDLES"
+        )
+
+        with psycopg.connect(stages_test_db) as conn:
+            # Stored chunk text unchanged.
+            assert conn.execute(
+                "SELECT count(*) FROM document_chunks WHERE document_id=%s AND text ILIKE %s",
+                (doc_id, "%urban inequality%"),
+            ).fetchone()[0] == 0, "handle text leaked into document_chunks.text"
+            # node_metadata unchanged.
+            assert conn.execute(
+                "SELECT count(*) FROM document_chunks WHERE document_id=%s "
+                "AND node_metadata::text ILIKE %s",
+                (doc_id, "%urban inequality%"),
+            ).fetchone()[0] == 0, "handle text leaked into node_metadata"
+            on_rows = conn.execute(
+                "SELECT legacy_chunk_id, chunk_index, sparse::text FROM document_chunks "
+                "WHERE document_id=%s",
+                (doc_id,),
+            ).fetchall()
+            vocab = dict(
+                conn.execute(
+                    "SELECT token, token_id FROM keyword_vocab "
+                    "WHERE token IN ('inequ', 'unequ')"
+                ).fetchall()
+            )
+
+        assert "inequ" in vocab, "title_en tokens must reach the vocab"
+        assert "unequ" in vocab, "the English long summary must reach the vocab"
+        assert len(on_rows) >= 2
+
+        summary_rows = [r for r in on_rows if r[1] == -1]
+        text_rows = [r for r in on_rows if r[1] != -1]
+        assert len(summary_rows) == 1 and text_rows
+
+        for chunk_id, _, sparse_text in on_rows:
+            assert vocab["inequ"] in _sparse_dims(sparse_text), (
+                f"title_en must be weighted into every chunk; missing from {chunk_id}"
+            )
+        assert vocab["unequ"] in _sparse_dims(summary_rows[0][2]), (
+            "the English long summary must be weighted into the summary chunk"
+        )
+        for chunk_id, _, sparse_text in text_rows:
+            assert vocab["unequ"] not in _sparse_dims(sparse_text), (
+                f"the English long summary belongs to the summary chunk only; {chunk_id} has it"
+            )
 
 
 class TestEmbedStageCohere:

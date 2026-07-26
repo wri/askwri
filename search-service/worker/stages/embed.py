@@ -55,6 +55,20 @@ def _recompute_boundaries_on_text(boundaries: list, original_text: str, normaliz
 _CONVERT_FN = None
 
 
+def _indexed_title(doc) -> str:
+    """The title this stage actually indexes into node metadata.
+
+    Prefer Publication Title (matches indexing.load_csv_metadata:59), fall back
+    to Article Title, then the stored documents.title. Single definition shared
+    by _build_nodes_for_doc and the English-handle fetch so the handle's
+    "is title_en redundant?" comparison can never drift from what is indexed
+    (app/sparse_handles.py's _HANDLES_SQL mirrors the same three-way choice).
+    """
+    src_meta = doc["source_metadata"] or {}
+    src = (src_meta.get("metadata") or {}) if isinstance(src_meta, dict) else {}
+    return src.get("Publication Title") or src.get("Article Title") or doc["title"] or ""
+
+
 def _build_nodes_for_doc(doc, full_text: str, boundaries: list, summary: str):
     """Single-document version of app.indexing.build_nodes (same params/metadata).
 
@@ -71,9 +85,7 @@ def _build_nodes_for_doc(doc, full_text: str, boundaries: list, summary: str):
 
     src_meta = doc["source_metadata"] or {}
     src = (src_meta.get("metadata") or {}) if isinstance(src_meta, dict) else {}
-    # title: prefer Publication Title (matches indexing.load_csv_metadata:59),
-    # fallback to Article Title, then the stored documents.title.
-    title = src.get("Publication Title") or src.get("Article Title") or doc["title"] or ""
+    title = _indexed_title(doc)
     # authors: full value (indexing.build_nodes restores full in the per-chunk
     # node.metadata.update at line 365; the Document-level [:100] is only the
     # embedding-time Document metadata, not the stored chunk metadata).
@@ -161,6 +173,22 @@ def run(document_id):
             """SELECT text FROM document_summaries WHERE document_id=%s
                AND language=%s AND kind='long'""", (document_id, doc["language"]),
         ).fetchone()
+        # English handles (spec 2026-07-26 §3): the incremental counterpart of
+        # scripts/build_sparse_keyword.py's injection. Without it a re-ingest of
+        # a non-EN doc would silently strip the handles the backfill added.
+        # SPARSE ONLY — see the _sparse_content wrapper below.
+        en_handle = None
+        if get_settings().sparse_en_handles and doc["language"] != "en":
+            en_row = conn.execute(
+                """SELECT text FROM document_summaries
+                   WHERE document_id=%s AND language='en' AND kind='long'""",
+                (document_id,),
+            ).fetchone()
+            en_handle = {
+                "indexed_title": _indexed_title(doc),
+                "title_en": doc.get("title_en") or "",
+                "en_summary": en_row[0] if en_row else "",
+            }
         index_text = full_text
         summary = summary_row[0] if summary_row else ""
         if doc["language"] == "zh":
@@ -200,9 +228,27 @@ def run(document_id):
         ).fetchone()
         if stats:
             n_chunks, avgdl = stats
-            token_lists = [
-                tokenize(n.get_content(metadata_mode=MetadataMode.EMBED)) for n in nodes
-            ]
+            from app.sparse_handles import handle_text
+
+            def _sparse_content(n):
+                """Tokenization string for ONE chunk — diverges from `contents`.
+
+                The English handle is appended HERE and nowhere else: `contents`
+                (dense), node.text (stored) and node_metadata stay untouched, so
+                turning the flag on never forces a dense re-embed (spec §3.2).
+                Summary chunk detected by chunk_index == -1, the same signal
+                scripts/build_sparse_keyword.py uses.
+                """
+                base = n.get_content(metadata_mode=MetadataMode.EMBED)
+                if not en_handle:
+                    return base
+                extra = handle_text(
+                    en_handle["indexed_title"], en_handle,
+                    is_summary_chunk=n.metadata.get("chunk_index") == -1,
+                )
+                return f"{base}\n{extra}" if extra else base
+
+            token_lists = [tokenize(_sparse_content(n)) for n in nodes]
             doc_tokens = sorted({t for toks in token_lists for t in toks})
             # Insert only genuinely-new tokens: ON CONFLICT burns one identity
             # value per PROPOSED row, so proposing every distinct token of every
