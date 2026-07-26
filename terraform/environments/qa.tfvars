@@ -53,6 +53,15 @@ search_service_environment_variables = {
   "WORKERS"     = "1"
 }
 
+# Ingestion Worker Environment Variables
+# SPARSE_EN_HANDLES must match the sparse-backfill operator's setting
+# (docs/runbooks/qa-push-deploy.md Step 3) — qa's corpus was rebuilt flag-on
+# 2026-07-26; without this, the worker's next re-ingest of a non-EN document
+# would strip that document's English handles.
+ingestion_worker_environment_variables = {
+  "SPARSE_EN_HANDLES" = "true"
+}
+
 # =============================================================================
 # S3 Documents Configuration (QA)
 # =============================================================================

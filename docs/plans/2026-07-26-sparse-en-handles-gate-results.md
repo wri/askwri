@@ -40,8 +40,33 @@ and P/F1 moved +0.1/+0.3 at the existing 0.09 floor on this corpus; local
 floor values don't transfer to qa (different corpus + deployed Bedrock path),
 and the qa deploy runbook already mandates its own derivation.
 
-**Status:** mechanism validated on the local corpus. The qa deploy remains a
-separately gated exercise: apply qa `title_en` repairs → set
-`SPARSE_EN_HANDLES=true` in backfill shell AND ingestion-worker env (two
-terraform surfaces) → flag-on rebuild (worker idle) → capture/analyze cite
-scores → floor config → eval:cite at the derived floor.
+**Status:** mechanism validated on the local corpus, and **ACTIVATED ON qa
+2026-07-26 (~20:32 UTC)**:
+
+- All three `title_en` repairs applied to qa RDS (provenance `human`; qa
+  needed all three — see the executed stamp in
+  `2026-07-26-title-en-repairs-qa-deferred.md`).
+- Flag-on backfill committed against qa: 27,878 vectors, 0 NULL, vocab
+  233,945, avgdl 200.4. `12 inject a title handle, 29 an English summary` —
+  the lower title count vs local is CORRECT (qa zh docs' `title_en` equals
+  their already-English indexed title, so the dedup skips them); handles
+  verified present in `_3387`'s stored vectors. Worker scaled to 0 for the
+  window and restored after.
+- Floor re-derived on qa through the live Bedrock path: **0.09 HOLDS**
+  (R 83.3 at 0.09; recall cliff to 78.8 at 0.10). No config change. Non-EN
+  smoke targets rerank at 0.81–0.94.
+- Worker env flag: `SPARSE_EN_HANDLES=true` recorded in
+  `terraform/environments/qa.tfvars` (`ingestion_worker_environment_variables`
+  — the non-secret surface; the runbook's `INGESTION_WORKER_ENV` secret is
+  for actual secrets).
+
+**qa latency exercise (2026-07-26, post-activation, deployed endpoint
+`qa.askwri-app.org/api/llamaindex`, 20 queries × 2 passes):** multilingual-
+surfacing queries cost the same as English-only controls — warm p50 1122ms
+(topical, non-EN targets) vs 1106ms (English controls); cold p50 1353 vs
+1243. EMF per-stage (n=40): total 1085ms avg = rerank 604 + stage1 479
+(dense 473 ∥ sparse 265 — the handle-injected sparse lane sits entirely
+inside the dense lane's shadow; zero critical-path cost, as designed).
+18/20 queries surfaced non-EN documents, 9 of them at final rank ≤ 3.
+
+Production remains un-activated (separate corpus, separate exercise).

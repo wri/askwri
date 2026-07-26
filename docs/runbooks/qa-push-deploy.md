@@ -161,12 +161,16 @@ Notes:
   races the vocab/stats writes). On first deploy there is no worker yet; for later
   refreshes, scale `askwri-app-qa-ingestion-worker` to 0 first.
 
-**`SPARSE_EN_HANDLES`** (spec 2026-07-26): if this flag is on, it must be set
-consistently in **both** the backfill operator's shell above **and** the
-ingestion-worker task env (`INGESTION_WORKER_ENV` / `ingestion_worker_secret_env`
-in the table above — a different surface from the search service's
-`SEARCH_SERVICE_ENV`/`search_service_secret_env`) — otherwise the next re-ingest
-silently strips the handles the backfill just added. Two other gotchas:
+**`SPARSE_EN_HANDLES`** (spec 2026-07-26; **qa activated 2026-07-26** — flag-on
+backfill executed, floor 0.09 re-confirmed, see
+`docs/plans/2026-07-26-sparse-en-handles-gate-results.md`): if this flag is on,
+it must be set consistently in **both** the backfill operator's shell above
+**and** the ingestion-worker task env — otherwise the next re-ingest silently
+strips the handles the backfill just added. The worker-side setting lives in
+`terraform/environments/<env>.tfvars` → `ingestion_worker_environment_variables`
+(non-secret; this is where qa sets it). The `INGESTION_WORKER_ENV` secret JSON
+also lands in the same task env but is for actual secrets — don't put the flag
+in both. Two other gotchas:
 
 - `scripts/sparse_parity_check.py` only guards the env of the process running it.
   After a flag-on rebuild, running parity from a flag-off shell will legitimately
