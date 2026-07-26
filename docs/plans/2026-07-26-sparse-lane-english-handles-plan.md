@@ -678,7 +678,11 @@ def test_en_handles_injected_flag_on(build_test_db, monkeypatch):
     assert rolled == base
 ```
 
-Fill the `...` chunk INSERTs by copying the existing fixture's `document_chunks` INSERT columns (`legacy_chunk_id`, `chunk_index`, `unit_type`, `text`, `node_metadata`, `corpus_order`, …). The summary chunk needs `node_metadata` containing `{"doc_id": "doc_es", "title": "Índice de Desigualdad", "chunk_index": -1}` and `chunk_index=-1`.
+Fill the `...` chunk INSERTs by copying the existing fixture's `document_chunks` INSERT columns (`legacy_chunk_id`, `chunk_index`, `unit_type`, `text`, `node_metadata`, `corpus_order`, …). **The crux of the test lives in `node_metadata`** — the injection looks up handles by `node_metadata->>'doc_id'` and detects the summary chunk by `node_metadata->>'chunk_index' == -1`, so seed exactly:
+- text chunk: `chunk_index=0`, `unit_type='text'`, `node_metadata = {"doc_id": "doc_es", "title": "Índice de Desigualdad", "chunk_index": 0}`
+- summary chunk: `chunk_index=-1`, `unit_type='summary'`, `node_metadata = {"doc_id": "doc_es", "title": "Índice de Desigualdad", "chunk_index": -1}`
+
+If the metadata lacks `doc_id`, injection silently no-ops and the flag-on assertion fails for the wrong reason.
 
 Run: `cd search-service && ./venv/bin/python -m pytest tests/test_build_sparse_script.py -v -k en_handles`
 Expected: FAIL (flag has no effect yet). (Self-skips without `DATABASE_URL` — run against the local docker DB.)
