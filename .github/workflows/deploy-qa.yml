@@ -48,6 +48,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Gating: don't deploy lint-broken code (issue #234).
+      - name: Lint
+        run: npm run lint
+
       - name: Run tests
         run: npm run test:ci
 

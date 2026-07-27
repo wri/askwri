@@ -21,8 +21,12 @@ export default [
       'evaluation/results/**',
       // Stray agent worktrees (e.g. .claude/worktrees/) are not part of this
       // project's lint surface — keep them out of `eslint .` without deleting
-      // the directories.
+      // the directories. `.worktrees/` is the convention .gitignore documents
+      // for isolated feature work; without it `npm run lint` reports hundreds
+      // of "not found in any of the provided project(s)" parse errors for a
+      // checkout that is doing nothing wrong.
       '.claude/worktrees/**',
+      '.worktrees/**',
     ],
   },
   {
