@@ -94,7 +94,9 @@ jobs:
         with:
           images: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}
           tags: |
-            type=sha,prefix=
+            # format=long so the tag IS github.sha exactly — the Terraform
+            # image_tag var is passed that same value, with no reconstruction.
+            type=sha,format=long,prefix=
             type=raw,value=latest
 
       - name: Build and push Docker image
@@ -141,7 +143,9 @@ jobs:
         with:
           images: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service
           tags: |
-            type=sha,prefix=
+            # format=long so the tag IS github.sha exactly — the Terraform
+            # image_tag var is passed that same value, with no reconstruction.
+            type=sha,format=long,prefix=
             type=raw,value=latest
 
       - name: Build and push Docker image
@@ -195,6 +199,7 @@ jobs:
         run: |
           terraform plan \
             -var-file="../environments/${{ env.ENVIRONMENT }}.tfvars" \
+            -var="image_tag=${{ github.sha }}" \
             -out=tfplan
 
       - name: Terraform Apply

@@ -291,7 +291,7 @@ resource "aws_ecs_task_definition" "app" {
     # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
     {
       name      = "init-volumes"
-      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      image     = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
       essential = false
       user      = "0"
       command   = ["sh", "-c", "chown 1001:1001 /tmp/askWRI_docs /app/.next/cache"]
@@ -320,7 +320,7 @@ resource "aws_ecs_task_definition" "app" {
     },
     {
       name  = "${var.project_name}-${var.environment}"
-      image = "${aws_ecr_repository.app.repository_url}:latest"
+      image = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
 
       # Security hardening:
       # - readonlyRootFilesystem prevents attackers from dropping payloads onto disk.
@@ -614,7 +614,7 @@ resource "aws_ecs_task_definition" "search_service" {
     # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
     {
       name      = "init-volumes"
-      image     = "${aws_ecr_repository.search_service.repository_url}:latest"
+      image     = "${aws_ecr_repository.search_service.repository_url}:${var.image_tag}"
       essential = false
       user      = "0"
       command   = ["sh", "-c", "mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache/hf_hub && chown -R 1000:1000 /tmp"]
@@ -638,7 +638,7 @@ resource "aws_ecs_task_definition" "search_service" {
     },
     {
       name  = "${var.project_name}-${var.environment}-search-service"
-      image = "${aws_ecr_repository.search_service.repository_url}:latest"
+      image = "${aws_ecr_repository.search_service.repository_url}:${var.image_tag}"
 
       readonlyRootFilesystem = true
       privileged             = false
@@ -923,7 +923,7 @@ resource "aws_ecs_task_definition" "ingestion_worker" {
     # Required because Fargate initialises ephemeral volumes as root:root 755.
     {
       name      = "init-volumes"
-      image     = "${aws_ecr_repository.search_service.repository_url}:latest"
+      image     = "${aws_ecr_repository.search_service.repository_url}:${var.image_tag}"
       essential = false
       user      = "0"
       command   = ["sh", "-c", "chown -R 1000:1000 /tmp"]
@@ -947,7 +947,7 @@ resource "aws_ecs_task_definition" "ingestion_worker" {
     },
     {
       name    = "${var.project_name}-${var.environment}-ingestion-worker"
-      image   = "${aws_ecr_repository.search_service.repository_url}:latest"
+      image   = "${aws_ecr_repository.search_service.repository_url}:${var.image_tag}"
       command = ["python", "-m", "worker.main"]
 
       readonlyRootFilesystem = true
