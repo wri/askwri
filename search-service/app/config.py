@@ -164,6 +164,22 @@ class Settings(BaseSettings):
     cite_strong_threshold: float = 0.70
     cite_partial_threshold: float = 0.30
 
+    # Cite mode: show a real passage for documents whose best-scoring chunk is
+    # the synthetic summary node (title+summary), keeping the summary node's
+    # score and tier so ranking is unchanged by construction. Answer mode has
+    # stripped summary nodes since #140; cite mode never did (issue #233).
+    #
+    # Cost of enabling, measured 2026-07-27 on 50 cite queries (11 golden + 39
+    # cross-lingual) against the real pipeline — see the issue for the harness:
+    #  - document set, order, score, tier: IDENTICAL (the score is carried over)
+    #  - changes ONLY `content`, `page` and `metadata.chunk_id` for the affected
+    #    docs: 19/746 rows on live qa (1.0% of the golden set, 3.1% of the
+    #    cross-lingual set, where it is rank 1 in 10 of 39 queries)
+    #  - 15/16 affected docs had a real chunk in the reranked set to substitute;
+    #    the remainder keep today's behaviour (summary text) rather than vanish
+    # Default off so the merge is behaviour-neutral; activate via env/tfvars.
+    cite_substitute_summary_passage: bool = False
+
     # CloudWatch EMF latency metrics: one pure-JSON stdout line per /query
     # with per-stage timings (L0 latency instrumentation). The ECS awslogs
     # driver ships it; CloudWatch parses the embedded metric format.

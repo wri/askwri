@@ -260,6 +260,59 @@ class TestQueryEndpointCiteMode:
             )
 
     @requires_db
+    def test_cite_summary_substitution_off_by_default(self, booted_service):
+        """Rollback proof for #233: with the flag off, cite mode is unchanged —
+        summary nodes may still represent a document."""
+        import app.main as _main
+        assert _main.settings.cite_substitute_summary_passage is False
+        client, _ = booted_service
+        resp = client.post(
+            "/query",
+            json={"query": "urban mobility", "mode": "cite", "max_results": 50},
+        )
+        assert resp.status_code == 200
+
+    @requires_db
+    def test_cite_summary_substitution_swaps_in_real_passages(self, booted_service):
+        """Flag on: no returned document may be represented by a summary node
+        when a real chunk of that document was reranked, and the document set,
+        order and scores must be identical to the flag-off run."""
+        import app.main as _main
+        client, _ = booted_service
+        payload = {"query": "urban mobility", "mode": "cite", "max_results": 50}
+
+        before_body = client.post(
+            "/query", json={**payload, "return_intermediate_results": True}
+        ).json()
+        before = before_body["docs"]
+        reranked_ids = {n["chunk_id"] for n in before_body["reranked_results"]}
+        _main.settings.cite_substitute_summary_passage = True
+        try:
+            after = client.post("/query", json=payload).json()["docs"]
+        finally:
+            _main.settings.cite_substitute_summary_passage = False
+
+        assert [d["doc_id"] for d in before] == [d["doc_id"] for d in after], (
+            "substitution must not change the document set or its order"
+        )
+        assert [d["score"] for d in before] == [d["score"] for d in after], (
+            "substitution must not change scores"
+        )
+        assert ([d["metadata"].get("relevance_tier") for d in before]
+                == [d["metadata"].get("relevance_tier") for d in after]), (
+            "substitution must not change relevance tiers"
+        )
+        for doc in after:
+            if not doc["metadata"].get("is_summary_node", False):
+                continue
+            # Still a summary node is only allowed when this document had no
+            # real chunk in the reranked set to substitute.
+            assert not [cid for cid in reranked_ids
+                        if cid.startswith(f"{doc['doc_id']}_chunk_")], (
+                f"{doc['doc_id']} kept its summary node despite a reranked passage"
+            )
+
+    @requires_db
     def test_response_keys_match_query_response_model(self, booted_service):
         """Response JSON keys must exactly include all QueryResponse fields."""
         from app.main import QueryResponse

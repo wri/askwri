@@ -163,6 +163,7 @@ Once running: http://localhost:8000/docs
 | `RERANK_CANDIDATES` | `100` | Fused candidates sent to the Bedrock Rerank API (cost/latency scale with count) |
 | `CITE_RERANK_PER_DOC_CAP` | `2` | Max chunks per doc in the cite-mode rerank candidate set (doc-coverage lever; answer mode uncapped) |
 | `CITE_LOGIT_FLOOR` | `0.10` | Cite-mode relevance floor on the 0–1 rerank scale (derived 2026-07-22; re-derive with `scripts/capture_cite_scores.py` + `analyze_cite_scores.py` after candidate-pool changes) |
+| `CITE_SUBSTITUTE_SUMMARY_PASSAGE` | `false` | Cite mode: show a real passage for documents whose best chunk is the synthetic summary node, carrying its score and tier over (issue #233). Ranking is unchanged by construction; only `content`/`page`/`chunk_id` move, for ~1% of golden-set and ~3% of cross-lingual result rows |
 | `PARSE_BACKEND` | `pypdf` | Worker parse stage: `pypdf` (text layer, validation oracle) or `mistral` (Mistral OCR markdown, per-page; ratified for Phase C, default flips after the Phase 1 gate) |
 | `MISTRAL_API_KEY` | — | Required when `PARSE_BACKEND=mistral` |
 | `MISTRAL_OCR_MODEL` | `mistral-ocr-latest` | Mistral OCR model id |
