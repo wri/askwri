@@ -14,7 +14,9 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
     crypto.subtle.digest('SHA-256', encoder.encode(b)),
   ])
   const toHex = (buf: ArrayBuffer) =>
-    Array.from(new Uint8Array(buf), (byte) => byte.toString(16).padStart(2, '0')).join('')
+    Array.from(new Uint8Array(buf), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('')
   const hexA = toHex(digestA)
   const hexB = toHex(digestB)
   let diff = 0
@@ -46,7 +48,10 @@ export async function proxy(req: NextRequest) {
   if (token && (await verifySession(token))) return NextResponse.next()
 
   if (pathname.startsWith('/api/')) {
-    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+    return NextResponse.json(
+      { ok: false, error: 'unauthorized' },
+      { status: 401 },
+    )
   }
   const loginUrl = req.nextUrl.clone()
   loginUrl.pathname = '/admin/login'

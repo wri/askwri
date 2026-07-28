@@ -20,7 +20,9 @@ export function slugify(name: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-export async function listCollectionsWithCounts(): Promise<CollectionWithCount[]> {
+export async function listCollectionsWithCounts(): Promise<
+  CollectionWithCount[]
+> {
   return AppDataSource.query(`
     SELECT c.id, c.name, c.slug, c.description,
            count(dc.document_id)::int AS "documentCount"
@@ -39,7 +41,8 @@ export async function createCollection(
   const repo = AppDataSource.getRepository(Collection)
   const slug = slugify(name)
   if (!slug) return { error: 'name must contain letters or numbers' }
-  if (await repo.findOne({ where: { slug } })) return { error: 'a collection with this slug exists' }
+  if (await repo.findOne({ where: { slug } }))
+    return { error: 'a collection with this slug exists' }
   const collection = await repo.save(repo.create({ name, slug, description }))
   await writeAudit({
     ...auditActor(identity),
@@ -62,7 +65,11 @@ export async function updateCollection(
   const before: Record<string, any> = {}
   const after: Record<string, any> = {}
   for (const key of ['name', 'description'] as const) {
-    if (key in patch && patch[key] !== undefined && patch[key] !== collection[key]) {
+    if (
+      key in patch &&
+      patch[key] !== undefined &&
+      patch[key] !== collection[key]
+    ) {
       before[key] = collection[key]
       after[key] = patch[key]
       ;(collection as any)[key] = patch[key]
@@ -95,7 +102,8 @@ export async function addDocumentsToCollection(
   documentIds: string[],
   identity: AdminIdentity,
 ): Promise<{ added: number } | { error: string }> {
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (!documentIds.every((id) => typeof id === 'string' && UUID_RE.test(id))) {
     return { error: 'documentIds must be UUIDs' }
   }

@@ -29,6 +29,10 @@ describe('mapDocumentToCatalogItem', () => {
     const doc = { s3Key: 'x.pdf', sourceMetadata: null }
     const item = mapDocumentToCatalogItem(doc as any)
     expect(item.file_name).toBe('x.pdf')
-    expect(item.meta).toEqual({ file_path: 'x.pdf', metadata: '{}', summary: '' })
+    expect(item.meta).toEqual({
+      file_path: 'x.pdf',
+      metadata: '{}',
+      summary: '',
+    })
   })
 })

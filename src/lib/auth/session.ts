@@ -25,7 +25,9 @@ export async function signSession(payload: SessionPayload): Promise<string> {
     .sign(secretKey())
 }
 
-export async function verifySession(token: string): Promise<SessionPayload | null> {
+export async function verifySession(
+  token: string,
+): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, secretKey())
     const { userId, username, role } = payload as Record<string, unknown>

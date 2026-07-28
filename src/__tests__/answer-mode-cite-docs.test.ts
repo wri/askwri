@@ -38,11 +38,7 @@ function buildPayload(
 
 describe('extractCiteDocIds', () => {
   it('returns doc ids from selected rows', () => {
-    const docs = [
-      { id: 'doc_a' },
-      { id: 'doc_b' },
-      { id: 'doc_c' },
-    ]
+    const docs = [{ id: 'doc_a' }, { id: 'doc_b' }, { id: 'doc_c' }]
     expect(extractCiteDocIds(docs)).toEqual(['doc_a', 'doc_b', 'doc_c'])
   })
 
@@ -215,8 +211,22 @@ describe('selectedRows → citeDocs data flow', () => {
 
   it('passes all rows when fewer than 20 selected', () => {
     const selectedRows = [
-      { id: 'doc_a', publication_name: 'A', author: '', summary: '', relevance: '', how_relevant: '' },
-      { id: 'doc_b', publication_name: 'B', author: '', summary: '', relevance: '', how_relevant: '' },
+      {
+        id: 'doc_a',
+        publication_name: 'A',
+        author: '',
+        summary: '',
+        relevance: '',
+        how_relevant: '',
+      },
+      {
+        id: 'doc_b',
+        publication_name: 'B',
+        author: '',
+        summary: '',
+        relevance: '',
+        how_relevant: '',
+      },
     ]
     const citeDocs = selectedRows.slice(0, 20)
     expect(citeDocs).toHaveLength(2)

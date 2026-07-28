@@ -6,16 +6,48 @@ import ChakraProvider from '@/app/Providers/ChakraProvider'
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
   useParams: () => ({}),
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    refresh: jest.fn(),
+  }),
   usePathname: () => '/admin/tags',
   useSearchParams: () => ({ get: () => null }),
 }))
 
 const mockTags = [
-  { id: 'tag-1', facet: 'program', valueId: 'Cities', taxonomyVersion: 'v1', acceptedCount: 169, suggestedCount: 0 },
-  { id: 'tag-2', facet: 'office', valueId: 'WRI India', taxonomyVersion: 'v1', acceptedCount: 5, suggestedCount: 0 },
-  { id: 'tag-3', facet: 'topic', valueId: 'Transport decarbonization', taxonomyVersion: 'v1', acceptedCount: 148, suggestedCount: 0 },
-  { id: 'tag-4', facet: 'doc_type', valueId: 'Report', taxonomyVersion: 'v1', acceptedCount: 10, suggestedCount: 0 },
+  {
+    id: 'tag-1',
+    facet: 'program',
+    valueId: 'Cities',
+    taxonomyVersion: 'v1',
+    acceptedCount: 169,
+    suggestedCount: 0,
+  },
+  {
+    id: 'tag-2',
+    facet: 'office',
+    valueId: 'WRI India',
+    taxonomyVersion: 'v1',
+    acceptedCount: 5,
+    suggestedCount: 0,
+  },
+  {
+    id: 'tag-3',
+    facet: 'topic',
+    valueId: 'Transport decarbonization',
+    taxonomyVersion: 'v1',
+    acceptedCount: 148,
+    suggestedCount: 0,
+  },
+  {
+    id: 'tag-4',
+    facet: 'doc_type',
+    valueId: 'Report',
+    taxonomyVersion: 'v1',
+    acceptedCount: 10,
+    suggestedCount: 0,
+  },
 ]
 
 const renderPage = (role: string = 'admin') => {

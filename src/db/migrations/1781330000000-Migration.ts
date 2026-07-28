@@ -7,7 +7,9 @@ export class Migration1781330000000 implements MigrationInterface {
     // Provenance tracking for metadata fields: maps field name -> 'external'|'llm'|'human'.
     // The parse stage reads this to decide whether to overwrite on re-ingest
     // (overwrite only if source is NULL or 'llm'; never touch 'external'/'human').
-    await q.query(`ALTER TABLE "documents" ADD COLUMN "metadata_source" jsonb NOT NULL DEFAULT '{}'::jsonb`)
+    await q.query(
+      `ALTER TABLE "documents" ADD COLUMN "metadata_source" jsonb NOT NULL DEFAULT '{}'::jsonb`,
+    )
 
     // Backfill migrated docs (source_metadata IS NOT NULL): all fields came from the CSV → 'external'.
     await q.query(`
@@ -34,6 +36,8 @@ export class Migration1781330000000 implements MigrationInterface {
   }
 
   public async down(q: QueryRunner): Promise<void> {
-    await q.query(`ALTER TABLE "documents" DROP COLUMN IF EXISTS "metadata_source"`)
+    await q.query(
+      `ALTER TABLE "documents" DROP COLUMN IF EXISTS "metadata_source"`,
+    )
   }
 }

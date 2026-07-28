@@ -44,6 +44,8 @@ export class Migration1781300000000 implements MigrationInterface {
       ALTER TABLE "ingestion_jobs"
       ADD CONSTRAINT "ingestion_jobs_document_id_fkey"
       FOREIGN KEY ("document_id") REFERENCES "documents"("id") ON DELETE SET NULL`)
-    await queryRunner.query(`DROP INDEX IF EXISTS "ingestion_jobs_one_open_per_doc"`)
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "ingestion_jobs_one_open_per_doc"`,
+    )
   }
 }

@@ -24,10 +24,14 @@ export async function POST(req: NextRequest) {
   const { identity, response } = await requireIdentity(req, 'admin')
   if (response) return response
   try {
-    const { username, email, password, role } = (await req.json().catch(() => ({}))) ?? {}
+    const { username, email, password, role } =
+      (await req.json().catch(() => ({}))) ?? {}
     if (!username || !password || (role !== 'admin' && role !== 'editor')) {
       return NextResponse.json(
-        { ok: false, error: 'username, password, and role (admin|editor) are required' },
+        {
+          ok: false,
+          error: 'username, password, and role (admin|editor) are required',
+        },
         { status: 400 },
       )
     }
@@ -49,13 +53,20 @@ export async function POST(req: NextRequest) {
       action: 'create',
       entityType: 'user',
       entityId: user.id,
-      after: { username: user.username, email: user.email ?? null, role: user.role },
+      after: {
+        username: user.username,
+        email: user.email ?? null,
+        role: user.role,
+      },
     })
     return NextResponse.json({ ok: true, user })
   } catch (err: any) {
     // Unique violation on users.username (pg error 23505)
     if (err?.code === '23505' || err?.driverError?.code === '23505') {
-      return NextResponse.json({ ok: false, error: 'username already exists' }, { status: 409 })
+      return NextResponse.json(
+        { ok: false, error: 'username already exists' },
+        { status: 409 },
+      )
     }
     return internalError(err)
   }

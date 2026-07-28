@@ -33,13 +33,19 @@ describe('proxy auth gate', () => {
   })
 
   it('lets a valid session through', async () => {
-    const token = await signSession({ userId: 'u1', username: 'a', role: 'editor' })
+    const token = await signSession({
+      userId: 'u1',
+      username: 'a',
+      role: 'editor',
+    })
     const res = await proxy(req('/admin/review', { cookie: token }))
     expect(res.status).toBe(200)
   })
 
   it('lets the bearer token through on /api/import-documents', async () => {
-    const res = await proxy(req('/api/import-documents', { bearer: 'test-api-token' }))
+    const res = await proxy(
+      req('/api/import-documents', { bearer: 'test-api-token' }),
+    )
     expect(res.status).toBe(200)
   })
 })

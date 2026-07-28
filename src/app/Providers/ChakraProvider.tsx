@@ -1,8 +1,6 @@
 'use client'
 
-import {
-  ChakraProvider as ChakraProviderComponent,
-} from '@chakra-ui/react'
+import { ChakraProvider as ChakraProviderComponent } from '@chakra-ui/react'
 import { designSystemStyles } from '@worldresources/wri-design-systems'
 
 const ChakraProvider = ({ children }: { children: React.ReactNode }) => (

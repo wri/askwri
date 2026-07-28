@@ -1,4 +1,3 @@
-
 import { render, screen } from '@testing-library/react'
 import HomePage from '@/app/page'
 import ChakraProvider from '@/app/Providers/ChakraProvider'

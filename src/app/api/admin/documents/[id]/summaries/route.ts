@@ -8,12 +8,19 @@ import { isUuid } from '../../../../../../lib/api-error'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const { identity, response } = await requireIdentity(req)
   if (response) return response
   try {
     const { id } = await params
-    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'invalid id' }, { status: 400 })
+    if (!isUuid(id))
+      return NextResponse.json(
+        { ok: false, error: 'invalid id' },
+        { status: 400 },
+      )
     const body = await req.json().catch(() => ({}))
     const { language, kind, text } = body ?? {}
     if (!language || !kind || typeof text !== 'string') {
@@ -23,12 +30,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       )
     }
     await initializeDatabase()
-    const result = await updateDocumentSummary(id, language, kind, text, identity!)
+    const result = await updateDocumentSummary(
+      id,
+      language,
+      kind,
+      text,
+      identity!,
+    )
     if (result === null) {
-      return NextResponse.json({ ok: false, error: 'summary not found' }, { status: 404 })
+      return NextResponse.json(
+        { ok: false, error: 'summary not found' },
+        { status: 404 },
+      )
     }
     if ('error' in result) {
-      return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
+      return NextResponse.json(
+        { ok: false, error: result.error },
+        { status: 400 },
+      )
     }
     return NextResponse.json({ ok: true, updated: result.updated })
   } catch (err) {

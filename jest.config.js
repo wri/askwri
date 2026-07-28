@@ -1,9 +1,9 @@
-const nextJest = require('next/jest');
+const nextJest = require('next/jest')
 
 const createJestConfig = nextJest({
   // Path to Next.js app
   dir: './',
-});
+})
 
 /** @type {import('jest').Config} */
 const customJestConfig = {
@@ -18,6 +18,6 @@ const customJestConfig = {
     '!src/**/*.d.ts',
     '!src/**/layout.tsx',
   ],
-};
+}
 
-module.exports = createJestConfig(customJestConfig);
+module.exports = createJestConfig(customJestConfig)

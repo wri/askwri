@@ -21,7 +21,11 @@ d('admin entities (DB integration)', () => {
   it('users entity maps the table', async () => {
     const repo = AppDataSource.getRepository(User)
     const u = await repo.save(
-      repo.create({ username: `t_${Date.now()}`, passwordHash: 'x', role: 'editor' }),
+      repo.create({
+        username: `t_${Date.now()}`,
+        passwordHash: 'x',
+        role: 'editor',
+      }),
     )
     expect(u.id).toBeTruthy()
     expect(u.active).toBe(true)

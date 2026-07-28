@@ -84,7 +84,9 @@ export class Migration1781320000000 implements MigrationInterface {
        FROM documents d
        WHERE document_summaries.document_id = d.id AND d.language IN ('zh','es','pt')`,
     )
-    await q.query(`ALTER TABLE "documents" DROP COLUMN IF EXISTS "date_published"`)
+    await q.query(
+      `ALTER TABLE "documents" DROP COLUMN IF EXISTS "date_published"`,
+    )
     await q.query(`ALTER TABLE "documents" DROP COLUMN IF EXISTS "url"`)
     await q.query(`ALTER TABLE "documents" DROP COLUMN IF EXISTS "authors"`)
     await q.query(`ALTER TABLE "documents" ADD COLUMN "abstract" text`)
