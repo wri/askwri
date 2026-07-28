@@ -20,7 +20,7 @@ rank-bm25>=0.2.2
 # scripts/build_sparse_keyword.py — not just a transitive of removed models)
 pandas>=2.3.3
 numpy>=1.26.4
-scipy>=1.14
+scipy>=1.18.0
 
 # HTTP client
 httpx>=0.28.1,<1.0.0
