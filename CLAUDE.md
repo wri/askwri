@@ -20,6 +20,10 @@ Terraform); S3 for PDFs and derived artifacts.
   (`npm run search-service` is broken locally — venv has no `pip` shim;
   `npm run search-service:stop` to kill)
 - `npm run test:python` (or `cd search-service && ./venv/bin/python -m pytest tests/ -v`) — Python tests
+- Python deps are PINNED: edit `search-service/requirements.in`, then run
+  `search-service/scripts/compile-requirements.sh` to regenerate the `.txt`
+  (compiles inside `python:3.12-slim` so pins match the deploy image). Never
+  hand-edit `requirements.txt`.
 - `npm run eval:cite` / `npm run eval:answer-retrieval` — retrieval evals (search-service must be running)
 - `./scripts/local-bootstrap.sh` — one-command local stack (docker pgvector Postgres
   \+ MinIO via `docker-compose.local.yml`, migrations, corpus, sparse backfill, bucket

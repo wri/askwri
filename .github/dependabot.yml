@@ -49,13 +49,11 @@ updates:
       runtime:
         patterns: ['*']
         update-types: ['minor', 'patch']
-    # NOTE: this ignore does NOT cover pip requirement-RANGE updates. The
-    # floors in requirements.txt are `>=` with no upper pin, so Dependabot
-    # raises them as "update requirement" rather than "version-update", and
-    # a major crossing slips through (#284 raised pytest >=8.0 to >=9.1.1).
-    # Harmless while the floors are unpinned — the image installs latest at
-    # build time either way — but do not read this rule as a major-version gate
-    # for Python.
+    # requirements.txt / requirements-dev.txt are pip-compile output (pinned,
+    # generated); requirements.in / requirements-dev.in are the sources.
+    # Dependabot edits the .in and regenerates the .txt. Regenerate by hand
+    # with search-service/scripts/compile-requirements.sh, which compiles
+    # inside python:3.12-slim so the pins match the deploy image.
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
