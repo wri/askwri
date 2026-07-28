@@ -27,7 +27,9 @@ async function readPassword(): Promise<string> {
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
   // Only a trailing newline is stripped — a password may legitimately end in
   // spaces, and trimming them would silently store a different credential.
-  return Buffer.concat(chunks).toString('utf8').replace(/\r?\n$/, '')
+  return Buffer.concat(chunks)
+    .toString('utf8')
+    .replace(/\r?\n$/, '')
 }
 
 async function main() {
@@ -55,10 +57,16 @@ async function main() {
   const passwordHash = await bcrypt.hash(password, 12)
   const existing = await repo.findOne({ where: { username } })
   if (existing) {
-    await repo.update(existing.id, { passwordHash, active: true, role: 'admin' })
+    await repo.update(existing.id, {
+      passwordHash,
+      active: true,
+      role: 'admin',
+    })
     console.log(`Reset password and re-activated admin '${username}'`)
   } else {
-    await repo.save(repo.create({ username, passwordHash, role: 'admin', active: true }))
+    await repo.save(
+      repo.create({ username, passwordHash, role: 'admin', active: true }),
+    )
     console.log(`Created admin user '${username}'`)
   }
   await AppDataSource.destroy()

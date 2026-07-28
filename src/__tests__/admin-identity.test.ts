@@ -11,7 +11,9 @@ jest.mock('@/db/queries/users', () => ({
   findUserById: jest.fn(),
 }))
 
-const mockFindUserById = findUserById as jest.MockedFunction<typeof findUserById>
+const mockFindUserById = findUserById as jest.MockedFunction<
+  typeof findUserById
+>
 
 beforeAll(() => {
   process.env.SESSION_SECRET = 'test-secret-test-secret-test-secret-1234'
@@ -37,19 +39,35 @@ describe('requireIdentity', () => {
   })
 
   it('accepts a valid session cookie', async () => {
-    const token = await signSession({ userId: 'u1', username: 'a', role: 'editor' })
+    const token = await signSession({
+      userId: 'u1',
+      username: 'a',
+      role: 'editor',
+    })
     const result = await requireIdentity(reqWith({ cookie: token }))
-    expect(result.identity).toEqual({ kind: 'user', userId: 'u1', username: 'a', role: 'editor' })
+    expect(result.identity).toEqual({
+      kind: 'user',
+      userId: 'u1',
+      username: 'a',
+      role: 'editor',
+    })
   })
 
   it('enforces admin role', async () => {
-    const token = await signSession({ userId: 'u1', username: 'a', role: 'editor' })
+    const token = await signSession({
+      userId: 'u1',
+      username: 'a',
+      role: 'editor',
+    })
     const result = await requireIdentity(reqWith({ cookie: token }), 'admin')
     expect(result.response?.status).toBe(403)
   })
 
   it('accepts the bearer token as admin', async () => {
-    const result = await requireIdentity(reqWith({ bearer: 'test-api-token' }), 'admin')
+    const result = await requireIdentity(
+      reqWith({ bearer: 'test-api-token' }),
+      'admin',
+    )
     expect(result.identity).toEqual({ kind: 'token', role: 'admin' })
   })
 
@@ -82,29 +100,62 @@ describe('requireIdentity', () => {
 
   it('401s when the session user no longer exists', async () => {
     mockFindUserById.mockResolvedValue(null)
-    const token = await signSession({ userId: 'u1', username: 'a', role: 'editor' })
+    const token = await signSession({
+      userId: 'u1',
+      username: 'a',
+      role: 'editor',
+    })
     const result = await requireIdentity(reqWith({ cookie: token }))
     expect(result.response?.status).toBe(401)
   })
 
   it('401s when the session user was deactivated', async () => {
-    mockFindUserById.mockResolvedValue({ id: 'u1', role: 'editor', active: false })
-    const token = await signSession({ userId: 'u1', username: 'a', role: 'editor' })
+    mockFindUserById.mockResolvedValue({
+      id: 'u1',
+      role: 'editor',
+      active: false,
+    })
+    const token = await signSession({
+      userId: 'u1',
+      username: 'a',
+      role: 'editor',
+    })
     const result = await requireIdentity(reqWith({ cookie: token }))
     expect(result.response?.status).toBe(401)
   })
 
   it('uses the DB role when it differs from the token role', async () => {
     // Token claims admin, DB says editor -> editor wins, admin check fails.
-    mockFindUserById.mockResolvedValue({ id: 'u1', role: 'editor', active: true })
-    const token = await signSession({ userId: 'u1', username: 'a', role: 'admin' })
+    mockFindUserById.mockResolvedValue({
+      id: 'u1',
+      role: 'editor',
+      active: true,
+    })
+    const token = await signSession({
+      userId: 'u1',
+      username: 'a',
+      role: 'admin',
+    })
     const result = await requireIdentity(reqWith({ cookie: token }), 'admin')
     expect(result.response?.status).toBe(403)
 
     // Token claims editor, DB says admin -> admin wins.
-    mockFindUserById.mockResolvedValue({ id: 'u1', role: 'admin', active: true })
-    const token2 = await signSession({ userId: 'u1', username: 'a', role: 'editor' })
+    mockFindUserById.mockResolvedValue({
+      id: 'u1',
+      role: 'admin',
+      active: true,
+    })
+    const token2 = await signSession({
+      userId: 'u1',
+      username: 'a',
+      role: 'editor',
+    })
     const result2 = await requireIdentity(reqWith({ cookie: token2 }), 'admin')
-    expect(result2.identity).toEqual({ kind: 'user', userId: 'u1', username: 'a', role: 'admin' })
+    expect(result2.identity).toEqual({
+      kind: 'user',
+      userId: 'u1',
+      username: 'a',
+      role: 'admin',
+    })
   })
 })

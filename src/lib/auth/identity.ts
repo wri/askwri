@@ -20,7 +20,9 @@ function timingSafeStringEqual(a: string, b: string): boolean {
   return timingSafeEqual(da, db)
 }
 
-export async function getIdentity(req: NextRequest): Promise<AdminIdentity | null> {
+export async function getIdentity(
+  req: NextRequest,
+): Promise<AdminIdentity | null> {
   const apiToken = process.env.ADMIN_API_TOKEN
   const bearer = req.headers.get('authorization')
   if (apiToken && bearer) {
@@ -28,7 +30,10 @@ export async function getIdentity(req: NextRequest): Promise<AdminIdentity | nul
     // scheme case-insensitively, then the token exactly (timing-safe).
     const lowerBearer = bearer.toLowerCase()
     const expected = `bearer ${apiToken}`
-    if (lowerBearer.startsWith('bearer ') && timingSafeStringEqual(lowerBearer, expected)) {
+    if (
+      lowerBearer.startsWith('bearer ') &&
+      timingSafeStringEqual(lowerBearer, expected)
+    ) {
       return { kind: 'token', role: 'admin' }
     }
   }
@@ -43,7 +48,12 @@ export async function getIdentity(req: NextRequest): Promise<AdminIdentity | nul
   const user = await findUserById(session.userId)
   if (!user || user.active === false) return null
   const role = user.role === 'admin' ? 'admin' : 'editor'
-  return { kind: 'user', userId: session.userId, username: session.username, role }
+  return {
+    kind: 'user',
+    userId: session.userId,
+    username: session.username,
+    role,
+  }
 }
 
 /**
@@ -58,12 +68,18 @@ export async function requireIdentity(
   const identity = await getIdentity(req)
   if (!identity) {
     return {
-      response: NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 }),
+      response: NextResponse.json(
+        { ok: false, error: 'unauthorized' },
+        { status: 401 },
+      ),
     }
   }
   if (role === 'admin' && identity.role !== 'admin') {
     return {
-      response: NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 }),
+      response: NextResponse.json(
+        { ok: false, error: 'forbidden' },
+        { status: 403 },
+      ),
     }
   }
   return { identity }

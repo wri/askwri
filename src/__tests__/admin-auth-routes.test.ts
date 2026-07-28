@@ -65,37 +65,37 @@ d('login route (DB integration)', () => {
     expect(res.status).toBe(400)
   })
 
-  it(
-    '429s after 10 failed attempts, even with the right password',
-    async () => {
-      // Dedicated username so other tests are not throttled.
-      const throttleUsername = `throttle_test_${Date.now()}`
-      const repo = AppDataSource.getRepository(User)
-      const u = await repo.save(
-        repo.create({
-          username: throttleUsername,
-          passwordHash: await bcrypt.hash('pw-123456', 12),
-          role: 'editor',
-          active: true,
-        }),
-      )
-      try {
-        for (let i = 0; i < 10; i++) {
-          const res = await login(loginReq({ username: throttleUsername, password: 'wrong' }))
-          expect(res.status).toBe(401)
-        }
-        const blocked = await login(loginReq({ username: throttleUsername, password: 'wrong' }))
-        expect(blocked.status).toBe(429)
-        const withRightPassword = await login(
-          loginReq({ username: throttleUsername, password: 'pw-123456' }),
+  it('429s after 10 failed attempts, even with the right password', async () => {
+    // Dedicated username so other tests are not throttled.
+    const throttleUsername = `throttle_test_${Date.now()}`
+    const repo = AppDataSource.getRepository(User)
+    const u = await repo.save(
+      repo.create({
+        username: throttleUsername,
+        passwordHash: await bcrypt.hash('pw-123456', 12),
+        role: 'editor',
+        active: true,
+      }),
+    )
+    try {
+      for (let i = 0; i < 10; i++) {
+        const res = await login(
+          loginReq({ username: throttleUsername, password: 'wrong' }),
         )
-        expect(withRightPassword.status).toBe(429)
-      } finally {
-        await repo.delete({ id: u.id })
+        expect(res.status).toBe(401)
       }
-    },
-    60000,
-  )
+      const blocked = await login(
+        loginReq({ username: throttleUsername, password: 'wrong' }),
+      )
+      expect(blocked.status).toBe(429)
+      const withRightPassword = await login(
+        loginReq({ username: throttleUsername, password: 'pw-123456' }),
+      )
+      expect(withRightPassword.status).toBe(429)
+    } finally {
+      await repo.delete({ id: u.id })
+    }
+  }, 60000)
 })
 
 d('user management routes (DB integration)', () => {
@@ -122,9 +122,10 @@ d('user management routes (DB integration)', () => {
 
   afterAll(async () => {
     if (createdUserIds.length > 0) {
-      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = ANY($1::uuid[])`, [
-        createdUserIds,
-      ])
+      await AppDataSource.query(
+        `DELETE FROM audit_log WHERE entity_id = ANY($1::uuid[])`,
+        [createdUserIds],
+      )
       for (const id of createdUserIds) {
         await AppDataSource.getRepository(User).delete({ id })
       }
@@ -135,7 +136,11 @@ d('user management routes (DB integration)', () => {
     const username = `created_user_${Date.now()}`
     const password = 'ValidPassword123!'
     const res = await createUserRoute(
-      adminReq('POST', 'http://localhost/api/admin/users', { username, password, role: 'editor' }),
+      adminReq('POST', 'http://localhost/api/admin/users', {
+        username,
+        password,
+        role: 'editor',
+      }),
     )
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -166,14 +171,20 @@ d('user management routes (DB integration)', () => {
     const username = `deactivate_user_${Date.now()}`
     const password = 'ValidPassword456!'
     const createRes = await createUserRoute(
-      adminReq('POST', 'http://localhost/api/admin/users', { username, password, role: 'editor' }),
+      adminReq('POST', 'http://localhost/api/admin/users', {
+        username,
+        password,
+        role: 'editor',
+      }),
     )
     expect(createRes.status).toBe(200)
     const { user } = await createRes.json()
     createdUserIds.push(user.id)
 
     const patchRes = await patchUserRoute(
-      adminReq('PATCH', `http://localhost/api/admin/users/${user.id}`, { active: false }),
+      adminReq('PATCH', `http://localhost/api/admin/users/${user.id}`, {
+        active: false,
+      }),
       { params: Promise.resolve({ id: user.id }) },
     )
     expect(patchRes.status).toBe(200)
@@ -186,7 +197,9 @@ d('user management routes (DB integration)', () => {
 
   it('PATCH /admin/users/[id] 404s on a non-UUID id', async () => {
     const res = await patchUserRoute(
-      adminReq('PATCH', 'http://localhost/api/admin/users/not-a-uuid', { active: false }),
+      adminReq('PATCH', 'http://localhost/api/admin/users/not-a-uuid', {
+        active: false,
+      }),
       { params: Promise.resolve({ id: 'not-a-uuid' }) },
     )
     expect(res.status).toBe(404)
@@ -215,7 +228,8 @@ d('last-admin guard (DB integration)', () => {
     // Park any pre-existing active admins so our test admin is the only one.
     const existing = await repo.find({ where: { role: 'admin', active: true } })
     parkedAdminIds = existing.map((u) => u.id)
-    if (parkedAdminIds.length > 0) await repo.update(parkedAdminIds, { active: false })
+    if (parkedAdminIds.length > 0)
+      await repo.update(parkedAdminIds, { active: false })
     const solo = await repo.save(
       repo.create({
         username: soloUsername,
@@ -229,16 +243,21 @@ d('last-admin guard (DB integration)', () => {
 
   afterAll(async () => {
     const repo = AppDataSource.getRepository(User)
-    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [soloAdminId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+      soloAdminId,
+    ])
     await repo.delete({ id: soloAdminId })
-    if (parkedAdminIds.length > 0) await repo.update(parkedAdminIds, { active: true })
+    if (parkedAdminIds.length > 0)
+      await repo.update(parkedAdminIds, { active: true })
     // Last describe in this file: close the connection so jest exits cleanly.
     if (AppDataSource.isInitialized) await AppDataSource.destroy()
   })
 
   it('409s when demoting the last active admin', async () => {
     const res = await patchUserRoute(
-      adminReq('PATCH', `http://localhost/api/admin/users/${soloAdminId}`, { role: 'editor' }),
+      adminReq('PATCH', `http://localhost/api/admin/users/${soloAdminId}`, {
+        role: 'editor',
+      }),
       { params: Promise.resolve({ id: soloAdminId }) },
     )
     expect(res.status).toBe(409)
@@ -248,7 +267,9 @@ d('last-admin guard (DB integration)', () => {
 
   it('409s when deactivating the last active admin', async () => {
     const res = await patchUserRoute(
-      adminReq('PATCH', `http://localhost/api/admin/users/${soloAdminId}`, { active: false }),
+      adminReq('PATCH', `http://localhost/api/admin/users/${soloAdminId}`, {
+        active: false,
+      }),
       { params: Promise.resolve({ id: soloAdminId }) },
     )
     expect(res.status).toBe(409)
@@ -266,7 +287,9 @@ d('last-admin guard (DB integration)', () => {
     )
     try {
       const res = await patchUserRoute(
-        adminReq('PATCH', `http://localhost/api/admin/users/${soloAdminId}`, { role: 'editor' }),
+        adminReq('PATCH', `http://localhost/api/admin/users/${soloAdminId}`, {
+          role: 'editor',
+        }),
         { params: Promise.resolve({ id: soloAdminId }) },
       )
       expect(res.status).toBe(200)

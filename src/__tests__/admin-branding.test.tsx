@@ -18,7 +18,11 @@ beforeAll(() => {
 })
 
 describe('AdminLayout branding', () => {
-  const wrap = (children: React.ReactNode) => <ChakraProvider><AdminLayout>{children}</AdminLayout></ChakraProvider>
+  const wrap = (children: React.ReactNode) => (
+    <ChakraProvider>
+      <AdminLayout>{children}</AdminLayout>
+    </ChakraProvider>
+  )
   it('renders an AskWRI branded header/wordmark', () => {
     render(wrap(<div>page content</div>))
     // The layout must show an AskWRI wordmark/logo (appears in sidebar + footer).

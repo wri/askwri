@@ -18,10 +18,18 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (response) return response
   try {
     const { id } = await params
-    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    if (!isUuid(id))
+      return NextResponse.json(
+        { ok: false, error: 'not found' },
+        { status: 404 },
+      )
     await initializeDatabase()
     const detail = await getAdminDocumentDetail(id)
-    if (!detail) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    if (!detail)
+      return NextResponse.json(
+        { ok: false, error: 'not found' },
+        { status: 404 },
+      )
     return NextResponse.json({ ok: true, ...detail })
   } catch (err) {
     return internalError(err)
@@ -33,13 +41,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (response) return response
   try {
     const { id } = await params
-    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    if (!isUuid(id))
+      return NextResponse.json(
+        { ok: false, error: 'not found' },
+        { status: 404 },
+      )
     const patch = (await req.json().catch(() => ({}))) ?? {}
     await initializeDatabase()
     const result = await updateDocumentFields(id, patch, identity!)
-    if (!result) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    if (!result)
+      return NextResponse.json(
+        { ok: false, error: 'not found' },
+        { status: 404 },
+      )
     if ('error' in result)
-      return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
+      return NextResponse.json(
+        { ok: false, error: result.error },
+        { status: 400 },
+      )
     return NextResponse.json({ ok: true, updated: result.updated })
   } catch (err) {
     return internalError(err)
@@ -54,10 +73,18 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   if (response) return response
   try {
     const { id } = await params
-    if (!isUuid(id)) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    if (!isUuid(id))
+      return NextResponse.json(
+        { ok: false, error: 'not found' },
+        { status: 404 },
+      )
     await initializeDatabase()
     const deleted = await purgeDocument(id, identity!)
-    if (!deleted) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    if (!deleted)
+      return NextResponse.json(
+        { ok: false, error: 'not found' },
+        { status: 404 },
+      )
     return NextResponse.json({ ok: true })
   } catch (err) {
     return internalError(err)

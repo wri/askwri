@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
   if (response) return response
   try {
     await initializeDatabase()
-    return NextResponse.json({ ok: true, collections: await listCollectionsWithCounts() })
+    return NextResponse.json({
+      ok: true,
+      collections: await listCollectionsWithCounts(),
+    })
   } catch (err) {
     return internalError(err)
   }
@@ -26,11 +29,22 @@ export async function POST(req: NextRequest) {
   if (response) return response
   try {
     const { name, description } = (await req.json().catch(() => ({}))) ?? {}
-    if (!name) return NextResponse.json({ ok: false, error: 'name is required' }, { status: 400 })
+    if (!name)
+      return NextResponse.json(
+        { ok: false, error: 'name is required' },
+        { status: 400 },
+      )
     await initializeDatabase()
-    const result = await createCollection(String(name), description ?? null, identity!)
+    const result = await createCollection(
+      String(name),
+      description ?? null,
+      identity!,
+    )
     if ('error' in result)
-      return NextResponse.json({ ok: false, error: result.error }, { status: 409 })
+      return NextResponse.json(
+        { ok: false, error: result.error },
+        { status: 409 },
+      )
     return NextResponse.json({ ok: true, collection: result })
   } catch (err) {
     return internalError(err)

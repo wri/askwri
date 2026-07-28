@@ -5,13 +5,23 @@ import ChakraProvider from '@/app/Providers/ChakraProvider'
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({}),
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    refresh: jest.fn(),
+  }),
   usePathname: () => '/admin/collections',
   useSearchParams: () => ({ get: () => null }),
 }))
 
 const mockCollections = [
-  { id: 'col-1', name: 'Legacy Transport', slug: 'legacy-transport', description: 'All docs', documentCount: 169 },
+  {
+    id: 'col-1',
+    name: 'Legacy Transport',
+    slug: 'legacy-transport',
+    description: 'All docs',
+    documentCount: 169,
+  },
 ]
 
 describe('CollectionsPage (jsdom)', () => {
@@ -20,7 +30,8 @@ describe('CollectionsPage (jsdom)', () => {
       if (url === '/api/admin/collections') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ ok: true, collections: mockCollections }),
+          json: () =>
+            Promise.resolve({ ok: true, collections: mockCollections }),
         })
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })

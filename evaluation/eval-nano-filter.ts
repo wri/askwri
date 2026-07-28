@@ -11,22 +11,27 @@ import fs from 'fs'
 import path from 'path'
 
 const NEXTJS_URL = process.env.NEXTJS_URL || 'http://localhost:3000'
-const SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://localhost:8000'
+const SERVICE_URL =
+  process.env.LLAMAINDEX_SERVICE_URL || 'http://localhost:8000'
 
 // Load golden queries — file structure: { test_cases: [{ test_case_id, question, ... }] }
 const rawData = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'answer-synthesis-raw.json'), 'utf-8')
+  fs.readFileSync(path.join(__dirname, 'answer-synthesis-raw.json'), 'utf-8'),
 )
 const goldenSet = rawData.test_cases
 
 // Load GPT-5.4 debiased labels — file structure: { questions: [{ id, chunks: [{ chunk_id, doc_id, label }] }] }
 const labelFile = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'answer-labels-review.json'), 'utf-8')
+  fs.readFileSync(path.join(__dirname, 'answer-labels-review.json'), 'utf-8'),
 )
 // Build chunk-level labels AND doc-level labels (max label per doc for a given query)
 const chunkLabels: Record<string, Record<string, string>> = {}
 const docLabels: Record<string, Record<string, string>> = {}
-const tierRank: Record<string, number> = { relevant: 2, partially_relevant: 1, not_relevant: 0 }
+const tierRank: Record<string, number> = {
+  relevant: 2,
+  partially_relevant: 1,
+  not_relevant: 0,
+}
 for (const q of labelFile.questions) {
   chunkLabels[q.id] = {}
   docLabels[q.id] = {}
@@ -67,7 +72,10 @@ async function getSearchResults(query: string): Promise<any[]> {
   return data.docs || []
 }
 
-async function getSynthesisWithNanoFilter(query: string, docs: any[]): Promise<any> {
+async function getSynthesisWithNanoFilter(
+  query: string,
+  docs: any[],
+): Promise<any> {
   const resp = await fetch(`${NEXTJS_URL}/api/answer`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -80,7 +88,17 @@ async function getSynthesisWithNanoFilter(query: string, docs: any[]): Promise<a
 async function main() {
   console.log('=== Nano Filter Accuracy Evaluation ===\n')
 
-  const confusion = { ss: 0, sp: 0, sw: 0, ps: 0, pp: 0, pw: 0, ws: 0, wp: 0, ww: 0 }
+  const confusion = {
+    ss: 0,
+    sp: 0,
+    sw: 0,
+    ps: 0,
+    pp: 0,
+    pw: 0,
+    ws: 0,
+    wp: 0,
+    ww: 0,
+  }
   let totalCompared = 0
   let totalAgreed = 0
   let filterPrecisionSum = 0
@@ -104,7 +122,9 @@ async function main() {
     // Compare nano tiers with ground truth at DOC level
     // (nano filter assigns tiers per doc_id; ground truth aggregated to max label per doc)
     const seenDocs = new Set<string>()
-    let relevant = 0, nanoStrong = 0, nanoStrongAndRelevant = 0
+    let relevant = 0,
+      nanoStrong = 0,
+      nanoStrongAndRelevant = 0
 
     for (const r of searchResults.slice(0, 15)) {
       const docId = r.doc_id
@@ -122,48 +142,73 @@ async function main() {
 
       if (groundTruth === 'strong' || groundTruth === 'partial') relevant++
       if (nanoTier === 'strong' || nanoTier === 'partial') nanoStrong++
-      if ((nanoTier === 'strong' || nanoTier === 'partial') &&
-          (groundTruth === 'strong' || groundTruth === 'partial')) nanoStrongAndRelevant++
+      if (
+        (nanoTier === 'strong' || nanoTier === 'partial') &&
+        (groundTruth === 'strong' || groundTruth === 'partial')
+      )
+        nanoStrongAndRelevant++
     }
 
-    const filterPrecision = nanoStrong > 0 ? nanoStrongAndRelevant / nanoStrong : 0
+    const filterPrecision =
+      nanoStrong > 0 ? nanoStrongAndRelevant / nanoStrong : 0
     const filterRecall = relevant > 0 ? nanoStrongAndRelevant / relevant : 0
     filterPrecisionSum += filterPrecision
     filterRecallSum += filterRecall
 
     console.log(`  Coverage: ${result.synthesis?.coverage || 'unknown'}`)
-    console.log(`  Filter precision: ${filterPrecision.toFixed(2)} (${nanoStrongAndRelevant}/${nanoStrong})`)
-    console.log(`  Filter recall: ${filterRecall.toFixed(2)} (${nanoStrongAndRelevant}/${relevant})`)
-    console.log(`  Synthesis docs: ${result.synthesis?.sentences?.length || 0} sentences`)
+    console.log(
+      `  Filter precision: ${filterPrecision.toFixed(2)} (${nanoStrongAndRelevant}/${nanoStrong})`,
+    )
+    console.log(
+      `  Filter recall: ${filterRecall.toFixed(2)} (${nanoStrongAndRelevant}/${relevant})`,
+    )
+    console.log(
+      `  Synthesis docs: ${result.synthesis?.sentences?.length || 0} sentences`,
+    )
   }
 
   const n = goldenSet.length
   console.log('\n=== SUMMARY ===')
-  console.log(`Agreement rate: ${(totalAgreed / totalCompared * 100).toFixed(1)}% (${totalAgreed}/${totalCompared})`)
+  console.log(
+    `Agreement rate: ${((totalAgreed / totalCompared) * 100).toFixed(1)}% (${totalAgreed}/${totalCompared})`,
+  )
   console.log(`Avg filter precision: ${(filterPrecisionSum / n).toFixed(3)}`)
   console.log(`Avg filter recall: ${(filterRecallSum / n).toFixed(3)}`)
   console.log(`\nConfusion matrix (rows=ground_truth, cols=nano):`)
   console.log(`         strong  partial  weak`)
-  console.log(`strong   ${confusion.ss.toString().padStart(5)}  ${confusion.sp.toString().padStart(7)}  ${confusion.sw.toString().padStart(4)}`)
-  console.log(`partial  ${confusion.ps.toString().padStart(5)}  ${confusion.pp.toString().padStart(7)}  ${confusion.pw.toString().padStart(4)}`)
-  console.log(`weak     ${confusion.ws.toString().padStart(5)}  ${confusion.wp.toString().padStart(7)}  ${confusion.ww.toString().padStart(4)}`)
+  console.log(
+    `strong   ${confusion.ss.toString().padStart(5)}  ${confusion.sp.toString().padStart(7)}  ${confusion.sw.toString().padStart(4)}`,
+  )
+  console.log(
+    `partial  ${confusion.ps.toString().padStart(5)}  ${confusion.pp.toString().padStart(7)}  ${confusion.pw.toString().padStart(4)}`,
+  )
+  console.log(
+    `weak     ${confusion.ws.toString().padStart(5)}  ${confusion.wp.toString().padStart(7)}  ${confusion.ww.toString().padStart(4)}`,
+  )
 
   // Save results
   const outDir = path.join(__dirname, 'results')
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true })
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const outPath = path.join(outDir, `nano-filter-eval-${timestamp}.json`)
-  fs.writeFileSync(outPath, JSON.stringify({
-    timestamp: new Date().toISOString(),
-    agreement_rate: totalAgreed / totalCompared,
-    avg_filter_precision: filterPrecisionSum / n,
-    avg_filter_recall: filterRecallSum / n,
-    confusion,
-    success_criteria: {
-      precision_target: 0.85,
-      precision_met: (filterPrecisionSum / n) >= 0.85,
-    },
-  }, null, 2))
+  fs.writeFileSync(
+    outPath,
+    JSON.stringify(
+      {
+        timestamp: new Date().toISOString(),
+        agreement_rate: totalAgreed / totalCompared,
+        avg_filter_precision: filterPrecisionSum / n,
+        avg_filter_recall: filterRecallSum / n,
+        confusion,
+        success_criteria: {
+          precision_target: 0.85,
+          precision_met: filterPrecisionSum / n >= 0.85,
+        },
+      },
+      null,
+      2,
+    ),
+  )
   console.log(`\nResults saved to ${outPath}`)
 }
 

@@ -896,6 +896,65 @@ def _emit_query_emf(mode: str, debug: dict) -> None:
         logger.debug("EMF emit failed", exc_info=True)
 
 
+def _substitute_summary_passages(doc_groups, stage2_results):
+    """Cite mode: show a real passage for docs represented by a summary node.
+
+    Summary nodes (title+summary, app/indexing.py) are a retrieval device —
+    they give the dense and keyword lanes a topic-dense handle on each
+    document, and for non-English documents they carry the English handle
+    text (app/sparse_handles.py). They earn their place in the ranking, so
+    this does NOT drop them: measured on 50 cite queries, dropping them costs
+    a document and moves 3 known-item targets off rank 1, while substituting
+    costs nothing. But their text is title+summary, not a passage from the
+    PDF, so it should not be the citation a user reads, the page a citation
+    points at, or the text a downstream prompt quotes as evidence.
+
+    The substitute inherits the summary node's score and relevance_tier, so
+    the document set, its order and its scores are unchanged by construction;
+    only the displayed chunk moves. A document with no real chunk in the
+    reranked set keeps its summary node — a synthetic snippet beats a
+    dropped document.
+    """
+    summary_docs = {doc_id for doc_id, node in doc_groups.items()
+                    if (node.node.metadata or {}).get("is_summary_node", False)}
+    if not summary_docs:
+        return doc_groups
+
+    best_real = {}
+    for node in stage2_results:
+        metadata = node.node.metadata or {}
+        doc_id = metadata.get("doc_id")
+        if doc_id not in summary_docs or metadata.get("is_summary_node", False):
+            continue
+        if doc_id not in best_real or node.score > best_real[doc_id].score:
+            best_real[doc_id] = node
+
+    substituted = 0
+    for doc_id in summary_docs:
+        replacement = best_real.get(doc_id)
+        if replacement is None:
+            continue
+        original = doc_groups[doc_id]
+        tier = (original.node.metadata or {}).get("relevance_tier")
+        if tier is not None:
+            replacement.node.metadata["relevance_tier"] = tier
+        else:
+            # Legacy in-memory mode shares node objects across requests — the
+            # substitute may carry a tier stamped by an earlier reranked query.
+            replacement.node.metadata.pop("relevance_tier", None)
+        # Assigning an existing key preserves dict insertion order, which is
+        # the document ranking (stage2_results is score-sorted).
+        doc_groups[doc_id] = NodeWithScore(node=replacement.node,
+                                           score=original.score)
+        substituted += 1
+
+    logger.info(
+        f"Stage 3.1 (Summary Passage Substitution): {substituted} of "
+        f"{len(summary_docs)} summary-represented docs given a real passage"
+    )
+    return doc_groups
+
+
 @app.post("/query", response_model=QueryResponse)
 async def hybrid_query(request: QueryRequest):
     """
@@ -1057,6 +1116,9 @@ async def hybrid_query(request: QueryRequest):
                 for node in doc_groups.values():
                     node.node.metadata.pop("relevance_tier", None)
                 logger.info("Stage 3 (Relevance Floor): skipped — results not reranked")
+
+            if settings.cite_substitute_summary_passage:
+                doc_groups = _substitute_summary_passages(doc_groups, stage2_results)
 
             filtered_results = list(doc_groups.values())[:request.max_results]
         else:

@@ -13,14 +13,17 @@
  *   POST /api/labels/override   → set human_override on a chunk
  */
 
-import * as http from 'http';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as http from 'http'
+import * as fs from 'fs'
+import * as path from 'path'
 
-const PORT = 3001;
-const LABELS_PATH = path.join(__dirname, 'answer-labels-review.json');
-const SYNTHESIS_EVAL_PATH = path.join(__dirname, 'answer-synthesis-eval-final.json');
-const SYNTHESIS_RAW_PATH = path.join(__dirname, 'answer-synthesis-raw.json');
+const PORT = 3001
+const LABELS_PATH = path.join(__dirname, 'answer-labels-review.json')
+const SYNTHESIS_EVAL_PATH = path.join(
+  __dirname,
+  'answer-synthesis-eval-final.json',
+)
+const SYNTHESIS_RAW_PATH = path.join(__dirname, 'answer-synthesis-raw.json')
 
 // ---------------------------------------------------------------------------
 // HTML template
@@ -685,7 +688,7 @@ const REVIEW_HTML = `<!DOCTYPE html>
 })();
 </script>
 </body>
-</html>`;
+</html>`
 
 // ---------------------------------------------------------------------------
 // Synthesis Review HTML (Task 6 — will replace this placeholder)
@@ -1234,230 +1237,267 @@ const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
 })();
 </script>
 </body>
-</html>`;
+</html>`
 
 // ---------------------------------------------------------------------------
 // Server
 // ---------------------------------------------------------------------------
 
 function readLabels(): unknown {
-  const raw = fs.readFileSync(LABELS_PATH, 'utf-8');
-  return JSON.parse(raw);
+  const raw = fs.readFileSync(LABELS_PATH, 'utf-8')
+  return JSON.parse(raw)
 }
 
 function writeLabels(data: unknown): void {
-  fs.writeFileSync(LABELS_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(LABELS_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8')
 }
 
-const MAX_BODY_BYTES = 1_048_576; // 1 MB
+const MAX_BODY_BYTES = 1_048_576 // 1 MB
 
 function collectBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let total = 0;
+    const chunks: Buffer[] = []
+    let total = 0
     req.on('data', (chunk: Buffer) => {
-      total += chunk.length;
+      total += chunk.length
       if (total > MAX_BODY_BYTES) {
-        reject(new Error('Request body too large'));
-        req.destroy();
-        return;
+        reject(new Error('Request body too large'))
+        req.destroy()
+        return
       }
-      chunks.push(chunk);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    req.on('error', reject);
-  });
+      chunks.push(chunk)
+    })
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+    req.on('error', reject)
+  })
 }
 
 function json(res: http.ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body);
+  const payload = JSON.stringify(body)
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(payload),
-  });
-  res.end(payload);
+  })
+  res.end(payload)
 }
 
 function html(res: http.ServerResponse, content: string): void {
   res.writeHead(200, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': Buffer.byteLength(content),
-  });
-  res.end(content);
+  })
+  res.end(content)
 }
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url || '/', `http://localhost:${PORT}`);
-  const pathname = url.pathname;
+  const url = new URL(req.url || '/', `http://localhost:${PORT}`)
+  const pathname = url.pathname
 
   try {
     // GET /eval/review-labels → serve HTML page
     if (req.method === 'GET' && pathname === '/eval/review-labels') {
-      html(res, REVIEW_HTML);
-      return;
+      html(res, REVIEW_HTML)
+      return
     }
 
     // GET /api/labels → return labels JSON
     if (req.method === 'GET' && pathname === '/api/labels') {
-      const data = readLabels();
-      json(res, 200, data);
-      return;
+      const data = readLabels()
+      json(res, 200, data)
+      return
     }
 
     // POST /api/labels/override → update human_override
     if (req.method === 'POST' && pathname === '/api/labels/override') {
-      const body = await collectBody(req);
-      let parsed: { question_id: string; chunk_id: string; override: string | null };
+      const body = await collectBody(req)
+      let parsed: {
+        question_id: string
+        chunk_id: string
+        override: string | null
+      }
       try {
-        parsed = JSON.parse(body);
+        parsed = JSON.parse(body)
       } catch {
-        json(res, 400, { error: 'Invalid JSON' });
-        return;
+        json(res, 400, { error: 'Invalid JSON' })
+        return
       }
 
-      const { question_id, chunk_id, override: overrideVal } = parsed;
+      const { question_id, chunk_id, override: overrideVal } = parsed
       if (!question_id || !chunk_id) {
-        json(res, 400, { error: 'Missing question_id or chunk_id' });
-        return;
+        json(res, 400, { error: 'Missing question_id or chunk_id' })
+        return
       }
 
-      const validOverrides = ['relevant', 'partially_relevant', 'not_relevant', null];
+      const validOverrides = [
+        'relevant',
+        'partially_relevant',
+        'not_relevant',
+        null,
+      ]
       if (!validOverrides.includes(overrideVal)) {
-        json(res, 400, { error: 'Invalid override value' });
-        return;
+        json(res, 400, { error: 'Invalid override value' })
+        return
       }
 
       const data = readLabels() as {
         questions: Array<{
-          id: string;
-          chunks: Array<{ chunk_id: string; human_override: string | null }>;
-        }>;
-      };
+          id: string
+          chunks: Array<{ chunk_id: string; human_override: string | null }>
+        }>
+      }
 
-      let found = false;
+      let found = false
       for (const q of data.questions) {
         if (q.id === question_id) {
           for (const c of q.chunks) {
             if (c.chunk_id === chunk_id) {
-              c.human_override = overrideVal;
-              found = true;
-              break;
+              c.human_override = overrideVal
+              found = true
+              break
             }
           }
-          break;
+          break
         }
       }
 
       if (!found) {
-        json(res, 404, { error: 'Chunk not found' });
-        return;
+        json(res, 404, { error: 'Chunk not found' })
+        return
       }
 
-      writeLabels(data);
-      json(res, 200, { ok: true });
-      return;
+      writeLabels(data)
+      json(res, 200, { ok: true })
+      return
     }
 
     // --- Synthesis Review Routes ---
 
     // GET /eval/review-synthesis → serve synthesis review HTML page
     if (req.method === 'GET' && pathname === '/eval/review-synthesis') {
-      html(res, SYNTHESIS_REVIEW_HTML);
-      return;
+      html(res, SYNTHESIS_REVIEW_HTML)
+      return
     }
 
     // GET /api/synthesis-eval → return synthesis eval JSON
     if (req.method === 'GET' && pathname === '/api/synthesis-eval') {
       if (!fs.existsSync(SYNTHESIS_EVAL_PATH)) {
-        json(res, 404, { error: 'answer-synthesis-eval-final.json not found. Run stages 1-2 first.' });
-        return;
+        json(res, 404, {
+          error:
+            'answer-synthesis-eval-final.json not found. Run stages 1-2 first.',
+        })
+        return
       }
-      const synthData = JSON.parse(fs.readFileSync(SYNTHESIS_EVAL_PATH, 'utf-8'));
-      json(res, 200, synthData);
-      return;
+      const synthData = JSON.parse(
+        fs.readFileSync(SYNTHESIS_EVAL_PATH, 'utf-8'),
+      )
+      json(res, 200, synthData)
+      return
     }
 
     // GET /api/synthesis-raw → return captured passages (optionally filtered by ?id=)
     if (req.method === 'GET' && pathname === '/api/synthesis-raw') {
       if (!fs.existsSync(SYNTHESIS_RAW_PATH)) {
-        json(res, 404, { error: 'answer-synthesis-raw.json not found. Run stage 1 first.' });
-        return;
+        json(res, 404, {
+          error: 'answer-synthesis-raw.json not found. Run stage 1 first.',
+        })
+        return
       }
-      const rawData = JSON.parse(fs.readFileSync(SYNTHESIS_RAW_PATH, 'utf-8'));
-      const testCaseId = url.searchParams.get('id');
+      const rawData = JSON.parse(fs.readFileSync(SYNTHESIS_RAW_PATH, 'utf-8'))
+      const testCaseId = url.searchParams.get('id')
       if (testCaseId) {
-        const tc = rawData.test_cases.find((t: any) => t.test_case_id === testCaseId);
-        json(res, tc ? 200 : 404, tc || { error: 'Test case not found' });
+        const tc = rawData.test_cases.find(
+          (t: any) => t.test_case_id === testCaseId,
+        )
+        json(res, tc ? 200 : 404, tc || { error: 'Test case not found' })
       } else {
-        json(res, 200, rawData);
+        json(res, 200, rawData)
       }
-      return;
+      return
     }
 
     // POST /api/synthesis-eval/review → update human eval for a test case
     if (req.method === 'POST' && pathname === '/api/synthesis-eval/review') {
-      const postBody = await collectBody(req);
+      const postBody = await collectBody(req)
       let parsedReview: {
-        test_case_id: string;
+        test_case_id: string
         human_eval: {
-          scores: Record<string, number>;
-          qualitative_feedback: string;
-          key_facts_confirmed: string[];
-          key_facts_added: string[];
-          reviewed: boolean;
-        };
-      };
+          scores: Record<string, number>
+          qualitative_feedback: string
+          key_facts_confirmed: string[]
+          key_facts_added: string[]
+          reviewed: boolean
+        }
+      }
       try {
-        parsedReview = JSON.parse(postBody);
+        parsedReview = JSON.parse(postBody)
       } catch {
-        json(res, 400, { error: 'Invalid JSON' });
-        return;
+        json(res, 400, { error: 'Invalid JSON' })
+        return
       }
 
       if (!parsedReview.test_case_id || !parsedReview.human_eval) {
-        json(res, 400, { error: 'Missing test_case_id or human_eval' });
-        return;
+        json(res, 400, { error: 'Missing test_case_id or human_eval' })
+        return
       }
 
-      const he = parsedReview.human_eval;
-      const validDims = ['faithfulness', 'completeness', 'conciseness', 'coherence', 'citation_accuracy'];
+      const he = parsedReview.human_eval
+      const validDims = [
+        'faithfulness',
+        'completeness',
+        'conciseness',
+        'coherence',
+        'citation_accuracy',
+      ]
       if (he.scores) {
         for (const [key, val] of Object.entries(he.scores)) {
-          if (!validDims.includes(key) || typeof val !== 'number' || val < 0 || val > 1) {
-            json(res, 400, { error: `Invalid score: ${key}=${val}` });
-            return;
+          if (
+            !validDims.includes(key) ||
+            typeof val !== 'number' ||
+            val < 0 ||
+            val > 1
+          ) {
+            json(res, 400, { error: `Invalid score: ${key}=${val}` })
+            return
           }
         }
       }
       if (typeof he.reviewed !== 'boolean') {
-        json(res, 400, { error: 'reviewed must be a boolean' });
-        return;
+        json(res, 400, { error: 'reviewed must be a boolean' })
+        return
       }
 
-      const synthEvalData = JSON.parse(fs.readFileSync(SYNTHESIS_EVAL_PATH, 'utf-8'));
-      const synthTc = synthEvalData.test_cases.find((t: any) => t.test_case_id === parsedReview.test_case_id);
+      const synthEvalData = JSON.parse(
+        fs.readFileSync(SYNTHESIS_EVAL_PATH, 'utf-8'),
+      )
+      const synthTc = synthEvalData.test_cases.find(
+        (t: any) => t.test_case_id === parsedReview.test_case_id,
+      )
       if (!synthTc) {
-        json(res, 404, { error: 'Test case not found' });
-        return;
+        json(res, 404, { error: 'Test case not found' })
+        return
       }
 
-      synthTc.human_eval = parsedReview.human_eval;
-      fs.writeFileSync(SYNTHESIS_EVAL_PATH, JSON.stringify(synthEvalData, null, 2) + '\n', 'utf-8');
-      json(res, 200, { ok: true });
-      return;
+      synthTc.human_eval = parsedReview.human_eval
+      fs.writeFileSync(
+        SYNTHESIS_EVAL_PATH,
+        JSON.stringify(synthEvalData, null, 2) + '\n',
+        'utf-8',
+      )
+      json(res, 200, { ok: true })
+      return
     }
 
     // 404
-    json(res, 404, { error: 'Not found' });
+    json(res, 404, { error: 'Not found' })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('Server error:', message);
-    json(res, 500, { error: message });
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Server error:', message)
+    json(res, 500, { error: message })
   }
-});
+})
 
 server.listen(PORT, () => {
-  console.log(`Review server running on :${PORT}`);
-  console.log(`  Labels:    http://localhost:${PORT}/eval/review-labels`);
-  console.log(`  Synthesis: http://localhost:${PORT}/eval/review-synthesis`);
-});
+  console.log(`Review server running on :${PORT}`)
+  console.log(`  Labels:    http://localhost:${PORT}/eval/review-labels`)
+  console.log(`  Synthesis: http://localhost:${PORT}/eval/review-synthesis`)
+})
