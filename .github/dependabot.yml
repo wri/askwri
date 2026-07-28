@@ -1,3 +1,8 @@
+# NOTE: editing this file makes Dependabot re-run EVERY ecosystem immediately
+# on the default branch, not on the next scheduled tick. On 2026-07-27 a
+# cosmetic reformat of this file opened 19 PRs within two minutes. That is why
+# .prettierignore excludes it, and why the groups below exist — a re-run should
+# cost a handful of PRs, not twenty.
 version: 2
 updates:
   # npm (Next.js app)
@@ -7,6 +12,27 @@ updates:
       interval: 'monthly'
     open-pull-requests-limit: 10
     versioning-strategy: 'increase-if-necessary'
+    # Grouping is not just noise control. Packages released in lockstep MUST
+    # move together: react/react-dom enforce exact version parity at runtime,
+    # and a solo react-dom bump (#289) failed every jsdom suite with
+    # "Incompatible React versions". Same shape for the typescript-eslint
+    # family, whose meta-package pins its own parser version.
+    groups:
+      react:
+        patterns: ['react', 'react-dom', '@types/react', '@types/react-dom']
+      next:
+        patterns: ['next', 'eslint-config-next', '@next/*']
+      typescript-eslint:
+        patterns: ['typescript-eslint', '@typescript-eslint/*']
+      lint-and-format:
+        patterns: ['eslint', 'eslint-*', 'prettier', 'prettier-*']
+      tailwind:
+        patterns: ['tailwindcss', '@tailwindcss/*']
+      testing:
+        patterns: ['jest', 'jest-*', '@testing-library/*', 'ts-jest']
+      minor-and-patch:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
@@ -17,6 +43,19 @@ updates:
     schedule:
       interval: 'monthly'
     open-pull-requests-limit: 10
+    groups:
+      pytest:
+        patterns: ['pytest', 'pytest-*']
+      runtime:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+    # NOTE: this ignore does NOT cover pip requirement-RANGE updates. The
+    # floors in requirements.txt are `>=` with no upper pin, so Dependabot
+    # raises them as "update requirement" rather than "version-update", and
+    # a major crossing slips through (#284 raised pytest >=8.0 to >=9.1.1).
+    # Harmless while the floors are unpinned — the image installs latest at
+    # build time either way — but do not read this rule as a major-version gate
+    # for Python.
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
