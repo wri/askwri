@@ -5,6 +5,16 @@
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-${var.environment}-cluster"
 
+  # Container Insights is off as a standing cost decision (issue #236), not an
+  # oversight. It carries a per-cluster charge, and it was turned off in the
+  # same pass that cut CPU/memory and pinned autoscaling at 1 task.
+  # The tradeoff: no CloudWatch task-level CPU/memory/task-count metrics, which
+  # is exactly what you would want to confirm the reduced capacity holds under
+  # load. What remains: the awslogs driver still ships container logs, and
+  # /query emits per-stage latency as CloudWatch EMF (AskWRI/Query namespace,
+  # search-service/app/main.py:_emit_query_emf).
+  # Re-enable temporarily when task-level metrics are the only way to diagnose
+  # something; flip back afterwards.
   setting {
     name  = "containerInsights"
     value = "disabled"
