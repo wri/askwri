@@ -64,6 +64,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Prettier owns code formatting (eslint-config-prettier stands ESLint down
+      # from it), so it has to be enforced somewhere. Scope is .prettierignore.
+      - name: Format check
+        run: npm run format:check
+
       - name: Run database migrations
         run: npm run migration:run
 
