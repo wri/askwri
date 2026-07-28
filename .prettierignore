@@ -29,6 +29,12 @@ evaluation/**/*.json
 public
 next-env.d.ts
 
+# Dependabot re-runs every ecosystem the moment this file changes on the
+# default branch. A cosmetic requote of it on 2026-07-27 opened 19 PRs in two
+# minutes. Formatting it is worth nothing; re-triggering Dependabot is worth
+# less than nothing.
+.github/dependabot.yml
+
 # Git worktrees for isolated feature work (.gitignore:92) and agent worktrees —
 # these are other checkouts. Writing into them from here would edit another
 # branch's working tree.

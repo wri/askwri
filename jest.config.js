@@ -12,7 +12,16 @@ const customJestConfig = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
-  testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/.next/'],
+  // Worktrees are other checkouts of this repo. Without these, `npm test` run
+  // from a tree that has one collects that branch's suites too: locally this
+  // reported 88 suites where CI, on a fresh checkout, reported 45. Same class
+  // of trap as the eslint `.worktrees` ignore.
+  testPathIgnorePatterns: [
+    '<rootDir>/node_modules/',
+    '<rootDir>/.next/',
+    '<rootDir>/.worktrees/',
+    '<rootDir>/.claude/worktrees/',
+  ],
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
     '!src/**/*.d.ts',
