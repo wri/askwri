@@ -233,9 +233,7 @@ async function main() {
         score: chunk.score,
         page: chunk.page,
         label: (label?.label || 'not_relevant') as
-          | 'relevant'
-          | 'partially_relevant'
-          | 'not_relevant',
+          'relevant' | 'partially_relevant' | 'not_relevant',
         confidence: (label?.confidence || 'low') as string,
         rationale: label?.rationale || 'No label returned by LLM',
         human_override: null,
