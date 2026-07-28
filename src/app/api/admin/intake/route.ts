@@ -20,9 +20,14 @@ export async function POST(req: NextRequest) {
   if (response) return response
   try {
     const form = await req.formData()
-    const files = form.getAll('files').filter((f): f is File => f instanceof File)
+    const files = form
+      .getAll('files')
+      .filter((f): f is File => f instanceof File)
     if (files.length === 0) {
-      return NextResponse.json({ ok: false, error: 'no files provided' }, { status: 400 })
+      return NextResponse.json(
+        { ok: false, error: 'no files provided' },
+        { status: 400 },
+      )
     }
     if (files.length > MAX_FILES) {
       return NextResponse.json(
@@ -35,7 +40,11 @@ export async function POST(req: NextRequest) {
     const localDir = process.env.INTAKE_LOCAL_DIR
     if (!bucket && !localDir) {
       return NextResponse.json(
-        { ok: false, error: 'no intake destination configured (DOCUMENTS_S3_BUCKET or INTAKE_LOCAL_DIR)' },
+        {
+          ok: false,
+          error:
+            'no intake destination configured (DOCUMENTS_S3_BUCKET or INTAKE_LOCAL_DIR)',
+        },
         { status: 500 },
       )
     }
@@ -46,24 +55,39 @@ export async function POST(req: NextRequest) {
     for (const file of files) {
       const name = basename(file.name)
       if (!name.toLowerCase().endsWith('.pdf')) {
-        return NextResponse.json({ ok: false, error: `${name}: only PDFs accepted` }, { status: 400 })
+        return NextResponse.json(
+          { ok: false, error: `${name}: only PDFs accepted` },
+          { status: 400 },
+        )
       }
       if (file.size > MAX_FILE_BYTES) {
         return NextResponse.json(
-          { ok: false, error: `${name}: file too large (max ${MAX_FILE_BYTES} bytes)` },
+          {
+            ok: false,
+            error: `${name}: file too large (max ${MAX_FILE_BYTES} bytes)`,
+          },
           { status: 400 },
         )
       }
       if (seenNames.has(name)) {
         return NextResponse.json(
-          { ok: false, error: `${name}: duplicate filename in batch (rename and retry)` },
+          {
+            ok: false,
+            error: `${name}: duplicate filename in batch (rename and retry)`,
+          },
           { status: 400 },
         )
       }
       seenNames.add(name)
       const bytes = new Uint8Array(await file.arrayBuffer())
-      if (bytes.length < PDF_MAGIC.length || !PDF_MAGIC.every((b, i) => bytes[i] === b)) {
-        return NextResponse.json({ ok: false, error: `${name}: not a valid PDF` }, { status: 400 })
+      if (
+        bytes.length < PDF_MAGIC.length ||
+        !PDF_MAGIC.every((b, i) => bytes[i] === b)
+      ) {
+        return NextResponse.json(
+          { ok: false, error: `${name}: not a valid PDF` },
+          { status: 400 },
+        )
       }
       validated.push({ name, bytes })
     }
@@ -74,7 +98,11 @@ export async function POST(req: NextRequest) {
         if (bucket) {
           const s3 = new S3Client(s3ClientConfig())
           await s3.send(
-            new PutObjectCommand({ Bucket: bucket, Key: `${intakePrefix}${name}`, Body: bytes }),
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: `${intakePrefix}${name}`,
+              Body: bytes,
+            }),
           )
         } else {
           await mkdir(localDir!, { recursive: true })

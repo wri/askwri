@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { initializeDatabase } from '../../../../../db/data-source'
-import { findActiveUserByUsername, touchLastLogin } from '../../../../../db/queries/users'
-import { signSession, SESSION_COOKIE, sessionCookieOptions } from '../../../../../lib/auth/session'
+import {
+  findActiveUserByUsername,
+  touchLastLogin,
+} from '../../../../../db/queries/users'
+import {
+  signSession,
+  SESSION_COOKIE,
+  sessionCookieOptions,
+} from '../../../../../lib/auth/session'
 import { internalError } from '../../../../../lib/api-error'
 
 export const runtime = 'nodejs'
@@ -67,10 +74,16 @@ export async function POST(req: NextRequest) {
     const user = await findActiveUserByUsername(String(username))
     // Always run a bcrypt compare so a missing user costs the same as a
     // wrong password.
-    const ok = await bcrypt.compare(String(password), user ? user.passwordHash : DUMMY_HASH)
+    const ok = await bcrypt.compare(
+      String(password),
+      user ? user.passwordHash : DUMMY_HASH,
+    )
     if (!user || !ok) {
       recordFailure(String(username))
-      return NextResponse.json({ ok: false, error: 'invalid credentials' }, { status: 401 })
+      return NextResponse.json(
+        { ok: false, error: 'invalid credentials' },
+        { status: 401 },
+      )
     }
     failedAttempts.delete(String(username))
     await touchLastLogin(user.id)
@@ -79,7 +92,10 @@ export async function POST(req: NextRequest) {
       username: user.username,
       role: user.role as 'admin' | 'editor',
     })
-    const res = NextResponse.json({ ok: true, user: { username: user.username, role: user.role } })
+    const res = NextResponse.json({
+      ok: true,
+      user: { username: user.username, role: user.role },
+    })
     res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions())
     return res
   } catch (err) {

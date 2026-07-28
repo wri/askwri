@@ -144,7 +144,9 @@ const AskWriAppContent = () => {
 
     // Mark all docs as loading
     const loadingUpdate: Record<string, boolean> = {}
-    docsToProcess.forEach((d) => { loadingUpdate[d.doc_id] = true })
+    docsToProcess.forEach((d) => {
+      loadingUpdate[d.doc_id] = true
+    })
     setDocWhyLoading((prev) => ({ ...prev, ...loadingUpdate }))
 
     // Build batch request — catalog index is optional (enriches metadata when available)
@@ -194,7 +196,9 @@ const AskWriAppContent = () => {
       })
       .finally(() => {
         const doneUpdate: Record<string, boolean> = {}
-        docsToProcess.forEach((d) => { doneUpdate[d.doc_id] = false })
+        docsToProcess.forEach((d) => {
+          doneUpdate[d.doc_id] = false
+        })
         setDocWhyLoading((prev) => ({ ...prev, ...doneUpdate }))
       })
   }, [index, pageDocs, query, batchRelatesRequested])

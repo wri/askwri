@@ -43,10 +43,13 @@ describe('getCatalogItems() DB integration', () => {
     }
   })
 
-  corpusIt('returns the migrated catalog items (≥169, tolerates worker uploads)', async () => {
-    const items = await getCatalogItems()
-    expect(items.length).toBeGreaterThanOrEqual(169)
-  })
+  corpusIt(
+    'returns the migrated catalog items (≥169, tolerates worker uploads)',
+    async () => {
+      const items = await getCatalogItems()
+      expect(items.length).toBeGreaterThanOrEqual(169)
+    },
+  )
 
   corpusIt('first item has the expected CatalogItem shape', async () => {
     const items = await getCatalogItems()

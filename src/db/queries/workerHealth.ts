@@ -47,7 +47,9 @@ export async function getWorkerHealth(
   const queueDepth: number = row?.queueDepth ?? 0
   const lastProcessedAt: string | null = row?.lastProcessedAt ?? null
 
-  const { count, oldestAgeSeconds } = await countIntakeBacklog(staleThresholdSeconds)
+  const { count, oldestAgeSeconds } = await countIntakeBacklog(
+    staleThresholdSeconds,
+  )
 
   let status: WorkerHealth['status']
   if (queueDepth > 0) {
@@ -78,13 +80,20 @@ async function countIntakeBacklog(
   const prefix = process.env.INTAKE_S3_PREFIX || 'intake/'
   try {
     const s3 = new S3Client(s3ClientConfig())
-    const resp = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }))
+    const resp = await s3.send(
+      new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }),
+    )
     const objects = (resp.Contents ?? []).filter((o) =>
       (o.Key ?? '').toLowerCase().endsWith('.pdf'),
     )
     if (objects.length === 0) return { count: 0, oldestAgeSeconds: 0 }
     // external_id = filename stem (matches worker intake_s3._register)
-    const stems = objects.map((o) => (o.Key ?? '').split('/').pop()!.replace(/\.pdf$/i, ''))
+    const stems = objects.map((o) =>
+      (o.Key ?? '')
+        .split('/')
+        .pop()!
+        .replace(/\.pdf$/i, ''),
+    )
     // Which of these have NO documents row?
     const placeholders = stems.map((_, i) => `$${i + 1}`).join(',')
     const rows: { external_id: string }[] = await AppDataSource.query(

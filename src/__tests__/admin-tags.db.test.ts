@@ -39,7 +39,10 @@ d('tagsAdmin (DB integration)', () => {
       `DELETE FROM audit_log WHERE entity_id = $1 OR entity_id = $2`,
       [docId, tagId],
     )
-    await AppDataSource.query(`DELETE FROM document_tags WHERE document_id = $1`, [docId])
+    await AppDataSource.query(
+      `DELETE FROM document_tags WHERE document_id = $1`,
+      [docId],
+    )
     await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tagId])
     await AppDataSource.destroy()
@@ -80,7 +83,10 @@ d('tagsAdmin (DB integration)', () => {
   })
 
   it('deleteTagIfUnused reports not_found for an unknown tag id', async () => {
-    const result = await deleteTagIfUnused('00000000-0000-4000-8000-000000000000', identity)
+    const result = await deleteTagIfUnused(
+      '00000000-0000-4000-8000-000000000000',
+      identity,
+    )
     expect(result).toMatchObject({ deleted: false, reason: 'not_found' })
   })
 
@@ -105,7 +111,11 @@ d('tagsAdmin (DB integration)', () => {
       [docId],
     )
     expect(audit.action).toBe('tag_decision')
-    expect(audit.before).toMatchObject({ tagId, source: 'llm', status: 'suggested' })
+    expect(audit.before).toMatchObject({
+      tagId,
+      source: 'llm',
+      status: 'suggested',
+    })
     expect(audit.after).toEqual({ tagId, status: 'accepted', source: 'human' })
   })
 
@@ -118,16 +128,24 @@ d('tagsAdmin (DB integration)', () => {
     const result = await deleteTagIfUnused(spareId, identity)
     expect(result).toEqual({ deleted: true })
     // Confirm it is actually gone
-    const rows = await AppDataSource.query(`SELECT id FROM tags WHERE id = $1`, [spareId])
+    const rows = await AppDataSource.query(
+      `SELECT id FROM tags WHERE id = $1`,
+      [spareId],
+    )
     expect(rows).toHaveLength(0)
     // Clean up audit for spare tag
-    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [spareId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+      spareId,
+    ])
   })
 
   it('addHumanTag conflicts when tag is already on document', async () => {
     // document_tag row still exists from decideDocumentTag test
     const result = await addHumanTag(docId, tagId, identity)
-    expect(result).toHaveProperty('error', 'tag already on document — use accept/reject')
+    expect(result).toHaveProperty(
+      'error',
+      'tag already on document — use accept/reject',
+    )
   })
 
   it('addHumanTag inserts a new human tag', async () => {
@@ -180,7 +198,11 @@ d('tagsAdmin (DB integration)', () => {
     )
     const spareId = spareRow.id
 
-    const result = await renameTag(spareId, { valueId: `__test_renamed_${ts}__` }, identity)
+    const result = await renameTag(
+      spareId,
+      { valueId: `__test_renamed_${ts}__` },
+      identity,
+    )
     expect(result).not.toBeNull()
     expect(result!.valueId).toBe(`__test_renamed_${ts}__`)
 
@@ -200,11 +222,15 @@ d('tagsAdmin (DB integration)', () => {
       [spareId],
     )
     expect(audit.action).toBe('update')
-    expect(audit.before).toMatchObject({ valueId: `__test_rename_target_${ts}__` })
+    expect(audit.before).toMatchObject({
+      valueId: `__test_rename_target_${ts}__`,
+    })
     expect(audit.after).toMatchObject({ valueId: `__test_renamed_${ts}__` })
 
     // Cleanup
-    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [spareId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+      spareId,
+    ])
     await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [spareId])
   })
 
@@ -236,12 +262,18 @@ d('tagsAdmin (DB integration)', () => {
     expect(audit.before).toMatchObject({ facet: 'topic' })
     expect(audit.after).toMatchObject({ facet: 'program' })
 
-    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [spareId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+      spareId,
+    ])
     await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [spareId])
   })
 
   it('renameTag returns null for a non-existent tag', async () => {
-    const result = await renameTag('00000000-0000-4000-8000-000000000000', { valueId: 'x' }, identity)
+    const result = await renameTag(
+      '00000000-0000-4000-8000-000000000000',
+      { valueId: 'x' },
+      identity,
+    )
     expect(result).toBeNull()
   })
 
@@ -269,7 +301,9 @@ d('tagsAdmin (DB integration)', () => {
 
   it('createTag allows a new facet when allowNewFacet is true', async () => {
     const facet = `newfacet_${Date.now()}`
-    const result = await createTag(facet, 'somevalue', identity, { allowNewFacet: true })
+    const result = await createTag(facet, 'somevalue', identity, {
+      allowNewFacet: true,
+    })
     expect(result).not.toHaveProperty('error')
     const created = result as { id: string }
     await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [created.id])

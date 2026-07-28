@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
   const { identity, response } = await requireIdentity(req)
   if (response) return response
   try {
-    const { facet, valueId, allowNewFacet } = (await req.json().catch(() => ({}))) ?? {}
+    const { facet, valueId, allowNewFacet } =
+      (await req.json().catch(() => ({}))) ?? {}
     if (!facet || !valueId) {
       return NextResponse.json(
         { ok: false, error: 'facet and valueId are required' },
@@ -34,7 +35,10 @@ export async function POST(req: NextRequest) {
       allowNewFacet: Boolean(allowNewFacet),
     })
     if ('error' in result)
-      return NextResponse.json({ ok: false, error: result.error }, { status: 409 })
+      return NextResponse.json(
+        { ok: false, error: result.error },
+        { status: 409 },
+      )
     return NextResponse.json({ ok: true, tag: result })
   } catch (err) {
     return internalError(err)

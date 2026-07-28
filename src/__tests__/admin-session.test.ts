@@ -1,5 +1,10 @@
 /** @jest-environment node */
-import { signSession, verifySession, SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session'
+import {
+  signSession,
+  verifySession,
+  SESSION_COOKIE,
+  sessionCookieOptions,
+} from '@/lib/auth/session'
 
 beforeAll(() => {
   process.env.SESSION_SECRET = 'test-secret-test-secret-test-secret-1234'
@@ -18,7 +23,8 @@ describe('session sign/verify', () => {
     // Flip a mid-signature char (guaranteed different; the final base64url
     // char has ignored padding bits, so appending 'xx' was flaky).
     const i = token.length - 3
-    const tampered = token.slice(0, i) + (token[i] === 'A' ? 'B' : 'A') + token.slice(i + 1)
+    const tampered =
+      token.slice(0, i) + (token[i] === 'A' ? 'B' : 'A') + token.slice(i + 1)
     expect(await verifySession(tampered)).toBeNull()
   })
 

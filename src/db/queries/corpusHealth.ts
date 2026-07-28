@@ -34,17 +34,20 @@ export interface CorpusHealth {
  * (missing native summaries, missing title_en) that are otherwise invisible.
  */
 export async function getCorpusHealth(): Promise<CorpusHealth> {
-  const statusRows: { status: string; count: string }[] = await AppDataSource.query(`
+  const statusRows: { status: string; count: string }[] =
+    await AppDataSource.query(`
     SELECT status, count(*)::text AS count FROM documents GROUP BY status
   `)
   const statusCounts: Record<string, number> = {}
   for (const r of statusRows) statusCounts[r.status] = Number(r.count)
 
-  const langRows: { language: string; count: string }[] = await AppDataSource.query(`
+  const langRows: { language: string; count: string }[] =
+    await AppDataSource.query(`
     SELECT language, count(*)::text AS count FROM documents GROUP BY language
   `)
   const languageCounts: Record<string, number> = {}
-  for (const r of langRows) languageCounts[r.language ?? 'unknown'] = Number(r.count)
+  for (const r of langRows)
+    languageCounts[r.language ?? 'unknown'] = Number(r.count)
 
   const [qRow] = await AppDataSource.query(`
     SELECT

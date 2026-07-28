@@ -41,18 +41,21 @@ d('migration 178132 — schema + data backfills', () => {
     expect(names).not.toContain('abstract')
   })
 
-  corpusIt('authors/url/date_published backfilled for all 169 migrated docs', async () => {
-    const [r] = await AppDataSource.query(
-      `SELECT
+  corpusIt(
+    'authors/url/date_published backfilled for all 169 migrated docs',
+    async () => {
+      const [r] = await AppDataSource.query(
+        `SELECT
          count(*) FILTER (WHERE authors IS NOT NULL) AS a,
          count(*) FILTER (WHERE url IS NOT NULL) AS u,
          count(*) FILTER (WHERE date_published IS NOT NULL) AS d
        FROM documents WHERE source_metadata IS NOT NULL`,
-    )
-    expect(Number(r.a)).toBe(169)
-    expect(Number(r.u)).toBe(169)
-    expect(Number(r.d)).toBe(169)
-  })
+      )
+      expect(Number(r.a)).toBe(169)
+      expect(Number(r.u)).toBe(169)
+      expect(Number(r.d)).toBe(169)
+    },
+  )
 
   it('no document title is "Pre-EM" or "Not available"', async () => {
     const [r] = await AppDataSource.query(

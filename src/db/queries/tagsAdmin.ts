@@ -50,9 +50,13 @@ export async function createTag(
   // Transactional: the tag insert and its audit row commit together (D4).
   return AppDataSource.transaction(async (em) => {
     const repo = em.getRepository(Tag)
-    const existing = await repo.findOne({ where: { facet, valueId, taxonomyVersion: 'v1' } })
+    const existing = await repo.findOne({
+      where: { facet, valueId, taxonomyVersion: 'v1' },
+    })
     if (existing) return { error: 'tag already exists' }
-    const tag = await repo.save(repo.create({ facet, valueId, taxonomyVersion: 'v1' }))
+    const tag = await repo.save(
+      repo.create({ facet, valueId, taxonomyVersion: 'v1' }),
+    )
     await writeAudit({
       ...auditActor(identity),
       action: 'create',
@@ -98,7 +102,11 @@ export async function deleteTagIfUnused(
     return { deleted: true as const }
   })
   if (result.deleted) return { deleted: true }
-  return { deleted: false, reason: result.reason, error: 'tag is applied to one or more documents' }
+  return {
+    deleted: false,
+    reason: result.reason,
+    error: 'tag is applied to one or more documents',
+  }
 }
 
 /**
@@ -151,7 +159,8 @@ export async function addHumanTag(
       `SELECT 1 FROM document_tags WHERE document_id = $1 AND tag_id = $2`,
       [documentId, tagId],
     )
-    if (existing.length > 0) return { error: 'tag already on document — use accept/reject' }
+    if (existing.length > 0)
+      return { error: 'tag already on document — use accept/reject' }
     await em.query(
       `INSERT INTO document_tags (document_id, tag_id, source, status)
        VALUES ($1, $2, 'human', 'accepted')`,

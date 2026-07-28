@@ -153,7 +153,8 @@ export async function GET(_req: NextRequest) {
 
       if (p.endsWith('.json')) {
         const arr = JSON.parse(buf)
-        if (!Array.isArray(arr)) throw new Error('JSON catalog must be an array')
+        if (!Array.isArray(arr))
+          throw new Error('JSON catalog must be an array')
         items = arr.map((row: any) => normalizeRow(row))
       } else {
         const rows = parseCSV(buf)

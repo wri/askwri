@@ -21,7 +21,8 @@ function makeCatalogRow(overrides: Partial<CatalogRow> = {}): CatalogRow {
     allAuthors: 'Smith, John; Doe, Jane',
     articleType: 'Working Paper',
     office: 'WRI Global',
-    summary: 'This is the full long summary from the CSV catalog. It is complete and not truncated mid-sentence.',
+    summary:
+      'This is the full long summary from the CSV catalog. It is complete and not truncated mid-sentence.',
     shortSummary: 'This is a long summary that has been trunca',
     raw: {
       'date published': '8/17/2021',
@@ -54,7 +55,10 @@ describe('buildCitationsCsv', () => {
   it('does not truncate the summary to 240 chars', () => {
     const longSummary = 'A'.repeat(500) + '. This is the end.'
     const doc = makeDoc()
-    const row = makeCatalogRow({ summary: longSummary, shortSummary: 'A'.repeat(240) })
+    const row = makeCatalogRow({
+      summary: longSummary,
+      shortSummary: 'A'.repeat(240),
+    })
     const index = buildCatalogIndex([row])
     const csv = buildCitationsCsv({
       docs: [doc],
@@ -83,7 +87,10 @@ describe('buildCitationsCsv', () => {
 
   it('falls back to docSummary when row.summary is absent', () => {
     const doc = makeDoc()
-    const row = makeCatalogRow({ summary: undefined, shortSummary: 'Short text.' })
+    const row = makeCatalogRow({
+      summary: undefined,
+      shortSummary: 'Short text.',
+    })
     const index = buildCatalogIndex([row])
     const csv = buildCitationsCsv({
       docs: [doc],

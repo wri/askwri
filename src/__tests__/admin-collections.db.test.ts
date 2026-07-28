@@ -45,15 +45,16 @@ d('collectionsAdmin (DB integration)', () => {
 
   afterAll(async () => {
     if (collectionId) {
-      await AppDataSource.query(
-        `DELETE FROM audit_log WHERE entity_id = $1`,
-        [collectionId],
-      )
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+        collectionId,
+      ])
       await AppDataSource.query(
         `DELETE FROM document_collections WHERE collection_id = $1`,
         [collectionId],
       )
-      await AppDataSource.query(`DELETE FROM collections WHERE id = $1`, [collectionId])
+      await AppDataSource.query(`DELETE FROM collections WHERE id = $1`, [
+        collectionId,
+      ])
     }
     await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     await AppDataSource.destroy()
@@ -120,7 +121,11 @@ d('collectionsAdmin (DB integration)', () => {
   })
 
   it('addDocumentsToCollection rejects non-UUID documentIds', async () => {
-    const result = await addDocumentsToCollection(collectionId, ['not-a-uuid'], identity)
+    const result = await addDocumentsToCollection(
+      collectionId,
+      ['not-a-uuid'],
+      identity,
+    )
     expect(result).toEqual({ error: 'documentIds must be UUIDs' })
   })
 
@@ -165,7 +170,11 @@ d('collectionsAdmin (DB integration)', () => {
   it('updateCollection regenerates the slug when the name changes', async () => {
     // The collection was created with a timestamp-based name; rename it
     const newName = `Renamed Collection ${Date.now()}`
-    const result = await updateCollection(collectionId, { name: newName }, identity)
+    const result = await updateCollection(
+      collectionId,
+      { name: newName },
+      identity,
+    )
     expect(result).not.toBeNull()
     expect(result!.name).toBe(newName)
     expect(result!.slug).toBe(slugify(newName))

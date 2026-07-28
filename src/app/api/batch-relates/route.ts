@@ -60,7 +60,10 @@ interface DocInput {
 
 export async function POST(req: NextRequest) {
   try {
-    const { query, docs } = await req.json() as { query: string; docs: DocInput[] }
+    const { query, docs } = (await req.json()) as {
+      query: string
+      docs: DocInput[]
+    }
     const key = process.env.OPENAI_API_KEY?.trim()
 
     if (!docs || !Array.isArray(docs) || docs.length === 0) {
@@ -71,7 +74,8 @@ export async function POST(req: NextRequest) {
     if (!key) {
       const results = docs.map((doc) => {
         const snippet = String(doc?.snippet ?? '')
-        const fb = snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
+        const fb =
+          snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
         return { relates: fb, relation: 'indirect' as const }
       })
       return NextResponse.json({ ok: true, results })
@@ -85,10 +89,16 @@ export async function POST(req: NextRequest) {
       })
       .join('\n\n')
 
-    const userContent = JSON.stringify({ query, document_count: docs.length, documents: docList })
+    const userContent = JSON.stringify({
+      query,
+      document_count: docs.length,
+      documents: docList,
+    })
 
     // Token allocation: ~100 tokens per doc for output
-    const outputTokens = IS_GPT5 ? Math.max(1000, docs.length * 120) : Math.min(docs.length * 120, 4000)
+    const outputTokens = IS_GPT5
+      ? Math.max(1000, docs.length * 120)
+      : Math.min(docs.length * 120, 4000)
 
     const body: any = {
       model: MODEL,
@@ -122,10 +132,15 @@ export async function POST(req: NextRequest) {
       // Fallback on API error
       const results = docs.map((doc) => {
         const snippet = String(doc?.snippet ?? '')
-        const fb = snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
+        const fb =
+          snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
         return { relates: fb, relation: 'indirect' as const }
       })
-      return NextResponse.json({ ok: true, results, debug: { status: r.status, upstream: j?.error } })
+      return NextResponse.json({
+        ok: true,
+        results,
+        debug: { status: r.status, upstream: j?.error },
+      })
     }
 
     const choice = j?.choices?.[0]
@@ -146,11 +161,15 @@ export async function POST(req: NextRequest) {
         if (item && typeof item.relates === 'string' && item.relates.trim()) {
           return {
             relates: item.relates.trim(),
-            relation: item.relation === 'direct' ? 'direct' as const : 'indirect' as const,
+            relation:
+              item.relation === 'direct'
+                ? ('direct' as const)
+                : ('indirect' as const),
           }
         }
         const snippet = String(doc?.snippet ?? '')
-        const fb = snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
+        const fb =
+          snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
         return { relates: fb, relation: 'indirect' as const }
       })
       return NextResponse.json({ ok: true, results, usage: j?.usage })
@@ -159,7 +178,8 @@ export async function POST(req: NextRequest) {
     // Parsing failed — return fallbacks
     const results = docs.map((doc) => {
       const snippet = String(doc?.snippet ?? '')
-      const fb = snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
+      const fb =
+        snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
       return { relates: fb, relation: 'indirect' as const }
     })
     return NextResponse.json({ ok: true, results, debug: { parseError: true } })

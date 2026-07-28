@@ -34,16 +34,24 @@ d('getWorkerHealth (DB integration)', () => {
     expect(health.queueDepth).toBeGreaterThanOrEqual(0)
   })
 
-  corpusIt('reports a non-null lastProcessedAt when any job has been processed', async () => {
-    const health = await getWorkerHealth()
-    expect(health.lastProcessedAt).not.toBeNull()
-  })
+  corpusIt(
+    'reports a non-null lastProcessedAt when any job has been processed',
+    async () => {
+      const health = await getWorkerHealth()
+      expect(health.lastProcessedAt).not.toBeNull()
+    },
+  )
 
   it('determines pending vs stale from intake file age (pure logic)', () => {
     // Test the status-determination logic without S3 (Jest can't run aws-sdk
     // dynamic imports). The logic is: queueDepth>0 → processing; else if
     // intakeBacklog>0 → stale if oldestAge > threshold, else pending; else idle.
-    function deriveStatus(queueDepth: number, intakeBacklog: number, oldestAge: number, threshold: number) {
+    function deriveStatus(
+      queueDepth: number,
+      intakeBacklog: number,
+      oldestAge: number,
+      threshold: number,
+    ) {
       if (queueDepth > 0) return 'processing'
       if (intakeBacklog > 0) return oldestAge > threshold ? 'stale' : 'pending'
       return 'idle'

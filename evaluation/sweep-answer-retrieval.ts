@@ -9,18 +9,19 @@
 import fs from 'fs'
 import path from 'path'
 
-const SERVICE_URL = process.env.LLAMAINDEX_SERVICE_URL || 'http://localhost:8000'
+const SERVICE_URL =
+  process.env.LLAMAINDEX_SERVICE_URL || 'http://localhost:8000'
 
 // Load golden queries — file structure: { test_cases: [{ test_case_id, question, ... }] }
 const rawData = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'answer-synthesis-raw.json'), 'utf-8')
+  fs.readFileSync(path.join(__dirname, 'answer-synthesis-raw.json'), 'utf-8'),
 )
 const goldenSet = rawData.test_cases
 
 // Load GPT-5.4 debiased labels — file structure: { questions: [{ id, chunks: [{ chunk_id, label }] }] }
 const labels: Record<string, Record<string, string>> = {}
 const labelFile = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'answer-labels-review.json'), 'utf-8')
+  fs.readFileSync(path.join(__dirname, 'answer-labels-review.json'), 'utf-8'),
 )
 for (const q of labelFile.questions) {
   labels[q.id] = {}
@@ -51,7 +52,7 @@ async function runQuery(
   query: string,
   alpha: number,
   rerankTopN: number,
-  maxResults: number
+  maxResults: number,
 ): Promise<Array<{ chunk_id: string; score: number }>> {
   const resp = await fetch(`${SERVICE_URL}/query`, {
     method: 'POST',
@@ -80,11 +81,11 @@ async function runQuery(
 function computePrecisionAtK(
   results: Array<{ chunk_id: string }>,
   queryLabels: Record<string, string>,
-  k: number
+  k: number,
 ): number {
   const topK = results.slice(0, k)
   if (topK.length === 0) return 0
-  const relevant = topK.filter(r => {
+  const relevant = topK.filter((r) => {
     const label = queryLabels[r.chunk_id]
     return label === 'relevant' || label === 'partially_relevant'
   })
@@ -110,7 +111,12 @@ async function main() {
       const perQuery: SweepResult['perQuery'] = []
 
       for (const q of goldenSet) {
-        const results = await runQuery(q.question, alpha, rerankTopN, Math.max(...PRECISION_AT_K))
+        const results = await runQuery(
+          q.question,
+          alpha,
+          rerankTopN,
+          Math.max(...PRECISION_AT_K),
+        )
         const queryLabels = labels[q.test_case_id] || {}
 
         for (const k of PRECISION_AT_K) {
@@ -121,7 +127,7 @@ async function main() {
           queryId: q.test_case_id,
           question: q.question,
           precisionAt8: computePrecisionAtK(results, queryLabels, 8),
-          relevantInTop8: results.slice(0, 8).filter(r => {
+          relevantInTop8: results.slice(0, 8).filter((r) => {
             const l = queryLabels[r.chunk_id]
             return l === 'relevant' || l === 'partially_relevant'
           }).length,
@@ -134,7 +140,9 @@ async function main() {
         precisionAtK[k] = precisionSums[k] / goldenSet.length
       }
 
-      console.log(`  P@8=${precisionAtK[8].toFixed(3)}  P@10=${precisionAtK[10].toFixed(3)}  P@12=${precisionAtK[12].toFixed(3)}  P@15=${precisionAtK[15].toFixed(3)}`)
+      console.log(
+        `  P@8=${precisionAtK[8].toFixed(3)}  P@10=${precisionAtK[10].toFixed(3)}  P@12=${precisionAtK[12].toFixed(3)}  P@15=${precisionAtK[15].toFixed(3)}`,
+      )
 
       allResults.push({ alpha, rerankTopN, precisionAtK, perQuery })
     }
@@ -142,14 +150,16 @@ async function main() {
 
   // Find best config
   const best = allResults.reduce((a, b) =>
-    (a.precisionAtK[8] > b.precisionAtK[8]) ? a : b
+    a.precisionAtK[8] > b.precisionAtK[8] ? a : b,
   )
   console.log(`\n=== BEST CONFIG ===`)
   console.log(`alpha=${best.alpha}, rerankTopN=${best.rerankTopN}`)
   console.log(`P@8=${best.precisionAtK[8].toFixed(3)}`)
   console.log(`\nPer-query breakdown:`)
   for (const q of best.perQuery) {
-    console.log(`  ${q.queryId}: P@8=${q.precisionAt8.toFixed(2)} (${q.relevantInTop8}/8)`)
+    console.log(
+      `  ${q.queryId}: P@8=${q.precisionAt8.toFixed(2)} (${q.relevantInTop8}/8)`,
+    )
   }
 
   // Save results
@@ -157,12 +167,27 @@ async function main() {
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true })
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const outPath = path.join(outDir, `answer-retrieval-sweep-${timestamp}.json`)
-  fs.writeFileSync(outPath, JSON.stringify({
-    timestamp: new Date().toISOString(),
-    sweep_params: { alphas: ALPHA_VALUES, rerankTopNs: RERANK_TOP_N_VALUES, precisionAtK: PRECISION_AT_K },
-    best: { alpha: best.alpha, rerankTopN: best.rerankTopN, precisionAtK: best.precisionAtK },
-    all_results: allResults,
-  }, null, 2))
+  fs.writeFileSync(
+    outPath,
+    JSON.stringify(
+      {
+        timestamp: new Date().toISOString(),
+        sweep_params: {
+          alphas: ALPHA_VALUES,
+          rerankTopNs: RERANK_TOP_N_VALUES,
+          precisionAtK: PRECISION_AT_K,
+        },
+        best: {
+          alpha: best.alpha,
+          rerankTopN: best.rerankTopN,
+          precisionAtK: best.precisionAtK,
+        },
+        all_results: allResults,
+      },
+      null,
+      2,
+    ),
+  )
   console.log(`\nResults saved to ${outPath}`)
 }
 
