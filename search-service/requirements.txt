@@ -29,7 +29,7 @@ certifi>=2023.11.17
 
 # Postgres / pgvector (system of record for chunks + embeddings)
 psycopg[binary,pool]>=3.2
-pgvector>=0.3.0
+pgvector>=0.5.0
 
 # Phase 1 ingestion worker
 boto3>=1.34
