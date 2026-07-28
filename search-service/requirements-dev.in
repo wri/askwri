@@ -1,0 +1,11 @@
+# SOURCE file — edit this, never requirements-dev.txt.
+# Regenerate with ./scripts/compile-requirements.sh (see requirements.in).
+pytest>=9.1.1
+pytest-cov>=7.1.0
+pytest-asyncio>=1.4.0
+
+# Local-dev only: lets boto3 resolve the AWS CLI `aws login` session
+# credentials (provider=login, auto-refreshing) so long-running Bedrock
+# scripts (reembed_cohere) survive the ~1h token expiry. The deployed
+# services use the ECS task role and never need this.
+botocore[crt]

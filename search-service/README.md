@@ -126,8 +126,14 @@ Cite mode deduplicates by document ID, keeping the best chunk score per document
 ```bash
 cd search-service
 
-# Install dependencies
+# Install dependencies. requirements.txt is PINNED pip-compile output —
+# every direct and transitive version is fixed, so this matches the deploy
+# image exactly. Edit requirements.in (never the .txt), then regenerate:
+#   ./scripts/compile-requirements.sh
 pip install -r requirements.txt
+
+# To make the venv match the lock exactly (removes anything not in it):
+#   pip install pip-tools && pip-sync requirements.txt requirements-dev.txt
 
 # Create .env with:
 #   OPENAI_API_KEY=sk-...
@@ -217,6 +223,11 @@ search-service/
 │   ├── documents.csv        # Document metadata catalog
 │   └── *.pdf                # PDF corpus
 ├── Dockerfile
-├── requirements.txt
+├── requirements.in         # SOURCE — edit this
+├── requirements.txt        # GENERATED — pinned, do not hand-edit
+├── requirements-dev.in     # SOURCE
+├── requirements-dev.txt    # GENERATED
+├── scripts/
+│   └── compile-requirements.sh  # regenerate the two .txt files
 └── README.md
 ```
