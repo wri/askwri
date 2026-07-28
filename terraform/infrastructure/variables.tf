@@ -214,6 +214,21 @@ variable "rds_security_group_id" {
 # S3 Variables
 # =============================================================================
 
+variable "image_tag" {
+  description = <<-EOT
+    ECR tag the ECS task definitions run. The deploy workflows pass the full
+    commit SHA, which is immutable, so a task definition records exactly which
+    commit is live and a rollback is `terraform apply -var="image_tag=<sha>"`
+    with no rebuild.
+
+    Defaults to "latest" so a manual `terraform apply` outside the workflows
+    still resolves. Do not rely on that default for a real deploy: `latest` is
+    mutable, so the running task becomes whichever build pushed most recently.
+  EOT
+  type        = string
+  default     = "latest"
+}
+
 variable "documents_s3_bucket" {
   description = "S3 bucket name containing documents for the search service"
   type        = string
