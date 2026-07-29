@@ -9,7 +9,11 @@ import {
 import { DocMeta, KP } from '@/lib/llamacloud'
 import { getCatalog } from '@/lib/catalog-cache'
 import { CitationCard } from './CitationCard'
-import { buildCatalogIndex } from '../../utils/utils'
+import {
+  buildCatalogIndex,
+  matchCatalogRow,
+  titleFrom,
+} from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
 
 export const SupportingCitations = ({
@@ -44,9 +48,13 @@ export const SupportingCitations = ({
   const [catalogIndex, setCatalogIndex] = useState<ReturnType<
     typeof buildCatalogIndex
   > | null>(null)
+  // Settles true even when the fetch failed and index is null, so the
+  // explanation fetch below degrades rather than stalls.
+  const [catalogSettled, setCatalogSettled] = useState(false)
   useEffect(() => {
     getCatalog().then(({ index }) => {
       setCatalogIndex(index)
+      setCatalogSettled(true)
     })
   }, [])
 
@@ -134,7 +142,7 @@ export const SupportingCitations = ({
 
   // Fetch "Why it answers" explanations for visible passages
   useEffect(() => {
-    if (paginatedItems.length === 0) return
+    if (paginatedItems.length === 0 || !catalogSettled) return
 
     const passagesToFetch = paginatedItems.filter(({ doc, kp }) => {
       const passageId = `${doc.doc_id}:${kp.passage_id}`
@@ -159,7 +167,10 @@ export const SupportingCitations = ({
         query: 'answer', // Generic query since we don't have access to actual query here
         mode: 'answer',
         passages: passagesToFetch.map(({ doc, kp }) => ({
-          docTitle: doc.title || 'Document',
+          // English title, so the explanation is grounded in the same title
+          // the card shows rather than the native-language chunk metadata.
+          docTitle:
+            titleFrom(doc, matchCatalogRow(doc, catalogIndex)) || 'Document',
           snippet: kp.snippet,
         })),
       }),
@@ -210,6 +221,8 @@ export const SupportingCitations = ({
       })
   }, [
     paginatedItems,
+    catalogIndex,
+    catalogSettled,
     passageWhy,
     passageWhyLoading,
     setPassageWhy,

@@ -113,7 +113,11 @@ Switched by `RETRIEVAL_BACKEND` env var in `search-service/app/config.py`.
 
 Both backends serve the same frozen `/query` contract (`QueryRequest`/`QueryResponse` in `search-service/app/main.py`). The `/reindex` endpoint re-runs the active boot path (re-reads Postgres in postgres mode; re-parses CSV in legacy mode).
 
-`CATALOG_SOURCE=postgres` (app tier) switches `/api/catalog` from reading the CSV to reading `documents.source_metadata` from Postgres.
+`CATALOG_SOURCE=postgres` (app tier, the default) switches `/api/catalog` from reading the CSV to reading Postgres.
+
+**Catalog payload (issues #305/#306, 2026-07-29).** Each item keeps the legacy CSV envelope `{file_path, metadata: <json string>, summary}` for backward compatibility, and adds `meta.dms` — the first-class `documents` columns (`title`, `title_en`, `authors`, `year_published`, `date_published`, `publication_title`, `article_type`, `wri_primary_office`, `doi`, `url`, `language`, `languages`) plus the English `long`/`short` rows from `document_summaries`. **`meta.dms` is authoritative; `meta.metadata` is a frozen import artefact.** The research UI reads it through `normalizeCatalogRow` → `CatalogRow` in `src/app/utils/utils.tsx`, and `buildCatalogIndex` keys documents by `external_id` so `matchCatalogRow` matches `/query`'s `metadata.doc_id` exactly instead of guessing from filenames and titles.
+
+This matters because `document_chunks.node_metadata` — and therefore every field `/query` returns — is built from `source_metadata` at embed time (`worker/stages/embed.py`). For worker-ingested documents that jsonb is sparse or absent, which is why the UI rendered "Unknown author", blank years and blank summaries; and where it does exist it is stale (pre-#303 bilingual titles, and three English documents whose CSV `languages` says `Chinese`). Any new UI metadata field must come from `meta.dms`, never from `meta.metadata` and never from the `/query` chunk metadata. `meta.dms.url` is deliberately NOT wired into `urlFrom` — it is the publication's landing page, while the Open-document and preview-iframe consumers need the in-app `/api/pdf` route.
 
 **Keyword lane** (`RETRIEVAL_BACKEND=postgres` only) — controlled by `KEYWORD_BACKEND`:
 

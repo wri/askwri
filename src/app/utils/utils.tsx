@@ -7,7 +7,28 @@ export interface CatalogMeta {
   file_path?: string
   metadata?: string
   summary?: string
+  dms?: CatalogDmsMeta
   [key: string]: any
+}
+
+/** Mirror of CatalogDms in src/db/queries/getCatalogItems.ts (serialized over
+ *  /api/catalog). Absent when the catalog is served from the legacy CSV. */
+export interface CatalogDmsMeta {
+  doc_id?: string
+  title?: string | null
+  title_en?: string | null
+  authors?: string | null
+  year_published?: number | null
+  date_published?: string | null
+  publication_title?: string | null
+  article_type?: string | null
+  wri_primary_office?: string | null
+  doi?: string | null
+  url?: string | null
+  language?: string | null
+  languages?: string[] | null
+  summary_en?: string | null
+  short_summary_en?: string | null
 }
 
 // Catalog row type for catalog helpers
@@ -36,6 +57,13 @@ export interface CatalogRow {
   raw?: Record<string, any>
   fileName?: string
   meta?: CatalogMeta
+  /** Document-management fields — authoritative over everything above. */
+  docId?: string
+  titleEn?: string
+  nativeTitle?: string
+  language?: string
+  languages?: string[]
+  doi?: string
 }
 
 /* ---------- general helpers ---------- */
@@ -57,9 +85,15 @@ const slug = (s?: string) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, '-')
+/** Split an author list on SEMICOLONS ONLY.
+ *
+ *  Both `documents.authors` and the legacy CSV `All authors` use
+ *  "Last, First; Last, First" — the comma belongs to the name. Splitting on
+ *  commas too turned "Qiu, Shiyong; Liu, Daizong" into four "authors" and
+ *  mangled single-author rows like "Lazer, Leah" into "Lazer" and "Leah". */
 export const parseAuthors = (csv?: string) =>
   (csv || '')
-    .split(/;|,/)
+    .split(';')
     .map((v) => v.trim())
     .filter(Boolean)
 const toYear = (x: string) => {
@@ -90,51 +124,92 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
   const baseName = basename(fileName)
   const noExt = stripExt(baseName)
   const meta = parseMetaJSON(r.meta?.metadata)
+  const dms = r.meta?.dms ?? {}
   return {
     fileName,
     baseName: baseName.toLowerCase(),
     noExt: noExt.toLowerCase(),
-    titleSlug: slug(meta['publication title']) || undefined,
+    titleSlug:
+      slug(dms.title_en ?? undefined) ||
+      slug(dms.title ?? undefined) ||
+      slug(meta['publication title']) ||
+      undefined,
     articleTitle: meta['article title'] || undefined,
-    publicationTitle: meta['publication title'] || undefined,
-    allAuthors: meta['all authors'] || undefined,
+    publicationTitle:
+      dms.publication_title || meta['publication title'] || undefined,
+    allAuthors: dms.authors || meta['all authors'] || undefined,
+    // Deliberately NOT dms.url: that is the publication's landing page, while
+    // sourceUrl feeds urlFrom, whose consumers (Open document, the preview
+    // iframe) need the in-app /api/pdf route.
     sourceUrl:
       meta['source url'] || meta['other weblink (not doi)'] || undefined,
-    articleType: meta['article type'] || meta.article_type || undefined,
+    articleType:
+      dms.article_type ||
+      meta['article type'] ||
+      meta.article_type ||
+      undefined,
     subTag: meta['sub-tag'] || undefined,
-    yearAccepted: toYear(String(meta['year accepted'] ?? meta.year)),
-    dateAccepted: meta['date accepted'] || undefined,
+    yearAccepted:
+      dms.year_published ?? toYear(String(meta['year accepted'] ?? meta.year)),
+    dateAccepted: dms.date_published || meta['date accepted'] || undefined,
     office:
+      dms.wri_primary_office ||
       meta['wri office affiliation (primary)'] ||
       meta.wri_primary_office ||
       undefined,
-    summary: r.meta?.summary || undefined, // Preserve the CSV summary field
+    summary: dms.summary_en || r.meta?.summary || undefined,
     shortSummary:
+      dms.short_summary_en ||
       r.meta?.short_summary ||
       meta['short_summary'] ||
       meta['short summary'] ||
       undefined,
+    docId: dms.doc_id || undefined,
+    titleEn: dms.title_en || undefined,
+    nativeTitle: dms.title || undefined,
+    language: dms.language || undefined,
+    languages: dms.languages ?? undefined,
+    doi: dms.doi || undefined,
     raw: meta,
   }
 }
-/** Language label for a result row, from the client-side catalog's raw CSV
- *  metadata ('languages' key survives parseMetaJSON's norm()). Empty for
- *  English-only or unknown — the badge renders only when it informs. */
-export function languageLabel(raw?: Record<string, any>): string {
-  const v = String(raw?.['languages'] ?? '').trim()
-  if (!v || v.toLowerCase() === 'english') return ''
-  return v
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish',
+  pt: 'Portuguese',
+  zh: 'Chinese',
+  fr: 'French',
+  id: 'Bahasa Indonesia',
+  hi: 'Hindi',
+}
+
+/** Badge label for a result row: the document's own language, from the
+ *  document-management `language` column. Empty for English (and for rows with
+ *  no DMS record) — the badge renders only when it informs.
+ *
+ *  It deliberately ignores the legacy CSV `languages` field, which is stale:
+ *  three English documents in the corpus carry `languages='Chinese'` there,
+ *  which is what made English-only docs render a Chinese badge (issue #306). */
+export function languageLabel(row?: CatalogRow): string {
+  const code = String(row?.language ?? '')
+    .trim()
+    .toLowerCase()
+  if (!code || code === 'en') return ''
+  return LANGUAGE_NAMES[code] ?? code.toUpperCase()
 }
 
 export function buildCatalogIndex(items: CatalogRow[]) {
   const byBase = new Map<string, CatalogRow>() // basename + noExt
   const bySlug = new Map<string, CatalogRow>() // title slug
+  const byDocId = new Map<string, CatalogRow>() // documents.external_id
   for (const r of items) {
     if (r.baseName) byBase.set(r.baseName, r)
     if (r.noExt) byBase.set(r.noExt, r)
     if (r.titleSlug) bySlug.set(r.titleSlug, r)
+    if (r.docId) byDocId.set(r.docId, r)
   }
-  return { byBase, bySlug }
+  return { byBase, bySlug, byDocId }
 }
 
 export function matchCatalogRow(
@@ -142,9 +217,15 @@ export function matchCatalogRow(
   index: {
     byBase: Map<string, CatalogRow>
     bySlug: Map<string, CatalogRow>
+    byDocId?: Map<string, CatalogRow>
   } | null,
 ): CatalogRow | undefined {
   if (!index) return undefined
+  // Exact match first: /query's metadata.doc_id IS documents.external_id
+  // (search-service worker/stages/embed.py:100), so this is exact where the
+  // filename/title heuristics below are only best-effort.
+  const byDocId = index.byDocId?.get(doc.doc_id)
+  if (byDocId) return byDocId
   const chunk = (doc.meta as any)?.raw?.chunk || {}
   const candidates = [
     doc._url,
@@ -165,13 +246,27 @@ export function matchCatalogRow(
   if (s2 && index.bySlug.has(s2)) return index.bySlug.get(s2)
   return undefined
 }
+/** The English title, always. `doc.title` comes from chunk node_metadata,
+ *  which is built from the frozen CSV `Publication Title` and is bilingual for
+ *  documents imported before issue #303 split the pair — so the DMS
+ *  `title_en` column wins over it (issues #305, #306). */
 export function titleFrom(doc: DocMeta, row?: CatalogRow) {
-  const t = row?.publicationTitle || doc.title || row?.articleTitle || ''
+  const t =
+    row?.titleEn ||
+    row?.publicationTitle ||
+    doc.title ||
+    row?.articleTitle ||
+    row?.nativeTitle ||
+    ''
   if (t) return t
   const fromName =
     row?.baseName || stripExt(basename(doc._url || '')) || '(untitled)'
   return titleCase(fromName.replace(/[_-]+/g, ' ').trim())
 }
+/** Authors, transliterated to Latin script. `documents.authors` is written by
+ *  the parse stage's extraction, which transliterates (issue #303); the
+ *  node_metadata fallback is empty for worker-ingested docs, which is what
+ *  rendered "Unknown author" / "(author unknown)". */
 export function authorsFrom(doc: DocMeta, row?: CatalogRow) {
   if (row?.allAuthors && row.allAuthors !== '—' && row.allAuthors !== '-')
     return parseAuthors(row.allAuthors)
@@ -181,10 +276,19 @@ export function authorsFrom(doc: DocMeta, row?: CatalogRow) {
   return (doc.authors || []).filter(Boolean)
 }
 export function yearFrom(doc: DocMeta, row?: CatalogRow) {
-  return doc?.year ?? row?.yearAccepted ?? toYear(row?.dateAccepted ?? '')
+  return row?.yearAccepted ?? doc?.year ?? toYear(row?.dateAccepted ?? '')
 }
 export function typeFrom(row?: CatalogRow) {
   return row?.articleType || 'Report'
+}
+/** Publisher for the citation: the WRI office that produced the document
+ *  (issue #305). Only WRI's global office is in Washington, DC — regional
+ *  offices have no city recorded, so the office name stands alone. */
+export function publisherFrom(row?: CatalogRow) {
+  const office = (row?.office || '').trim()
+  if (!office || /^wri\s*(global|hq|headquarters)?$/i.test(office))
+    return 'Washington, DC: WRI'
+  return office
 }
 export function urlFrom(doc: DocMeta, row?: CatalogRow) {
   if (row?.sourceUrl) return row.sourceUrl
@@ -197,9 +301,9 @@ export function urlFrom(doc: DocMeta, row?: CatalogRow) {
 export const chicagoFull = (doc: DocMeta, row?: CatalogRow) => {
   const authors = authorsFrom(doc, row).join('; ') || '(author unknown)'
   const title = `"${titleFrom(doc, row)}"`
-  const cityPub = 'Washington, DC: WRI'
+  const publisher = publisherFrom(row)
   const year = yearFrom(doc, row) ?? ''
-  return `${authors}. ${title}. ${cityPub}, ${year}.`
+  return `${authors}. ${title}. ${publisher}, ${year}.`
 }
 
 export function buildAlignmentSummary(query: string, docs: any[]) {

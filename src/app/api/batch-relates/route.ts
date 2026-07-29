@@ -21,6 +21,8 @@ Output a JSON array with one object per document, in the same order:
 [{"relates":"...","relation":"direct"|"indirect"}, ...]
 
 Rules:
+- ALWAYS write "relates" in English, even when the document or snippet is in
+  another language. Never mirror the document's language.
 - Do NOT restate the query.
 - Avoid generic filler like "by showing evidence/mechanism".
 - Be concrete and ≤ 18 words per explanation.
