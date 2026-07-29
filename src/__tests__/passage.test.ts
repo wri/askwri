@@ -56,6 +56,28 @@ describe('extractPassage', () => {
     ).toBe('数据来源：本研究计算')
   })
 
+  it('strips a placeholder the chunk boundary cut in half at the end', () => {
+    // Observed on deployed qa: the chunk ends mid-placeholder, so the closing
+    // `)` never arrives and the reader sees `![img-105.jpeg](img-105.`
+    expect(
+      extractPassage(
+        '**[Electric Vehicles in China ![img-105.jpeg](img-105.]**',
+      ),
+    ).toBe('Electric Vehicles in China')
+  })
+
+  it('strips a lone trailing `!` left by a placeholder cut before its bracket', () => {
+    expect(
+      extractPassage('**[(Charging power: 7kW, Coincidence factor: 21%) !]**'),
+    ).toBe('(Charging power: 7kW, Coincidence factor: 21%)')
+  })
+
+  it('keeps real prose that ends in an exclamation mark', () => {
+    expect(extractPassage('**[Cities must act now!]**')).toBe(
+      'Cities must act now!',
+    )
+  })
+
   it('keeps ordinary markdown links, which are not placeholders', () => {
     expect(
       extractPassage('**[see [the guidebook](https://wri.org/x) for more]**'),

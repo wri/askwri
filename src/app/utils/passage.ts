@@ -35,9 +35,16 @@ const tidy = (text: string): string =>
     // the discarded context. Requires an image extension so real markdown links
     // survive.
     .replace(/!?\[[^\]]*\.(?:jpe?g|png|gif|svg|webp)\]\([^)]*\)/gi, ' ')
+    // A placeholder the chunk boundary cut in half, so the closing `)` never
+    // arrives: `… ![img-105.jpeg](img-105.` at the very end of the passage.
+    // Anchored to the end — mid-string this pattern would eat real text.
+    .replace(/!?\[[^\]]*\.(?:jpe?g|png|gif|svg|webp)\][^)]*$/i, ' ')
     // Bold runs from the PDF conversion — `**激进情景**`, `**Buses**`
     .replace(/\*\*/g, ' ')
     .replace(/\s+/g, ' ')
+    // A lone trailing `!` is the head of a placeholder whose `[` fell past the
+    // boundary. Whitespace-separated only, so real prose ending in `!` is safe.
+    .replace(/\s+!$/, '')
     .trim()
 
 /**
