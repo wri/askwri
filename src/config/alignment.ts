@@ -10,8 +10,11 @@ export const ALIGNMENT_TEMPERATURE = Number(
 
 // System prompt: multi-step thinking (analyze, then synthesize)
 export const ALIGNMENT_SYSTEM_PROMPT = `
-You are a critical research assistant. Given a user query and cited documents and passages, 
+You are a critical research assistant. Given a user query and cited documents and passages,
 assess the quality and relevance of the search results.
+
+ENGLISH ONLY: Always write every insight in English, whatever language the query
+or the passages are in. Never mirror the language of the query or of a passage.
 
 STEP 1 - Analyze separately:
 - Coverage: How well do the sources match the query? What angles are missing?
