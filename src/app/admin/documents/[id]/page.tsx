@@ -45,10 +45,25 @@ const LANGUAGES: { code: string; name: string }[] = [
   { code: 'id', name: 'Indonesian' },
 ]
 
+// Year published is a dropdown rather than a free number input (issue #304).
+// A stored year outside the range still renders as its own option, so an older
+// document is never silently rewritten by opening its editor.
+const YEAR_MIN = 2000
+const YEAR_MAX = 2027
+const YEARS: number[] = Array.from(
+  { length: YEAR_MAX - YEAR_MIN + 1 },
+  (_, i) => YEAR_MAX - i,
+)
+
+// Columns whose dropdown options come from /api/admin/documents/field-values —
+// the distinct values already in the corpus, since neither has a canonical
+// vocabulary in the schema (issue #304).
+type FieldValues = { articleType: string[]; wriPrimaryOffice: string[] }
+
 const EDITABLE: {
   key: string
   label: string
-  type?: 'number' | 'date' | 'textarea' | 'select'
+  type?: 'number' | 'date' | 'textarea' | 'select' | 'year' | 'values'
   help: string
 }[] = [
   {
@@ -92,7 +107,7 @@ const EDITABLE: {
   {
     key: 'yearPublished',
     label: 'Year published',
-    type: 'number',
+    type: 'year',
     help: 'Publication year (used by the year filter in the catalog).',
   },
   {
@@ -103,12 +118,14 @@ const EDITABLE: {
   {
     key: 'articleType',
     label: 'Article type',
-    help: 'The kind of publication (e.g. Report, Working Paper, Technical Note).',
+    type: 'values',
+    help: 'The kind of publication (e.g. Report, Working Paper, Technical Note). Options are the types already in use across the corpus.',
   },
   {
     key: 'wriPrimaryOffice',
     label: 'WRI primary office',
-    help: 'The WRI office or center primarily responsible (e.g. WRI Ross Center).',
+    type: 'values',
+    help: 'The WRI office or center primarily responsible (e.g. WRI India). Options are the offices already in use across the corpus.',
   },
 ]
 
@@ -164,6 +181,10 @@ const DocumentEditorPage = () => {
   const [allCollections, setAllCollections] = useState<
     { id: string; name: string; slug: string }[]
   >([])
+  const [fieldValues, setFieldValues] = useState<FieldValues>({
+    articleType: [],
+    wriPrimaryOffice: [],
+  })
   const [me, setMe] = useState<{ role?: string }>({})
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -241,6 +262,17 @@ const DocumentEditorPage = () => {
     adminFetch<{ collections: any[] }>('/api/admin/collections')
       .then((b) => setAllCollections(b.collections))
       .catch((err: any) => setError(err.message))
+    // Dropdown vocabularies. Failing to load them must not block editing, so
+    // this one degrades to empty lists (the select still offers the row's own
+    // value) rather than surfacing a page-level error.
+    adminFetch<FieldValues>('/api/admin/documents/field-values')
+      .then((b) =>
+        setFieldValues({
+          articleType: b.articleType ?? [],
+          wriPrimaryOffice: b.wriPrimaryOffice ?? [],
+        }),
+      )
+      .catch(() => {})
     fetch('/api/admin/auth/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((b) => setMe(b?.identity ?? {}))
@@ -266,7 +298,12 @@ const DocumentEditorPage = () => {
       const patch: Record<string, any> = {}
       for (const { key, type } of EDITABLE) {
         const raw = form[key]
-        patch[key] = raw === '' ? null : type === 'number' ? Number(raw) : raw
+        patch[key] =
+          raw === ''
+            ? null
+            : type === 'number' || type === 'year'
+              ? Number(raw)
+              : raw
       }
       const body = await adminFetch<{ updated: string[] }>(
         `/api/admin/documents/${id}`,
@@ -337,6 +374,48 @@ const DocumentEditorPage = () => {
       await load()
     } catch (err: any) {
       setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeTag = async (tagId: string) => {
+    setBusy(true)
+    try {
+      setError(null)
+      await adminFetch(`/api/admin/documents/${id}/tags/${tagId}`, {
+        method: 'DELETE',
+      })
+      await load()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Repoint a tag row at a different value in the same facet (issue #304).
+  // document_tags is keyed (document_id, tag_id) with no update path, so a
+  // change is a remove + add; the new row lands as source='human'/'accepted'.
+  // The add runs first: if it fails the document keeps its original tag rather
+  // than losing it, which a delete-first order could not guarantee.
+  const changeTag = async (oldTagId: string, newTagId: string) => {
+    if (!newTagId || newTagId === oldTagId) return
+    setBusy(true)
+    try {
+      setError(null)
+      setNotice(null)
+      await adminFetch(`/api/admin/documents/${id}/tags`, {
+        method: 'POST',
+        body: JSON.stringify({ tagId: newTagId }),
+      })
+      await adminFetch(`/api/admin/documents/${id}/tags/${oldTagId}`, {
+        method: 'DELETE',
+      })
+      await load()
+    } catch (err: any) {
+      setError(err.message)
+      await load()
     } finally {
       setBusy(false)
     }
@@ -450,6 +529,24 @@ const DocumentEditorPage = () => {
     (c) => !existingCollectionIds.has(c.id),
   )
 
+  // Options for the year / corpus-vocabulary dropdowns. The currently stored
+  // value is prepended when the list does not already contain it, so a year
+  // outside 2000-2027 or an article type no other document uses stays
+  // selectable instead of silently reading as "—".
+  const optionsFor = (
+    type: 'year' | 'values',
+    key: string,
+    current: unknown,
+  ): { value: string; label: string }[] => {
+    const base =
+      type === 'year'
+        ? YEARS.map(String)
+        : (fieldValues[key as keyof FieldValues] ?? [])
+    const value = current == null || current === '' ? '' : String(current)
+    const options = value && !base.includes(value) ? [value, ...base] : base
+    return options.map((v) => ({ value: v, label: v }))
+  }
+
   const doc = detail?.document
 
   return (
@@ -466,10 +563,20 @@ const DocumentEditorPage = () => {
       <Heading size='lg' style={{ marginBottom: 8 }}>
         Document editor
       </Heading>
+      {/* Native title, with the English one beneath it (issue #304). For an
+      English document the two are the same string, so title_en is shown only
+      when it actually differs — repeating it would just read as a glitch. */}
       {doc && (
-        <Text style={{ marginBottom: 16, color: '#555' }}>
-          {doc.title || doc.externalId}
-        </Text>
+        <div style={{ marginBottom: 16 }}>
+          <Text style={{ color: '#555' }} lang={doc.language ?? undefined}>
+            {doc.title || doc.externalId}
+          </Text>
+          {doc.titleEn && doc.titleEn !== doc.title && (
+            <Text style={{ color: '#595959', fontSize: 14 }} lang='en'>
+              {doc.titleEn}
+            </Text>
+          )}
+        </div>
       )}
       <Text style={{ marginBottom: 16, color: '#555' }}>
         Edit this document&apos;s metadata, summaries, tags, and lifecycle.
@@ -672,6 +779,28 @@ const DocumentEditorPage = () => {
                             </option>
                           ))}
                         </select>
+                      ) : type === 'year' || type === 'values' ? (
+                        <select
+                          aria-label={label}
+                          value={form[key] ?? ''}
+                          onChange={(e) => {
+                            formDirty.current = true
+                            setDirty(true)
+                            setForm((f) => ({ ...f, [key]: e.target.value }))
+                          }}
+                          style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+                        >
+                          <option value=''>—</option>
+                          {/* The stored value always stays selectable, even when
+                          it is outside the year range or absent from the corpus
+                          vocabulary — opening an editor must never silently
+                          rewrite a field. */}
+                          {optionsFor(type, key, form[key]).map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       ) : type === 'textarea' ? (
                         <textarea
                           value={form[key] ?? ''}
@@ -762,7 +891,38 @@ const DocumentEditorPage = () => {
                   <tbody>
                     {tags.map((tag) => (
                       <tr key={tag.tagId}>
-                        <td style={cell}>{tag.valueId}</td>
+                        <td style={cell}>
+                          {/* Editable in place: the options are the other tags
+                          in this same facet, so a row can be corrected without
+                          remove-then-re-add. Facet stays fixed — it is the
+                          heading this row sits under. */}
+                          <select
+                            aria-label={`${tag.facet} tag`}
+                            value={tag.tagId}
+                            disabled={busy}
+                            onChange={(e) =>
+                              changeTag(tag.tagId, e.target.value)
+                            }
+                            style={{
+                              fontFamily: 'inherit',
+                              fontSize: 'inherit',
+                            }}
+                          >
+                            <option value={tag.tagId}>{tag.valueId}</option>
+                            {allTags
+                              .filter(
+                                (t) =>
+                                  t.facet === tag.facet &&
+                                  t.id !== tag.tagId &&
+                                  !existingTagIds.has(t.id),
+                              )
+                              .map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.valueId}
+                                </option>
+                              ))}
+                          </select>
+                        </td>
                         <td style={cell}>
                           <span
                             title='Who applied this tag and its review state. AI-suggested tags need a person to Accept or Reject them; accepting makes the tag permanent (the AI will never change it again).'
@@ -811,6 +971,15 @@ const DocumentEditorPage = () => {
                               Accept
                             </button>
                           )}
+                          <button
+                            onClick={() => removeTag(tag.tagId)}
+                            disabled={busy}
+                            title='Take this tag off the document entirely. Unlike Reject, it leaves no record on the document — the AI may suggest it again on re-ingest.'
+                            className='admin-btn'
+                            style={{ ...actionButton, marginLeft: 8 }}
+                          >
+                            Remove
+                          </button>
                         </td>
                       </tr>
                     ))}

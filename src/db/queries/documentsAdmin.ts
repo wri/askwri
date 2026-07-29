@@ -196,6 +196,38 @@ export async function getAdminDocumentDetail(
   return { document, summaries, tags, collections, latestJob: jobs[0] ?? null }
 }
 
+/** Columns the document editor renders as a dropdown of values already in use
+ * (issue #304). Both are free text in the schema with no canonical vocabulary,
+ * so the corpus itself is the vocabulary: offering the existing spellings is
+ * what stops "WRI Brasil"/"WRI Brazil" variants accumulating. The map is the
+ * ONLY source of column SQL below — never a bound param (no injection). */
+const DISTINCT_VALUE_COLUMNS = {
+  articleType: 'article_type',
+  wriPrimaryOffice: 'wri_primary_office',
+} as const
+export type DistinctValueField = keyof typeof DISTINCT_VALUE_COLUMNS
+
+export type DocumentFieldValues = Record<DistinctValueField, string[]>
+
+/** Distinct non-blank values per editable free-text column, alphabetical.
+ * A value the editor holds that is absent here is still rendered by the client
+ * as its own option, so this never has to be exhaustive. */
+export async function listDocumentFieldValues(): Promise<DocumentFieldValues> {
+  const entries = await Promise.all(
+    (
+      Object.entries(DISTINCT_VALUE_COLUMNS) as [DistinctValueField, string][]
+    ).map(async ([field, column]) => {
+      const rows = await AppDataSource.query(
+        `SELECT DISTINCT ${column} AS value FROM documents
+         WHERE ${column} IS NOT NULL AND btrim(${column}) <> ''
+         ORDER BY value`,
+      )
+      return [field, rows.map((r: { value: string }) => r.value)] as const
+    }),
+  )
+  return Object.fromEntries(entries) as DocumentFieldValues
+}
+
 export async function updateDocumentFields(
   id: string,
   patch: Partial<Record<EditableField, unknown>>,

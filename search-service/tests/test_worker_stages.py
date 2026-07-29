@@ -656,6 +656,164 @@ class TestParseStage:
         )
 
 
+class TestParseTitleAndAuthors:
+    """Issue #303: parse extracts title and title_en as two separate fields, and
+    transliterates author names, all in its one existing metadata call."""
+
+    def _setup_pdf(self, tmp_path, monkeypatch):
+        """Point the loader at a real fixture PDF on disk (local intake lane)."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "sample.pdf")
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+    def _fake_llm(self, monkeypatch, calls, **fields):
+        """Patch worker.llm.chat_json — parse imports it inside the function, so
+        the module attribute is what the call resolves against."""
+        payload = {f: None for f in ("title", "title_en", "authors", "doi",
+                                     "year_published", "article_type",
+                                     "wri_primary_office")}
+        payload.update(fields)
+
+        def fake(system, user, schema, model, max_tokens=1500):
+            calls.append({"system": system, "schema": set(schema["properties"])})
+            return dict(payload)
+
+        monkeypatch.setattr("worker.llm.chat_json", fake)
+
+    def test_bilingual_cover_keeps_native_title_and_english_title_apart(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """The reported bug: a cover carrying both a Chinese and an English title
+        used to land concatenated in BOTH columns. title must now hold the native
+        title alone and title_en the English one, each marked 'llm'."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        calls = []
+        self._fake_llm(
+            monkeypatch, calls,
+            title="中国交通运输低碳发展",
+            title_en="Low-Carbon Development of Transport in China",
+            authors="Xue, Lulu; Liu, Daizong",
+        )
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        assert len(calls) == 1, f"expected one extraction call, got {len(calls)}"
+        assert "title_en" in calls[0]["schema"], "title_en must be in the extraction schema"
+
+        with psycopg.connect(stages_test_db) as conn:
+            title, title_en, authors, ms = conn.execute(
+                """SELECT title, title_en, authors, metadata_source
+                   FROM documents WHERE id=%s""",
+                (doc_id,),
+            ).fetchone()
+
+        assert title == "中国交通运输低碳发展"
+        assert title_en == "Low-Carbon Development of Transport in China"
+        assert title_en != title, "title_en must not repeat the native title"
+        assert "中国交通运输低碳发展" not in title_en, (
+            f"the native title must not be concatenated into title_en; got {title_en!r}"
+        )
+        assert authors == "Xue, Lulu; Liu, Daizong"
+        assert ms["title"] == "llm" and ms["title_en"] == "llm"
+
+    def test_authors_prompt_requires_latin_transliteration(self):
+        """The transliteration is prompt-driven, so the contract lives in the
+        prompt: assert it actually asks for Latin-script author names."""
+        from worker.stages.parse import _extract_metadata_llm
+
+        captured = {}
+
+        def fake(system, user, schema, model, max_tokens=1500):
+            captured["system"] = system
+            return {f: None for f in schema["properties"]}
+
+        import worker.llm
+        original = worker.llm.chat_json
+        worker.llm.chat_json = fake
+        try:
+            _extract_metadata_llm("some text", "test-model")
+        finally:
+            worker.llm.chat_json = original
+
+        system = captured["system"]
+        assert "Transliterate" in system, "prompt must ask for transliterated authors"
+        assert "Latin" in system, "prompt must name the target script"
+        assert "primary language" in system, "prompt must ask for a single-language title"
+
+    def test_human_edited_title_en_not_overwritten_by_parse(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """title_en rides the same provenance guard as every other extracted
+        field: a 'human' value survives re-extraction untouched."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._fake_llm(monkeypatch, [], title="中文标题", title_en="Machine English Title")
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+            conn.execute(
+                """UPDATE documents
+                   SET title_en = 'Curated English Title',
+                       metadata_source = '{"title_en": "human"}'::jsonb
+                   WHERE id = %s""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            title_en, prov = conn.execute(
+                "SELECT title_en, metadata_source->>'title_en' FROM documents WHERE id=%s",
+                (doc_id,),
+            ).fetchone()
+        assert title_en == "Curated English Title"
+        assert prov == "human"
+
+    def test_llm_title_en_refreshed_on_reingest(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """Parse now owns the title/title_en pair, so it is parse that keeps them
+        from drifting: a stale 'llm' title_en is replaced on re-ingest. (This
+        assertion used to live on the summarize stage.)"""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._fake_llm(monkeypatch, [], title="新的中文标题", title_en="Fresh English Title")
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+            conn.execute(
+                """UPDATE documents
+                   SET title_en = 'Stale English Title',
+                       metadata_source = '{"title_en": "llm"}'::jsonb
+                   WHERE id = %s""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            title, title_en, prov = conn.execute(
+                """SELECT title, title_en, metadata_source->>'title_en'
+                   FROM documents WHERE id=%s""",
+                (doc_id,),
+            ).fetchone()
+        assert title == "新的中文标题"
+        assert title_en == "Fresh English Title", "a stale llm title_en must be refreshed"
+        assert prov == "llm"
+
+
 # ---------------------------------------------------------------------------
 # --- language stage ---
 # ---------------------------------------------------------------------------
@@ -1038,16 +1196,21 @@ class TestSummarizeStage:
             ).fetchone()[0]
         assert title_en == "CSV English Title"
 
-    def test_title_en_llm_refreshed_when_title_changes_on_reingest(self, stages_test_db, monkeypatch):
-        """An 'llm' title_en is regenerated from the current title on re-ingest, so a
-        changed title can never leave a stale English title behind."""
+    def test_populated_title_en_is_left_to_parse(self, stages_test_db, monkeypatch):
+        """Issue #303 moved ownership of the title/title_en pair to parse, which
+        extracts both from the PDF in one call and refreshes both on re-ingest.
+        Summarize is the fallback for documents parse could not reach, so a
+        title_en that is already populated must not trigger a translation — that
+        call would overwrite the document's own English title with a machine
+        translation of the native one. (Refresh-on-re-ingest is now asserted by
+        TestParseTitleAndAuthors.test_llm_title_en_refreshed_on_reingest.)"""
         calls = []
         monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
 
         with psycopg.connect(stages_test_db) as conn:
             doc_id = _insert_document_with_lang(
-                conn, external_id="zh-refresh", language="zh", languages=["zh"],
-                title="新的中文标题", title_en="Stale English Title",
+                conn, external_id="zh-parsed", language="zh", languages=["zh"],
+                title="中文标题", title_en="Title From The Cover Page",
                 metadata_source={"title_en": "llm"},
             )
             _insert_document_text(conn, doc_id, text="中文内容。")
@@ -1055,15 +1218,39 @@ class TestSummarizeStage:
         from worker.stages.summarize import run
         run(doc_id)
 
-        assert any(c["schema"] == {"title_en"} for c in calls), \
-            "an 'llm' title_en must be re-translated on re-ingest"
+        assert [c for c in calls if c["schema"] == {"title_en"}] == [], \
+            "a title_en parse already extracted must not be re-translated"
         with psycopg.connect(stages_test_db) as conn:
             title_en, prov = conn.execute(
                 "SELECT title_en, metadata_source->>'title_en' FROM documents WHERE id=%s", (doc_id,)
             ).fetchone()
-        assert title_en != "Stale English Title", "stale llm title_en must be regenerated"
-        assert title_en.startswith("English title")
+        assert title_en == "Title From The Cover Page"
         assert prov == "llm"
+
+    def test_blank_title_en_still_translated_as_fallback(self, stages_test_db, monkeypatch):
+        """A whitespace-only title_en counts as absent: a row that carried an empty
+        string must still get a translation rather than be mistaken for a value
+        parse supplied."""
+        calls = []
+        monkeypatch.setattr("worker.stages.summarize.chat_json", self._make_fake_llm(calls))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document_with_lang(
+                conn, external_id="zh-blank", language="zh", languages=["zh"],
+                title="中文标题", title_en="   ",
+            )
+            _insert_document_text(conn, doc_id, text="中文内容。")
+
+        from worker.stages.summarize import run
+        run(doc_id)
+
+        assert any(c["schema"] == {"title_en"} for c in calls), \
+            "a blank title_en must fall back to translation"
+        with psycopg.connect(stages_test_db) as conn:
+            title_en = conn.execute(
+                "SELECT title_en FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert title_en.startswith("English title")
 
     def test_rerun_regenerates_generated_summaries(
         self, stages_test_db, monkeypatch

@@ -6,6 +6,7 @@ import {
   setDocumentStatus,
   reenqueueIngestion,
   listAdminDocuments,
+  listDocumentFieldValues,
   purgeDocument,
   validateSort,
 } from '@/db/queries/documentsAdmin'
@@ -169,7 +170,7 @@ d('documentsAdmin (DB integration)', () => {
     }
   })
 
-  it('does NOT auto-sync title_en for a non-English doc title edit (worker re-translates on re-ingest)', async () => {
+  it('does NOT auto-sync title_en for a non-English doc title edit (the worker re-derives it on re-ingest)', async () => {
     const ext = `es_title_nosync_${Date.now()}`
     const [ins] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, title_en, language, status, metadata_source)
@@ -190,7 +191,9 @@ d('documentsAdmin (DB integration)', () => {
         [id],
       )
       // title_en is left for the worker to regenerate (provenance stays 'llm');
-      // the app tier can't translate synchronously.
+      // the app tier can't translate synchronously. Since issue #303 that
+      // regeneration happens in the parse stage, which re-extracts title and
+      // title_en from the PDF together, not in summarize.
       expect(row.title_en).toBe('Old English')
       expect(row.pte).toBe('llm')
     } finally {
@@ -505,6 +508,56 @@ d('documentsAdmin (DB integration)', () => {
       expect(found).toBeDefined()
     } finally {
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [mlId])
+    }
+  })
+})
+
+// Feeds the document editor's Article type / WRI primary office dropdowns
+// (issue #304).
+d('listDocumentFieldValues (DB integration)', () => {
+  beforeAll(async () => {
+    if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+  })
+  afterAll(async () => {
+    if (AppDataSource.isInitialized) await AppDataSource.destroy()
+  })
+
+  it('returns distinct sorted values and skips null/blank ones', async () => {
+    const ext = `fieldvalues_${Date.now()}`
+    const ids: string[] = []
+    // Two rows share an article type (must dedupe); one carries a blank office
+    // and a NULL type, both of which must be filtered out rather than surface
+    // as an empty dropdown entry.
+    const rows: [string, string | null, string | null][] = [
+      [`${ext}_a`, 'Zzz Test Type', 'Zzz Test Office'],
+      [`${ext}_b`, 'Zzz Test Type', 'Aaa Test Office'],
+      [`${ext}_c`, null, '   '],
+    ]
+    try {
+      for (const [extId, articleType, office] of rows) {
+        const [ins] = await AppDataSource.query(
+          `INSERT INTO documents (external_id, s3_key, title, status, article_type, wri_primary_office)
+           VALUES ($1, $2, 'Field values fixture', 'needs_review', $3, $4)
+           RETURNING id`,
+          [extId, `documents/${extId}.pdf`, articleType, office],
+        )
+        ids.push(ins.id)
+      }
+
+      const values = await listDocumentFieldValues()
+
+      const types = values.articleType.filter((v) => v.startsWith('Zzz Test'))
+      expect(types).toEqual(['Zzz Test Type'])
+      const offices = values.wriPrimaryOffice.filter((v) =>
+        v.endsWith('Test Office'),
+      )
+      expect(offices).toEqual(['Aaa Test Office', 'Zzz Test Office'])
+      expect(values.articleType).not.toContain(null)
+      expect(values.wriPrimaryOffice.some((v) => v.trim() === '')).toBe(false)
+    } finally {
+      for (const id of ids) {
+        await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [id])
+      }
     }
   })
 })

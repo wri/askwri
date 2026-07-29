@@ -80,14 +80,26 @@ const mockDetail = {
   latestJob: null,
 }
 
+// Corpus vocabularies for the Article type / WRI primary office dropdowns.
+const mockFieldValues = {
+  articleType: ['Report', 'Technical Note', 'Working Paper'],
+  wriPrimaryOffice: ['WRI China', 'WRI Global', 'WRI India'],
+}
+
 function setupFetchMock(
   documentOverride?: Record<string, any>,
   queueItems: any[] = [],
   history: { total: number; entries: any[] } = { total: 0, entries: [] },
+  opts: { tags?: any[]; allTags?: any[] } = {},
 ) {
-  const detail = documentOverride
-    ? { ...mockDetail, document: { ...mockDocument, ...documentOverride } }
-    : mockDetail
+  // Never mutate mockDetail — it is shared across every test in the file.
+  const detail = {
+    ...mockDetail,
+    ...(documentOverride
+      ? { document: { ...mockDocument, ...documentOverride } }
+      : {}),
+    ...(opts.tags ? { tags: opts.tags } : {}),
+  }
   const fetchMock = jest.fn((url: string, init?: RequestInit) => {
     // adminFetch calls fetch with the path directly; auth/me uses raw fetch
     if (url === '/api/admin/auth/me') {
@@ -106,7 +118,15 @@ function setupFetchMock(
     if (url === '/api/admin/tags') {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ ok: true, tags: [] }),
+        json: () => Promise.resolve({ ok: true, tags: opts.allTags ?? [] }),
+      } as any)
+    }
+    // MUST precede the broad '/api/admin/documents/' prefix branch below —
+    // field-values is a sibling static segment, not a document id.
+    if (url === '/api/admin/documents/field-values') {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, ...mockFieldValues }),
       } as any)
     }
     if (url === '/api/admin/collections') {
@@ -291,6 +311,210 @@ describe('DocumentEditorPage', () => {
     const select = await screen.findByLabelText(/language/i)
     await waitFor(() => {
       expect(select).toHaveDisplayValue(/fr \(unsupported\)/)
+    })
+  })
+
+  // --- issue #304 -----------------------------------------------------------
+
+  describe('dual title header', () => {
+    it('shows the native title with the English title beneath it', async () => {
+      setupFetchMock({
+        title: '中国交通运输低碳发展',
+        titleEn: 'Low-Carbon Development of Transport in China',
+      })
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      await screen.findByText('中国交通运输低碳发展')
+      expect(
+        screen.getByText('Low-Carbon Development of Transport in China'),
+      ).toBeInTheDocument()
+    })
+
+    it('shows the title once when the English title is identical', async () => {
+      setupFetchMock({ title: 'Test Document', titleEn: 'Test Document' })
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      await screen.findByText('Document editor')
+      // The Title / Title (EN) inputs also hold the string, so count only the
+      // rendered text nodes in the header.
+      expect(screen.getAllByText('Test Document')).toHaveLength(1)
+    })
+  })
+
+  describe('metadata dropdowns', () => {
+    it('renders Year published as a dropdown spanning 2000-2027', async () => {
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      const select = (await screen.findByLabelText(
+        /year published/i,
+      )) as HTMLSelectElement
+      expect(select.tagName).toBe('SELECT')
+      const values = Array.from(select.options).map((o) => o.value)
+      expect(values).toContain('2000')
+      expect(values).toContain('2027')
+      expect(values).not.toContain('1999')
+      expect(values).not.toContain('2028')
+      expect(select).toHaveValue('2024')
+    })
+
+    it('keeps a stored year outside the range selectable', async () => {
+      setupFetchMock({ yearPublished: 1998 })
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      const select = await screen.findByLabelText(/year published/i)
+      await waitFor(() => expect(select).toHaveValue('1998'))
+    })
+
+    it('fills Article type and WRI primary office from the corpus values', async () => {
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      const articleType = (await screen.findByLabelText(
+        /article type/i,
+      )) as HTMLSelectElement
+      await waitFor(() =>
+        expect(Array.from(articleType.options).map((o) => o.value)).toEqual([
+          '',
+          ...mockFieldValues.articleType,
+        ]),
+      )
+      expect(articleType).toHaveValue('Report')
+
+      const office = (await screen.findByLabelText(
+        /wri primary office/i,
+      )) as HTMLSelectElement
+      expect(Array.from(office.options).map((o) => o.value)).toEqual([
+        '',
+        ...mockFieldValues.wriPrimaryOffice,
+      ])
+      expect(office).toHaveValue('WRI India')
+    })
+
+    it('keeps a value absent from the corpus vocabulary selectable', async () => {
+      setupFetchMock({ articleType: 'Field Guide' })
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      const select = await screen.findByLabelText(/article type/i)
+      await waitFor(() => expect(select).toHaveValue('Field Guide'))
+    })
+
+    it('still lets the field be edited when the vocabulary fetch fails', async () => {
+      const fetchMock = setupFetchMock()
+      const original = fetchMock.getMockImplementation()!
+      fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+        url === '/api/admin/documents/field-values'
+          ? Promise.reject(new Error('boom'))
+          : original(url, init),
+      )
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      const select = await screen.findByLabelText(/article type/i)
+      // The document's own value survives as the sole option; no page error.
+      await waitFor(() => expect(select).toHaveValue('Report'))
+      expect(screen.queryByText('boom')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('tag editing', () => {
+    const docTag = {
+      tagId: 'tag-1',
+      facet: 'office',
+      valueId: 'WRI India',
+      source: 'llm',
+      status: 'accepted',
+      confidence: 0.9,
+    }
+    const taxonomy = [
+      { id: 'tag-1', facet: 'office', valueId: 'WRI India' },
+      { id: 'tag-2', facet: 'office', valueId: 'WRI China' },
+      { id: 'tag-3', facet: 'doc_type', valueId: 'Report' },
+    ]
+
+    const renderWithTag = () => {
+      const fetchMock = setupFetchMock(undefined, [], undefined, {
+        tags: [docTag],
+        allTags: taxonomy,
+      })
+      render(
+        <ChakraProvider>
+          <DocumentEditorPage />
+        </ChakraProvider>,
+      )
+      return fetchMock
+    }
+
+    it('renders the tag value as a dropdown of the same facet', async () => {
+      renderWithTag()
+      const select = (await screen.findByLabelText(
+        'office tag',
+      )) as HTMLSelectElement
+      await waitFor(() =>
+        expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+          'WRI India',
+          'WRI China',
+        ]),
+      )
+      // doc_type belongs to another facet group and must not leak in.
+      expect(
+        Array.from(select.options).map((o) => o.textContent),
+      ).not.toContain('Report')
+    })
+
+    it('adds the new tag before removing the old one when changed', async () => {
+      const fetchMock = renderWithTag()
+      const select = await screen.findByLabelText('office tag')
+      fetchMock.mockClear()
+      fireEvent.change(select, { target: { value: 'tag-2' } })
+
+      await waitFor(() => {
+        const calls = fetchMock.mock.calls.filter(
+          ([url]: any[]) => typeof url === 'string' && url.includes('/tags'),
+        )
+        expect(calls).toHaveLength(2)
+        // Order matters: a failed add must leave the original tag in place.
+        expect(calls[0][0]).toBe('/api/admin/documents/test-doc-id-123/tags')
+        expect(calls[0][1].method).toBe('POST')
+        expect(JSON.parse(calls[0][1].body)).toEqual({ tagId: 'tag-2' })
+        expect(calls[1][0]).toBe(
+          '/api/admin/documents/test-doc-id-123/tags/tag-1',
+        )
+        expect(calls[1][1].method).toBe('DELETE')
+      })
+    })
+
+    it('removes a tag via the Remove button', async () => {
+      const fetchMock = renderWithTag()
+      const remove = await screen.findByText('Remove')
+      fetchMock.mockClear()
+      fireEvent.click(remove)
+
+      await waitFor(() => {
+        const call = fetchMock.mock.calls.find(
+          ([, init]: any[]) => init?.method === 'DELETE',
+        )
+        expect(call).toBeDefined()
+        expect(call![0]).toBe('/api/admin/documents/test-doc-id-123/tags/tag-1')
+      })
     })
   })
 
