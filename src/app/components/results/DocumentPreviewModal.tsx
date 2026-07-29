@@ -9,7 +9,18 @@ export const DocumentPreviewModalContent = ({
   rowData,
   onExportBib,
 }: DocumentPreviewModalContentProps) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+  // The design system renders Modal's body with `padding: 0`, so content has to
+  // inset itself. Without this the bordered panels below sit flush on the
+  // dialog's own border — their side borders merge with it and the panels read
+  // as edge-to-edge bands with no borders at all (#309).
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+      padding: '16px',
+    }}
+  >
     <div style={{ width: 'fit-content' }}>
       <Tag
         label={`${rowData.relevance} Relevance`}

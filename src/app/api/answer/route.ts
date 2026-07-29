@@ -55,6 +55,9 @@ const SYS = IS_GPT5
 Synthesize a concise answer from the provided documents. Write exactly 2-3 clear sentences.
 
 Rules:
+- ENGLISH ONLY: Always write every sentence in English, whatever language the
+  question or the passages are in. Never mirror the language of the question or
+  of a passage — translate what you need instead.
 - TRUST SOURCES: The provided sources have been pre-filtered for relevance. Focus on synthesizing their key findings.
 - SYNTHESIZE: Combine key information across relevant sources — do NOT copy phrases verbatim
 - PRIORITIZE: Focus on the most relevant and important findings
@@ -78,6 +81,9 @@ If no sources adequately answer the question:
 You are a careful research assistant. Write a clear, concise answer that synthesizes the most important information from the provided documents.
 
 CRITICAL RULES:
+- ENGLISH ONLY: Always write every sentence in English, whatever language the
+  question or the passages are in. Never mirror the language of the question or
+  of a passage — translate what you need instead.
 - TRUST SOURCES: The provided sources have been pre-filtered for relevance. Focus on synthesizing their key findings.
 - CONCISE: Write exactly 2-3 sentences total (not paragraphs)
 - SYNTHESIZE: Combine key information from relevant sources - do NOT copy phrases verbatim

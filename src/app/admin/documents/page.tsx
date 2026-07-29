@@ -13,6 +13,7 @@ interface DocItem {
   id: string
   externalId: string
   title: string | null
+  titleEn: string | null
   language: string | null
   status: string
   yearPublished: number | null
@@ -511,7 +512,9 @@ const CatalogInner = () => {
                     href={`/admin/documents/${doc.id}`}
                     style={{ textDecoration: 'underline' }}
                   >
-                    {doc.title || doc.externalId}
+                    {/* English first: the catalog list is English-only. The
+                        native title stays on the detail page's dual-title header. */}
+                    {doc.titleEn || doc.title || doc.externalId}
                   </Link>
                 </td>
                 <td style={cell}>{doc.language ?? '—'}</td>
