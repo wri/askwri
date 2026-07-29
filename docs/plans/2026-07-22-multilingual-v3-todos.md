@@ -42,6 +42,33 @@ check items off with a pointer to the commit/PR that resolved them.
 - [ ] **TODO(golden-set)**: formal per-language floor/tier recalibration
   once the redone golden set lands (markers in `app/config.py`).
 
+## Parse quality (all-Mistral corpus, found 2026-07-29)
+
+- [ ] **Mistral emits PDF running headers and page numbers as body prose, inside
+  chunk text.** No ingestion stage strips headers/footers, so a retrieved chunk
+  can contain the document's own title and a bare page number mid-passage.
+  Observed on deployed qa in `2020_quantifying-the-grid-impacts-from-large-adoption_6748`
+  (page 10): the chunk carries `… 数据来源：本研究计算  8  Quantifying the Grid
+  Impacts from Large Adoption of Electric Vehicles in China  侧富余的装机容量消化。`
+  — the citation card then shows that title twice, once as its heading and once
+  inside the excerpt. This is a **live artifact of the all-Mistral corpus**, NOT
+  something the Phase D re-parse fixes (Phase D is done; see
+  `2026-07-23-session-handoff.md:3`). Correct fix is a header/footer strip in the
+  worker parse stage, which needs a full re-ingest to take effect; a display-time
+  strip in the app was considered and deliberately not taken (heuristic layered
+  over bad text). Note the noise also reaches the synthesis model, since
+  `key_finding` is the first 400 chars of the passage.
+  Related: the app-side excerpt fix in `src/app/utils/passage.ts` removes the
+  passage-window context, markers and image placeholders, but cannot remove
+  headers baked into the chunk itself.
+- [ ] **Answer-mode result concentration**: several 2026-07-29 probes on qa
+  returned 15/15 chunks from a single document (e.g. "How does large-scale
+  electric vehicle adoption affect the power grid?" → all 15 from
+  `2020_quantifying-the-grid-impacts…_6748`). Cite mode has a per-doc candidate
+  cap (=2); answer mode appears not to, so a synthesis billed as "Based on N
+  Knowledge Products" can rest on one. Distinct from the ans_006 item below,
+  which is about F1 on one golden query rather than a missing cap.
+
 ## Answer mode (post-cutover, 2026-07-22)
 
 - [ ] **ans_006 regression under embed-v4**: answer-mode doc-F1 dropped
