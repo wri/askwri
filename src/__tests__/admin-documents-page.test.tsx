@@ -17,6 +17,7 @@ const docs = [
     id: 'd1',
     externalId: 'ext-1',
     title: 'Alpha',
+    titleEn: 'Alpha',
     language: 'en',
     status: 'searchable',
     yearPublished: 2021,
@@ -25,14 +26,28 @@ const docs = [
     id: 'd2',
     externalId: 'ext-2',
     title: 'Beta',
+    titleEn: 'Beta',
     language: 'es',
     status: 'needs_review',
     yearPublished: 2020,
   },
 ]
 
+// A non-English row: native `title`, English `titleEn`. The catalog list is
+// English-only, so only titleEn may be rendered (#309).
+const zhDoc = {
+  id: 'd3',
+  externalId: '2024_a-comparative-study_7471',
+  title: '从全球百余城市低碳发展水平异同看中国城市低碳发展之道',
+  titleEn: 'Low carbon city development in China',
+  language: 'zh',
+  status: 'searchable',
+  yearPublished: 2024,
+}
+
 // Capture every documents-list URL adminFetch requests so we can assert the query string.
 let listUrls: string[] = []
+let listItems: unknown[] = docs
 const setupFetch = () => {
   listUrls = []
   global.fetch = jest.fn((url: string) => {
@@ -40,7 +55,12 @@ const setupFetch = () => {
       if (!url.includes('limit=500')) listUrls.push(url) // ignore the loadYears() sweep
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ ok: true, items: docs, total: 2 }),
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            items: listItems,
+            total: listItems.length,
+          }),
       })
     }
     if (url.startsWith('/api/admin/collections'))
@@ -70,6 +90,7 @@ const renderPage = () =>
 beforeEach(() => {
   mockParams = new URLSearchParams('')
   mockReplace.mockClear()
+  listItems = docs
   setupFetch()
 })
 
@@ -212,6 +233,32 @@ describe('CatalogPage — URL-driven view state (jsdom)', () => {
     expect(
       mockReplace.mock.calls.some((c) => (c[0] as string).includes('zzz')),
     ).toBe(false)
+  })
+
+  it('shows the English title for a non-English document, never the native one', async () => {
+    listItems = [zhDoc]
+    setupFetch()
+    renderPage()
+    expect(
+      await screen.findByText('Low carbon city development in China'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        '从全球百余城市低碳发展水平异同看中国城市低碳发展之道',
+      ),
+    ).not.toBeInTheDocument()
+  })
+
+  it('falls back to title then externalId when title_en is not populated', async () => {
+    listItems = [{ ...zhDoc, titleEn: null }]
+    setupFetch()
+    renderPage()
+    expect(await screen.findByText(zhDoc.title)).toBeInTheDocument()
+
+    listItems = [{ ...zhDoc, titleEn: null, title: null }]
+    setupFetch()
+    renderPage()
+    expect(await screen.findByText(zhDoc.externalId)).toBeInTheDocument()
   })
 
   it('clears the bulk selection when the view changes', async () => {

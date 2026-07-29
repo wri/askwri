@@ -27,6 +27,9 @@ export interface AdminDocumentListItem {
   id: string
   externalId: string
   title: string | null
+  /** English title (documents.title_en). The catalog list shows this, not the
+   *  native `title` — the admin corpus view is English-only. */
+  titleEn: string | null
   language: string | null
   status: string
   yearPublished: number | null
@@ -50,7 +53,9 @@ export interface PaginationOptions {
 // Whitelisted sort columns. Values are interpolated directly into ORDER BY, so
 // this map is the ONLY source of column SQL — never a bound param (no injection).
 const SORT_COLUMNS = {
-  title: 'd.title',
+  // Sort on the same string the list renders, or the order looks arbitrary for
+  // non-English rows (which display title_en but would sort on the native title).
+  title: 'COALESCE(d.title_en, d.title)',
   year_published: 'd.year_published',
   status: 'd.status',
   created_at: 'd.created_at',
@@ -92,9 +97,11 @@ export async function listAdminDocuments(
   if (filters.status) where.push(`d.status = ${p(filters.status)}`)
   if (filters.language)
     where.push(`d.languages @> ARRAY[${p(filters.language)}]::text[]`)
+  // title_en is searched alongside title: the list displays the English title, so
+  // searching for what you can see has to match.
   if (filters.search)
     where.push(
-      `(d.title ILIKE ${p('%' + filters.search + '%')} OR d.external_id ILIKE ${p('%' + filters.search + '%')} OR d.authors ILIKE ${p('%' + filters.search + '%')} OR d.doi ILIKE ${p('%' + filters.search + '%')} OR d.url ILIKE ${p('%' + filters.search + '%')})`,
+      `(d.title ILIKE ${p('%' + filters.search + '%')} OR d.title_en ILIKE ${p('%' + filters.search + '%')} OR d.external_id ILIKE ${p('%' + filters.search + '%')} OR d.authors ILIKE ${p('%' + filters.search + '%')} OR d.doi ILIKE ${p('%' + filters.search + '%')} OR d.url ILIKE ${p('%' + filters.search + '%')})`,
     )
   if (filters.collectionId)
     where.push(`EXISTS (SELECT 1 FROM document_collections dc
@@ -120,7 +127,8 @@ export async function listAdminDocuments(
   const sortDir = sort.dir === 'asc' ? 'ASC' : 'DESC'
   // d.id DESC stays as the deterministic tiebreaker (unchanged default: created_at DESC).
   const items = await AppDataSource.query(
-    `SELECT d.id, d.external_id AS "externalId", d.title, d.language, d.status,
+    `SELECT d.id, d.external_id AS "externalId", d.title,
+            d.title_en AS "titleEn", d.language, d.status,
             d.year_published AS "yearPublished", d.created_at AS "createdAt"
      FROM documents d
      WHERE ${whereClause}

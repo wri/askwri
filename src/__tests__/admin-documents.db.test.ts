@@ -510,6 +510,100 @@ d('documentsAdmin (DB integration)', () => {
       await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [mlId])
     }
   })
+
+  // --- The catalog list is English-only (#309): it renders title_en, so the
+  // query has to serve it, search it, and sort on it. ---
+
+  /**
+   * Seed a non-English document. The native `document_summaries` row is NOT
+   * incidental: getCorpusHealth counts non-English docs that lack one, and
+   * `npm test` runs the DB suites in parallel, so a fixture without it makes
+   * corpus-health.db.test.ts fail intermittently on a row that is not its own.
+   */
+  const seedNonEnglishDoc = async (
+    extId: string,
+    title: string,
+    titleEn: string | null,
+  ): Promise<string> => {
+    const [row] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, title_en, status, language, languages)
+       VALUES ($1, $2, $3, $4, 'searchable', 'zh', ARRAY['zh']) RETURNING id`,
+      [extId, `documents/${extId}.pdf`, title, titleEn],
+    )
+    await AppDataSource.query(
+      `INSERT INTO document_summaries (document_id, language, kind, text, source)
+       VALUES ($1, 'zh', 'short', '测试摘要', 'test')`,
+      [row.id],
+    )
+    return row.id
+  }
+
+  it('serves title_en so the list can render the English title of a zh doc', async () => {
+    const extId = `title_en_test_${Date.now()}`
+    const row = {
+      id: await seedNonEnglishDoc(
+        extId,
+        '从全球百余城市低碳发展水平异同看中国城市低碳发展之道',
+        'Low carbon city development in China',
+      ),
+    }
+    try {
+      const { items } = await listAdminDocuments({ search: extId })
+      const found = items.find((i) => i.id === row.id)
+      expect(found?.titleEn).toBe('Low carbon city development in China')
+      expect(found?.title).toBe(
+        '从全球百余城市低碳发展水平异同看中国城市低碳发展之道',
+      )
+    } finally {
+      await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [row.id])
+    }
+  })
+
+  it('finds a non-English document by its English title', async () => {
+    const extId = `title_en_search_${Date.now()}`
+    const row = {
+      id: await seedNonEnglishDoc(
+        extId,
+        '零排放货车推广',
+        'Zeppelin Freight Uniqueword',
+      ),
+    }
+    try {
+      // Searching the English title must match — it is the string on screen.
+      const { items } = await listAdminDocuments({
+        search: 'Zeppelin Freight Uniqueword',
+      })
+      expect(items.find((i) => i.id === row.id)).toBeDefined()
+    } finally {
+      await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [row.id])
+    }
+  })
+
+  it('sorts title on the English title, matching what the list renders', async () => {
+    const stamp = Date.now()
+    // Native titles sort in the opposite order to the English ones, so a query
+    // still sorting on d.title would return these the other way round.
+    const seed = [
+      { ext: `sort_en_a_${stamp}`, title: 'ZZZ native', en: 'AAA english' },
+      { ext: `sort_en_b_${stamp}`, title: 'AAA native', en: 'ZZZ english' },
+    ]
+    const ids: string[] = []
+    try {
+      for (const s of seed) {
+        ids.push(await seedNonEnglishDoc(s.ext, s.title, s.en))
+      }
+      const { items } = await listAdminDocuments(
+        { search: `sort_en_` },
+        {},
+        { sort: 'title', dir: 'asc' },
+      )
+      const ours = items.filter((i) => ids.includes(i.id))
+      expect(ours.map((i) => i.titleEn)).toEqual(['AAA english', 'ZZZ english'])
+    } finally {
+      for (const id of ids)
+        await AppDataSource.query(`DELETE FROM documents WHERE id=$1`, [id])
+    }
+  })
 })
 
 // Feeds the document editor's Article type / WRI primary office dropdowns
