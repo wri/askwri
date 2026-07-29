@@ -39,7 +39,10 @@ def _summarize(text: str, title: str, lang: str, model: str) -> dict:
 
 def _translate_title(title: str, lang: str, model: str) -> str | None:
     """Translate a non-English publication title into English via one LLM call.
-    Returns the English title, or None if the model returns nothing usable."""
+    Returns the English title, or None if the model returns nothing usable.
+
+    Fallback only: parse extracts title_en alongside title for every document
+    that has a PDF (issue #303). This covers the documents it cannot reach."""
     lang_name = _LANG_NAMES.get(lang, lang or "the source language")
     result = chat_json(
         system=("You translate research-publication titles into English. Return JSON "
@@ -97,15 +100,20 @@ def run(document_id):
                     (document_id, lang, kind, result[kind], settings.worker_llm_model),
                 )
         # title_en — the English rendition of the title (design §6: always
-        # populated; §7.5). English docs: title_en = title. Non-English docs:
-        # translate the title to English via the LLM. Provenance-guarded exactly
-        # like parse.py's metadata fields: overwrite only when
-        # metadata_source->>'title_en' is NULL or 'llm' — never 'human' (admin
-        # edit) or 'external' (CSV). On re-ingest an 'llm' value is refreshed from
-        # the current title, so title/title_en can never drift.
+        # populated; §7.5). Since issue #303 the parse stage extracts title and
+        # title_en together from the PDF, so it — not this stage — owns the pair
+        # and keeps them from drifting on re-ingest (it rewrites both under one
+        # guard). What is left here is the FALLBACK for documents parse's
+        # extraction never covered: CSV-only rows with no PDF, and PDFs whose
+        # extraction call failed. Both arrive with title_en still empty.
+        #
+        # English docs: title_en = title. Non-English docs: translate the title.
+        # Provenance-guarded exactly like parse.py's metadata fields: overwrite
+        # only when metadata_source->>'title_en' is NULL or 'llm' — never 'human'
+        # (admin edit) or 'external' (CSV).
         title = doc["title"]
         prov = (doc["metadata_source"] or {}).get("title_en")
-        if title and prov not in ("human", "external"):
+        if title and not (doc["title_en"] or "").strip() and prov not in ("human", "external"):
             lang = doc["language"] or "en"
             if lang == "en":
                 title_en = title

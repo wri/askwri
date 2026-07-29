@@ -6,9 +6,24 @@ Documents with no retrievable file fall back to title+summary text when the
 document has a long summary (CSV-imported docs); otherwise -> needs_review.
 
 Metadata extraction: uses the LLM (one structured-output chat_json call) to
-extract title, authors, DOI, year_published, article_type, wri_primary_office
-from the first ~12k chars of the PDF text. DOI is tried via regex first (more
-reliable when present). url is NOT extracted from the PDF (CSV-only field).
+extract title, title_en, authors, DOI, year_published, article_type,
+wri_primary_office from the first ~12k chars of the PDF text. DOI is tried via
+regex first (more reliable when present). url is NOT extracted from the PDF
+(CSV-only field).
+
+title/title_en are extracted TOGETHER in that one call (issue #303). A bilingual
+cover page carries the title twice — e.g. a Chinese main title above an English
+one — and asking only for "the title" returned both concatenated into `title`,
+which summarize then translated into an equally doubled `title_en`. Splitting the
+two in the extraction call is what structurally prevents that: `title` is the
+native-language title alone, `title_en` the document's own English title when it
+has one (a publisher's English title beats a machine translation) and a
+translation otherwise. summarize._translate_title survives only as the fallback
+for documents that never reach this call (no PDF) or whose call failed.
+
+Author names are transliterated to Latin script in the same call (issue #303):
+`authors` is what the admin UI and citations render, and native-script names are
+not retained — a re-ingest re-extracts them from the PDF.
 
 Provenance: the parse stage reads documents.metadata_source (jsonb mapping
 field→'external'|'llm'|'human') and overwrites a field ONLY when its source is
@@ -33,20 +48,23 @@ logger = logging.getLogger(__name__)
 _DOI_RE = re.compile(r'10\.\d{4,}/\S+')
 
 # The fields the LLM extracts, mapped to their DB column names.
-_EXTRACT_FIELDS = ["title", "authors", "doi", "year_published", "article_type", "wri_primary_office"]
+_EXTRACT_FIELDS = ["title", "title_en", "authors", "doi", "year_published",
+                   "article_type", "wri_primary_office"]
 
 # JSON schema for the LLM structured-output call.
 _EXTRACT_SCHEMA = {
     "type": "object", "additionalProperties": False,
     "properties": {
         "title": {"type": ["string", "null"]},
+        "title_en": {"type": ["string", "null"]},
         "authors": {"type": ["string", "null"]},
         "doi": {"type": ["string", "null"]},
         "year_published": {"type": ["integer", "null"]},
         "article_type": {"type": ["string", "null"]},
         "wri_primary_office": {"type": ["string", "null"]},
     },
-    "required": ["title", "authors", "doi", "year_published", "article_type", "wri_primary_office"],
+    "required": ["title", "title_en", "authors", "doi", "year_published",
+                 "article_type", "wri_primary_office"],
 }
 
 
@@ -68,13 +86,25 @@ def _extract_metadata_llm(full_text: str, model: str) -> dict:
         system=(
             "You extract bibliographic metadata from research publication text. "
             "Return JSON with: title (the document's actual title, NOT a header, "
-            "banner, or table-of-contents line), authors (semicolon-separated "
-            "full names), doi (the DOI string if present, e.g. 10.xxxx/yyyy, "
-            "else null), year_published (integer publication year if determinable, "
-            "else null), article_type (e.g. Working Paper, Report, Article, "
-            "Technical Note, Practice Note), wri_primary_office (if mentioned, "
-            "e.g. WRI India, WRI Brasil, WRI China, else null). "
-            "If a field is not determinable from the text, return null."
+            "banner, or table-of-contents line), title_en, authors "
+            "(semicolon-separated full names), doi (the DOI string if present, "
+            "e.g. 10.xxxx/yyyy, else null), year_published (integer publication "
+            "year if determinable, else null), article_type (e.g. Working Paper, "
+            "Report, Article, Technical Note, Practice Note), wri_primary_office "
+            "(if mentioned, e.g. WRI India, WRI Brasil, WRI China, else null). "
+            "If a field is not determinable from the text, return null.\n\n"
+            "TITLES. Cover pages often print the title in two languages. Never "
+            "merge them into one string. Put the title in the document's own "
+            "primary language, and that language ONLY, in 'title'. Put the "
+            "English title in 'title_en': use the document's own English title "
+            "when the cover provides one, otherwise a faithful translation of "
+            "'title' preserving proper nouns, place names, and meaning. When the "
+            "document is already English, 'title' and 'title_en' are the same "
+            "string. Do not add quotes, commentary, or a trailing period.\n\n"
+            "AUTHORS. Transliterate every author name into the Latin alphabet, "
+            "e.g. '薛露露' -> 'Xue, Lulu'. When the document itself prints a "
+            "romanized form of a name, use that spelling rather than your own. "
+            "Return only the transliterated names — never the native script."
         ),
         user=f"Document text (first ~12000 chars):\n{full_text[:12000]}",
         schema=_EXTRACT_SCHEMA,
