@@ -109,6 +109,8 @@ Format: [{"why": "explanation", "relation": "direct|indirect"}, ...]
 
 Rules:
 - Return ONLY the JSON array, no other text
+- ALWAYS write the "why" field in English, even when the passage is in another
+  language. Never mirror the passage's language.
 - One object per passage in exact order provided
 - "why" field: 1-2 sentences explaining relevance
 - "relation" field: Use "direct" if the passage explicitly answers or addresses the query's main question. Use "indirect" if it provides background, context, or related information.

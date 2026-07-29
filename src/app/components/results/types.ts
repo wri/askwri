@@ -1,4 +1,5 @@
 import { DocMeta } from '@/lib/llamacloud'
+import { CatalogRow } from '@/app/utils/utils'
 
 export type RowData = {
   id: string | number
@@ -15,6 +16,9 @@ export type RowData = {
   year?: number | string
   language?: string
   fullDoc: DocMeta
+  /** The matched document-management catalog row, so citation formatting has
+   *  the same fields the row was rendered from (issue #306). */
+  catalogRow?: CatalogRow
 }
 
 export type SelectableResultRowProps = {

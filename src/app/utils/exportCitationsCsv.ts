@@ -5,7 +5,18 @@ import {
   matchCatalogRow,
   buildCatalogIndex,
   titleFrom,
+  authorsFrom,
 } from './utils'
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish',
+  pt: 'Portuguese',
+  zh: 'Chinese',
+  fr: 'French',
+  id: 'Bahasa Indonesia',
+  hi: 'Hindi',
+}
 
 /**
  * Build the citations CSV as a string. Extracted from exportCitationsCsv for
@@ -70,27 +81,32 @@ export function buildCitationsCsv({
   const rows = selectedDocs.map((doc: DocMeta) => {
     const row = index ? matchCatalogRow(doc, index) : undefined
     const title = titleFrom(doc, row)
-    const authors = row?.allAuthors || ''
+    const authors = authorsFrom(doc, row).join('; ')
+    // documents.date_published first (row.dateAccepted carries it since the
+    // DMS catalog landed); the CSV key remains a fallback for legacy rows.
     let datePublished = ''
-    if (row?.raw?.['date published']) {
-      datePublished = formatDate(row.raw['date published'])
-    } else if (row?.dateAccepted) {
+    if (row?.dateAccepted) {
       datePublished = formatDate(row.dateAccepted)
+    } else if (row?.raw?.['date published']) {
+      datePublished = formatDate(row.raw['date published'])
     }
     const type = row?.articleType || ''
+    // documents.languages, not the stale CSV `languages` column (issue #306).
     let langs = ''
-    if (row?.raw?.languages) {
-      if (Array.isArray(row.raw.languages)) {
-        langs = row.raw.languages.join('; ')
-      } else if (typeof row.raw.languages === 'string') {
-        langs = row.raw.languages
-          .split(/;|,/)
-          .map((l: string) => l.trim())
-          .filter(Boolean)
-          .join('; ')
-      }
+    if (row?.languages?.length) {
+      langs = row.languages
+        .map((code) => LANGUAGE_NAMES[code] ?? code)
+        .join('; ')
+    } else if (typeof row?.raw?.languages === 'string') {
+      langs = row.raw.languages
+        .split(/;|,/)
+        .map((l: string) => l.trim())
+        .filter(Boolean)
+        .join('; ')
+    } else if (Array.isArray(row?.raw?.languages)) {
+      langs = row.raw.languages.join('; ')
     }
-    const doi = row?.raw?.doi || ''
+    const doi = row?.doi || row?.raw?.doi || ''
     const relativeOrAbsoluteUrl = urlFrom(doc, row)
     const url = relativeOrAbsoluteUrl
       ? new URL(relativeOrAbsoluteUrl, origin).toString()

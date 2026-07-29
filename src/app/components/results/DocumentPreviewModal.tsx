@@ -35,7 +35,7 @@ export const DocumentPreviewModalContent = ({
           marginBottom: '8px',
         }}
       >
-        {rowData.summary}
+        {rowData.short_summary || rowData.summary}
       </Text>
       <Text
         style={{
@@ -49,7 +49,7 @@ export const DocumentPreviewModalContent = ({
           color: getThemedColor('neutral', 700),
         }}
       >
-        {rowData.fullDoc.year}
+        {rowData.year}
       </Text>
     </div>
     <div

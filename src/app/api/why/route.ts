@@ -23,6 +23,8 @@ You generate ONE concise sentence explaining why a cited passage answers the use
 
 Rules:
 - Output STRICT JSON ONLY: {"why":"...", "relation":"direct"|"indirect"}
+- ALWAYS write "why" in English, even when the passage is in another language.
+  Never mirror the passage's language.
 - Do NOT restate the query.
 - Do NOT use generic phrases like "by showing evidence/mechanism".
 - Be specific and terse (≤ 18 words).
