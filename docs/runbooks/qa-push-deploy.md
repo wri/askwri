@@ -221,6 +221,7 @@ SET parsed_content_hash = d.content_hash,
 FROM documents d
 WHERE d.id = dt.document_id
   AND d.content_hash IS NOT NULL
+  AND d.source_metadata IS NULL
   AND jsonb_array_length(dt.page_boundaries) > 0;
 ```
 
