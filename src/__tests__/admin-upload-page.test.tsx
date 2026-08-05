@@ -49,14 +49,14 @@ afterEach(() => {
 })
 
 describe('UploadPage — dropzone + per-file results', () => {
-  it('drops PDFs, uploads them, and lists each accepted file', async () => {
-    const fetchMock = jest.fn((url: string) => {
+  it('drops PDFs, uploads them one request per file, and lists each accepted file', async () => {
+    const fetchMock = jest.fn((url: string, init?: any) => {
       if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
       if (url === '/api/admin/intake') {
+        const file = (init.body as FormData).get('files') as File
         return Promise.resolve({
           ok: true,
-          json: () =>
-            Promise.resolve({ ok: true, uploaded: ['a.pdf', 'b.pdf'] }),
+          json: () => Promise.resolve({ ok: true, uploaded: [file.name] }),
         })
       }
       // documents poll — nothing registered yet
@@ -79,9 +79,15 @@ describe('UploadPage — dropzone + per-file results', () => {
 
     await screen.findByText('a.pdf')
     expect(screen.getByText('b.pdf')).toBeInTheDocument()
-    // POST body was multipart FormData, not JSON
-    const post = fetchMock.mock.calls.find((c) => c[0] === '/api/admin/intake')!
-    expect(post[1].body).toBeInstanceOf(FormData)
+    // One multipart POST per file, each carrying exactly that file
+    const posts = fetchMock.mock.calls.filter(
+      (c) => c[0] === '/api/admin/intake',
+    )
+    expect(posts).toHaveLength(2)
+    for (const post of posts) {
+      expect(post[1].body).toBeInstanceOf(FormData)
+      expect((post[1].body as FormData).getAll('files')).toHaveLength(1)
+    }
   })
 
   it('rejects non-PDF drops with a message and does not upload them', async () => {
@@ -114,18 +120,22 @@ describe('UploadPage — dropzone + per-file results', () => {
     )
   })
 
-  it('renders the batch-400 error and leaves the session list untouched', async () => {
-    const fetchMock = jest.fn((url: string) => {
+  it('uploads the good files and reports a rejected file by name', async () => {
+    const fetchMock = jest.fn((url: string, init?: any) => {
       if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
       if (url === '/api/admin/intake') {
+        const file = (init.body as FormData).get('files') as File
+        if (file.name === 'bad.pdf') {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: () =>
+              Promise.resolve({ ok: false, error: 'bad.pdf: not a valid PDF' }),
+          })
+        }
         return Promise.resolve({
-          ok: false,
-          status: 400,
-          json: () =>
-            Promise.resolve({
-              ok: false,
-              error: 'big.pdf: file too large (max 52428800 bytes)',
-            }),
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: [file.name] }),
         })
       }
       return Promise.resolve({
@@ -141,14 +151,53 @@ describe('UploadPage — dropzone + per-file results', () => {
     )
     await act(async () => {
       fireEvent.drop(zone, {
-        dataTransfer: { files: [pdf('ok.pdf'), pdf('big.pdf')] },
+        dataTransfer: { files: [pdf('ok.pdf'), pdf('bad.pdf')] },
       })
     })
 
-    await screen.findByText(/big\.pdf: file too large/i)
-    // ALL-OR-NOTHING: nothing was accepted, so no filename appears in a list row
-    expect(screen.queryByText('ok.pdf')).not.toBeInTheDocument()
-    expect(screen.queryByText('big.pdf')).not.toBeInTheDocument()
+    // The good file landed and is tracked…
+    await screen.findByText('ok.pdf')
+    // …the bad one is reported by name and is NOT in the session list.
+    await screen.findByText(/bad\.pdf: not a valid PDF/i)
+    expect(screen.getByText(/1 file\(s\) failed/i)).toBeInTheDocument()
+  })
+
+  it('rejects an oversized file client-side without a request', async () => {
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
+      if (url === '/api/admin/intake') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: ['small.pdf'] }),
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, items: [] }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+
+    const huge = pdf('huge.pdf')
+    Object.defineProperty(huge, 'size', { value: 101 * 1024 * 1024 })
+
+    const zone = screen.getByLabelText(
+      'Drop PDFs here or click to choose files',
+    )
+    await act(async () => {
+      fireEvent.drop(zone, {
+        dataTransfer: { files: [pdf('small.pdf'), huge] },
+      })
+    })
+
+    await screen.findByText('small.pdf')
+    await screen.findByText(/huge\.pdf: file too large \(max 100MB\)/i)
+    // Only the small file was POSTed
+    const posts = fetchMock.mock.calls.filter(
+      (c) => c[0] === '/api/admin/intake',
+    )
+    expect(posts).toHaveLength(1)
   })
 
   it('uploads the PDFs AND keeps the skip message on a mixed drop', async () => {

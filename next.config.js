@@ -2,6 +2,17 @@
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  experimental: {
+    // The auth middleware (src/proxy.ts) buffers request bodies; the default
+    // 10MB cap silently truncates larger uploads, corrupting the multipart
+    // body before /api/admin/intake can read it (issue #310: every PDF over
+    // 10MB failed with "internal error"). Intake allows 100MB PDFs
+    // (MAX_FILE_BYTES); raising this buffers more per request in memory, so
+    // it is sized for one max-size PDF plus multipart overhead — the upload
+    // client sends one file per request. Buffering the full 20-file batch
+    // cap in one request would need ~2GB and OOM the 512MB qa task.
+    proxyClientMaxBodySize: '105mb',
+  },
   poweredByHeader: false,
   optimizePackageImports: ['react-icons'],
   transpilePackages: ['jose'],

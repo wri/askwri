@@ -40,6 +40,10 @@ const STATUS_STYLES: Record<
   },
 }
 
+// Mirrors MAX_FILE_BYTES in /api/admin/intake — reject oversized files before
+// wasting an upload round-trip (and before the proxy body cap garbles them).
+const MAX_FILE_BYTES = 100 * 1024 * 1024
+
 const POLL_INTERVAL_MS = 5000
 const DUPLICATE_TIMEOUT_MS = 90000
 const TERMINAL_DOC_STATUSES = new Set([
@@ -68,6 +72,10 @@ const UploadPage = () => {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<{
+    done: number
+    total: number
+  } | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [health, setHealth] = useState<WorkerHealth | null>(null)
   const [entries, setEntries] = useState<UploadEntry[]>([])
@@ -108,45 +116,73 @@ const UploadPage = () => {
       setBusy(true)
       setNotice(null)
       setError(skipMessage ?? null)
+      // One request per file: a bad or oversized file only fails itself, every
+      // other file still lands, and each failure is reported by name. (The
+      // route validates all-or-nothing per request, so batching would let one
+      // bad file silently sink the rest — the issue #310 symptom.)
+      const uploadedCount = { value: 0 }
+      const failures: string[] = []
       try {
-        const form = new FormData()
-        for (const f of files) form.append('files', f)
-        const res = await fetch('/api/admin/intake', {
-          method: 'POST',
-          body: form,
-        })
-        if (res.status === 401) {
-          window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
-          return
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i]
+          setProgress({ done: i, total: files.length })
+          if (f.size > MAX_FILE_BYTES) {
+            failures.push(
+              `${f.name}: file too large (max ${MAX_FILE_BYTES / 1024 / 1024}MB)`,
+            )
+            continue
+          }
+          try {
+            const form = new FormData()
+            form.append('files', f)
+            const res = await fetch('/api/admin/intake', {
+              method: 'POST',
+              body: form,
+            })
+            if (res.status === 401) {
+              window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+              return
+            }
+            const body = await res.json().catch(() => ({}))
+            if (!res.ok || body.ok === false) {
+              failures.push(`${f.name}: ${body.error || `HTTP ${res.status}`}`)
+              continue
+            }
+            const uploaded = (body.uploaded as string[]) ?? []
+            uploadedCount.value += uploaded.length
+            const now = Date.now()
+            setEntries((prev) => [
+              ...prev,
+              ...uploaded.map((filename) => ({
+                filename,
+                stem: stemOf(filename),
+                uploadedAt: now,
+                docId: null,
+                docStatus: null,
+                likelyDuplicate: false,
+              })),
+            ])
+          } catch (err: any) {
+            failures.push(`${f.name}: ${err.message}`)
+          }
         }
-        const body = await res.json().catch(() => ({}))
-        // Intake validation is ALL-OR-NOTHING: any bad file 400s the whole batch
-        // with a single error string and no `uploaded` list. Surface the error
-        // and leave the session list untouched — nothing was accepted.
-        if (!res.ok || body.ok === false) {
-          throw new Error(body.error || `HTTP ${res.status}`)
-        }
-        const uploaded = (body.uploaded as string[]) ?? []
-        const now = Date.now()
-        setEntries((prev) => [
-          ...prev,
-          ...uploaded.map((filename) => ({
-            filename,
-            stem: stemOf(filename),
-            uploadedAt: now,
-            docId: null,
-            docStatus: null,
-            likelyDuplicate: false,
-          })),
-        ])
         await loadHealth()
-        if (inputRef.current) inputRef.current.value = ''
-        setNotice(
-          `${uploaded.length} file(s) dropped into the intake queue. Track each one below.`,
-        )
-      } catch (err: any) {
-        setError(skipMessage ? `${skipMessage} — ${err.message}` : err.message)
+        const failMessage =
+          failures.length > 0
+            ? `${failures.length} file(s) failed. ${failures.join('; ')}`
+            : null
+        const errorParts = [skipMessage, failMessage].filter(Boolean)
+        setError(errorParts.length > 0 ? errorParts.join(' — ') : null)
+        if (uploadedCount.value > 0) {
+          setNotice(
+            `${uploadedCount.value} file(s) dropped into the intake queue. Track each one below.`,
+          )
+        }
       } finally {
+        // Always clear the input — even after a failure — so re-picking the
+        // same files fires a fresh change event (a same-value re-pick doesn't).
+        if (inputRef.current) inputRef.current.value = ''
+        setProgress(null)
         setBusy(false)
       }
     },
@@ -345,7 +381,11 @@ const UploadPage = () => {
           color: '#555',
         }}
       >
-        {busy ? 'Uploading…' : 'Drop PDFs here or click to choose'}
+        {busy
+          ? progress && progress.total > 1
+            ? `Uploading ${progress.done + 1} of ${progress.total}…`
+            : 'Uploading…'
+          : 'Drop PDFs here or click to choose'}
         <input
           ref={inputRef}
           type='file'

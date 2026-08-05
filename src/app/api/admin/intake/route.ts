@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const MAX_FILES = 20
-const MAX_FILE_BYTES = 50 * 1024 * 1024
+const MAX_FILE_BYTES = 100 * 1024 * 1024
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d] // "%PDF-"
 
 export async function POST(req: NextRequest) {
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             ok: false,
-            error: `${name}: file too large (max ${MAX_FILE_BYTES} bytes)`,
+            error: `${name}: file too large (max ${MAX_FILE_BYTES / 1024 / 1024}MB)`,
           },
           { status: 400 },
         )
