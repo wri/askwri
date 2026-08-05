@@ -168,7 +168,7 @@ jobs:
       # image — deploy-only failures nothing else catches).
       - name: Run tests
         working-directory: search-service
-        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py tests/test_sparse_keyword.py tests/test_cite_doc_ids_filter.py tests/test_migration_script.py tests/test_build_sparse_script.py tests/test_sparse_retriever.py tests/test_worker_pipeline.py tests/test_startsh_sync.py tests/test_config.py tests/test_config_env_local.py tests/test_env_loading.py tests/test_parse_backend.py tests/test_dockerfile_worker.py -v
+        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py tests/test_sparse_keyword.py tests/test_cite_doc_ids_filter.py tests/test_migration_script.py tests/test_build_sparse_script.py tests/test_sparse_retriever.py tests/test_worker_pipeline.py tests/test_startsh_sync.py tests/test_config.py tests/test_config_env_local.py tests/test_env_loading.py tests/test_parse_backend.py tests/test_dockerfile_worker.py tests/test_batch_ocr_script.py -v
 
   # ==========================================================================
   # Docker Build Test

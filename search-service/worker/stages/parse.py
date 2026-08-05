@@ -68,6 +68,12 @@ MISTRAL_MAX_BYTES = 50 * 1024 * 1024
 # (e.g. a different dpi), so old shrunk rows stop matching.
 SHRINK_POLICY_TAG = "+gs300"
 
+MISTRAL_API = "https://api.mistral.ai"
+# Signed-URL lifetime. Generous for the sync path (used within seconds) because
+# scripts/batch_ocr.py shares this helper and its URLs must outlive a queued
+# async job.
+MISTRAL_SIGNED_URL_EXPIRY_HOURS = 24
+
 
 def _mb(n: int) -> str:
     return f"{n / 1024 / 1024:.1f}"
@@ -324,13 +330,53 @@ def _shrink_pdf(content: bytes) -> bytes:
     return shrunk
 
 
+def mistral_upload_and_sign(settings, name: str, content: bytes) -> tuple[str, str]:
+    """Upload a PDF to Mistral file storage; return (file_id, signed_url).
+
+    Shared by the sync parse path and scripts/batch_ocr.py so both transports
+    submit documents the same way.
+    """
+    import requests
+
+    headers = {"Authorization": _mistral_auth_header(settings)}
+    r = requests.post(f"{MISTRAL_API}/v1/files", headers=headers,
+                      files={"file": (name, content, "application/pdf")},
+                      data={"purpose": "ocr"}, timeout=900)
+    r.raise_for_status()
+    file_id = r.json()["id"]
+    r = requests.get(f"{MISTRAL_API}/v1/files/{file_id}/url", headers=headers,
+                     params={"expiry": MISTRAL_SIGNED_URL_EXPIRY_HOURS}, timeout=120)
+    r.raise_for_status()
+    return file_id, r.json()["url"]
+
+
+def _mistral_delete_file(settings, file_id: str) -> None:
+    """Best-effort cleanup so parsing does not accumulate copies of the corpus
+    in Mistral's file storage. Never fails the parse."""
+    import requests
+
+    try:
+        requests.delete(f"{MISTRAL_API}/v1/files/{file_id}",
+                        headers={"Authorization": _mistral_auth_header(settings)},
+                        timeout=120)
+    except Exception:  # noqa: BLE001 — cleanup is hygiene, not a parse invariant
+        logger.warning("could not delete Mistral file %s (non-fatal)", file_id, exc_info=True)
+
+
 def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
     """Mistral OCR (spec §7 as amended 2026-07-22): per-page markdown.
     Boundaries carry the PARSER's page indices, so a page that comes back
     empty (full-bleed graphic) doesn't shift later pages' labels — this is
-    what structurally fixes R4 (zh boundaries vs OpenCC length changes)."""
-    import base64
+    what structurally fixes R4 (zh boundaries vs OpenCC length changes).
 
+    The document is uploaded and referenced by signed URL rather than inlined as
+    a base64 data URI. Base64 is 1.37x, so a 50MB PDF became a ~68MB request
+    body, and it was never established whether Mistral's 50MB limit applies to
+    the document or to the body — meaning a file shrunk to just under the cap
+    might still have been rejected. Uploading removes the question (verified
+    against the live API 2026-08-05) and drops peak memory per parse by ~2
+    copies of the file.
+    """
     import requests
 
     settings = get_settings()
@@ -342,29 +388,29 @@ def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
         # tagged SHRINK_POLICY_TAG and never matches, so raising the cap and
         # re-ingesting really does re-OCR at full resolution.)
         content = _shrink_pdf(content)
-    data_uri = ("data:application/pdf;base64,"
-                + base64.b64encode(content).decode())
-    r = requests.post(
-        "https://api.mistral.ai/v1/ocr",
-        headers={"Authorization": _mistral_auth_header(settings)},
-        json={"model": settings.mistral_ocr_model,
-              "document": {"type": "document_url", "document_url": data_uri}},
-        timeout=900,
-    )
-    if r.status_code == 413:
-        # UNVERIFIED whether Mistral's 50MB limit applies to the document or to
-        # the request body. The body is base64 (1.37x), so a file shrunk to just
-        # under 50MB is submitted as ~68MB. If the cap is on the body, the real
-        # raw ceiling is ~36MB and MISTRAL_MAX_BYTES needs lowering; a bare 413
-        # from raise_for_status() would not say that.
-        raise RuntimeError(
-            f"Mistral OCR rejected a {_mb(len(content))} MB document as too large "
-            f"(HTTP 413; base64 request body was {_mb(len(data_uri))} MB). If this "
-            f"document is under the {_mb(MISTRAL_MAX_BYTES)} MB limit, the limit "
-            "applies to the encoded request body — lower MISTRAL_MAX_BYTES to ~36MB."
+    file_id, signed_url = mistral_upload_and_sign(settings, "document.pdf", content)
+    try:
+        r = requests.post(
+            f"{MISTRAL_API}/v1/ocr",
+            headers={"Authorization": _mistral_auth_header(settings)},
+            json={"model": settings.mistral_ocr_model,
+                  "document": {"type": "document_url", "document_url": signed_url}},
+            timeout=900,
         )
-    r.raise_for_status()
-    pages = r.json().get("pages", [])
+        r.raise_for_status()
+        return mistral_pages_to_text(r.json().get("pages", []))
+    finally:
+        _mistral_delete_file(settings, file_id)
+
+
+def mistral_pages_to_text(pages: list) -> tuple[str, list]:
+    """Convert a Mistral OCR `pages` array to (full_text, page_boundaries).
+
+    Public because scripts/batch_ocr.py submits the SAME documents through the
+    Batch API and must produce byte-identical text and boundaries — text that
+    differs by transport would make the parse cache serve one shape where the
+    pipeline expects another.
+    """
     page_texts, boundaries, pos = [], [], 0
     for i, page in enumerate(pages):
         text = (page.get("markdown") or "").strip()

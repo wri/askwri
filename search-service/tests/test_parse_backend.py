@@ -26,15 +26,57 @@ def _clear_settings_cache():
 
 
 class _StubResp:
-    def __init__(self, pages):
-        self._pages = pages
+    def __init__(self, payload):
+        self._payload = payload
         self.status_code = 200
 
     def raise_for_status(self):
         pass
 
     def json(self):
-        return {"pages": self._pages}
+        return self._payload
+
+
+class FakeMistral:
+    """Stubs the upload -> sign -> OCR -> delete flow the mistral backend uses.
+
+    Documents are uploaded and referenced by signed URL rather than inlined as
+    base64 (see parse._parse_pdf_mistral), so what a test wants to inspect is
+    the bytes that reached /v1/files.
+    """
+
+    SIGNED = "https://files.example.invalid/doc?sig=abc"
+
+    def __init__(self, pages):
+        self.pages = pages
+        self.uploaded = None       # bytes sent to /v1/files
+        self.ocr_document = None   # the `document` field sent to /v1/ocr
+        self.deleted = []          # file ids cleaned up afterwards
+
+    def install(self, monkeypatch):
+        monkeypatch.setattr("requests.post", self.post)
+        monkeypatch.setattr("requests.get", self.get)
+        monkeypatch.setattr("requests.delete", self.delete)
+        return self
+
+    def post(self, url, headers=None, files=None, data=None, json=None, timeout=None):
+        if url.endswith("/v1/files"):
+            assert data["purpose"] == "ocr"
+            self.uploaded = files["file"][1]
+            return _StubResp({"id": "file-1"})
+        if url.endswith("/v1/ocr"):
+            self.ocr_document = json["document"]
+            return _StubResp({"pages": self.pages})
+        raise AssertionError(f"unexpected POST {url}")
+
+    def get(self, url, headers=None, params=None, timeout=None):
+        assert url.endswith("/v1/files/file-1/url"), url
+        assert params["expiry"] > 0, "signed URLs need a lifetime"
+        return _StubResp({"url": self.SIGNED})
+
+    def delete(self, url, headers=None, timeout=None):
+        self.deleted.append(url.rsplit("/", 1)[-1])
+        return _StubResp({})
 
 
 def test_parse_backend_defaults_to_pypdf(monkeypatch):
@@ -49,17 +91,10 @@ def test_mistral_branch_returns_contract_shape(monkeypatch):
     monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
     get_settings.cache_clear()
 
-    captured = {}
-
-    def fake_post(url, headers=None, json=None, timeout=None):
-        captured["url"] = url
-        captured["json"] = json
-        return _StubResp([
-            {"index": 0, "markdown": "# Título\n\nHola mundo"},
-            {"index": 1, "markdown": "Segunda página"},
-        ])
-
-    monkeypatch.setattr("requests.post", fake_post)
+    fake = FakeMistral([
+        {"index": 0, "markdown": "# Título\n\nHola mundo"},
+        {"index": 1, "markdown": "Segunda página"},
+    ]).install(monkeypatch)
 
     full_text, boundaries = parse._parse_pdf(b"%PDF-fake")
 
@@ -68,9 +103,12 @@ def test_mistral_branch_returns_contract_shape(monkeypatch):
         {"page": 1, "end_pos": len("# Título\n\nHola mundo")},
         {"page": 2, "end_pos": len(full_text)},
     ]
-    assert "mistral" in captured["url"]
-    assert captured["json"]["document"]["document_url"].startswith(
-        "data:application/pdf;base64,")
+    # The document is uploaded and referenced, never inlined as base64: a 50MB
+    # PDF would otherwise become a ~68MB request body, against a 50MB limit
+    # whose scope (document vs body) was never established.
+    assert fake.uploaded == b"%PDF-fake"
+    assert fake.ocr_document == {"type": "document_url", "document_url": FakeMistral.SIGNED}
+    assert fake.deleted == ["file-1"], "the uploaded copy must be cleaned up"
 
 
 def test_mistral_branch_preserves_parser_page_numbers(monkeypatch):
@@ -83,11 +121,11 @@ def test_mistral_branch_preserves_parser_page_numbers(monkeypatch):
     monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
     get_settings.cache_clear()
 
-    monkeypatch.setattr("requests.post", lambda *a, **k: _StubResp([
+    FakeMistral([
         {"index": 0, "markdown": "## 执行摘要\n\n纯电动公交车"},
         {"index": 1, "markdown": "   "},
         {"index": 2, "markdown": "## 研究方法\n\n样本城市"},
-    ]))
+    ]).install(monkeypatch)
 
     full_text, boundaries = parse._parse_pdf(b"%PDF-fake")
 
@@ -138,18 +176,10 @@ class TestOversizedPdfShrink:
         small.resize((2400, 3000), Image.NEAREST).save(buf, format="PDF", resolution=600.0)
         return buf.getvalue()
 
-    def _stub_ocr(self, monkeypatch) -> dict:
-        """Capture what actually gets submitted to the OCR endpoint."""
-        captured = {}
-
-        def fake_post(url, headers=None, json=None, timeout=None):
-            import base64
-            uri = json["document"]["document_url"]
-            captured["submitted"] = base64.b64decode(uri.split(",", 1)[1])
-            return _StubResp([{"index": 0, "markdown": "page one"}])
-
-        monkeypatch.setattr("requests.post", fake_post)
-        return captured
+    def _stub_ocr(self, monkeypatch) -> FakeMistral:
+        """Capture the bytes that reach Mistral (the uploaded file, since the
+        document is referenced by signed URL rather than inlined)."""
+        return FakeMistral([{"index": 0, "markdown": "page one"}]).install(monkeypatch)
 
     def _mistral_env(self, monkeypatch):
         monkeypatch.setenv("PARSE_BACKEND", "mistral")
@@ -170,14 +200,14 @@ class TestOversizedPdfShrink:
         import worker.stages.parse as parse
 
         self._mistral_env(monkeypatch)
-        captured = self._stub_ocr(monkeypatch)
+        fake = self._stub_ocr(monkeypatch)
         original = self._raster_pdf()
         monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", len(original) - 1)
 
         full_text, _ = parse._parse_pdf(original)
 
         assert full_text == "page one", "the OCR result still comes back normally"
-        submitted = captured["submitted"]
+        submitted = fake.uploaded
         assert len(submitted) < len(original), (
             f"submission should shrink: {len(submitted)} vs {len(original)} bytes"
         )
@@ -265,12 +295,12 @@ class TestOversizedPdfShrink:
         import worker.stages.parse as parse
 
         self._mistral_env(monkeypatch)
-        captured = self._stub_ocr(monkeypatch)
+        fake = self._stub_ocr(monkeypatch)
         monkeypatch.setattr(parse, "_shrink_pdf",
                             lambda c: pytest.fail("must not shrink a file under the cap"))
 
         parse._parse_pdf(b"%PDF-small")
-        assert captured["submitted"] == b"%PDF-small"
+        assert fake.uploaded == b"%PDF-small", "an under-cap file is uploaded verbatim"
 
     def test_missing_ghostscript_names_the_size_and_the_binary(self, monkeypatch):
         """Deploy-shaped failure: the image lacks `gs`. The message has to say
