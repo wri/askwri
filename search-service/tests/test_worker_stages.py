@@ -2492,6 +2492,16 @@ def _insert_chunk_for_publish(conn, document_id, *, external_id):
     conn.commit()
 
 
+def _insert_running_job_for_publish(conn, document_id, *, prior_status=None):
+    """Insert the open running job publish reads prior_status from."""
+    conn.execute(
+        """INSERT INTO ingestion_jobs (document_id, stage, status, prior_status)
+           VALUES (%s, 'embed', 'running', %s)""",
+        (document_id, prior_status),
+    )
+    conn.commit()
+
+
 class TestPublishStage:
 
     def test_high_density_doc_parks_at_needs_review(self, stages_test_db, monkeypatch):
@@ -2574,21 +2584,73 @@ class TestPublishStage:
             ).fetchone()[0]
         assert status == "withdrawn", f"Withdrawn doc must stay withdrawn, got '{status}'"
 
-    def test_publish_never_calls_reindex(self, stages_test_db, monkeypatch):
-        """Publish no longer flips docs to searchable, so it must not touch
-        SEARCH_SERVICE_URL at all — pointing it at a closed port proves no
-        /reindex call is attempted (a call would raise or hang, and the admin
-        promote route owns reindexing now)."""
+    def test_fresh_ingest_parks_and_never_calls_reindex(self, stages_test_db, monkeypatch):
+        """A fresh ingest (no prior_status) parks at needs_review and must not
+        touch SEARCH_SERVICE_URL — pointing it at a closed port proves no
+        /reindex call is attempted on the park path (the admin promote route
+        owns reindexing for first-time publication)."""
         monkeypatch.setenv("SEARCH_SERVICE_URL", "http://127.0.0.1:1")
 
         with psycopg.connect(stages_test_db) as conn:
             doc_id = _insert_publish_document(conn, external_id="pub-reindex", language="en")
             _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
             _insert_chunk_for_publish(conn, doc_id, external_id="pub-reindex")
+            _insert_running_job_for_publish(conn, doc_id, prior_status="draft")
 
         from worker.stages.publish import run
         result = run(doc_id)
         assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert status == "needs_review", f"Expected 'needs_review', got '{status}'"
+
+    def test_reingest_restores_previously_searchable(self, stages_test_db, monkeypatch):
+        """Re-ingest of a promoted doc: prior_status='searchable' + clean parse
+        → restored to searchable (not unpublished), job ends done. The /reindex
+        refresh points at a closed port to prove a failure there is tolerated
+        (best-effort, same contract as the old auto-publish path)."""
+        monkeypatch.setenv("SEARCH_SERVICE_URL", "http://127.0.0.1:1")
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-restore", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-restore")
+            _insert_running_job_for_publish(conn, doc_id, prior_status="searchable")
+            # Parse flipped the doc to 'processing' mid-pipeline.
+            conn.execute("UPDATE documents SET status='processing' WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT status, extraction_confidence FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+        assert row[0] == "searchable", f"Expected restored 'searchable', got '{row[0]}'"
+        assert float(row[1]) >= 0.7
+
+    def test_degraded_reingest_parks_previously_searchable(self, stages_test_db, monkeypatch):
+        """Re-ingest of a promoted doc whose re-parse is now LOW quality: the
+        restore is refused — doc parks at needs_review and the job parks too,
+        so a human sees the regression before the doc goes back up.
+
+        Arithmetic (sparse case): char_count=50, pages=1, no chunks → 0.4 < 0.7.
+        """
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-restore-low", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=50, pages=1)
+            _insert_running_job_for_publish(conn, doc_id, prior_status="searchable")
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result == "needs_review"
 
         with psycopg.connect(stages_test_db) as conn:
             status = conn.execute(

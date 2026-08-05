@@ -240,8 +240,10 @@ docker exec askwri-pg psql -U askwri -d qa -c \
 
 Verify the published doc end-to-end:
 
-- `documents.status = 'searchable'` (or `needs_review` if extraction
-  confidence < 0.7 — then it appears in `/admin/review` for promotion).
+- `documents.status = 'needs_review'` — since issue #310 the worker never
+  auto-publishes a new document; it appears in `/admin/review` for promotion
+  regardless of extraction confidence. (Only a RE-ingested doc that was
+  already `searchable` comes back as `searchable`.)
 - Metadata extracted by the parse stage: `title`, `authors`, `doi`,
   `year_published`, `article_type`, `wri_primary_office` populated with
   `metadata_source->>'<field>' = 'llm'` provenance. The extraction is

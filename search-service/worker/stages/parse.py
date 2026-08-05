@@ -353,6 +353,18 @@ def run(document_id):
                    char_count = EXCLUDED.char_count""",
             (document_id, full_text, Jsonb(boundaries), len(full_text)),
         )
+        # Record the pre-ingest status on the open job BEFORE flipping to
+        # 'processing', so publish can restore a previously-searchable doc
+        # instead of unpublishing it (issue #310). First write per job wins:
+        # a reaped/retried parse re-runs with the doc already 'processing',
+        # and overwriting would lose the real prior status.
+        conn.execute(
+            """UPDATE ingestion_jobs SET prior_status = d.status
+               FROM documents d
+               WHERE d.id = %s AND ingestion_jobs.document_id = d.id
+                 AND ingestion_jobs.status = 'running'
+                 AND ingestion_jobs.prior_status IS NULL""",
+            (document_id,))
         conn.execute(
             "UPDATE documents SET status='processing', updated_at=now() WHERE id=%s AND status <> 'withdrawn'",
             (document_id,))
