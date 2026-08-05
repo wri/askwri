@@ -13,12 +13,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies including AWS CLI for S3 sync
+# Install system dependencies including AWS CLI for S3 sync.
+# ghostscript: the parse stage shells out to `gs` to downsample raster images
+# in PDFs over Mistral OCR's 50MB hard limit (worker/stages/parse.py
+# _shrink_pdf). Without it those documents cannot be parsed at all.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     awscli \
     gcc \
     g++ \
+    ghostscript \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================

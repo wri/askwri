@@ -109,6 +109,19 @@ def test_b1_worker_package_importable_in_image():
         )
 
 
+def test_ghostscript_installed_in_image():
+    """Issue #310 follow-up (Fix 2): the parse stage shells out to `gs` to
+    shrink PDFs over Mistral OCR's 50MB limit. If the apt line loses
+    ghostscript, oversized documents fail with 'Ghostscript is not installed'
+    at parse time — a deploy-only failure no unit test would catch. Text
+    assertion, not a build: this must run in the fast suite."""
+    text = DOCKERFILE.read_text()
+    assert "ghostscript" in text, (
+        "search-service/Dockerfile must apt-install ghostscript — "
+        "worker/stages/parse.py::_shrink_pdf shells out to `gs`"
+    )
+
+
 @_requires_docker_bin
 def test_b1_worker_package_exists_in_source_tree():
     """Fast sanity check (no Docker): the source `worker/` package exists.

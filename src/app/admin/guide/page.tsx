@@ -33,11 +33,10 @@ const GuidePage = () => (
       Upload one or more PDFs on the Upload page. The ingestion pipeline picks
       them up and works through them in the background: it reads the PDF text
       (parse), detects the language, writes summaries, suggests tags (classify),
-      indexes the document for search (embed), then publishes it. Documents that
-      come out of the pipeline needing a human look land in the Review queue.
-      Open a document from there (or from Documents) to check its metadata and
-      the tags the AI suggested, then click Promote to make it publicly
-      searchable.
+      and indexes the document for search (embed). Every new document then lands
+      in the Review queue. Open it from there (or from Documents) to check its
+      metadata and the tags the AI suggested, then click Promote to make it
+      publicly searchable.
     </p>
     <p>
       If you have metadata for many documents at once — from a spreadsheet or
@@ -199,10 +198,11 @@ const GuidePage = () => (
     <p style={{ marginBottom: 8 }}>
       Once a PDF is uploaded, the worker moves it through six stages: read the
       PDF text (parse), detect the language, write summaries, suggest tags
-      (classify), index the document for search (embed), and publish it (a
-      quality gate that decides whether it goes straight to searchable or is
-      held as needs_review). If a stage fails it retries automatically before
-      the document is marked error.
+      (classify), index the document for search (embed), and a final quality
+      gate (publish) that records an extraction-confidence score. Every document
+      then waits in needs_review — nothing goes live until a person reviews and
+      promotes it. If a stage fails it retries automatically before the document
+      is marked error.
     </p>
     <p>
       Re-ingesting a document runs it through this pipeline again. AI-written
@@ -210,7 +210,10 @@ const GuidePage = () => (
       so re-ingest is the right move after a parsing problem is fixed. Anything
       a person has edited by hand — a corrected title, a rewritten summary, an
       accepted or rejected tag — is preserved exactly as it was set and is never
-      overwritten by re-ingestion.
+      overwritten by re-ingestion. A document that was already publicly
+      searchable comes back searchable after re-ingest (it is not pulled from
+      search) unless the new extraction looks degraded, in which case it lands
+      in needs_review for a person to check first.
     </p>
 
     <h2
@@ -234,6 +237,21 @@ const GuidePage = () => (
       back up.
     </p>
     <p style={{ marginBottom: 4 }}>
+      <strong>My PDF is over 100MB and won&apos;t upload.</strong>
+    </p>
+    <p style={{ marginBottom: 12 }}>
+      Uploads are capped at 100MB. You do not need to compress anything below
+      that: files too large for the OCR service are downsampled automatically
+      before processing, and the original you uploaded is what gets stored and
+      served. If your file is over 100MB, compress it first: in Adobe Acrobat
+      use File → Reduce File Size (or Save as Other → Optimized PDF); on a Mac,
+      open the PDF in Preview and export with the &quot;Reduce File Size&quot;
+      Quartz filter; or use a reputable web compressor such as iLovePDF or
+      Smallpdf (fine here — these are published, public documents). Nearly all
+      the bulk in a large report is imagery, so downsampling images typically
+      shrinks it several-fold with no visible loss in the text.
+    </p>
+    <p style={{ marginBottom: 4 }}>
       <strong>The Promote button is missing.</strong>
     </p>
     <p style={{ marginBottom: 12 }}>
@@ -246,8 +264,9 @@ const GuidePage = () => (
     </p>
     <p style={{ marginBottom: 12 }}>
       Extraction confidence is a score from 0 to 1 for how cleanly the PDF text
-      was extracted. Documents below 0.7 are held in needs_review for a human to
-      check before they go live.
+      was extracted. All documents wait in needs_review for a human check before
+      they go live; a score below 0.7 is a signal to look extra closely at the
+      extracted text and metadata.
     </p>
     <p style={{ marginBottom: 4 }}>
       <strong>Who can do what?</strong>

@@ -142,6 +142,12 @@ jobs:
         working-directory: search-service
         run: pip install -r requirements-dev.txt
 
+      # Ghostscript: worker/stages/parse.py shells out to `gs` to shrink PDFs
+      # over Mistral OCR's 50MB limit. Without it the shrink tests in
+      # test_parse_backend.py skip, which would hide a broken shrink path.
+      - name: Install ghostscript
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ghostscript
+
       # Selection: hermetic tests (test_sparse_keyword, test_cite_doc_ids_filter)
       # plus scratch-DB tests that self-provision against DATABASE_URL
       # (test_migration_script, test_build_sparse_script, test_sparse_retriever,
@@ -153,9 +159,16 @@ jobs:
       # test_config_env_local, test_env_loading). All are hermetic / self-
       # provisioning scratch DBs or pure config tests. test_pg_store and
       # test_query_e2e remain local-only (they need the real 169-doc qa corpus).
+      #
+      # Added 2026-08-05 (#310 follow-up): test_parse_backend (parse-backend
+      # dispatch + the oversized-PDF Ghostscript shrink; fully hermetic, no DB,
+      # no network) and test_dockerfile_worker (the Docker BUILD test is opt-in
+      # behind REQUIRE_DOCKER_TESTS and stays skipped here; the two text
+      # assertions that run guard `worker/` and `ghostscript` staying in the
+      # image — deploy-only failures nothing else catches).
       - name: Run tests
         working-directory: search-service
-        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py tests/test_sparse_keyword.py tests/test_cite_doc_ids_filter.py tests/test_migration_script.py tests/test_build_sparse_script.py tests/test_sparse_retriever.py tests/test_worker_pipeline.py tests/test_startsh_sync.py tests/test_config.py tests/test_config_env_local.py tests/test_env_loading.py -v
+        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py tests/test_sparse_keyword.py tests/test_cite_doc_ids_filter.py tests/test_migration_script.py tests/test_build_sparse_script.py tests/test_sparse_retriever.py tests/test_worker_pipeline.py tests/test_startsh_sync.py tests/test_config.py tests/test_config_env_local.py tests/test_env_loading.py tests/test_parse_backend.py tests/test_dockerfile_worker.py tests/test_batch_ocr_script.py -v
 
   # ==========================================================================
   # Docker Build Test

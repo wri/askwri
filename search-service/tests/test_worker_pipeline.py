@@ -82,6 +82,18 @@ def _fake_chat_json(system, user, schema, model, max_tokens=1500):
     }
 
 
+# Records every parse-stage metadata-extraction call; _run_full_pipeline resets it.
+_extract_calls: list = []
+
+
+def _fake_extract_json(system, user, schema, model, max_tokens=1500):
+    """Stub for the parse stage's bibliographic extraction call. Returns all
+    nulls so no document field is overwritten — the point is only that the call
+    happens (and costs no network)."""
+    _extract_calls.append(user)
+    return {f: None for f in schema["properties"]}
+
+
 def _fake_embed_texts(texts):
     return [[0.01] * 1536 for _ in texts]
 
@@ -112,7 +124,12 @@ def _run_full_pipeline(monkeypatch, tmp_path) -> None:
     from app.config import get_settings
     get_settings.cache_clear()
 
+    _extract_calls.clear()
+
     # Monkeypatch external services
+    # parse's metadata extraction resolves chat_json off worker.llm at call time;
+    # unstubbed it attempts a real LLM call that the stage swallows as non-fatal.
+    monkeypatch.setattr("worker.llm.chat_json", _fake_extract_json)
     monkeypatch.setattr("worker.stages.summarize.chat_json", _fake_chat_json)
     monkeypatch.setattr("worker.stages.classify.chat_json", _fake_chat_json)
     monkeypatch.setattr("worker.stages.embed._embed_texts", _fake_embed_texts)
@@ -219,7 +236,8 @@ class TestWorkerPipeline:
             ).fetchone()
             assert doc_row is not None, "documents row for 'sample' should exist"
             status, extraction_confidence, language = doc_row
-            assert status == "searchable", f"Expected status='searchable', got '{status}'"
+            # Never auto-published (issue #310): even a clean doc awaits human review.
+            assert status == "needs_review", f"Expected status='needs_review', got '{status}'"
             assert extraction_confidence is not None, "extraction_confidence should be set"
             assert float(extraction_confidence) >= 0.7, (
                 f"extraction_confidence {extraction_confidence} < 0.7"
@@ -398,9 +416,10 @@ class TestWorkerPipeline:
             "Without the worker, no ingestion_jobs row should exist"
         )
 
-    def test_worker_running_processes_intake_to_searchable(self, pipeline_test_db, monkeypatch, tmp_path):
-        """The happy path: a file in intake + the worker running → searchable with
-        chunks, summaries, and a done job. This is the e2e upload→process test."""
+    def test_worker_running_processes_intake_to_needs_review(self, pipeline_test_db, monkeypatch, tmp_path):
+        """The happy path: a file in intake + the worker running → needs_review
+        (awaiting human promote, issue #310) with chunks, summaries, and a done
+        job. This is the e2e upload→process test."""
         with psycopg.connect(pipeline_test_db) as conn:
             _seed_tags(conn)
 
@@ -412,15 +431,15 @@ class TestWorkerPipeline:
                    WHERE external_id = 'sample'"""
             ).fetchone()
             assert doc_row is not None, "worker should have registered the dropped file"
-            assert doc_row[0] == "searchable", (
-                f"Expected searchable, got '{doc_row[0]}'"
+            assert doc_row[0] == "needs_review", (
+                f"Expected needs_review, got '{doc_row[0]}'"
             )
             chunks = conn.execute(
                 "SELECT count(*) FROM document_chunks dc "
                 "JOIN documents d ON d.id = dc.document_id "
                 "WHERE d.external_id = 'sample'"
             ).fetchone()[0]
-            assert chunks > 0, "searchable doc should have chunks"
+            assert chunks > 0, "processed doc should have chunks"
             job = conn.execute(
                 """SELECT j.status, j.stage FROM ingestion_jobs j
                    JOIN documents d ON d.id = j.document_id
@@ -431,8 +450,8 @@ class TestWorkerPipeline:
             assert job[1] == "publish"
 
     def test_multiple_files_uploaded_then_processed(self, pipeline_test_db, monkeypatch, tmp_path):
-        """Two files dropped into intake are both processed to searchable by the worker —
-        the multi-file upload scenario from the bug report."""
+        """Two files dropped into intake are both processed to needs_review by the
+        worker — the multi-file upload scenario from the bug report."""
         with psycopg.connect(pipeline_test_db) as conn:
             _seed_tags(conn)
 
@@ -462,12 +481,12 @@ class TestWorkerPipeline:
             assert iterations < 20, "Pipeline did not terminate within 20 iterations"
 
         with psycopg.connect(pipeline_test_db) as conn:
-            # file_a is registered + processed to searchable
+            # file_a is registered + processed to needs_review (awaiting promote)
             row_a = conn.execute(
                 "SELECT status FROM documents WHERE external_id = 'file_a'"
             ).fetchone()
             assert row_a is not None, "file_a should be registered"
-            assert row_a[0] == "searchable", f"file_a should be searchable, got '{row_a[0]}'"
+            assert row_a[0] == "needs_review", f"file_a should be needs_review, got '{row_a[0]}'"
             # file_b is a content-hash duplicate of file_a -> deduped, no documents row
             row_b = conn.execute(
                 "SELECT count(*) FROM documents WHERE external_id = 'file_b'"
@@ -475,3 +494,61 @@ class TestWorkerPipeline:
             assert row_b[0] == 0, (
                 "file_b (same content as file_a) should be deduped, not registered"
             )
+
+    def test_reingest_makes_exactly_one_ocr_call(self, pipeline_test_db, monkeypatch, tmp_path):
+        """Issue #310 follow-up (Fix 1): a full ingest followed by a re-ingest of
+        the SAME bytes under the SAME parser must call OCR exactly once. Runs on
+        the mistral backend because that is qa's configuration — the OCR call is
+        stubbed, so what is counted is the call the cache is meant to eliminate.
+        Every other stage still runs on the re-ingest (that is the point)."""
+        with psycopg.connect(pipeline_test_db) as conn:
+            _seed_tags(conn)
+
+        ocr_calls = []
+
+        def fake_ocr(content):
+            ocr_calls.append(len(content))
+            return (
+                "World Resources Institute working paper on urban transport.\n\n"
+                "This page describes emissions from freight movement in cities.",
+                [{"page": 1, "end_pos": 58}, {"page": 2, "end_pos": 122}],
+            )
+
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        monkeypatch.setattr("worker.stages.parse._parse_pdf_mistral", fake_ocr)
+
+        _run_full_pipeline(monkeypatch, tmp_path)
+        assert len(ocr_calls) == 1, f"first ingest should OCR once, got {len(ocr_calls)}"
+        assert len(_extract_calls) == 1, "first ingest runs metadata extraction once"
+
+        # Re-ingest the same document (what reingest_all does for a prompt campaign).
+        from worker import queue
+        from worker.main import process_one_job
+        with psycopg.connect(pipeline_test_db) as conn:
+            doc_id = conn.execute(
+                "SELECT id FROM documents WHERE external_id = 'sample'"
+            ).fetchone()[0]
+            queue.enqueue(conn, doc_id)
+            conn.commit()
+
+        iterations = 0
+        while process_one_job():
+            iterations += 1
+            assert iterations < 20, "Re-ingest did not terminate within 20 iterations"
+
+        assert len(ocr_calls) == 1, (
+            f"re-ingest of unchanged bytes must reuse the cached parse; got {len(ocr_calls)} OCR calls"
+        )
+        assert len(_extract_calls) == 2, (
+            "the re-ingest must still run metadata extraction — only the OCR is skipped, "
+            f"got {len(_extract_calls)} extraction calls"
+        )
+        with psycopg.connect(pipeline_test_db) as conn:
+            texts, jobs = conn.execute(
+                """SELECT (SELECT count(*) FROM document_texts WHERE document_id = %s),
+                          (SELECT count(*) FROM ingestion_jobs WHERE document_id = %s AND status = 'done')""",
+                (doc_id, doc_id),
+            ).fetchone()
+        assert texts == 1, "still exactly one document_texts row"
+        assert jobs == 2, f"both the ingest and the re-ingest jobs should complete, got {jobs}"

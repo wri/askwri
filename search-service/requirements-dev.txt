@@ -16,6 +16,8 @@ jmespath==1.1.0
     # via botocore
 packaging==26.2
     # via pytest
+pillow==12.3.0
+    # via -r requirements-dev.in
 pluggy==1.6.0
     # via
     #   pytest

@@ -31,7 +31,16 @@ def _summarize(text: str, title: str, lang: str, model: str) -> dict:
     return chat_json(
         system=(f"You summarize research publications in {_LANG_NAMES.get(lang, 'English')}. "
                 "Return JSON with 'long' (120-180 words) and 'short' (max 40 words) summaries "
-                "written in that language, faithful to the source."),
+                "written in that language, faithful to the source.\n\n"
+                # Style guidance added for issue #310: unconstrained summaries
+                # mirrored the source's register and could be unreadably technical.
+                "STYLE. Write for an educated general reader, not a specialist. "
+                "Lead with what the publication shows and why it matters, in "
+                "plain language and active voice. Spell out every acronym on "
+                "first mention, and skip acronyms you would only use once. Keep "
+                "parentheticals and technical qualifiers to a minimum — prefer "
+                "a simpler faithful statement over a dense, caveat-laden one. "
+                "Never invent facts or numbers that are not in the source."),
         user=f"Title: {title}\n\nDocument text (truncated):\n{text[:24000]}",
         schema=_SCHEMA, model=model,
     )

@@ -22,7 +22,7 @@ export const STATUS_META: Record<
   needs_review: {
     color: '#8a5a15',
     bg: '#fdf3e0',
-    help: 'Held for human review — the PDF may not have parsed cleanly. Not publicly searchable until a person promotes it.',
+    help: 'Waiting for human review — every ingested document lands here. Not publicly searchable until a person reviews and promotes it.',
   },
   searchable: {
     color: '#0A6640',

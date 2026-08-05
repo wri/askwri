@@ -417,7 +417,7 @@ d('documentsAdmin (DB integration)', () => {
         {
           title: 'Corrected Title',
           yearPublished: 2020,
-          wriPrimaryOffice: 'WRI Ross Center',
+          wriPrimaryOffice: 'WRI India',
         },
         identity,
       )

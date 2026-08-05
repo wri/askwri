@@ -60,7 +60,7 @@ Migration history (all TypeORM raw-SQL under `src/db/migrations/`): `17812800000
 | Table | Purpose | Key columns | Written by |
 |---|---|---|---|
 | `documents` | One row per document. System of record. | `id` (uuid PK), `external_id` (unique, legacy doc_id), `s3_key`, `title`, `language`, `languages[]`, `status`, `source_metadata` (jsonb) | App tier |
-| `document_texts` | Full extracted text per document (for query-time passage context). | `document_id` (PK, FK → documents), `full_text`, `page_boundaries` (jsonb), `char_count` | Python migration script |
+| `document_texts` | Full extracted text per document (for query-time passage context). | `document_id` (PK, FK → documents), `full_text`, `page_boundaries` (jsonb), `char_count`, parse-cache stamps `parsed_content_hash` / `parse_backend` / `parse_model` (nullable; see the parse stage) | Python migration script |
 | `document_summaries` | Per-language summaries (long/short). | `(document_id, language, kind)` composite PK, `text`, `source` | Python migration script |
 | `document_chunks` | Retrieval units (text chunks + embeddings). One row per chunk or summary node. | `id` (uuid PK), `document_id` (FK), `legacy_chunk_id` (unique, e.g. `2021_doc_chunk_0`), `chunk_index`, `unit_type` (`text`\|`summary`), `text`, `node_metadata` (jsonb, full legacy metadata verbatim), `embedding` (vector), `embedding_model`, `dimension`, `sparse` (sparsevec — BM25 impact vectors, the live keyword lane; populated by `scripts/build_sparse_keyword.py` backfill and the worker embed stage), `corpus_order` | Python migration script |
 | `tags` | Controlled vocabulary. Taxonomy v1. | `id` (uuid PK), `facet`, `value_id`, `taxonomy_version` | App tier / migration script |
@@ -126,7 +126,7 @@ This matters because `document_chunks.node_metadata` — and therefore every fie
 | `sparse` (default) | No BM25 build; sparse vectors already in `document_chunks.sparse` | Per-query SQL with `WHERE status='searchable'` filter; requires `build_sparse_keyword.py` to have run |
 | `memory` | Hydrates `BM25Retriever` from Postgres chunk rows at boot or `/reindex` | In-memory lookup; stale until next boot or `/reindex` |
 
-Under `KEYWORD_BACKEND=sparse`, the `/reindex` endpoint no longer rebuilds the BM25 index. It refreshes in-memory passage-context texts and metadata (build-then-swap, ~11 s) used for answer synthesis — the worker publish stage still calls it for that reason (retrying once on `409 already_running`).
+Under `KEYWORD_BACKEND=sparse`, the `/reindex` endpoint no longer rebuilds the BM25 index. It refreshes in-memory passage-context texts and metadata (build-then-swap, ~11 s) used for answer synthesis — the admin promote route calls it on every flip to `searchable`, and the worker publish stage calls it only when restoring a re-ingested previously-searchable doc (retrying once on `409 already_running`; issue #310 removed the auto-publish path).
 
 **English handles (`SPARSE_EN_HANDLES`, default `false` — cross-lingual, 2026-07-26):** when on, both sparse write sites (`scripts/build_sparse_keyword.py` and the worker embed stage) append English handle text to the **sparse tokenization string only** for `language != 'en'` docs: `documents.title_en` per chunk (skipped when it equals the indexed title after normalization — most zh docs) plus the curated English `long` summary on the summary chunk. Dense embeddings, stored chunk text, `node_metadata`, and `/query` are untouched; nothing on the query path reads the flag. The flag must be set consistently in the backfill shell AND the ingestion-worker env (two deploy surfaces) or the next re-ingest strips the handles. Rollback: flag off + one rebuild restores byte-identical sparse vectors (`keyword_vocab` keeps residual zero-weight rows — harmless). `scripts/sparse_parity_check.py` refuses to run flag-on (stored vectors intentionally diverge from raw-text BM25). Gate record: `docs/plans/2026-07-26-sparse-en-handles-gate-results.md`; design: `docs/plans/2026-07-26-sparse-lane-english-handles-design.md`.
 
@@ -246,22 +246,23 @@ queued → running → queued (next stage) → … → done | needs_review | err
 
 | Stage | What it does |
 |---|---|
-| **parse** | Dispatches on `PARSE_BACKEND` (multilingual-v3, 2026-07-22): `pypdf` (default — PDFReader/LlamaIndex text layer) or `mistral` (Mistral OCR markdown, per-page emission; parser page indices drive `page_boundaries`, fixing the zh page-attribution drift). Ratified parser for Phase C per the bake-off (`docs/plans/2026-07-22-parse-bakeoff-phase0-results.md`). Selected per-environment via worker env — qa runs `mistral` and its corpus is fully re-parsed (2026-07-23); the code default stays `pypdf` deliberately (see the parse-backend note above). Writes `document_texts` (`full_text`, `page_boundaries`). Sets document `status='processing'`. Falls back to title+summary text for CSV-imported docs with no associated file. If no text can be extracted at all, advances to `needs_review`. Also runs one structured-output LLM call that extracts `title`, `title_en`, `authors`, `doi`, `year_published`, `article_type`, `wri_primary_office`, each written under the `metadata_source` provenance guard (overwrite only when NULL/`llm`). Since issue #303 this stage owns the `title`/`title_en` pair: `title` is the native-language title **alone** and `title_en` the document's own English title when the cover carries one, else a translation — asking for a single "title" returned bilingual covers concatenated into both columns. Author names are transliterated to Latin script in the same call; native-script forms are not retained (a re-ingest re-extracts them). |
+| **parse** | Dispatches on `PARSE_BACKEND` (multilingual-v3, 2026-07-22): `pypdf` (default — PDFReader/LlamaIndex text layer) or `mistral` (Mistral OCR markdown, per-page emission; parser page indices drive `page_boundaries`, fixing the zh page-attribution drift). Ratified parser for Phase C per the bake-off (`docs/plans/2026-07-22-parse-bakeoff-phase0-results.md`). Selected per-environment via worker env — qa runs `mistral` and its corpus is fully re-parsed (2026-07-23); the code default stays `pypdf` deliberately (see the parse-backend note above). Writes `document_texts` (`full_text`, `page_boundaries`). Sets document `status='processing'`. Falls back to title+summary text for CSV-imported docs with no associated file. If no text can be extracted at all, advances to `needs_review`. Also runs one structured-output LLM call that extracts `title`, `title_en`, `authors`, `doi`, `year_published`, `article_type`, `wri_primary_office`, each written under the `metadata_source` provenance guard (overwrite only when NULL/`llm`). Since issue #303 this stage owns the `title`/`title_en` pair: `title` is the native-language title **alone** and `title_en` the document's own English title when the cover carries one, else a translation — asking for a single "title" returned bilingual covers concatenated into both columns. Author names are transliterated to Latin script in the same call; native-script forms are not retained (a re-ingest re-extracts them). **Parse cache (issue #310 follow-up):** each write stamps `document_texts.parsed_content_hash` / `parse_backend` / `parse_model` (empty model for pypdf). On a later run, if all three match the document's current `content_hash` and the worker's current backend/model, the stage reuses the stored text and skips **both the S3 download and the OCR call**; metadata extraction and every downstream stage still run, so prompt-tuning re-ingests re-run the cheap stages only. Misses on NULL stamps (all pre-migration rows — that is what makes the migration behavior-neutral), NULL `content_hash` (CSV-era rows), changed bytes, a backend flip, or a change to the stamped `MISTRAL_OCR_MODEL` **string**. Two things the stamps deliberately do NOT track, both requiring `FORCE_REPARSE=true` (or a changed model string) to invalidate: a change to what the parse code *emits* under an unchanged backend (the 2026-07-22 per-page boundary fix is the precedent), and Mistral repointing the default `mistral-ocr-latest` alias — pin a dated model id per environment if you want that to invalidate on its own. `FORCE_REPARSE=true` bypasses the read path for a deliberate re-OCR. Making an existing corpus cache-eligible is a per-environment ops step (see `docs/runbooks/qa-push-deploy.md`), not a migration: the correct `parse_backend` value differs by environment. **Transport (2026-08-05):** the document is uploaded to Mistral file storage (`purpose='ocr'`) and referenced by a signed URL, then deleted after the call — it is NOT inlined as a base64 data URI. Base64 is 1.37x, so a 50MB PDF became a ~68MB request body, and it was never established whether the 50MB limit applies to the document or the body (i.e. whether the real raw ceiling was ~36MB). Uploading removes the question, verified against the live API, and drops peak per-parse memory by roughly two copies of the file. `scripts/batch_ocr.py` shares the same helper, so both transports submit documents identically. **Oversize shrink (issue #310 follow-up, mistral backend only):** Mistral OCR rejects files over 50MB (`MISTRAL_MAX_BYTES`). A PDF over that is passed through Ghostscript (raster images downsampled to 300 dpi — not the 150 dpi `/ebook` preset, which costs OCR legibility on small figure labels) and the **shrunk bytes are submitted to OCR only**; S3 and the app keep the original file. Ghostscript exit 0 is not trusted on its own — the output is re-read and rejected if it is empty, unreadable, or has fewer pages than the source (gs 10's repair path can silently drop pages, which would OCR clean and cache as complete). A shrunk parse stamps `parse_model` with a `+gs300` policy tag, so it is distinguishable from a full-resolution parse of the same bytes and **never hits the cache** — once the cap is raised, re-ingesting genuinely re-OCRs at full resolution rather than serving downsampled text forever. `WHERE parse_model LIKE '%+gs%'` finds every affected document. If `gs` is missing, fails, or cannot get the file under the cap, the stage raises with the sizes named and the job lands in the review queue. Note the reachable lane: the admin upload route still rejects >50MB at the door (`MAX_FILE_BYTES`, deliberately unchanged), so today this path only fires for files dropped directly into the S3 intake prefix, which has no size cap. Raising the upload cap is a separate decision to make **after** the mechanism is proven on the 59MB `wri-india-nup-report.pdf`. |
 | **language** | langdetect; supported set: `{en, es, zh, pt, id}` (Indonesian added in Phase 1). Unsupported languages fall back to `en`. Long docs vote across head/middle/late windows (2026-07-22): WRI zh/es/pt reports open with English cover pages, and a head-only sample flipped `documents.language` to `en` on re-ingest. |
 | **summarize** | Generates native-language + English long/short summaries via `WORKER_LLM_MODEL` (default `gpt-5-mini`), `source='generated'`. Skips rows that already exist (including CSV-seeded `source='external'` rows). Also a **fallback** writer of `title_en`, for documents the parse extraction never reached (CSV rows with no PDF; extraction-call failures) — it fires only when `title_en` is still blank: English docs get `= title`, non-English docs an LLM translation. Provenance-guarded via `metadata_source->>'title_en'` (overwrite only when NULL/`llm`; never `human`/`external`). Since issue #303 the parse stage owns the `title`/`title_en` pair and refreshes both together on re-ingest, so they never drift. |
 | **classify** | LLM call constrained to the `tags` taxonomy v1 values. Writes `document_tags` with `source='llm'`; `status='accepted'` if `confidence ≥ TAG_CONFIDENCE_ACCEPT` (default 0.7), else `status='suggested'`. Never touches rows with `source='human'` or `source='external'`. |
 | **embed** | Phase 0-identical chunking *parameters* (SimpleNodeParser 400/80 + summary node, legacy chunk id format). Dense model is model-aware since multilingual-v3 B1: `EMBEDDING_MODEL` selects `cohere-embed-v4` (Bedrock, the default and post-2026-07-22-cutover state) or `text-embedding-3-small` (OpenAI, rollback path); rows record `embedding_model`/`dimension`. Note: chunk *metadata* diverges from the Phase-0 migration in title source (worker uses `Publication Title` fallback, matching `indexing.build_nodes`; the migration used `Article Title`), authors (worker stores full, not truncated to 100), and `file_path` (worker stores the CSV `file_path`, not `s3_key`). `corpus_order` appended after the current global max (advisory lock for concurrency). Re-ingest deletes prior chunks first. Chinese text and summaries are OpenCC t2s-normalized in chunks only (`document_texts` retains original); page boundaries are recomputed on the Simplified text to avoid OpenCC length-change drift. Also writes sparse keyword vectors under the frozen corpus stats (new tokens get `df=1`); a token_id headroom guard **warns at 80% of `SPARSE_DIM`** and raises a clear error at the cap (run `build_sparse_keyword.py` or migrate the dimension). **After any BULK re-ingest, `scripts/build_sparse_keyword.py` must be re-run before any threshold derivation**: the stage assigns brand-new tokens `lucene_idf(1, n_chunks)` from the FROZEN `keyword_corpus_stats`, so a bulk run leaves both `n_chunks`/`avgdl` and the new tokens' IDF drifted from the real corpus. (Phase D 2026-07-23: stats were stale at 30,435 vs an actual 27,878 until rebuilt; vocab grew 190,070 -> 233,936.) If `keyword_corpus_stats` is missing (backfill never ran), it writes `NULL` sparse with a warning. When `SPARSE_EN_HANDLES=true`, English handle text (title_en per chunk; English long summary on the summary chunk) is appended to the sparse tokenization string only for non-EN docs — dense content and stored text are untouched (see §5). |
-| **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). If `< 0.7`: document status → `needs_review`. Otherwise: document status → `searchable` + best-effort `POST SEARCH_SERVICE_URL/reindex` (one retry on `409 already_running`) to refresh the service's in-memory passage-context texts/metadata (both retrieval lanes pick up new chunks immediately via SQL under the default sparse backend). |
+| **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). Since issue #310 ingestion **never auto-publishes a new document**: it parks at `needs_review` regardless of score (the job additionally parks in the review state only when `< 0.7`, so extraction concerns stay distinguishable from routine pending review), and only the admin promote route flips it to `searchable`. Exception — **re-ingest of an already-promoted doc**: parse records the pre-ingest status on the job (`ingestion_jobs.prior_status`, first write per job wins), and publish restores `prior_status='searchable'` docs to `searchable` when the score passes 0.7 (so `reingest_all` doesn't unpublish the corpus); a restore fires the same best-effort `POST SEARCH_SERVICE_URL/reindex` (one retry on `409 already_running`) as the promote route, because the live doc's chunks changed. A degraded re-parse (`< 0.7`) refuses the restore and parks. Withdrawn docs are never touched. |
 
 ### 10.5 Document lifecycle update
 
 ```
-draft → processing (set by parse) → searchable | needs_review
-                                                      ↑
-                                  error (job exhausted retries)
+draft → processing (set by parse) → needs_review → searchable (human promote only)
+                                          ↑              │
+                      error (job exhausted retries)      └─ re-ingest: processing → searchable
+                                                            (restored, score ≥ 0.7) | needs_review
 ```
 
-Phase 0 migration set all existing documents directly to `searchable` (bypassing the pipeline). Phase 1 worker advances newly ingested documents through `processing` → `searchable` or `needs_review`.
+Phase 0 migration set all existing documents directly to `searchable` (bypassing the pipeline). Since issue #310 the worker never auto-publishes: every newly ingested document waits in `needs_review` until a human promotes it; only a re-ingested previously-searchable document is restored to `searchable` automatically (see the publish stage row above).
 
 `needs_review` documents are excluded from retrieval (`status='searchable'` filter in all retrieval SQL). To review and promote:
 
@@ -297,6 +298,56 @@ A review UI shipped in Phase 2; see §11 below.
 | `SEARCH_SERVICE_URL` | — | Used by publish stage to trigger `/reindex` |
 | `OPENAI_API_KEY` | — | Required for summarize and embed stages |
 | `DATABASE_URL` | — | Postgres connection string |
+| `FORCE_REPARSE` | `false` | Bypass the parse cache and re-OCR every document (see the parse stage) |
+
+### 10.6b Bulk OCR via the Batch API (`scripts/batch_ocr.py`)
+
+Gated ops script, 50% cheaper than per-document OCR ($2 vs $4 per 1k pages).
+**Not for prompt-tuning re-ingests** — with the parse cache those already make
+zero OCR calls. It pays off for a bulk NEW-corpus import, or a re-OCR campaign
+after an OCR-model upgrade.
+
+It selects documents that would MISS the parse cache (the same predicate
+`_cached_parse` uses), uploads each PDF for a signed URL, submits one batch job
+against `endpoint=/v1/ocr`, polls it, then writes `document_texts` **with the
+cache stamps** and enqueues each document — so the follow-up pipeline pass runs
+language→summarize→classify→embed→publish against a guaranteed cache hit and
+never pays for OCR twice. Batch entries reference signed URLs rather than
+inlining base64 (verified against the live API 2026-08-05): a 50MB PDF inlined
+would be a ~67MB JSONL line, where the reference is ~500 bytes.
+
+**Dry run is the default** — it prints the selected documents and the exact
+JSONL/job payload, performing no uploads, no job, and no writes. `--execute`
+opts in to spending money. Documents over the 50MB OCR limit are skipped and
+left to the worker's Ghostscript shrink path, since a shrunk row is stamped
+`+gs300` and would be re-OCR'd by the follow-up pass anyway.
+
+**It refuses to run in two environments**, because in both the spend would be
+wasted and a dry run would not reveal it (it would just list the whole corpus,
+which reads like confirmation that they all need OCR):
+
+- `PARSE_BACKEND != mistral` — the script stamps rows `mistral`, so under pypdf
+  (the code default, and production's setting) every document looks like a cache
+  miss and the follow-up pypdf parse would overwrite the OCR text just paid for.
+- `FORCE_REPARSE=true` — the enqueued pass would bypass the cache and re-OCR
+  everything synchronously at full price. Unset it, run the script, re-set it.
+
+**Recovery.** The job id is logged at submission and the poll timeout repeats it.
+If a run is interrupted after submission the work is already paid for — collect
+it with `--resume-job <id> --execute`, which rebuilds the document map from the
+database (`custom_id` is `external_id`) and writes the results. Partial results
+from a `TIMEOUT_EXCEEDED` or `FAILED` job are collected too, rather than
+discarded. The write-back commits per document, so a late failure keeps
+everything already stored. Each write is guarded on the document's current
+`content_hash`: a version replaced at intake mid-job is left alone rather than
+overwritten with OCR of the superseded bytes. Uploaded copies are deleted from
+Mistral storage when the job finishes, on every path.
+
+```bash
+cd search-service && ./venv/bin/python -m scripts.batch_ocr            # dry run
+cd search-service && ./venv/bin/python -m scripts.batch_ocr --execute
+cd search-service && ./venv/bin/python -m scripts.batch_ocr --resume-job <id> --execute
+```
 
 ### 10.7 Taxonomy human-gate note
 
@@ -388,7 +439,7 @@ When an editor accepts or rejects a suggested LLM tag, the `document_tags` row h
 
 Promote (`needs_review → searchable`) and withdraw (`searchable → withdrawn`) are consistent on the next query under the default `KEYWORD_BACKEND=sparse` — both lanes filter `status='searchable'` per-query, so no reindex is needed for UI-driven or direct psql status changes.
 
-The admin status route fires a **non-blocking, fire-and-forget** `POST /reindex` on promote (status → `searchable`) only — purely to refresh the service's in-memory passage-context texts; the API response has no `reindex` field, the route never awaits the call, and the UI shows no staleness notices (both retrieval lanes are already consistent per query). Withdraw fires nothing. The worker's publish stage calls `/reindex` for the same passage-text reason (with one retry on `409 already_running`; build-then-swap, seconds under sparse mode). Under `KEYWORD_BACKEND=memory` (legacy path) `/reindex` also rebuilds the in-memory BM25 index, and a manual call after admin lifecycle changes is required for keyword-lane correctness in that mode (see §4).
+The admin status route fires a **non-blocking, fire-and-forget** `POST /reindex` on promote (status → `searchable`) only — purely to refresh the service's in-memory passage-context texts; the API response has no `reindex` field, the route never awaits the call, and the UI shows no staleness notices (both retrieval lanes are already consistent per query). Withdraw fires nothing. The worker's publish stage calls `/reindex` for the same passage-text reason (with one retry on `409 already_running`; build-then-swap, seconds under sparse mode) — but since issue #310 only on the re-ingest restore path, the one case where it flips a doc to `searchable`. Under `KEYWORD_BACKEND=memory` (legacy path) `/reindex` also rebuilds the in-memory BM25 index, and a manual call after admin lifecycle changes is required for keyword-lane correctness in that mode (see §4).
 
 ### 11.8 Deferred
 

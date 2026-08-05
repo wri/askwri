@@ -9,6 +9,7 @@ Uses the same hermetic pattern as test_worker_queue.py:
 Skip guard: requires DATABASE_URL (same convention as other DB tests).
 """
 import hashlib
+import json as json_mod
 import os
 import shutil
 import subprocess
@@ -562,7 +563,10 @@ class TestParseStage:
         self, tmp_path, stages_test_db, monkeypatch
     ):
         """Running parse twice on the same document upserts — no duplicate-key error
-        and exactly one document_texts row remains."""
+        and exactly one document_texts row remains. Since the parse cache landed
+        the second run takes the cache-hit branch, but the document_texts write
+        happens on every path, so this still exercises the ON CONFLICT clause.
+        The re-PARSE case is covered by TestParseCache's miss tests."""
         intake_dir = tmp_path / "intake"
         intake_dir.mkdir()
         docs_dir = tmp_path / "documents"
@@ -654,6 +658,619 @@ class TestParseStage:
         assert status == "withdrawn", (
             f"a withdrawn doc must not be flipped to needs_review by parse, got {status!r}"
         )
+
+
+class TestParseCache:
+    """Issue #310 follow-up (Fix 1): an unchanged PDF parsed by an unchanged
+    backend must not be re-OCR'd. Validity = same bytes + same parser, recorded
+    in document_texts.parsed_content_hash / parse_backend / parse_model."""
+
+    def _setup_pdf(self, tmp_path, monkeypatch, backend="pypdf"):
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "sample.pdf")
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("PARSE_BACKEND", backend)
+        monkeypatch.delenv("FORCE_REPARSE", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+    def _count_llm(self, monkeypatch, calls):
+        """Count metadata-extraction calls; return all-null fields so nothing
+        downstream of the extraction changes."""
+        def fake(system, user, schema, model, max_tokens=1500):
+            calls.append(user)
+            return {f: None for f in schema["properties"]}
+        monkeypatch.setattr("worker.llm.chat_json", fake)
+
+    def _forbid_parse(self, monkeypatch):
+        """Sentinel: any call to the parser (or the byte loader that feeds it)
+        on a cache hit is the bug this fix exists to prevent."""
+        def boom(*a, **k):
+            raise AssertionError("parse cache hit must not re-parse the PDF")
+        monkeypatch.setattr("worker.stages.parse._parse_pdf", boom)
+        monkeypatch.setattr("worker.stages.parse._load_pdf_bytes", boom)
+
+    def _stamps(self, db, doc_id):
+        with psycopg.connect(db) as conn:
+            return conn.execute(
+                """SELECT parsed_content_hash, parse_backend, parse_model, full_text
+                   FROM document_texts WHERE document_id = %s""",
+                (doc_id,),
+            ).fetchone()
+
+    def test_fresh_parse_writes_cache_stamps(self, tmp_path, stages_test_db, monkeypatch):
+        """(d) A first parse stamps the document's content_hash and the parser
+        identity. pypdf has no model, so parse_model is '' — the empty string,
+        not NULL, so a NULL stamp keeps meaning 'never cached'."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        parsed_hash, backend, model, _ = self._stamps(stages_test_db, doc_id)
+        assert parsed_hash == "abc123", f"expected the document's content_hash, got {parsed_hash!r}"
+        assert backend == "pypdf"
+        assert model == ""
+
+    def test_cache_hit_skips_parse_and_reuses_text(self, tmp_path, stages_test_db, monkeypatch):
+        """(a) Second run with unchanged bytes + parser: no download, no OCR,
+        stored text reused — and the metadata-extraction LLM call STILL runs,
+        which is what lets a prompt campaign re-run the cheap stages."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        llm_calls = []
+        self._count_llm(monkeypatch, llm_calls)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+        first_text = self._stamps(stages_test_db, doc_id)[3]
+        assert len(llm_calls) == 1
+
+        self._forbid_parse(monkeypatch)
+        assert run(doc_id) is None, "cache hit must complete the stage normally"
+
+        parsed_hash, backend, model, text = self._stamps(stages_test_db, doc_id)
+        assert text == first_text, "cache hit must reuse the stored text verbatim"
+        assert (parsed_hash, backend, model) == ("abc123", "pypdf", ""), "stamps must survive a cache hit"
+        assert len(llm_calls) == 2, (
+            f"metadata extraction must still run on a cache hit, got {len(llm_calls)} calls"
+        )
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute("SELECT status FROM documents WHERE id=%s", (doc_id,)).fetchone()[0]
+        assert status == "processing", "the cache-hit path must still do the processing bookkeeping"
+
+    def test_cache_miss_on_changed_bytes(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) A version replacement re-stamps documents.content_hash at intake;
+        the stored text is then stale and must be re-parsed."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute("UPDATE documents SET content_hash='different' WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        parsed = []
+        from worker.stages.parse import _parse_pdf as real_parse
+        monkeypatch.setattr("worker.stages.parse._parse_pdf",
+                            lambda c: (parsed.append(1), real_parse(c))[1])
+        assert run(doc_id) is None
+        assert parsed == [1], "changed content_hash must miss the cache"
+        assert self._stamps(stages_test_db, doc_id)[0] == "different", "re-parse re-stamps the new hash"
+
+    def test_cache_miss_on_backend_change(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) A backend flip (pypdf<->mistral) invalidates stored text even
+        though the bytes are unchanged — the two parsers produce different text."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        monkeypatch.setattr("worker.stages.parse._parse_pdf_mistral",
+                            lambda content: ("OCR text from mistral", [{"page": 1, "end_pos": 21}]))
+        assert run(doc_id) is None
+
+        parsed_hash, backend, model, text = self._stamps(stages_test_db, doc_id)
+        assert text == "OCR text from mistral", "backend flip must re-parse, not reuse pypdf text"
+        assert (backend, model) == ("mistral", "mistral-ocr-latest"), (
+            f"stamps must record the new parser, got {backend!r}/{model!r}"
+        )
+        assert parsed_hash == "abc123"
+
+    def test_cache_miss_on_model_change(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) Same backend, upgraded OCR model → miss (new model, new text)."""
+        self._setup_pdf(tmp_path, monkeypatch, backend="mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        monkeypatch.setenv("MISTRAL_OCR_MODEL", "mistral-ocr-2505")
+        from app.config import get_settings
+        get_settings.cache_clear()
+        self._count_llm(monkeypatch, [])
+        monkeypatch.setattr("worker.stages.parse._parse_pdf_mistral",
+                            lambda content: ("v1 text", [{"page": 1, "end_pos": 7}]))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+        assert self._stamps(stages_test_db, doc_id)[2] == "mistral-ocr-2505"
+
+        monkeypatch.setenv("MISTRAL_OCR_MODEL", "mistral-ocr-2510")
+        get_settings.cache_clear()
+        monkeypatch.setattr("worker.stages.parse._parse_pdf_mistral",
+                            lambda content: ("v2 text", [{"page": 1, "end_pos": 7}]))
+        assert run(doc_id) is None
+
+        _, _, model, text = self._stamps(stages_test_db, doc_id)
+        assert (model, text) == ("mistral-ocr-2510", "v2 text"), "an OCR model upgrade must re-parse"
+
+    def test_null_stamps_always_miss(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) Every pre-migration row has NULL stamps — that is what makes the
+        migration behavior-neutral. A NULL stamp must never match."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, page_boundaries, char_count)
+                   VALUES (%s, 'stale pre-migration text', '[]'::jsonb, 24)""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        parsed_hash, backend, _, text = self._stamps(stages_test_db, doc_id)
+        assert text != "stale pre-migration text", "an unstamped row must be re-parsed"
+        assert (parsed_hash, backend) == ("abc123", "pypdf")
+
+    def test_null_content_hash_misses(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) CSV-era documents carry no content_hash: nothing to compare, so
+        the cache can never claim their text is current."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute("UPDATE documents SET content_hash=NULL WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        parsed = []
+        from worker.stages.parse import _parse_pdf as real_parse
+        monkeypatch.setattr("worker.stages.parse._parse_pdf",
+                            lambda c: (parsed.append(1), real_parse(c))[1])
+        assert run(doc_id) is None
+        assert parsed == [1], "a NULL content_hash must miss the cache"
+
+    def test_shrunk_parse_is_tagged_and_never_cache_hits(self, tmp_path, stages_test_db, monkeypatch):
+        """A downsampled OCR submission is NOT the same product as a full-resolution
+        one, but content_hash (the ORIGINAL bytes) and the model id are identical
+        for both. The stamp is tagged so the two are distinguishable, and because
+        the read path compares against the untagged identity, a shrunk row never
+        hits — raising the cap and re-ingesting really does re-OCR at full
+        resolution instead of serving downsampled text forever."""
+        self._setup_pdf(tmp_path, monkeypatch, backend="mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        from app.config import get_settings
+        get_settings.cache_clear()
+        self._count_llm(monkeypatch, [])
+
+        import worker.stages.parse as parse
+        # Any file counts as oversized, so run() takes the shrink-tagged path.
+        monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", 10)
+        ocr_calls = []
+        monkeypatch.setattr(parse, "_parse_pdf_mistral",
+                            lambda c: (ocr_calls.append(1), ("shrunk OCR text", [{"page": 1, "end_pos": 15}]))[1])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        parsed_hash, backend, model, _ = self._stamps(stages_test_db, doc_id)
+        assert (parsed_hash, backend) == ("abc123", "mistral")
+        assert model == "mistral-ocr-latest" + parse.SHRINK_POLICY_TAG, (
+            f"a shrunk parse must carry the policy tag, got {model!r}"
+        )
+        assert len(ocr_calls) == 1
+
+        # Second run: same bytes, same backend/model — but the tag means miss.
+        assert run(doc_id) is None
+        assert len(ocr_calls) == 2, (
+            "a shrunk row must NOT serve from cache; it re-OCRs until the "
+            "oversize situation changes"
+        )
+
+    def test_summary_fallback_writes_no_stamps(self, tmp_path, stages_test_db, monkeypatch):
+        """A document with no retrievable PDF falls back to title+summary text.
+        That text was never parsed from bytes, so it must be stamped NULL —
+        stamping it would let the cache serve non-PDF text as OCR output. This
+        path is also the one that CLEARS stamps left by an earlier parse, so the
+        row is seeded with stale ones (a MATCHING stamp would legitimately be
+        served from cache and never reach the fallback)."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path / "nonexistent"))
+        monkeypatch.setenv("PARSE_BACKEND", "pypdf")
+        monkeypatch.delenv("FORCE_REPARSE", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        llm_calls = []
+        self._count_llm(monkeypatch, llm_calls)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(
+                conn, s3_key="documents/missing.pdf",
+                source_metadata={"summary": "A CSV-era summary standing in for the text."},
+            )
+            # Stale stamps from a run against different bytes -> cache miss.
+            conn.execute(
+                """INSERT INTO document_texts
+                       (document_id, full_text, page_boundaries, char_count,
+                        parsed_content_hash, parse_backend, parse_model)
+                   VALUES (%s, 'old parsed text', '[{"page": 1, "end_pos": 15}]'::jsonb, 15,
+                           'stale-hash', 'pypdf', '')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            parsed_hash, backend, model, text, boundaries = conn.execute(
+                """SELECT parsed_content_hash, parse_backend, parse_model, full_text, page_boundaries
+                   FROM document_texts WHERE document_id = %s""",
+                (doc_id,),
+            ).fetchone()
+        assert "A CSV-era summary" in text, "the fallback text should have replaced the parsed text"
+        assert (parsed_hash, backend, model) == (None, None, None), (
+            f"fallback text must carry no cache stamps, got {parsed_hash!r}/{backend!r}/{model!r}"
+        )
+        assert boundaries == [], "the fallback emits no page boundaries"
+        assert llm_calls == [], "no PDF text, so no metadata extraction call"
+
+    def test_force_reparse_bypasses_the_cache(self, tmp_path, stages_test_db, monkeypatch):
+        """(c) The escape hatch for a deliberate re-OCR (e.g. an OCR quality
+        regression under an unchanged model id)."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        monkeypatch.setenv("FORCE_REPARSE", "true")
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        parsed = []
+        from worker.stages.parse import _parse_pdf as real_parse
+        monkeypatch.setattr("worker.stages.parse._parse_pdf",
+                            lambda c: (parsed.append(1), real_parse(c))[1])
+        assert run(doc_id) is None
+        assert parsed == [1], "FORCE_REPARSE=true must re-parse despite matching stamps"
+        assert self._stamps(stages_test_db, doc_id)[0] == "abc123", "a forced re-parse still stamps"
+
+
+class TestBatchOcrTargetSelection:
+    """scripts/batch_ocr.py selects the documents it will pay to OCR. Its
+    predicate is asserted here against REAL Postgres, because the hermetic unit
+    tests can only substring-match the SQL: swapping LEFT JOIN for JOIN — which
+    would silently drop the single biggest miss class, documents with no
+    document_texts row at all — passes every string assertion."""
+
+    MODEL = "mistral-ocr-latest"
+
+    def _targets(self, db):
+        from scripts.batch_ocr import select_targets
+        with psycopg.connect(db) as conn:
+            return {t["external_id"] for t in select_targets(conn, self.MODEL, backend="mistral")}
+
+    def _doc(self, conn, external_id):
+        """Insert a document with a UNIQUE content_hash (the documents table has
+        a unique partial index on it, so the shared helper's fixed hash collides)."""
+        doc_id = _insert_document(conn, external_id=external_id,
+                                  s3_key=f"documents/{external_id}.pdf")
+        conn.execute("UPDATE documents SET content_hash=%s WHERE id=%s",
+                     (f"hash-{external_id}", doc_id))
+        conn.commit()
+        return doc_id
+
+    def _stamp(self, conn, doc_id, *, hash_=None, backend="mistral", model=MODEL):
+        conn.execute(
+            """INSERT INTO document_texts (document_id, full_text, page_boundaries,
+                   char_count, parsed_content_hash, parse_backend, parse_model)
+               VALUES (%s, 'stored text', '[{"page": 1, "end_pos": 11}]'::jsonb, 11, %s, %s, %s)
+               ON CONFLICT (document_id) DO UPDATE
+               SET parsed_content_hash = EXCLUDED.parsed_content_hash,
+                   parse_backend = EXCLUDED.parse_backend,
+                   parse_model = EXCLUDED.parse_model""",
+            (doc_id, hash_, backend, model))
+
+    def test_selects_exactly_the_documents_that_would_miss_the_cache(self, stages_test_db):
+        with psycopg.connect(stages_test_db) as conn:
+            self._doc(conn, "no-text")
+            current = self._doc(conn, "current")
+            stale_hash = self._doc(conn, "stale-hash")
+            other_backend = self._doc(conn, "other-backend")
+            other_model = self._doc(conn, "other-model")
+            withdrawn = self._doc(conn, "withdrawn")
+            no_hash = self._doc(conn, "no-hash")
+
+            self._stamp(conn, current, hash_="hash-current")
+            self._stamp(conn, stale_hash, hash_="a-previous-version")
+            self._stamp(conn, other_backend, hash_="hash-other-backend", backend="pypdf")
+            self._stamp(conn, other_model, hash_="hash-other-model", model="mistral-ocr-2505")
+            self._stamp(conn, withdrawn, hash_="hash-withdrawn")
+            conn.execute("UPDATE documents SET status='withdrawn' WHERE id=%s", (withdrawn,))
+            conn.execute("UPDATE documents SET content_hash=NULL WHERE id=%s", (no_hash,))
+            conn.commit()
+
+        selected = self._targets(stages_test_db)
+
+        # no-text has no document_texts row at all — the LEFT JOIN case, and the
+        # largest class in a fresh corpus import.
+        assert "no-text" in selected
+        assert "stale-hash" in selected, "changed bytes must be re-OCR'd"
+        assert "other-backend" in selected and "other-model" in selected
+        assert "current" not in selected, "a current stamp must NOT be paid for again"
+        assert "withdrawn" not in selected, "withdrawn documents are never re-OCR'd"
+        assert "no-hash" not in selected, "nothing to compare bytes against"
+
+    def test_shrunk_documents_are_selected_but_skipped_before_upload(self, stages_test_db):
+        """A +gs300 row never cache-hits, so SQL correctly sees it as a miss —
+        but batching it would be wasted spend, since the follow-up pipeline pass
+        re-OCRs it anyway. The size check in the execute path is what drops it."""
+        from worker.stages.parse import SHRINK_POLICY_TAG
+        with psycopg.connect(stages_test_db) as conn:
+            shrunk = self._doc(conn, "shrunk")
+            self._stamp(conn, shrunk, hash_="hash-shrunk",
+                        model=self.MODEL + SHRINK_POLICY_TAG)
+            conn.commit()
+
+        assert "shrunk" in self._targets(stages_test_db)
+
+
+class FakeMistralBatchAPI:
+    """A stand-in for the whole Mistral surface scripts/batch_ocr.py --execute
+    touches, wired to the shapes the live probe returned on 2026-08-05.
+
+    Records every call so the test can assert on the sequence, and fails loudly
+    on any URL the script is not supposed to hit.
+    """
+
+    def __init__(self, pages_by_custom_id, job_statuses=("QUEUED", "SUCCESS")):
+        self.pages_by_custom_id = pages_by_custom_id
+        self.job_statuses = list(job_statuses)
+        self.uploaded_pdfs = {}    # file id -> bytes
+        self.batch_jsonl = None
+        self.deleted = []
+        self.job_payload = None
+        self._n = 0
+
+    def install(self, monkeypatch):
+        monkeypatch.setattr("requests.post", self.post)
+        monkeypatch.setattr("requests.get", self.get)
+        monkeypatch.setattr("requests.delete", self.delete)
+        return self
+
+    def _resp(self, payload, text=None):
+        class _R:
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+            def json(self_inner):
+                return payload
+
+        r = _R()
+        if text is not None:
+            r.text = text
+        return r
+
+    def post(self, url, headers=None, files=None, data=None, json=None, timeout=None):
+        if url.endswith("/v1/files"):
+            purpose = data["purpose"]
+            content = files["file"][1]
+            if purpose == "ocr":
+                self._n += 1
+                fid = f"pdf-{self._n}"
+                self.uploaded_pdfs[fid] = content
+                return self._resp({"id": fid})
+            if purpose == "batch":
+                self.batch_jsonl = content
+                return self._resp({"id": "batchfile-1"})
+            raise AssertionError(f"unexpected purpose {purpose}")
+        if url.endswith("/v1/batch/jobs"):
+            self.job_payload = json
+            return self._resp({"id": "job-1", "status": "QUEUED"})
+        raise AssertionError(f"unexpected POST {url}")
+
+    def get(self, url, headers=None, params=None, timeout=None):
+        if url.endswith("/url"):
+            fid = url.split("/v1/files/")[1].split("/")[0]
+            return self._resp({"url": f"https://signed.invalid/{fid}?sig=x"})
+        if "/v1/batch/jobs/" in url:
+            status = self.job_statuses.pop(0) if len(self.job_statuses) > 1 \
+                else self.job_statuses[0]
+            return self._resp({"id": "job-1", "status": status,
+                               "succeeded_requests": len(self.pages_by_custom_id),
+                               "failed_requests": 0, "output_file": "out-1"})
+        if url.endswith("/v1/files/out-1/content"):
+            lines = [json_mod.dumps({"custom_id": cid, "error": None,
+                                     "response": {"status_code": 200,
+                                                  "body": {"pages": pages}}})
+                     for cid, pages in self.pages_by_custom_id.items()]
+            return self._resp({}, text="\n".join(lines))
+        raise AssertionError(f"unexpected GET {url}")
+
+    def delete(self, url, headers=None, timeout=None):
+        self.deleted.append(url.rsplit("/", 1)[-1])
+        return self._resp({})
+
+
+class TestBatchOcrEndToEnd:
+    """Drives scripts/batch_ocr.py --execute all the way through against a real
+    scratch database with the Mistral API mocked.
+
+    This is the path that a live run would take and that nothing else exercises:
+    select -> upload -> sign -> submit -> poll -> fetch -> write -> enqueue. The
+    final assertion is the one the whole design rests on — that the document the
+    script stored is then a parse-cache HIT, so the pipeline pass it enqueues
+    does not pay for OCR a second time.
+    """
+
+    def test_execute_writes_text_enqueues_and_leaves_a_cache_hit(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        from scripts import batch_ocr
+
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "batch-doc.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        monkeypatch.delenv("FORCE_REPARSE", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, external_id="batch-doc",
+                                      s3_key="documents/batch-doc.pdf")
+
+        pages = [{"index": 0, "markdown": "# Batched Report\n\nFirst page body."},
+                 {"index": 1, "markdown": "Second page body."}]
+        fake = FakeMistralBatchAPI({"batch-doc": pages}).install(monkeypatch)
+
+        written = batch_ocr.run(execute=True, poll_interval=0)
+
+        assert written == 1, "the document should have been stored"
+
+        # --- the API conversation looked the way the live probe did ---
+        assert len(fake.uploaded_pdfs) == 1, "one PDF uploaded"
+        assert list(fake.uploaded_pdfs.values())[0][:4] == b"%PDF", "the real file was uploaded"
+        assert fake.job_payload["endpoint"] == "/v1/ocr"
+        assert fake.job_payload["input_files"] == ["batchfile-1"]
+        entry = json_mod.loads(fake.batch_jsonl.decode().strip())
+        assert entry["custom_id"] == "batch-doc"
+        assert entry["body"]["document"]["document_url"].startswith("https://signed.invalid/")
+        assert fake.deleted == ["pdf-1"], "the uploaded copy is cleaned up after the job"
+
+        # --- the database got the text, the stamps, and a queued job ---
+        with psycopg.connect(stages_test_db) as conn:
+            text, boundaries, stamp_hash, backend, model = conn.execute(
+                """SELECT full_text, page_boundaries, parsed_content_hash,
+                          parse_backend, parse_model
+                   FROM document_texts WHERE document_id = %s""", (doc_id,)).fetchone()
+            jobs = conn.execute(
+                "SELECT count(*) FROM ingestion_jobs WHERE document_id = %s AND status = 'queued'",
+                (doc_id,)).fetchone()[0]
+        assert text == "# Batched Report\n\nFirst page body.\n\nSecond page body."
+        assert [b["page"] for b in boundaries] == [1, 2]
+        assert (stamp_hash, backend, model) == ("abc123", "mistral", "mistral-ocr-latest")
+        assert jobs == 1, "the document must be enqueued for the rest of the pipeline"
+
+        # --- THE POINT: the pipeline pass it enqueued does no OCR ---
+        import worker.stages.parse as parse_mod
+
+        def boom(*a, **k):
+            raise AssertionError("the enqueued pass must hit the parse cache, not re-OCR")
+
+        monkeypatch.setattr(parse_mod, "_parse_pdf", boom)
+        monkeypatch.setattr(parse_mod, "_load_pdf_bytes", boom)
+        monkeypatch.setattr("worker.llm.chat_json",
+                            lambda system, user, schema, model, max_tokens=1500: {
+                                f: None for f in schema["properties"]})
+
+        assert parse_mod.run(doc_id) is None
+        with psycopg.connect(stages_test_db) as conn:
+            after = conn.execute(
+                "SELECT full_text FROM document_texts WHERE document_id = %s",
+                (doc_id,)).fetchone()[0]
+        assert after == text, "the cached batch text survives the pipeline pass intact"
+
+    def test_execute_collects_partial_results_from_a_timed_out_job(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """A TIMEOUT_EXCEEDED job has already produced and billed some pages.
+        Discarding them means paying twice, so they are collected anyway."""
+        from scripts import batch_ocr
+
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "partial.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, external_id="partial",
+                                      s3_key="documents/partial.pdf")
+
+        fake = FakeMistralBatchAPI(
+            {"partial": [{"index": 0, "markdown": "Recovered text"}]},
+            job_statuses=("TIMEOUT_EXCEEDED",),
+        ).install(monkeypatch)
+
+        written = batch_ocr.run(execute=True, poll_interval=0)
+
+        assert written == 1, "partial results must be collected, not thrown away"
+        assert fake.deleted == ["pdf-1"], "uploads are cleaned up even on a failed job"
+        with psycopg.connect(stages_test_db) as conn:
+            text = conn.execute(
+                "SELECT full_text FROM document_texts WHERE document_id = %s",
+                (doc_id,)).fetchone()[0]
+        assert text == "Recovered text"
 
 
 class TestParseTitleAndAuthors:
@@ -2492,17 +3109,28 @@ def _insert_chunk_for_publish(conn, document_id, *, external_id):
     conn.commit()
 
 
+def _insert_running_job_for_publish(conn, document_id, *, prior_status=None):
+    """Insert the open running job publish reads prior_status from."""
+    conn.execute(
+        """INSERT INTO ingestion_jobs (document_id, stage, status, prior_status)
+           VALUES (%s, 'embed', 'running', %s)""",
+        (document_id, prior_status),
+    )
+    conn.commit()
+
+
 class TestPublishStage:
 
-    def test_high_density_doc_becomes_searchable(self, stages_test_db, monkeypatch):
-        """High-quality en doc → status='searchable', extraction_confidence >= 0.7, returns None.
+    def test_high_density_doc_parks_at_needs_review(self, stages_test_db, monkeypatch):
+        """Even a high-quality doc is parked at needs_review (never auto-published,
+        issue #310); confidence is recorded and the job ends 'done' (returns None).
 
         Arithmetic:
           char_count=1000, pages=2 → chars/page=500
           density = min(500/200, 1.0) = 1.0
           language 'en' ∈ SUPPORTED → 0.3
           chunks present → 0.3
-          score = 0.4*1.0 + 0.3 + 0.3 = 1.0 >= 0.7 → searchable
+          score = 0.4*1.0 + 0.3 + 0.3 = 1.0 >= 0.7 → job done, doc awaits review
         """
         monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
 
@@ -2519,7 +3147,7 @@ class TestPublishStage:
             row = conn.execute(
                 "SELECT status, extraction_confidence FROM documents WHERE id=%s", (doc_id,)
             ).fetchone()
-        assert row[0] == "searchable", f"Expected 'searchable', got '{row[0]}'"
+        assert row[0] == "needs_review", f"Expected 'needs_review', got '{row[0]}'"
         assert float(row[1]) >= 0.7, f"Expected confidence >= 0.7, got {row[1]}"
 
     def test_sparse_doc_becomes_needs_review(self, stages_test_db, monkeypatch):
@@ -2552,8 +3180,8 @@ class TestPublishStage:
         assert float(row[1]) < 0.7, f"Expected confidence < 0.7, got {row[1]}"
 
     def test_withdrawn_doc_not_resurrected(self, stages_test_db, monkeypatch):
-        """A withdrawn document is never flipped back to searchable by publish:
-        the status UPDATE matches 0 rows, publishing is skipped, stage returns None."""
+        """A withdrawn document is never flipped to needs_review by publish:
+        the status UPDATE matches 0 rows, the stage skips and returns None."""
         monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
 
         with psycopg.connect(stages_test_db) as conn:
@@ -2573,18 +3201,18 @@ class TestPublishStage:
             ).fetchone()[0]
         assert status == "withdrawn", f"Withdrawn doc must stay withdrawn, got '{status}'"
 
-    def test_reindex_failure_does_not_fail_stage(self, stages_test_db, monkeypatch):
-        """/reindex POST failure (closed port) does not raise; stage still returns None and searchable.
-
-        Arithmetic (same as high-density test):
-          char_count=1000, pages=2 → score=1.0 >= 0.7 → searchable
-        """
+    def test_fresh_ingest_parks_and_never_calls_reindex(self, stages_test_db, monkeypatch):
+        """A fresh ingest (no prior_status) parks at needs_review and must not
+        touch SEARCH_SERVICE_URL — pointing it at a closed port proves no
+        /reindex call is attempted on the park path (the admin promote route
+        owns reindexing for first-time publication)."""
         monkeypatch.setenv("SEARCH_SERVICE_URL", "http://127.0.0.1:1")
 
         with psycopg.connect(stages_test_db) as conn:
             doc_id = _insert_publish_document(conn, external_id="pub-reindex", language="en")
             _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
             _insert_chunk_for_publish(conn, doc_id, external_id="pub-reindex")
+            _insert_running_job_for_publish(conn, doc_id, prior_status="draft")
 
         from worker.stages.publish import run
         result = run(doc_id)
@@ -2594,7 +3222,58 @@ class TestPublishStage:
             status = conn.execute(
                 "SELECT status FROM documents WHERE id=%s", (doc_id,)
             ).fetchone()[0]
-        assert status == "searchable", f"Expected 'searchable' despite /reindex failure, got '{status}'"
+        assert status == "needs_review", f"Expected 'needs_review', got '{status}'"
+
+    def test_reingest_restores_previously_searchable(self, stages_test_db, monkeypatch):
+        """Re-ingest of a promoted doc: prior_status='searchable' + clean parse
+        → restored to searchable (not unpublished), job ends done. The /reindex
+        refresh points at a closed port to prove a failure there is tolerated
+        (best-effort, same contract as the old auto-publish path)."""
+        monkeypatch.setenv("SEARCH_SERVICE_URL", "http://127.0.0.1:1")
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-restore", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-restore")
+            _insert_running_job_for_publish(conn, doc_id, prior_status="searchable")
+            # Parse flipped the doc to 'processing' mid-pipeline.
+            conn.execute("UPDATE documents SET status='processing' WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute(
+                "SELECT status, extraction_confidence FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+        assert row[0] == "searchable", f"Expected restored 'searchable', got '{row[0]}'"
+        assert float(row[1]) >= 0.7
+
+    def test_degraded_reingest_parks_previously_searchable(self, stages_test_db, monkeypatch):
+        """Re-ingest of a promoted doc whose re-parse is now LOW quality: the
+        restore is refused — doc parks at needs_review and the job parks too,
+        so a human sees the regression before the doc goes back up.
+
+        Arithmetic (sparse case): char_count=50, pages=1, no chunks → 0.4 < 0.7.
+        """
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-restore-low", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=50, pages=1)
+            _insert_running_job_for_publish(conn, doc_id, prior_status="searchable")
+
+        from worker.stages.publish import run
+        result = run(doc_id)
+        assert result == "needs_review"
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert status == "needs_review", f"Expected 'needs_review', got '{status}'"
 
     def test_low_confidence_withdrawn_doc_returns_none_not_needs_review(
         self, stages_test_db, monkeypatch
@@ -2626,10 +3305,10 @@ class TestPublishStage:
             ).fetchone()[0]
         assert status == "withdrawn", f"withdrawn doc must stay withdrawn, got {status!r}"
 
-    def test_searchable_flip_writes_lifecycle_audit(self, stages_test_db, monkeypatch):
-        """Publishing a high-density doc to 'searchable' emits one system lifecycle
+    def test_high_confidence_flip_writes_lifecycle_audit(self, stages_test_db, monkeypatch):
+        """Parking a high-density doc at 'needs_review' emits one system lifecycle
         audit row: entity_type='document', source='system', actor NULL,
-        before={status:'processing'}, after={status:'searchable'}."""
+        before={status:'processing'}, after={status:'needs_review'}."""
         monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
 
         with psycopg.connect(stages_test_db) as conn:
@@ -2651,7 +3330,7 @@ class TestPublishStage:
         assert source == "system"
         assert actor is None
         assert before == {"status": "processing"}
-        assert after == {"status": "searchable"}
+        assert after == {"status": "needs_review"}
 
     def test_needs_review_flip_writes_lifecycle_audit(self, stages_test_db, monkeypatch):
         """A sparse doc flipped to 'needs_review' also emits a lifecycle row
@@ -2698,7 +3377,7 @@ class TestPublishStage:
         assert n == 0, f"withdrawn-skip path must emit no lifecycle row, got {n}"
 
     def test_failed_audit_write_does_not_fail_publish(self, stages_test_db, monkeypatch):
-        """A failed audit write is swallowed: the stage still flips to searchable
+        """A failed audit write is swallowed: the stage still flips to needs_review
         and returns None (auditing is observability, not a pipeline invariant)."""
         monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
         # Force the helper's insert to blow up by breaking jsonb adaptation.
@@ -2722,7 +3401,7 @@ class TestPublishStage:
                 "SELECT count(*) FROM audit_log WHERE action='lifecycle' AND entity_id=%s",
                 (doc_id,),
             ).fetchone()[0]
-        assert status == "searchable", "status flip must succeed despite audit failure"
+        assert status == "needs_review", "status flip must succeed despite audit failure"
         assert n == 0, "the failed audit write left no row"
 
     def test_server_side_audit_failure_recovers_savepoint(self, stages_test_db):
