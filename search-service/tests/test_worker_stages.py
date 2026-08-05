@@ -2494,15 +2494,16 @@ def _insert_chunk_for_publish(conn, document_id, *, external_id):
 
 class TestPublishStage:
 
-    def test_high_density_doc_becomes_searchable(self, stages_test_db, monkeypatch):
-        """High-quality en doc → status='searchable', extraction_confidence >= 0.7, returns None.
+    def test_high_density_doc_parks_at_needs_review(self, stages_test_db, monkeypatch):
+        """Even a high-quality doc is parked at needs_review (never auto-published,
+        issue #310); confidence is recorded and the job ends 'done' (returns None).
 
         Arithmetic:
           char_count=1000, pages=2 → chars/page=500
           density = min(500/200, 1.0) = 1.0
           language 'en' ∈ SUPPORTED → 0.3
           chunks present → 0.3
-          score = 0.4*1.0 + 0.3 + 0.3 = 1.0 >= 0.7 → searchable
+          score = 0.4*1.0 + 0.3 + 0.3 = 1.0 >= 0.7 → job done, doc awaits review
         """
         monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
 
@@ -2519,7 +2520,7 @@ class TestPublishStage:
             row = conn.execute(
                 "SELECT status, extraction_confidence FROM documents WHERE id=%s", (doc_id,)
             ).fetchone()
-        assert row[0] == "searchable", f"Expected 'searchable', got '{row[0]}'"
+        assert row[0] == "needs_review", f"Expected 'needs_review', got '{row[0]}'"
         assert float(row[1]) >= 0.7, f"Expected confidence >= 0.7, got {row[1]}"
 
     def test_sparse_doc_becomes_needs_review(self, stages_test_db, monkeypatch):
@@ -2552,8 +2553,8 @@ class TestPublishStage:
         assert float(row[1]) < 0.7, f"Expected confidence < 0.7, got {row[1]}"
 
     def test_withdrawn_doc_not_resurrected(self, stages_test_db, monkeypatch):
-        """A withdrawn document is never flipped back to searchable by publish:
-        the status UPDATE matches 0 rows, publishing is skipped, stage returns None."""
+        """A withdrawn document is never flipped to needs_review by publish:
+        the status UPDATE matches 0 rows, the stage skips and returns None."""
         monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
 
         with psycopg.connect(stages_test_db) as conn:
@@ -2573,12 +2574,11 @@ class TestPublishStage:
             ).fetchone()[0]
         assert status == "withdrawn", f"Withdrawn doc must stay withdrawn, got '{status}'"
 
-    def test_reindex_failure_does_not_fail_stage(self, stages_test_db, monkeypatch):
-        """/reindex POST failure (closed port) does not raise; stage still returns None and searchable.
-
-        Arithmetic (same as high-density test):
-          char_count=1000, pages=2 → score=1.0 >= 0.7 → searchable
-        """
+    def test_publish_never_calls_reindex(self, stages_test_db, monkeypatch):
+        """Publish no longer flips docs to searchable, so it must not touch
+        SEARCH_SERVICE_URL at all — pointing it at a closed port proves no
+        /reindex call is attempted (a call would raise or hang, and the admin
+        promote route owns reindexing now)."""
         monkeypatch.setenv("SEARCH_SERVICE_URL", "http://127.0.0.1:1")
 
         with psycopg.connect(stages_test_db) as conn:
@@ -2594,7 +2594,7 @@ class TestPublishStage:
             status = conn.execute(
                 "SELECT status FROM documents WHERE id=%s", (doc_id,)
             ).fetchone()[0]
-        assert status == "searchable", f"Expected 'searchable' despite /reindex failure, got '{status}'"
+        assert status == "needs_review", f"Expected 'needs_review', got '{status}'"
 
     def test_low_confidence_withdrawn_doc_returns_none_not_needs_review(
         self, stages_test_db, monkeypatch
@@ -2626,10 +2626,10 @@ class TestPublishStage:
             ).fetchone()[0]
         assert status == "withdrawn", f"withdrawn doc must stay withdrawn, got {status!r}"
 
-    def test_searchable_flip_writes_lifecycle_audit(self, stages_test_db, monkeypatch):
-        """Publishing a high-density doc to 'searchable' emits one system lifecycle
+    def test_high_confidence_flip_writes_lifecycle_audit(self, stages_test_db, monkeypatch):
+        """Parking a high-density doc at 'needs_review' emits one system lifecycle
         audit row: entity_type='document', source='system', actor NULL,
-        before={status:'processing'}, after={status:'searchable'}."""
+        before={status:'processing'}, after={status:'needs_review'}."""
         monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
 
         with psycopg.connect(stages_test_db) as conn:
@@ -2651,7 +2651,7 @@ class TestPublishStage:
         assert source == "system"
         assert actor is None
         assert before == {"status": "processing"}
-        assert after == {"status": "searchable"}
+        assert after == {"status": "needs_review"}
 
     def test_needs_review_flip_writes_lifecycle_audit(self, stages_test_db, monkeypatch):
         """A sparse doc flipped to 'needs_review' also emits a lifecycle row
@@ -2698,7 +2698,7 @@ class TestPublishStage:
         assert n == 0, f"withdrawn-skip path must emit no lifecycle row, got {n}"
 
     def test_failed_audit_write_does_not_fail_publish(self, stages_test_db, monkeypatch):
-        """A failed audit write is swallowed: the stage still flips to searchable
+        """A failed audit write is swallowed: the stage still flips to needs_review
         and returns None (auditing is observability, not a pipeline invariant)."""
         monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
         # Force the helper's insert to blow up by breaking jsonb adaptation.
@@ -2722,7 +2722,7 @@ class TestPublishStage:
                 "SELECT count(*) FROM audit_log WHERE action='lifecycle' AND entity_id=%s",
                 (doc_id,),
             ).fetchone()[0]
-        assert status == "searchable", "status flip must succeed despite audit failure"
+        assert status == "needs_review", "status flip must succeed despite audit failure"
         assert n == 0, "the failed audit write left no row"
 
     def test_server_side_audit_failure_recovers_savepoint(self, stages_test_db):

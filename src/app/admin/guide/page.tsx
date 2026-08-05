@@ -199,10 +199,11 @@ const GuidePage = () => (
     <p style={{ marginBottom: 8 }}>
       Once a PDF is uploaded, the worker moves it through six stages: read the
       PDF text (parse), detect the language, write summaries, suggest tags
-      (classify), index the document for search (embed), and publish it (a
-      quality gate that decides whether it goes straight to searchable or is
-      held as needs_review). If a stage fails it retries automatically before
-      the document is marked error.
+      (classify), index the document for search (embed), and a final quality
+      gate (publish) that records an extraction-confidence score. Every document
+      then waits in needs_review — nothing goes live until a person reviews and
+      promotes it. If a stage fails it retries automatically before the document
+      is marked error.
     </p>
     <p>
       Re-ingesting a document runs it through this pipeline again. AI-written
@@ -246,8 +247,9 @@ const GuidePage = () => (
     </p>
     <p style={{ marginBottom: 12 }}>
       Extraction confidence is a score from 0 to 1 for how cleanly the PDF text
-      was extracted. Documents below 0.7 are held in needs_review for a human to
-      check before they go live.
+      was extracted. All documents wait in needs_review for a human check before
+      they go live; a score below 0.7 is a signal to look extra closely at the
+      extracted text and metadata.
     </p>
     <p style={{ marginBottom: 4 }}>
       <strong>Who can do what?</strong>

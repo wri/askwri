@@ -219,7 +219,8 @@ class TestWorkerPipeline:
             ).fetchone()
             assert doc_row is not None, "documents row for 'sample' should exist"
             status, extraction_confidence, language = doc_row
-            assert status == "searchable", f"Expected status='searchable', got '{status}'"
+            # Never auto-published (issue #310): even a clean doc awaits human review.
+            assert status == "needs_review", f"Expected status='needs_review', got '{status}'"
             assert extraction_confidence is not None, "extraction_confidence should be set"
             assert float(extraction_confidence) >= 0.7, (
                 f"extraction_confidence {extraction_confidence} < 0.7"
@@ -398,9 +399,10 @@ class TestWorkerPipeline:
             "Without the worker, no ingestion_jobs row should exist"
         )
 
-    def test_worker_running_processes_intake_to_searchable(self, pipeline_test_db, monkeypatch, tmp_path):
-        """The happy path: a file in intake + the worker running → searchable with
-        chunks, summaries, and a done job. This is the e2e upload→process test."""
+    def test_worker_running_processes_intake_to_needs_review(self, pipeline_test_db, monkeypatch, tmp_path):
+        """The happy path: a file in intake + the worker running → needs_review
+        (awaiting human promote, issue #310) with chunks, summaries, and a done
+        job. This is the e2e upload→process test."""
         with psycopg.connect(pipeline_test_db) as conn:
             _seed_tags(conn)
 
@@ -412,15 +414,15 @@ class TestWorkerPipeline:
                    WHERE external_id = 'sample'"""
             ).fetchone()
             assert doc_row is not None, "worker should have registered the dropped file"
-            assert doc_row[0] == "searchable", (
-                f"Expected searchable, got '{doc_row[0]}'"
+            assert doc_row[0] == "needs_review", (
+                f"Expected needs_review, got '{doc_row[0]}'"
             )
             chunks = conn.execute(
                 "SELECT count(*) FROM document_chunks dc "
                 "JOIN documents d ON d.id = dc.document_id "
                 "WHERE d.external_id = 'sample'"
             ).fetchone()[0]
-            assert chunks > 0, "searchable doc should have chunks"
+            assert chunks > 0, "processed doc should have chunks"
             job = conn.execute(
                 """SELECT j.status, j.stage FROM ingestion_jobs j
                    JOIN documents d ON d.id = j.document_id
@@ -431,8 +433,8 @@ class TestWorkerPipeline:
             assert job[1] == "publish"
 
     def test_multiple_files_uploaded_then_processed(self, pipeline_test_db, monkeypatch, tmp_path):
-        """Two files dropped into intake are both processed to searchable by the worker —
-        the multi-file upload scenario from the bug report."""
+        """Two files dropped into intake are both processed to needs_review by the
+        worker — the multi-file upload scenario from the bug report."""
         with psycopg.connect(pipeline_test_db) as conn:
             _seed_tags(conn)
 
@@ -462,12 +464,12 @@ class TestWorkerPipeline:
             assert iterations < 20, "Pipeline did not terminate within 20 iterations"
 
         with psycopg.connect(pipeline_test_db) as conn:
-            # file_a is registered + processed to searchable
+            # file_a is registered + processed to needs_review (awaiting promote)
             row_a = conn.execute(
                 "SELECT status FROM documents WHERE external_id = 'file_a'"
             ).fetchone()
             assert row_a is not None, "file_a should be registered"
-            assert row_a[0] == "searchable", f"file_a should be searchable, got '{row_a[0]}'"
+            assert row_a[0] == "needs_review", f"file_a should be needs_review, got '{row_a[0]}'"
             # file_b is a content-hash duplicate of file_a -> deduped, no documents row
             row_b = conn.execute(
                 "SELECT count(*) FROM documents WHERE external_id = 'file_b'"
