@@ -322,9 +322,31 @@ opts in to spending money. Documents over the 50MB OCR limit are skipped and
 left to the worker's Ghostscript shrink path, since a shrunk row is stamped
 `+gs300` and would be re-OCR'd by the follow-up pass anyway.
 
+**It refuses to run in two environments**, because in both the spend would be
+wasted and a dry run would not reveal it (it would just list the whole corpus,
+which reads like confirmation that they all need OCR):
+
+- `PARSE_BACKEND != mistral` — the script stamps rows `mistral`, so under pypdf
+  (the code default, and production's setting) every document looks like a cache
+  miss and the follow-up pypdf parse would overwrite the OCR text just paid for.
+- `FORCE_REPARSE=true` — the enqueued pass would bypass the cache and re-OCR
+  everything synchronously at full price. Unset it, run the script, re-set it.
+
+**Recovery.** The job id is logged at submission and the poll timeout repeats it.
+If a run is interrupted after submission the work is already paid for — collect
+it with `--resume-job <id> --execute`, which rebuilds the document map from the
+database (`custom_id` is `external_id`) and writes the results. Partial results
+from a `TIMEOUT_EXCEEDED` or `FAILED` job are collected too, rather than
+discarded. The write-back commits per document, so a late failure keeps
+everything already stored. Each write is guarded on the document's current
+`content_hash`: a version replaced at intake mid-job is left alone rather than
+overwritten with OCR of the superseded bytes. Uploaded copies are deleted from
+Mistral storage when the job finishes, on every path.
+
 ```bash
 cd search-service && ./venv/bin/python -m scripts.batch_ocr            # dry run
 cd search-service && ./venv/bin/python -m scripts.batch_ocr --execute
+cd search-service && ./venv/bin/python -m scripts.batch_ocr --resume-job <id> --execute
 ```
 
 ### 10.7 Taxonomy human-gate note

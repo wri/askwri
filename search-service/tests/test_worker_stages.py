@@ -989,6 +989,85 @@ class TestParseCache:
         assert self._stamps(stages_test_db, doc_id)[0] == "abc123", "a forced re-parse still stamps"
 
 
+class TestBatchOcrTargetSelection:
+    """scripts/batch_ocr.py selects the documents it will pay to OCR. Its
+    predicate is asserted here against REAL Postgres, because the hermetic unit
+    tests can only substring-match the SQL: swapping LEFT JOIN for JOIN — which
+    would silently drop the single biggest miss class, documents with no
+    document_texts row at all — passes every string assertion."""
+
+    MODEL = "mistral-ocr-latest"
+
+    def _targets(self, db):
+        from scripts.batch_ocr import select_targets
+        with psycopg.connect(db) as conn:
+            return {t["external_id"] for t in select_targets(conn, self.MODEL, backend="mistral")}
+
+    def _doc(self, conn, external_id):
+        """Insert a document with a UNIQUE content_hash (the documents table has
+        a unique partial index on it, so the shared helper's fixed hash collides)."""
+        doc_id = _insert_document(conn, external_id=external_id,
+                                  s3_key=f"documents/{external_id}.pdf")
+        conn.execute("UPDATE documents SET content_hash=%s WHERE id=%s",
+                     (f"hash-{external_id}", doc_id))
+        conn.commit()
+        return doc_id
+
+    def _stamp(self, conn, doc_id, *, hash_=None, backend="mistral", model=MODEL):
+        conn.execute(
+            """INSERT INTO document_texts (document_id, full_text, page_boundaries,
+                   char_count, parsed_content_hash, parse_backend, parse_model)
+               VALUES (%s, 'stored text', '[{"page": 1, "end_pos": 11}]'::jsonb, 11, %s, %s, %s)
+               ON CONFLICT (document_id) DO UPDATE
+               SET parsed_content_hash = EXCLUDED.parsed_content_hash,
+                   parse_backend = EXCLUDED.parse_backend,
+                   parse_model = EXCLUDED.parse_model""",
+            (doc_id, hash_, backend, model))
+
+    def test_selects_exactly_the_documents_that_would_miss_the_cache(self, stages_test_db):
+        with psycopg.connect(stages_test_db) as conn:
+            self._doc(conn, "no-text")
+            current = self._doc(conn, "current")
+            stale_hash = self._doc(conn, "stale-hash")
+            other_backend = self._doc(conn, "other-backend")
+            other_model = self._doc(conn, "other-model")
+            withdrawn = self._doc(conn, "withdrawn")
+            no_hash = self._doc(conn, "no-hash")
+
+            self._stamp(conn, current, hash_="hash-current")
+            self._stamp(conn, stale_hash, hash_="a-previous-version")
+            self._stamp(conn, other_backend, hash_="hash-other-backend", backend="pypdf")
+            self._stamp(conn, other_model, hash_="hash-other-model", model="mistral-ocr-2505")
+            self._stamp(conn, withdrawn, hash_="hash-withdrawn")
+            conn.execute("UPDATE documents SET status='withdrawn' WHERE id=%s", (withdrawn,))
+            conn.execute("UPDATE documents SET content_hash=NULL WHERE id=%s", (no_hash,))
+            conn.commit()
+
+        selected = self._targets(stages_test_db)
+
+        # no-text has no document_texts row at all — the LEFT JOIN case, and the
+        # largest class in a fresh corpus import.
+        assert "no-text" in selected
+        assert "stale-hash" in selected, "changed bytes must be re-OCR'd"
+        assert "other-backend" in selected and "other-model" in selected
+        assert "current" not in selected, "a current stamp must NOT be paid for again"
+        assert "withdrawn" not in selected, "withdrawn documents are never re-OCR'd"
+        assert "no-hash" not in selected, "nothing to compare bytes against"
+
+    def test_shrunk_documents_are_selected_but_skipped_before_upload(self, stages_test_db):
+        """A +gs300 row never cache-hits, so SQL correctly sees it as a miss —
+        but batching it would be wasted spend, since the follow-up pipeline pass
+        re-OCRs it anyway. The size check in the execute path is what drops it."""
+        from worker.stages.parse import SHRINK_POLICY_TAG
+        with psycopg.connect(stages_test_db) as conn:
+            shrunk = self._doc(conn, "shrunk")
+            self._stamp(conn, shrunk, hash_="hash-shrunk",
+                        model=self.MODEL + SHRINK_POLICY_TAG)
+            conn.commit()
+
+        assert "shrunk" in self._targets(stages_test_db)
+
+
 class TestParseTitleAndAuthors:
     """Issue #303: parse extracts title and title_en as two separate fields, and
     transliterates author names, all in its one existing metadata call."""

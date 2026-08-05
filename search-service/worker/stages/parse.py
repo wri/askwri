@@ -69,10 +69,23 @@ MISTRAL_MAX_BYTES = 50 * 1024 * 1024
 SHRINK_POLICY_TAG = "+gs300"
 
 MISTRAL_API = "https://api.mistral.ai"
-# Signed-URL lifetime. Generous for the sync path (used within seconds) because
-# scripts/batch_ocr.py shares this helper and its URLs must outlive a queued
+# Signed-URL lifetime for the SYNC path, which uses the URL within seconds. Kept
+# short so a failed cleanup leaves a document fetchable for an hour, not a day.
+# scripts/batch_ocr.py passes a longer expiry: its URLs must outlive a queued
 # async job.
-MISTRAL_SIGNED_URL_EXPIRY_HOURS = 24
+MISTRAL_SIGNED_URL_EXPIRY_HOURS = 1
+MISTRAL_BATCH_SIGNED_URL_EXPIRY_HOURS = 24
+
+# Per-call HTTP timeouts. Their SUM plus the Ghostscript timeout is the parse
+# stage's worst case, and it must stay under WORKER_REAP_MINUTES (default 15) or
+# a slow document gets reaped mid-parse and re-OCR'd by another worker — paying
+# twice. Single-worker deploys are safe today (the poll loop blocks inside
+# process_one_job, so the reaper cannot fire against its own in-flight job);
+# raising ingestion_worker_desired_count above 1 makes this budget load-bearing.
+MISTRAL_UPLOAD_TIMEOUT = 300
+MISTRAL_SIGN_TIMEOUT = 60
+MISTRAL_OCR_TIMEOUT = 900
+MISTRAL_DELETE_TIMEOUT = 15
 
 
 def _mb(n: int) -> str:
@@ -330,35 +343,50 @@ def _shrink_pdf(content: bytes) -> bytes:
     return shrunk
 
 
-def mistral_upload_and_sign(settings, name: str, content: bytes) -> tuple[str, str]:
+def mistral_upload_and_sign(settings, name: str, content: bytes,
+                            expiry_hours: int = MISTRAL_SIGNED_URL_EXPIRY_HOURS
+                            ) -> tuple[str, str]:
     """Upload a PDF to Mistral file storage; return (file_id, signed_url).
 
     Shared by the sync parse path and scripts/batch_ocr.py so both transports
     submit documents the same way.
+
+    If signing fails the upload is deleted before raising: the caller never
+    receives the file_id on that path, so it could not clean up itself, and a
+    retried parse would orphan another copy on every attempt.
     """
     import requests
 
     headers = {"Authorization": _mistral_auth_header(settings)}
     r = requests.post(f"{MISTRAL_API}/v1/files", headers=headers,
                       files={"file": (name, content, "application/pdf")},
-                      data={"purpose": "ocr"}, timeout=900)
+                      data={"purpose": "ocr"}, timeout=MISTRAL_UPLOAD_TIMEOUT)
     r.raise_for_status()
     file_id = r.json()["id"]
-    r = requests.get(f"{MISTRAL_API}/v1/files/{file_id}/url", headers=headers,
-                     params={"expiry": MISTRAL_SIGNED_URL_EXPIRY_HOURS}, timeout=120)
-    r.raise_for_status()
-    return file_id, r.json()["url"]
+    try:
+        r = requests.get(f"{MISTRAL_API}/v1/files/{file_id}/url", headers=headers,
+                         params={"expiry": expiry_hours}, timeout=MISTRAL_SIGN_TIMEOUT)
+        r.raise_for_status()
+        return file_id, r.json()["url"]
+    except Exception:
+        _mistral_delete_file(settings, file_id)
+        raise
 
 
 def _mistral_delete_file(settings, file_id: str) -> None:
     """Best-effort cleanup so parsing does not accumulate copies of the corpus
-    in Mistral's file storage. Never fails the parse."""
+    in Mistral's file storage. Never fails the parse — but never silent either:
+    requests does not raise on 4xx/5xx, so the status is checked explicitly or a
+    failed delete would leave a document fetchable by signed URL with no trace."""
     import requests
 
     try:
-        requests.delete(f"{MISTRAL_API}/v1/files/{file_id}",
-                        headers={"Authorization": _mistral_auth_header(settings)},
-                        timeout=120)
+        r = requests.delete(f"{MISTRAL_API}/v1/files/{file_id}",
+                            headers={"Authorization": _mistral_auth_header(settings)},
+                            timeout=MISTRAL_DELETE_TIMEOUT)
+        if r.status_code >= 400:
+            logger.warning("deleting Mistral file %s returned HTTP %s: %s",
+                           file_id, r.status_code, (r.text or "")[:200])
     except Exception:  # noqa: BLE001 — cleanup is hygiene, not a parse invariant
         logger.warning("could not delete Mistral file %s (non-fatal)", file_id, exc_info=True)
 
@@ -395,7 +423,7 @@ def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
             headers={"Authorization": _mistral_auth_header(settings)},
             json={"model": settings.mistral_ocr_model,
                   "document": {"type": "document_url", "document_url": signed_url}},
-            timeout=900,
+            timeout=MISTRAL_OCR_TIMEOUT,
         )
         r.raise_for_status()
         return mistral_pages_to_text(r.json().get("pages", []))

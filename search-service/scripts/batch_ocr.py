@@ -40,9 +40,11 @@ from app.db import get_pool
 from worker.queue import enqueue
 from worker.stages.parse import (
     MISTRAL_API as API,
+    MISTRAL_BATCH_SIGNED_URL_EXPIRY_HOURS,
     MISTRAL_MAX_BYTES,
     _load_pdf_bytes,
     _mistral_auth_header,
+    _mistral_delete_file,
     _parse_model,
     mistral_pages_to_text,
     mistral_upload_and_sign,
@@ -68,9 +70,40 @@ _TARGET_SQL = """
 """
 
 
-def select_targets(conn, model: str, ids: list[str] | None = None) -> list[dict]:
+def check_environment(settings) -> None:
+    """Refuse to run where the batch results could not be used.
+
+    Both checks exist because the failure mode is a full-corpus OCR bill for
+    zero benefit, and a dry run cannot reveal either — it would just list the
+    whole corpus, which reads like confirmation that they all need OCR.
+
+    PARSE_BACKEND: this script stamps rows 'mistral'. Under pypdf (the code
+    DEFAULT, and production's setting) every row is stamped 'pypdf', so every
+    document looks like a cache miss; the enqueued follow-up pass would then
+    re-parse with pypdf and overwrite the OCR text we just paid for.
+
+    FORCE_REPARSE: the whole design is that the enqueued pass hits the cache.
+    With the bypass on it re-OCRs every document synchronously at full price,
+    making the batch spend pure waste.
+    """
+    if settings.parse_backend != "mistral":
+        raise RuntimeError(
+            f"batch OCR requires PARSE_BACKEND=mistral, found {settings.parse_backend!r}. "
+            "Under another backend every document looks like a cache miss and the "
+            "follow-up pipeline pass would overwrite the OCR text this script pays for."
+        )
+    if settings.force_reparse:
+        raise RuntimeError(
+            "FORCE_REPARSE is set: the follow-up pipeline pass would bypass the parse "
+            "cache and re-OCR every document at full price, wasting the batch spend. "
+            "Unset it, run this script, then set it again if you still need it."
+        )
+
+
+def select_targets(conn, model: str, ids: list[str] | None = None,
+                   backend: str = "mistral") -> list[dict]:
     """Documents that would miss the parse cache under the current settings."""
-    sql, params = _TARGET_SQL, ["mistral", model]
+    sql, params = _TARGET_SQL, [backend, model]
     if ids is not None:
         if not ids:
             return []
@@ -122,8 +155,9 @@ def _poll(settings, job_id: str, interval: int, timeout_s: int) -> dict:
             return job
         if time.monotonic() > deadline:
             raise RuntimeError(
-                f"batch job {job_id} still {status} after {timeout_s}s — it is not "
-                "lost; re-run with --resume-job to collect results later"
+                f"batch job {job_id} still {status} after {timeout_s}s. The job is "
+                f"NOT lost and the work is already paid for — collect it later with:\n"
+                f"    python -m scripts.batch_ocr --resume-job {job_id} --execute"
             )
         time.sleep(interval)
 
@@ -166,11 +200,16 @@ def write_results(conn, targets_by_id: dict[str, dict], results: dict[str, list]
             logger.warning("%s: batch OCR returned no text — left for the worker",
                            doc["external_id"])
             continue
-        conn.execute(
+        # Guarded on the document's CURRENT content_hash: a version replaced at
+        # intake during the batch window has already been re-parsed from the new
+        # bytes, and overwriting that with this job's text (OCR of the OLD bytes)
+        # would store stale content under a stale stamp. Zero rows = skip.
+        cur = conn.execute(
             """INSERT INTO document_texts
                    (document_id, full_text, page_boundaries, char_count,
                     parsed_content_hash, parse_backend, parse_model)
-               VALUES (%s, %s, %s, %s, %s, 'mistral', %s)
+               SELECT d.id, %s, %s, %s, d.content_hash, 'mistral', %s
+               FROM documents d WHERE d.id = %s AND d.content_hash = %s
                ON CONFLICT (document_id) DO UPDATE
                SET full_text = EXCLUDED.full_text,
                    page_boundaries = EXCLUDED.page_boundaries,
@@ -178,20 +217,81 @@ def write_results(conn, targets_by_id: dict[str, dict], results: dict[str, list]
                    parsed_content_hash = EXCLUDED.parsed_content_hash,
                    parse_backend = EXCLUDED.parse_backend,
                    parse_model = EXCLUDED.parse_model""",
-            (doc["id"], full_text, Jsonb(boundaries), len(full_text),
-             doc["content_hash"], model),
+            (full_text, Jsonb(boundaries), len(full_text), model,
+             doc["id"], doc["content_hash"]),
         )
+        if cur.rowcount == 0:
+            logger.warning("%s: content_hash changed since selection — result "
+                           "discarded rather than overwriting newer text",
+                           doc["external_id"])
+            continue
         enqueue(conn, doc["id"])
+        # Commit per document. The alternative — one transaction for the whole
+        # write-back — means a failure on document 2900 rolls back all 2899
+        # before it, and the batch results are already paid for.
+        conn.commit()
         written += 1
     return written
 
 
-def run(ids=None, execute=False, limit=None, poll_interval=30, poll_timeout=86400) -> int:
+def _collect(settings, job: dict, model: str, kept: dict) -> int:
+    """Fetch a finished job's output and write whatever it produced.
+
+    Called for EVERY terminal status, not just SUCCESS: a TIMEOUT_EXCEEDED job
+    has partial results that were produced and billed, and discarding them means
+    paying twice for the same pages.
+    """
+    output_file = job.get("output_file")
+    if not output_file:
+        logger.warning("job %s ended %s with no output file — nothing to collect",
+                       job.get("id"), job.get("status"))
+        return 0
+    results = _fetch_results(settings, output_file)
+    with get_pool().connection() as conn:
+        written = write_results(conn, kept, results, model)
+    dropped = len(kept) - written
+    logger.info("wrote %d document_texts rows and enqueued them (%d of %d entries "
+                "produced no usable result)", written, dropped, len(kept))
+    return written
+
+
+def _resume(settings, job_id: str, model: str, poll_interval: int, poll_timeout: int) -> int:
+    """Collect a job submitted by an earlier run.
+
+    custom_id is the document's external_id, so the target map is rebuilt from
+    the database — the earlier run's in-memory state is not needed.
+    """
+    job = _poll(settings, job_id, poll_interval, poll_timeout)
+    results_preview = _fetch_results(settings, job["output_file"]) if job.get("output_file") else {}
+    if not results_preview:
+        logger.warning("job %s produced no usable entries", job_id)
+        return 0
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            "SELECT id, external_id, s3_key, content_hash FROM documents WHERE external_id = ANY(%s)",
+            (list(results_preview),),
+        ).fetchall()
+    kept = {r[1]: dict(zip(["id", "external_id", "s3_key", "content_hash"], r)) for r in rows}
+    with get_pool().connection() as conn:
+        written = write_results(conn, kept, results_preview, model)
+    logger.info("resumed job %s: wrote %d rows", job_id, written)
+    return written
+
+
+def run(ids=None, execute=False, limit=None, poll_interval=30, poll_timeout=86400,
+        resume_job=None) -> int:
     settings = get_settings()
-    model = _parse_model(settings) or settings.mistral_ocr_model
+    check_environment(settings)
+    model = _parse_model(settings)
+
+    if resume_job:
+        if not execute:
+            print(f"\n--- DRY RUN --- would poll and collect batch job {resume_job}\n")
+            return 0
+        return _resume(settings, resume_job, model, poll_interval, poll_timeout)
 
     with get_pool().connection() as conn:
-        targets = select_targets(conn, model, ids)
+        targets = select_targets(conn, model, ids, backend=settings.parse_backend)
     if limit:
         targets = targets[:limit]
     if not targets:
@@ -210,13 +310,16 @@ def run(ids=None, execute=False, limit=None, poll_interval=30, poll_timeout=8640
             print(f"  ... and {len(targets) - 20} more")
         print(f"\nJSONL entry shape:\n  {json.dumps(sample)}")
         print(f"\nJob payload:\n  {json.dumps(build_job_payload('<file-id>', model))}")
-        print("\nRe-run with --execute to upload, submit, and write results.\n")
+        print("\nNote: --execute additionally skips documents with no retrievable "
+              f"file and any over the {MISTRAL_MAX_BYTES // 1024 // 1024}MB OCR "
+              "limit, so the real job may be smaller than the count above.")
+        print("Re-run with --execute to upload, submit, and write results.\n")
         return 0
 
     if not settings.mistral_api_key:
         raise RuntimeError("batch OCR requires MISTRAL_API_KEY")
 
-    entries, kept = [], {}
+    entries, kept, uploaded_files = [], {}, []
     for doc in targets:
         content = _load_pdf_bytes(doc)
         if content is None:
@@ -230,9 +333,11 @@ def run(ids=None, execute=False, limit=None, poll_interval=30, poll_timeout=8640
                            "worker's shrink path", doc["external_id"],
                            len(content) / 1024 / 1024)
             continue
-        _, signed_url = mistral_upload_and_sign(
-            settings, f"{doc['external_id']}.pdf", content)
+        file_id, signed_url = mistral_upload_and_sign(
+            settings, f"{doc['external_id']}.pdf", content,
+            expiry_hours=MISTRAL_BATCH_SIGNED_URL_EXPIRY_HOURS)
         entries.append(build_entry(doc["external_id"], signed_url))
+        uploaded_files.append(file_id)
         kept[doc["external_id"]] = doc
         logger.info("uploaded %s (%d entries ready)", doc["external_id"], len(entries))
 
@@ -240,18 +345,23 @@ def run(ids=None, execute=False, limit=None, poll_interval=30, poll_timeout=8640
         logger.info("nothing uploadable — no batch submitted")
         return 0
 
-    job_id = _submit(settings, entries, model)
-    logger.info("submitted batch job %s", job_id)
-    job = _poll(settings, job_id, poll_interval, poll_timeout)
-    if job.get("status") != "SUCCESS":
-        raise RuntimeError(f"batch job {job_id} ended {job.get('status')}: "
-                           f"{json.dumps(job.get('errors'))[:500]}")
+    try:
+        job_id = _submit(settings, entries, model)
+        logger.info("submitted batch job %s — resume with "
+                    "--resume-job %s if this run is interrupted", job_id, job_id)
+        job = _poll(settings, job_id, poll_interval, poll_timeout)
+        if job.get("status") != "SUCCESS":
+            logger.warning("job %s ended %s: %s — collecting whatever it produced",
+                           job_id, job.get("status"),
+                           json.dumps(job.get("errors"))[:500])
+    finally:
+        # Delete the uploaded copies whatever happened, so a run does not leave a
+        # duplicate of the corpus in a third party's storage. Only safe here:
+        # Mistral fetches the signed URLs while the job runs.
+        for file_id in uploaded_files:
+            _mistral_delete_file(settings, file_id)
 
-    results = _fetch_results(settings, job["output_file"])
-    with get_pool().connection() as conn:
-        written = write_results(conn, kept, results, model)
-    logger.info("wrote %d document_texts rows and enqueued them (job %s)", written, job_id)
-    return written
+    return _collect(settings, job, model, kept)
 
 
 def _parse_args(argv=None):
@@ -264,6 +374,9 @@ def _parse_args(argv=None):
                    help="actually upload, submit, and write (default is a dry run)")
     p.add_argument("--poll-interval", type=int, default=30, help="seconds between status polls")
     p.add_argument("--poll-timeout", type=int, default=86400, help="seconds to wait for the job")
+    p.add_argument("--resume-job", default=None, metavar="JOB_ID",
+                   help="collect an already-submitted batch job instead of starting "
+                        "a new one (the work is already paid for)")
     return p.parse_args(argv)
 
 
@@ -272,7 +385,8 @@ def main(argv=None):
     args = _parse_args(argv)
     try:
         run(ids=args.ids, execute=args.execute, limit=args.limit,
-            poll_interval=args.poll_interval, poll_timeout=args.poll_timeout)
+            poll_interval=args.poll_interval, poll_timeout=args.poll_timeout,
+            resume_job=args.resume_job)
     finally:
         get_pool().close()
     return 0
