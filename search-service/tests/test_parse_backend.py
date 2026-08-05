@@ -349,6 +349,118 @@ class TestOversizedPdfShrink:
             parse._shrink_pdf(self._raster_pdf())
 
 
+class TestOversizedPdfPageSplit:
+    """Issue #310 follow-up: the lossless fallback for files downsampling cannot
+    fix. Measured on the real 304-page wri-india-nup-report (59.2MB of already
+    ~72dpi imagery): Ghostscript recovered 2.1MB at 300 dpi and 2.8MB at 150 dpi,
+    and /ebook and /screen crashed outright. Nothing to downsample — the size is
+    page count, so the document is split on page ranges instead.
+    """
+
+    def _multipage_pdf(self, pages: int) -> bytes:
+        import io
+
+        from pypdf import PdfWriter
+        w = PdfWriter()
+        for _ in range(pages):
+            w.add_blank_page(width=612, height=792)
+        buf = io.BytesIO()
+        w.write(buf)
+        return buf.getvalue()
+
+    def test_split_covers_every_page_exactly_once(self):
+        import worker.stages.parse as parse
+
+        pieces = parse._split_pdf(self._multipage_pdf(10), 3)
+
+        assert sum(count for _, count in pieces) == 10, "no page may be lost or duplicated"
+        assert len(pieces) == 3
+
+    def test_page_numbers_are_rebased_onto_the_whole_document(self, monkeypatch):
+        """The correctness property citations depend on: a part's page 1 is NOT
+        the document's page 1. Without rebasing, every part after the first
+        would report pages 1..n and silently overwrite the earlier parts'
+        numbering."""
+        import worker.stages.parse as parse
+
+        # Cap large enough that the stubbed parts are accepted at parts=2.
+        monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", 100)
+        monkeypatch.setattr(parse, "_split_pdf",
+                            lambda content, parts: [(b"part1", 2), (b"part2", 2)])
+
+        calls = []
+
+        def fake_ocr(settings, content):
+            calls.append(content)
+            # Each part reports its OWN page indices, starting at 0.
+            return [{"index": 0, "markdown": f"{content.decode()} page A"},
+                    {"index": 1, "markdown": f"{content.decode()} page B"}]
+
+        monkeypatch.setattr(parse, "_mistral_ocr_bytes", fake_ocr)
+
+        pages = parse._ocr_by_parts(object(), b"x" * 10)
+
+        assert calls == [b"part1", b"part2"], "each part is OCR'd once, in order"
+        assert [p["index"] for p in pages] == [0, 1, 2, 3], (
+            "part 2's pages must continue the document's numbering, not restart"
+        )
+        full_text, boundaries = parse.mistral_pages_to_text(pages)
+        assert [b["page"] for b in boundaries] == [1, 2, 3, 4]
+        assert full_text.endswith("part2 page B")
+
+    def test_split_is_only_reached_after_shrink_fails(self, monkeypatch):
+        """Downsampling is one API call and genuinely fixes high-dpi files, so it
+        stays the first attempt; splitting is the fallback."""
+        import worker.stages.parse as parse
+
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        get_settings.cache_clear()
+        monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", 10)
+
+        order = []
+        monkeypatch.setattr(parse, "_shrink_pdf",
+                            lambda c: order.append("shrink") or b"tiny")
+        monkeypatch.setattr(parse, "_ocr_by_parts",
+                            lambda s, c: pytest.fail("must not split when shrink succeeds"))
+        monkeypatch.setattr(parse, "_mistral_ocr_bytes",
+                            lambda s, c: [{"index": 0, "markdown": "shrunk text"}])
+
+        text, _ = parse._parse_pdf(b"x" * 100)
+
+        assert order == ["shrink"]
+        assert text == "shrunk text"
+
+    def test_falls_back_to_splitting_when_shrink_cannot_clear_the_limit(self, monkeypatch):
+        import worker.stages.parse as parse
+
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        get_settings.cache_clear()
+        monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", 10)
+
+        def shrink_fails(content):
+            raise RuntimeError("PDF is still 57.1 MB after Ghostscript shrink")
+
+        monkeypatch.setattr(parse, "_shrink_pdf", shrink_fails)
+        monkeypatch.setattr(parse, "_ocr_by_parts",
+                            lambda s, c: [{"index": 0, "markdown": "split text"}])
+
+        text, _ = parse._parse_pdf(b"x" * 100)
+
+        assert text == "split text", "a file shrink cannot fix must still be parsed"
+
+    def test_gives_up_with_a_clear_error_when_even_ten_parts_are_too_big(self, monkeypatch):
+        import worker.stages.parse as parse
+
+        monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", 10)
+        monkeypatch.setattr(parse, "_split_pdf",
+                            lambda content, parts: [(b"x" * 100, 1)] * parts)
+
+        with pytest.raises(RuntimeError, match="even at 10 parts"):
+            parse._ocr_by_parts(object(), b"x" * 1000)
+
+
 def test_pypdf_branch_untouched_by_default(monkeypatch):
     """Regression guard: default backend routes to the existing pypdf path."""
     import worker.stages.parse as parse
