@@ -43,6 +43,7 @@ If the LLM call fails, extraction is skipped (best-effort; the stage continues).
 """
 import logging
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -56,6 +57,15 @@ logger = logging.getLogger(__name__)
 
 # DOI pattern: matches 10.xxxx/something (the DOI prefix + suffix)
 _DOI_RE = re.compile(r'10\.\d{4,}/\S+')
+
+# Mistral OCR rejects documents over 50MB. This is THEIR hard limit, which is
+# also why the upload cap in src/app/api/admin/intake/route.ts is pinned to the
+# same number (#310): an upload the parser cannot accept should fail at the door.
+MISTRAL_MAX_BYTES = 50 * 1024 * 1024
+
+
+def _mb(n: int) -> str:
+    return f"{n / 1024 / 1024:.1f}"
 
 # The fields the LLM extracts, mapped to their DB column names.
 _EXTRACT_FIELDS = ["title", "title_en", "authors", "doi", "year_published",
@@ -209,6 +219,63 @@ def _mistral_auth_header(settings) -> str:
     return f"Bearer {settings.mistral_api_key.get_secret_value()}"
 
 
+def _shrink_pdf(content: bytes) -> bytes:
+    """Downsample a PDF's raster images with Ghostscript so it fits the OCR cap.
+
+    300 dpi, NOT the /ebook preset (150 dpi). Vector charts pass through
+    untouched either way, but 300 dpi is what keeps small labels inside raster
+    figures legible to OCR — the whole point of sending the file at all.
+    Typical oversized WRI reports carry 400-600 dpi imagery, so 2x+ shrink is
+    the expected outcome. Note it is not guaranteed: Ghostscript re-encodes, and
+    an already-well-compressed file can come back LARGER, which is why the
+    result is re-checked against the cap below.
+
+    Only the OCR submission shrinks: the caller's bytes are untouched, and S3
+    and the app keep the original file. Raises RuntimeError (naming the sizes)
+    when Ghostscript is missing, fails, or cannot get the file under the cap —
+    the job then lands in the review queue with a message an admin can act on.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "in.pdf"
+        dst = Path(tmpdir) / "out.pdf"
+        src.write_bytes(content)
+        cmd = [
+            "gs", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.5",
+            "-dNOPAUSE", "-dBATCH", "-dQUIET",
+            "-dDownsampleColorImages=true", "-dColorImageResolution=300",
+            "-dDownsampleGrayImages=true", "-dGrayImageResolution=300",
+            "-dDownsampleMonoImages=true", "-dMonoImageResolution=300",
+            "-o", str(dst), str(src),
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"PDF is {_mb(len(content))} MB, over the {_mb(MISTRAL_MAX_BYTES)} MB "
+                "Mistral OCR limit, and Ghostscript ('gs') is not installed — cannot shrink it"
+            ) from None
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"Ghostscript timed out shrinking a {_mb(len(content))} MB PDF"
+            ) from None
+        if proc.returncode != 0 or not dst.exists():
+            raise RuntimeError(
+                f"Ghostscript failed to shrink a {_mb(len(content))} MB PDF "
+                f"(exit {proc.returncode}): {(proc.stderr or '').strip()[-500:]}"
+            )
+        shrunk = dst.read_bytes()
+
+    if len(shrunk) > MISTRAL_MAX_BYTES:
+        raise RuntimeError(
+            f"PDF is still {_mb(len(shrunk))} MB after Ghostscript shrink "
+            f"(was {_mb(len(content))} MB), over the {_mb(MISTRAL_MAX_BYTES)} MB "
+            "Mistral OCR limit — split the document or reduce its imagery"
+        )
+    logger.info("shrank oversized PDF for OCR: %s MB -> %s MB",
+                _mb(len(content)), _mb(len(shrunk)))
+    return shrunk
+
+
 def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
     """Mistral OCR (spec §7 as amended 2026-07-22): per-page markdown.
     Boundaries carry the PARSER's page indices, so a page that comes back
@@ -221,6 +288,10 @@ def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
     settings = get_settings()
     if not settings.mistral_api_key:
         raise RuntimeError("PARSE_BACKEND=mistral requires MISTRAL_API_KEY")
+    if len(content) > MISTRAL_MAX_BYTES:
+        # Shrink only what we submit. The stored file stays the original, so a
+        # later re-parse (or a better parser) still sees full-resolution bytes.
+        content = _shrink_pdf(content)
     data_uri = ("data:application/pdf;base64,"
                 + base64.b64encode(content).decode())
     r = requests.post(
