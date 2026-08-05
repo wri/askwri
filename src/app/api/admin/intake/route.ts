@@ -12,7 +12,14 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const MAX_FILES = 20
-const MAX_FILE_BYTES = 100 * 1024 * 1024
+// 50MB deliberately matches the Mistral OCR limit (the qa/prod parse backend
+// rejects larger files): anything accepted here that Mistral can't parse
+// would fail later as an opaque worker error instead of this friendly 400.
+// Raising this requires BOTH a parse-side answer for >50MB files AND a
+// matching bump of next.config.js experimental.proxyClientMaxBodySize —
+// bodies above THAT cap are truncated by the auth middleware's buffer before
+// this route runs and fail as garbled multipart / generic 500 (issue #310).
+const MAX_FILE_BYTES = 50 * 1024 * 1024
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d] // "%PDF-"
 
 export async function POST(req: NextRequest) {

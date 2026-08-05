@@ -46,8 +46,8 @@ describe('POST /api/admin/intake limits', () => {
     expect(body.error).toContain('too many files')
   })
 
-  it('400s on a file over 100MB before buffering', async () => {
-    const big = new File([new Uint8Array(100 * 1024 * 1024 + 1)], 'big.pdf', {
+  it('400s on a file over 50MB before buffering', async () => {
+    const big = new File([new Uint8Array(50 * 1024 * 1024 + 1)], 'big.pdf', {
       type: 'application/pdf',
     })
     const res = await intakeRoute(intakeReq([big]))
@@ -74,7 +74,7 @@ describe('POST /api/admin/intake limits', () => {
     process.env.INTAKE_LOCAL_DIR = dir
     try {
       const good = pdfNamed('good.pdf')
-      const big = new File([new Uint8Array(100 * 1024 * 1024 + 1)], 'big.pdf', {
+      const big = new File([new Uint8Array(50 * 1024 * 1024 + 1)], 'big.pdf', {
         type: 'application/pdf',
       })
       const res = await intakeRoute(intakeReq([good, big]))

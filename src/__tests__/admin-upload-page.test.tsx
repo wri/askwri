@@ -180,7 +180,7 @@ describe('UploadPage — dropzone + per-file results', () => {
     renderPage()
 
     const huge = pdf('huge.pdf')
-    Object.defineProperty(huge, 'size', { value: 101 * 1024 * 1024 })
+    Object.defineProperty(huge, 'size', { value: 51 * 1024 * 1024 })
 
     const zone = screen.getByLabelText(
       'Drop PDFs here or click to choose files',
@@ -192,12 +192,55 @@ describe('UploadPage — dropzone + per-file results', () => {
     })
 
     await screen.findByText('small.pdf')
-    await screen.findByText(/huge\.pdf: file too large \(max 100MB\)/i)
+    await screen.findByText(/huge\.pdf: file too large \(max 50MB\)/i)
     // Only the small file was POSTed
     const posts = fetchMock.mock.calls.filter(
       (c) => c[0] === '/api/admin/intake',
     )
     expect(posts).toHaveLength(1)
+  })
+
+  it('shows per-file progress while a multi-file upload is in flight', async () => {
+    let resolveFirst: (v: any) => void
+    const firstIntake = new Promise((r) => {
+      resolveFirst = r
+    })
+    let intakeCalls = 0
+    const fetchMock = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
+      if (url === '/api/admin/intake') {
+        intakeCalls++
+        const file = (init.body as FormData).get('files') as File
+        const ok = {
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: [file.name] }),
+        }
+        // Hold the FIRST file's request open so the progress label is observable.
+        return intakeCalls === 1
+          ? firstIntake.then(() => ok)
+          : Promise.resolve(ok)
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, items: [] }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+
+    const zone = screen.getByLabelText(
+      'Drop PDFs here or click to choose files',
+    )
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [pdf('a.pdf'), pdf('b.pdf')] },
+    })
+
+    await screen.findByText('Uploading 1 of 2…')
+    await act(async () => {
+      resolveFirst!(undefined)
+    })
+    await screen.findByText('b.pdf')
+    expect(screen.getByText('a.pdf')).toBeInTheDocument()
   })
 
   it('uploads the PDFs AND keeps the skip message on a mixed drop', async () => {

@@ -42,7 +42,8 @@ const STATUS_STYLES: Record<
 
 // Mirrors MAX_FILE_BYTES in /api/admin/intake — reject oversized files before
 // wasting an upload round-trip (and before the proxy body cap garbles them).
-const MAX_FILE_BYTES = 100 * 1024 * 1024
+// 50MB is the parse backend's (Mistral OCR) hard limit, not an arbitrary cap.
+const MAX_FILE_BYTES = 50 * 1024 * 1024
 
 const POLL_INTERVAL_MS = 5000
 const DUPLICATE_TIMEOUT_MS = 90000
@@ -120,7 +121,7 @@ const UploadPage = () => {
       // other file still lands, and each failure is reported by name. (The
       // route validates all-or-nothing per request, so batching would let one
       // bad file silently sink the rest — the issue #310 symptom.)
-      const uploadedCount = { value: 0 }
+      let uploadedCount = 0
       const failures: string[] = []
       try {
         for (let i = 0; i < files.length; i++) {
@@ -149,7 +150,7 @@ const UploadPage = () => {
               continue
             }
             const uploaded = (body.uploaded as string[]) ?? []
-            uploadedCount.value += uploaded.length
+            uploadedCount += uploaded.length
             const now = Date.now()
             setEntries((prev) => [
               ...prev,
@@ -163,7 +164,7 @@ const UploadPage = () => {
               })),
             ])
           } catch (err: any) {
-            failures.push(`${f.name}: ${err.message}`)
+            failures.push(`${f.name}: ${err?.message ?? String(err)}`)
           }
         }
         await loadHealth()
@@ -173,9 +174,9 @@ const UploadPage = () => {
             : null
         const errorParts = [skipMessage, failMessage].filter(Boolean)
         setError(errorParts.length > 0 ? errorParts.join(' — ') : null)
-        if (uploadedCount.value > 0) {
+        if (uploadedCount > 0) {
           setNotice(
-            `${uploadedCount.value} file(s) dropped into the intake queue. Track each one below.`,
+            `${uploadedCount} file(s) dropped into the intake queue. Track each one below.`,
           )
         }
       } finally {
@@ -296,8 +297,13 @@ const UploadPage = () => {
         </Tooltip>
       </Heading>
       <Text style={{ marginBottom: 16, color: '#555' }}>
-        Select one or more PDF files. They will be placed in the intake queue
-        and registered by the ingestion worker automatically.{' '}
+        Select one or more PDF files (max 50MB each — the OCR service rejects
+        larger files; see the{' '}
+        <Link href='/admin/guide' style={{ textDecoration: 'underline' }}>
+          guide
+        </Link>{' '}
+        for how to compress a bigger PDF). They will be placed in the intake
+        queue and registered by the ingestion worker automatically.{' '}
         <strong>
           If a file is identical to a document already in the system, it is
           silently skipped as a duplicate
