@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { NextRequest } from 'next/server'
-import { mkdtempSync, readdirSync, rmSync } from 'fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { POST as intakeRoute } from '@/app/api/admin/intake/route'
@@ -46,8 +46,8 @@ describe('POST /api/admin/intake limits', () => {
     expect(body.error).toContain('too many files')
   })
 
-  it('400s on a file over 50MB before buffering', async () => {
-    const big = new File([new Uint8Array(50 * 1024 * 1024 + 1)], 'big.pdf', {
+  it('400s on a file over 100MB before buffering', async () => {
+    const big = new File([new Uint8Array(100 * 1024 * 1024 + 1)], 'big.pdf', {
       type: 'application/pdf',
     })
     const res = await intakeRoute(intakeReq([big]))
@@ -74,7 +74,7 @@ describe('POST /api/admin/intake limits', () => {
     process.env.INTAKE_LOCAL_DIR = dir
     try {
       const good = pdfNamed('good.pdf')
-      const big = new File([new Uint8Array(50 * 1024 * 1024 + 1)], 'big.pdf', {
+      const big = new File([new Uint8Array(100 * 1024 * 1024 + 1)], 'big.pdf', {
         type: 'application/pdf',
       })
       const res = await intakeRoute(intakeReq([good, big]))
@@ -117,5 +117,40 @@ describe('isUuid', () => {
     expect(isUuid('not-a-uuid')).toBe(false)
     expect(isUuid('')).toBe(false)
     expect(isUuid("1' OR '1'='1")).toBe(false)
+  })
+})
+
+describe('upload size caps stay consistent', () => {
+  // Issue #310: the auth middleware buffers request bodies, and a body above
+  // proxyClientMaxBodySize is TRUNCATED before the intake route ever runs —
+  // surfacing as a garbled multipart / generic 500 rather than the friendly
+  // "too large" 400. So the proxy cap must always exceed the intake cap plus
+  // multipart overhead. Raising one alone silently reintroduces that bug, which
+  // no other test would catch: the intake route's own tests construct Files
+  // directly and never traverse the proxy.
+  const MAX_FILE_BYTES = 100 * 1024 * 1024
+
+  it('proxyClientMaxBodySize exceeds MAX_FILE_BYTES', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nextConfig = require('../../next.config.js')
+    const raw = nextConfig.experimental?.proxyClientMaxBodySize as string
+    expect(raw).toMatch(/^\d+mb$/)
+    const proxyBytes = parseInt(raw, 10) * 1024 * 1024
+    expect(proxyBytes).toBeGreaterThan(MAX_FILE_BYTES)
+  })
+
+  it('the client mirror matches the server cap', () => {
+    const page = readFileSync(
+      join(__dirname, '../app/admin/upload/page.tsx'),
+      'utf8',
+    )
+    const route = readFileSync(
+      join(__dirname, '../app/api/admin/intake/route.ts'),
+      'utf8',
+    )
+    const capOf = (src: string) =>
+      /const MAX_FILE_BYTES = (\d+) \* 1024 \* 1024/.exec(src)?.[1]
+    expect(capOf(page)).toBe(capOf(route))
+    expect(capOf(route)).toBe(String(MAX_FILE_BYTES / 1024 / 1024))
   })
 })

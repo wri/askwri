@@ -180,7 +180,7 @@ describe('UploadPage — dropzone + per-file results', () => {
     renderPage()
 
     const huge = pdf('huge.pdf')
-    Object.defineProperty(huge, 'size', { value: 51 * 1024 * 1024 })
+    Object.defineProperty(huge, 'size', { value: 101 * 1024 * 1024 })
 
     const zone = screen.getByLabelText(
       'Drop PDFs here or click to choose files',
@@ -192,7 +192,7 @@ describe('UploadPage — dropzone + per-file results', () => {
     })
 
     await screen.findByText('small.pdf')
-    await screen.findByText(/huge\.pdf: file too large \(max 50MB\)/i)
+    await screen.findByText(/huge\.pdf: file too large \(max 100MB\)/i)
     // Only the small file was POSTed
     const posts = fetchMock.mock.calls.filter(
       (c) => c[0] === '/api/admin/intake',

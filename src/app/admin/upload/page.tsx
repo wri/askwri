@@ -42,8 +42,9 @@ const STATUS_STYLES: Record<
 
 // Mirrors MAX_FILE_BYTES in /api/admin/intake — reject oversized files before
 // wasting an upload round-trip (and before the proxy body cap garbles them).
-// 50MB is the parse backend's (Mistral OCR) hard limit, not an arbitrary cap.
-const MAX_FILE_BYTES = 50 * 1024 * 1024
+// 100MB: above Mistral OCR's own 50MB limit, which the parse stage covers by
+// downsampling oversized PDFs with Ghostscript before submission (#310).
+const MAX_FILE_BYTES = 100 * 1024 * 1024
 
 const POLL_INTERVAL_MS = 5000
 const DUPLICATE_TIMEOUT_MS = 90000

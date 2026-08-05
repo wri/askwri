@@ -12,14 +12,20 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const MAX_FILES = 20
-// 50MB deliberately matches the Mistral OCR limit (the qa/prod parse backend
-// rejects larger files): anything accepted here that Mistral can't parse
-// would fail later as an opaque worker error instead of this friendly 400.
-// Raising this requires BOTH a parse-side answer for >50MB files AND a
-// matching bump of next.config.js experimental.proxyClientMaxBodySize —
-// bodies above THAT cap are truncated by the auth middleware's buffer before
-// this route runs and fail as garbled multipart / generic 500 (issue #310).
-const MAX_FILE_BYTES = 50 * 1024 * 1024
+// 100MB. This is NOT the parse limit: Mistral OCR still rejects documents over
+// 50MB (MISTRAL_MAX_BYTES in worker/stages/parse.py). The gap is covered by the
+// parse-side Ghostscript shrink, which downsamples raster imagery to 300 dpi for
+// the OCR submission while S3 keeps the original file (#310 follow-up, Fix 2).
+// Measured on an 85MB 90-page image-heavy PDF: 23MB out in 13s, no pages lost.
+//
+// This cap must stay <= next.config.js experimental.proxyClientMaxBodySize minus
+// multipart overhead — bodies above THAT cap are truncated by the auth
+// middleware's buffer before this route runs and fail as garbled multipart /
+// generic 500 (issue #310). Raise them together, never one alone.
+//
+// Above 100MB the shrink may not reach 50MB; the worker then fails the job with
+// a message naming the sizes, which surfaces in the review queue.
+const MAX_FILE_BYTES = 100 * 1024 * 1024
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d] // "%PDF-"
 
 export async function POST(req: NextRequest) {

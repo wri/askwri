@@ -237,18 +237,19 @@ const GuidePage = () => (
       back up.
     </p>
     <p style={{ marginBottom: 4 }}>
-      <strong>My PDF is over 50MB and won&apos;t upload.</strong>
+      <strong>My PDF is over 100MB and won&apos;t upload.</strong>
     </p>
     <p style={{ marginBottom: 12 }}>
-      Uploads are capped at 50MB because the OCR service that reads PDFs rejects
-      anything larger — a bigger file would upload and then fail processing
-      anyway. Compress the PDF first: in Adobe Acrobat use File → Reduce File
-      Size (or Save as Other → Optimized PDF); on a Mac, open the PDF in Preview
-      and export with the &quot;Reduce File Size&quot; Quartz filter; or use a
-      reputable web compressor such as iLovePDF or Smallpdf (fine here — these
-      are published, public documents). Nearly all the bulk in a large report is
-      imagery, so downsampling images to around 150 dpi typically shrinks it
-      several-fold with no visible loss in the text.
+      Uploads are capped at 100MB. You do not need to compress anything below
+      that: files too large for the OCR service are downsampled automatically
+      before processing, and the original you uploaded is what gets stored and
+      served. If your file is over 100MB, compress it first: in Adobe Acrobat
+      use File → Reduce File Size (or Save as Other → Optimized PDF); on a Mac,
+      open the PDF in Preview and export with the &quot;Reduce File Size&quot;
+      Quartz filter; or use a reputable web compressor such as iLovePDF or
+      Smallpdf (fine here — these are published, public documents). Nearly all
+      the bulk in a large report is imagery, so downsampling images typically
+      shrinks it several-fold with no visible loss in the text.
     </p>
     <p style={{ marginBottom: 4 }}>
       <strong>The Promote button is missing.</strong>

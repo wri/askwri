@@ -6,13 +6,18 @@ const nextConfig = {
     // The auth middleware (src/proxy.ts) buffers request bodies; the default
     // 10MB cap silently truncates larger uploads, corrupting the multipart
     // body before /api/admin/intake can read it (issue #310: every PDF over
-    // 10MB failed with "internal error"). Intake allows 50MB PDFs
-    // (MAX_FILE_BYTES, itself pinned to the Mistral OCR parse limit); this is
-    // sized for one max-size PDF plus multipart overhead — the upload client
-    // sends one file per request. Costs of raising it: the buffer is held in
-    // memory per in-flight request on a 512MB qa task, and files over 50MB
-    // would pass upload only to die at the parse stage.
-    proxyClientMaxBodySize: '55mb',
+    // 10MB failed with "internal error"). Intake allows 100MB PDFs
+    // (MAX_FILE_BYTES); this is sized for one max-size PDF plus multipart
+    // overhead — the upload client sends one file per request. MUST stay above
+    // MAX_FILE_BYTES: raise them together, never one alone.
+    //
+    // Cost of this size, recorded because it is the reason not to go higher:
+    // the buffer is held IN MEMORY per in-flight request, against a 512MB qa
+    // task (ecs.tf). Two concurrent 100MB uploads is ~200MB of buffer on top of
+    // the app's own footprint — close enough to the limit that a third would
+    // risk an OOM kill. Raised from 55mb on 2026-08-05 alongside the parse-side
+    // Ghostscript shrink, which is what makes >50MB files parseable at all.
+    proxyClientMaxBodySize: '105mb',
   },
   poweredByHeader: false,
   optimizePackageImports: ['react-icons'],
