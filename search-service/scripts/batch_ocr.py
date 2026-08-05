@@ -35,7 +35,15 @@ import time
 import requests
 from psycopg.types.json import Jsonb
 
-from app.config import get_settings
+from app.env import load_env
+
+# MUST run before boto3 is used. pydantic Settings reads .env.local on its own,
+# but boto3 reads os.environ — so without this, AWS_ENDPOINT_URL is missing and
+# _load_pdf_bytes silently talks to REAL S3 instead of local MinIO while every
+# Settings-derived value still looks correct. Same bootstrap as worker/main.py.
+load_env()
+
+from app.config import get_settings  # noqa: E402
 from app.db import get_pool
 from worker.queue import enqueue
 from worker.stages.parse import (
