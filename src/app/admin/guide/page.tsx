@@ -33,11 +33,10 @@ const GuidePage = () => (
       Upload one or more PDFs on the Upload page. The ingestion pipeline picks
       them up and works through them in the background: it reads the PDF text
       (parse), detects the language, writes summaries, suggests tags (classify),
-      indexes the document for search (embed), then publishes it. Documents that
-      come out of the pipeline needing a human look land in the Review queue.
-      Open a document from there (or from Documents) to check its metadata and
-      the tags the AI suggested, then click Promote to make it publicly
-      searchable.
+      and indexes the document for search (embed). Every new document then lands
+      in the Review queue. Open it from there (or from Documents) to check its
+      metadata and the tags the AI suggested, then click Promote to make it
+      publicly searchable.
     </p>
     <p>
       If you have metadata for many documents at once — from a spreadsheet or
@@ -211,7 +210,10 @@ const GuidePage = () => (
       so re-ingest is the right move after a parsing problem is fixed. Anything
       a person has edited by hand — a corrected title, a rewritten summary, an
       accepted or rejected tag — is preserved exactly as it was set and is never
-      overwritten by re-ingestion.
+      overwritten by re-ingestion. A document that was already publicly
+      searchable comes back searchable after re-ingest (it is not pulled from
+      search) unless the new extraction looks degraded, in which case it lands
+      in needs_review for a person to check first.
     </p>
 
     <h2
@@ -233,6 +235,20 @@ const GuidePage = () => (
       running. Check the worker-status panel on the Upload page — if it shows
       stale, the worker is down and files will sit unprocessed until it comes
       back up.
+    </p>
+    <p style={{ marginBottom: 4 }}>
+      <strong>My PDF is over 50MB and won&apos;t upload.</strong>
+    </p>
+    <p style={{ marginBottom: 12 }}>
+      Uploads are capped at 50MB because the OCR service that reads PDFs rejects
+      anything larger — a bigger file would upload and then fail processing
+      anyway. Compress the PDF first: in Adobe Acrobat use File → Reduce File
+      Size (or Save as Other → Optimized PDF); on a Mac, open the PDF in Preview
+      and export with the &quot;Reduce File Size&quot; Quartz filter; or use a
+      reputable web compressor such as iLovePDF or Smallpdf (fine here — these
+      are published, public documents). Nearly all the bulk in a large report is
+      imagery, so downsampling images to around 150 dpi typically shrinks it
+      several-fold with no visible loss in the text.
     </p>
     <p style={{ marginBottom: 4 }}>
       <strong>The Promote button is missing.</strong>
