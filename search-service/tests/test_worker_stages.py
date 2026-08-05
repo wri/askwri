@@ -9,6 +9,7 @@ Uses the same hermetic pattern as test_worker_queue.py:
 Skip guard: requires DATABASE_URL (same convention as other DB tests).
 """
 import hashlib
+import json as json_mod
 import os
 import shutil
 import subprocess
@@ -1066,6 +1067,210 @@ class TestBatchOcrTargetSelection:
             conn.commit()
 
         assert "shrunk" in self._targets(stages_test_db)
+
+
+class FakeMistralBatchAPI:
+    """A stand-in for the whole Mistral surface scripts/batch_ocr.py --execute
+    touches, wired to the shapes the live probe returned on 2026-08-05.
+
+    Records every call so the test can assert on the sequence, and fails loudly
+    on any URL the script is not supposed to hit.
+    """
+
+    def __init__(self, pages_by_custom_id, job_statuses=("QUEUED", "SUCCESS")):
+        self.pages_by_custom_id = pages_by_custom_id
+        self.job_statuses = list(job_statuses)
+        self.uploaded_pdfs = {}    # file id -> bytes
+        self.batch_jsonl = None
+        self.deleted = []
+        self.job_payload = None
+        self._n = 0
+
+    def install(self, monkeypatch):
+        monkeypatch.setattr("requests.post", self.post)
+        monkeypatch.setattr("requests.get", self.get)
+        monkeypatch.setattr("requests.delete", self.delete)
+        return self
+
+    def _resp(self, payload, text=None):
+        class _R:
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+            def json(self_inner):
+                return payload
+
+        r = _R()
+        if text is not None:
+            r.text = text
+        return r
+
+    def post(self, url, headers=None, files=None, data=None, json=None, timeout=None):
+        if url.endswith("/v1/files"):
+            purpose = data["purpose"]
+            content = files["file"][1]
+            if purpose == "ocr":
+                self._n += 1
+                fid = f"pdf-{self._n}"
+                self.uploaded_pdfs[fid] = content
+                return self._resp({"id": fid})
+            if purpose == "batch":
+                self.batch_jsonl = content
+                return self._resp({"id": "batchfile-1"})
+            raise AssertionError(f"unexpected purpose {purpose}")
+        if url.endswith("/v1/batch/jobs"):
+            self.job_payload = json
+            return self._resp({"id": "job-1", "status": "QUEUED"})
+        raise AssertionError(f"unexpected POST {url}")
+
+    def get(self, url, headers=None, params=None, timeout=None):
+        if url.endswith("/url"):
+            fid = url.split("/v1/files/")[1].split("/")[0]
+            return self._resp({"url": f"https://signed.invalid/{fid}?sig=x"})
+        if "/v1/batch/jobs/" in url:
+            status = self.job_statuses.pop(0) if len(self.job_statuses) > 1 \
+                else self.job_statuses[0]
+            return self._resp({"id": "job-1", "status": status,
+                               "succeeded_requests": len(self.pages_by_custom_id),
+                               "failed_requests": 0, "output_file": "out-1"})
+        if url.endswith("/v1/files/out-1/content"):
+            lines = [json_mod.dumps({"custom_id": cid, "error": None,
+                                     "response": {"status_code": 200,
+                                                  "body": {"pages": pages}}})
+                     for cid, pages in self.pages_by_custom_id.items()]
+            return self._resp({}, text="\n".join(lines))
+        raise AssertionError(f"unexpected GET {url}")
+
+    def delete(self, url, headers=None, timeout=None):
+        self.deleted.append(url.rsplit("/", 1)[-1])
+        return self._resp({})
+
+
+class TestBatchOcrEndToEnd:
+    """Drives scripts/batch_ocr.py --execute all the way through against a real
+    scratch database with the Mistral API mocked.
+
+    This is the path that a live run would take and that nothing else exercises:
+    select -> upload -> sign -> submit -> poll -> fetch -> write -> enqueue. The
+    final assertion is the one the whole design rests on — that the document the
+    script stored is then a parse-cache HIT, so the pipeline pass it enqueues
+    does not pay for OCR a second time.
+    """
+
+    def test_execute_writes_text_enqueues_and_leaves_a_cache_hit(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        from scripts import batch_ocr
+
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "batch-doc.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        monkeypatch.delenv("FORCE_REPARSE", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, external_id="batch-doc",
+                                      s3_key="documents/batch-doc.pdf")
+
+        pages = [{"index": 0, "markdown": "# Batched Report\n\nFirst page body."},
+                 {"index": 1, "markdown": "Second page body."}]
+        fake = FakeMistralBatchAPI({"batch-doc": pages}).install(monkeypatch)
+
+        written = batch_ocr.run(execute=True, poll_interval=0)
+
+        assert written == 1, "the document should have been stored"
+
+        # --- the API conversation looked the way the live probe did ---
+        assert len(fake.uploaded_pdfs) == 1, "one PDF uploaded"
+        assert list(fake.uploaded_pdfs.values())[0][:4] == b"%PDF", "the real file was uploaded"
+        assert fake.job_payload["endpoint"] == "/v1/ocr"
+        assert fake.job_payload["input_files"] == ["batchfile-1"]
+        entry = json_mod.loads(fake.batch_jsonl.decode().strip())
+        assert entry["custom_id"] == "batch-doc"
+        assert entry["body"]["document"]["document_url"].startswith("https://signed.invalid/")
+        assert fake.deleted == ["pdf-1"], "the uploaded copy is cleaned up after the job"
+
+        # --- the database got the text, the stamps, and a queued job ---
+        with psycopg.connect(stages_test_db) as conn:
+            text, boundaries, stamp_hash, backend, model = conn.execute(
+                """SELECT full_text, page_boundaries, parsed_content_hash,
+                          parse_backend, parse_model
+                   FROM document_texts WHERE document_id = %s""", (doc_id,)).fetchone()
+            jobs = conn.execute(
+                "SELECT count(*) FROM ingestion_jobs WHERE document_id = %s AND status = 'queued'",
+                (doc_id,)).fetchone()[0]
+        assert text == "# Batched Report\n\nFirst page body.\n\nSecond page body."
+        assert [b["page"] for b in boundaries] == [1, 2]
+        assert (stamp_hash, backend, model) == ("abc123", "mistral", "mistral-ocr-latest")
+        assert jobs == 1, "the document must be enqueued for the rest of the pipeline"
+
+        # --- THE POINT: the pipeline pass it enqueued does no OCR ---
+        import worker.stages.parse as parse_mod
+
+        def boom(*a, **k):
+            raise AssertionError("the enqueued pass must hit the parse cache, not re-OCR")
+
+        monkeypatch.setattr(parse_mod, "_parse_pdf", boom)
+        monkeypatch.setattr(parse_mod, "_load_pdf_bytes", boom)
+        monkeypatch.setattr("worker.llm.chat_json",
+                            lambda system, user, schema, model, max_tokens=1500: {
+                                f: None for f in schema["properties"]})
+
+        assert parse_mod.run(doc_id) is None
+        with psycopg.connect(stages_test_db) as conn:
+            after = conn.execute(
+                "SELECT full_text FROM document_texts WHERE document_id = %s",
+                (doc_id,)).fetchone()[0]
+        assert after == text, "the cached batch text survives the pipeline pass intact"
+
+    def test_execute_collects_partial_results_from_a_timed_out_job(
+        self, tmp_path, stages_test_db, monkeypatch
+    ):
+        """A TIMEOUT_EXCEEDED job has already produced and billed some pages.
+        Discarding them means paying twice, so they are collected anyway."""
+        from scripts import batch_ocr
+
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "partial.pdf")
+
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, external_id="partial",
+                                      s3_key="documents/partial.pdf")
+
+        fake = FakeMistralBatchAPI(
+            {"partial": [{"index": 0, "markdown": "Recovered text"}]},
+            job_statuses=("TIMEOUT_EXCEEDED",),
+        ).install(monkeypatch)
+
+        written = batch_ocr.run(execute=True, poll_interval=0)
+
+        assert written == 1, "partial results must be collected, not thrown away"
+        assert fake.deleted == ["pdf-1"], "uploads are cleaned up even on a failed job"
+        with psycopg.connect(stages_test_db) as conn:
+            text = conn.execute(
+                "SELECT full_text FROM document_texts WHERE document_id = %s",
+                (doc_id,)).fetchone()[0]
+        assert text == "Recovered text"
 
 
 class TestParseTitleAndAuthors:
