@@ -872,6 +872,46 @@ class TestParseCache:
         assert run(doc_id) is None
         assert parsed == [1], "a NULL content_hash must miss the cache"
 
+    def test_shrunk_parse_is_tagged_and_never_cache_hits(self, tmp_path, stages_test_db, monkeypatch):
+        """A downsampled OCR submission is NOT the same product as a full-resolution
+        one, but content_hash (the ORIGINAL bytes) and the model id are identical
+        for both. The stamp is tagged so the two are distinguishable, and because
+        the read path compares against the untagged identity, a shrunk row never
+        hits — raising the cap and re-ingesting really does re-OCR at full
+        resolution instead of serving downsampled text forever."""
+        self._setup_pdf(tmp_path, monkeypatch, backend="mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        from app.config import get_settings
+        get_settings.cache_clear()
+        self._count_llm(monkeypatch, [])
+
+        import worker.stages.parse as parse
+        # Any file counts as oversized, so run() takes the shrink-tagged path.
+        monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", 10)
+        ocr_calls = []
+        monkeypatch.setattr(parse, "_parse_pdf_mistral",
+                            lambda c: (ocr_calls.append(1), ("shrunk OCR text", [{"page": 1, "end_pos": 15}]))[1])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        parsed_hash, backend, model, _ = self._stamps(stages_test_db, doc_id)
+        assert (parsed_hash, backend) == ("abc123", "mistral")
+        assert model == "mistral-ocr-latest" + parse.SHRINK_POLICY_TAG, (
+            f"a shrunk parse must carry the policy tag, got {model!r}"
+        )
+        assert len(ocr_calls) == 1
+
+        # Second run: same bytes, same backend/model — but the tag means miss.
+        assert run(doc_id) is None
+        assert len(ocr_calls) == 2, (
+            "a shrunk row must NOT serve from cache; it re-OCRs until the "
+            "oversize situation changes"
+        )
+
     def test_summary_fallback_writes_no_stamps(self, tmp_path, stages_test_db, monkeypatch):
         """A document with no retrievable PDF falls back to title+summary text.
         That text was never parsed from bytes, so it must be stamped NULL —

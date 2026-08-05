@@ -63,6 +63,11 @@ _DOI_RE = re.compile(r'10\.\d{4,}/\S+')
 # same number (#310): an upload the parser cannot accept should fail at the door.
 MISTRAL_MAX_BYTES = 50 * 1024 * 1024
 
+# Appended to the cached parse_model stamp for documents whose OCR submission
+# was downsampled by _shrink_pdf. Change it when the shrink POLICY changes
+# (e.g. a different dpi), so old shrunk rows stop matching.
+SHRINK_POLICY_TAG = "+gs300"
+
 
 def _mb(n: int) -> str:
     return f"{n / 1024 / 1024:.1f}"
@@ -219,6 +224,44 @@ def _mistral_auth_header(settings) -> str:
     return f"Bearer {settings.mistral_api_key.get_secret_value()}"
 
 
+def _assert_pages_preserved(src: Path, dst: Path, orig_bytes: int) -> None:
+    """Raise unless the shrunk PDF still has every page the original had.
+
+    Ghostscript exit 0 does not mean a faithful conversion: it always creates
+    the output file, and gs 10's repair path can drop pages from a damaged
+    source without failing. A silently short document would OCR cleanly, store
+    truncated text, and (with the parse cache) keep it — so the page count is
+    checked before those bytes go anywhere.
+    """
+    if dst.stat().st_size == 0:
+        raise RuntimeError(
+            f"Ghostscript produced an empty file from a {_mb(orig_bytes)} MB PDF"
+        )
+    from pypdf import PdfReader
+    try:
+        before = len(PdfReader(str(src)).pages)
+    except Exception:
+        # Lenient about the SOURCE: a PDF pypdf cannot read is exactly the kind
+        # of damaged file we still want to hand to OCR. Nothing to compare, so
+        # skip the check rather than block the document.
+        logger.warning("could not read source page count before shrink", exc_info=True)
+        return
+    try:
+        after = len(PdfReader(str(dst)).pages)
+    except Exception as exc:
+        # Strict about the OUTPUT: these are the bytes we are about to submit
+        # and cache. Unreadable means Ghostscript failed while reporting success.
+        raise RuntimeError(
+            f"Ghostscript produced an unreadable PDF from a {_mb(orig_bytes)} MB "
+            f"source ({type(exc).__name__}: {exc})"
+        ) from None
+    if after < before:
+        raise RuntimeError(
+            f"Ghostscript dropped pages shrinking a {_mb(orig_bytes)} MB PDF "
+            f"({before} pages in, {after} out) — refusing to OCR a truncated document"
+        )
+
+
 def _shrink_pdf(content: bytes) -> bytes:
     """Downsample a PDF's raster images with Ghostscript so it fits the OCR cap.
 
@@ -248,7 +291,7 @@ def _shrink_pdf(content: bytes) -> bytes:
             "-o", str(dst), str(src),
         ]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         except FileNotFoundError:
             raise RuntimeError(
                 f"PDF is {_mb(len(content))} MB, over the {_mb(MISTRAL_MAX_BYTES)} MB "
@@ -264,6 +307,11 @@ def _shrink_pdf(content: bytes) -> bytes:
                 f"(exit {proc.returncode}): {(proc.stderr or '').strip()[-500:]}"
             )
         shrunk = dst.read_bytes()
+        # Exit 0 is NOT proof of a good conversion. Ghostscript writes out.pdf
+        # even on hard failure, and gs 10's permissive repair path can "recover"
+        # a damaged file by silently dropping pages — which would OCR clean,
+        # store short text, and cache it as if complete. Compare page counts.
+        _assert_pages_preserved(src, dst, len(content))
 
     if len(shrunk) > MISTRAL_MAX_BYTES:
         raise RuntimeError(
@@ -289,8 +337,10 @@ def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
     if not settings.mistral_api_key:
         raise RuntimeError("PARSE_BACKEND=mistral requires MISTRAL_API_KEY")
     if len(content) > MISTRAL_MAX_BYTES:
-        # Shrink only what we submit. The stored file stays the original, so a
-        # later re-parse (or a better parser) still sees full-resolution bytes.
+        # Shrink only what we submit: S3 and the app keep the original file.
+        # (Note the parse cache does NOT let a shrunk doc coast — its stamp is
+        # tagged SHRINK_POLICY_TAG and never matches, so raising the cap and
+        # re-ingesting really does re-OCR at full resolution.)
         content = _shrink_pdf(content)
     data_uri = ("data:application/pdf;base64,"
                 + base64.b64encode(content).decode())
@@ -301,6 +351,18 @@ def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
               "document": {"type": "document_url", "document_url": data_uri}},
         timeout=900,
     )
+    if r.status_code == 413:
+        # UNVERIFIED whether Mistral's 50MB limit applies to the document or to
+        # the request body. The body is base64 (1.37x), so a file shrunk to just
+        # under 50MB is submitted as ~68MB. If the cap is on the body, the real
+        # raw ceiling is ~36MB and MISTRAL_MAX_BYTES needs lowering; a bare 413
+        # from raise_for_status() would not say that.
+        raise RuntimeError(
+            f"Mistral OCR rejected a {_mb(len(content))} MB document as too large "
+            f"(HTTP 413; base64 request body was {_mb(len(data_uri))} MB). If this "
+            f"document is under the {_mb(MISTRAL_MAX_BYTES)} MB limit, the limit "
+            "applies to the encoded request body — lower MISTRAL_MAX_BYTES to ~36MB."
+        )
     r.raise_for_status()
     pages = r.json().get("pages", [])
     page_texts, boundaries, pos = [], [], 0
@@ -496,6 +558,17 @@ def run(document_id):
         # is exactly the miss the read path wants.
         settings = get_settings()
         stamp_hash = doc["content_hash"] if from_pdf else None
+        # A shrunk parse is NOT the same product as a full-resolution one, but
+        # content_hash (the ORIGINAL bytes) and the model id are identical for
+        # both. Tag the stamp so the two are distinguishable. The read path
+        # compares against the untagged identity, so a shrunk row never hits the
+        # cache — it re-OCRs instead of silently serving downsampled text
+        # forever once the cap is raised. `WHERE parse_model LIKE '%+gs%'`
+        # finds every document that went through the shrink.
+        was_shrunk = (stamp_hash and content is not None
+                      and settings.parse_backend == "mistral"
+                      and len(content) > MISTRAL_MAX_BYTES)
+        stamp_model = _parse_model(settings) + (SHRINK_POLICY_TAG if was_shrunk else "")
         conn.execute(
             """INSERT INTO document_texts
                    (document_id, full_text, page_boundaries, char_count,
@@ -509,7 +582,7 @@ def run(document_id):
             (document_id, full_text, Jsonb(boundaries), len(full_text),
              stamp_hash,
              settings.parse_backend if stamp_hash else None,
-             _parse_model(settings) if stamp_hash else None),
+             stamp_model if stamp_hash else None),
         )
         # Record the pre-ingest status on the open job BEFORE flipping to
         # 'processing', so publish can restore a previously-searchable doc

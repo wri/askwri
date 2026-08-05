@@ -9,7 +9,9 @@ OpenCC length changes under the joined-text arithmetic).
 
 Mistral API is stubbed; no network calls here.
 """
+import io
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -170,9 +172,6 @@ class TestOversizedPdfShrink:
         self._mistral_env(monkeypatch)
         captured = self._stub_ocr(monkeypatch)
         original = self._raster_pdf()
-        # PIL stamps a CreationDate, so the fixture is not byte-reproducible —
-        # snapshot it instead of regenerating for the untouched-bytes check.
-        before = bytes(original)
         monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", len(original) - 1)
 
         full_text, _ = parse._parse_pdf(original)
@@ -183,9 +182,84 @@ class TestOversizedPdfShrink:
             f"submission should shrink: {len(submitted)} vs {len(original)} bytes"
         )
         assert submitted != original, "the shrunk bytes must be what was submitted"
-        assert original == before, "the caller's PDF bytes must be untouched (S3 keeps the original)"
+        # The submission must still be a readable PDF with every page intact —
+        # a smaller pile of bytes is not the goal, a smaller DOCUMENT is.
+        from pypdf import PdfReader
+        assert len(PdfReader(io.BytesIO(submitted)).pages) == \
+            len(PdfReader(io.BytesIO(original)).pages), "shrink must not drop pages"
 
     @pytest.mark.skipif(shutil.which("gs") is None, reason="ghostscript not installed")
+    def test_shrink_uses_300dpi_and_a_timeout(self, monkeypatch):
+        """Pins the two decisions the spec cares about and that no output-shape
+        assertion can catch: 300 dpi (NOT the /ebook 150 dpi preset — small
+        labels in raster figures have to stay OCR-legible) and a subprocess
+        timeout (without it a pathological PDF hangs the single worker forever).
+        Both are invisible in the returned bytes, so assert on the argv."""
+        import worker.stages.parse as parse
+
+        seen = {}
+        real_run = parse.subprocess.run
+
+        def spy(cmd, **kwargs):
+            seen["cmd"] = cmd
+            seen["kwargs"] = kwargs
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr(parse.subprocess, "run", spy)
+        parse._shrink_pdf(self._raster_pdf())
+
+        for flag in ("-dColorImageResolution=300", "-dGrayImageResolution=300",
+                     "-dMonoImageResolution=300"):
+            assert flag in seen["cmd"], f"{flag} missing — is this still 300 dpi?"
+        assert "-dPDFSETTINGS=/ebook" not in seen["cmd"], "the 150 dpi preset costs OCR legibility"
+        assert seen["kwargs"].get("timeout"), "gs must run under a timeout"
+
+    @pytest.mark.skipif(shutil.which("gs") is None, reason="ghostscript not installed")
+    def test_dropped_pages_are_refused(self, monkeypatch):
+        """Ghostscript exit 0 is not proof of a faithful conversion — gs 10's
+        repair path can drop pages from a damaged source. Truncated text that
+        OCRs cleanly would be cached as complete, so the page count is checked."""
+        import worker.stages.parse as parse
+
+        original = self._raster_pdf()
+
+        def lossy_gs(cmd, **kwargs):
+            # Emulate 'exit 0, fewer pages': a VALID but empty PDF at the output
+            # path (pypdf writes one, so this tests page loss, not corruption).
+            from pypdf import PdfWriter
+            out = Path(cmd[cmd.index("-o") + 1])
+            with open(out, "wb") as fh:
+                PdfWriter().write(fh)
+
+            class _P:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+            return _P()
+
+        monkeypatch.setattr(parse.subprocess, "run", lossy_gs)
+        with pytest.raises(RuntimeError, match="dropped pages"):
+            parse._shrink_pdf(original)
+
+    @pytest.mark.skipif(shutil.which("gs") is None, reason="ghostscript not installed")
+    def test_unreadable_output_is_refused(self, monkeypatch):
+        """The other half: exit 0 with output pypdf cannot parse at all. Those
+        are the bytes we would submit and then cache, so they must not pass."""
+        import worker.stages.parse as parse
+
+        def corrupt_gs(cmd, **kwargs):
+            Path(cmd[cmd.index("-o") + 1]).write_bytes(b"%PDF-1.4\nnot really a pdf\n")
+
+            class _P:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+            return _P()
+
+        monkeypatch.setattr(parse.subprocess, "run", corrupt_gs)
+        with pytest.raises(RuntimeError, match="unreadable PDF"):
+            parse._shrink_pdf(self._raster_pdf())
+
     def test_pdf_under_the_cap_is_submitted_verbatim(self, monkeypatch):
         """No shrink, no Ghostscript, for the overwhelming majority of files."""
         import worker.stages.parse as parse
@@ -206,14 +280,17 @@ class TestOversizedPdfShrink:
         def no_gs(*a, **k):
             raise FileNotFoundError("gs")
         monkeypatch.setattr(parse.subprocess, "run", no_gs)
-        monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", 10)
+        monkeypatch.setattr(parse, "MISTRAL_MAX_BYTES", 50 * 1024 * 1024)
 
-        with pytest.raises(RuntimeError, match="Ghostscript"):
-            parse._shrink_pdf(b"x" * 100)
-        try:
-            parse._shrink_pdf(b"x" * 100)
-        except RuntimeError as exc:
-            assert "0.0 MB" in str(exc), f"the message must name the sizes, got: {exc}"
+        # Sizes chosen so the document (60MB) and the limit (50MB) render as
+        # DIFFERENT strings — otherwise the message could name the wrong number
+        # and still match.
+        with pytest.raises(RuntimeError) as exc:
+            parse._shrink_pdf(b"x" * (60 * 1024 * 1024))
+        msg = str(exc.value)
+        assert "Ghostscript" in msg and "not installed" in msg, msg
+        assert "60.0 MB" in msg, f"must name the document's size: {msg}"
+        assert "50.0 MB" in msg, f"must name the limit: {msg}"
 
     def test_ghostscript_failure_surfaces_exit_code_and_stderr(self, monkeypatch):
         import worker.stages.parse as parse
