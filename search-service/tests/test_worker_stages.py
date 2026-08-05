@@ -562,7 +562,10 @@ class TestParseStage:
         self, tmp_path, stages_test_db, monkeypatch
     ):
         """Running parse twice on the same document upserts — no duplicate-key error
-        and exactly one document_texts row remains."""
+        and exactly one document_texts row remains. Since the parse cache landed
+        the second run takes the cache-hit branch, but the document_texts write
+        happens on every path, so this still exercises the ON CONFLICT clause.
+        The re-PARSE case is covered by TestParseCache's miss tests."""
         intake_dir = tmp_path / "intake"
         intake_dir.mkdir()
         docs_dir = tmp_path / "documents"
@@ -654,6 +657,296 @@ class TestParseStage:
         assert status == "withdrawn", (
             f"a withdrawn doc must not be flipped to needs_review by parse, got {status!r}"
         )
+
+
+class TestParseCache:
+    """Issue #310 follow-up (Fix 1): an unchanged PDF parsed by an unchanged
+    backend must not be re-OCR'd. Validity = same bytes + same parser, recorded
+    in document_texts.parsed_content_hash / parse_backend / parse_model."""
+
+    def _setup_pdf(self, tmp_path, monkeypatch, backend="pypdf"):
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        docs_dir = tmp_path / "documents"
+        docs_dir.mkdir()
+        shutil.copy(_FIXTURE_PDF, docs_dir / "sample.pdf")
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("PARSE_BACKEND", backend)
+        monkeypatch.delenv("FORCE_REPARSE", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+    def _count_llm(self, monkeypatch, calls):
+        """Count metadata-extraction calls; return all-null fields so nothing
+        downstream of the extraction changes."""
+        def fake(system, user, schema, model, max_tokens=1500):
+            calls.append(user)
+            return {f: None for f in schema["properties"]}
+        monkeypatch.setattr("worker.llm.chat_json", fake)
+
+    def _forbid_parse(self, monkeypatch):
+        """Sentinel: any call to the parser (or the byte loader that feeds it)
+        on a cache hit is the bug this fix exists to prevent."""
+        def boom(*a, **k):
+            raise AssertionError("parse cache hit must not re-parse the PDF")
+        monkeypatch.setattr("worker.stages.parse._parse_pdf", boom)
+        monkeypatch.setattr("worker.stages.parse._load_pdf_bytes", boom)
+
+    def _stamps(self, db, doc_id):
+        with psycopg.connect(db) as conn:
+            return conn.execute(
+                """SELECT parsed_content_hash, parse_backend, parse_model, full_text
+                   FROM document_texts WHERE document_id = %s""",
+                (doc_id,),
+            ).fetchone()
+
+    def test_fresh_parse_writes_cache_stamps(self, tmp_path, stages_test_db, monkeypatch):
+        """(d) A first parse stamps the document's content_hash and the parser
+        identity. pypdf has no model, so parse_model is '' — the empty string,
+        not NULL, so a NULL stamp keeps meaning 'never cached'."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        parsed_hash, backend, model, _ = self._stamps(stages_test_db, doc_id)
+        assert parsed_hash == "abc123", f"expected the document's content_hash, got {parsed_hash!r}"
+        assert backend == "pypdf"
+        assert model == ""
+
+    def test_cache_hit_skips_parse_and_reuses_text(self, tmp_path, stages_test_db, monkeypatch):
+        """(a) Second run with unchanged bytes + parser: no download, no OCR,
+        stored text reused — and the metadata-extraction LLM call STILL runs,
+        which is what lets a prompt campaign re-run the cheap stages."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        llm_calls = []
+        self._count_llm(monkeypatch, llm_calls)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+        first_text = self._stamps(stages_test_db, doc_id)[3]
+        assert len(llm_calls) == 1
+
+        self._forbid_parse(monkeypatch)
+        assert run(doc_id) is None, "cache hit must complete the stage normally"
+
+        parsed_hash, backend, model, text = self._stamps(stages_test_db, doc_id)
+        assert text == first_text, "cache hit must reuse the stored text verbatim"
+        assert (parsed_hash, backend, model) == ("abc123", "pypdf", ""), "stamps must survive a cache hit"
+        assert len(llm_calls) == 2, (
+            f"metadata extraction must still run on a cache hit, got {len(llm_calls)} calls"
+        )
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute("SELECT status FROM documents WHERE id=%s", (doc_id,)).fetchone()[0]
+        assert status == "processing", "the cache-hit path must still do the processing bookkeeping"
+
+    def test_cache_miss_on_changed_bytes(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) A version replacement re-stamps documents.content_hash at intake;
+        the stored text is then stale and must be re-parsed."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute("UPDATE documents SET content_hash='different' WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        parsed = []
+        from worker.stages.parse import _parse_pdf as real_parse
+        monkeypatch.setattr("worker.stages.parse._parse_pdf",
+                            lambda c: (parsed.append(1), real_parse(c))[1])
+        assert run(doc_id) is None
+        assert parsed == [1], "changed content_hash must miss the cache"
+        assert self._stamps(stages_test_db, doc_id)[0] == "different", "re-parse re-stamps the new hash"
+
+    def test_cache_miss_on_backend_change(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) A backend flip (pypdf<->mistral) invalidates stored text even
+        though the bytes are unchanged — the two parsers produce different text."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        monkeypatch.setenv("PARSE_BACKEND", "mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        monkeypatch.setattr("worker.stages.parse._parse_pdf_mistral",
+                            lambda content: ("OCR text from mistral", [{"page": 1, "end_pos": 21}]))
+        assert run(doc_id) is None
+
+        parsed_hash, backend, model, text = self._stamps(stages_test_db, doc_id)
+        assert text == "OCR text from mistral", "backend flip must re-parse, not reuse pypdf text"
+        assert (backend, model) == ("mistral", "mistral-ocr-latest"), (
+            f"stamps must record the new parser, got {backend!r}/{model!r}"
+        )
+        assert parsed_hash == "abc123"
+
+    def test_cache_miss_on_model_change(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) Same backend, upgraded OCR model → miss (new model, new text)."""
+        self._setup_pdf(tmp_path, monkeypatch, backend="mistral")
+        monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+        monkeypatch.setenv("MISTRAL_OCR_MODEL", "mistral-ocr-2505")
+        from app.config import get_settings
+        get_settings.cache_clear()
+        self._count_llm(monkeypatch, [])
+        monkeypatch.setattr("worker.stages.parse._parse_pdf_mistral",
+                            lambda content: ("v1 text", [{"page": 1, "end_pos": 7}]))
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+        assert self._stamps(stages_test_db, doc_id)[2] == "mistral-ocr-2505"
+
+        monkeypatch.setenv("MISTRAL_OCR_MODEL", "mistral-ocr-2510")
+        get_settings.cache_clear()
+        monkeypatch.setattr("worker.stages.parse._parse_pdf_mistral",
+                            lambda content: ("v2 text", [{"page": 1, "end_pos": 7}]))
+        assert run(doc_id) is None
+
+        _, _, model, text = self._stamps(stages_test_db, doc_id)
+        assert (model, text) == ("mistral-ocr-2510", "v2 text"), "an OCR model upgrade must re-parse"
+
+    def test_null_stamps_always_miss(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) Every pre-migration row has NULL stamps — that is what makes the
+        migration behavior-neutral. A NULL stamp must never match."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+            conn.execute(
+                """INSERT INTO document_texts (document_id, full_text, page_boundaries, char_count)
+                   VALUES (%s, 'stale pre-migration text', '[]'::jsonb, 24)""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        parsed_hash, backend, _, text = self._stamps(stages_test_db, doc_id)
+        assert text != "stale pre-migration text", "an unstamped row must be re-parsed"
+        assert (parsed_hash, backend) == ("abc123", "pypdf")
+
+    def test_null_content_hash_misses(self, tmp_path, stages_test_db, monkeypatch):
+        """(b) CSV-era documents carry no content_hash: nothing to compare, so
+        the cache can never claim their text is current."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            conn.execute("UPDATE documents SET content_hash=NULL WHERE id=%s", (doc_id,))
+            conn.commit()
+
+        parsed = []
+        from worker.stages.parse import _parse_pdf as real_parse
+        monkeypatch.setattr("worker.stages.parse._parse_pdf",
+                            lambda c: (parsed.append(1), real_parse(c))[1])
+        assert run(doc_id) is None
+        assert parsed == [1], "a NULL content_hash must miss the cache"
+
+    def test_summary_fallback_writes_no_stamps(self, tmp_path, stages_test_db, monkeypatch):
+        """A document with no retrievable PDF falls back to title+summary text.
+        That text was never parsed from bytes, so it must be stamped NULL —
+        stamping it would let the cache serve non-PDF text as OCR output. This
+        path is also the one that CLEARS stamps left by an earlier parse, so the
+        row is seeded with stale ones (a MATCHING stamp would legitimately be
+        served from cache and never reach the fallback)."""
+        intake_dir = tmp_path / "intake"
+        intake_dir.mkdir()
+        monkeypatch.setenv("INTAKE_LOCAL_DIR", str(intake_dir))
+        monkeypatch.delenv("DOCUMENTS_S3_BUCKET", raising=False)
+        monkeypatch.setenv("DOCUMENTS_LOCAL_DIR", str(tmp_path / "nonexistent"))
+        monkeypatch.setenv("PARSE_BACKEND", "pypdf")
+        monkeypatch.delenv("FORCE_REPARSE", raising=False)
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        llm_calls = []
+        self._count_llm(monkeypatch, llm_calls)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(
+                conn, s3_key="documents/missing.pdf",
+                source_metadata={"summary": "A CSV-era summary standing in for the text."},
+            )
+            # Stale stamps from a run against different bytes -> cache miss.
+            conn.execute(
+                """INSERT INTO document_texts
+                       (document_id, full_text, page_boundaries, char_count,
+                        parsed_content_hash, parse_backend, parse_model)
+                   VALUES (%s, 'old parsed text', '[{"page": 1, "end_pos": 15}]'::jsonb, 15,
+                           'stale-hash', 'pypdf', '')""",
+                (doc_id,),
+            )
+            conn.commit()
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        with psycopg.connect(stages_test_db) as conn:
+            parsed_hash, backend, model, text, boundaries = conn.execute(
+                """SELECT parsed_content_hash, parse_backend, parse_model, full_text, page_boundaries
+                   FROM document_texts WHERE document_id = %s""",
+                (doc_id,),
+            ).fetchone()
+        assert "A CSV-era summary" in text, "the fallback text should have replaced the parsed text"
+        assert (parsed_hash, backend, model) == (None, None, None), (
+            f"fallback text must carry no cache stamps, got {parsed_hash!r}/{backend!r}/{model!r}"
+        )
+        assert boundaries == [], "the fallback emits no page boundaries"
+        assert llm_calls == [], "no PDF text, so no metadata extraction call"
+
+    def test_force_reparse_bypasses_the_cache(self, tmp_path, stages_test_db, monkeypatch):
+        """(c) The escape hatch for a deliberate re-OCR (e.g. an OCR quality
+        regression under an unchanged model id)."""
+        self._setup_pdf(tmp_path, monkeypatch)
+        self._count_llm(monkeypatch, [])
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_document(conn, s3_key="documents/sample.pdf")
+
+        from worker.stages.parse import run
+        assert run(doc_id) is None
+
+        monkeypatch.setenv("FORCE_REPARSE", "true")
+        from app.config import get_settings
+        get_settings.cache_clear()
+
+        parsed = []
+        from worker.stages.parse import _parse_pdf as real_parse
+        monkeypatch.setattr("worker.stages.parse._parse_pdf",
+                            lambda c: (parsed.append(1), real_parse(c))[1])
+        assert run(doc_id) is None
+        assert parsed == [1], "FORCE_REPARSE=true must re-parse despite matching stamps"
+        assert self._stamps(stages_test_db, doc_id)[0] == "abc123", "a forced re-parse still stamps"
 
 
 class TestParseTitleAndAuthors:

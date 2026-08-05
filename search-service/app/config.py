@@ -112,6 +112,12 @@ class Settings(BaseSettings):
     # in worker/stages/parse.py — a bare f-string would interpolate the mask.
     mistral_api_key: SecretStr = SecretStr("")
     mistral_ocr_model: str = "mistral-ocr-latest"
+    # Parse cache escape hatch (issue #310 follow-up). The parse stage reuses a
+    # stored document_texts row when its cache stamps match the document's
+    # content_hash and the current backend/model, skipping the download + OCR
+    # call. FORCE_REPARSE=true bypasses the read path for a deliberate re-OCR
+    # (e.g. after an OCR quality regression on an unchanged model id).
+    force_reparse: bool = False
 
     # Bedrock placement for embed-v4 (spec v3 §5): infra is us-east-2 but
     # embed-v4 is not natively there — call the nearest hosting region

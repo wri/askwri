@@ -192,6 +192,70 @@ SELECT n_chunks, avgdl, sparse_dim, built_at FROM keyword_corpus_stats;
 
 ---
 
+## Step 3b (optional, per environment): parse-cache backfill
+
+Only when you are about to run a bulk re-ingest (e.g. a prompt-tuning
+`reingest_all`) and want it to perform **zero OCR calls**. Skip it otherwise —
+the parse cache works without this; new parses stamp themselves, and unstamped
+rows simply miss.
+
+**Environment-specific, deliberately not a migration:** the stamp must name the
+parser that actually produced each row's text, and that differs by environment
+(qa has been fully Mistral-parsed since 2026-07-23; production is not). Never
+stamp an environment `mistral` without confirming its corpus was parsed that
+way — a wrong stamp makes the cache serve stale pypdf text forever.
+
+**The stamp does not track parse *code* version.** If the change you are about
+to deploy alters what `_parse_pdf_pypdf`/`_parse_pdf_mistral` EMIT (the
+2026-07-22 per-page boundary fix is the precedent), a stamped corpus will
+cache-hit and silently keep the old-format text. In that case skip this step and
+run the campaign with `FORCE_REPARSE=true` instead. Same for an OCR upgrade
+delivered under the unchanged `mistral-ocr-latest` alias.
+
+```sql
+-- qa ONLY, after confirming qa's corpus is all-Mistral.
+-- Substitute the worker's live MISTRAL_OCR_MODEL for <model>.
+UPDATE document_texts dt
+SET parsed_content_hash = d.content_hash,
+    parse_backend = 'mistral', parse_model = '<model>'
+FROM documents d
+WHERE d.id = dt.document_id
+  AND d.content_hash IS NOT NULL
+  AND jsonb_array_length(dt.page_boundaries) > 0;
+```
+
+Two rows are deliberately left unstamped, and both keep re-parsing:
+
+- NULL `content_hash` (CSV-era imports) — nothing to compare bytes against.
+- Empty `page_boundaries` — the signature of parse's title+summary fallback for
+  documents with no retrievable PDF. That text was never OCR'd, so stamping it
+  `mistral` would make the cache serve non-PDF text as OCR output forever. Every
+  genuinely parsed row has at least one boundary.
+
+Rollback / invalidate the whole cache:
+
+```sql
+UPDATE document_texts
+SET parsed_content_hash = NULL, parse_backend = NULL, parse_model = NULL;
+```
+
+For a one-off forced re-OCR without touching data, set `FORCE_REPARSE=true` on
+the worker instead. That is not an instant toggle: it lives in
+`terraform/environments/<env>.tfvars` →
+`ingestion_worker_environment_variables`, so it costs a `terraform apply` and a
+task-definition redeploy each way.
+
+Verify — the `GROUP BY` only echoes what the UPDATE just wrote, so it cannot
+catch a wrong `<model>` string. Confirm the cache actually hits by re-ingesting
+one document and looking for `parse cache hit, skipping OCR` in the worker log:
+
+```sql
+SELECT parse_backend, parse_model, count(*)
+FROM document_texts GROUP BY 1, 2;
+```
+
+---
+
 ## Step 4: Push qa
 
 ```bash

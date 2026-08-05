@@ -5,6 +5,16 @@ pages joined with '\n\n', boundaries = [{'page': n, 'end_pos': cumulative}].
 Documents with no retrievable file fall back to title+summary text when the
 document has a long summary (CSV-imported docs); otherwise -> needs_review.
 
+Parse cache (issue #310 follow-up): document_texts carries three stamps
+(parsed_content_hash / parse_backend / parse_model) recording what produced the
+stored text. When they all match the document's current content_hash and the
+worker's current backend/model, this stage reuses the stored text and skips both
+the download and the OCR call — the slowest, costliest stage of a re-ingest.
+Everything downstream (metadata extraction, summarize/classify/embed) still
+runs, so a prompt-tuning campaign re-runs the cheap stages only. The cache
+misses on NULL stamps (pre-existing rows), changed bytes, a backend flip, or an
+OCR model upgrade; FORCE_REPARSE=true bypasses it entirely.
+
 Metadata extraction: uses the LLM (one structured-output chat_json call) to
 extract title, title_en, authors, DOI, year_published, article_type,
 wri_primary_office from the first ~12k chars of the PDF text. DOI is tried via
@@ -239,22 +249,86 @@ def _parse_pdf(content: bytes) -> tuple[str, list]:
     return _parse_pdf_pypdf(content)
 
 
+def _parse_model(settings) -> str:
+    """The parser identity stamped alongside cached text. Empty for pypdf,
+    which has no model — only the backend name distinguishes it.
+
+    The stamp names the backend and the model, NOT this module's code version.
+    Two consequences a future author must act on deliberately:
+      - Changing what _parse_pdf_pypdf/_parse_pdf_mistral EMIT (the 2026-07-22
+        per-page boundary fix is the precedent) does not invalidate anything: a
+        re-ingest would cache-hit and quietly keep the old-format text. Re-run
+        the campaign with FORCE_REPARSE=true, or bump this string.
+      - MISTRAL_OCR_MODEL defaults to the 'mistral-ocr-latest' ALIAS, whose
+        target Mistral can repoint under a stable name. Pin a dated model id
+        per environment if you want an OCR upgrade to invalidate the cache
+        on its own.
+    """
+    return settings.mistral_ocr_model if settings.parse_backend == "mistral" else ""
+
+
+def _cached_parse(conn, doc) -> tuple[str, list] | None:
+    """Reusable stored text for this document, or None (cache miss).
+
+    Cache validity = same bytes + same parser: the stored stamps must match the
+    document's current content_hash AND the worker's current backend/model.
+    Misses on NULL stamps (every pre-Fix-1 row, and CSV-era rows with no
+    content_hash), on changed bytes (a version replacement re-stamps
+    documents.content_hash at intake), on a backend flip, and on an OCR model
+    upgrade. FORCE_REPARSE=true skips the read path entirely.
+    """
+    settings = get_settings()
+    if settings.force_reparse:
+        return None
+    if not doc.get("content_hash"):
+        return None
+    row = conn.execute(
+        """SELECT full_text, page_boundaries, parsed_content_hash, parse_backend, parse_model
+           FROM document_texts WHERE document_id = %s""",
+        (doc["id"],),
+    ).fetchone()
+    if row is None:
+        return None
+    full_text, boundaries, parsed_hash, backend, model = row
+    if parsed_hash is None or parsed_hash != doc["content_hash"]:
+        return None
+    if backend != settings.parse_backend or (model or "") != _parse_model(settings):
+        return None
+    if not (full_text or "").strip():
+        return None
+    return full_text, list(boundaries or [])
+
+
 @stage("parse")
 def run(document_id):
     with get_pool().connection() as conn:
         doc = fetch_document(conn, document_id)
-        content = _load_pdf_bytes(doc)
-        if content is not None:
-            full_text, boundaries = _parse_pdf(content)
+        cached = _cached_parse(conn, doc)
+        content = None
+        if cached is not None:
+            # Unchanged bytes, unchanged parser: reuse the stored text and skip
+            # the download AND the OCR call. Everything downstream still runs —
+            # metadata extraction below, then summarize/classify/embed under
+            # whatever prompts are current. That is the point: a prompt-tuning
+            # re-ingest campaign re-runs the cheap stages, not the OCR.
+            logger.info(f"{doc['external_id']}: parse cache hit, skipping OCR")
+            full_text, boundaries = cached
+            # PDF-derived text, so the LLM metadata extraction below still applies.
+            from_pdf = True
         else:
-            src = doc["source_metadata"] or {}
-            summary = (src.get("metadata") or {}).get("summary") or src.get("summary") or ""
-            if not summary:
-                logger.warning(f"{doc['external_id']}: no file and no summary -> needs_review")
-                conn.execute("UPDATE documents SET status='needs_review', updated_at=now() WHERE id=%s AND status <> 'withdrawn'",
-                             (document_id,))
-                return "needs_review"
-            full_text, boundaries = f"{doc['title']}\n\n{summary}", []
+            content = _load_pdf_bytes(doc)
+            from_pdf = content is not None
+            if content is not None:
+                full_text, boundaries = _parse_pdf(content)
+            else:
+                src = doc["source_metadata"] or {}
+                summary = (src.get("metadata") or {}).get("summary") or src.get("summary") or ""
+                if not summary:
+                    logger.warning(f"{doc['external_id']}: no file and no summary -> needs_review")
+                    conn.execute("UPDATE documents SET status='needs_review', updated_at=now() WHERE id=%s AND status <> 'withdrawn'",
+                                 (document_id,))
+                    return "needs_review"
+                full_text, boundaries = f"{doc['title']}\n\n{summary}", []
         if not full_text.strip():
             # Even with no extractable text, try PDF embedded metadata (pypdf).
             if content is not None:
@@ -291,7 +365,7 @@ def run(document_id):
         # LLM metadata extraction (best-effort). Overwrites a field only when its
         # provenance is NULL or 'llm' — never CSV ('external') or human ('human').
         # On re-ingest, a prior LLM extraction is overwritten (self-correcting).
-        if content is not None and full_text.strip():
+        if from_pdf and full_text.strip():
             try:
                 settings = get_settings()
                 meta = _extract_metadata_llm(full_text, settings.worker_llm_model)
@@ -345,13 +419,26 @@ def run(document_id):
             except Exception:
                 logger.warning(f"{doc['external_id']}: LLM metadata extraction failed (non-fatal)", exc_info=True)
 
+        # Stamp what produced this text (bytes + parser identity) so an
+        # unchanged re-ingest can skip the OCR call. Stamps are NULL when the
+        # text did not come from a hashed PDF (CSV-era summary fallback), which
+        # is exactly the miss the read path wants.
+        settings = get_settings()
+        stamp_hash = doc["content_hash"] if from_pdf else None
         conn.execute(
-            """INSERT INTO document_texts (document_id, full_text, page_boundaries, char_count)
-               VALUES (%s, %s, %s, %s)
+            """INSERT INTO document_texts
+                   (document_id, full_text, page_boundaries, char_count,
+                    parsed_content_hash, parse_backend, parse_model)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
                ON CONFLICT (document_id) DO UPDATE
                SET full_text = EXCLUDED.full_text, page_boundaries = EXCLUDED.page_boundaries,
-                   char_count = EXCLUDED.char_count""",
-            (document_id, full_text, Jsonb(boundaries), len(full_text)),
+                   char_count = EXCLUDED.char_count,
+                   parsed_content_hash = EXCLUDED.parsed_content_hash,
+                   parse_backend = EXCLUDED.parse_backend, parse_model = EXCLUDED.parse_model""",
+            (document_id, full_text, Jsonb(boundaries), len(full_text),
+             stamp_hash,
+             settings.parse_backend if stamp_hash else None,
+             _parse_model(settings) if stamp_hash else None),
         )
         # Record the pre-ingest status on the open job BEFORE flipping to
         # 'processing', so publish can restore a previously-searchable doc
