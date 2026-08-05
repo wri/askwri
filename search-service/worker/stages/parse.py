@@ -405,17 +405,92 @@ def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
     against the live API 2026-08-05) and drops peak memory per parse by ~2
     copies of the file.
     """
-    import requests
-
     settings = get_settings()
     if not settings.mistral_api_key:
         raise RuntimeError("PARSE_BACKEND=mistral requires MISTRAL_API_KEY")
-    if len(content) > MISTRAL_MAX_BYTES:
-        # Shrink only what we submit: S3 and the app keep the original file.
-        # (Note the parse cache does NOT let a shrunk doc coast — its stamp is
-        # tagged SHRINK_POLICY_TAG and never matches, so raising the cap and
-        # re-ingesting really does re-OCR at full resolution.)
-        content = _shrink_pdf(content)
+    if len(content) <= MISTRAL_MAX_BYTES:
+        return mistral_pages_to_text(_mistral_ocr_bytes(settings, content))
+
+    # Oversized. Downsampling first, because it is one API call and it genuinely
+    # works for the high-dpi-imagery case. (The parse cache does NOT let either
+    # path coast — the stamp is tagged SHRINK_POLICY_TAG and never matches, so
+    # raising the cap and re-ingesting really does re-parse at full resolution.)
+    try:
+        shrunk = _shrink_pdf(content)
+        return mistral_pages_to_text(_mistral_ocr_bytes(settings, shrunk))
+    except RuntimeError as exc:
+        logger.info("shrink did not clear the OCR limit (%s) — splitting by pages", exc)
+
+    return mistral_pages_to_text(_ocr_by_parts(settings, content))
+
+
+def _split_pdf(content: bytes, parts: int) -> list[tuple[bytes, int]]:
+    """Split into `parts` contiguous page ranges: [(bytes, page_count), ...]."""
+    import io
+
+    from pypdf import PdfReader, PdfWriter
+
+    reader = PdfReader(io.BytesIO(content))
+    total = len(reader.pages)
+    step = (total + parts - 1) // parts
+    out = []
+    for start in range(0, total, step):
+        writer = PdfWriter()
+        chunk = reader.pages[start:start + step]
+        for page in chunk:
+            writer.add_page(page)
+        buf = io.BytesIO()
+        writer.write(buf)
+        out.append((buf.getvalue(), len(chunk)))
+    return out
+
+
+def _ocr_by_parts(settings, content: bytes) -> list:
+    """OCR a document too large for one request by splitting it on page ranges.
+
+    The lossless fallback for files downsampling cannot fix: the 304-page
+    wri-india-nup-report is 59MB of already-~72dpi imagery, so Ghostscript
+    recovered 2MB at 300 dpi and 3MB at 150 dpi, while /ebook and /screen crashed
+    outright. Nothing is left to downsample; the size is simply page count.
+
+    Page INDICES are rebased onto the whole document as parts are stitched, so
+    citations keep pointing at the right page — a part's page 1 is not the
+    document's page 1.
+    """
+    size = len(content)
+    # Aim comfortably under the cap: parts are uneven (the same file split in two
+    # gave 49.6MB + 9.5MB — technically passing, with 0.4MB of headroom).
+    target = int(MISTRAL_MAX_BYTES * 0.9)
+    for parts in range(2, 11):
+        pieces = _split_pdf(content, parts)
+        largest = max(len(b) for b, _ in pieces)
+        if largest <= target:
+            logger.info("split %s MB document into %d parts (largest %s MB)",
+                        _mb(size), len(pieces), _mb(largest))
+            break
+    else:
+        raise RuntimeError(
+            f"could not split a {_mb(size)} MB PDF into parts under the "
+            f"{_mb(MISTRAL_MAX_BYTES)} MB OCR limit even at 10 parts — a single "
+            "page may exceed the limit"
+        )
+
+    pages, page_offset = [], 0
+    for i, (part_bytes, page_count) in enumerate(pieces, start=1):
+        logger.info("OCR part %d/%d (%s MB, %d pages)",
+                    i, len(pieces), _mb(len(part_bytes)), page_count)
+        for page in _mistral_ocr_bytes(settings, part_bytes):
+            page = dict(page)
+            page["index"] = int(page.get("index", 0)) + page_offset
+            pages.append(page)
+        page_offset += page_count
+    return pages
+
+
+def _mistral_ocr_bytes(settings, content: bytes) -> list:
+    """Upload one PDF, OCR it, delete the upload; return the raw `pages` array."""
+    import requests
+
     file_id, signed_url = mistral_upload_and_sign(settings, "document.pdf", content)
     try:
         r = requests.post(
@@ -426,7 +501,7 @@ def _parse_pdf_mistral(content: bytes) -> tuple[str, list]:
             timeout=MISTRAL_OCR_TIMEOUT,
         )
         r.raise_for_status()
-        return mistral_pages_to_text(r.json().get("pages", []))
+        return r.json().get("pages", [])
     finally:
         _mistral_delete_file(settings, file_id)
 
