@@ -21,6 +21,7 @@ const docs = [
     language: 'en',
     status: 'searchable',
     yearPublished: 2021,
+    createdAt: '2026-08-01T12:00:00.000Z',
   },
   {
     id: 'd2',
@@ -30,6 +31,7 @@ const docs = [
     language: 'es',
     status: 'needs_review',
     yearPublished: 2020,
+    createdAt: '2026-07-15T12:00:00.000Z',
   },
 ]
 
@@ -43,6 +45,7 @@ const zhDoc = {
   language: 'zh',
   status: 'searchable',
   yearPublished: 2024,
+  createdAt: '2026-07-20T12:00:00.000Z',
 }
 
 // Capture every documents-list URL adminFetch requests so we can assert the query string.
@@ -171,6 +174,22 @@ describe('CatalogPage — URL-driven view state (jsdom)', () => {
     const cleared = mockReplace.mock.calls.at(-1)![0] as string
     expect(cleared).not.toContain('sort=')
     expect(cleared).not.toContain('dir=')
+  })
+
+  it('renders a sortable Uploaded column showing created_at (#310)', async () => {
+    renderPage()
+    await screen.findByText('Alpha')
+    // Each row shows its upload date (locale-formatted from createdAt).
+    expect(
+      screen.getByText(
+        new Date('2026-08-01T12:00:00.000Z').toLocaleDateString(),
+      ),
+    ).toBeInTheDocument()
+    // The header sorts by created_at through the URL like other columns.
+    fireEvent.click(screen.getByRole('button', { name: /^Uploaded/ }))
+    expect(mockReplace.mock.calls.at(-1)![0]).toMatch(
+      /sort=created_at.*dir=asc|dir=asc.*sort=created_at/,
+    )
   })
 
   it('preserves an inbound ?collectionId= deep link in the list request', async () => {

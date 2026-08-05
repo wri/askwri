@@ -17,6 +17,7 @@ interface DocItem {
   language: string | null
   status: string
   yearPublished: number | null
+  createdAt: string
 }
 
 interface Collection {
@@ -38,14 +39,15 @@ const cell: React.CSSProperties = {
   borderBottom: '1px solid #eee',
 }
 
-// Only Title/Status/Year are sortable; created_at is the implicit default order
-// (no sort param) and never appears as a clickable header.
+// created_at is also the implicit default order when no sort param is set
+// (newest first), so the Uploaded column matches what an unsorted view shows.
 const COLUMNS: { label: string; sortKey: string | null }[] = [
   { label: 'External ID', sortKey: null },
   { label: 'Title', sortKey: 'title' },
   { label: 'Language', sortKey: null },
   { label: 'Status', sortKey: 'status' },
   { label: 'Year', sortKey: 'year_published' },
+  { label: 'Uploaded', sortKey: 'created_at' },
 ]
 
 const CatalogInner = () => {
@@ -522,6 +524,11 @@ const CatalogInner = () => {
                   <StatusChip status={doc.status} />
                 </td>
                 <td style={cell}>{doc.yearPublished ?? '—'}</td>
+                <td style={{ ...cell, whiteSpace: 'nowrap' }}>
+                  {doc.createdAt
+                    ? new Date(doc.createdAt).toLocaleDateString()
+                    : '—'}
+                </td>
               </tr>
             ))}
           </tbody>
