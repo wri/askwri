@@ -12,12 +12,68 @@
 import { NextRequest, NextResponse } from 'next/server'
 import path from 'node:path'
 import fs from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { promisify } from 'node:util'
+import { gzip } from 'node:zlib'
 import { initializeDatabase } from '../../../db/data-source'
 import { getCatalogItems } from '../../../db/queries/getCatalogItems'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+const gzipAsync = promisify(gzip)
+
+// The catalog only changes on ingest, so short-lived shared caching is safe;
+// the ETag turns repeat sessions into 304s (issue #302).
+const CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
+
+/**
+ * Serialize the catalog payload with caching + compression headers.
+ * Next's built-in `compress` never gzips App Router route-handler responses
+ * (vercel/next.js#73693), so gzip is applied here to hold end to end
+ * through the ALB. The ETag hashes the content-bearing fields only —
+ * `updatedAt` changes per request and must not break 304 revalidation.
+ */
+async function catalogResponse(
+  req: NextRequest,
+  payload: { ok: true; count: number; items: unknown[]; source: string },
+): Promise<NextResponse> {
+  const etag = `"${createHash('sha256')
+    .update(JSON.stringify(payload))
+    .digest('hex')}"`
+  const headers: Record<string, string> = {
+    'Cache-Control': CACHE_CONTROL,
+    ETag: etag,
+    Vary: 'Accept-Encoding',
+  }
+
+  const ifNoneMatch = req.headers.get('if-none-match')
+  const matches = (ifNoneMatch ?? '')
+    .split(',')
+    .some((tag) => tag.trim().replace(/^W\//, '') === etag)
+  if (matches) {
+    return new NextResponse(null, { status: 304, headers })
+  }
+
+  const body = JSON.stringify({
+    ok: payload.ok,
+    count: payload.count,
+    updatedAt: new Date().toISOString(),
+    items: payload.items,
+    source: payload.source,
+  })
+  headers['Content-Type'] = 'application/json'
+  const acceptsGzip = /(^|,)\s*gzip\s*(;|,|$)/i.test(
+    req.headers.get('accept-encoding') ?? '',
+  )
+  if (!acceptsGzip) {
+    return new NextResponse(body, { headers })
+  }
+  const compressed = await gzipAsync(Buffer.from(body))
+  headers['Content-Encoding'] = 'gzip'
+  return new NextResponse(new Uint8Array(compressed), { headers })
+}
 
 function norm(s: string) {
   return s.trim().toLowerCase()
@@ -141,7 +197,7 @@ function normalizeRow(row: Record<string, string>) {
   return { file_id, file_name, external_file_id, meta }
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     // Postgres is the default catalog source now that the corpus lives in
     // the database. CSV fallback is only for the legacy retrieval backend
@@ -172,10 +228,9 @@ export async function GET(_req: NextRequest) {
         uniq.push(it)
       }
 
-      return NextResponse.json({
+      return catalogResponse(req, {
         ok: true,
         count: uniq.length,
-        updatedAt: new Date().toISOString(),
         items: uniq,
         source: path.basename(p),
       })
@@ -184,10 +239,9 @@ export async function GET(_req: NextRequest) {
     // Default: postgres
     await initializeDatabase()
     const items = await getCatalogItems()
-    return NextResponse.json({
+    return catalogResponse(req, {
       ok: true,
       count: items.length,
-      updatedAt: new Date().toISOString(),
       items,
       source: 'postgres',
     })
