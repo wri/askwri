@@ -50,10 +50,59 @@ mirrors qa.
 
 ---
 
+> **REVISED 2026-08-05 — read this before the steps below.** This runbook was
+> written assuming prod had already completed the Phase 0 cutover and was
+> serving from Postgres with a `text-embedding-3-small` corpus. **It has not.**
+> Verified against prod on 2026-08-05:
+>
+> | Check | Prod's actual state |
+> |---|---|
+> | `migrations` applied | **7**, all Feb–Mar 2026 (`1772…`/`1773…`) — qa has 22 |
+> | `documents` table | **does not exist** |
+> | pgvector extension | **not installed** on the `production` database |
+> | Tables present | only 6, all telemetry: `answer_mode_feedback`, `answer_mode_query_logs`, `cite_mode_feedback`, `cite_mode_query_logs`, `user_feedback`, `migrations` |
+> | Services | app + search-service only — **no ingestion worker** |
+> | Search backend env | no `DATABASE_URL`/`RETRIEVAL_BACKEND`/`KEYWORD_BACKEND`/`EMBEDDING_MODEL`/`PARSE_BACKEND` → still **legacy** (CSV + in-memory) |
+>
+> Consequences, all of which make the job easier except the first:
+>
+> - **Phase 1 is bigger than written.** Prod needs `CREATE EXTENSION vector` and
+>   **15** migrations to reach qa's 22, not a short catch-up.
+> - **Step 0's "prod corpus is disposable" is moot** — there is no prod corpus.
+>   Same for the Phase 2 step 4 backup and the step 7 3-small index retirement:
+>   both are no-ops. Nothing to reconcile, nothing to merge.
+> - **Protect the six telemetry tables.** They hold real production history and
+>   are the only thing in that database worth keeping. They are already absent
+>   from the clone list below — keep it that way, and never restore a whole-
+>   database dump over `production`.
+> - **Prod and qa share one RDS instance** (`askwri-db1…`), databases
+>   `production` and `qa`. The clone is a local operation on one server.
+> - **Prod and qa share one S3 bucket** (`askwri-data`). The PDFs are already in
+>   place; the Step 0 bucket check below is satisfied by construction.
+>
+> Also since this runbook was written (#314/#315, 2026-08-05):
+>
+> - `document_texts` carries parse-cache stamps, and the clone brings them, so
+>   **a prod re-ingest performs zero OCR**. Keep `FORCE_REPARSE` unset on prod or
+>   that inheritance is thrown away and you pay for a full re-OCR.
+> - Every qa document now has a `content_hash`, so prod inherits working
+>   corpus-wide duplicate detection from day one. (Hashing qa's corpus found 4
+>   byte-identical duplicate pairs, since withdrawn.)
+> - The worker image ships Ghostscript and a page-split fallback, so prod can
+>   ingest PDFs over Mistral's 50MB limit. The upload cap is 100MB and
+>   `proxyClientMaxBodySize` is 105mb — the proxy buffer is held per in-flight
+>   request, so check prod's app task memory before assuming that is free.
+> - The counts quoted below (168 docs, 27,878 chunks) are **stale and will stale
+>   again**. Derive them from qa at cutover time; do not trust this document.
+
 ## Step 0 — preconditions (confirm / provision before touching prod)
 
-- [ ] **Prod corpus is disposable.** The clone clobbers prod's current corpus.
-      Confirm there is nothing in prod's `documents`/chunks worth keeping.
+- [ ] **Prod corpus is disposable.** No longer applicable — prod has no corpus
+      tables at all (see the 2026-08-05 revision note). Confirm this is still
+      true rather than assuming it.
+- [ ] **pgvector installed on the `production` database** —
+      `CREATE EXTENSION IF NOT EXISTS vector;`. It is available on the instance
+      (qa uses it) but extensions are per-database.
 - [ ] **Prod org Mistral key provisioned** (Mistral console, org/team — never a
       personal key). This is for *going-forward* ingestion, not for the clone.
 - [ ] **Confirm prod topology** (read-only): prod `/health` + a
@@ -65,9 +114,24 @@ mirrors qa.
       not a blocker — but "view PDF" links and any future *re-ingest* of a cloned
       doc resolve `documents.s3_key` against this bucket. If it differs, view
       links break until the bucket is synced; search is unaffected.
-- [ ] **qa is in its validated final state** (post-Phase-D, verified
-      2026-07-23): 168 docs, 27,878 chunks, 100% cohere, 168/168 Mistral, sparse
-      rebuilt. This is the clone source of truth.
+- [ ] **qa is in its validated final state.** This is the clone source of truth.
+      Do NOT copy a count from this document — read it from qa at cutover time:
+
+      ```sql
+      SELECT count(*) FILTER (WHERE status <> 'withdrawn') AS active_docs,
+             (SELECT count(*) FROM document_chunks) AS chunks,
+             (SELECT count(*) FROM document_chunks WHERE embedding IS NULL) AS null_embed,
+             (SELECT count(*) FROM document_chunks WHERE sparse IS NULL) AS null_sparse,
+             (SELECT count(*) FROM document_texts WHERE parsed_content_hash IS NULL) AS uncached
+      FROM documents;
+      ```
+
+      `null_embed` and `null_sparse` must be 0. `uncached` should be 0 for active
+      documents, or prod inherits an incomplete parse cache.
+- [ ] **qa's sparse lane is freshly rebuilt.** After any bulk re-ingest,
+      `scripts/build_sparse_keyword.py` must have been re-run — the embed stage
+      assigns new tokens `df=1` from FROZEN stats, so a campaign leaves both the
+      stats and those tokens drifted. Cloning a drifted qa copies the drift.
 
 ---
 
@@ -92,11 +156,19 @@ mirrors qa.
    `bedrock:InvokeModel` + `bedrock:Rerank` to prod's task role (same shared
    terraform as qa) before the ECS deploy, per `needs: deploy-infrastructure`.
 3. **Apply migrations on prod** — `with-remote-env.sh production npm run
-   migration:run` (CI does NOT run migrations). Brings prod's schema to qa's
-   (cohere HNSW partial index, etc.). The conditional 3-small-drop migration
-   `1784815300000` **no-ops here** — prod's corpus is still 3-small at this
-   point, so it keeps the index and raises a NOTICE. It drops after the clone
-   (Phase 2 step 7).
+   migration:run` (CI does NOT run migrations). This is **15 migrations**, not a
+   short catch-up: prod is at 7 (Feb–Mar 2026) and qa is at 22. Run
+   `migration:show` first and confirm the pending list before applying.
+
+   `CREATE EXTENSION vector` must already have happened (Step 0) — the Phase 0
+   schema migration creates `vector`/`sparsevec` columns and fails without it.
+
+   Two migrations in that run do more than add columns, and both are safe here
+   precisely because prod has no corpus:
+   - `1785916800000` remaps retired "WRI Ross Center" office values. On prod it
+     matches 0 rows.
+   - `1784815300000` conditionally drops the 3-small index. On prod it no-ops —
+     there is no 3-small corpus. Phase 2 step 7 is therefore also a no-op.
 
 After Phase 1 prod can serve and ingest like qa — it is just still holding its
 old corpus.
@@ -112,14 +184,26 @@ old corpus.
      `document_summaries`, `keyword_vocab`, `keyword_corpus_stats`, `tags`,
      `document_tags`, `collections`, `document_collections`.
    - **Do NOT clone:** `users`, `audit_log` (prod keeps its own auth + history),
-     `ingestion_jobs` (transient — prod starts fresh).
+     `ingestion_jobs` (transient — prod starts fresh), and the six telemetry
+     tables (`answer_mode_feedback`, `answer_mode_query_logs`,
+     `cite_mode_feedback`, `cite_mode_query_logs`, `user_feedback`,
+     `migrations`) — those are prod's real production history and the only data
+     in that database worth protecting. Clone by explicit table list; never
+     restore a whole-database dump over `production`.
    - Mechanics: `pg_dump --data-only` the tables from qa → truncate prod's
      targets → load in FK-dependency order (or `--disable-triggers`). At ~28k
      chunks the cohere HNSW index builds on load; drop-load-recreate the index if
      you want it faster.
-6. **Verify prod now equals qa:** 168 docs, 27,878 chunks, 100% cohere, 0 null
-   embedding/sparse, all `searchable`; language distribution matches
-   (en 139, zh 16, es 9, pt 3, id 1).
+6. **Verify prod now equals qa:** re-run Step 0's count query against BOTH
+   databases and diff the results — the numbers must match each other, not the
+   stale figures once quoted here (168 docs / 27,878 chunks, correct as of
+   2026-07-23 and wrong since). Also confirm 100% cohere, 0 null
+   embedding/sparse, and a matching language distribution.
+
+   Add one check this runbook predates: `document_texts.parsed_content_hash`
+   should be non-NULL for every active document on prod. That is the inherited
+   parse cache — if it is NULL, prod will re-OCR the entire corpus on its first
+   re-ingest.
    - **No sparse rebuild needed.** `keyword_vocab`, `keyword_corpus_stats`, and
      `document_chunks.sparse` all came from qa together, so the sparse lane is
      internally consistent. (This is the clone's advantage over a replay — a
