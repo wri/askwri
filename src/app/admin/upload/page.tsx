@@ -18,6 +18,15 @@ interface WorkerHealth {
 
 // A file the user uploaded this session. In-memory only (gone on page leave,
 // per the approved scope). Tracked until it reaches a terminal state.
+// What the worker recorded this upload as a duplicate OF, when it can be
+// resolved. The dedup decision lives in audit_log, not on any documents row —
+// the rejected upload never gets one (worker/intake_s3.py:28-35).
+interface DuplicateOf {
+  externalId: string
+  docId: string | null
+  title: string | null
+}
+
 interface UploadEntry {
   filename: string
   stem: string
@@ -25,6 +34,9 @@ interface UploadEntry {
   docId: string | null
   docStatus: string | null // null until a documents row with external_id === stem appears
   likelyDuplicate: boolean
+  // null = not looked up yet or no audit row found. A resolved value turns the
+  // "likely duplicate" inference into a stated fact with a target.
+  duplicateOf: DuplicateOf | null
 }
 
 const STATUS_STYLES: Record<
@@ -162,6 +174,7 @@ const UploadPage = () => {
                 docId: null,
                 docStatus: null,
                 likelyDuplicate: false,
+                duplicateOf: null,
               })),
             ])
           } catch (err: any) {
@@ -269,7 +282,21 @@ const UploadPage = () => {
             backlog === 0 &&
             Date.now() - e.uploadedAt > DUPLICATE_TIMEOUT_MS
           ) {
-            updates.set(keyOf(e), { likelyDuplicate: true })
+            // Ask what it duplicated. The audit row names the match; resolving
+            // it turns the inference into a fact the user can go look at. A
+            // miss here is expected and non-fatal — the file may have failed
+            // to register for some other reason — so the hedged label stays
+            // as the fallback.
+            let duplicateOf: DuplicateOf | null = null
+            try {
+              const dup = await adminFetch<{ duplicate: DuplicateOf | null }>(
+                `/api/admin/intake/duplicate?filename=${encodeURIComponent(e.filename)}`,
+              )
+              duplicateOf = dup.duplicate
+            } catch {
+              // leave null; the label falls back to the inference wording
+            }
+            updates.set(keyOf(e), { likelyDuplicate: true, duplicateOf })
           }
         }),
       )
@@ -298,13 +325,21 @@ const UploadPage = () => {
         </Tooltip>
       </Heading>
       <Text style={{ marginBottom: 16, color: '#555' }}>
-        Select one or more PDF files (max 50MB each — the OCR service rejects
-        larger files; see the{' '}
+        Select one or more PDF files (max 100MB each). Files over 50MB are
+        handled automatically — the OCR service caps out at 50MB, so the worker
+        downsamples the imagery and, if that is not enough, splits the document
+        by pages. Very large image-heavy PDFs near the 100MB ceiling can still
+        exceed the limit after both; those fail with a message naming the sizes
+        in the{' '}
+        <Link href='/admin/review' style={{ textDecoration: 'underline' }}>
+          review queue
+        </Link>
+        , and the{' '}
         <Link href='/admin/guide' style={{ textDecoration: 'underline' }}>
           guide
         </Link>{' '}
-        for how to compress a bigger PDF). They will be placed in the intake
-        queue and registered by the ingestion worker automatically.{' '}
+        covers how to compress one. They will be placed in the intake queue and
+        registered by the ingestion worker automatically.{' '}
         <strong>
           If a file is identical to a document already in the system, it is
           silently skipped as a duplicate
@@ -435,8 +470,38 @@ const UploadPage = () => {
                       open →
                     </Link>
                   </>
+                ) : e.likelyDuplicate && e.duplicateOf?.docId ? (
+                  // Resolved: the worker recorded exactly what this duplicated.
+                  // New tab so the user keeps this list — the uploads are
+                  // in-memory only and navigating away loses them.
+                  <>
+                    <span style={{ color: '#8a5a15', fontWeight: 600 }}>
+                      duplicate of
+                    </span>
+                    <a
+                      href={`/admin/documents/${e.duplicateOf.docId}`}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      style={{
+                        textDecoration: 'underline',
+                        maxWidth: 320,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={e.duplicateOf.title ?? e.duplicateOf.externalId}
+                    >
+                      {e.duplicateOf.title ?? e.duplicateOf.externalId} →
+                    </a>
+                  </>
                 ) : e.likelyDuplicate ? (
-                  <Tooltip help='Not registered after 90s and the intake queue is empty — the worker most likely skipped this file as a content-hash duplicate of a document already in the system. This is an inference (dedup-skip is not queryable per file). To re-process, use Re-ingest on the existing document.'>
+                  <Tooltip
+                    help={
+                      e.duplicateOf
+                        ? `The worker skipped this as a duplicate of "${e.duplicateOf.externalId}", but that document is no longer in the system — it was deleted after the dedup check. Nothing to open.`
+                        : 'Not registered after 90s and the intake queue is empty — the worker most likely skipped this file as a content-hash duplicate. No dedup record was found for this filename, so it may instead have failed to register for another reason; check the review queue and the worker logs.'
+                    }
+                  >
                     <span style={{ color: '#8a5a15', fontWeight: 600 }}>
                       likely duplicate
                     </span>

@@ -57,6 +57,36 @@ describe('POST /api/admin/intake limits', () => {
     expect(body.error).toContain('too large')
   })
 
+  // Intake is excluded from the proxy matcher (src/proxy.ts) so Next never
+  // tees its body into memory. That removed an accidental ceiling: the tee
+  // stopped pushing chunks past proxyClientMaxBodySize, which crudely bounded
+  // what formData() could ever materialize. Nothing bounds it now — and the
+  // per-file MAX_FILE_BYTES check cannot, because it runs only after
+  // formData() has already built every File in memory. Content-Length is the
+  // one bound available before that allocation.
+  it('413s on an oversized Content-Length before parsing the body', async () => {
+    const req = intakeReq([pdfNamed('a.pdf')])
+    req.headers.set('content-length', String(200 * 1024 * 1024))
+    const res = await intakeRoute(req)
+    expect(res.status).toBe(413)
+    const body = await res.json()
+    expect(body.error).toContain('too large')
+  })
+
+  it('does not reject a request whose Content-Length is within the cap', async () => {
+    const req = intakeReq([pdfNamed('a.pdf')])
+    req.headers.set('content-length', String(1024))
+    const res = await intakeRoute(req)
+    expect(res.status).not.toBe(413)
+  })
+
+  it('still parses when Content-Length is absent (chunked upload)', async () => {
+    const req = intakeReq([pdfNamed('a.pdf')])
+    req.headers.delete('content-length')
+    const res = await intakeRoute(req)
+    expect(res.status).not.toBe(413)
+  })
+
   it('400s when the content is not a PDF (magic bytes)', async () => {
     const fake = new File(['hello world, definitely not a pdf'], 'fake.pdf', {
       type: 'application/pdf',
@@ -121,13 +151,16 @@ describe('isUuid', () => {
 })
 
 describe('upload size caps stay consistent', () => {
-  // Issue #310: the auth middleware buffers request bodies, and a body above
-  // proxyClientMaxBodySize is TRUNCATED before the intake route ever runs —
-  // surfacing as a garbled multipart / generic 500 rather than the friendly
-  // "too large" 400. So the proxy cap must always exceed the intake cap plus
-  // multipart overhead. Raising one alone silently reintroduces that bug, which
-  // no other test would catch: the intake route's own tests construct Files
-  // directly and never traverse the proxy.
+  // NOTE: proxyClientMaxBodySize no longer governs intake. The route is
+  // excluded from the proxy matcher (src/proxy.ts), so Next never tees its
+  // body and never truncates it — that was the issue #310 mechanism, and it is
+  // gone for this path. MAX_REQUEST_BYTES in the route is what bounds the body
+  // now, covered by the Content-Length tests above.
+  //
+  // The assertion below is kept because the setting still applies to the
+  // routes that ARE matched (/api/import-documents takes a JSON row batch),
+  // and because a future edit that re-adds intake to the matcher would
+  // reintroduce the coupling. It is a floor, not the intake contract.
   const MAX_FILE_BYTES = 100 * 1024 * 1024
 
   it('proxyClientMaxBodySize exceeds MAX_FILE_BYTES', () => {

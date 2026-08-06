@@ -18,20 +18,50 @@ const MAX_FILES = 20
 // the OCR submission while S3 keeps the original file (#310 follow-up, Fix 2).
 // Measured on an 85MB 90-page image-heavy PDF: 23MB out in 13s, no pages lost.
 //
-// This cap must stay <= next.config.js experimental.proxyClientMaxBodySize minus
-// multipart overhead — bodies above THAT cap are truncated by the auth
-// middleware's buffer before this route runs and fail as garbled multipart /
-// generic 500 (issue #310). Raise them together, never one alone.
+// This route is EXCLUDED from the proxy matcher (src/proxy.ts), so
+// next.config.js experimental.proxyClientMaxBodySize does NOT apply here and
+// no longer has to stay above this cap. It used to: the proxy's body tee
+// truncated anything larger, which is what made >10MB uploads fail as garbled
+// multipart / generic 500 (issue #310). The exclusion removed both the
+// truncation and the two in-memory copies that OOM-killed the 512MB qa task.
+// MAX_REQUEST_BYTES below is what bounds the body now.
 //
 // Above 100MB the shrink may not reach 50MB; the worker then fails the job with
 // a message naming the sizes, which surfaces in the review queue.
 const MAX_FILE_BYTES = 100 * 1024 * 1024
+// Content-Length ceiling for one request. The client sends one file per
+// request, so this is MAX_FILE_BYTES plus room for multipart framing
+// (boundaries, headers, the filename) rather than a multiple of it.
+const MAX_REQUEST_BYTES = MAX_FILE_BYTES + 5 * 1024 * 1024
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d] // "%PDF-"
 
 export async function POST(req: NextRequest) {
   const { identity, response } = await requireIdentity(req)
   if (response) return response
   try {
+    // Reject on Content-Length BEFORE formData(), which materializes every
+    // part in memory at once. The per-file MAX_FILE_BYTES check below cannot
+    // do this job: a multipart part has no size until it has been fully
+    // received, so by the time file.size is readable the allocation already
+    // happened. This is the only bound left in front of that allocation —
+    // intake is excluded from the proxy matcher, so Next's body tee (and with
+    // it proxyClientMaxBodySize) never sees this route.
+    //
+    // The cap is per REQUEST, and the upload client sends one file per
+    // request, so MAX_FILE_BYTES plus multipart overhead is the right ceiling.
+    // Absent/unparseable Content-Length falls through: it is a hint, not a
+    // guarantee (chunked encoding omits it), and the per-file check still
+    // backstops correctness. This bounds the honest case, not the hostile one.
+    const declaredLength = Number(req.headers.get('content-length'))
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `request too large (max ${MAX_FILE_BYTES / 1024 / 1024}MB per file)`,
+        },
+        { status: 413 },
+      )
+    }
     const form = await req.formData()
     const files = form
       .getAll('files')

@@ -18,7 +18,15 @@ listener_rule_priority = 200
 # ECS Configuration
 container_port   = 3000
 container_cpu    = 256   # 0.25 vCPU
-container_memory = 512   # 512 MB
+# TEMPORARY (2026-08-06): raised 512 -> 2048 to get the Spanish transport batch
+# uploaded. At 512MB a 79MB PDF OOM-killed the task three times (exit 137,
+# "OutOfMemoryError", tasks 6a622d0/91712b0) — one upload holds the file in
+# memory up to 4x, and desired_count=1 makes every OOM a site-wide 502.
+# 2048 is the Fargate maximum for 256 CPU units.
+# DIAL BACK to 512 once the doc-upload push is done AND the per-request copies
+# are gone (proxy matcher fix: shipped; streaming upload in the route: not yet).
+# Reverting before the route streams to S3 re-opens the same OOM.
+container_memory = 2048  # 2 GB
 desired_count    = 1     # Lower for QA
 min_capacity     = 1
 max_capacity     = 1
