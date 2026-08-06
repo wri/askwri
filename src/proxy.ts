@@ -60,5 +60,23 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*', '/api/import-documents'],
+  // /api/admin/intake is deliberately excluded (the `(?!intake$)` lookahead).
+  // Matching it here does not just run this function — next-server tees the
+  // whole request body into two in-memory PassThroughs before calling the
+  // handler (next/dist/server/body-streams.js:87-101), and this proxy never
+  // reads its copy, so nothing drains it. That doubled a 79MB upload to ~158MB
+  // of buffer on the 512MB qa task and OOM-killed it (exit 137, 2026-08-06):
+  // with desired_count=1 every request 502s until the replacement task passes
+  // health checks, which is why small files in the same batch failed too.
+  //
+  // Auth is NOT weakened: the route calls requireIdentity() itself
+  // (app/api/admin/intake/route.ts:32), which is stricter than this proxy —
+  // it revalidates the session against the users table so deactivations take
+  // effect immediately. Any new unauthenticated route must not be added under
+  // this exemption. Covered by __tests__/proxy-matcher.test.ts.
+  matcher: [
+    '/admin/:path*',
+    '/api/admin/((?!intake$).*)',
+    '/api/import-documents',
+  ],
 }
