@@ -420,6 +420,85 @@ describe('UploadPage — polling + likely-duplicate', () => {
     expect(fetchMock.mock.calls.length).toBe(callsAtTerminal)
   })
 
+  // The worker records WHAT a skipped upload duplicated in audit_log; the page
+  // resolves it so the user can open the match instead of hunting for it.
+  it('links to the duplicated document when the dedup record resolves', async () => {
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
+      if (url === '/api/admin/intake')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: ['dup.pdf'] }),
+        })
+      if (url.startsWith('/api/admin/intake/duplicate'))
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              duplicate: {
+                externalId: 'existing-doc',
+                docId: 'doc-id-9',
+                title: 'An Existing Report',
+              },
+            }),
+        })
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, items: [] }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+    await dropOne('dup.pdf')
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(100000)
+    })
+
+    // Looked up by the filename as written to intake/, not the stem.
+    expect(
+      fetchMock.mock.calls.some((c) =>
+        String(c[0]).includes('filename=dup.pdf'),
+      ),
+    ).toBe(true)
+
+    const link = screen.getByRole('link', { name: /An Existing Report/ })
+    expect(link).toHaveAttribute('href', '/admin/documents/doc-id-9')
+    // New tab: the uploads list is in-memory and navigating away loses it.
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+    expect(screen.getByText(/duplicate of/i)).toBeInTheDocument()
+  })
+
+  it('keeps the hedged label when no dedup record is found', async () => {
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/worker-health') return Promise.resolve(healthOk)
+      if (url === '/api/admin/intake')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, uploaded: ['dup.pdf'] }),
+        })
+      if (url.startsWith('/api/admin/intake/duplicate'))
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, duplicate: null }),
+        })
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, items: [] }),
+      })
+    })
+    global.fetch = fetchMock as any
+    renderPage()
+    await dropOne('dup.pdf')
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(100000)
+    })
+
+    expect(screen.getByText(/likely duplicate/i)).toBeInTheDocument()
+    expect(screen.queryByText(/duplicate of/i)).not.toBeInTheDocument()
+  })
+
   it('re-arms polling when a new batch arrives after all entries are terminal', async () => {
     let uploadName = 'dup1.pdf'
     const fetchMock = jest.fn((url: string) => {

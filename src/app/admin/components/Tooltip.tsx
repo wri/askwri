@@ -1,6 +1,10 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
+
+const MAX_WIDTH = 280
+// Keep the panel off the very edge of the window.
+const VIEWPORT_MARGIN = 8
 
 /**
  * Tooltip / HelpHint — an inline help marker with a keyboard-, touch-, and
@@ -24,9 +28,34 @@ export const Tooltip = ({
 }) => {
   const id = useId()
   const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  // Left-anchored by default; flipped to right-anchored when a left-anchored
+  // panel would run past the viewport. These tooltips sit in a right-aligned
+  // status column, where left-anchoring pushed most of the text off-screen.
+  const [alignRight, setAlignRight] = useState(false)
+
+  // Measure rather than assume: the trigger's position depends on the row it
+  // lands in and on the window width, neither of which is knowable statically.
+  const place = useCallback(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const { left } = el.getBoundingClientRect()
+    setAlignRight(left + MAX_WIDTH + VIEWPORT_MARGIN > window.innerWidth)
+  }, [])
+
+  // Before paint, so the panel never appears in the wrong place first.
+  useLayoutEffect(() => {
+    if (!open) return
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [open, place])
 
   return (
-    <span style={{ position: 'relative', display: 'inline-block' }}>
+    <span
+      ref={wrapRef}
+      style={{ position: 'relative', display: 'inline-block' }}
+    >
       <button
         type='button'
         aria-describedby={id}
@@ -59,7 +88,7 @@ export const Tooltip = ({
         id={id}
         style={{
           position: 'absolute',
-          left: 0,
+          ...(alignRight ? { right: 0 } : { left: 0 }),
           top: '100%',
           marginTop: 4,
           zIndex: 10,
@@ -72,7 +101,9 @@ export const Tooltip = ({
           fontWeight: 400,
           lineHeight: 1.4,
           width: 'max-content',
-          maxWidth: 280,
+          // Never wider than the viewport allows, so a narrow window clamps
+          // instead of overflowing.
+          maxWidth: `min(${MAX_WIDTH}px, calc(100vw - ${VIEWPORT_MARGIN * 2}px))`,
           whiteSpace: 'normal',
           boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
         }}
