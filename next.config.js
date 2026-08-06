@@ -3,20 +3,23 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   experimental: {
-    // The auth middleware (src/proxy.ts) buffers request bodies; the default
-    // 10MB cap silently truncates larger uploads, corrupting the multipart
-    // body before /api/admin/intake can read it (issue #310: every PDF over
-    // 10MB failed with "internal error"). Intake allows 100MB PDFs
-    // (MAX_FILE_BYTES); this is sized for one max-size PDF plus multipart
-    // overhead — the upload client sends one file per request. MUST stay above
-    // MAX_FILE_BYTES: raise them together, never one alone.
+    // Applies to paths matched by src/proxy.ts. /api/admin/intake is NO LONGER
+    // one of them: it was excluded from the matcher precisely because matching
+    // it made Next tee the whole upload into two in-memory PassThroughs, which
+    // OOM-killed the 512MB qa task on a 79MB PDF. So this value is no longer
+    // sized for, or coupled to, the intake cap (MAX_FILE_BYTES).
     //
-    // Cost of this size, recorded because it is the reason not to go higher:
-    // the buffer is held IN MEMORY per in-flight request, against a 512MB qa
-    // task (ecs.tf). Two concurrent 100MB uploads is ~200MB of buffer on top of
-    // the app's own footprint — close enough to the limit that a third would
-    // risk an OOM kill. Raised from 55mb on 2026-08-05 alongside the parse-side
-    // Ghostscript shrink, which is what makes >50MB files parseable at all.
+    // It was originally raised 10mb -> 55mb -> 105mb to stop the tee from
+    // truncating large uploads (issue #310). That reason is gone. What remains
+    // matched and body-carrying is /api/import-documents, which takes a JSON
+    // row batch — far smaller than 105mb.
+    //
+    // The cost is real and unchanged: the buffer is held IN MEMORY per
+    // in-flight request, doubled by the tee. At 105mb a single large POST to a
+    // matched route can still cost ~210MB. Lowering this toward the 10mb
+    // default is the right follow-up, gated on confirming the largest real
+    // /api/import-documents batch — not done here to keep the OOM hotfix
+    // scoped.
     proxyClientMaxBodySize: '105mb',
   },
   poweredByHeader: false,

@@ -12,6 +12,18 @@ import { config } from '@/proxy'
 // /api/admin/intake must therefore never match. It loses nothing: the route
 // calls requireIdentity() itself (app/api/admin/intake/route.ts:32), which is
 // STRICTER than the proxy — it revalidates the session against the users table.
+// LIMITATION, stated because it is not obvious: getPathMatch is an
+// approximation of what ships. Next compiles config.matcher at BUILD time into
+// .next/server/functions-config-manifest.json and matches with
+// `new RegExp(m.regexp)` — no flags, so case-SENSITIVE — after wrapping the
+// pattern with _next/data prefix and .json/.rsc suffix handling. getPathMatch
+// defaults to sensitive:false (path-match.js:16). They therefore disagree on
+// case: '/api/admin/INTAKE' is excluded here but matched by the shipped regex.
+// That is inert (Next's own route dispatch is case-sensitive, so /INTAKE 404s
+// before auth matters either way), but a future matcher edit could land
+// somewhere this divergence bites. Asserting against the manifest instead
+// would couple these tests to a prior `next build`, which unit tests must not
+// require — so the compiled regex was verified by hand at fix time.
 function matchesProxy(pathname: string): boolean {
   return config.matcher.some((m) => getPathMatch(m)(pathname) !== false)
 }
@@ -36,5 +48,13 @@ describe('proxy matcher', () => {
 
   it('exempts only the exact intake endpoint, not paths beneath it', () => {
     expect(matchesProxy('/api/admin/intake/anything')).toBe(true)
+  })
+
+  // Side effect of moving from '/api/admin/:path*' to a regex segment: :path*
+  // allowed zero segments, the regex requires at least one character. Inert —
+  // nothing is routed at the bare path — but pinned so the change is visible
+  // if someone ever adds a handler there and wonders why it is unauthenticated.
+  it('no longer matches the bare /api/admin path', () => {
+    expect(matchesProxy('/api/admin')).toBe(false)
   })
 })
