@@ -67,6 +67,15 @@ search_service_environment_variables = {
   "WORKERS" = "1"
 }
 
+# Ingestion Worker Environment Variables
+# SPARSE_EN_HANDLES must match the flag the corpus was built under. Production's
+# corpus is a clone of qa's, which was rebuilt flag-on 2026-07-26; without this,
+# the worker's next re-ingest of a non-EN document would strip that document's
+# English handles and it would stop surfacing for English queries.
+ingestion_worker_environment_variables = {
+  "SPARSE_EN_HANDLES" = "true"
+}
+
 # =============================================================================
 # S3 Documents Configuration (Production)
 # =============================================================================
