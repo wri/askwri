@@ -126,8 +126,14 @@ Cite mode deduplicates by document ID, keeping the best chunk score per document
 ```bash
 cd search-service
 
-# Install dependencies
+# Install dependencies. requirements.txt is PINNED pip-compile output —
+# every direct and transitive version is fixed, so this matches the deploy
+# image exactly. Edit requirements.in (never the .txt), then regenerate:
+#   ./scripts/compile-requirements.sh
 pip install -r requirements.txt
+
+# To make the venv match the lock exactly (removes anything not in it):
+#   pip install pip-tools && pip-sync requirements.txt requirements-dev.txt
 
 # Create .env with:
 #   OPENAI_API_KEY=sk-...
@@ -155,6 +161,39 @@ Once running: http://localhost:8000/docs
 | `PORT` | `8000` | Server port |
 | `WORKERS` | `1` | Number of uvicorn workers |
 | `LOG_LEVEL` | `info` | Logging level |
+| `RETRIEVAL_BACKEND` | `legacy` | `legacy` (CSV + boot-time index build) or `postgres` (read chunks/embeddings from Postgres) |
+| `DATABASE_URL` | — | Postgres connection URL; required for `postgres` backend and the migration script (append `?sslmode=require` for RDS) |
+| `EMBEDDING_MODEL` | `cohere-embed-v4` | Dense model for chunk writes + query encode: `cohere-embed-v4` (Bedrock) or `text-embedding-3-small` (OpenAI rollback) |
+| `BEDROCK_EMBED_REGION` | `us-east-1` | Bedrock region hosting Cohere embed-v4 (infra runs in us-east-2; cross-region call) |
+| `BEDROCK_RERANK_REGION` | `us-west-2` | Bedrock region hosting Cohere Rerank 3.5 |
+| `RERANK_CANDIDATES` | `100` | Fused candidates sent to the Bedrock Rerank API (cost/latency scale with count) |
+| `CITE_RERANK_PER_DOC_CAP` | `2` | Max chunks per doc in the cite-mode rerank candidate set (doc-coverage lever; answer mode uncapped) |
+| `CITE_LOGIT_FLOOR` | `0.10` | Cite-mode relevance floor on the 0–1 rerank scale (derived 2026-07-22; re-derive with `scripts/capture_cite_scores.py` + `analyze_cite_scores.py` after candidate-pool changes) |
+| `CITE_SUBSTITUTE_SUMMARY_PASSAGE` | `false` | Cite mode: show a real passage for documents whose best chunk is the synthetic summary node, carrying its score and tier over (issue #233). Ranking is unchanged by construction; only `content`/`page`/`chunk_id` move, for ~1% of golden-set and ~3% of cross-lingual result rows |
+| `PARSE_BACKEND` | `pypdf` | Worker parse stage: `pypdf` (text layer, validation oracle) or `mistral` (Mistral OCR markdown, per-page; ratified for Phase C, default flips after the Phase 1 gate) |
+| `MISTRAL_API_KEY` | — | Required when `PARSE_BACKEND=mistral` |
+| `MISTRAL_OCR_MODEL` | `mistral-ocr-latest` | Mistral OCR model id |
+| `BEDROCK_EMBED_MODEL_ID` | `cohere.embed-v4:0` | Bedrock invoke target for embed; set `us.cohere.embed-v4:0` (cross-region profile, 2× quota) for bulk re-embeds/re-ingests |
+
+## Docs
+
+- [docs/document-management.md](../docs/document-management.md) — Phase 0 as-built reference (schema, lifecycle, retrieval backends, parity status)
+- [docs/runbooks/phase0-cutover.md](../docs/runbooks/phase0-cutover.md) — local dev setup, production cutover steps, rollback
+
+## Postgres-backed retrieval (Phase 0)
+
+Two boot modes, switched by `RETRIEVAL_BACKEND`:
+
+- **`legacy`** (default): parses `documents.csv` + PDFs, builds in-memory indexes at boot (cached; slow cold start).
+- **`postgres`**: reads `document_chunks` (text + embeddings + node metadata) from Postgres at boot — no CSV, no PDF parsing, no OpenAI calls at startup. Dense retrieval runs per-query against pgvector; BM25 is hydrated from the chunk rows in `corpus_order` (which must match the legacy node build order — BM25 breaks score ties by corpus position).
+
+One-time corpus migration (schema first via `npm run migration:run` at the repo root):
+
+```bash
+./venv/bin/python -m scripts.migrate_csv_to_postgres [--reset]
+```
+
+The `/query` request/response contract (`QueryRequest`/`QueryResponse` in `app/main.py`) is frozen — both backends serve it identically. Parity vs the golden sets is recorded in `docs/plans/2026-06-09-phase0-store-and-migration-plan.md` (Task 10).
 
 ## Docker
 
@@ -184,6 +223,11 @@ search-service/
 │   ├── documents.csv        # Document metadata catalog
 │   └── *.pdf                # PDF corpus
 ├── Dockerfile
-├── requirements.txt
+├── requirements.in         # SOURCE — edit this
+├── requirements.txt        # GENERATED — pinned, do not hand-edit
+├── requirements-dev.in     # SOURCE
+├── requirements-dev.txt    # GENERATED
+├── scripts/
+│   └── compile-requirements.sh  # regenerate the two .txt files
 └── README.md
 ```

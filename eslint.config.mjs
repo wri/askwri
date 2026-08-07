@@ -19,6 +19,14 @@ export default [
       'next-env.d.ts',
       'search-service/**',
       'evaluation/results/**',
+      // Stray agent worktrees (e.g. .claude/worktrees/) are not part of this
+      // project's lint surface — keep them out of `eslint .` without deleting
+      // the directories. `.worktrees/` is the convention .gitignore documents
+      // for isolated feature work; without it `npm run lint` reports hundreds
+      // of "not found in any of the provided project(s)" parse errors for a
+      // checkout that is doing nothing wrong.
+      '.claude/worktrees/**',
+      '.worktrees/**',
     ],
   },
   {
@@ -57,10 +65,7 @@ export default [
       'arrow-body-style': ['error', 'as-needed'],
       'import/prefer-default-export': 'off',
       'react/jsx-props-no-spreading': 'off',
-      'import/no-useless-path-segments': [
-        'error',
-        { noUselessIndex: true },
-      ],
+      'import/no-useless-path-segments': ['error', { noUselessIndex: true }],
       'prefer-arrow-callback': 'error',
       'react/jsx-no-duplicate-props': ['error', { ignoreCase: false }],
       'react/function-component-definition': [

@@ -59,10 +59,15 @@ const AskWriAppContent = () => {
   const [index, setIndex] = useState<ReturnType<
     typeof buildCatalogIndex
   > | null>(null)
+  // Distinct from `index !== null`: getCatalog resolves to a null index when
+  // the fetch fails, and the metadata-dependent effects below must still run
+  // (degraded) rather than hang forever waiting for a catalog.
+  const [catalogSettled, setCatalogSettled] = useState(false)
   useEffect(() => {
     getCatalog().then(({ catalog: c, index: i }) => {
       setCatalog(c)
       setIndex(i)
+      setCatalogSettled(true)
     })
   }, [])
 
@@ -132,7 +137,10 @@ const AskWriAppContent = () => {
   // Document-level WHY processing — batched into a single LLM call
   const [batchRelatesRequested, setBatchRelatesRequested] = useState(false)
   useEffect(() => {
-    if (supporting.length === 0 || batchRelatesRequested) return
+    // Wait for the catalog: the prompt is built from titles/authors/years that
+    // only the catalog carries, and this effect fires exactly once.
+    if (supporting.length === 0 || batchRelatesRequested || !catalogSettled)
+      return
 
     // Collect all docs that need relates explanations
     const docsToProcess = pageDocs.filter(
@@ -144,7 +152,9 @@ const AskWriAppContent = () => {
 
     // Mark all docs as loading
     const loadingUpdate: Record<string, boolean> = {}
-    docsToProcess.forEach((d) => { loadingUpdate[d.doc_id] = true })
+    docsToProcess.forEach((d) => {
+      loadingUpdate[d.doc_id] = true
+    })
     setDocWhyLoading((prev) => ({ ...prev, ...loadingUpdate }))
 
     // Build batch request — catalog index is optional (enriches metadata when available)
@@ -194,10 +204,12 @@ const AskWriAppContent = () => {
       })
       .finally(() => {
         const doneUpdate: Record<string, boolean> = {}
-        docsToProcess.forEach((d) => { doneUpdate[d.doc_id] = false })
+        docsToProcess.forEach((d) => {
+          doneUpdate[d.doc_id] = false
+        })
         setDocWhyLoading((prev) => ({ ...prev, ...doneUpdate }))
       })
-  }, [index, pageDocs, query, batchRelatesRequested])
+  }, [index, catalogSettled, pageDocs, query, batchRelatesRequested])
 
   async function runAlignment(q: string, docs: DocMeta[]) {
     try {

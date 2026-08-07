@@ -6,7 +6,14 @@ import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
 import { IoIosCopy, IoMdCheckmark, IoMdOpen } from 'react-icons/io'
 import { VscTriangleRight } from 'react-icons/vsc'
 import { AiIcon } from '../icons/AiIcon'
-import { chicagoFull, matchCatalogRow } from '../../utils/utils'
+import {
+  authorsFrom,
+  chicagoFull,
+  matchCatalogRow,
+  publisherFrom,
+  titleFrom,
+  yearFrom,
+} from '../../utils/utils'
 import { CitationCardProps } from './types'
 
 export const CitationCard = ({
@@ -26,16 +33,53 @@ export const CitationCard = ({
   const [expandedWhy, setExpandedWhy] = useState(false)
   const [expandedSummary, setExpandedSummary] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [translation, setTranslation] = useState<string | null>(null)
+  const [showTranslation, setShowTranslation] = useState(false)
+  const [translating, setTranslating] = useState(false)
+  const [translateError, setTranslateError] = useState(false)
 
   const passageId = `${doc.doc_id}:${kp.passage_id}`
   const whyData = passageWhy[passageId]
-  const docTitle = doc.title || `Document ${doc.doc_id?.slice(0, 8) || idx + 1}`
-  const authors = doc.authors?.join('; ') || 'Unknown author'
-  const year = doc.year || ''
 
   const tier = sourceRelevance?.[doc.doc_id]
   const row = catalogIndex ? matchCatalogRow(doc, catalogIndex) : undefined
-  const summary = row?.summary || row?.shortSummary
+  // All four come from the document-management columns via the catalog, not
+  // from the chunk metadata the retriever returns (issue #305).
+  const docTitle =
+    titleFrom(doc, row) || `Document ${doc.doc_id?.slice(0, 8) || idx + 1}`
+  const authors = authorsFrom(doc, row).join('; ') || 'Unknown author'
+  const year = yearFrom(doc, row) ?? ''
+  const publisher = publisherFrom(row)
+  // Short English summary — the long one is a wall of text in a side panel.
+  const summary = row?.shortSummary || row?.summary
+  const isTranslatable = Boolean(row?.language && row.language !== 'en')
+
+  const onTranslate = async () => {
+    if (translation) {
+      setShowTranslation((prev) => !prev)
+      return
+    }
+    setTranslating(true)
+    setTranslateError(false)
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: kp.snippet }),
+      })
+      const j = await res.json()
+      if (j?.ok && j.translation) {
+        setTranslation(j.translation)
+        setShowTranslation(true)
+      } else {
+        setTranslateError(true)
+      }
+    } catch {
+      setTranslateError(true)
+    } finally {
+      setTranslating(false)
+    }
+  }
 
   return (
     <Box
@@ -85,27 +129,43 @@ export const CitationCard = ({
 
       {/* Excerpt */}
       <Box>
-        <Text
-          onClick={() => setExpandedSnippet((prev) => !prev)}
-          as='div'
-          style={{
-            padding: '4px 0px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
-          <VscTriangleRight
+        <Box display='flex' alignItems='center' gap='2'>
+          <Text
+            onClick={() => setExpandedSnippet((prev) => !prev)}
+            as='div'
             style={{
-              color: getThemedColor('neutral', 700),
-              transition: 'transform 0.2s',
-              transform: expandedSnippet ? 'rotate(90deg)' : 'rotate(0deg)',
-              flexShrink: 0,
+              padding: '4px 0px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
-          />
-          {`Excerpt (Page ${kp.page ?? 1})`}
-        </Text>
+          >
+            <VscTriangleRight
+              style={{
+                color: getThemedColor('neutral', 700),
+                transition: 'transform 0.2s',
+                transform: expandedSnippet ? 'rotate(90deg)' : 'rotate(0deg)',
+                flexShrink: 0,
+              }}
+            />
+            {`Excerpt (Page ${kp.page ?? 1})`}
+          </Text>
+          {expandedSnippet && isTranslatable && (
+            <Button
+              variant='borderless'
+              size='small'
+              onClick={onTranslate}
+              disabled={translating}
+            >
+              {translating
+                ? 'Translating…'
+                : showTranslation
+                  ? 'Show original'
+                  : 'Translate'}
+            </Button>
+          )}
+        </Box>
 
         <Text
           fontSize='sm'
@@ -114,8 +174,24 @@ export const CitationCard = ({
             paddingLeft: '8px',
           }}
         >
-          {expandedSnippet && <>&rdquo;{kp.snippet}&rdquo;</>}
+          {expandedSnippet && (
+            <>
+              &rdquo;
+              {showTranslation && translation ? translation : kp.snippet}
+              &rdquo;
+            </>
+          )}
         </Text>
+        {expandedSnippet && showTranslation && translation && (
+          <Text fontSize='xs' color={getThemedColor('neutral', 700)}>
+            Translated to English by AI <AiIcon />
+          </Text>
+        )}
+        {expandedSnippet && translateError && (
+          <Text fontSize='xs' color={getThemedColor('error', 700)}>
+            Translation unavailable — showing the original.
+          </Text>
+        )}
       </Box>
 
       {/* How is this relevant? */}
@@ -176,7 +252,7 @@ export const CitationCard = ({
         </Text>
         {expandedSummary && (
           <>
-            <Text fontSize='sm'>{summary}</Text>
+            <Text fontSize='sm'>{summary || 'No summary available.'}</Text>
 
             {/* Citation info */}
             <Text
@@ -193,7 +269,7 @@ export const CitationCard = ({
               paddingBottom='8px'
               fontStyle='italic'
             >
-              {`Washington, DC: WRI ${year ? `(${year})` : ''}`}
+              {`${publisher} ${year ? `(${year})` : ''}`.trim()}
             </Text>
           </>
         )}
@@ -215,8 +291,11 @@ export const CitationCard = ({
           size='small'
           leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
           onClick={() => {
+            const passage = (
+              showTranslation && translation ? translation : kp.snippet
+            ).trim()
             navigator.clipboard.writeText(
-              `${kp.snippet.trim()}\n\n${chicagoFull(doc)}`,
+              `${passage}\n\n${chicagoFull(doc, row)}`,
             )
             setCopied(true)
             setTimeout(() => setCopied(false), 1500)

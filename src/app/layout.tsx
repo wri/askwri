@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Script from 'next/script'
 import type { ReactNode } from 'react'
 import ChakraProvider from './Providers/ChakraProvider'
-import { Footer } from './components/Footer'
+import { SiteFooter } from './components/Footer/SiteFooter'
 import IsQA from './IsQA'
 import './globals.css'
 
@@ -33,7 +33,7 @@ const RootLayout = ({ children }: { children: ReactNode }) => (
     <body>
       <ChakraProvider>
         {children}
-        <Footer />
+        <SiteFooter />
       </ChakraProvider>
       <IsQA />
     </body>

@@ -5,6 +5,16 @@
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-${var.environment}-cluster"
 
+  # Container Insights is off as a standing cost decision (issue #236), not an
+  # oversight. It carries a per-cluster charge, and it was turned off in the
+  # same pass that cut CPU/memory and pinned autoscaling at 1 task.
+  # The tradeoff: no CloudWatch task-level CPU/memory/task-count metrics, which
+  # is exactly what you would want to confirm the reduced capacity holds under
+  # load. What remains: the awslogs driver still ships container logs, and
+  # /query emits per-stage latency as CloudWatch EMF (AskWRI/Query namespace,
+  # search-service/app/main.py:_emit_query_emf).
+  # Re-enable temporarily when task-level metrics are the only way to diagnose
+  # something; flip back afterwards.
   setting {
     name  = "containerInsights"
     value = "disabled"
@@ -117,6 +127,50 @@ resource "aws_iam_role_policy" "ecs_task_ssm" {
   })
 }
 
+# Bedrock permissions for the v3 retrieval substrate (multilingual spec v3 §11):
+# dense = Cohere embed-v4, rerank = Cohere Rerank 3.5 — both managed Bedrock
+# APIs. Neither model is hosted in us-east-2, so the services call the nearest
+# hosting region directly (embed: us-east-1, rerank: us-west-2) — hence
+# Resource covers the foundation-model ARNs in any region. bedrock:Rerank
+# (the bedrock-agent-runtime Rerank API) does not support resource-level
+# scoping beyond the model.
+resource "aws_iam_role_policy" "ecs_task_bedrock" {
+  name = "${var.project_name}-${var.environment}-ecs-task-bedrock-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "InvokeCohereModels"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        # The cross-region inference profile (us.cohere.embed-v4:0) is the
+        # re-embed path of record: 300k tokens/min quota vs 150k on-demand
+        # (measured 2026-07-22 — the on-demand bucket throttle-kills bulk
+        # re-embeds at batch 96, and even batch 24 runs ~2x slower). Profile
+        # invocation needs InvokeModel on BOTH the profile ARN and the
+        # underlying regional foundation-model ARNs.
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
+          "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/us.cohere.embed-v4:0"
+        ]
+      },
+      {
+        Sid    = "RerankApi"
+        Effect = "Allow"
+        Action = [
+          "bedrock:Rerank"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # S3 permissions for downloading documents
 resource "aws_iam_role_policy" "ecs_task_s3" {
   count = var.documents_s3_bucket != "" ? 1 : 0
@@ -135,7 +189,7 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
         Resource = "arn:aws:s3:::${var.documents_s3_bucket}"
         Condition = {
           StringLike = {
-            "s3:prefix" = ["${var.documents_s3_prefix}*", "${var.cache_s3_prefix}*"]
+            "s3:prefix" = ["${var.documents_s3_prefix}*", "${var.cache_s3_prefix}*", "${var.intake_s3_prefix}*"]
           }
         }
       },
@@ -167,6 +221,31 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
           "s3:PutObject"
         ]
         Resource = "arn:aws:s3:::${var.documents_s3_bucket}/eval-data/*"
+      },
+      {
+        Sid    = "WorkerIntakeObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.intake_s3_prefix}*"
+      },
+      {
+        Sid    = "PutIntakeObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.intake_s3_prefix}*"
+      },
+      {
+        Sid    = "WorkerPutDocuments"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_s3_bucket}/${var.documents_s3_prefix}*"
       }
     ]
   })
@@ -212,7 +291,7 @@ resource "aws_ecs_task_definition" "app" {
     # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
     {
       name      = "init-volumes"
-      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      image     = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
       essential = false
       user      = "0"
       command   = ["sh", "-c", "chown 1001:1001 /tmp/askWRI_docs /app/.next/cache"]
@@ -241,7 +320,7 @@ resource "aws_ecs_task_definition" "app" {
     },
     {
       name  = "${var.project_name}-${var.environment}"
-      image = "${aws_ecr_repository.app.repository_url}:latest"
+      image = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
 
       # Security hardening:
       # - readonlyRootFilesystem prevents attackers from dropping payloads onto disk.
@@ -368,8 +447,10 @@ resource "aws_ecs_task_definition" "app" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
-        interval    = 30
+        command = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
+        # 15s rather than 30s so a replacement task is declared healthy sooner
+        # on deploys; retries stays at 5 so failure tolerance is unchanged.
+        interval    = 15
         timeout     = 10
         retries     = 5
         startPeriod = 120
@@ -533,7 +614,7 @@ resource "aws_ecs_task_definition" "search_service" {
     # ssm-agent is intentionally omitted: the SSM agent runs as root and needs no chown.
     {
       name      = "init-volumes"
-      image     = "${aws_ecr_repository.search_service.repository_url}:latest"
+      image     = "${aws_ecr_repository.search_service.repository_url}:${var.image_tag}"
       essential = false
       user      = "0"
       command   = ["sh", "-c", "mkdir -p /tmp/askWRI_docs /tmp/askWRI_cache/hf_hub && chown -R 1000:1000 /tmp"]
@@ -557,7 +638,7 @@ resource "aws_ecs_task_definition" "search_service" {
     },
     {
       name  = "${var.project_name}-${var.environment}-search-service"
-      image = "${aws_ecr_repository.search_service.repository_url}:latest"
+      image = "${aws_ecr_repository.search_service.repository_url}:${var.image_tag}"
 
       readonlyRootFilesystem = true
       privileged             = false
@@ -799,6 +880,197 @@ resource "aws_appautoscaling_target" "search_service" {
 #     scale_out_cooldown = 60
 #   }
 # }
+
+# =============================================================================
+# Ingestion Worker CloudWatch Log Group
+# =============================================================================
+
+resource "aws_cloudwatch_log_group" "ingestion_worker" {
+  name              = "/ecs/${var.project_name}-${var.environment}-ingestion-worker"
+  retention_in_days = 30
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-ingestion-worker-logs"
+  }
+}
+
+# =============================================================================
+# Ingestion Worker ECS Task Definition
+# =============================================================================
+
+resource "aws_ecs_task_definition" "ingestion_worker" {
+  family                   = "${var.project_name}-${var.environment}-ingestion-worker"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.ingestion_worker_container_cpu
+  memory                   = var.ingestion_worker_container_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  # Ephemeral writable /tmp for Python tempfile (PDF parsing uses NamedTemporaryFile).
+  # The init-volumes container chowns /tmp to appuser (UID 1000) so the worker can
+  # write temp files with readonlyRootFilesystem = true.  Pattern mirrors search-service.
+  volume {
+    name = "tmp"
+  }
+
+  volume {
+    name = "ssm-agent"
+  }
+
+  container_definitions = jsonencode([
+    # Init container: runs as root to chown /tmp to appuser (UID 1000).
+    # Required because Fargate initialises ephemeral volumes as root:root 755.
+    {
+      name      = "init-volumes"
+      image     = "${aws_ecr_repository.search_service.repository_url}:${var.image_tag}"
+      essential = false
+      user      = "0"
+      command   = ["sh", "-c", "chown -R 1000:1000 /tmp"]
+
+      mountPoints = [
+        {
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
+          readOnly      = false
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ingestion_worker.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "ecs-init"
+        }
+      }
+    },
+    {
+      name    = "${var.project_name}-${var.environment}-ingestion-worker"
+      image   = "${aws_ecr_repository.search_service.repository_url}:${var.image_tag}"
+      command = ["python", "-m", "worker.main"]
+
+      readonlyRootFilesystem = true
+      privileged             = false
+
+      dependsOn = [
+        {
+          containerName = "init-volumes"
+          condition     = "SUCCESS"
+        }
+      ]
+
+      mountPoints = [
+        {
+          sourceVolume  = "tmp"
+          containerPath = "/tmp"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "ssm-agent"
+          containerPath = "/var/lib/amazon/ssm"
+          readOnly      = false
+        }
+      ]
+
+      environment = concat(
+        [
+          {
+            name  = "ENVIRONMENT"
+            value = var.environment
+          },
+          {
+            name  = "DOCUMENTS_S3_BUCKET"
+            value = var.documents_s3_bucket
+          },
+          {
+            name  = "DOCUMENTS_S3_PREFIX"
+            value = var.documents_s3_prefix
+          },
+          {
+            name  = "INTAKE_S3_PREFIX"
+            value = var.intake_s3_prefix
+          },
+          {
+            name  = "SEARCH_SERVICE_URL"
+            value = "http://search-service.${var.project_name}-${var.environment}.local:${var.search_service_container_port}"
+          },
+          {
+            name  = "WORKER_LLM_MODEL"
+            value = var.worker_llm_model
+          }
+        ],
+        [
+          for key, value in var.ingestion_worker_environment_variables : {
+            name  = key
+            value = value
+          }
+        ],
+        # Secret environment variables from GitHub Secrets (JSON decoded)
+        [
+          for key, value in try(jsondecode(var.ingestion_worker_secret_env), {}) : {
+            name  = key
+            value = value
+          }
+        ]
+      )
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ingestion_worker.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+
+      essential = true
+    }
+  ])
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-ingestion-worker-task"
+  }
+}
+
+# =============================================================================
+# Ingestion Worker ECS Service
+# =============================================================================
+
+resource "aws_ecs_service" "ingestion_worker" {
+  name                    = "${var.project_name}-${var.environment}-ingestion-worker"
+  cluster                 = aws_ecs_cluster.main.id
+  task_definition         = aws_ecs_task_definition.ingestion_worker.arn
+  desired_count           = var.ingestion_worker_desired_count
+  launch_type             = "FARGATE"
+  enable_execute_command  = true
+  enable_ecs_managed_tags = true
+  propagate_tags          = "SERVICE"
+
+  network_configuration {
+    subnets          = local.private_subnet_ids
+    security_groups  = [aws_security_group.ingestion_worker.id]
+    assign_public_ip = false
+  }
+
+  # Stop-then-start: queue worker, not load-balanced — never run two task
+  # revisions concurrently during a deploy.
+  deployment_maximum_percent         = 100
+  deployment_minimum_healthy_percent = 0
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-ingestion-worker"
+  }
+}
 
 # Memory autoscaling disabled
 # resource "aws_appautoscaling_policy" "search_service_memory" {

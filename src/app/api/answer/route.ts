@@ -17,7 +17,8 @@ const MAX = IS_GPT5 ? Math.max(2000, ENV_MAX) : ENV_MAX
 const TEMP = Number(process.env.OPENAI_TEMPERATURE ?? 0.3) // Moderate temperature for concise synthesis
 
 const NANO_MODEL = (process.env.OPENAI_MODEL_NANO ?? 'gpt-5.4-nano').trim()
-const USE_NANO_FILTER = (process.env.USE_NANO_FILTER ?? 'false').toLowerCase() === 'true'
+const USE_NANO_FILTER =
+  (process.env.USE_NANO_FILTER ?? 'false').toLowerCase() === 'true'
 
 const NANO_SYSTEM_PROMPT = `Given a research question and a set of passages, classify each passage's relevance to the question.
 
@@ -54,6 +55,9 @@ const SYS = IS_GPT5
 Synthesize a concise answer from the provided documents. Write exactly 2-3 clear sentences.
 
 Rules:
+- ENGLISH ONLY: Always write every sentence in English, whatever language the
+  question or the passages are in. Never mirror the language of the question or
+  of a passage — translate what you need instead.
 - TRUST SOURCES: The provided sources have been pre-filtered for relevance. Focus on synthesizing their key findings.
 - SYNTHESIZE: Combine key information across relevant sources — do NOT copy phrases verbatim
 - PRIORITIZE: Focus on the most relevant and important findings
@@ -77,6 +81,9 @@ If no sources adequately answer the question:
 You are a careful research assistant. Write a clear, concise answer that synthesizes the most important information from the provided documents.
 
 CRITICAL RULES:
+- ENGLISH ONLY: Always write every sentence in English, whatever language the
+  question or the passages are in. Never mirror the language of the question or
+  of a passage — translate what you need instead.
 - TRUST SOURCES: The provided sources have been pre-filtered for relevance. Focus on synthesizing their key findings.
 - CONCISE: Write exactly 2-3 sentences total (not paragraphs)
 - SYNTHESIZE: Combine key information from relevant sources - do NOT copy phrases verbatim
@@ -204,8 +211,11 @@ function detectVerbatimCopying(sentences: string[], docs: any[]): boolean {
 async function runNanoFilter(
   query: string,
   docs: Array<{ id: number; title: string; key_finding: string }>,
-  apiKey: string
-): Promise<{ relevance: Array<{ id: number; tier: string }>; coverage: string } | null> {
+  apiKey: string,
+): Promise<{
+  relevance: Array<{ id: number; tier: string }>
+  coverage: string
+} | null> {
   try {
     // Shuffle docs to prevent position bias (Fisher-Yates)
     const shuffled = [...docs]
@@ -215,7 +225,7 @@ async function runNanoFilter(
     }
 
     const passageText = shuffled
-      .map(d => `[${d.id}] "${d.title}" — ${d.key_finding}`)
+      .map((d) => `[${d.id}] "${d.title}" — ${d.key_finding}`)
       .join('\n\n')
 
     const userPrompt = `Question: ${query}\n\nPassages (presented in random order):\n${passageText}`
@@ -317,16 +327,25 @@ export async function POST(req: NextRequest) {
       authors: d.authors,
       year: d.year,
       doc_id: d.doc_id || '',
-      key_finding: String(d.kps?.[0]?.snippet ?? d.content ?? '').slice(0, maxSnippetLen),
+      key_finding: String(d.kps?.[0]?.snippet ?? d.content ?? '').slice(
+        0,
+        maxSnippetLen,
+      ),
       relevance: d.kps?.[0]?.kp_relevance || d.score || 0,
     }))
 
     // Run nano relevance filter (gated — enable with USE_NANO_FILTER=true)
-    const nanoResult = USE_NANO_FILTER ? await runNanoFilter(
-      query,
-      docList.map(d => ({ id: d.id, title: d.title, key_finding: d.key_finding })),
-      key
-    ) : null
+    const nanoResult = USE_NANO_FILTER
+      ? await runNanoFilter(
+          query,
+          docList.map((d) => ({
+            id: d.id,
+            title: d.title,
+            key_finding: d.key_finding,
+          })),
+          key,
+        )
+      : null
 
     let filteredDocs: typeof docList
     let coverageRating: string = 'unknown'
@@ -339,35 +358,46 @@ export async function POST(req: NextRequest) {
       }
 
       // Filter: keep strong + partial, drop weak
-      filteredDocs = docList.filter(d => {
+      filteredDocs = docList.filter((d) => {
         const tier = tierMap.get(d.id) || 'weak'
         return tier === 'strong' || tier === 'partial'
       })
 
       // Build source_relevance for frontend (all docs, not just filtered)
-      sourceRelevanceFromNano = docList.map(d => ({
-        doc_id: d.doc_id,
-        tier: tierMap.get(d.id) || 'weak',
-      })).filter(sr => sr.doc_id)
+      sourceRelevanceFromNano = docList
+        .map((d) => ({
+          doc_id: d.doc_id,
+          tier: tierMap.get(d.id) || 'weak',
+        }))
+        .filter((sr) => sr.doc_id)
 
       coverageRating = nanoResult.coverage
       const maxDocs = IS_GPT5 ? 8 : 6
       filteredDocs = filteredDocs.slice(0, maxDocs)
 
-      console.log(`[Nano Filter] ${docList.length} → ${filteredDocs.length} docs (coverage: ${coverageRating})`)
+      console.log(
+        `[Nano Filter] ${docList.length} → ${filteredDocs.length} docs (coverage: ${coverageRating})`,
+      )
 
       // Edge case: all weak → skip synthesis, return low coverage
       if (filteredDocs.length === 0) {
         return NextResponse.json({
           ok: true,
           synthesis: {
-            sentences: ['The available sources do not contain sufficient information to answer this question.'],
+            sentences: [
+              'The available sources do not contain sufficient information to answer this question.',
+            ],
             source_relevance: sourceRelevanceFromNano,
             warning: 'low_coverage',
-            warningMessage: 'The available sources do not adequately cover this topic.',
+            warningMessage:
+              'The available sources do not adequately cover this topic.',
             coverage: coverageRating,
           },
-          debug: { ...debugInfo, nanoFilter: 'all_weak', coverage: coverageRating },
+          debug: {
+            ...debugInfo,
+            nanoFilter: 'all_weak',
+            coverage: coverageRating,
+          },
         })
       }
     } else {
@@ -556,16 +586,20 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
     if (sourceRelevanceFromNano.length > 0) {
       sourceRelevance = sourceRelevanceFromNano
     } else {
-      const rawSourceRelevance: {id: number, tier: string}[] = Array.isArray(parsed.source_relevance)
+      const rawSourceRelevance: { id: number; tier: string }[] = Array.isArray(
+        parsed.source_relevance,
+      )
         ? parsed.source_relevance
         : []
-      sourceRelevance = rawSourceRelevance.map(sr => {
-        const doc = docList[sr.id - 1]
-        return {
-          doc_id: doc?.doc_id || '',
-          tier: sr.tier || 'weak',
-        }
-      }).filter(sr => sr.doc_id)
+      sourceRelevance = rawSourceRelevance
+        .map((sr) => {
+          const doc = docList[sr.id - 1]
+          return {
+            doc_id: doc?.doc_id || '',
+            tier: sr.tier || 'weak',
+          }
+        })
+        .filter((sr) => sr.doc_id)
     }
     if (sourceRelevance.length > 0) {
       synthesis.source_relevance = sourceRelevance
@@ -575,7 +609,9 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
     }
 
     // Low coverage: from nano filter or synthesis LLM
-    const isLowCoverage = coverageRating === 'poor' || coverageRating === 'limited' ||
+    const isLowCoverage =
+      coverageRating === 'poor' ||
+      coverageRating === 'limited' ||
       parsed.low_coverage === true
     const sourcesUsed = filteredDocs.length
 
@@ -583,12 +619,16 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
       synthesis.warning = 'low_coverage'
       synthesis.warningMessage =
         'Limited relevant sources found for this query. The answer may not fully address your question.'
-      console.warn(`[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`)
+      console.warn(
+        `[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`,
+      )
     } else if (sourcesUsed < 3 && docList.length >= 3) {
       synthesis.warning = 'low_coverage'
       synthesis.warningMessage =
         'Only a few sources were relevant to this query. The answer may be incomplete.'
-      console.warn(`[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`)
+      console.warn(
+        `[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`,
+      )
     } else if (isPartial || wasTruncated) {
       synthesis.warning = 'partial_answer'
       synthesis.warningMessage =

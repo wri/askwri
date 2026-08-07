@@ -124,6 +124,11 @@ export const SelectableResultRow = ({
           {rowData.publication_title}
         </Heading>
         <div>{rowData.year}</div>
+        {rowData.language ? (
+          <div style={{ width: 'fit-content' }}>
+            <Tag label={rowData.language} variant='info-grey' />
+          </div>
+        ) : null}
         <div
           style={{
             display: '-webkit-box',
@@ -184,8 +189,11 @@ export const SelectableResultRow = ({
               leftIcon={copied ? <IoMdCheckmark /> : <IoIosCopy />}
               aria-label={copied ? 'Copied' : 'Copy citation to clipboard'}
               onClick={() => {
-                const { fullDoc } = rowData
-                navigator.clipboard.writeText(chicagoFull(fullDoc, rowData))
+                const { fullDoc, catalogRow } = rowData
+                // catalogRow, not rowData: chicagoFull reads CatalogRow fields
+                // (allAuthors, titleEn, office), so passing the RowData made it
+                // silently fall back to empty chunk metadata (issue #306).
+                navigator.clipboard.writeText(chicagoFull(fullDoc, catalogRow))
                 setCopied(true)
                 setTimeout(() => setCopied(false), 1500)
               }}

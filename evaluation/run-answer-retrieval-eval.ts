@@ -8,18 +8,24 @@
  * Usage: npx tsx evaluation/run-answer-retrieval-eval.ts
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { checkPythonService, callPythonService, PYTHON_SERVICE_URL } from './lib/service-client';
-import { calculateChunkMetrics, calculateDocMetrics, aggregateMetrics } from './lib/metrics';
+import * as crypto from 'crypto'
+import * as fs from 'fs'
+import * as path from 'path'
+import { callPythonService, PYTHON_SERVICE_URL } from './lib/service-client'
+import {
+  calculateChunkMetrics,
+  calculateDocMetrics,
+  aggregateMetrics,
+  assertChunkMetricsValid,
+} from './lib/metrics'
 import type {
   AnswerGoldenDataset,
   AnswerTestCase,
   RetrievalTestResult,
   RetrievalEvalReport,
-} from './lib/types';
-import { generateHtmlReport } from './generate-answer-report';
-import { ANSWER_PRESET } from '../src/config/retrieval';
+} from './lib/types'
+import { generateHtmlReport } from './generate-answer-report'
+import { ANSWER_PRESET } from '../src/config/retrieval'
 
 // --- Config ---
 
@@ -30,62 +36,141 @@ const ANSWER_PARAMS = {
   max_results: ANSWER_PRESET.maxResults,
   dense_weight: ANSWER_PRESET.alpha,
   sparse_weight: ANSWER_PRESET.alpha ? 1 - ANSWER_PRESET.alpha : undefined,
-};
+}
 
-const ADJACENT_TOLERANCE = 1; // chunk N+/-1 counts as partial match
+const ADJACENT_TOLERANCE = 1 // chunk N+/-1 counts as partial match
 
 // --- Load golden dataset ---
 
-const goldenDataPath = path.join(__dirname, 'answer-golden-dataset.json');
-const goldenData: AnswerGoldenDataset = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
+const goldenDataPath = path.join(__dirname, 'answer-golden-dataset.json')
+const goldenDataRaw = fs.readFileSync(goldenDataPath, 'utf-8')
+const goldenData: AnswerGoldenDataset = JSON.parse(goldenDataRaw)
+const goldenSetHash = crypto
+  .createHash('sha256')
+  .update(goldenDataRaw)
+  .digest('hex')
+const evalLabel = process.env.EVAL_LABEL ?? null
+
+// --- Service health / backend identity ---
+
+interface ServiceHealth {
+  keyword_backend: string | null
+  retrieval_backend: string | null
+}
+
+interface CheckpointIdentity {
+  goldenSetHash: string
+  serviceIdentity: string | null
+  label: string | null
+}
+
+interface CheckpointFile {
+  identity?: CheckpointIdentity
+  results?: Record<string, RetrievalTestResult>
+}
+
+/**
+ * Fetch /health and extract the service's backend identity.
+ * Fails fast if /health is unreachable or the service is not healthy:
+ * checkpoint identity and report provenance depend on knowing the backend.
+ */
+async function fetchServiceHealth(): Promise<ServiceHealth> {
+  let data: any
+  try {
+    const response = await fetch(`${PYTHON_SERVICE_URL}/health`, {
+      method: 'GET',
+    })
+    data = await response.json()
+  } catch (error: any) {
+    console.error(
+      `FATAL: /health unreachable at ${PYTHON_SERVICE_URL} (${error.message})`,
+    )
+    console.error(
+      'Cannot verify the service backend identity. Start the service first:',
+    )
+    console.error('  npm run search-service   (or set LLAMAINDEX_SERVICE_URL)')
+    process.exit(1)
+  }
+  if (data.status !== 'healthy' && !data.ok) {
+    console.error(
+      `FATAL: service at ${PYTHON_SERVICE_URL} reports status "${data.status}" — not ready`,
+    )
+    process.exit(1)
+  }
+  return {
+    keyword_backend: data.keyword_backend ?? null,
+    retrieval_backend: data.retrieval_backend ?? null,
+  }
+}
 
 // --- Test runner ---
 
 async function runTestCase(tc: AnswerTestCase): Promise<RetrievalTestResult> {
-  console.log(`\n  Testing: ${tc.id}`);
-  console.log(`   Question: ${tc.question}`);
-  console.log(`   Expected: ${tc.retrieval_ground_truth.expected_passages.length} passages, ${tc.retrieval_ground_truth.expected_doc_ids.length} docs`);
+  console.log(`\n  Testing: ${tc.id}`)
+  console.log(`   Question: ${tc.question}`)
+  console.log(
+    `   Expected: ${tc.retrieval_ground_truth.expected_passages.length} passages, ${tc.retrieval_ground_truth.expected_doc_ids.length} docs`,
+  )
 
-  const start = Date.now();
+  const start = Date.now()
 
   try {
-    const rawDocs = await callPythonService(tc.question, 'answer', ANSWER_PARAMS);
+    const rawDocs = await callPythonService(
+      tc.question,
+      'answer',
+      ANSWER_PARAMS,
+    )
 
     // Extract chunk_ids and doc_ids from retrieved results
-    const retrievedChunks = rawDocs.map(d => ({
+    const retrievedChunks = rawDocs.map((d) => ({
       chunk_id: d.metadata?.chunk_id || d.chunk_id || 'unknown',
       doc_id: d.doc_id,
-    }));
-    const retrievedDocIds = [...new Set(rawDocs.map(d => d.doc_id))];
+    }))
+    const retrievedDocIds = [...new Set(rawDocs.map((d) => d.doc_id))]
 
     // Build detailed chunk info sorted by score
     const retrievedChunksDetail = rawDocs
-      .map(d => ({
+      .map((d) => ({
         chunk_id: d.metadata?.chunk_id || d.chunk_id || 'unknown',
         doc_id: d.doc_id,
         title: d.title,
         snippet: d.content,
         score: d.score,
       }))
-      .sort((a, b) => b.score - a.score); // Sort descending by score
+      .sort((a, b) => b.score - a.score) // Sort descending by score
 
     // Expected from golden set
-    const expectedChunks = tc.retrieval_ground_truth.expected_passages.map(p => ({
-      chunk_id: p.chunk_id,
-      doc_id: p.doc_id,
-    }));
-    const expectedDocIds = tc.retrieval_ground_truth.expected_doc_ids;
+    const expectedChunks = tc.retrieval_ground_truth.expected_passages.map(
+      (p) => ({
+        chunk_id: p.chunk_id,
+        doc_id: p.doc_id,
+      }),
+    )
+    const expectedDocIds = tc.retrieval_ground_truth.expected_doc_ids
 
     // Calculate metrics
-    const chunkMetrics = calculateChunkMetrics(expectedChunks, retrievedChunks, ADJACENT_TOLERANCE);
-    const docMetrics = calculateDocMetrics(expectedDocIds, retrievedDocIds);
+    const chunkMetrics = calculateChunkMetrics(
+      expectedChunks,
+      retrievedChunks,
+      ADJACENT_TOLERANCE,
+    )
+    assertChunkMetricsValid(chunkMetrics, tc.id)
+    const docMetrics = calculateDocMetrics(expectedDocIds, retrievedDocIds)
 
-    const elapsed = Date.now() - start;
+    const elapsed = Date.now() - start
 
-    console.log(`   Retrieved: ${rawDocs.length} passages, ${retrievedDocIds.length} unique docs`);
-    console.log(`   Chunk P/R/F1: ${(chunkMetrics.precision * 100).toFixed(1)}% / ${(chunkMetrics.recall * 100).toFixed(1)}% / ${(chunkMetrics.f1 * 100).toFixed(1)}%`);
-    console.log(`   Chunk (adj) P/R/F1: ${(chunkMetrics.precision_with_adjacent * 100).toFixed(1)}% / ${(chunkMetrics.recall_with_adjacent * 100).toFixed(1)}% / ${(chunkMetrics.f1_with_adjacent * 100).toFixed(1)}%`);
-    console.log(`   Doc P/R/F1: ${(docMetrics.precision * 100).toFixed(1)}% / ${(docMetrics.recall * 100).toFixed(1)}% / ${(docMetrics.f1 * 100).toFixed(1)}%`);
+    console.log(
+      `   Retrieved: ${rawDocs.length} passages, ${retrievedDocIds.length} unique docs`,
+    )
+    console.log(
+      `   Chunk P/R/F1: ${(chunkMetrics.precision * 100).toFixed(1)}% / ${(chunkMetrics.recall * 100).toFixed(1)}% / ${(chunkMetrics.f1 * 100).toFixed(1)}%`,
+    )
+    console.log(
+      `   Chunk (adj) P/R/F1: ${(chunkMetrics.precision_with_adjacent * 100).toFixed(1)}% / ${(chunkMetrics.recall_with_adjacent * 100).toFixed(1)}% / ${(chunkMetrics.f1_with_adjacent * 100).toFixed(1)}%`,
+    )
+    console.log(
+      `   Doc P/R/F1: ${(docMetrics.precision * 100).toFixed(1)}% / ${(docMetrics.recall * 100).toFixed(1)}% / ${(docMetrics.f1 * 100).toFixed(1)}%`,
+    )
 
     return {
       test_case_id: tc.id,
@@ -99,24 +184,32 @@ async function runTestCase(tc: AnswerTestCase): Promise<RetrievalTestResult> {
       doc_precision: docMetrics.precision,
       doc_recall: docMetrics.recall,
       doc_f1: docMetrics.f1,
-      expected_chunk_ids: expectedChunks.map(c => c.chunk_id),
-      retrieved_chunk_ids: retrievedChunks.map(c => c.chunk_id),
+      expected_chunk_ids: expectedChunks.map((c) => c.chunk_id),
+      retrieved_chunk_ids: retrievedChunks.map((c) => c.chunk_id),
       expected_doc_ids: expectedDocIds,
       retrieved_doc_ids: retrievedDocIds,
       exact_matches: chunkMetrics.exact_matches,
       adjacent_matches: chunkMetrics.adjacent_matches,
       retrieved_chunks_detail: retrievedChunksDetail,
       execution_time_ms: elapsed,
-    };
+    }
   } catch (error: any) {
-    console.error(`   Error: ${error.message}`);
+    console.error(`   Error: ${error.message}`)
     return {
       test_case_id: tc.id,
       question: tc.question,
-      chunk_precision: 0, chunk_recall: 0, chunk_f1: 0,
-      chunk_precision_adjacent: 0, chunk_recall_adjacent: 0, chunk_f1_adjacent: 0,
-      doc_precision: 0, doc_recall: 0, doc_f1: 0,
-      expected_chunk_ids: tc.retrieval_ground_truth.expected_passages.map(p => p.chunk_id),
+      chunk_precision: 0,
+      chunk_recall: 0,
+      chunk_f1: 0,
+      chunk_precision_adjacent: 0,
+      chunk_recall_adjacent: 0,
+      chunk_f1_adjacent: 0,
+      doc_precision: 0,
+      doc_recall: 0,
+      doc_f1: 0,
+      expected_chunk_ids: tc.retrieval_ground_truth.expected_passages.map(
+        (p) => p.chunk_id,
+      ),
       retrieved_chunk_ids: [],
       expected_doc_ids: tc.retrieval_ground_truth.expected_doc_ids,
       retrieved_doc_ids: [],
@@ -125,7 +218,7 @@ async function runTestCase(tc: AnswerTestCase): Promise<RetrievalTestResult> {
       retrieved_chunks_detail: [],
       execution_time_ms: Date.now() - start,
       error: error.message,
-    };
+    }
   }
 }
 
@@ -133,75 +226,163 @@ async function runTestCase(tc: AnswerTestCase): Promise<RetrievalTestResult> {
 
 function summarizeByQueryType(
   results: RetrievalTestResult[],
-  testCases: AnswerTestCase[]
+  testCases: AnswerTestCase[],
 ): Record<string, any> {
-  const byType: Record<string, RetrievalTestResult[]> = {};
+  const byType: Record<string, RetrievalTestResult[]> = {}
 
   for (const result of results) {
-    const tc = testCases.find(t => t.id === result.test_case_id);
-    if (!tc) continue;
-    const type = tc.query_type;
-    if (!byType[type]) byType[type] = [];
-    byType[type].push(result);
+    const tc = testCases.find((t) => t.id === result.test_case_id)
+    if (!tc) continue
+    const type = tc.query_type
+    if (!byType[type]) byType[type] = []
+    byType[type].push(result)
   }
 
-  const summary: Record<string, any> = {};
+  const summary: Record<string, any> = {}
   for (const [type, typeResults] of Object.entries(byType)) {
     summary[type] = {
       count: typeResults.length,
-      chunk: aggregateMetrics(typeResults.map(r => ({
-        precision: r.chunk_precision, recall: r.chunk_recall, f1: r.chunk_f1,
-      }))),
-      chunk_adjacent: aggregateMetrics(typeResults.map(r => ({
-        precision: r.chunk_precision_adjacent, recall: r.chunk_recall_adjacent, f1: r.chunk_f1_adjacent,
-      }))),
-      doc: aggregateMetrics(typeResults.map(r => ({
-        precision: r.doc_precision, recall: r.doc_recall, f1: r.doc_f1,
-      }))),
-    };
+      chunk: aggregateMetrics(
+        typeResults.map((r) => ({
+          precision: r.chunk_precision,
+          recall: r.chunk_recall,
+          f1: r.chunk_f1,
+        })),
+      ),
+      chunk_adjacent: aggregateMetrics(
+        typeResults.map((r) => ({
+          precision: r.chunk_precision_adjacent,
+          recall: r.chunk_recall_adjacent,
+          f1: r.chunk_f1_adjacent,
+        })),
+      ),
+      doc: aggregateMetrics(
+        typeResults.map((r) => ({
+          precision: r.doc_precision,
+          recall: r.doc_recall,
+          f1: r.doc_f1,
+        })),
+      ),
+    }
   }
-  return summary;
+  return summary
 }
 
 // --- Main ---
 
 async function main() {
-  console.log('Starting AskWRI Answer Mode Retrieval Evaluation');
-  console.log(`Test cases: ${goldenData.test_cases.length}`);
-  console.log(`Golden set status: ${goldenData.metadata.status || 'unknown'}\n`);
+  console.log('Starting AskWRI Answer Mode Retrieval Evaluation')
+  console.log(`Test cases: ${goldenData.test_cases.length}`)
+  console.log(`Golden set status: ${goldenData.metadata.status || 'unknown'}\n`)
 
-  // Pre-flight check
-  console.log(`Checking Python service at ${PYTHON_SERVICE_URL}...`);
-  const available = await checkPythonService();
-  if (!available) {
-    console.error(`Python service not available at ${PYTHON_SERVICE_URL}`);
-    console.error('Start with: npm run start:all');
-    process.exit(1);
+  // Pre-flight check: verify the service is up AND capture its backend identity.
+  console.log(`Checking Python service at ${PYTHON_SERVICE_URL}...`)
+  const serviceHealth = await fetchServiceHealth()
+  console.log(
+    `Python service is running (keyword_backend=${serviceHealth.keyword_backend}, retrieval_backend=${serviceHealth.retrieval_backend})\n`,
+  )
+
+  const results: RetrievalTestResult[] = []
+
+  // Resume support: checkpoint each completed query so interrupted runs only
+  // re-pay unfinished queries (mirrors run-cite-eval.ts). The checkpoint is
+  // stamped with an identity (golden-set hash, service backend, label):
+  // resuming under a different identity would silently mix runs, so a
+  // mismatch discards the checkpoint and starts fresh.
+  const checkpointPath = path.join(
+    __dirname,
+    'results',
+    'answer-retrieval-checkpoint.json',
+  )
+  const checkpointIdentity: CheckpointIdentity = {
+    goldenSetHash,
+    serviceIdentity: serviceHealth.keyword_backend,
+    label: evalLabel,
   }
-  console.log('Python service is running\n');
+  let checkpoint: Record<string, RetrievalTestResult> = {}
+  if (fs.existsSync(checkpointPath)) {
+    const stored: CheckpointFile = JSON.parse(
+      fs.readFileSync(checkpointPath, 'utf-8'),
+    )
+    if (
+      JSON.stringify(stored.identity ?? null) ===
+      JSON.stringify(checkpointIdentity)
+    ) {
+      checkpoint = stored.results ?? {}
+    } else {
+      console.log(
+        'Checkpoint identity mismatch — golden set, service backend, or label changed.',
+      )
+      console.log(`  stored:  ${JSON.stringify(stored.identity ?? null)}`)
+      console.log(`  current: ${JSON.stringify(checkpointIdentity)}`)
+      console.log('Discarding the old checkpoint and starting fresh.\n')
+    }
+  }
+  const saveCheckpoint = () => {
+    fs.mkdirSync(path.dirname(checkpointPath), { recursive: true })
+    const tmpPath = `${checkpointPath}.tmp`
+    fs.writeFileSync(
+      tmpPath,
+      JSON.stringify(
+        { identity: checkpointIdentity, results: checkpoint },
+        null,
+        2,
+      ),
+    )
+    fs.renameSync(tmpPath, checkpointPath)
+  }
+  const resumed = Object.values(checkpoint).filter((r) => !r.error).length
+  if (resumed > 0) {
+    console.log(
+      `Resuming from checkpoint: ${resumed} completed queries will be skipped\n`,
+    )
+  }
 
-  const results: RetrievalTestResult[] = [];
-
+  // Reuse is keyed by the CURRENT golden set's ids: only checkpoint entries
+  // whose id exists in goldenData.test_cases are consulted.
   for (const tc of goldenData.test_cases) {
-    const result = await runTestCase(tc);
-    results.push(result);
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    const prior = checkpoint[tc.id]
+    if (prior && !prior.error) {
+      console.log(`\n  Skipping (checkpointed): ${tc.id}`)
+      results.push(prior)
+      continue
+    }
+    const result = await runTestCase(tc)
+    results.push(result)
+    checkpoint[tc.id] = result
+    saveCheckpoint()
+    await new Promise((resolve) => setTimeout(resolve, 2000))
   }
 
   // Aggregate
-  const chunkAgg = aggregateMetrics(results.map(r => ({
-    precision: r.chunk_precision, recall: r.chunk_recall, f1: r.chunk_f1,
-  })));
-  const chunkAdjAgg = aggregateMetrics(results.map(r => ({
-    precision: r.chunk_precision_adjacent, recall: r.chunk_recall_adjacent, f1: r.chunk_f1_adjacent,
-  })));
-  const docAgg = aggregateMetrics(results.map(r => ({
-    precision: r.doc_precision, recall: r.doc_recall, f1: r.doc_f1,
-  })));
+  const chunkAgg = aggregateMetrics(
+    results.map((r) => ({
+      precision: r.chunk_precision,
+      recall: r.chunk_recall,
+      f1: r.chunk_f1,
+    })),
+  )
+  const chunkAdjAgg = aggregateMetrics(
+    results.map((r) => ({
+      precision: r.chunk_precision_adjacent,
+      recall: r.chunk_recall_adjacent,
+      f1: r.chunk_f1_adjacent,
+    })),
+  )
+  const docAgg = aggregateMetrics(
+    results.map((r) => ({
+      precision: r.doc_precision,
+      recall: r.doc_recall,
+      f1: r.doc_f1,
+    })),
+  )
 
   // Build report
   const report: RetrievalEvalReport = {
     timestamp: new Date().toISOString(),
+    label: evalLabel,
+    keyword_backend: serviceHealth.keyword_backend,
+    retrieval_backend: serviceHealth.retrieval_backend,
     test_cases_total: results.length,
     results,
     aggregate: {
@@ -210,47 +391,67 @@ async function main() {
       doc: docAgg,
     },
     summary_by_query_type: summarizeByQueryType(results, goldenData.test_cases),
-  };
+  }
 
   // Save
-  const resultsDir = path.join(__dirname, 'results');
-  fs.mkdirSync(resultsDir, { recursive: true });
-  const reportPath = path.join(resultsDir, `answer-retrieval-${Date.now()}.json`);
-  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  const resultsDir = path.join(__dirname, 'results')
+  fs.mkdirSync(resultsDir, { recursive: true })
+  const reportPath = path.join(
+    resultsDir,
+    `answer-retrieval-${evalLabel ? `${evalLabel}-` : ''}${Date.now()}.json`,
+  )
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
+
+  // Completed run: clear checkpoint only if every query succeeded.
+  if (results.every((r) => !r.error) && fs.existsSync(checkpointPath)) {
+    fs.unlinkSync(checkpointPath)
+  }
 
   // Print summary
-  console.log('\n' + '='.repeat(70));
-  console.log('ANSWER MODE RETRIEVAL EVALUATION SUMMARY');
-  console.log('='.repeat(70));
-  console.log(`Test cases: ${results.length}`);
-  console.log(`\nChunk-level (strict):`);
-  console.log(`  Precision: ${(chunkAgg.avg_precision * 100).toFixed(1)}%`);
-  console.log(`  Recall:    ${(chunkAgg.avg_recall * 100).toFixed(1)}%`);
-  console.log(`  F1:        ${(chunkAgg.avg_f1 * 100).toFixed(1)}%`);
-  console.log(`\nChunk-level (adjacent tolerance=${ADJACENT_TOLERANCE}):`);
-  console.log(`  Precision: ${(chunkAdjAgg.avg_precision * 100).toFixed(1)}%`);
-  console.log(`  Recall:    ${(chunkAdjAgg.avg_recall * 100).toFixed(1)}%`);
-  console.log(`  F1:        ${(chunkAdjAgg.avg_f1 * 100).toFixed(1)}%`);
-  console.log(`\nDoc-level (coarse grain):`);
-  console.log(`  Precision: ${(docAgg.avg_precision * 100).toFixed(1)}%`);
-  console.log(`  Recall:    ${(docAgg.avg_recall * 100).toFixed(1)}%`);
-  console.log(`  F1:        ${(docAgg.avg_f1 * 100).toFixed(1)}%`);
-  console.log(`\nReport saved: ${reportPath}`);
+  console.log('\n' + '='.repeat(70))
+  console.log('ANSWER MODE RETRIEVAL EVALUATION SUMMARY')
+  console.log('='.repeat(70))
+  console.log(`Test cases: ${results.length}`)
+  console.log(`\nChunk-level (strict):`)
+  console.log(`  Precision: ${(chunkAgg.avg_precision * 100).toFixed(1)}%`)
+  console.log(`  Recall:    ${(chunkAgg.avg_recall * 100).toFixed(1)}%`)
+  console.log(`  F1:        ${(chunkAgg.avg_f1 * 100).toFixed(1)}%`)
+  console.log(`\nChunk-level (adjacent tolerance=${ADJACENT_TOLERANCE}):`)
+  console.log(`  Precision: ${(chunkAdjAgg.avg_precision * 100).toFixed(1)}%`)
+  console.log(`  Recall:    ${(chunkAdjAgg.avg_recall * 100).toFixed(1)}%`)
+  console.log(`  F1:        ${(chunkAdjAgg.avg_f1 * 100).toFixed(1)}%`)
+  console.log(`\nDoc-level (coarse grain):`)
+  console.log(`  Precision: ${(docAgg.avg_precision * 100).toFixed(1)}%`)
+  console.log(`  Recall:    ${(docAgg.avg_recall * 100).toFixed(1)}%`)
+  console.log(`  F1:        ${(docAgg.avg_f1 * 100).toFixed(1)}%`)
+  console.log(`\nReport saved: ${reportPath}`)
 
   // Generate HTML report
-  const htmlPath = reportPath.replace('.json', '.html');
-  const goldenDataPath = path.join(__dirname, 'answer-golden-dataset.json');
-  fs.writeFileSync(htmlPath, generateHtmlReport(report, goldenDataPath));
-  console.log(`HTML report: ${htmlPath}`);
+  const htmlPath = reportPath.replace('.json', '.html')
+  fs.writeFileSync(htmlPath, generateHtmlReport(report, goldenDataPath))
+  console.log(`HTML report: ${htmlPath}`)
+
+  // Per-query errors must fail the run: exiting 0 on a partial result would
+  // poison downstream comparisons. The checkpoint is preserved (it is only
+  // cleared above when every query succeeded), so a re-run resumes and
+  // retries exactly the errored queries.
+  const errored = results.filter((r) => r.error)
+  if (errored.length > 0) {
+    console.error(
+      `\n${errored.length} test case(s) errored: ${errored.map((r) => r.test_case_id).join(', ')}`,
+    )
+    console.error('Checkpoint preserved — re-run to retry the errored queries.')
+    process.exit(1)
+  }
 }
 
 if (require.main === module) {
   main()
     .then(() => process.exit(0))
     .catch((error) => {
-      console.error('Fatal error:', error);
-      process.exit(1);
-    });
+      console.error('Fatal error:', error)
+      process.exit(1)
+    })
 }
 
-export { main as runAnswerRetrievalEval };
+export { main as runAnswerRetrievalEval }

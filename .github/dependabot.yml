@@ -1,67 +1,104 @@
+# NOTE: editing this file makes Dependabot re-run EVERY ecosystem immediately
+# on the default branch, not on the next scheduled tick. On 2026-07-27 a
+# cosmetic reformat of this file opened 19 PRs within two minutes. That is why
+# .prettierignore excludes it, and why the groups below exist — a re-run should
+# cost a handful of PRs, not twenty.
 version: 2
 updates:
   # npm (Next.js app)
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "monthly"
+      interval: 'monthly'
     open-pull-requests-limit: 10
-    versioning-strategy: "increase-if-necessary"
+    versioning-strategy: 'increase-if-necessary'
+    # Grouping is not just noise control. Packages released in lockstep MUST
+    # move together: react/react-dom enforce exact version parity at runtime,
+    # and a solo react-dom bump (#289) failed every jsdom suite with
+    # "Incompatible React versions". Same shape for the typescript-eslint
+    # family, whose meta-package pins its own parser version.
+    groups:
+      react:
+        patterns: ['react', 'react-dom', '@types/react', '@types/react-dom']
+      next:
+        patterns: ['next', 'eslint-config-next', '@next/*']
+      typescript-eslint:
+        patterns: ['typescript-eslint', '@typescript-eslint/*']
+      lint-and-format:
+        patterns: ['eslint', 'eslint-*', 'prettier', 'prettier-*']
+      tailwind:
+        patterns: ['tailwindcss', '@tailwindcss/*']
+      testing:
+        patterns: ['jest', 'jest-*', '@testing-library/*', 'ts-jest']
+      minor-and-patch:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   # pip (search-service)
-  - package-ecosystem: "pip"
-    directory: "/search-service"
+  - package-ecosystem: 'pip'
+    directory: '/search-service'
     schedule:
-      interval: "monthly"
+      interval: 'monthly'
     open-pull-requests-limit: 10
+    groups:
+      pytest:
+        patterns: ['pytest', 'pytest-*']
+      runtime:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+    # requirements.txt / requirements-dev.txt are pip-compile output (pinned,
+    # generated); requirements.in / requirements-dev.in are the sources.
+    # Dependabot edits the .in and regenerates the .txt. Regenerate by hand
+    # with search-service/scripts/compile-requirements.sh, which compiles
+    # inside python:3.12-slim so the pins match the deploy image.
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   # Docker (root)
-  - package-ecosystem: "docker"
-    directory: "/"
+  - package-ecosystem: 'docker'
+    directory: '/'
     schedule:
-      interval: "monthly"
+      interval: 'monthly'
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   # Docker (search-service)
-  - package-ecosystem: "docker"
-    directory: "/search-service"
+  - package-ecosystem: 'docker'
+    directory: '/search-service'
     schedule:
-      interval: "monthly"
+      interval: 'monthly'
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   # Terraform (infrastructure)
-  - package-ecosystem: "terraform"
-    directory: "/terraform/infrastructure"
+  - package-ecosystem: 'terraform'
+    directory: '/terraform/infrastructure'
     schedule:
-      interval: "monthly"
+      interval: 'monthly'
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   # Terraform (backend-setup)
-  - package-ecosystem: "terraform"
-    directory: "/terraform/backend-setup"
+  - package-ecosystem: 'terraform'
+    directory: '/terraform/backend-setup'
     schedule:
-      interval: "monthly"
+      interval: 'monthly'
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "monthly"
+      interval: 'monthly'
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']

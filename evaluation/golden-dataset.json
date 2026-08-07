@@ -180,16 +180,12 @@
         "https://urbantransitions.global/en/publication/financing-the-urban-transition-for-sustainable-development-better-finance-for-better-cities/",
         "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen",
         "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
-        "https://www.wri.org/research/synergizing-land-value-capture-tod",
-        "https://www.wri.org/research/financing-electric-and-hybrid-electric-buses",
-        "https://wri-india.org/research/assessing-financing-challenges-implementing-large-scale-electric-bus-program-india",
-        "https://wri-india.org/research/rolling-out-electric-buses",
-        "https://urbantransitions.global/en/publication/the-future-of-urban-mobility-the-case-for-electric-bus-deployment-in-bogota-colombia/"
+        "https://www.wri.org/research/synergizing-land-value-capture-tod"
       ],
-      "expected_count": 11,
+      "expected_count": 7,
       "difficulty": "hard",
       "query_type": "amorphous_exclusion",
-      "note": "Urban finance minus electric buses. Removed seizing-the-urban-opportunity (not in catalog)"
+      "note": "Urban finance minus electric buses. Removed seizing-the-urban-opportunity (not in catalog). 2026-07-22: removed 4 electric-bus expected_urls that contradicted the query's own exclusion clause (financing-electric-and-hybrid-electric-buses, assessing-financing-challenges-implementing-large-scale-electric-bus-program-india, rolling-out-electric-buses, the-future-of-urban-mobility-electric-bus-deployment-in-bogota-colombia); expected_count 11->7."
     }
   ],
   "metadata": {

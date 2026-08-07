@@ -1,0 +1,710 @@
+{
+  "label": "before-rerank",
+  "rerank": true,
+  "pinned": {
+    "vector_top_k": 800,
+    "bm25_top_k": 800,
+    "rerank_top_n": 500,
+    "max_results": 100
+  },
+  "generated_at": "2026-07-26T18:05:23.345Z",
+  "service_url": "http://127.0.0.1:8000",
+  "results": {
+    "en-tr-zh-01": {
+      "class": "en-tr",
+      "query": "Zhuzhou complete street design guidelines",
+      "targets": {
+        "2019_zhuzhou-complete-street-design-manual_2976": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 11,
+      "latency_ms": 1860
+    },
+    "en-tr-zh-02": {
+      "class": "en-tr",
+      "query": "electric bus operational challenges",
+      "targets": {
+        "2019_overcoming-the-operational-challenges-of-electric_2317": {
+          "bm25": 5,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 13,
+      "latency_ms": 991
+    },
+    "en-tr-zh-03": {
+      "class": "en-tr",
+      "query": "Beijing zero-emission freight",
+      "targets": {
+        "2021_zero-emission-logistic-vehicles-promotion_1319": {
+          "bm25": 4,
+          "dense": 3,
+          "final": 2
+        },
+        "2024_accelerating-zero-emission-truck-adoption-in_6287": {
+          "bm25": 2,
+          "dense": 2,
+          "final": 3
+        },
+        "2024_feasibility-of-zero-emission-freight-zones_1267": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 3,
+      "latency_ms": 790
+    },
+    "en-tr-zh-04": {
+      "class": "en-tr",
+      "query": "mobility as a service platform business models",
+      "targets": {
+        "2022_introduction-and-case-studies-of-mobility-as-a_9845": {
+          "bm25": 2,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 32,
+      "latency_ms": 1068
+    },
+    "en-tr-zh-05": {
+      "class": "en-tr",
+      "query": "Shenzhen port container transport decarbonization",
+      "targets": {
+        "2024_optimizing-container-ports-transportation-and_9894": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 12,
+      "latency_ms": 1057
+    },
+    "en-tr-zh-06": {
+      "class": "en-tr",
+      "query": "rail transit station safe accessibility design",
+      "targets": {
+        "2020_design-manual-on-safe-access-to-public_5869": {
+          "bm25": 13,
+          "dense": 2,
+          "final": 1
+        }
+      },
+      "final_doc_count": 16,
+      "latency_ms": 989
+    },
+    "en-tr-zh-07": {
+      "class": "en-tr",
+      "query": "Guangdong road transport deep emission reduction pathways",
+      "targets": {
+        "2022_research-on-medium-and-long-term-in-depth_4687": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 5,
+      "latency_ms": 882
+    },
+    "en-tr-es-01": {
+      "class": "en-tr",
+      "query": "the cost of urban expansion in Mexico",
+      "targets": {
+        "2021_el-costo-de-la-expansion-urbana-en-mexico_9471": {
+          "bm25": 2,
+          "dense": 2,
+          "final": 1
+        }
+      },
+      "final_doc_count": 20,
+      "latency_ms": 1015
+    },
+    "en-tr-es-02": {
+      "class": "en-tr",
+      "query": "women and transport in Bogota",
+      "targets": {
+        "2020_las-mujeres-y-el-transporte-en-bogota-las-cuentas_3254": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 15,
+      "latency_ms": 1032
+    },
+    "en-tr-es-03": {
+      "class": "en-tr",
+      "query": "safe walkable environments",
+      "targets": {
+        "2022_guia-de-entornos-caminables-seguros_2940": {
+          "bm25": null,
+          "dense": 1,
+          "final": 2
+        }
+      },
+      "final_doc_count": 16,
+      "latency_ms": 1046
+    },
+    "en-tr-es-04": {
+      "class": "en-tr",
+      "query": "participatory science for clean air",
+      "targets": {
+        "2023_ciencia-participativa-accion-para-un-aire-limpio_6722": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 6,
+      "latency_ms": 1944
+    },
+    "en-tr-es-05": {
+      "class": "en-tr",
+      "query": "urban inequality index",
+      "targets": {
+        "2020_indice-de-desigualdad-urbana_3387": {
+          "bm25": null,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 29,
+      "latency_ms": 1049
+    },
+    "en-tr-pt-01": {
+      "class": "en-tr",
+      "query": "complete streets in Brazil",
+      "targets": {
+        "2021_ruas-completas-no-brasil-promovendo-uma-mudanca_5028": {
+          "bm25": 3,
+          "dense": 1,
+          "final": 3
+        }
+      },
+      "final_doc_count": 8,
+      "latency_ms": 1007
+    },
+    "en-tr-pt-03": {
+      "class": "en-tr",
+      "query": "QualiOnibus passenger satisfaction survey",
+      "targets": {
+        "2024_manual-da-pesquisa-de-satisfacao-qualionibus_7600": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 7,
+      "latency_ms": 1077
+    },
+    "en-tr-pt-04": {
+      "class": "en-tr",
+      "query": "vertical and horizontal expansion in Brazilian cities",
+      "targets": {
+        "2025_trinta-anos-de-expansao-vertical-e-horizontal-em_9049": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 12,
+      "latency_ms": 1087
+    },
+    "en-topical-ebus-lessons": {
+      "class": "en-topical",
+      "query": "what have cities learned from operating large electric bus fleets in daily service?",
+      "targets": {
+        "2019_overcoming-the-operational-challenges-of-electric_2317": {
+          "bm25": null,
+          "dense": 3,
+          "final": 6
+        }
+      },
+      "competitors": {
+        "2019_barriers-to-adopting-electric-buses_4116": {
+          "bm25": 24,
+          "dense": 5,
+          "final": 11
+        },
+        "2019_how-to-enable-electric-bus-adoption-in-cities_4136": {
+          "bm25": 9,
+          "dense": 1,
+          "final": 2
+        },
+        "2022_rolling-out-electric-buses-a-guidebook-on-route_8515": {
+          "bm25": 2,
+          "dense": 4,
+          "final": 12
+        }
+      },
+      "final_doc_count": 31,
+      "latency_ms": 1063
+    },
+    "en-topical-freight-decarb": {
+      "class": "en-topical",
+      "query": "how can cities decarbonize urban freight and logistics vehicle fleets?",
+      "targets": {
+        "2021_zero-emission-logistic-vehicles-promotion_1319": {
+          "bm25": 4,
+          "dense": 5,
+          "final": 3
+        }
+      },
+      "competitors": {
+        "2022_zero-emission-delivery-zones-decarbonizing-urban_6979": {
+          "bm25": 6,
+          "dense": 1,
+          "final": 2
+        },
+        "2025_charging-toward-2035-policies-to-accelerate-zero_7455": {
+          "bm25": 9,
+          "dense": 23,
+          "final": 17
+        }
+      },
+      "final_doc_count": 31,
+      "latency_ms": 1044
+    },
+    "en-topical-transit-finance": {
+      "class": "en-topical",
+      "query": "what financing mechanisms can make public bus systems financially sustainable?",
+      "targets": {
+        "2023_analisis-de-los-mecanismos-financieros-para-la_3765": {
+          "bm25": null,
+          "dense": 1,
+          "final": 2
+        }
+      },
+      "competitors": {
+        "2024_a-fare-look-funding-urban-public-transport_7541": {
+          "bm25": 52,
+          "dense": 4,
+          "final": 9
+        },
+        "2016_financing-the-urban-transition-for-sustainable_3374": {
+          "bm25": 9,
+          "dense": 9,
+          "final": 34
+        }
+      },
+      "final_doc_count": 37,
+      "latency_ms": 1165
+    },
+    "en-topical-vehicle-grid": {
+      "class": "en-topical",
+      "query": "what technical standards and grid strategies are needed for large-scale EV charging?",
+      "targets": {
+        "2021_open-communication-protocols-vehicle-grid_1665": {
+          "bm25": 10,
+          "dense": 2,
+          "final": 3
+        },
+        "2020_quantifying-the-grid-impacts-from-large-adoption_6748": {
+          "bm25": 7,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "competitors": {
+        "2021_simulator-to-quantify-and-manage-electric-vehicle_1145": {
+          "bm25": 4,
+          "dense": 13,
+          "final": 7
+        },
+        "2021_pole-mounted-electric-vehicle-charging_6046": {
+          "bm25": 2,
+          "dense": 5,
+          "final": 13
+        }
+      },
+      "final_doc_count": 30,
+      "latency_ms": 1027
+    },
+    "en-topical-maas": {
+      "class": "en-topical",
+      "query": "how can cities integrate buses, ride-hailing, and bike-share into one mobility platform?",
+      "targets": {
+        "2022_introduction-and-case-studies-of-mobility-as-a_9845": {
+          "bm25": 22,
+          "dense": 5,
+          "final": 5
+        }
+      },
+      "competitors": {
+        "2021_demand-responsive-transit-understanding-emerging_8185": {
+          "bm25": 6,
+          "dense": 7,
+          "final": 6
+        },
+        "2019_from-mobility-to-access-for-all-expanding-urban_8627": {
+          "bm25": 2,
+          "dense": 9,
+          "final": 4
+        }
+      },
+      "final_doc_count": 24,
+      "latency_ms": 1061
+    },
+    "en-topical-net-zero-road": {
+      "class": "en-topical",
+      "query": "what are realistic pathways for the road transport sector to reach net-zero emissions?",
+      "targets": {
+        "2019_toward-net-zero-emissions-in-the-road-transport_1735": {
+          "bm25": 2,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "competitors": {
+        "2022_decarbonizing-chinas-road-transport-sector_2101": {
+          "bm25": 9,
+          "dense": 4,
+          "final": 5
+        },
+        "2024_pathways-to-decarbonize-indias-transport-sector_2978": {
+          "bm25": 4,
+          "dense": 3,
+          "final": 6
+        }
+      },
+      "final_doc_count": 8,
+      "latency_ms": 884
+    },
+    "en-topical-air-citizen-science": {
+      "class": "en-topical",
+      "query": "How does citizen-led air quality monitoring with low-cost sensors influence urban policy?",
+      "targets": {
+        "2023_ciencia-participativa-accion-para-un-aire-limpio_6722": {
+          "bm25": 26,
+          "dense": 2,
+          "final": 2
+        },
+        "2025_aire-limpio-en-barrios-vitales_9425": {
+          "bm25": 56,
+          "dense": 3,
+          "final": 3
+        }
+      },
+      "competitors": {
+        "2020_impactar-tool-valuing-air-quality-health-impacts_1028": {
+          "bm25": 5,
+          "dense": 9,
+          "final": null
+        },
+        "2021_medindo-mp25-com-sensores-de-baixo-custo_6821": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 14,
+      "latency_ms": 1127
+    },
+    "en-topical-sprawl-costs": {
+      "class": "en-topical",
+      "query": "What are the economic costs of unchecked urban sprawl and expansion in Latin American cities?",
+      "targets": {
+        "2021_el-costo-de-la-expansion-urbana-en-mexico_9471": {
+          "bm25": 7,
+          "dense": 2,
+          "final": 5
+        },
+        "2021_mexican-cities-expansion-trends-and-their-impacts_9595": {
+          "bm25": 16,
+          "dense": 4,
+          "final": 16
+        },
+        "2025_trinta-anos-de-expansao-vertical-e-horizontal-em_9049": {
+          "bm25": null,
+          "dense": 7,
+          "final": 25
+        }
+      },
+      "competitors": {
+        "2019_upward-and-outward-growth-managing-urban_2841": {
+          "bm25": 1,
+          "dense": 5,
+          "final": 7
+        },
+        "2017_integrating-national-policies-to-deliver-compact_5239": {
+          "bm25": 3,
+          "dense": 19,
+          "final": 9
+        }
+      },
+      "final_doc_count": 31,
+      "latency_ms": 1061
+    },
+    "en-topical-walkable-streets": {
+      "class": "en-topical",
+      "query": "How can redesigning streets make neighborhoods more walkable and safer for pedestrians?",
+      "targets": {
+        "2021_ruas-completas-no-brasil-promovendo-uma-mudanca_5028": {
+          "bm25": null,
+          "dense": 9,
+          "final": null
+        },
+        "2022_guia-de-entornos-caminables-seguros_2940": {
+          "bm25": null,
+          "dense": 3,
+          "final": 8
+        }
+      },
+      "competitors": {
+        "2015_cities-safer-by-design_8831": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 3
+        },
+        "2024_guide-for-safe-speeds-managing-traffic-speeds-to_4833": {
+          "bm25": 6,
+          "dense": 4,
+          "final": 11
+        },
+        "2021_low-speed-zone-guide_6603": {
+          "bm25": 4,
+          "dense": 7,
+          "final": 4
+        }
+      },
+      "final_doc_count": 12,
+      "latency_ms": 1061
+    },
+    "en-topical-inequality-access": {
+      "class": "en-topical",
+      "query": "How unequal is access to jobs and essential services across neighborhoods within a city?",
+      "targets": {
+        "2020_indice-de-desigualdad-urbana_3387": {
+          "bm25": null,
+          "dense": 2,
+          "final": 5
+        }
+      },
+      "competitors": {
+        "2016_towards-a-more-equal-city-framing-the-challenges_8659": {
+          "bm25": 72,
+          "dense": 7,
+          "final": 14
+        },
+        "2019_from-mobility-to-access-for-all-expanding-urban_8627": {
+          "bm25": 2,
+          "dense": 3,
+          "final": 3
+        }
+      },
+      "final_doc_count": 38,
+      "latency_ms": 1191
+    },
+    "en-topical-gender-safety": {
+      "class": "en-topical",
+      "query": "How does gender shape safety and mobility experiences for women using public transport?",
+      "targets": {
+        "2020_las-mujeres-y-el-transporte-en-bogota-las-cuentas_3254": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 3
+        }
+      },
+      "competitors": {
+        "2025_fare-free-bus-travel-scheme-for-women-lessons_2822": {
+          "bm25": 2,
+          "dense": 3,
+          "final": 1
+        },
+        "2025_safer-streets-in-mumbai-reflecting-on-a-decade-of_7058": {
+          "bm25": 16,
+          "dense": 17,
+          "final": null
+        }
+      },
+      "final_doc_count": 19,
+      "latency_ms": 1119
+    },
+    "en-topical-just-transition": {
+      "class": "en-topical",
+      "query": "How can countries manage job losses and social impacts from a low-carbon transition?",
+      "targets": {
+        "2025_from-concept-to-application-analyzing-just_6237": {
+          "bm25": 9,
+          "dense": 1,
+          "final": 11
+        }
+      },
+      "competitors": {
+        "2025_a-just-transition-in-the-downstream-automotive_1481": {
+          "bm25": 12,
+          "dense": 8,
+          "final": 3
+        },
+        "2021_seizing-the-urban-opportunity_8690": {
+          "bm25": 2,
+          "dense": 2,
+          "final": 1
+        }
+      },
+      "final_doc_count": 31,
+      "latency_ms": 1238
+    },
+    "en-body-es-9595": {
+      "class": "en-body",
+      "query": "Why did northern border cities in Mexico grow faster in built-up area than the national average between 2000 and 2010?",
+      "targets": {
+        "2021_mexican-cities-expansion-trends-and-their-impacts_9595": {
+          "bm25": 62,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 16,
+      "latency_ms": 1085
+    },
+    "en-body-es-3765": {
+      "class": "en-body",
+      "query": "How many trolleybuses did Mexico City's electric transit operator purchase in 2019 and 2020, and at what cost?",
+      "targets": {
+        "2023_analisis-de-los-mecanismos-financieros-para-la_3765": {
+          "bm25": null,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 15,
+      "latency_ms": 1054
+    },
+    "en-body-es-2276": {
+      "class": "en-body",
+      "query": "How many possible combinations of transportation modes were identified for completing a single trip in the survey data?",
+      "targets": {
+        "2023_base-de-datos-ajustada-de-la-encuesta-origen_2276": {
+          "bm25": 42,
+          "dense": 2,
+          "final": 1
+        }
+      },
+      "final_doc_count": 28,
+      "latency_ms": 1082
+    },
+    "en-body-es-9425": {
+      "class": "en-body",
+      "query": "How did truck and motorcycle counts change between the 2021 baseline and 2023 measurements at San Felipe's vehicle counting points?",
+      "targets": {
+        "2025_aire-limpio-en-barrios-vitales_9425": {
+          "bm25": 23,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 1,
+      "latency_ms": 1129
+    },
+    "en-body-id-4324": {
+      "class": "en-body",
+      "query": "What spatial resolution and satellite imagery source does the Dynamic World platform use to map tree cover?",
+      "targets": {
+        "2025_panduan-pelaksanaan-inventarisasi-pohon-perkotaan_4324": {
+          "bm25": 12,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 5,
+      "latency_ms": 1136
+    },
+    "en-body-zh-1735": {
+      "class": "en-body",
+      "query": "What is the average annual driving distance of private passenger cars in Beijing compared with Shenzhen and Guangzhou?",
+      "targets": {
+        "2019_toward-net-zero-emissions-in-the-road-transport_1735": {
+          "bm25": 33,
+          "dense": 4,
+          "final": 1
+        }
+      },
+      "final_doc_count": 16,
+      "latency_ms": 1030
+    },
+    "en-body-zh-6748": {
+      "class": "en-body",
+      "query": "According to real-world monitoring data, how many hours per day does a typical private electric vehicle sit parked in Beijing?",
+      "targets": {
+        "2020_quantifying-the-grid-impacts-from-large-adoption_6748": {
+          "bm25": null,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 11,
+      "latency_ms": 1091
+    },
+    "en-body-zh-1665": {
+      "class": "en-body",
+      "query": "Why did a US charging network operator's patents create legal obstacles for an international charging standard entering the American market?",
+      "targets": {
+        "2021_open-communication-protocols-vehicle-grid_1665": {
+          "bm25": 16,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 2,
+      "latency_ms": 1059
+    },
+    "en-body-zh-5424": {
+      "class": "en-body",
+      "query": "Which four Chinese provinces had the fastest average annual growth in transportation carbon emissions from 2012 to 2019, and what were their growth rates?",
+      "targets": {
+        "2023_deciphering-chinas-provincial-transport-carbon_5424": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 3
+        }
+      },
+      "final_doc_count": 10,
+      "latency_ms": 1068
+    },
+    "en-body-zh-7471": {
+      "class": "en-body",
+      "query": "Which city's 2020 greening coverage rate was used as the benchmark for scoring urban green space performance?",
+      "targets": {
+        "2024_a-comparative-study-of-low-carbon-development_7471": {
+          "bm25": 25,
+          "dense": 3,
+          "final": 1
+        }
+      },
+      "final_doc_count": 5,
+      "latency_ms": 1077
+    },
+    "en-body-zh-6237": {
+      "class": "en-body",
+      "query": "Which groups — women, youth, low-income people, indigenous people — are named for protection in national adaptation plans?",
+      "targets": {
+        "2025_from-concept-to-application-analyzing-just_6237": {
+          "bm25": 1,
+          "dense": 4,
+          "final": 1
+        }
+      },
+      "final_doc_count": 7,
+      "latency_ms": 1161
+    },
+    "en-body-zh-3814": {
+      "class": "en-body",
+      "query": "How could a nationwide book-and-claim mechanism let airlines trade fuel credits without physically loading fuel?",
+      "targets": {
+        "2025_navigating-sustainability-comparative-study-of_3814": {
+          "bm25": 1,
+          "dense": 1,
+          "final": 1
+        }
+      },
+      "final_doc_count": 3,
+      "latency_ms": 1107
+    }
+  }
+}

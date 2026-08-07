@@ -5,65 +5,93 @@
  * Generates precision, recall, F1 metrics and detailed report
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import type { DocMeta } from '../src/lib/llamacloud';
+import * as crypto from 'crypto'
+import * as fs from 'fs'
+import * as path from 'path'
+import type { DocMeta } from '../src/lib/llamacloud'
 import {
-  checkPythonService,
   callPythonService as callPythonServiceRaw,
   transformToDocMeta,
   PYTHON_SERVICE_URL,
-} from './lib/service-client';
-import { calculateUrlMetrics, extractUrlSlug } from './lib/metrics';
+} from './lib/service-client'
+import { calculateUrlMetrics, extractUrlSlug } from './lib/metrics'
 
 // Load golden dataset
-const goldenDataPath = path.join(__dirname, 'golden-dataset.json');
-const goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
+const goldenDataPath = path.join(__dirname, 'golden-dataset.json')
+const goldenDataRaw = fs.readFileSync(goldenDataPath, 'utf-8')
+const goldenData = JSON.parse(goldenDataRaw)
+const goldenSetHash = crypto
+  .createHash('sha256')
+  .update(goldenDataRaw)
+  .digest('hex')
+const evalLabel = process.env.EVAL_LABEL ?? null
 
 interface TestCase {
-  id: string;
-  question: string;
-  task_description: string;
-  expected_urls: string[];
-  expected_count: number;
-  difficulty: string;
-  query_type: string;
-  note?: string;
+  id: string
+  question: string
+  task_description: string
+  expected_urls: string[]
+  expected_count: number
+  difficulty: string
+  query_type: string
+  note?: string
 }
 
 interface TestResult {
-  test_case_id: string;
-  question: string;
-  task_description: string;
-  expected_count: number;
-  retrieved_count: number;
-  expected_urls: string[];
-  retrieved_urls: string[];
-  matched_urls: string[];
-  precision: number;
-  recall: number;
-  f1: number;
-  false_positives: string[];
-  false_negatives: string[];
-  execution_time_ms: number;
-  error?: string;
+  test_case_id: string
+  question: string
+  task_description: string
+  expected_count: number
+  retrieved_count: number
+  expected_urls: string[]
+  retrieved_urls: string[]
+  matched_urls: string[]
+  precision: number
+  recall: number
+  f1: number
+  false_positives: string[]
+  false_negatives: string[]
+  execution_time_ms: number
+  error?: string
+}
+
+interface ServiceHealth {
+  keyword_backend: string | null
+  retrieval_backend: string | null
+}
+
+interface CheckpointIdentity {
+  goldenSetHash: string
+  serviceIdentity: string | null
+  label: string | null
+}
+
+interface CheckpointFile {
+  identity?: CheckpointIdentity
+  results?: Record<string, TestResult>
 }
 
 interface EvalReport {
-  timestamp: string;
-  test_cases_total: number;
-  test_cases_passed: number;
-  test_cases_failed: number;
-  overall_precision: number;
-  overall_recall: number;
-  overall_f1: number;
-  results: TestResult[];
-  summary_by_query_type: Record<string, {
-    count: number;
-    avg_precision: number;
-    avg_recall: number;
-    avg_f1: number;
-  }>;
+  timestamp: string
+  label: string | null
+  keyword_backend: string | null
+  retrieval_backend: string | null
+  test_cases_total: number
+  test_cases_passed: number
+  test_cases_failed: number
+  overall_precision: number
+  overall_recall: number
+  overall_f1: number
+  results: TestResult[]
+  summary_by_query_type: Record<
+    string,
+    {
+      count: number
+      avg_precision: number
+      avg_recall: number
+      avg_f1: number
+    }
+  >
 }
 
 /**
@@ -71,69 +99,112 @@ interface EvalReport {
  */
 function extractUrls(docs: DocMeta[]): string[] {
   return docs
-    .map(doc => doc.url || doc._url)
+    .map((doc) => doc.url || doc._url)
     .filter(Boolean)
-    .map(url => url as string);
+    .map((url) => url as string)
+}
+
+/**
+ * Fetch /health and extract the service's backend identity.
+ * Fails fast if /health is unreachable or the service is not healthy:
+ * checkpoint identity and report provenance depend on knowing the backend.
+ */
+async function fetchServiceHealth(): Promise<ServiceHealth> {
+  let data: any
+  try {
+    const response = await fetch(`${PYTHON_SERVICE_URL}/health`, {
+      method: 'GET',
+    })
+    data = await response.json()
+  } catch (error: any) {
+    console.error(
+      `FATAL: /health unreachable at ${PYTHON_SERVICE_URL} (${error.message})`,
+    )
+    console.error(
+      'Cannot verify the service backend identity. Start the service first:',
+    )
+    console.error('  npm run search-service   (or set LLAMAINDEX_SERVICE_URL)')
+    process.exit(1)
+  }
+  if (data.status !== 'healthy' && !data.ok) {
+    console.error(
+      `FATAL: service at ${PYTHON_SERVICE_URL} reports status "${data.status}" — not ready`,
+    )
+    process.exit(1)
+  }
+  return {
+    keyword_backend: data.keyword_backend ?? null,
+    retrieval_backend: data.retrieval_backend ?? null,
+  }
 }
 
 /**
  * Call Python service with Cite mode parameters and filtering.
  * Wraps the shared service client with cite-specific config.
  */
-async function callCiteService(query: string, params?: {
-  vector_top_k?: number,
-  bm25_top_k?: number,
-  rerank_top_n?: number
-}): Promise<DocMeta[]> {
+async function callCiteService(
+  query: string,
+  params?: {
+    vector_top_k?: number
+    bm25_top_k?: number
+    rerank_top_n?: number
+  },
+): Promise<DocMeta[]> {
   // Service now handles logit floor filtering and tier assignment
   const rawDocs = await callPythonServiceRaw(query, 'cite', {
     vector_top_k: params?.vector_top_k ?? 800,
     bm25_top_k: params?.bm25_top_k ?? 800,
     rerank_top_n: params?.rerank_top_n ?? 500,
     max_results: 100,
-  });
+  })
 
-  console.log(`[Cite Service] Retrieved: ${rawDocs.length} docs (logit floor applied by service)`);
+  console.log(
+    `[Cite Service] Retrieved: ${rawDocs.length} docs (logit floor applied by service)`,
+  )
 
-  return rawDocs.map(transformToDocMeta);
+  return rawDocs.map(transformToDocMeta)
 }
 
 /**
  * Run a single test case
  */
 async function runTestCase(testCase: TestCase): Promise<TestResult> {
-  console.log(`\n  Testing: ${testCase.id}`);
-  console.log(`   Question: ${testCase.question}`);
-  console.log(`   Task: ${testCase.task_description}`);
-  console.log(`   Expected: ${testCase.expected_count} documents`);
+  console.log(`\n  Testing: ${testCase.id}`)
+  console.log(`   Question: ${testCase.question}`)
+  console.log(`   Task: ${testCase.task_description}`)
+  console.log(`   Expected: ${testCase.expected_count} documents`)
 
-  const startTime = Date.now();
+  const startTime = Date.now()
 
   try {
     // Combine question and task description for full context
-    const fullQuery = `${testCase.question}\n\nTask: ${testCase.task_description}`;
+    const fullQuery = `${testCase.question}\n\nTask: ${testCase.task_description}`
 
-    const docs = await callCiteService(fullQuery);
+    const docs = await callCiteService(fullQuery)
 
-    console.log(`   Retrieved: ${docs.length} documents`);
+    console.log(`   Retrieved: ${docs.length} documents`)
 
-    const executionTime = Date.now() - startTime;
+    const executionTime = Date.now() - startTime
 
     // Extract URLs
-    const retrievedUrls = extractUrls(docs);
+    const retrievedUrls = extractUrls(docs)
 
     // Calculate metrics using shared URL metrics
-    const expectedSlugs = testCase.expected_urls.map(extractUrlSlug);
-    const retrievedSlugs = retrievedUrls.map(extractUrlSlug);
-    console.log(`[Matching] Expected slugs: ${expectedSlugs.slice(0, 3).join(', ')}...`);
-    console.log(`[Matching] Retrieved slugs: ${retrievedSlugs.slice(0, 3).join(', ')}...`);
+    const expectedSlugs = testCase.expected_urls.map(extractUrlSlug)
+    const retrievedSlugs = retrievedUrls.map(extractUrlSlug)
+    console.log(
+      `[Matching] Expected slugs: ${expectedSlugs.slice(0, 3).join(', ')}...`,
+    )
+    console.log(
+      `[Matching] Retrieved slugs: ${retrievedSlugs.slice(0, 3).join(', ')}...`,
+    )
 
-    const metrics = calculateUrlMetrics(testCase.expected_urls, retrievedUrls);
+    const metrics = calculateUrlMetrics(testCase.expected_urls, retrievedUrls)
 
-    console.log(`   Retrieved: ${retrievedUrls.length} documents`);
-    console.log(`   Precision: ${(metrics.precision * 100).toFixed(1)}%`);
-    console.log(`   Recall: ${(metrics.recall * 100).toFixed(1)}%`);
-    console.log(`   F1: ${(metrics.f1 * 100).toFixed(1)}%`);
+    console.log(`   Retrieved: ${retrievedUrls.length} documents`)
+    console.log(`   Precision: ${(metrics.precision * 100).toFixed(1)}%`)
+    console.log(`   Recall: ${(metrics.recall * 100).toFixed(1)}%`)
+    console.log(`   F1: ${(metrics.f1 * 100).toFixed(1)}%`)
 
     return {
       test_case_id: testCase.id,
@@ -149,10 +220,10 @@ async function runTestCase(testCase: TestCase): Promise<TestResult> {
       f1: metrics.f1,
       false_positives: metrics.false_positives,
       false_negatives: metrics.false_negatives,
-      execution_time_ms: executionTime
-    };
+      execution_time_ms: executionTime,
+    }
   } catch (error: any) {
-    console.error(`   Error: ${error.message}`);
+    console.error(`   Error: ${error.message}`)
     return {
       test_case_id: testCase.id,
       question: testCase.question,
@@ -168,84 +239,158 @@ async function runTestCase(testCase: TestCase): Promise<TestResult> {
       false_positives: [],
       false_negatives: testCase.expected_urls,
       execution_time_ms: Date.now() - startTime,
-      error: error.message
-    };
+      error: error.message,
+    }
   }
 }
 
 /**
  * Generate summary statistics by query type
  */
-function summarizeByQueryType(results: TestResult[], testCases: TestCase[]): Record<string, any> {
-  const byType: Record<string, TestResult[]> = {};
+function summarizeByQueryType(
+  results: TestResult[],
+  testCases: TestCase[],
+): Record<string, any> {
+  const byType: Record<string, TestResult[]> = {}
 
   for (const result of results) {
-    const testCase = testCases.find(tc => tc.id === result.test_case_id);
-    if (!testCase) continue;
+    const testCase = testCases.find((tc) => tc.id === result.test_case_id)
+    if (!testCase) continue
 
-    const type = testCase.query_type;
-    if (!byType[type]) byType[type] = [];
-    byType[type].push(result);
+    const type = testCase.query_type
+    if (!byType[type]) byType[type] = []
+    byType[type].push(result)
   }
 
-  const summary: Record<string, any> = {};
+  const summary: Record<string, any> = {}
   for (const [type, typeResults] of Object.entries(byType)) {
-    const avgPrecision = typeResults.reduce((sum, r) => sum + r.precision, 0) / typeResults.length;
-    const avgRecall = typeResults.reduce((sum, r) => sum + r.recall, 0) / typeResults.length;
-    const avgF1 = typeResults.reduce((sum, r) => sum + r.f1, 0) / typeResults.length;
+    const avgPrecision =
+      typeResults.reduce((sum, r) => sum + r.precision, 0) / typeResults.length
+    const avgRecall =
+      typeResults.reduce((sum, r) => sum + r.recall, 0) / typeResults.length
+    const avgF1 =
+      typeResults.reduce((sum, r) => sum + r.f1, 0) / typeResults.length
 
     summary[type] = {
       count: typeResults.length,
       avg_precision: avgPrecision,
       avg_recall: avgRecall,
-      avg_f1: avgF1
-    };
+      avg_f1: avgF1,
+    }
   }
 
-  return summary;
+  return summary
 }
 
 /**
  * Main evaluation runner
  */
 async function runEvaluation() {
-  console.log('Starting AskWRI Cite Mode Evaluation');
-  console.log(`Test cases: ${goldenData.test_cases.length}`);
-  console.log(`Total expected documents: ${goldenData.metadata.total_expected_documents}\n`);
+  console.log('Starting AskWRI Cite Mode Evaluation')
+  console.log(`Test cases: ${goldenData.test_cases.length}`)
+  console.log(
+    `Total expected documents: ${goldenData.metadata.total_expected_documents}\n`,
+  )
 
-  // Pre-flight check
-  console.log('Checking Python service availability...');
-  const serviceAvailable = await checkPythonService();
-  if (!serviceAvailable) {
-    console.error(`Python service not available at ${PYTHON_SERVICE_URL}`);
-    console.error('   Please start the service with: npm run start:all');
-    console.error('   Or set LLAMAINDEX_SERVICE_URL environment variable');
-    process.exit(1);
+  // Pre-flight check: verify the service is up AND capture its backend identity.
+  console.log('Checking Python service availability...')
+  const serviceHealth = await fetchServiceHealth()
+  console.log(
+    `Python service is running (keyword_backend=${serviceHealth.keyword_backend}, retrieval_backend=${serviceHealth.retrieval_backend})\n`,
+  )
+
+  const results: TestResult[] = []
+
+  // Resume support: each completed query is checkpointed so an interrupted run
+  // (session limit, crash) only re-pays the queries it hasn't finished.
+  // The checkpoint is stamped with an identity (golden-set hash, service backend,
+  // label): resuming under a different identity would silently mix runs, so a
+  // mismatch discards the checkpoint and starts fresh.
+  const checkpointPath = path.join(
+    __dirname,
+    'results',
+    'cite-eval-checkpoint.json',
+  )
+  const checkpointIdentity: CheckpointIdentity = {
+    goldenSetHash,
+    serviceIdentity: serviceHealth.keyword_backend,
+    label: evalLabel,
   }
-  console.log('Python service is running\n');
+  let checkpoint: Record<string, TestResult> = {}
+  if (fs.existsSync(checkpointPath)) {
+    const stored: CheckpointFile = JSON.parse(
+      fs.readFileSync(checkpointPath, 'utf-8'),
+    )
+    if (
+      JSON.stringify(stored.identity ?? null) ===
+      JSON.stringify(checkpointIdentity)
+    ) {
+      checkpoint = stored.results ?? {}
+    } else {
+      console.log(
+        'Checkpoint identity mismatch — golden set, service backend, or label changed.',
+      )
+      console.log(`  stored:  ${JSON.stringify(stored.identity ?? null)}`)
+      console.log(`  current: ${JSON.stringify(checkpointIdentity)}`)
+      console.log('Discarding the old checkpoint and starting fresh.\n')
+    }
+  }
+  const saveCheckpoint = () => {
+    fs.mkdirSync(path.dirname(checkpointPath), { recursive: true })
+    const tmpPath = `${checkpointPath}.tmp`
+    fs.writeFileSync(
+      tmpPath,
+      JSON.stringify(
+        { identity: checkpointIdentity, results: checkpoint },
+        null,
+        2,
+      ),
+    )
+    fs.renameSync(tmpPath, checkpointPath)
+  }
+  const resumed = Object.values(checkpoint).filter((r) => !r.error).length
+  if (resumed > 0) {
+    console.log(
+      `Resuming from checkpoint: ${resumed} completed queries will be skipped\n`,
+    )
+  }
 
-  const results: TestResult[] = [];
-
-  // Run each test case
+  // Run each test case. Reuse is keyed by the CURRENT golden set's ids: only
+  // checkpoint entries whose id exists in goldenData.test_cases are consulted.
   for (const testCase of goldenData.test_cases as TestCase[]) {
-    const result = await runTestCase(testCase);
-    results.push(result);
+    const prior = checkpoint[testCase.id]
+    if (prior && !prior.error) {
+      console.log(`\n  Skipping (checkpointed): ${testCase.id}`)
+      results.push(prior)
+      continue
+    }
+    const result = await runTestCase(testCase)
+    results.push(result)
+    checkpoint[testCase.id] = result
+    saveCheckpoint()
 
     // Add delay between requests to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000))
   }
 
   // Calculate overall metrics
-  const overallPrecision = results.reduce((sum, r) => sum + r.precision, 0) / results.length;
-  const overallRecall = results.reduce((sum, r) => sum + r.recall, 0) / results.length;
-  const overallF1 = results.reduce((sum, r) => sum + r.f1, 0) / results.length;
+  const overallPrecision =
+    results.reduce((sum, r) => sum + r.precision, 0) / results.length
+  const overallRecall =
+    results.reduce((sum, r) => sum + r.recall, 0) / results.length
+  const overallF1 = results.reduce((sum, r) => sum + r.f1, 0) / results.length
 
-  const passed = results.filter(r => r.recall >= 0.75 && r.precision >= 0.15 && r.f1 >= 0.25).length;
-  const failed = results.length - passed;
+  const passed = results.filter(
+    (r) => r.recall >= 0.75 && r.precision >= 0.15 && r.f1 >= 0.25,
+  ).length
+  const failed = results.length - passed
 
   // Generate report
   const report: EvalReport = {
     timestamp: new Date().toISOString(),
+    label: evalLabel,
+    keyword_backend: serviceHealth.keyword_backend,
+    retrieval_backend: serviceHealth.retrieval_backend,
     test_cases_total: results.length,
     test_cases_passed: passed,
     test_cases_failed: failed,
@@ -253,28 +398,51 @@ async function runEvaluation() {
     overall_recall: overallRecall,
     overall_f1: overallF1,
     results,
-    summary_by_query_type: summarizeByQueryType(results, goldenData.test_cases)
-  };
+    summary_by_query_type: summarizeByQueryType(results, goldenData.test_cases),
+  }
 
   // Save report
-  const reportPath = path.join(__dirname, 'results', `eval-report-${Date.now()}.json`);
-  fs.mkdirSync(path.dirname(reportPath), { recursive: true });
-  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  const reportPath = path.join(
+    __dirname,
+    'results',
+    `eval-report-${evalLabel ? `${evalLabel}-` : ''}${Date.now()}.json`,
+  )
+  fs.mkdirSync(path.dirname(reportPath), { recursive: true })
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
+
+  // Completed run: clear the checkpoint only if every query succeeded, so a
+  // rerun retries failures instead of starting over.
+  if (results.every((r) => !r.error) && fs.existsSync(checkpointPath)) {
+    fs.unlinkSync(checkpointPath)
+  }
 
   // Print summary
-  console.log('\n' + '='.repeat(80));
-  console.log('EVALUATION SUMMARY');
-  console.log('='.repeat(80));
-  console.log(`Passed: ${passed}/${results.length}`);
-  console.log(`Failed: ${failed}/${results.length}`);
-  console.log(`\nOverall Metrics:`);
-  console.log(`   Precision: ${(overallPrecision * 100).toFixed(1)}%`);
-  console.log(`   Recall: ${(overallRecall * 100).toFixed(1)}%`);
-  console.log(`   F1 Score: ${(overallF1 * 100).toFixed(1)}%`);
+  console.log('\n' + '='.repeat(80))
+  console.log('EVALUATION SUMMARY')
+  console.log('='.repeat(80))
+  console.log(`Passed: ${passed}/${results.length}`)
+  console.log(`Failed: ${failed}/${results.length}`)
+  console.log(`\nOverall Metrics:`)
+  console.log(`   Precision: ${(overallPrecision * 100).toFixed(1)}%`)
+  console.log(`   Recall: ${(overallRecall * 100).toFixed(1)}%`)
+  console.log(`   F1 Score: ${(overallF1 * 100).toFixed(1)}%`)
 
-  console.log(`\nFull report saved to: ${reportPath}`);
+  console.log(`\nFull report saved to: ${reportPath}`)
 
-  return report;
+  // Per-query errors must fail the run: exiting 0 on a partial result would
+  // poison downstream comparisons. The checkpoint is preserved (it is only
+  // cleared above when every query succeeded), so a re-run resumes and
+  // retries exactly the errored queries.
+  const errored = results.filter((r) => r.error)
+  if (errored.length > 0) {
+    console.error(
+      `\n${errored.length} test case(s) errored: ${errored.map((r) => r.test_case_id).join(', ')}`,
+    )
+    console.error('Checkpoint preserved — re-run to retry the errored queries.')
+    process.exit(1)
+  }
+
+  return report
 }
 
 // Run if called directly
@@ -282,9 +450,9 @@ if (require.main === module) {
   runEvaluation()
     .then(() => process.exit(0))
     .catch((error) => {
-      console.error('Fatal error:', error);
-      process.exit(1);
-    });
+      console.error('Fatal error:', error)
+      process.exit(1)
+    })
 }
 
-export { runEvaluation, runTestCase };
+export { runEvaluation, runTestCase }

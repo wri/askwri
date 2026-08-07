@@ -214,6 +214,21 @@ variable "rds_security_group_id" {
 # S3 Variables
 # =============================================================================
 
+variable "image_tag" {
+  description = <<-EOT
+    ECR tag the ECS task definitions run. The deploy workflows pass the full
+    commit SHA, which is immutable, so a task definition records exactly which
+    commit is live and a rollback is `terraform apply -var="image_tag=<sha>"`
+    with no rebuild.
+
+    Defaults to "latest" so a manual `terraform apply` outside the workflows
+    still resolves. Do not rely on that default for a real deploy: `latest` is
+    mutable, so the running task becomes whichever build pushed most recently.
+  EOT
+  type        = string
+  default     = "latest"
+}
+
 variable "documents_s3_bucket" {
   description = "S3 bucket name containing documents for the search service"
   type        = string
@@ -230,4 +245,51 @@ variable "cache_s3_prefix" {
   description = "S3 prefix (folder path) for cache within the bucket"
   type        = string
   default     = "cache/"
+}
+
+# =============================================================================
+# Ingestion Worker Variables
+# =============================================================================
+
+variable "ingestion_worker_container_cpu" {
+  description = "CPU units for the Ingestion Worker container (1 vCPU = 1024)"
+  type        = number
+  default     = 512
+}
+
+variable "ingestion_worker_container_memory" {
+  description = "Memory for the Ingestion Worker container in MB"
+  type        = number
+  default     = 2048
+}
+
+variable "ingestion_worker_desired_count" {
+  description = "Desired number of Ingestion Worker tasks"
+  type        = number
+  default     = 1
+}
+
+variable "ingestion_worker_environment_variables" {
+  description = "Environment variables for the Ingestion Worker application"
+  type        = map(string)
+  default     = {}
+}
+
+variable "ingestion_worker_secret_env" {
+  description = "Secret environment variables for Ingestion Worker as JSON string (from GitHub Secrets)"
+  type        = string
+  sensitive   = true
+  default     = "{}"
+}
+
+variable "intake_s3_prefix" {
+  description = "S3 prefix (folder path) for intake documents within the bucket"
+  type        = string
+  default     = "intake/"
+}
+
+variable "worker_llm_model" {
+  description = "LLM model name used by the ingestion worker for summaries and tagging"
+  type        = string
+  default     = "gpt-5-mini"
 }

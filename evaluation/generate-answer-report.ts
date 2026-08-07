@@ -5,19 +5,19 @@
  *   npx tsx evaluation/generate-answer-report.ts
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import type { RetrievalEvalReport } from './lib/types';
-import type { AnswerGoldenDataset } from './lib/types';
+import * as fs from 'fs'
+import * as path from 'path'
+import type { RetrievalEvalReport } from './lib/types'
+import type { AnswerGoldenDataset } from './lib/types'
 
 function pct(v: number): string {
-  return (v * 100).toFixed(1) + '%';
+  return (v * 100).toFixed(1) + '%'
 }
 
 function colorClass(value: number, good: number, medium: number): string {
-  if (value >= good) return 'good';
-  if (value >= medium) return 'medium';
-  return 'bad';
+  if (value >= good) return 'good'
+  if (value >= medium) return 'medium'
+  return 'bad'
 }
 
 function escapeHtml(text: string): string {
@@ -26,23 +26,28 @@ function escapeHtml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/'/g, '&#039;')
 }
 
 function truncateSnippet(text: string, maxLength: number = 250): string {
-  if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength) + '...';
+  if (text.length <= maxLength) return text
+  return text.slice(0, maxLength) + '...'
 }
 
-function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string): string {
-  let goldenData: AnswerGoldenDataset;
+function generateHtmlReport(
+  report: RetrievalEvalReport,
+  goldenDataPath: string,
+): string {
+  let goldenData: AnswerGoldenDataset
   try {
-    goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'));
+    goldenData = JSON.parse(fs.readFileSync(goldenDataPath, 'utf-8'))
   } catch (error: any) {
-    throw new Error(`Failed to load golden dataset from ${goldenDataPath}: ${error.message}`);
+    throw new Error(
+      `Failed to load golden dataset from ${goldenDataPath}: ${error.message}`,
+    )
   }
-  const timestamp = new Date(report.timestamp).toLocaleString();
-  const agg = report.aggregate;
+  const timestamp = new Date(report.timestamp).toLocaleString()
+  const agg = report.aggregate
 
   let html = `<!DOCTYPE html>
 <html>
@@ -373,7 +378,7 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
       <div class="metric-value ${colorClass(agg.chunk_adjacent.avg_f1, 0.3, 0.15)}">${pct(agg.chunk_adjacent.avg_f1)}</div>
     </div>
   </div>
-`;
+`
 
   // Summary by query type table
   if (Object.keys(report.summary_by_query_type).length > 0) {
@@ -391,8 +396,10 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
         </tr>
       </thead>
       <tbody>
-`;
-    for (const [type, stats] of Object.entries(report.summary_by_query_type) as [string, any][]) {
+`
+    for (const [type, stats] of Object.entries(
+      report.summary_by_query_type,
+    ) as [string, any][]) {
       html += `
         <tr>
           <td><strong>${type.replace(/_/g, ' ')}</strong></td>
@@ -401,24 +408,26 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
           <td>${pct(stats.chunk.avg_precision)} / ${pct(stats.chunk.avg_recall)} / ${pct(stats.chunk.avg_f1)}</td>
           <td>${pct(stats.chunk_adjacent.avg_precision)} / ${pct(stats.chunk_adjacent.avg_recall)} / ${pct(stats.chunk_adjacent.avg_f1)}</td>
         </tr>
-`;
+`
     }
     html += `
       </tbody>
     </table>
   </div>
-`;
+`
   }
 
   // Individual test cases
-  html += `\n  <h2>Test Case Results</h2>\n`;
+  html += `\n  <h2>Test Case Results</h2>\n`
 
   for (const r of report.results) {
-    const testCase = goldenData.test_cases.find(tc => tc.id === r.test_case_id);
+    const testCase = goldenData.test_cases.find(
+      (tc) => tc.id === r.test_case_id,
+    )
 
-    const retrievedSet = new Set(r.retrieved_chunk_ids);
-    const exactSet = new Set(r.exact_matches);
-    const adjSet = new Set(r.adjacent_matches);
+    const retrievedSet = new Set(r.retrieved_chunk_ids)
+    const exactSet = new Set(r.exact_matches)
+    const adjSet = new Set(r.adjacent_matches)
 
     html += `
   <div class="test-case">
@@ -435,18 +444,24 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
       <div><strong>Adj:</strong> P=${pct(r.chunk_precision_adjacent)} R=${pct(r.chunk_recall_adjacent)} F1=${pct(r.chunk_f1_adjacent)}</div>
       <div><strong>Time:</strong> ${(r.execution_time_ms / 1000).toFixed(2)}s</div>
     </div>
-`;
+`
 
-    if (testCase && testCase.retrieval_ground_truth.expected_passages.length > 0) {
+    if (
+      testCase &&
+      testCase.retrieval_ground_truth.expected_passages.length > 0
+    ) {
       html += `
     <div class="expected-section">
       <h3>Expected Chunks from Golden Set (${testCase.retrieval_ground_truth.expected_passages.length} chunks)</h3>
-`;
+`
 
       for (const passage of testCase.retrieval_ground_truth.expected_passages) {
-        const wasFound = retrievedSet.has(passage.chunk_id) || adjSet.has(passage.chunk_id);
-        const chunkClass = wasFound ? 'expected-chunk' : 'expected-chunk missed';
-        const icon = wasFound ? '<span class="match-icon found">✓</span>' : '<span class="match-icon missed">✗</span>';
+        const wasFound =
+          retrievedSet.has(passage.chunk_id) || adjSet.has(passage.chunk_id)
+        const chunkClass = wasFound ? 'expected-chunk' : 'expected-chunk missed'
+        const icon = wasFound
+          ? '<span class="match-icon found">✓</span>'
+          : '<span class="match-icon missed">✗</span>'
 
         html += `
       <div class="${chunkClass}">
@@ -456,38 +471,38 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
         </div>
         <div class="expected-snippet">${escapeHtml(truncateSnippet(passage.text_snippet))}</div>
       </div>
-`;
+`
       }
 
       html += `
     </div>
-`;
+`
     }
 
     html += `
     <div class="retrieved-section">
       <h3>Retrieved Chunks (${r.retrieved_chunks_detail.length} chunks, sorted by relevance)</h3>
-`;
+`
 
     for (const chunk of r.retrieved_chunks_detail) {
-      const isExact = exactSet.has(chunk.chunk_id);
-      const isAdjacent = adjSet.has(chunk.chunk_id);
+      const isExact = exactSet.has(chunk.chunk_id)
+      const isAdjacent = adjSet.has(chunk.chunk_id)
 
-      let cardClass = 'chunk-card';
-      let matchIndicator = '';
+      let cardClass = 'chunk-card'
+      let matchIndicator = ''
 
       if (isExact) {
-        cardClass += ' exact-match';
-        matchIndicator = '<span class="match-indicator exact">✓</span>';
+        cardClass += ' exact-match'
+        matchIndicator = '<span class="match-indicator exact">✓</span>'
       } else if (isAdjacent) {
-        cardClass += ' adjacent-match';
-        matchIndicator = '<span class="match-indicator adjacent">~</span>';
+        cardClass += ' adjacent-match'
+        matchIndicator = '<span class="match-indicator adjacent">~</span>'
       }
 
       // Score badge color
-      let scoreClass = 'score-badge low';
-      if (chunk.score >= 0.5) scoreClass = 'score-badge high';
-      else if (chunk.score >= 0.3) scoreClass = 'score-badge medium';
+      let scoreClass = 'score-badge low'
+      if (chunk.score >= 0.5) scoreClass = 'score-badge high'
+      else if (chunk.score >= 0.3) scoreClass = 'score-badge medium'
 
       html += `
       <div class="${cardClass}">
@@ -499,13 +514,13 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
         </div>
         <div class="chunk-snippet">${escapeHtml(truncateSnippet(chunk.snippet))}</div>
       </div>
-`;
+`
     }
 
     html += `
     </div>
   </div>
-`;
+`
 
     if (r.error) {
       html += `
@@ -513,50 +528,53 @@ function generateHtmlReport(report: RetrievalEvalReport, goldenDataPath: string)
       <h4 style="margin: 0 0 8px 0; color: #991b1b;">Error</h4>
       <div style="color: #ef4444; font-family: monospace; font-size: 13px;">${escapeHtml(r.error)}</div>
     </div>
-`;
+`
     }
   }
 
-  html += `</body>\n</html>`;
-  return html;
+  html += `</body>\n</html>`
+  return html
 }
 
 // --- Standalone runner ---
 
 function findLatestReport(): string | null {
-  const resultsDir = path.join(__dirname, 'results');
-  if (!fs.existsSync(resultsDir)) return null;
+  const resultsDir = path.join(__dirname, 'results')
+  if (!fs.existsSync(resultsDir)) return null
 
-  const files = fs.readdirSync(resultsDir)
-    .filter(f => f.startsWith('answer-retrieval-') && f.endsWith('.json'))
+  const files = fs
+    .readdirSync(resultsDir)
+    .filter((f) => f.startsWith('answer-retrieval-') && f.endsWith('.json'))
     .sort()
-    .reverse();
+    .reverse()
 
-  return files.length > 0 ? path.join(resultsDir, files[0]) : null;
+  return files.length > 0 ? path.join(resultsDir, files[0]) : null
 }
 
 function generateLatestReport() {
-  const reportPath = findLatestReport();
+  const reportPath = findLatestReport()
   if (!reportPath) {
-    console.error('No answer retrieval reports found in evaluation/results/');
-    process.exit(1);
+    console.error('No answer retrieval reports found in evaluation/results/')
+    process.exit(1)
   }
 
-  console.log(`Generating HTML report from: ${reportPath}`);
+  console.log(`Generating HTML report from: ${reportPath}`)
 
-  const report: RetrievalEvalReport = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
-  const goldenDataPath = path.join(__dirname, 'answer-golden-dataset.json');
-  const html = generateHtmlReport(report, goldenDataPath);
+  const report: RetrievalEvalReport = JSON.parse(
+    fs.readFileSync(reportPath, 'utf-8'),
+  )
+  const goldenDataPath = path.join(__dirname, 'answer-golden-dataset.json')
+  const html = generateHtmlReport(report, goldenDataPath)
 
-  const htmlPath = reportPath.replace('.json', '.html');
-  fs.writeFileSync(htmlPath, html);
+  const htmlPath = reportPath.replace('.json', '.html')
+  fs.writeFileSync(htmlPath, html)
 
-  console.log(`HTML report generated: ${htmlPath}`);
-  console.log(`Open in browser: file://${htmlPath}`);
+  console.log(`HTML report generated: ${htmlPath}`)
+  console.log(`Open in browser: file://${htmlPath}`)
 }
 
 if (require.main === module) {
-  generateLatestReport();
+  generateLatestReport()
 }
 
-export { generateHtmlReport };
+export { generateHtmlReport }

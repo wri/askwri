@@ -50,8 +50,9 @@ const Landing = () => {
         <div style={{ textAlign: 'left' }}>
           This tool is under testing and intended for WRI employees only, not
           for external use. It is currently limited to a selection of Knowledge
-          Products published by WRI Cities program. <br />Results are generated
-          using AI and may occasionally be incomplete or inaccurate.
+          Products published by WRI Cities program. <br />
+          Results are generated using AI and may occasionally be incomplete or
+          inaccurate.
         </div>
       </AlertBanner>
 

@@ -1,0 +1,8 @@
+# Revisions that only reformat code. `git blame` skips these so the line
+# attribution stays on whoever last changed the logic.
+#
+# Enable locally (GitHub honours this file automatically):
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: apply prettier to the scoped surface (mechanical, no logic changes)
+73d7bdda188a83470d5b293f9742a2626513933b

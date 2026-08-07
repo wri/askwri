@@ -23,6 +23,8 @@ Explain, in ONE terse sentence, how the cited document relates to the user's que
 
 Rules:
 - Output STRICT JSON ONLY: {"relates":"...", "relation":"direct"|"indirect"}
+- ALWAYS write "relates" in English, even when the document is in another
+  language. Never mirror the document's language.
 - Do NOT restate the query.
 - Avoid generic filler like "by showing evidence/mechanism".
 - Be concrete and ≤ 18 words.
@@ -33,8 +35,8 @@ function safeParse(text: string) {
   try {
     return JSON.parse(text)
   } catch {
-    const s = text.indexOf('{');
-      const e = text.lastIndexOf('}')
+    const s = text.indexOf('{')
+    const e = text.lastIndexOf('}')
     if (s !== -1 && e !== -1 && e > s) {
       try {
         return JSON.parse(text.slice(s, e + 1))

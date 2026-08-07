@@ -7,12 +7,14 @@ import { RowData } from '@/app/components/results/types'
 import { exportCitationsCsv } from '../utils/exportCitationsCsv'
 import { getRelevanceLevel } from '../utils/relevance'
 import {
+  authorsFrom,
   buildCatalogIndex,
   matchCatalogRow,
   titleFrom,
   firstSentence,
   urlFrom,
   yearFrom,
+  languageLabel,
 } from '../utils/utils'
 
 const CitePanel = ({
@@ -87,20 +89,21 @@ const CitePanel = ({
         return {
           id: doc.doc_id,
           publication_title: titleFrom(doc, row),
-          author: row?.allAuthors || '',
+          // Transliterated English authors from documents.authors (issue #306).
+          author: authorsFrom(doc, row).join('; '),
           summary,
-          short_summary:
-            row?.shortSummary ||
-            row?.raw?.short_summary ||
-            row?.raw?.['short summary'] ||
-            summary,
+          // The document's short ENGLISH summary — never the native-language
+          // one and never a passage fallback when a summary exists (#306).
+          short_summary: row?.shortSummary || row?.summary || summary,
           relevance: relevanceLabel,
           how_relevant: whyMeta?.why || firstSentence(best?.snippet ?? ''),
           download_url: url,
           relevance_score: docRel,
           row_number: idx + 1,
           year: yearFrom(doc, row),
+          language: languageLabel(row),
           fullDoc: doc,
+          catalogRow: row,
         }
       }),
     [docs, index, docSummary, docWhy],

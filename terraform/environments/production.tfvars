@@ -16,6 +16,14 @@ certificate_arn        = "arn:aws:acm:us-east-2:905418285725:certificate/a1db6b2
 listener_rule_priority = 100
 
 # ECS Configuration - Higher resources for production
+#
+# Capacity is deliberately pinned at 1 (was max_capacity = 10). This is a
+# standing cost decision, not an oversight — see issue #232, where it was
+# reviewed and kept. What it buys and what it costs:
+#   - buys: no autoscaling spend; one task per service
+#   - costs: no high availability (single task = single point of failure), no
+#     headroom for traffic spikes, and no rolling-deploy safety margin
+# Raise min_capacity to 2 and max_capacity above it when HA is worth the spend.
 container_port   = 3000
 container_cpu    = 512   # 0.5 vCPU
 container_memory = 1024  # 1 GB
@@ -48,9 +56,24 @@ search_service_health_check_path = "/health"
 
 # Search Service Environment Variables
 search_service_environment_variables = {
-  "LOG_LEVEL"   = "info"
-  "DEBUG"       = "false"
-  "WORKERS"     = "1"  # Must be 1: each worker loads its own copy of indexes+models into RAM
+  "LOG_LEVEL" = "info"
+  "DEBUG"     = "false"
+  # WORKERS=1 is a per-worker RAM decision, and the reason has narrowed: since
+  # the Bedrock cutover there are no in-process models (embed and rerank are
+  # API calls), so the old "indexes+models into RAM" rationale is half retired.
+  # What still duplicates per worker is every document's full text, loaded at
+  # boot for passage context (search-service/app/main.py:670). Re-measure that
+  # footprint before raising this; concurrency work is tracked in AW-60.
+  "WORKERS" = "1"
+}
+
+# Ingestion Worker Environment Variables
+# SPARSE_EN_HANDLES must match the flag the corpus was built under. Production's
+# corpus is a clone of qa's, which was rebuilt flag-on 2026-07-26; without this,
+# the worker's next re-ingest of a non-EN document would strip that document's
+# English handles and it would stop surfacing for English queries.
+ingestion_worker_environment_variables = {
+  "SPARSE_EN_HANDLES" = "true"
 }
 
 # =============================================================================

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ANSWER_PRESET, CITE_PRESET } from '@/config/retrieval'
+import { extractPassage } from '@/app/utils/passage'
 
 const SEARCH_SERVICE_URL =
   process.env.SEARCH_SERVICE_URL || 'http://localhost:8000'
@@ -95,7 +96,10 @@ export async function POST(req: NextRequest) {
       rerank: true, // Enable reranking for quality results
       ...defaults,
       // Override with client-supplied retrieval params if provided
-      ...(alpha !== undefined && { dense_weight: alpha, sparse_weight: 1 - alpha }),
+      ...(alpha !== undefined && {
+        dense_weight: alpha,
+        sparse_weight: 1 - alpha,
+      }),
       ...(denseTopK !== undefined && { vector_top_k: denseTopK }),
       ...(sparseTopK !== undefined && { bm25_top_k: sparseTopK }),
       ...(rerankTopK !== undefined && { rerank_top_n: rerankTopK }),
@@ -161,6 +165,12 @@ export async function POST(req: NextRequest) {
       // Clamp to [0, 1] range
       effectiveScore = Math.max(0, Math.min(1, effectiveScore))
 
+      // `doc.content` is a passage window, not the chunk: strip the context and
+      // the `**[...]**` markers once, here, so every downstream consumer (the
+      // excerpt UI, the synthesis key_finding, why/relates prompts, translation,
+      // CSV export) gets the cited passage rather than the window.
+      const snippet = extractPassage(doc.content)
+
       return {
         doc_id: doc.doc_id,
         document_id: doc.doc_id,
@@ -183,7 +193,7 @@ export async function POST(req: NextRequest) {
         kps: [
           {
             kp_relevance: effectiveScore,
-            snippet: doc.content,
+            snippet,
             page: doc.page || doc.metadata.page || 1,
             passage_id: doc.metadata.chunk_id || doc.doc_id,
             citation_targets: [

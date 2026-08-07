@@ -9,14 +9,31 @@ export const DocumentPreviewModalContent = ({
   rowData,
   onExportBib,
 }: DocumentPreviewModalContentProps) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+  // The design system renders Modal's body with `padding: 0`, so content has to
+  // inset itself. Without this the bordered panels below sit flush on the
+  // dialog's own border — their side borders merge with it and the panels read
+  // as edge-to-edge bands with no borders at all (#309).
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+      padding: '16px',
+    }}
+  >
     <div style={{ width: 'fit-content' }}>
-      <Tag label={`${rowData.relevance} Relevance`} variant={
-        rowData.relevance === 'Strong' ? 'success'
-          : rowData.relevance === 'Partial' ? 'warning'
-            : rowData.relevance === 'Weak' ? 'info-grey'
-              : 'success'
-      } />
+      <Tag
+        label={`${rowData.relevance} Relevance`}
+        variant={
+          rowData.relevance === 'Strong'
+            ? 'success'
+            : rowData.relevance === 'Partial'
+              ? 'warning'
+              : rowData.relevance === 'Weak'
+                ? 'info-grey'
+                : 'success'
+        }
+      />
     </div>
     <div>
       <Heading size='2xl'>{rowData.publication_title}</Heading>
@@ -29,7 +46,7 @@ export const DocumentPreviewModalContent = ({
           marginBottom: '8px',
         }}
       >
-        {rowData.summary}
+        {rowData.short_summary || rowData.summary}
       </Text>
       <Text
         style={{
@@ -43,7 +60,7 @@ export const DocumentPreviewModalContent = ({
           color: getThemedColor('neutral', 700),
         }}
       >
-        {rowData.fullDoc.year}
+        {rowData.year}
       </Text>
     </div>
     <div

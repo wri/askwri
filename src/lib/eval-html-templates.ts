@@ -656,7 +656,7 @@ export const REVIEW_HTML = `<!DOCTYPE html>
 })();
 </script>
 </body>
-</html>`;
+</html>`
 
 export const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -1201,7 +1201,7 @@ export const SYNTHESIS_REVIEW_HTML = `<!DOCTYPE html>
 })();
 </script>
 </body>
-</html>`;
+</html>`
 
 export const CITE_REPORT_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -1283,4 +1283,4 @@ export const CITE_REPORT_HTML = `<!DOCTYPE html>
 })();
 </script>
 </body>
-</html>`;
+</html>`

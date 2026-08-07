@@ -10,6 +10,13 @@ on:
     branches:
       - main
       - production
+    # Documentation-only pushes do not change the images or the infrastructure,
+    # so skip the ~15 minute build/apply/redeploy cycle. Use workflow_dispatch to
+    # force a deploy regardless.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 env:
@@ -81,7 +88,9 @@ jobs:
         with:
           images: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}
           tags: |
-            type=sha,prefix=
+            # format=long so the tag IS github.sha exactly — the Terraform
+            # image_tag var is passed that same value, with no reconstruction.
+            type=sha,format=long,prefix=
             type=semver,pattern={{version}}
             type=raw,value=latest
 
@@ -91,8 +100,8 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=nextjs
+          cache-to: type=gha,mode=max,scope=nextjs
           build-args: |
             NEXT_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
 
@@ -129,7 +138,9 @@ jobs:
         with:
           images: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service
           tags: |
-            type=sha,prefix=
+            # format=long so the tag IS github.sha exactly — the Terraform
+            # image_tag var is passed that same value, with no reconstruction.
+            type=sha,format=long,prefix=
             type=semver,pattern={{version}}
             type=raw,value=latest
 
@@ -139,8 +150,8 @@ jobs:
           context: ./search-service
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=search-service
+          cache-to: type=gha,mode=max,scope=search-service
 
   # ==========================================================================
   # Deploy Infrastructure with Terraform
@@ -181,9 +192,11 @@ jobs:
         env:
           TF_VAR_search_service_secret_env: ${{ secrets.SEARCH_SERVICE_ENV }}
           TF_VAR_askwri_app_secret_env: ${{ secrets.ASKWRI_APP_ENV }}
+          TF_VAR_ingestion_worker_secret_env: ${{ secrets.INGESTION_WORKER_ENV }}
         run: |
           terraform plan \
             -var-file="../environments/${{ env.ENVIRONMENT }}.tfvars" \
+            -var="image_tag=${{ github.sha }}" \
             -out=tfplan
 
       - name: Terraform Apply
@@ -191,6 +204,7 @@ jobs:
         env:
           TF_VAR_search_service_secret_env: ${{ secrets.SEARCH_SERVICE_ENV }}
           TF_VAR_askwri_app_secret_env: ${{ secrets.ASKWRI_APP_ENV }}
+          TF_VAR_ingestion_worker_secret_env: ${{ secrets.INGESTION_WORKER_ENV }}
         run: terraform apply -auto-approve tfplan
 
   # ==========================================================================
@@ -219,12 +233,16 @@ jobs:
             --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
             --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service \
             --force-new-deployment
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
+            --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-ingestion-worker \
+            --force-new-deployment
 
       - name: Wait for service stability
         run: |
           aws ecs wait services-stable \
             --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
-            --services ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service
+            --services ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-ingestion-worker
 
       - name: Get Application URL
         run: |

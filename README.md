@@ -113,10 +113,13 @@ graph TB
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 24.x or later
+- [Node.js](https://nodejs.org/) 24.x or later (`.nvmrc` pins it; `package.json`
+  declares `engines.node >= 24` and CI runs 24)
 - [Python](https://www.python.org/) 3.12.x or later
 - [Docker](https://www.docker.com/)
-- [Terraform](https://www.terraform.io/) 1.0+
+- [Terraform](https://www.terraform.io/) 1.13.1 — the version CI pins for
+  `fmt -check` and `validate`. The root modules only declare `required_version
+  >= 1.0`, but nothing verifies older releases, so match CI.
 - [AWS CLI](https://aws.amazon.com/cli/) configured with appropriate credentials
 - [GitHub](https://github.com/) account
 
@@ -125,7 +128,16 @@ graph TB
 ```bash
 git clone <repository-url>
 cd askwri-app
-npm install
+nvm use          # reads .nvmrc (Node 24); nvm install 24 first if needed
+npm install      # .npmrc already sets legacy-peer-deps=true
+```
+
+Verify the toolchain before you start work — CI gates on all three:
+
+```bash
+npm run lint
+npm run test:ci
+npm run build
 ```
 
 ### 2. Set Up Terraform State Backend
