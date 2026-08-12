@@ -10,8 +10,9 @@
  * deployed presets, so this measures the system as users experience it.
  *
  * Usage:
- *   npx tsx evaluation/run-evalset.ts <evalset.json> [--mode cite|answer]
- *   EVAL_TARGET=https://qa.askwri-app.org npx tsx evaluation/run-evalset.ts ...
+ *   npm run eval:qa                                   every set in EVALSET_DIR
+ *   npx tsx evaluation/run-evalset.ts <evalset.json>   one set
+ *   EVAL_TARGET=https://... npm run eval:qa            a different instance
  */
 
 import * as fs from 'fs'
@@ -20,6 +21,10 @@ import { calculateSetMetrics } from './lib/metrics'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
+
+// Fixtures live in the eval-review submodule, pinned by commit so a report can
+// always be traced back to the exact ground truth that produced it.
+const EVALSET_DIR = path.join(__dirname, 'eval-review', 'evalsets')
 
 interface EvalCase {
   id: string
@@ -124,7 +129,8 @@ async function runCase(
   try {
     const retrieved = await queryTarget(tc.question, mode)
     const m = calculateSetMetrics(expected, retrieved)
-    const capped = missing.length > 0 ? ` (ceiling ${(ceiling * 100).toFixed(0)}%)` : ''
+    const capped =
+      missing.length > 0 ? ` (ceiling ${(ceiling * 100).toFixed(0)}%)` : ''
     console.log(
       `  ${tc.id.padEnd(40)} P ${(m.precision * 100).toFixed(0).padStart(3)}%  ` +
         `R ${(m.recall * 100).toFixed(0).padStart(3)}%  ` +
@@ -154,22 +160,17 @@ async function runCase(
   }
 }
 
-async function main() {
-  const args = process.argv.slice(2)
-  const evalsetPath = args.find((a) => !a.startsWith('--'))
-  if (!evalsetPath) {
-    console.error(
-      'Usage: npx tsx evaluation/run-evalset.ts <evalset.json> [--mode cite|answer]',
-    )
-    process.exit(1)
-  }
-
+async function runEvalset(
+  evalsetPath: string,
+  modeFlag: string | undefined,
+  service: Record<string, any>,
+  corpusIds: Set<string>,
+) {
   const evalset = JSON.parse(fs.readFileSync(evalsetPath, 'utf-8'))
   const cases: EvalCase[] = evalset.test_cases ?? []
 
   // Cite sets hold expected ids at the top level; answer sets nest them under
   // retrieval_ground_truth. Explicit --mode wins.
-  const modeFlag = args[args.indexOf('--mode') + 1]
   const mode: 'cite' | 'answer' =
     modeFlag === 'cite' || modeFlag === 'answer'
       ? modeFlag
@@ -177,16 +178,9 @@ async function main() {
         ? 'answer'
         : 'cite'
 
-  const health = await getJson(`${TARGET}/api/llamaindex`)
-  const service = health.hybrid_service ?? {}
-  const corpusIds = await fetchCorpusIds()
-
-  console.log(`\nEvalset:  ${path.basename(evalsetPath)} (${cases.length} cases)`)
-  console.log(`Target:   ${TARGET}  [mode: ${mode}]`)
   console.log(
-    `Backend:  keyword=${service.keyword_backend} retrieval=${service.retrieval_backend} env=${service.environment}`,
+    `\n${path.basename(evalsetPath)} — ${cases.length} cases [mode: ${mode}]\n`,
   )
-  console.log(`Corpus:   ${corpusIds.size} documents\n`)
 
   const results: CaseResult[] = []
   for (const tc of cases) {
@@ -239,7 +233,44 @@ async function main() {
     )
     for (const id of [...missing].sort()) console.log(`  - ${id}`)
   }
-  console.log(`\nReport: ${path.relative(process.cwd(), reportPath)}`)
+  console.log(`Report: ${path.relative(process.cwd(), reportPath)}`)
+}
+
+async function main() {
+  const args = process.argv.slice(2)
+  const explicit = args.find((a) => !a.startsWith('--'))
+  const modeFlag = args[args.indexOf('--mode') + 1]
+
+  const evalsetPaths = explicit
+    ? [explicit]
+    : fs
+        .readdirSync(EVALSET_DIR)
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+        .map((f) => path.join(EVALSET_DIR, f))
+
+  if (evalsetPaths.length === 0) {
+    console.error(
+      `No evalsets in ${EVALSET_DIR} — run: git submodule update --init`,
+    )
+    process.exit(1)
+  }
+
+  // The target's backend and corpus are the same for every set in a run, so
+  // fetch them once and report them once.
+  const health = await getJson(`${TARGET}/api/llamaindex`)
+  const service = health.hybrid_service ?? {}
+  const corpusIds = await fetchCorpusIds()
+
+  console.log(`\nTarget:   ${TARGET}`)
+  console.log(
+    `Backend:  keyword=${service.keyword_backend} retrieval=${service.retrieval_backend} env=${service.environment}`,
+  )
+  console.log(`Corpus:   ${corpusIds.size} documents`)
+
+  for (const evalsetPath of evalsetPaths) {
+    await runEvalset(evalsetPath, modeFlag, service, corpusIds)
+  }
 }
 
 main().catch((error) => {

@@ -4,7 +4,15 @@
 
 ## Quick Reference
 
-All eval commands are npm scripts. The hybrid service must be running first.
+**Against a deployed instance — no prerequisites:**
+```bash
+npm run eval:qa                             # every evalset vs QA (~1 min)
+```
+No search service, no database, no AWS credentials. See
+[Deployed-instance evals](#deployed-instance-evals) below.
+
+Every other command below runs against a LOCAL search service, which must be
+running first:
 
 ```bash
 # Prerequisites: start the search service
@@ -57,9 +65,45 @@ npm run eval:download              # pull reviewed data from S3
 
 | Service | Required for | How to start |
 |---------|-------------|-------------|
-| Search service (`:8000`) | All evals, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8000` |
+| Search service (`:8000`) | All evals except `eval:qa`, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8000` |
 | Next.js (`:3000`) | Answer synthesis capture | `npm run dev` (if running on another port, set `NEXTJS_SERVER_URL=http://localhost:<port>`) |
 | RAGAS Python deps | Legacy `eval:answer-synthesis` only | `pip install -r evaluation/requirements-eval.txt` |
+
+## Deployed-instance evals
+
+`npm run eval:qa` scores the generation-2 evalsets against a running AskWRI
+deployment through its public `/api/llamaindex` gateway. Nothing runs locally
+except the script, so there is no corpus to maintain and no credentials to hold.
+
+```bash
+npm run eval:qa                                    # every set in the submodule
+EVAL_TARGET=https://other.example npm run eval:qa  # a different instance
+npx tsx evaluation/run-evalset.ts <path.json>      # one set
+```
+
+**Fixtures** come from the `evaluation/eval-review` submodule, pinned by commit
+so a report always traces back to the ground truth that produced it. First
+checkout needs `git submodule update --init`; to take new sets from upstream:
+
+```bash
+git submodule update --remote evaluation/eval-review
+git commit evaluation/eval-review -m "chore(eval): bump evalset fixtures"
+```
+
+**Reading the output.** These sets key on `external_id`, so scoring is
+document-level only — Aman's process does not yet capture passage-level ground
+truth. Two things to keep in mind:
+
+- **Recall ceilings.** An expected document missing from the target's corpus is
+  reported as a ceiling, not a miss. A case marked `(ceiling 50%)` scoring 50%
+  recall retrieved everything it could; that is a data gap, not a retrieval bug.
+- **Precision is a floor, not a measure.** The sets label one or two documents
+  per query; cite mode returns 13-25. Unlabeled results are not wrong, just
+  unlabeled. Precision becomes meaningful once the `expected_document_*` arrays
+  are expanded upstream.
+
+Retrieval params are deliberately not sent, so the target applies its own
+presets and the numbers reflect what users actually get.
 
 ## Cite Mode Evaluation
 

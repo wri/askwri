@@ -25,6 +25,9 @@ Terraform); S3 for PDFs and derived artifacts.
   (compiles inside `python:3.12-slim` so pins match the deploy image). Never
   hand-edit `requirements.txt`.
 - `npm run eval:cite` / `npm run eval:answer-retrieval` — retrieval evals (search-service must be running)
+- `npm run eval:qa` — gen-2 evalsets against deployed QA via its public gateway;
+  no local service, DB, or AWS creds. Fixtures come from the
+  `evaluation/eval-review` submodule (`git submodule update --init` on first checkout).
 - `./scripts/local-bootstrap.sh` — one-command local stack (docker pgvector Postgres
   \+ MinIO via `docker-compose.local.yml`, migrations, corpus, sparse backfill, bucket
   seed, admin user `admin`/`admin-local-password`). Idempotent. Details:
