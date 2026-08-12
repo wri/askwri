@@ -1315,7 +1315,10 @@ class TestParseTitleAndAuthors:
             monkeypatch, calls,
             title="中国交通运输低碳发展",
             title_en="Low-Carbon Development of Transport in China",
-            authors="Xue, Lulu; Liu, Daizong",
+            authors=[
+                {"family_name": "Xue", "given_names": "Lulu", "organization_name": None},
+                {"family_name": "Liu", "given_names": "Daizong", "organization_name": None},
+            ],
         )
 
         with psycopg.connect(stages_test_db) as conn:
@@ -1365,6 +1368,7 @@ class TestParseTitleAndAuthors:
         system = captured["system"]
         assert "Transliterate" in system, "prompt must ask for transliterated authors"
         assert "Latin" in system, "prompt must name the target script"
+        assert "family_name" in system and "given_names" in system
         assert "primary language" in system, "prompt must ask for a single-language title"
 
     def test_human_edited_title_en_not_overwritten_by_parse(
@@ -3460,6 +3464,13 @@ class TestParseLLMExtraction:
         "article_type": "Working Paper",
         "wri_primary_office": "WRI United States",
     }
+    _FAKE_AUTHOR_PARTS = [
+        {"family_name": "Doe", "given_names": "Jane", "organization_name": None},
+        {"family_name": "Smith", "given_names": "John", "organization_name": None},
+    ]
+
+    def _fake_llm_response(self):
+        return {**self._FAKE_EXTRACTION, "authors": list(self._FAKE_AUTHOR_PARTS)}
 
     def _setup_doc(self, stages_test_db, metadata_source=None, title=None, authors=None):
         """Insert a doc with the given metadata_source and return its id."""
@@ -3494,7 +3505,7 @@ class TestParseLLMExtraction:
         """(a) Fresh worker ingest: metadata_source={} → LLM fills all fields, provenance='llm'."""
         self._mock_parse(monkeypatch)
         import worker.llm as _llm
-        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
 
         doc_id = self._setup_doc(stages_test_db, metadata_source={})
 
@@ -3521,7 +3532,7 @@ class TestParseLLMExtraction:
         """(b) CSV-imported title (metadata_source={title:'external'}) → re-ingest does NOT overwrite."""
         self._mock_parse(monkeypatch)
         import worker.llm as _llm
-        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
 
         doc_id = self._setup_doc(
             stages_test_db,
@@ -3551,7 +3562,7 @@ class TestParseLLMExtraction:
         """(c) Prior LLM title (metadata_source={title:'llm'}) → re-ingest OVERWRITES with new LLM value."""
         self._mock_parse(monkeypatch)
         import worker.llm as _llm
-        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
 
         doc_id = self._setup_doc(
             stages_test_db,
@@ -3590,7 +3601,7 @@ class TestParseLLMExtraction:
         whose before/after list exactly the overwritten fields with old→new values."""
         self._mock_parse(monkeypatch)
         import worker.llm as _llm
-        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
 
         doc_id = self._setup_doc(stages_test_db, metadata_source={}, title="old-slug")
 
@@ -3618,7 +3629,7 @@ class TestParseLLMExtraction:
         human/CSV-owned field. Other, genuinely-overwritten fields still appear."""
         self._mock_parse(monkeypatch)
         import worker.llm as _llm
-        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
 
         doc_id = self._setup_doc(
             stages_test_db, metadata_source={"title": "external"}, title="My CSV Title",
@@ -3644,7 +3655,7 @@ class TestParseLLMExtraction:
         → the change list is empty → NO update audit row (before==after noise filter)."""
         self._mock_parse(monkeypatch)
         import worker.llm as _llm
-        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
 
         # Seed the doc so every column already holds the exact value the LLM returns,
         # with 'llm' provenance so the guard permits (a no-op) overwrite.
@@ -3678,7 +3689,7 @@ class TestParseLLMExtraction:
         and the stage advances to 'processing' and returns None."""
         self._mock_parse(monkeypatch)
         import worker.llm as _llm
-        monkeypatch.setattr(_llm, "chat_json", lambda **kw: dict(self._FAKE_EXTRACTION))
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
         def _boom(*a, **k):
             raise RuntimeError("simulated audit serialize failure")
         monkeypatch.setattr("worker.stages.Jsonb", _boom)
