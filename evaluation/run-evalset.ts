@@ -228,6 +228,35 @@ async function runCase(
   }
 }
 
+/**
+ * The gen-2 sets tag every case with one of eight query types (topic_discovery,
+ * geography_constrained, binary_presence, …). A run-wide mean hides which of
+ * them the target is bad at; this is the breakdown that shows it.
+ */
+function byQueryType(results: CaseResult[]) {
+  const types = [
+    ...new Set(results.map((r) => r.query_type ?? 'untyped')),
+  ].sort()
+  return types.map((query_type) => {
+    const group = results.filter(
+      (r) => (r.query_type ?? 'untyped') === query_type,
+    )
+    const positives = group.filter((r) => r.polarity === 'positive')
+    const negatives = group.filter((r) => r.polarity === 'negative')
+    const mean = (pick: (r: CaseResult) => number) =>
+      positives.reduce((sum, r) => sum + pick(r), 0) / (positives.length || 1)
+    return {
+      query_type,
+      cases_positive: positives.length,
+      cases_negative: negatives.length,
+      precision: mean((r) => r.precision ?? 0),
+      recall: mean((r) => r.recall ?? 0),
+      f1: mean((r) => r.f1 ?? 0),
+      negatives_abstained: negatives.filter((r) => r.abstained).length,
+    }
+  })
+}
+
 async function runEvalset(
   evalsetPath: string,
   modeFlag: string | undefined,
@@ -285,6 +314,7 @@ async function runEvalset(
     overall_f1: mean((r) => r.f1 ?? 0),
     mean_recall_ceiling: mean((r) => r.recall_ceiling),
     negatives_abstained: abstained.length,
+    by_query_type: byQueryType(results),
     results,
   }
 
@@ -312,6 +342,27 @@ async function runEvalset(
       console.log(
         `  - ${r.test_case_id}: ${r.error ?? `${r.retrieved_ids.length} docs`}`,
       )
+    }
+  }
+  if (report.by_query_type.length > 1) {
+    console.log('\nBy query type')
+    for (const t of report.by_query_type) {
+      const parts: string[] = []
+      if (t.cases_positive) {
+        parts.push(
+          `${String(t.cases_positive).padStart(2)} pos  ` +
+            `P ${(t.precision * 100).toFixed(0).padStart(3)}%  ` +
+            `R ${(t.recall * 100).toFixed(0).padStart(3)}%  ` +
+            `F1 ${(t.f1 * 100).toFixed(0).padStart(3)}%`,
+        )
+      }
+      if (t.cases_negative) {
+        parts.push(
+          `${String(t.cases_negative).padStart(2)} neg  ` +
+            `abstained ${t.negatives_abstained}/${t.cases_negative}`,
+        )
+      }
+      console.log(`  ${t.query_type.padEnd(24)} ${parts.join('   ')}`)
     }
   }
   if (ceilinged.length) {
