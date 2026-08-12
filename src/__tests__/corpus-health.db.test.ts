@@ -44,24 +44,41 @@ d('getCorpusHealth (DB integration)', () => {
     expect(h.reviewQueueDepth).toBeGreaterThanOrEqual(0)
   })
 
-  it('surfaces docsMissingNativeSummary (the multilingual gap: closed after the native-summary regen)', async () => {
+  it('surfaces docsMissingNativeSummary as a non-negative number', async () => {
     const h = await getCorpusHealth()
     expect(typeof h.docsMissingNativeSummary).toBe('number')
-    // Wave 1 relabeled the 33 mislabeled summaries zh/es/pt → en (emptying the
-    // native slots), then a re-summarize batch regenerated the native zh/es/pt
-    // long+short summaries. The gap is now 0 (19 zh + 10 es + 4 pt all have
-    // native summaries). Assert 0 to lock the closed gap; if a future doc is
-    // added without a native summary, this metric (and this test) will surface it.
-    expect(h.docsMissingNativeSummary).toBe(0)
+    expect(h.docsMissingNativeSummary).toBeGreaterThanOrEqual(0)
   })
 
-  it('returns docsMissingTitleEn (should be 0 after Wave 1 backfill)', async () => {
+  // Corpus-state lock, gated to the serial `npm run test:db` run: under
+  // parallel `npm test`, other suites transiently seed non-en docs (before
+  // their summary/title_en rows land), making a corpus-wide 0 unassertable.
+  corpusIt(
+    'docsMissingNativeSummary is 0 (multilingual gap closed by the native-summary regen)',
+    async () => {
+      const h = await getCorpusHealth()
+      // Wave 1 relabeled the 33 mislabeled summaries zh/es/pt → en (emptying the
+      // native slots), then a re-summarize batch regenerated the native zh/es/pt
+      // long+short summaries. The gap is now 0 (19 zh + 10 es + 4 pt all have
+      // native summaries). Assert 0 to lock the closed gap; if a future doc is
+      // added without a native summary, this metric (and this test) will surface it.
+      expect(h.docsMissingNativeSummary).toBe(0)
+    },
+  )
+
+  it('returns docsMissingTitleEn as a non-negative number', async () => {
     const h = await getCorpusHealth()
     expect(typeof h.docsMissingTitleEn).toBe('number')
     expect(h.docsMissingTitleEn).toBeGreaterThanOrEqual(0)
-    // Wave 1 backfilled title_en = title for all 33 non-English docs.
-    expect(h.docsMissingTitleEn).toBe(0)
   })
+
+  corpusIt(
+    'docsMissingTitleEn is 0 (Wave 1 backfilled title_en for all 33 non-English docs)',
+    async () => {
+      const h = await getCorpusHealth()
+      expect(h.docsMissingTitleEn).toBe(0)
+    },
+  )
 
   it('returns lowConfidenceDocs (extraction_confidence < 0.7) as a non-negative number', async () => {
     const h = await getCorpusHealth()
@@ -73,7 +90,9 @@ d('getCorpusHealth (DB integration)', () => {
     const h = await getCorpusHealth()
     expect(h.worker).toBeTruthy()
     expect(h.worker).toHaveProperty('status')
-    expect(['idle', 'processing', 'stale']).toContain(h.worker.status)
+    expect(['idle', 'processing', 'pending', 'stale']).toContain(
+      h.worker.status,
+    )
     expect(h.worker).toHaveProperty('queueDepth')
     expect(h.worker).toHaveProperty('intakeBacklog')
   })
