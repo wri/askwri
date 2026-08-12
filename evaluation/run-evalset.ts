@@ -17,7 +17,7 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
-import { calculateSetMetrics } from './lib/metrics'
+import { calculateSetMetrics, calculateUrlMetrics } from './lib/metrics'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
@@ -33,6 +33,8 @@ interface EvalCase {
   source_language?: string
   expected_external_ids?: string[]
   retrieval_ground_truth?: { expected_external_ids?: string[] }
+  /** Gen-1 golden set only — see the URL branch in runCase. */
+  expected_urls?: string[]
 }
 
 interface CaseResult {
@@ -85,10 +87,15 @@ async function fetchCorpusIds(): Promise<Set<string>> {
   return ids
 }
 
+interface RetrievedDoc {
+  doc_id: string
+  url: string
+}
+
 async function queryTarget(
   question: string,
   mode: 'cite' | 'answer',
-): Promise<string[]> {
+): Promise<RetrievedDoc[]> {
   const response = await fetch(`${TARGET}/api/llamaindex`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -101,7 +108,14 @@ async function queryTarget(
   const data = await response.json()
   if (!data.ok) throw new Error(data.error ?? 'gateway returned ok:false')
   // Rank order is preserved; dedupe keeps the best-ranked hit per document.
-  return [...new Set<string>((data.docs ?? []).map((d: any) => d.doc_id))]
+  const docs: RetrievedDoc[] = []
+  const seen = new Set<string>()
+  for (const d of data.docs ?? []) {
+    if (seen.has(d.doc_id)) continue
+    seen.add(d.doc_id)
+    docs.push({ doc_id: d.doc_id, url: d.url ?? '' })
+  }
+  return docs
 }
 
 async function runCase(
@@ -109,11 +123,21 @@ async function runCase(
   mode: 'cite' | 'answer',
   corpusIds: Set<string>,
 ): Promise<CaseResult> {
-  const expected = expectedIdsOf(tc)
-  const missing = expected.filter((id) => !corpusIds.has(id))
-  const ceiling = expected.length
-    ? (expected.length - missing.length) / expected.length
-    : 0
+  // TEMPORARY: the URL branch exists only so the gen-1 English golden set
+  // (evaluation/golden-dataset.json, keyed on expected_urls) can serve as the
+  // regression baseline for corpus changes. Once the gen-2 evalsets have
+  // expanded expected-document coverage and a committed before/after baseline
+  // of their own, golden-dataset.json retires and this branch goes with it.
+  // URL↔filename matching is fuzzy, so URL sets skip the corpus-gap check and
+  // report raw recall (ceiling 1).
+  const byUrl = (tc.expected_urls ?? []).length > 0
+  const expected = byUrl ? tc.expected_urls! : expectedIdsOf(tc)
+  const missing = byUrl ? [] : expected.filter((id) => !corpusIds.has(id))
+  const ceiling = byUrl
+    ? 1
+    : expected.length
+      ? (expected.length - missing.length) / expected.length
+      : 0
   const start = Date.now()
 
   const base = {
@@ -127,8 +151,13 @@ async function runCase(
   }
 
   try {
-    const retrieved = await queryTarget(tc.question, mode)
-    const m = calculateSetMetrics(expected, retrieved)
+    const docs = await queryTarget(tc.question, mode)
+    // URL sets score gateway urls with slug matching; id sets score doc_ids
+    // exactly. expected_ids/retrieved_ids hold urls for URL sets.
+    const retrieved = byUrl ? docs.map((d) => d.url) : docs.map((d) => d.doc_id)
+    const m = byUrl
+      ? calculateUrlMetrics(expected, retrieved)
+      : calculateSetMetrics(expected, retrieved)
     const capped =
       missing.length > 0 ? ` (ceiling ${(ceiling * 100).toFixed(0)}%)` : ''
     console.log(
