@@ -29,6 +29,13 @@ Terraform); S3 for PDFs and derived artifacts.
   \+ MinIO via `docker-compose.local.yml`, migrations, corpus, sparse backfill, bucket
   seed, admin user `admin`/`admin-local-password`). Idempotent. Details:
   `docs/runbooks/local-testing.md`.
+- `./scripts/with-remote-env.sh <qa|production> <cmd>` — run any command against a
+  deployed environment's RDS (host/creds read from that env's ECS task definition).
+- `./scripts/clone-corpus.sh <source> <target>` / `./scripts/verify-corpus-parity.sh
+  <a> <b>` — mirror one environment's corpus into another and prove the result.
+  Direction is an argument: qa → production seeded the 2026-08-07 cutover;
+  production → qa is the future refresh. See
+  `docs/runbooks/prod-cutover-multilingual-v3.md`.
 
 ## Conventions (follow, don't invent)
 - API routes: `src/app/api/<name>/route.ts` → call `initializeDatabase()` → call a function in
