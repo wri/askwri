@@ -1,11 +1,12 @@
 ## AskWRI Evaluation System
 
-**Last Updated:** 2026-03-03
+**Last Updated:** 2026-08-12
 
 ## Quick Reference
 
-**Against a deployed instance — no prerequisites:**
+**Against a deployed instance — no services to run:**
 ```bash
+git submodule update --init                 # once per checkout, fetches the evalsets
 npm run eval:qa                             # every evalset vs QA (~1 min)
 ```
 No search service, no database, no AWS credentials. See
@@ -76,14 +77,19 @@ deployment through its public `/api/llamaindex` gateway. Nothing runs locally
 except the script, so there is no corpus to maintain and no credentials to hold.
 
 ```bash
+git submodule update --init                        # once per checkout
 npm run eval:qa                                    # every set in the submodule
 EVAL_TARGET=https://other.example npm run eval:qa  # a different instance
 npx tsx evaluation/run-evalset.ts <path.json>      # one set
 ```
 
+Without the submodule checked out there are no fixtures to run, and `eval:qa`
+exits telling you to run the `--init` above. A fresh clone of this repo does not
+fetch submodule contents; `git clone --recurse-submodules` does it in one step.
+
 **Fixtures** come from the `evaluation/eval-review` submodule, pinned by commit
-so a report always traces back to the ground truth that produced it. First
-checkout needs `git submodule update --init`; to take new sets from upstream:
+so a report always traces back to the ground truth that produced it. To take new
+sets from upstream:
 
 ```bash
 git submodule update --remote evaluation/eval-review
