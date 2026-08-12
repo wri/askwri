@@ -566,62 +566,91 @@ export async function importDocuments(
     const mapped = mapAnyRowToDocument(row)
 
     // Match by external_id OR doi
-    const match = await findExistingDoc(mapped)
+    let match = await findExistingDoc(mapped)
 
     if (!match) {
       // --- CREATED ---
-      decisions.push({
+      const createdDecision = {
         externalId: mapped.externalId,
-        action: 'created',
+        action: 'created' as const,
         matchKey: mapped.doi
           ? `doi:${mapped.doi}`
           : `external_id:${mapped.externalId}`,
-      })
-
-      if (!options.dryRun) {
-        const doc = docRepo.create({
-          externalId: mapped.externalId,
-          title: mapped.title,
-          language: mapped.language,
-          languages: mapped.languages,
-          yearPublished: mapped.yearPublished,
-          publicationTitle: mapped.publicationTitle,
-          s3Key: mapped.s3Key,
-          sourceMetadata: mapped.sourceMetadata,
-          status: 'draft',
-          doi: mapped.doi,
-          articleType: mapped.articleType,
-          wriPrimaryOffice: mapped.wriPrimaryOffice,
-          authors: mapped.authors,
-          url: mapped.url,
-          datePublished: mapped.datePublished,
-        })
-        const saved = await docRepo.save(doc)
-
-        // Set metadata_source = 'external' for all written fields (graceful if column absent)
-        if (hasMetadataSource && mapped.isFlat) {
-          const fields: Record<string, string> = {}
-          for (const f of OVERWRITABLE_FIELDS) {
-            if (mapped[f] !== null && mapped[f] !== undefined)
-              fields[PROVENANCE_KEY[f] ?? f] = 'external'
-          }
-          await AppDataSource.query(
-            `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
-            [saved.id, JSON.stringify(fields)],
-          ).catch(() => {})
-        }
-
-        // Atomic job creation
-        const [job] = await AppDataSource.query(
-          `INSERT INTO ingestion_jobs (document_id, status) VALUES ($1, 'queued')
-           ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
-           RETURNING id`,
-          [saved.id],
-        )
-        if (job) jobs++
-        created++
       }
-    } else {
+
+      if (options.dryRun) {
+        decisions.push(createdDecision)
+      } else {
+        // Atomic create: ON CONFLICT DO NOTHING closes the SELECT→INSERT race
+        // against a concurrent import or the intake worker's draft-row creation
+        const insertResult = await docRepo
+          .createQueryBuilder()
+          .insert()
+          .values({
+            externalId: mapped.externalId,
+            title: mapped.title,
+            language: mapped.language,
+            languages: mapped.languages,
+            yearPublished: mapped.yearPublished,
+            publicationTitle: mapped.publicationTitle,
+            s3Key: mapped.s3Key,
+            sourceMetadata: mapped.sourceMetadata,
+            status: 'draft',
+            doi: mapped.doi,
+            articleType: mapped.articleType,
+            wriPrimaryOffice: mapped.wriPrimaryOffice,
+            authors: mapped.authors,
+            url: mapped.url,
+            datePublished: mapped.datePublished,
+          })
+          .orIgnore()
+          .returning('id')
+          .execute()
+        const insertedId: string | undefined = insertResult.raw[0]?.id
+
+        if (insertedId) {
+          decisions.push(createdDecision)
+
+          // Set metadata_source = 'external' for all written fields (graceful if column absent)
+          if (hasMetadataSource && mapped.isFlat) {
+            const fields: Record<string, string> = {}
+            for (const f of OVERWRITABLE_FIELDS) {
+              if (mapped[f] !== null && mapped[f] !== undefined)
+                fields[PROVENANCE_KEY[f] ?? f] = 'external'
+            }
+            await AppDataSource.query(
+              `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
+              [insertedId, JSON.stringify(fields)],
+            ).catch(() => {})
+          }
+
+          // Atomic job creation
+          const [job] = await AppDataSource.query(
+            `INSERT INTO ingestion_jobs (document_id, status) VALUES ($1, 'queued')
+             ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
+             RETURNING id`,
+            [insertedId],
+          )
+          if (job) jobs++
+          created++
+        } else {
+          // Lost the race: another writer created this doc between the SELECT
+          // and the INSERT. Re-read and fall through to the existing-doc path.
+          match = await findExistingDoc(mapped)
+          if (!match) {
+            decisions.push({
+              externalId: mapped.externalId,
+              action: 'error',
+              reason:
+                'insert conflicted but no matching document found on re-read',
+            })
+            continue
+          }
+        }
+      }
+    }
+
+    if (match) {
       const { doc: existing, matchKey } = match
 
       if (mapped.isFlat) {
