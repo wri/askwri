@@ -21,6 +21,7 @@
     "migration:run": "npm run typeorm -- migration:run -d src/db/migration-data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/db/migration-data-source.ts",
     "eval:baseline-suite": "bash evaluation/run-baseline-suite.sh --daemon",
+    "eval:qa": "npx tsx evaluation/run-evalset.ts",
     "eval:cite": "npx tsx --env-file-if-exists=.env evaluation/run-cite-eval.ts",
     "eval:report": "npx tsx --env-file-if-exists=.env evaluation/generate-report.ts",
     "eval:answer-retrieval": "npx tsx --env-file-if-exists=.env evaluation/run-answer-retrieval-eval.ts",
