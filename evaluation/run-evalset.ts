@@ -9,6 +9,9 @@
  * Retrieval params are deliberately NOT sent — the gateway applies its own
  * deployed presets, so this measures the system as users experience it.
  *
+ * Cases expecting no documents ("Has WRI written about X?" where it hasn't)
+ * are scored as abstentions, not as P/R/F1, and reported separately.
+ *
  * Usage:
  *   npm run eval:qa                                   every set in EVALSET_DIR
  *   npx tsx evaluation/run-evalset.ts <evalset.json>   one set
@@ -37,20 +40,31 @@ interface EvalCase {
   expected_urls?: string[]
 }
 
+/**
+ * A case expecting no documents at all ("Has WRI written about X?" where the
+ * answer is no) asks a different question of the system than a case expecting
+ * a document set, and is scored differently — see CaseResult.
+ */
+type Polarity = 'positive' | 'negative'
+
 interface CaseResult {
   test_case_id: string
   question: string
   query_type?: string
   source_language?: string
+  polarity: Polarity
   expected_ids: string[]
   /** Expected docs absent from the target's corpus — these cap recall. */
   missing_from_corpus: string[]
   recall_ceiling: number
   retrieved_ids: string[]
-  matched: string[]
-  precision: number
-  recall: number
-  f1: number
+  /** Positive cases only: P/R/F1 against the expected document set. */
+  matched?: string[]
+  precision?: number
+  recall?: number
+  f1?: number
+  /** Negative cases only: did the target correctly return nothing? */
+  abstained?: boolean
   execution_time_ms: number
   error?: string
 }
@@ -132,12 +146,14 @@ async function runCase(
   // report raw recall (ceiling 1).
   const byUrl = (tc.expected_urls ?? []).length > 0
   const expected = byUrl ? tc.expected_urls! : expectedIdsOf(tc)
+  const polarity: Polarity = expected.length === 0 ? 'negative' : 'positive'
   const missing = byUrl ? [] : expected.filter((id) => !corpusIds.has(id))
-  const ceiling = byUrl
-    ? 1
-    : expected.length
-      ? (expected.length - missing.length) / expected.length
-      : 0
+  // A negative case has no expected documents to be missing, so nothing caps
+  // it — a ceiling of 0 here would read as a corpus gap that doesn't exist.
+  const ceiling =
+    byUrl || polarity === 'negative'
+      ? 1
+      : (expected.length - missing.length) / expected.length
   const start = Date.now()
 
   const base = {
@@ -145,6 +161,7 @@ async function runCase(
     question: tc.question,
     query_type: tc.query_type,
     source_language: tc.source_language,
+    polarity,
     expected_ids: expected,
     missing_from_corpus: missing,
     recall_ceiling: ceiling,
@@ -155,6 +172,25 @@ async function runCase(
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
     const retrieved = byUrl ? docs.map((d) => d.url) : docs.map((d) => d.doc_id)
+
+    // Cite mode drops results below a calibrated score floor, so returning
+    // nothing is a reachable outcome — that, not P/R/F1, is what a negative
+    // case measures.
+    if (polarity === 'negative') {
+      const abstained = retrieved.length === 0
+      console.log(
+        `  ${tc.id.padEnd(40)} ${
+          abstained ? 'abstained' : `returned ${retrieved.length} docs`
+        }`,
+      )
+      return {
+        ...base,
+        retrieved_ids: retrieved,
+        abstained,
+        execution_time_ms: Date.now() - start,
+      }
+    }
+
     const m = byUrl
       ? calculateUrlMetrics(expected, retrieved)
       : calculateSetMetrics(expected, retrieved)
@@ -176,13 +212,16 @@ async function runCase(
     }
   } catch (error: any) {
     console.log(`  ${tc.id.padEnd(40)} ERROR: ${error.message}`)
+    // A failed query proves nothing either way; count it against the target so
+    // errors can't quietly improve a score.
+    const failure =
+      polarity === 'negative'
+        ? { abstained: false }
+        : { matched: [], precision: 0, recall: 0, f1: 0 }
     return {
       ...base,
       retrieved_ids: [],
-      matched: [],
-      precision: 0,
-      recall: 0,
-      f1: 0,
+      ...failure,
       execution_time_ms: Date.now() - start,
       error: error.message,
     }
@@ -216,9 +255,15 @@ async function runEvalset(
     results.push(await runCase(tc, mode, corpusIds))
   }
 
+  // Positive and negative cases answer different questions, so they are
+  // averaged apart: mixing them would let a growing negative batch move
+  // overall_recall and overall_precision on its own.
+  const positives = results.filter((r) => r.polarity === 'positive')
+  const negatives = results.filter((r) => r.polarity === 'negative')
   const mean = (pick: (r: CaseResult) => number) =>
-    results.reduce((sum, r) => sum + pick(r), 0) / (results.length || 1)
+    positives.reduce((sum, r) => sum + pick(r), 0) / (positives.length || 1)
   const ceilinged = results.filter((r) => r.missing_from_corpus.length > 0)
+  const abstained = negatives.filter((r) => r.abstained)
 
   const report = {
     timestamp: new Date().toISOString(),
@@ -231,11 +276,15 @@ async function runEvalset(
     retrieval_backend: service.retrieval_backend ?? null,
     corpus_size: corpusIds.size,
     cases_total: results.length,
+    cases_positive: positives.length,
+    cases_negative: negatives.length,
     cases_ceilinged: ceilinged.length,
-    overall_precision: mean((r) => r.precision),
-    overall_recall: mean((r) => r.recall),
-    overall_f1: mean((r) => r.f1),
+    // overall_* and mean_recall_ceiling cover the positive cases only.
+    overall_precision: mean((r) => r.precision ?? 0),
+    overall_recall: mean((r) => r.recall ?? 0),
+    overall_f1: mean((r) => r.f1 ?? 0),
     mean_recall_ceiling: mean((r) => r.recall_ceiling),
+    negatives_abstained: abstained.length,
     results,
   }
 
@@ -249,10 +298,22 @@ async function runEvalset(
 
   console.log(`\n${'='.repeat(72)}`)
   console.log(
-    `Precision ${(report.overall_precision * 100).toFixed(1)}%   ` +
+    `${positives.length} positive   ` +
+      `Precision ${(report.overall_precision * 100).toFixed(1)}%   ` +
       `Recall ${(report.overall_recall * 100).toFixed(1)}%   ` +
       `F1 ${(report.overall_f1 * 100).toFixed(1)}%`,
   )
+  if (negatives.length) {
+    console.log(
+      `${negatives.length} negative   ` +
+        `${abstained.length}/${negatives.length} correctly returned nothing`,
+    )
+    for (const r of negatives.filter((n) => !n.abstained)) {
+      console.log(
+        `  - ${r.test_case_id}: ${r.error ?? `${r.retrieved_ids.length} docs`}`,
+      )
+    }
+  }
   if (ceilinged.length) {
     const missing = new Set(ceilinged.flatMap((r) => r.missing_from_corpus))
     console.log(
@@ -274,7 +335,9 @@ async function main() {
     ? [explicit]
     : fs
         .readdirSync(EVALSET_DIR)
-        .filter((f) => f.endsWith('.json'))
+        // Superseded sets stay in the submodule for provenance, named
+        // `*_bkupNN.json`. They are still runnable by path, just not by default.
+        .filter((f) => f.endsWith('.json') && !f.includes('_bkup'))
         .sort()
         .map((f) => path.join(EVALSET_DIR, f))
 
