@@ -1366,7 +1366,7 @@ class TestParseTitleAndAuthors:
             worker.llm.chat_json = original
 
         system = captured["system"]
-        assert "Transliterate" in system, "prompt must ask for transliterated authors"
+        assert "transliterate" in system.lower(), "prompt must ask for transliterated authors"
         assert "Latin" in system, "prompt must name the target script"
         assert "family_name" in system and "given_names" in system
         assert "primary language" in system, "prompt must ask for a single-language title"
