@@ -3558,26 +3558,60 @@ class TestParseLLMExtraction:
         assert ms.get("doi") == "llm"
         assert ms.get("year_published") == "llm"
 
-    def test_reingest_overwrites_prior_llm_title(self, stages_test_db, monkeypatch):
-        """(c) Prior LLM title (metadata_source={title:'llm'}) → re-ingest OVERWRITES with new LLM value."""
+    def test_reingest_does_not_overwrite_human_authors(self, stages_test_db, monkeypatch):
+        """Human-owned authors remain unchanged when the parse model re-ingests metadata."""
         self._mock_parse(monkeypatch)
         import worker.llm as _llm
         monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
 
         doc_id = self._setup_doc(
             stages_test_db,
-            metadata_source={"title": "llm"},
-            title="Old LLM Title (wrong)",
+            metadata_source={"authors": "human"},
+            authors="Human Curated Author",
         )
 
         from worker.stages.parse import run
         run(doc_id)
 
         with psycopg.connect(stages_test_db) as conn:
-            row = conn.execute("SELECT title, metadata_source FROM documents WHERE id=%s", (doc_id,)).fetchone()
-        # Title overwritten (provenance was 'llm')
+            authors, metadata_source = conn.execute(
+                "SELECT authors, metadata_source FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()
+        assert authors == "Human Curated Author"
+        assert metadata_source["authors"] == "human"
+
+    def test_reingest_overwrites_prior_llm_title_and_authors(self, stages_test_db, monkeypatch):
+        """Prior LLM title and authors refresh with normalized model metadata and audit changes."""
+        self._mock_parse(monkeypatch)
+        import worker.llm as _llm
+        monkeypatch.setattr(_llm, "chat_json", lambda **kw: self._fake_llm_response())
+
+        doc_id = self._setup_doc(
+            stages_test_db,
+            metadata_source={"title": "llm", "authors": "llm"},
+            title="Old LLM Title (wrong)",
+            authors="Old LLM Author",
+        )
+
+        from worker.stages.parse import run
+        run(doc_id)
+
+        with psycopg.connect(stages_test_db) as conn:
+            row = conn.execute("SELECT title, authors, metadata_source FROM documents WHERE id=%s", (doc_id,)).fetchone()
+            audit_row = conn.execute(
+                "SELECT before, after FROM audit_log "
+                "WHERE action='update' AND entity_type='document' AND entity_id=%s",
+                (doc_id,),
+            ).fetchone()
+        assert audit_row is not None
+        before, after = audit_row
+        # Title and authors refresh because their provenance was 'llm'.
         assert row[0] == self._FAKE_EXTRACTION["title"]
-        assert row[1]["title"] == "llm"
+        assert row[1] == "Doe, Jane; Smith, John"
+        assert row[2]["title"] == "llm"
+        assert row[2]["authors"] == "llm"
+        assert before["authors"] == "Old LLM Author"
+        assert after["authors"] == "Doe, Jane; Smith, John"
 
     def test_chat_json_failure_does_not_crash_stage(self, stages_test_db, monkeypatch):
         """(d) chat_json raises → stage continues, no crash, metadata columns unchanged."""
