@@ -1,4 +1,40 @@
-import { calculateChunkMetrics, assertChunkMetricsValid } from './metrics'
+import {
+  averagePrecision,
+  calculateChunkMetrics,
+  assertChunkMetricsValid,
+} from './metrics'
+
+describe('averagePrecision', () => {
+  test('single expected doc at rank 1 scores 1', () => {
+    expect(averagePrecision(['a'], ['a', 'x', 'y'])).toBe(1)
+  })
+
+  test('single expected doc at rank 3 scores 1/3', () => {
+    expect(averagePrecision(['a'], ['x', 'y', 'a'])).toBeCloseTo(1 / 3)
+  })
+
+  test('expected doc never retrieved scores 0', () => {
+    expect(averagePrecision(['a'], ['x', 'y'])).toBe(0)
+  })
+
+  test('empty retrieved list scores 0', () => {
+    expect(averagePrecision(['a'], [])).toBe(0)
+  })
+
+  test('two expected docs at ranks 1 and 3 score (1/1 + 2/3) / 2', () => {
+    expect(averagePrecision(['a', 'b'], ['a', 'x', 'b'])).toBeCloseTo(5 / 6)
+  })
+
+  test('one of two expected docs found at rank 2 scores (1/2) / 2', () => {
+    expect(averagePrecision(['a', 'b'], ['x', 'a', 'y'])).toBeCloseTo(0.25)
+  })
+
+  test('a duplicate retrieved id earns credit only once', () => {
+    // Retrieved lists are deduped upstream, but the function must not let a
+    // repeat push AP above 1 if that ever regresses.
+    expect(averagePrecision(['a'], ['a', 'a'])).toBe(1)
+  })
+})
 
 // Regression tests for the adjacent-tolerance double-count bug: a single
 // retrieved chunk could be counted more than once (as an exact match AND as an
