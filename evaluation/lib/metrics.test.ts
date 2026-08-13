@@ -2,6 +2,7 @@ import {
   averagePrecision,
   calculateChunkMetrics,
   assertChunkMetricsValid,
+  docCoverage,
 } from './metrics'
 
 describe('averagePrecision', () => {
@@ -33,6 +34,53 @@ describe('averagePrecision', () => {
     // Retrieved lists are deduped upstream, but the function must not let a
     // repeat push AP above 1 if that ever regresses.
     expect(averagePrecision(['a'], ['a', 'a'])).toBe(1)
+  })
+})
+
+// docCoverage exists so attainable recall can never be read alone: a document
+// dropped from the corpus raises attainable recall while lowering in_corpus,
+// and reporting both side by side makes that trade visible.
+
+describe('docCoverage', () => {
+  test('sums expected, in-corpus, and retrieved doc counts across cases', () => {
+    const cases = [
+      // 3 expected, 1 absent from the corpus, both attainable docs retrieved
+      {
+        expected_ids: ['a', 'b', 'c'],
+        missing_from_corpus: ['c'],
+        attainable_retrieved: 2,
+      },
+      // 2 expected, all in corpus, 1 retrieved
+      {
+        expected_ids: ['d', 'e'],
+        missing_from_corpus: [],
+        attainable_retrieved: 1,
+      },
+    ]
+    expect(docCoverage(cases)).toEqual({
+      expected: 5,
+      in_corpus: 4,
+      retrieved: 3,
+    })
+  })
+
+  test('a case with nothing attainable counts its expected docs but retrieves none', () => {
+    const cases = [
+      {
+        expected_ids: ['a', 'b'],
+        missing_from_corpus: ['a', 'b'],
+        attainable_retrieved: null,
+      },
+    ]
+    expect(docCoverage(cases)).toEqual({
+      expected: 2,
+      in_corpus: 0,
+      retrieved: 0,
+    })
+  })
+
+  test('no cases yields all zeros', () => {
+    expect(docCoverage([])).toEqual({ expected: 0, in_corpus: 0, retrieved: 0 })
   })
 })
 

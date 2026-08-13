@@ -76,6 +76,32 @@ export function averagePrecision(
   return sum / expected.length
 }
 
+/**
+ * Doc-level corpus coverage across a set of positive eval cases: how many
+ * expected documents there are in total, how many of those the target's corpus
+ * actually holds, and how many of the held ones were retrieved. Reported
+ * alongside attainable recall so a document dropped from the corpus (which
+ * raises attainable recall by shrinking its denominator) shows up as a fall in
+ * in_corpus rather than passing as a retrieval improvement.
+ */
+export function docCoverage(
+  cases: {
+    expected_ids: string[]
+    missing_from_corpus: string[]
+    attainable_retrieved?: number | null
+  }[],
+): { expected: number; in_corpus: number; retrieved: number } {
+  let expected = 0
+  let in_corpus = 0
+  let retrieved = 0
+  for (const c of cases) {
+    expected += c.expected_ids.length
+    in_corpus += c.expected_ids.length - c.missing_from_corpus.length
+    retrieved += c.attainable_retrieved ?? 0
+  }
+  return { expected, in_corpus, retrieved }
+}
+
 // --- Generic Set Metrics ---
 
 /**

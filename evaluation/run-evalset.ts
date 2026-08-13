@@ -26,6 +26,7 @@ import {
   averagePrecision,
   calculateSetMetrics,
   calculateUrlMetrics,
+  docCoverage,
   extractUrlSlug,
 } from './lib/metrics'
 
@@ -75,6 +76,8 @@ interface CaseResult {
   matched?: string[]
   average_precision?: number | null
   attainable_recall?: number | null
+  /** How many attainable expected docs were retrieved — attainable_recall's numerator. */
+  attainable_retrieved?: number | null
   /** Negative cases only: did the target correctly return nothing? */
   abstained?: boolean
   execution_time_ms: number
@@ -214,15 +217,12 @@ async function runCase(
     const expectedKeys = byUrl ? attainable.map(extractUrlSlug) : attainable
     const retrievedKeys = byUrl ? retrieved.map(extractUrlSlug) : retrieved
     const retrievedKeySet = new Set(retrievedKeys)
+    const hits = expectedKeys.filter((k) => retrievedKeySet.has(k)).length
     const ap =
       attainable.length > 0
         ? averagePrecision(expectedKeys, retrievedKeys)
         : null
-    const aRecall =
-      attainable.length > 0
-        ? expectedKeys.filter((k) => retrievedKeySet.has(k)).length /
-          expectedKeys.length
-        : null
+    const aRecall = attainable.length > 0 ? hits / expectedKeys.length : null
 
     const capped =
       attainable.length === 0
@@ -241,6 +241,7 @@ async function runCase(
       matched: m.matched,
       average_precision: ap,
       attainable_recall: aRecall,
+      attainable_retrieved: attainable.length > 0 ? hits : null,
       execution_time_ms: Date.now() - start,
     }
   } catch (error: any) {
@@ -256,6 +257,7 @@ async function runCase(
             matched: [],
             average_precision: scorable ? 0 : null,
             attainable_recall: scorable ? 0 : null,
+            attainable_retrieved: scorable ? 0 : null,
           }
     return {
       ...base,
@@ -340,6 +342,7 @@ async function runEvalset(
   const negatives = results.filter((r) => r.polarity === 'negative')
   const ceilinged = results.filter((r) => r.missing_from_corpus.length > 0)
   const abstained = negatives.filter((r) => r.abstained)
+  const coverage = docCoverage(positives)
 
   const report = {
     timestamp: new Date().toISOString(),
@@ -362,6 +365,12 @@ async function runEvalset(
       (r) => r.attainable_recall,
     ),
     mean_recall_ceiling: meanMeasurable(positives, (r) => r.recall_ceiling),
+    // Doc-level coverage, always read alongside attainable recall: a document
+    // dropped from the corpus raises the recall (smaller denominator) but
+    // lowers expected_docs_in_corpus, so the trade stays visible.
+    expected_docs: coverage.expected,
+    expected_docs_in_corpus: coverage.in_corpus,
+    expected_docs_retrieved: coverage.retrieved,
     negatives_abstained: abstained.length,
     by_query_type: byQueryType(results),
     results,
@@ -379,7 +388,9 @@ async function runEvalset(
   console.log(
     `${positives.length} positive   ` +
       `MAP ${(report.overall_map * 100).toFixed(1)}%   ` +
-      `Attainable recall ${(report.overall_attainable_recall * 100).toFixed(1)}%`,
+      `Attainable recall ${(report.overall_attainable_recall * 100).toFixed(1)}% ` +
+      `(${coverage.in_corpus}/${coverage.expected} expected docs in corpus, ` +
+      `${coverage.retrieved}/${coverage.in_corpus} retrieved)`,
   )
   if (negatives.length) {
     console.log(
