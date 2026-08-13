@@ -22,6 +22,40 @@ export interface RelationRow {
   original: RelationDocSummary
 }
 
+/** A confirm/flip/manual-create can violate one of two unique indexes. Returned
+ * as a typed value (not thrown) so the route can answer 409 instead of 500. */
+export type RelationConflictReason = 'already_confirmed' | 'pair_exists'
+export interface RelationConflict {
+  conflict: true
+  reason: RelationConflictReason
+}
+export type ReviewResult = RelationRow | null | RelationConflict
+export type ManualResult = RelationRow | RelationConflict
+
+const CONFLICT_MESSAGES: Record<RelationConflictReason, string> = {
+  already_confirmed: 'This document already has a confirmed translation pair.',
+  pair_exists:
+    'A relation row for this pair already exists (review it in the queue instead).',
+}
+
+export function conflictMessage(reason: RelationConflictReason): string {
+  return CONFLICT_MESSAGES[reason]
+}
+
+/** Map a TypeORM/pg constraint violation to a conflict reason, or null if the
+ * error is not one of ours (re-throw by the caller). */
+function classifyConflict(err: unknown): RelationConflictReason | null {
+  const e = err as {
+    driverError?: { constraint?: string }
+    constraint?: string
+  }
+  const constraint = e?.driverError?.constraint ?? e?.constraint
+  if (constraint === 'UQ_document_relations_confirmed')
+    return 'already_confirmed'
+  if (constraint === 'UQ_document_relations_pair') return 'pair_exists'
+  return null
+}
+
 const SELECT = `
   SELECT r.id, r.document_id AS "documentId", r.related_document_id AS "relatedDocumentId",
          r.relation_type AS "relationType", r.status, r.source,
@@ -97,24 +131,30 @@ export async function reviewRelation(
   id: string,
   action: 'confirm' | 'reject' | 'flip',
   reviewer: string,
-): Promise<RelationRow | null> {
+): Promise<ReviewResult> {
   const before = await getRaw(id)
   if (!before) return null
-  if (action === 'flip') {
-    await AppDataSource.query(
-      `UPDATE document_relations
-          SET document_id = related_document_id, related_document_id = document_id,
-              reviewed_by = $2, reviewed_at = now()
-        WHERE id = $1`,
-      [id, reviewer],
-    )
-  } else {
-    await AppDataSource.query(
-      `UPDATE document_relations
-          SET status = $2, reviewed_by = $3, reviewed_at = now()
-        WHERE id = $1`,
-      [id, action === 'confirm' ? 'confirmed' : 'rejected', reviewer],
-    )
+  try {
+    if (action === 'flip') {
+      await AppDataSource.query(
+        `UPDATE document_relations
+            SET document_id = related_document_id, related_document_id = document_id,
+                reviewed_by = $2, reviewed_at = now()
+          WHERE id = $1`,
+        [id, reviewer],
+      )
+    } else {
+      await AppDataSource.query(
+        `UPDATE document_relations
+            SET status = $2, reviewed_by = $3, reviewed_at = now()
+          WHERE id = $1`,
+        [id, action === 'confirm' ? 'confirmed' : 'rejected', reviewer],
+      )
+    }
+  } catch (err) {
+    const reason = classifyConflict(err)
+    if (reason) return { conflict: true, reason }
+    throw err
   }
   const after = await getRaw(id)
   await audit(id, reviewer, before, after)
@@ -143,14 +183,22 @@ export async function createManualRelation(
   translationDocId: string,
   originalDocId: string,
   reviewer: string,
-): Promise<RelationRow> {
-  const [row] = await AppDataSource.query(
-    `INSERT INTO document_relations
-       (document_id, related_document_id, source, status, reviewed_by, reviewed_at)
-     VALUES ($1, $2, 'human', 'confirmed', $3, now())
-     RETURNING id`,
-    [translationDocId, originalDocId, reviewer],
-  )
+): Promise<ManualResult> {
+  let row: { id: string }
+  try {
+    const r = await AppDataSource.query(
+      `INSERT INTO document_relations
+         (document_id, related_document_id, source, status, reviewed_by, reviewed_at)
+       VALUES ($1, $2, 'human', 'confirmed', $3, now())
+       RETURNING id`,
+      [translationDocId, originalDocId, reviewer],
+    )
+    row = r[0]
+  } catch (err) {
+    const reason = classifyConflict(err)
+    if (reason) return { conflict: true, reason }
+    throw err
+  }
   await audit(
     row.id,
     reviewer,

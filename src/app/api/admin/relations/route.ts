@@ -3,6 +3,7 @@ import { initializeDatabase } from '../../../../db/data-source'
 import {
   listRelations,
   createManualRelation,
+  conflictMessage,
 } from '../../../../db/queries/documentRelations'
 import { requireIdentity, identityName } from '../../../../lib/auth/identity'
 import { internalError } from '../../../../lib/api-error'
@@ -40,6 +41,12 @@ export async function POST(req: NextRequest) {
       body.originalDocId,
       identityName(identity),
     )
+    if ('conflict' in relation) {
+      return NextResponse.json(
+        { ok: false, error: conflictMessage(relation.reason) },
+        { status: 409 },
+      )
+    }
     return NextResponse.json({ ok: true, relation })
   } catch (err) {
     return internalError(err)

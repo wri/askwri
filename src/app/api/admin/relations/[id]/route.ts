@@ -3,6 +3,7 @@ import { initializeDatabase } from '../../../../../db/data-source'
 import {
   reviewRelation,
   unlinkRelation,
+  conflictMessage,
 } from '../../../../../db/queries/documentRelations'
 import { requireIdentity, identityName } from '../../../../../lib/auth/identity'
 import { internalError } from '../../../../../lib/api-error'
@@ -38,6 +39,12 @@ export async function PATCH(
         { ok: false, error: 'not found' },
         { status: 404 },
       )
+    if ('conflict' in relation) {
+      return NextResponse.json(
+        { ok: false, error: conflictMessage(relation.reason) },
+        { status: 409 },
+      )
+    }
     return NextResponse.json({ ok: true, relation })
   } catch (err) {
     return internalError(err)
