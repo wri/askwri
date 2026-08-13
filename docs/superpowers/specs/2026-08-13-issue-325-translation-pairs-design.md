@@ -78,13 +78,21 @@ creation. Same two-writer precedence as `document_tags`.
 - The same comparison logic ships as a re-runnable, idempotent full-corpus sweep script:
   seeds the current corpus, and can be re-run after threshold changes. Pairs with any
   existing relation row (any status) are skipped.
-- Signals, all saved in `signals` jsonb:
-  1. English-summary embedding cosine similarity (main signal; comparing the English
-     bridges avoids cross-language skew).
-  2. `title_en` exact/fuzzy match (corroborating).
-  3. Stamped language contradicts detected text language on either member (#332 case).
-- Thresholds are config values. Initial values: whatever makes all 10 known qa pairs
-  fire. Small corpus justifies direction, not permanent numbers.
+- Signals, all saved in `signals` jsonb. Trigger priority was set by measurement on qa
+  (2026-08-13): the 10 known pairs' summary-embedding cosines span only 0.63–0.76 while
+  non-pairs (revised editions 0.95, the "Seizing X's Urban Opportunity" country series
+  0.70–0.75) score higher — embedding similarity cannot distinguish a translation from a
+  country edition. Title matching found all 10 known pairs.
+  1. **Primary trigger:** normalized `title_en` fuzzy similarity ≥ 0.75 (all known
+     pairs clear this).
+  2. **Secondary trigger:** summary-embedding cosine ≥ 0.85 — catches retitled
+     near-duplicates (fires on exactly 3 qa families today: ImpactAr, Calculating
+     Indicators, Future Mobility Calculator — reviewable, even if the verdict is
+     "related, not a translation").
+  3. Embedding cosine and stamped-vs-detected language disagreement (#332 case) are
+     recorded on every suggestion as reviewer evidence, regardless of which trigger
+     fired.
+- Thresholds are config values. Small corpus justifies direction, not permanent numbers.
 - **No gate on language labels.** The two mislabeled pairs were zh/zh on paper and must
   still fire.
 - Proposed direction: the non-English member is the original, judged by **detected text
