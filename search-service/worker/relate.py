@@ -113,21 +113,20 @@ def _detected_language(conn, document_id):
     return detect(row[0])
 
 
-def suggest_for_document(conn, document_id) -> int:
-    settings = get_settings()
-    me_row = conn.execute(
-        """SELECT id, external_id, title, title_en, language, metadata_source
-           FROM documents WHERE id = %s""", (document_id,)).fetchone()
-    if me_row is None:
-        return 0
-    cols = ["id", "external_id", "title", "title_en", "language", "metadata_source"]
-    me = dict(zip(cols, me_row))
-    me["detected_language"] = _detected_language(conn, document_id)
+_DOC_COLS = ["id", "external_id", "title", "title_en", "language", "metadata_source"]
+_ME_SQL = "SELECT id, external_id, title, title_en, language, metadata_source FROM documents WHERE id = %s"
+_INSERT_RELATION_SQL = """INSERT INTO document_relations
+       (document_id, related_document_id, source, status, confidence, signals)
+       VALUES (%s, %s, 'system', 'suggested', %s, %s)
+       ON CONFLICT DO NOTHING"""
 
-    sims = {r[0]: float(r[1]) for r in conn.execute(_EMBED_SIM_SQL, (document_id, document_id))}
-    others = [dict(zip(cols, r)) for r in conn.execute(_ACTIVE_DOCS_SQL, (document_id,))]
 
-    inserted = 0
+def _candidates(conn, me, settings):
+    """Yield (other, signals) for each pair that fires a trigger and has no
+    existing relation row. Shared by suggest_for_document (INSERTs) and
+    count_candidates (counts) so the two cannot drift."""
+    sims = {r[0]: float(r[1]) for r in conn.execute(_EMBED_SIM_SQL, (me["id"], me["id"]))}
+    others = [dict(zip(_DOC_COLS, r)) for r in conn.execute(_ACTIVE_DOCS_SQL, (me["id"],))]
     for other in others:
         # Cheap pre-screen: only detect the counterpart's text language when a
         # trigger could fire (title close or embedding high).
@@ -145,14 +144,34 @@ def suggest_for_document(conn, document_id) -> int:
                              settings.relation_embed_threshold)
         if signals is None:
             continue
+        yield other, signals
+
+
+def suggest_for_document(conn, document_id) -> int:
+    settings = get_settings()
+    me_row = conn.execute(_ME_SQL, (document_id,)).fetchone()
+    if me_row is None:
+        return 0
+    me = dict(zip(_DOC_COLS, me_row))
+    me["detected_language"] = _detected_language(conn, document_id)
+    inserted = 0
+    for _other, signals in _candidates(conn, me, settings):
         translation_id = signals.pop("translation_id")
         original_id = signals.pop("original_id")
         confidence = max(signals["title_similarity"], signals["embedding_similarity"] or 0.0)
-        conn.execute(
-            """INSERT INTO document_relations
-               (document_id, related_document_id, source, status, confidence, signals)
-               VALUES (%s, %s, 'system', 'suggested', %s, %s)
-               ON CONFLICT DO NOTHING""",
-            (translation_id, original_id, confidence, Jsonb(signals)))
+        conn.execute(_INSERT_RELATION_SQL,
+                     (translation_id, original_id, confidence, Jsonb(signals)))
         inserted += 1
     return inserted
+
+
+def count_candidates(conn, document_id) -> int:
+    """Dry-run twin of suggest_for_document: count the suggestions that would be
+    inserted without writing any. Same _candidates loop, so the counts match."""
+    settings = get_settings()
+    me_row = conn.execute(_ME_SQL, (document_id,)).fetchone()
+    if me_row is None:
+        return 0
+    me = dict(zip(_DOC_COLS, me_row))
+    me["detected_language"] = _detected_language(conn, document_id)
+    return sum(1 for _ in _candidates(conn, me, settings))
