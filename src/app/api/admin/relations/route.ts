@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { initializeDatabase } from '../../../../db/data-source'
-import { listRelations, createManualRelation } from '../../../../db/queries/documentRelations'
+import {
+  listRelations,
+  createManualRelation,
+} from '../../../../db/queries/documentRelations'
 import { requireIdentity, identityName } from '../../../../lib/auth/identity'
 import { internalError } from '../../../../lib/api-error'
 
@@ -26,11 +29,17 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     if (!body?.translationDocId || !body?.originalDocId) {
-      return NextResponse.json({ ok: false, error: 'translationDocId and originalDocId are required' }, { status: 400 })
+      return NextResponse.json(
+        { ok: false, error: 'translationDocId and originalDocId are required' },
+        { status: 400 },
+      )
     }
     await initializeDatabase()
     const relation = await createManualRelation(
-      body.translationDocId, body.originalDocId, identityName(identity))
+      body.translationDocId,
+      body.originalDocId,
+      identityName(identity),
+    )
     return NextResponse.json({ ok: true, relation })
   } catch (err) {
     return internalError(err)

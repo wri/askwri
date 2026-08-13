@@ -38,7 +38,10 @@ const SignalChips = ({ signals }: { signals: Record<string, any> }) => {
     parts.push(`title ${signals.title_similarity}`)
   if (typeof signals.embedding_similarity === 'number')
     parts.push(`embed ${signals.embedding_similarity}`)
-  if (Array.isArray(signals.language_disagreement) && signals.language_disagreement.length)
+  if (
+    Array.isArray(signals.language_disagreement) &&
+    signals.language_disagreement.length
+  )
     parts.push('language mismatch')
   if (parts.length === 0) return null
   return <span>{parts.join(' · ')}</span>
@@ -143,7 +146,8 @@ export const RelationsPanel = ({ docId }: { docId?: string } = {}) => {
         return
       }
       const counterpartId = match.id
-      const translationDocId = linkMode === 'translation' ? docId : counterpartId
+      const translationDocId =
+        linkMode === 'translation' ? docId : counterpartId
       const originalDocId = linkMode === 'translation' ? counterpartId : docId
       await adminFetch('/api/admin/relations', {
         method: 'POST',
@@ -239,8 +243,7 @@ export const RelationsPanel = ({ docId }: { docId?: string } = {}) => {
                 >
                   Unlink
                 </button>
-              ) : null}
-              {' '}
+              ) : null}{' '}
               <span style={{ color: '#595959', fontSize: 13 }}>
                 suggested by {r.source}
                 {r.confidence != null ? ` · confidence ${r.confidence}` : ''}

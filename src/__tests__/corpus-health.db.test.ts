@@ -114,10 +114,14 @@ d('getCorpusHealth (DB integration)', () => {
            ($5, $6, 'Corpus Rel C', 'searchable'),
            ($7, $8, 'Corpus Rel D', 'searchable') RETURNING id`,
         [
-          `${ext}_a`, `documents/${ext}_a.pdf`,
-          `${ext}_b`, `documents/${ext}_b.pdf`,
-          `${ext}_c`, `documents/${ext}_c.pdf`,
-          `${ext}_d`, `documents/${ext}_d.pdf`,
+          `${ext}_a`,
+          `documents/${ext}_a.pdf`,
+          `${ext}_b`,
+          `documents/${ext}_b.pdf`,
+          `${ext}_c`,
+          `documents/${ext}_c.pdf`,
+          `${ext}_d`,
+          `documents/${ext}_d.pdf`,
         ],
       )
       docA = rows[0].id

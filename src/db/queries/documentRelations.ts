@@ -46,16 +46,33 @@ function toRow(r: any): RelationRow {
     createdAt: r.createdAt,
     reviewedBy: r.reviewedBy,
     reviewedAt: r.reviewedAt,
-    translation: { externalId: r.tExternalId, title: r.tTitle, language: r.tLanguage },
-    original: { externalId: r.oExternalId, title: r.oTitle, language: r.oLanguage },
+    translation: {
+      externalId: r.tExternalId,
+      title: r.tTitle,
+      language: r.tLanguage,
+    },
+    original: {
+      externalId: r.oExternalId,
+      title: r.oTitle,
+      language: r.oLanguage,
+    },
   }
 }
 
-async function audit(relationId: string, reviewer: string, before: object, after: object) {
+async function audit(
+  relationId: string,
+  reviewer: string,
+  before: object,
+  after: object,
+) {
   await AppDataSource.query(
     `INSERT INTO audit_log (source, actor_user_id, action, entity_type, entity_id, before, after)
      VALUES ('human', NULL, 'relation_review', 'document_relation', $1, $2, $3)`,
-    [relationId, JSON.stringify({ ...before, reviewer }), JSON.stringify(after)],
+    [
+      relationId,
+      JSON.stringify({ ...before, reviewer }),
+      JSON.stringify(after),
+    ],
   )
 }
 
@@ -105,7 +122,10 @@ export async function reviewRelation(
   return rows.length ? toRow(rows[0]) : null
 }
 
-export async function unlinkRelation(id: string, reviewer: string): Promise<RelationRow | null> {
+export async function unlinkRelation(
+  id: string,
+  reviewer: string,
+): Promise<RelationRow | null> {
   const before = await getRaw(id)
   if (!before || before.status !== 'confirmed') return null
   await AppDataSource.query(
@@ -131,7 +151,16 @@ export async function createManualRelation(
      RETURNING id`,
     [translationDocId, originalDocId, reviewer],
   )
-  await audit(row.id, reviewer, {}, { status: 'confirmed', document_id: translationDocId, related_document_id: originalDocId })
+  await audit(
+    row.id,
+    reviewer,
+    {},
+    {
+      status: 'confirmed',
+      document_id: translationDocId,
+      related_document_id: originalDocId,
+    },
+  )
   const rows = await AppDataSource.query(`${SELECT} WHERE r.id = $1`, [row.id])
   return toRow(rows[0])
 }

@@ -5,7 +5,11 @@ import ChakraProvider from '@/app/Providers/ChakraProvider'
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({}),
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    refresh: jest.fn(),
+  }),
   usePathname: () => '/admin/review',
   useSearchParams: () => ({ get: () => null }),
 }))
@@ -21,7 +25,9 @@ const suggestedRow = {
   signals: {
     title_similarity: 0.98,
     embedding_similarity: 0.72,
-    language_disagreement: [{ external_id: 'x', stamped: 'zh', detected: 'en' }],
+    language_disagreement: [
+      { external_id: 'x', stamped: 'zh', detected: 'en' },
+    ],
   },
   createdAt: '2026-01-01T00:00:00Z',
   reviewedBy: null,
@@ -50,7 +56,11 @@ const confirmedRow = {
   createdAt: '2026-01-02T00:00:00Z',
   reviewedBy: 'tester',
   reviewedAt: '2026-01-02T00:00:00Z',
-  translation: { externalId: 'other_en', title: 'Other English', language: 'en' },
+  translation: {
+    externalId: 'other_en',
+    title: 'Other English',
+    language: 'en',
+  },
   original: { externalId: 'other_es', title: 'Otro Original', language: 'es' },
 }
 
@@ -76,7 +86,10 @@ function setupFetchMock() {
         json: () => Promise.resolve({ ok: true, relations: [confirmedRow] }),
       })
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) })
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ok: true }),
+    })
   })
   global.fetch = fetchMock as any
   return fetchMock
@@ -98,7 +111,9 @@ describe('RelationsPanel (jsdom)', () => {
     renderPanel({ docId: 'doc-t' })
 
     await waitFor(() => {
-      expect(screen.getByText("Seizing China's Urban Opportunity")).toBeInTheDocument()
+      expect(
+        screen.getByText("Seizing China's Urban Opportunity"),
+      ).toBeInTheDocument()
     })
     expect(screen.getByText('抓住中国城市机遇')).toBeInTheDocument()
     expect(screen.getByText('[zh]')).toBeInTheDocument()
@@ -117,7 +132,8 @@ describe('RelationsPanel (jsdom)', () => {
 
     await waitFor(() => {
       const patch = fetchMock.mock.calls.find(
-        (c) => c[0] === '/api/admin/relations/rel-1' && c[1]?.method === 'PATCH',
+        (c) =>
+          c[0] === '/api/admin/relations/rel-1' && c[1]?.method === 'PATCH',
       )
       expect(patch).toBeTruthy()
       expect(patch![1].body).toBe(JSON.stringify({ action: 'confirm' }))
@@ -133,7 +149,8 @@ describe('RelationsPanel (jsdom)', () => {
 
     await waitFor(() => {
       const patch = fetchMock.mock.calls.find(
-        (c) => c[0] === '/api/admin/relations/rel-1' && c[1]?.method === 'PATCH',
+        (c) =>
+          c[0] === '/api/admin/relations/rel-1' && c[1]?.method === 'PATCH',
       )
       expect(patch).toBeTruthy()
       expect(patch![1].body).toBe(JSON.stringify({ action: 'reject' }))
@@ -149,7 +166,8 @@ describe('RelationsPanel (jsdom)', () => {
 
     await waitFor(() => {
       const patch = fetchMock.mock.calls.find(
-        (c) => c[0] === '/api/admin/relations/rel-1' && c[1]?.method === 'PATCH',
+        (c) =>
+          c[0] === '/api/admin/relations/rel-1' && c[1]?.method === 'PATCH',
       )
       expect(patch).toBeTruthy()
       expect(patch![1].body).toBe(JSON.stringify({ action: 'flip' }))
@@ -160,7 +178,9 @@ describe('RelationsPanel (jsdom)', () => {
     setupFetchMock()
     renderPanel()
 
-    expect(await screen.findByRole('button', { name: 'Unlink' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: 'Unlink' }),
+    ).toBeInTheDocument()
   })
 
   it('orphan warning renders for originals with a confirmed edge', async () => {

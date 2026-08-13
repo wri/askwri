@@ -86,8 +86,10 @@ export async function getCorpusHealth(): Promise<CorpusHealth> {
       count(*) FILTER (WHERE status = 'confirmed' AND relation_type = 'translation_of')::int AS "confirmedTranslationPairs"
     FROM document_relations
   `)
-  const pendingRelationSuggestions: number = relRow?.pendingRelationSuggestions ?? 0
-  const confirmedTranslationPairs: number = relRow?.confirmedTranslationPairs ?? 0
+  const pendingRelationSuggestions: number =
+    relRow?.pendingRelationSuggestions ?? 0
+  const confirmedTranslationPairs: number =
+    relRow?.confirmedTranslationPairs ?? 0
 
   return {
     statusCounts,

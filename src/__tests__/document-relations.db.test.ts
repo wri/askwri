@@ -15,7 +15,12 @@ d('document_relations schema', () => {
       `INSERT INTO documents (external_id, s3_key, title, status) VALUES
        ($1, $2, 'Rel Test A', 'searchable'),
        ($3, $4, 'Rel Test B', 'searchable') RETURNING id`,
-      [`${ext}_a`, `documents/${ext}_a.pdf`, `${ext}_b`, `documents/${ext}_b.pdf`],
+      [
+        `${ext}_a`,
+        `documents/${ext}_a.pdf`,
+        `${ext}_b`,
+        `documents/${ext}_b.pdf`,
+      ],
     )
     docA = rows[0].id
     docB = rows[1].id
@@ -26,7 +31,10 @@ d('document_relations schema', () => {
       `DELETE FROM document_relations WHERE document_id IN ($1, $2) OR related_document_id IN ($1, $2)`,
       [docA, docB],
     )
-    await AppDataSource.query(`DELETE FROM documents WHERE id IN ($1, $2)`, [docA, docB])
+    await AppDataSource.query(`DELETE FROM documents WHERE id IN ($1, $2)`, [
+      docA,
+      docB,
+    ])
     await AppDataSource.destroy()
   })
 

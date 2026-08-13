@@ -22,7 +22,12 @@ d('documentRelations queries', () => {
       `INSERT INTO documents (external_id, s3_key, title, status) VALUES
        ($1, $2, 'Rel Query A', 'searchable'),
        ($3, $4, 'Rel Query B', 'searchable') RETURNING id`,
-      [`${ext}_a`, `documents/${ext}_a.pdf`, `${ext}_b`, `documents/${ext}_b.pdf`],
+      [
+        `${ext}_a`,
+        `documents/${ext}_a.pdf`,
+        `${ext}_b`,
+        `documents/${ext}_b.pdf`,
+      ],
     )
     docA = rows[0].id
     docB = rows[1].id
@@ -39,7 +44,10 @@ d('documentRelations queries', () => {
       `DELETE FROM document_relations WHERE document_id IN ($1, $2) OR related_document_id IN ($1, $2)`,
       [docA, docB],
     )
-    await AppDataSource.query(`DELETE FROM documents WHERE id IN ($1, $2)`, [docA, docB])
+    await AppDataSource.query(`DELETE FROM documents WHERE id IN ($1, $2)`, [
+      docA,
+      docB,
+    ])
     await AppDataSource.destroy()
   })
 
@@ -58,7 +66,9 @@ d('documentRelations queries', () => {
 
   it('flip swaps direction and stamps reviewer', async () => {
     const [row] = await AppDataSource.query(
-      `SELECT id FROM document_relations WHERE document_id = $1`, [docA])
+      `SELECT id FROM document_relations WHERE document_id = $1`,
+      [docA],
+    )
     const flipped = await reviewRelation(row.id, 'flip', 'tester')
     expect(flipped!.documentId).toBe(docB)
     expect(flipped!.relatedDocumentId).toBe(docA)
@@ -67,7 +77,9 @@ d('documentRelations queries', () => {
 
   it('unlink turns confirmed into rejected', async () => {
     const [row] = await AppDataSource.query(
-      `SELECT id FROM document_relations WHERE related_document_id = $1`, [docA])
+      `SELECT id FROM document_relations WHERE related_document_id = $1`,
+      [docA],
+    )
     const rel = await unlinkRelation(row.id, 'tester')
     expect(rel!.status).toBe('rejected')
   })
@@ -75,7 +87,8 @@ d('documentRelations queries', () => {
   it('review writes an audit row', async () => {
     const rows = await AppDataSource.query(
       `SELECT count(*)::int AS n FROM audit_log
-       WHERE entity_type = 'document_relation' AND action = 'relation_review'`)
+       WHERE entity_type = 'document_relation' AND action = 'relation_review'`,
+    )
     expect(rows[0].n).toBeGreaterThanOrEqual(2)
   })
 })

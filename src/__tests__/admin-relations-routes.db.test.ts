@@ -24,9 +24,12 @@ d('admin relations routes', () => {
        ($3, $4, 'Routes B', 'searchable'),
        ($5, $6, 'Routes C', 'searchable') RETURNING id`,
       [
-        `${ext}_a`, `documents/${ext}_a.pdf`,
-        `${ext}_b`, `documents/${ext}_b.pdf`,
-        `${ext}_c`, `documents/${ext}_c.pdf`,
+        `${ext}_a`,
+        `documents/${ext}_a.pdf`,
+        `${ext}_b`,
+        `documents/${ext}_b.pdf`,
+        `${ext}_c`,
+        `documents/${ext}_c.pdf`,
       ],
     )
     docA = rows[0].id
@@ -52,7 +55,10 @@ d('admin relations routes', () => {
       `DELETE FROM document_relations WHERE document_id IN ($1, $2, $3) OR related_document_id IN ($1, $2, $3)`,
       [docA, docB, docC],
     )
-    await AppDataSource.query(`DELETE FROM documents WHERE id IN ($1, $2, $3)`, [docA, docB, docC])
+    await AppDataSource.query(
+      `DELETE FROM documents WHERE id IN ($1, $2, $3)`,
+      [docA, docB, docC],
+    )
     await AppDataSource.destroy()
   })
 
@@ -75,9 +81,15 @@ d('admin relations routes', () => {
   it('PATCH confirm returns the confirmed row', async () => {
     const req = new NextRequest(
       `http://localhost/api/admin/relations/${seededRelId}`,
-      { method: 'PATCH', body: JSON.stringify({ action: 'confirm' }), headers: authHeaders() },
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'confirm' }),
+        headers: authHeaders(),
+      },
     )
-    const res = await PATCH(req, { params: Promise.resolve({ id: seededRelId }) })
+    const res = await PATCH(req, {
+      params: Promise.resolve({ id: seededRelId }),
+    })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.ok).toBe(true)
@@ -87,9 +99,15 @@ d('admin relations routes', () => {
   it('PATCH bad action returns 400', async () => {
     const req = new NextRequest(
       `http://localhost/api/admin/relations/${seededRelId}`,
-      { method: 'PATCH', body: JSON.stringify({ action: 'bogus' }), headers: authHeaders() },
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'bogus' }),
+        headers: authHeaders(),
+      },
     )
-    const res = await PATCH(req, { params: Promise.resolve({ id: seededRelId }) })
+    const res = await PATCH(req, {
+      params: Promise.resolve({ id: seededRelId }),
+    })
     expect(res.status).toBe(400)
   })
 
@@ -97,7 +115,11 @@ d('admin relations routes', () => {
     const unknown = '00000000-0000-4000-8000-000000000000'
     const req = new NextRequest(
       `http://localhost/api/admin/relations/${unknown}`,
-      { method: 'PATCH', body: JSON.stringify({ action: 'confirm' }), headers: authHeaders() },
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'confirm' }),
+        headers: authHeaders(),
+      },
     )
     const res = await PATCH(req, { params: Promise.resolve({ id: unknown }) })
     expect(res.status).toBe(404)
