@@ -74,7 +74,7 @@ poor + `low_coverage` warning + per-source `relevance_tier`), `/api/relates` + `
 (on-demand English of a passage), `/api/alignment` (claim-vs-passage alignment
 `High|Moderate|Low|Very Low`), `/api/catalog`.
 
-Three real gaps for an agent persona, and only three:
+Four real gaps for an agent persona:
 
 1. **The two-step.** `/api/answer` is UI-coupled — it takes `{query, docs}` where `docs` are
    pre-fetched by the React client. An agent must do retrieve-then-synthesize itself. There
@@ -86,6 +86,13 @@ Three real gaps for an agent persona, and only three:
 3. **No extraction primitive** (post-overrule #8 — see §7). Geography / fleet size / cost-km
    live in passages, not metadata. Evidence-pack extraction was fragile-agent-side; the
    overrule moves it server-side.
+4. **The contract doesn't surface document history the store has.** `documents` carries
+   `status`, `created_at`, `updated_at`, `content_hash`, `extraction_confidence`, but the
+   citation response returns only `doc_id`, `title`, `page`, `authors`, `year`,
+   `program_series`, `relevance_tier`, `has_english_translation` — so a watcher can see a doc
+   reappear or change tier but can't distinguish "re-ranked" from "re-ingested." Supersession
+   and variant linking don't exist anywhere in the schema. Longitudinal uses (watcher diff,
+   cite-check, living brief) need both.
 
 Everything else an agent might *do* is composition over what's there.
 
@@ -327,10 +334,17 @@ Everything else is exposing + gating what already exists.
    do we re-retrieve every turn or accept agent-supplied `citations` from prior turns?
 9. **Disposal capacity vs proposal volume** — how to surface review debt (dashboard? a gate
    that throttles agent proposals when undisposed debt crosses a threshold?) before it
-   overwhelms the humans whose disposal feeds the judgment loop.
+   overwhelms the humans whose disposal feeds the judgment loop. Includes *where* humans
+   dispose of agent-type proposals — the existing review queue is shaped for human-authored
+   tags, not agent verdicts at volume, so this is a deferred build we haven't budgeted.
 10. **Narrow-corpus bias mitigation** — the surface is WRI-corpus-only by values (refuse: no
    open-web search); how to keep researchers reaching for the open literature where their
    frontier lives, rather than over-relying on fast internal synthesis.
+11. **Document history + supersession in the contract** (§3 gap 4). The store has
+   `status`/`updated_at`/`content_hash`; the citation response doesn't surface them, so
+   agents can't distinguish re-rank from re-ingest. Supersession/variant linking doesn't
+   exist in the schema at all. Which fields surface in v1, and does cite-check stay
+   three-verdict until a supersession graph exists?
 
 ---
 
