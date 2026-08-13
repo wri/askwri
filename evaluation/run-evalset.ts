@@ -9,8 +9,10 @@
  * Retrieval params are deliberately NOT sent — the gateway applies its own
  * deployed presets, so this measures the system as users experience it.
  *
- * Cases expecting no documents ("Has WRI written about X?" where it hasn't)
- * are scored as abstentions, not as P/R/F1, and reported separately.
+ * Positive cases score ranking quality (average precision over the returned
+ * list) and coverage (recall over the expected docs present in the target's
+ * corpus). Cases expecting no documents ("Has WRI written about X?" where it
+ * hasn't) are scored as abstentions and reported separately.
  *
  * Usage:
  *   npm run eval:qa                                   every set in EVALSET_DIR
@@ -20,7 +22,12 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
-import { calculateSetMetrics, calculateUrlMetrics } from './lib/metrics'
+import {
+  averagePrecision,
+  calculateSetMetrics,
+  calculateUrlMetrics,
+  extractUrlSlug,
+} from './lib/metrics'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
@@ -58,11 +65,16 @@ interface CaseResult {
   missing_from_corpus: string[]
   recall_ceiling: number
   retrieved_ids: string[]
-  /** Positive cases only: P/R/F1 against the expected document set. */
+  /**
+   * Positive cases only. Both metrics score against the attainable expected
+   * docs (those present in the target's corpus), so corpus gaps show up in
+   * missing_from_corpus, not as retrieval misses. null when no expected doc
+   * is attainable — nothing was measurable, and the case is excluded from
+   * set-level means.
+   */
   matched?: string[]
-  precision?: number
-  recall?: number
-  f1?: number
+  average_precision?: number | null
+  attainable_recall?: number | null
   /** Negative cases only: did the target correctly return nothing? */
   abstained?: boolean
   execution_time_ms: number
@@ -174,8 +186,8 @@ async function runCase(
     const retrieved = byUrl ? docs.map((d) => d.url) : docs.map((d) => d.doc_id)
 
     // Cite mode drops results below a calibrated score floor, so returning
-    // nothing is a reachable outcome — that, not P/R/F1, is what a negative
-    // case measures.
+    // nothing is a reachable outcome — that, not ranking quality, is what a
+    // negative case measures.
     if (polarity === 'negative') {
       const abstained = retrieved.length === 0
       console.log(
@@ -194,30 +206,57 @@ async function runCase(
     const m = byUrl
       ? calculateUrlMetrics(expected, retrieved)
       : calculateSetMetrics(expected, retrieved)
+
+    // Ranking metrics compare like against like: URL sets match on slugs,
+    // id sets on doc_ids. Only attainable expected docs enter the
+    // denominators — a corpus gap is a data request, not a retrieval miss.
+    const attainable = expected.filter((e) => !missing.includes(e))
+    const expectedKeys = byUrl ? attainable.map(extractUrlSlug) : attainable
+    const retrievedKeys = byUrl ? retrieved.map(extractUrlSlug) : retrieved
+    const retrievedKeySet = new Set(retrievedKeys)
+    const ap =
+      attainable.length > 0
+        ? averagePrecision(expectedKeys, retrievedKeys)
+        : null
+    const aRecall =
+      attainable.length > 0
+        ? expectedKeys.filter((k) => retrievedKeySet.has(k)).length /
+          expectedKeys.length
+        : null
+
     const capped =
-      missing.length > 0 ? ` (ceiling ${(ceiling * 100).toFixed(0)}%)` : ''
+      attainable.length === 0
+        ? ' (all expected docs absent from corpus)'
+        : missing.length > 0
+          ? ` (ceiling ${(ceiling * 100).toFixed(0)}%)`
+          : ''
+    const pct = (v: number | null) =>
+      v === null ? '  —' : `${(v * 100).toFixed(0).padStart(3)}%`
     console.log(
-      `  ${tc.id.padEnd(40)} P ${(m.precision * 100).toFixed(0).padStart(3)}%  ` +
-        `R ${(m.recall * 100).toFixed(0).padStart(3)}%  ` +
-        `F1 ${(m.f1 * 100).toFixed(0).padStart(3)}%${capped}`,
+      `  ${tc.id.padEnd(40)} AP ${pct(ap)}  aR ${pct(aRecall)}${capped}`,
     )
     return {
       ...base,
       retrieved_ids: retrieved,
       matched: m.matched,
-      precision: m.precision,
-      recall: m.recall,
-      f1: m.f1,
+      average_precision: ap,
+      attainable_recall: aRecall,
       execution_time_ms: Date.now() - start,
     }
   } catch (error: any) {
     console.log(`  ${tc.id.padEnd(40)} ERROR: ${error.message}`)
     // A failed query proves nothing either way; count it against the target so
-    // errors can't quietly improve a score.
+    // errors can't quietly improve a score. A case with nothing attainable
+    // stays null — there was nothing to score even before the error.
+    const scorable = expected.length - missing.length > 0
     const failure =
       polarity === 'negative'
         ? { abstained: false }
-        : { matched: [], precision: 0, recall: 0, f1: 0 }
+        : {
+            matched: [],
+            average_precision: scorable ? 0 : null,
+            attainable_recall: scorable ? 0 : null,
+          }
     return {
       ...base,
       retrieved_ids: [],
@@ -226,6 +265,19 @@ async function runCase(
       error: error.message,
     }
   }
+}
+
+/**
+ * Mean of a per-case metric over the cases where it was measurable. null
+ * values (nothing attainable) are excluded rather than counted as zero, so a
+ * corpus gap can't drag a score down.
+ */
+function meanMeasurable(
+  cases: CaseResult[],
+  pick: (r: CaseResult) => number | null | undefined,
+): number {
+  const values = cases.map(pick).filter((v): v is number => v != null)
+  return values.reduce((sum, v) => sum + v, 0) / (values.length || 1)
 }
 
 /**
@@ -243,15 +295,12 @@ function byQueryType(results: CaseResult[]) {
     )
     const positives = group.filter((r) => r.polarity === 'positive')
     const negatives = group.filter((r) => r.polarity === 'negative')
-    const mean = (pick: (r: CaseResult) => number) =>
-      positives.reduce((sum, r) => sum + pick(r), 0) / (positives.length || 1)
     return {
       query_type,
       cases_positive: positives.length,
       cases_negative: negatives.length,
-      precision: mean((r) => r.precision ?? 0),
-      recall: mean((r) => r.recall ?? 0),
-      f1: mean((r) => r.f1 ?? 0),
+      map: meanMeasurable(positives, (r) => r.average_precision),
+      attainable_recall: meanMeasurable(positives, (r) => r.attainable_recall),
       negatives_abstained: negatives.filter((r) => r.abstained).length,
     }
   })
@@ -286,11 +335,9 @@ async function runEvalset(
 
   // Positive and negative cases answer different questions, so they are
   // averaged apart: mixing them would let a growing negative batch move
-  // overall_recall and overall_precision on its own.
+  // overall_map and overall_attainable_recall on its own.
   const positives = results.filter((r) => r.polarity === 'positive')
   const negatives = results.filter((r) => r.polarity === 'negative')
-  const mean = (pick: (r: CaseResult) => number) =>
-    positives.reduce((sum, r) => sum + pick(r), 0) / (positives.length || 1)
   const ceilinged = results.filter((r) => r.missing_from_corpus.length > 0)
   const abstained = negatives.filter((r) => r.abstained)
 
@@ -309,10 +356,12 @@ async function runEvalset(
     cases_negative: negatives.length,
     cases_ceilinged: ceilinged.length,
     // overall_* and mean_recall_ceiling cover the positive cases only.
-    overall_precision: mean((r) => r.precision ?? 0),
-    overall_recall: mean((r) => r.recall ?? 0),
-    overall_f1: mean((r) => r.f1 ?? 0),
-    mean_recall_ceiling: mean((r) => r.recall_ceiling),
+    overall_map: meanMeasurable(positives, (r) => r.average_precision),
+    overall_attainable_recall: meanMeasurable(
+      positives,
+      (r) => r.attainable_recall,
+    ),
+    mean_recall_ceiling: meanMeasurable(positives, (r) => r.recall_ceiling),
     negatives_abstained: abstained.length,
     by_query_type: byQueryType(results),
     results,
@@ -329,9 +378,8 @@ async function runEvalset(
   console.log(`\n${'='.repeat(72)}`)
   console.log(
     `${positives.length} positive   ` +
-      `Precision ${(report.overall_precision * 100).toFixed(1)}%   ` +
-      `Recall ${(report.overall_recall * 100).toFixed(1)}%   ` +
-      `F1 ${(report.overall_f1 * 100).toFixed(1)}%`,
+      `MAP ${(report.overall_map * 100).toFixed(1)}%   ` +
+      `Attainable recall ${(report.overall_attainable_recall * 100).toFixed(1)}%`,
   )
   if (negatives.length) {
     console.log(
@@ -351,9 +399,8 @@ async function runEvalset(
       if (t.cases_positive) {
         parts.push(
           `${String(t.cases_positive).padStart(2)} pos  ` +
-            `P ${(t.precision * 100).toFixed(0).padStart(3)}%  ` +
-            `R ${(t.recall * 100).toFixed(0).padStart(3)}%  ` +
-            `F1 ${(t.f1 * 100).toFixed(0).padStart(3)}%`,
+            `MAP ${(t.map * 100).toFixed(0).padStart(3)}%  ` +
+            `aR ${(t.attainable_recall * 100).toFixed(0).padStart(3)}%`,
         )
       }
       if (t.cases_negative) {

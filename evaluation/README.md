@@ -98,15 +98,22 @@ git commit evaluation/eval-review -m "chore(eval): bump evalset fixtures"
 
 **Reading the output.** These sets key on `external_id`, so scoring is
 document-level only — Aman's process does not yet capture passage-level ground
-truth. Two things to keep in mind:
+truth. Positive cases report two numbers:
 
-- **Recall ceilings.** An expected document missing from the target's corpus is
-  reported as a ceiling, not a miss. A case marked `(ceiling 50%)` scoring 50%
-  recall retrieved everything it could; that is a data gap, not a retrieval bug.
-- **Precision is a floor, not a measure.** The sets label one or two documents
-  per query; cite mode returns 13-25. Unlabeled results are not wrong, just
-  unlabeled. Precision becomes meaningful once the `expected_document_*` arrays
-  are expanded upstream.
+- **MAP (mean average precision)** measures ranking quality: where the expected
+  documents sit in the returned list. 100% means every expected doc is at the
+  top. Classic set precision is deliberately not reported — the sets label one
+  or two documents per query while cite mode returns 13-25, so it would only
+  measure list length (unlabeled results are not wrong, just unlabeled).
+- **Attainable recall** measures coverage against the expected documents that
+  exist in the target's corpus. 100% means retrieval found everything it could
+  have. Expected docs missing from the corpus are listed per run as corpus
+  gaps — a data request, not a retrieval bug — and a case whose expected docs
+  are all missing is reported unscored rather than as a zero.
+
+Negative cases ("Has WRI written about X?" where it hasn't) are scored as
+abstentions — did the target correctly return nothing — and reported apart from
+the positive means.
 
 Retrieval params are deliberately not sent, so the target applies its own
 presets and the numbers reflect what users actually get.
