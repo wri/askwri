@@ -34,7 +34,7 @@ The design doc (`docs/plans/2026-06-09-askwri-document-management-design.md`, §
 
 Per design §20 lean-core cut:
 
-- `works`/versioning/translation grouping — removed under "one paper = one original document" assumption.
+- `works`/versioning grouping — removed under "one paper = one original document" assumption; translation pairing reopened in §12 (issue #325).
 - `document_attributes` (typed attributes table) — deferred; categorical tags + fixed columns for now.
 - Tag-label localization (`tag_labels` table) — canonical English `value_id` only.
 - Authoritative-import precedence subtleties (dry-run diff, `source=external` overwrite protection) — tags seeded with `source='external'`, `status='accepted'`; overwrite precedence logic deferred to Phase 1.
@@ -452,3 +452,100 @@ The following items were not built in Phase 2 (owner unassigned):
 - Summary editing
 - Per-collection bulk operations
 - Taxonomy rename/merge and version bumps
+
+## 12. Translation pairs (issue #325)
+
+Some papers exist as both a non-English original and an official English translation,
+catalogued as unrelated documents. Both were indexed, so one paper could occupy two
+result slots and be cited twice. Translation pairs link the two so the **original is
+the only cited/counted identity**; the English translation is a rendition.
+
+### 12.1 Table and direction
+
+`document_relations` holds directed edges:
+
+| column | notes |
+|---|---|
+| `document_id` | FK → documents. The **translation** (rendition). |
+| `related_document_id` | FK → documents. The **original**. |
+| `relation_type` | `'translation_of'` (only value today). |
+| `status` | `'suggested'` \| `'confirmed'` \| `'rejected'`. |
+| `source` | `'system'` (worker) \| `'human'` (app tier). |
+| `confidence` | numeric, null for human-created rows. |
+| `signals` | jsonb — what fired, shown to the reviewer. |
+
+Direction is fixed: `document_id` = translation, `related_document_id` = original.
+"Original wins" reads straight off the edge. Constraints: unique undirected pair
+(`UQ_document_relations_pair` on LEAST/GREATEST), at most one confirmed
+`translation_of` per translation doc (`UQ_document_relations_confirmed`), no
+self-edges. Rejected rows persist as don't-re-suggest memory.
+
+### 12.2 Lifecycle and two-writer precedence
+
+Mirrors `document_tags`: the worker only INSERTs `source='system',
+status='suggested'` rows and never modifies human-touched rows. The app tier owns
+confirm/reject/flip/unlink/manual-create; every state change writes an `audit_log`
+row (`action='relation_review'`, `entity_type='document_relation'`).
+
+### 12.3 Suggestion generation
+
+Runs worker-side at the end of each doc's ingestion (`worker/stages/publish.py`
+calls `worker.relate.suggest_for_document`), comparing the new doc against every
+active doc. The same logic ships as a re-runnable sweep:
+`python -m scripts.sweep_translation_pairs` (dry-run default; `--execute` to write;
+`--limit N`). Idempotent — pairs with any existing relation row (any status) are
+skipped.
+
+Triggers (measured on qa 2026-08-13):
+
+1. **Primary:** normalized `title_en` fuzzy similarity ≥ `relation_title_threshold`
+   (0.75). Found all 10 known pairs.
+2. **Secondary:** summary-embedding cosine ≥ `relation_embed_threshold` (0.85) —
+   catches retitled near-duplicates. High bar: known pairs' embedding cosines span
+   only 0.63–0.76, below revised editions / country series at 0.85–0.95, so
+   embedding alone cannot distinguish a translation from a related-but-distinct doc.
+3. Embedding cosine and stamped-vs-detected language disagreement are recorded on
+   every suggestion as reviewer evidence, regardless of which trigger fired.
+
+No gate on language labels — the two #332 mislabeled pairs (stamped zh, text en) still
+fire. Proposed direction uses **detected text language**, not stamps; if both
+members read the same language, no direction is proposed (the human picks).
+
+### 12.4 Retrieval behavior (flag-gated, default OFF)
+
+Only `status='confirmed'` edges affect retrieval. All filtering is query-time (a
+join against confirmed edges) — no index or ingest changes, so confirm/unlink takes
+effect on the next query with no reindex. Gated on `translation_pairs_enabled`
+(Settings, default `False`); rollback is flag-off.
+
+- **Answer mode:** translation docs' chunks are dropped before rerank — passages
+  can only come from originals, so a pair cannot double-count. English queries
+  still reach non-English passages via the cross-lingual dense lane.
+- **Cite mode:** translation chunks stay in (the English full text helps find the
+  work). At assembly, a hit on a translation is credited to its original and the
+  pair collapses to one result — the original's identity and `title_en`. If only
+  the translation matched, its text is shown with `excerpt_from_translation` in
+  the result metadata. Response shape is unchanged; new keys
+  (`has_english_translation`, `excerpt_from_translation`) are inside the existing
+  `metadata` dict.
+
+Activation is eval-gated (#333): run `eval:cite` and `eval:answer-retrieval` flag-off
+then flag-on on the same harness; enable only on acceptable deltas.
+
+### 12.5 DMS surfaces
+
+- **Review queue** (`/admin/review`, "Translation suggestions" section): pending
+  suggestions with both docs side by side, the signals that fired, and confirm /
+  reject / flip-direction actions. Confirmed rows show Unlink.
+- **Document detail page** (`/admin/documents/[id]`): a RelationsPanel showing the
+  doc's relations, a manual-link form, and an orphan warning when the doc is the
+  original of a confirmed edge (withdrawing it also removes its translation).
+- **Corpus health:** `pendingRelationSuggestions` and `confirmedTranslationPairs`
+  counts surface an unworked queue.
+
+### 12.6 Ownership
+
+Worker (Python) inserts `source='system', status='suggested'` rows only. App tier
+(Node) owns confirm/reject/flip/unlink/manual-create and the review UI. Same
+two-writer precedence as `document_tags`; the worker never touches human-reviewed
+rows.
