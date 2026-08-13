@@ -62,6 +62,7 @@ TABLES=(
   document_texts
   document_chunks
   document_summaries
+  document_relations
   document_tags
   document_collections
 )

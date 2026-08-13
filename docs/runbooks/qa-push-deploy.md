@@ -371,6 +371,47 @@ aws ecs update-service --cluster askwri-app-qa-cluster \
 
 ---
 
+## Translation pairs rollout (issue #325)
+
+The `document_relations` table and worker suggestion hook ship inert — the table is
+empty and `translation_pairs_enabled` is OFF by default. Activating retrieval
+filtering is a separate, eval-gated ops step:
+
+1. **Deploy + migrate.** Push qa (`askwri-app-qa`, `askwri-app-qa-search-service`) and
+   run `npm run migration:run` against qa RDS (Step 2). Migration `1786579200000`
+   creates `document_relations`; nothing reads it yet.
+
+2. **Seed suggestions.** On the search-service task (or a shell with the venv +
+   `DATABASE_URL`), run the sweep:
+   ```bash
+   cd search-service && ./venv/bin/python -m scripts.sweep_translation_pairs            # dry run — review the candidate count
+   cd search-service && ./venv/bin/python -m scripts.sweep_translation_pairs --execute  # write suggested rows
+   ```
+   ~10 pairs land in the review queue. Idempotent — re-running after threshold
+   changes only surfaces new candidates.
+
+3. **Review queue.** Work `/admin/review` → "Translation suggestions": confirm or
+   reject each, flipping direction where the detected-language proposal is wrong.
+   The two #332 mislabeled pairs (stamped `zh`, text `en`) go to the zh reviewer —
+   her stamps are reviewed by her, not overwritten. Confirmed edges still change
+   nothing in retrieval while the flag is off.
+
+4. **Eval gate (the activation decision).** With the flag still off, run both
+   retrieval evals on the same harness:
+   ```bash
+   npm run eval:cite
+   npm run eval:answer-retrieval
+   ```
+   Then re-run with `TRANSLATION_PAIRS_ENABLED=true` (export it for the eval
+   process) and compare. Enable the flag in the search-service task definition only
+   on acceptable deltas; #333 records the measured before/after.
+
+5. **Rollback.** Unset `translation_pairs_enabled` (or remove it from the task
+   definition). Retrieval reverts on the next query — no reindex, no data change.
+   Confirmed/rejected rows stay (they are the review memory).
+
+---
+
 ## Known gaps (accepted for this push)
 
 - **No migration step in CI/CD** — schema changes are manual, per this runbook. A future

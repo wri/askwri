@@ -3440,6 +3440,55 @@ class TestPublishStage:
         assert language == "fr", "post-audit write on the same connection must commit"
         assert n == 0, "the failed audit insert left no row"
 
+    def test_publish_calls_relation_suggest(self, stages_test_db, monkeypatch):
+        """At end of ingestion, publish calls relate.suggest_for_document once
+        with the document id (issue #325). Suggestions are advisory."""
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+        import worker.relate as relate
+        calls = []
+
+        def spy(conn, document_id):
+            calls.append(document_id)
+            return 0
+
+        monkeypatch.setattr(relate, "suggest_for_document", spy)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-rel", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-rel")
+
+        from worker.stages.publish import run
+        run(doc_id)
+
+        assert calls == [doc_id], "suggest_for_document must be called once with the doc id"
+
+    def test_relation_suggest_failure_is_non_fatal(self, stages_test_db, monkeypatch):
+        """A raised exception from suggest_for_document must NOT fail the stage —
+        suggestions are advisory, never a pipeline invariant (issue #325)."""
+        monkeypatch.delenv("SEARCH_SERVICE_URL", raising=False)
+        import worker.relate as relate
+
+        def boom(conn, document_id):
+            raise RuntimeError("suggest failed")
+
+        monkeypatch.setattr(relate, "suggest_for_document", boom)
+
+        with psycopg.connect(stages_test_db) as conn:
+            doc_id = _insert_publish_document(conn, external_id="pub-rel-boom", language="en")
+            _insert_document_texts_for_publish(conn, doc_id, char_count=1000, pages=2)
+            _insert_chunk_for_publish(conn, doc_id, external_id="pub-rel-boom")
+
+        from worker.stages.publish import run
+        result = run(doc_id)  # must NOT raise
+        assert result is None  # high-density fresh doc -> done, parked at needs_review
+
+        with psycopg.connect(stages_test_db) as conn:
+            status = conn.execute(
+                "SELECT status FROM documents WHERE id=%s", (doc_id,)
+            ).fetchone()[0]
+        assert status == "needs_review", f"stage must complete normally, got '{status}'"
+
 
 _EXTRACT_FIELDS_FOR_TEST = [
     "title", "authors", "doi", "year_published", "article_type", "wri_primary_office"

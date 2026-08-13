@@ -58,6 +58,19 @@ class Settings(BaseSettings):
     # flag-off rebuild restores byte-identical current weights (rollback).
     sparse_en_handles: bool = False
 
+    # Translation-pair suggestion thresholds (issue #325). Title is the primary
+    # trigger; embedding is a high-bar secondary for retitled near-duplicates.
+    # Measured on qa 2026-08-13: known pairs' embedding cosines span 0.63-0.76
+    # while revised editions/country series reach 0.85-0.95.
+    relation_title_threshold: float = 0.75
+    relation_embed_threshold: float = 0.85
+
+    # Query-time translation-pair filtering (issue #325). OFF by default:
+    # activation is eval-gated (#333) — run cite+answer evals flag-off then
+    # flag-on on the same harness before enabling in any environment.
+    # Rollback is flag off; no reindex either way.
+    translation_pairs_enabled: bool = False
+
     # Query-side translation for the SPARSE lane only (cross-lingual, 2026-07-24).
     # The BM25 lane is English-only by construction, so an English query cannot
     # match a Spanish body — not because the stemmer cannot handle Spanish, but

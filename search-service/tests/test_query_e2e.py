@@ -447,3 +447,105 @@ class TestWithdrawnDocExclusion:
                     (withdrawn_ext_id,),
                 ).fetchone()[0]
             assert status == "searchable", "Failed to restore doc status to searchable"
+
+
+# ---------------------------------------------------------------------------
+# Translation-pair query-time filter (issue #325)
+# ---------------------------------------------------------------------------
+
+class TestTranslationPairsQueryFilter:
+    """E2E: the real /query handler honors confirmed translation pairs (#325).
+
+    The Task 10/11 filter logic is unit-tested via extracted copies in
+    test_translation_pairs_filter.py; this exercises the real handler's filter
+    placement and the real DB loader against a seeded confirmed edge. The flag
+    is flipped by patching app.translation_pairs.get_settings (the loader reads
+    get_settings().translation_pairs_enabled, not the module-level capture).
+    """
+
+    @requires_db
+    def test_answer_excludes_translation_cite_collapses_to_original(
+        self, booted_service, monkeypatch
+    ):
+        import app.translation_pairs as tp
+
+        client, qa_url = booted_service
+
+        # Pick two searchable docs: T = translation, O = original.
+        with psycopg.connect(qa_url) as conn:
+            rows = conn.execute(
+                "SELECT external_id, id FROM documents WHERE status='searchable' "
+                "ORDER BY external_id LIMIT 2"
+            ).fetchall()
+        assert len(rows) >= 2, "need two searchable docs"
+        t_ext, t_id = rows[0]
+        o_ext, o_id = rows[1]
+
+        # Seed a confirmed translation_of edge T -> O.
+        with psycopg.connect(qa_url) as conn:
+            conn.execute(
+                """INSERT INTO document_relations
+                   (document_id, related_document_id, source, status, relation_type, signals)
+                   VALUES (%s, %s, 'human', 'confirmed', 'translation_of', '{}')
+                   ON CONFLICT DO NOTHING""",
+                (t_id, o_id),
+            )
+            conn.commit()
+
+        class _FlagOn:
+            translation_pairs_enabled = True
+
+        class _FlagOff:
+            translation_pairs_enabled = False
+
+        # rerank=False + wide top_k so the translation is actually retrieved
+        # (otherwise the filter assertions are vacuous).
+        payload = {
+            "query": "transport",
+            "max_results": 500,
+            "fusion_top_k": 500,
+            "rerank": False,
+        }
+
+        try:
+            # Baseline (flag off): the translation must be retrievable, else the
+            # filter assertions below are vacuous.
+            monkeypatch.setattr(tp, "get_settings", lambda: _FlagOff())
+            base_ans = client.post("/query", json={**payload, "mode": "answer"}).json()
+            base_ans_ids = {d["doc_id"] for d in base_ans["docs"]}
+            assert t_ext in base_ans_ids, (
+                f"translation {t_ext!r} not retrieved with the flag off — test is vacuous"
+            )
+
+            # Flag on, answer mode: translation filtered out, original still present.
+            monkeypatch.setattr(tp, "get_settings", lambda: _FlagOn())
+            ans = client.post("/query", json={**payload, "mode": "answer"}).json()
+            ans_ids = {d["doc_id"] for d in ans["docs"]}
+            assert t_ext not in ans_ids, (
+                "answer mode must exclude a confirmed translation's chunks"
+            )
+            assert o_ext in ans_ids, "the original must still be reachable"
+
+            # Flag on, cite mode: the pair collapses to the original — the
+            # translation never appears as a separate result.
+            cite = client.post("/query", json={**payload, "mode": "cite"}).json()
+            cite_ids = [d["doc_id"] for d in cite["docs"]]
+            assert t_ext not in cite_ids, (
+                "cite mode must not return the translation as a separate result"
+            )
+            assert o_ext in cite_ids, "cite mode must credit the pair to the original"
+
+            # Flag off again (rollback): both appear as separate results.
+            monkeypatch.setattr(tp, "get_settings", lambda: _FlagOff())
+            restored = client.post("/query", json={**payload, "mode": "cite"}).json()
+            restored_ids = {d["doc_id"] for d in restored["docs"]}
+            assert t_ext in restored_ids and o_ext in restored_ids, (
+                "flag off: current behavior (two separate results) must be restored"
+            )
+        finally:
+            with psycopg.connect(qa_url) as conn:
+                conn.execute(
+                    "DELETE FROM document_relations WHERE document_id=%s AND related_document_id=%s",
+                    (t_id, o_id),
+                )
+                conn.commit()
