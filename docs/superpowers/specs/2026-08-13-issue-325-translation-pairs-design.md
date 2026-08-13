@@ -144,8 +144,9 @@ Three independent pieces, each inert until the next:
    acceptable deltas. Rollback is flag off.
 
 Production: `clone-corpus.sh` / `verify-corpus-parity.sh` learn to carry
-`document_relations`, matched by `external_id` (ids differ across environments), so
-confirmations are not redone by hand.
+`document_relations` (document ids are preserved wholesale by the table-at-a-time
+clone, so no external-id remapping is needed), so confirmations are not redone
+by hand.
 
 ### 6. Failure modes and tests
 

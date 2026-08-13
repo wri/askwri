@@ -57,6 +57,8 @@ probes=(
   "tags|SELECT count(*) FROM tags"
   "document_tags|SELECT count(*) FROM document_tags"
   "human_tags|SELECT count(*) FROM document_tags WHERE source = 'human'"
+  "document_relations|SELECT count(*) FROM document_relations"
+  "confirmed_pairs|SELECT count(*) FROM document_relations WHERE status = 'confirmed'"
   "collections|SELECT count(*) FROM collections"
   "document_collections|SELECT count(*) FROM document_collections"
   "vocab_terms|SELECT count(*) FROM keyword_vocab"
