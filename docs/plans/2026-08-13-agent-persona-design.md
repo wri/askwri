@@ -222,16 +222,70 @@ Response:
 }
 ```
 
-**Honesty valve (critical, load-bearing):** extraction returns `found: false` + low
-`confidence` rather than inventing a value. The vision doc flags figure/table-heavy PDFs as
-hard to parse; extraction confidence must be surfaced so the agent can leave a cell empty (a
-labeled gap) rather than fill it with a guess. A configurable **confidence floor** (open
-§8.7) makes this structural: below the floor the server returns `found: false` by default, so
-the agent does not have to judge — same ergonomics principle as refusal on poor coverage
-(§5.5). This is the overrule that departs furthest from "current capabilities" — it is new
-logic (structured-output LLM call over a passage), not composition — and the biggest
-*faster*-research win (screening/extraction, §9.1) depends on it, so the valve must not be
-decorative.
+**Honesty valve (critical, load-bearing, two-part):**
+
+1. **Quote verification (structural, cheap).** The server checks the returned `quote` is a
+   literal/normalized substring of the source passage; if not, `found: false` regardless of
+   LLM confidence. The cite response already marks the verbatim chunk with `**[ ... ]**`
+   markers (`get_passage_with_context`, `search-service/app/main.py`), so the anchor is free.
+   This catches confabulated values with a fabricated quote — the same ergonomics principle
+   as refusal on poor coverage (§5.5): make the honest path structural, not behavioral. `quote`
+   is load-bearing (verification + human evidence), like `citation_url` (decision log #11).
+2. **Confidence floor (on the quote-verified subset).** A configurable threshold (open §8.7)
+   below which the server returns `found: false` by default, so the agent does not have to
+   judge. Applied only *after* quote-verify passes — confidence on an unverifiable quote is
+   noise, so don't floor it. With (1) as the structural floor, `found` is the operative signal
+   and `confidence` becomes advisory.
+
+This is the overrule that departs furthest from "current capabilities" — it is new logic
+(structured-output LLM call over a passage), not composition — and the biggest *faster*-
+research win (screening/extraction, §9.1) depends on it, so the valve must not be
+decorative. The spike (§5.3.1) tests whether the two-part valve is sufficient on
+figure-heavy WRI content.
+
+### 5.3.1 Extraction spike — the riskiest assumption
+
+The evidence-pack's "fast" claim (§9.1) rides on extraction honesty over the content the
+agent actually receives. That content is the cite response's `content` field — chunk
+(400 chars, `chunk_size=400`/`overlap=80`, `search-service/app/indexing.py`) + ±150 chars
+context via `get_passage_with_context`, ~550-800 chars total, with `**[chunk]**` markers —
+**not** a full section, and `/api/pdf` returns the raw PDF binary (no page-text / section
+fetch exists today). So extraction is bounded by chunk granularity.
+
+**Spike question:** given the ~550-800 char `content` from figure/table-heavy WRI PDFs, can a
+structured-output LLM extract a caller-specified field honestly — verifiable quote +
+calibrated confidence — often enough that an evidence-pack grid isn't mostly false
+negatives or confabulations?
+
+**Method (no endpoint built):** ~20-30 WRI passages spanning the difficulty range (clean
+prose / hedged value / well-parsed table cell / poorly-parsed table cell / field-absent) ×
+2-3 schemas; one structured-output call each; human-label each result for correct value,
+correct quote, honest `found:false`; measure precision/recall of `found`, quote-verify
+catch rate, and the false-negative rate from too-short context.
+
+**Four outcome branches:**
+
+- **Pass** — extraction is honest, quote-verify catches confabulation, confidence is
+  usable. Evidence-pack is real; proceed to plan.
+- **Confabulation survives quote-verify** — the LLM copies a real substring but
+  misattributes its value (extracts "12,000" from a sentence about a *different* fleet).
+  Quote-verify passes, the value is wrong. Evidence-pack needs prose-only scoping or human
+  confirmation (kills the "fast" claim).
+- **False negatives** — the value is in the doc but not in chunk+context (table on the next
+  page, column header above). The grid is emptier than reality. Fix is a section / page-text
+  fetch — which doesn't exist with current capabilities. This branch means evidence-pack is
+  bounded by chunk granularity until Phase 6 parsing lands.
+- **Confidence uncalibrated** — the floor is on noise. With quote-verify as the structural
+  floor (§5.3), `found` is the operative signal and `confidence` becomes advisory — so this
+  branch is largely absorbed by the two-part valve.
+
+**Insight that falls out before running it:** evidence-pack's value is **dimension-
+dependent**. Dimensions that live in prose (geography, stated methodology, policy frame) are
+extractable with current capabilities; dimensions that live in tables (cost per km, emissions
+factor, fleet size) are bounded by chunk granularity and will be honestly empty often until
+Phase 6 parsing lands. A researcher who wants a table-heavy grid still needs that work. This
+scopes the §9.1 "fast" claim honestly: fast for prose-resident dimensions, honestly thin for
+table-resident ones — not "a grid in an afternoon" for every dimension.
 
 ### 5.4 Token + quota — thinnest possible
 
@@ -329,7 +383,9 @@ Everything else is exposing + gating what already exists.
    `agent_call_log`; whether `proposal` + disposal-status are columns on the same row or a
    paired table (§5.6).
 7. **Extraction confidence floor** — the threshold below which `/api/agent/extract` returns
-   `found: false` by default (§5.3); how to eval/calibrate it so the valve is not decorative.
+   `found: false` by default (§5.3); applies only to the quote-verified subset (the structural
+   floor is quote-verify, not confidence). How to eval/calibrate it so the valve is not
+   decorative — the spike (§5.3.1) is the eval.
 8. **Conversation boundary** — given overrule #3, how many `prior_turns` do we accept, and
    do we re-retrieve every turn or accept agent-supplied `citations` from prior turns?
 9. **Disposal capacity vs proposal volume** — how to surface review debt (dashboard? a gate
@@ -372,8 +428,11 @@ Where faster is real and concrete:
 
 - **Reassembly.** "What does WRI already know about X?" — the grant-proposal hours, the
   country-office evidence pack — becomes a function call. The composite primitive +
-  extraction turn a season of reassembling into an afternoon. The speed win the vision doc
-  names explicitly, and the one the surface serves most directly.
+  extraction turn a season of reassembling into an afternoon — *with the dimension-
+  dependence caveat in §5.3.1*: prose-resident dimensions (geography, stated methodology,
+  policy frame) are fast; table-resident dimensions (cost per km, emissions factor, fleet
+  size) are bounded by chunk granularity and honestly thin until Phase 6 parsing lands. The
+  speed win the vision doc names explicitly, scoped honestly rather than overclaimed.
 - **The review cycle.** Cite-checker hardens claims *before* the 4-internal/4-external review.
   Reviewers stop spending their time catching lazy errors (the superseded citation, the
   unsourced number) and spend it on substance. Compresses the long pole —
