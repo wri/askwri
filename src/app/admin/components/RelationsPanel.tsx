@@ -32,7 +32,7 @@ interface RelationRow {
 const ORPHAN_NOTE =
   'Withdrawing this document also removes its linked translation from results (the pair is one work).'
 
-function SignalChips({ signals }: { signals: Record<string, any> }) {
+const SignalChips = ({ signals }: { signals: Record<string, any> }) => {
   const parts: string[] = []
   if (typeof signals.title_similarity === 'number')
     parts.push(`title ${signals.title_similarity}`)
@@ -57,7 +57,7 @@ function SignalChips({ signals }: { signals: Record<string, any> }) {
  * (`translation_pairs_enabled`) is OFF by default — confirming a pair changes
  * nothing until ops enables it (eval-gated, see the runbook).
  */
-export function RelationsPanel({ docId }: { docId?: string } = {}) {
+export const RelationsPanel = ({ docId }: { docId?: string } = {}) => {
   const [relations, setRelations] = useState<RelationRow[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)

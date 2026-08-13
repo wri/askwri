@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const { response, identity } = await requireIdentity(req)
+  const { response } = await requireIdentity(req)
   if (response) return response
   try {
     await initializeDatabase()
