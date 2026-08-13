@@ -3,7 +3,10 @@
 **Status:** brainstorm capture, not an implementation spec. Scope held to "agents as proxy
 users of AskWRI roughly as it exists today" — the product roadmap doc is set aside for this
 exercise. Two of the nine "refuses" below were overruled in the session (§7) and are
-reflected in the surface (§5); the rest stand as scope guards.
+reflected in the surface (§5); the rest stand as scope guards. §9 holds the impact analysis
+(faster/better research at WRI) the surface must survive; it sharpened §5.5 (refusal-as-
+default), §5.3 (confidence floor), refuse #2 (disposal debt), and promoted `citation_url`
+from open question to load-bearing (decision log #11).
 
 **Problem:** what would it mean to design AskWRI for a new persona — agents acting on behalf
 of WRI researchers? How would they use us, what would they want to do/see, what new use cases
@@ -22,11 +25,15 @@ Filed in `docs/plans/` to match repo convention (every prior design doc lives he
 | 2 | Scope to *current* AskWRI capabilities — set the roadmap doc aside | 2026-08-13 | user; isolate the agent-persona question from already-planned work |
 | 3 | The MVP agent surface is one composite primitive + token gating over *existing* endpoints, not a new subsystem | 2026-08-13 | §3 finding: AskWRI is already most of an agent-callable API; the two-step is the universal friction |
 | 4 | `relevance_tier` (strong/partial/weak) and `coverage` (good/limited/poor) are first-class contract fields, not debug noise | 2026-08-13 | they are the agent's judgment primitives (answer/refuse/diff); already golden-set-calibrated |
-| 5 | "Gaps" (what WRI does not cover) is a first-class contract field and the refusal primitive | 2026-08-13 | every agent shape's gold is what we *don't* know; `coverage: poor` is the documented refusal signal |
+| 5 | "Gaps" (what WRI does not cover) is a first-class contract field and the refusal primitive | 2026-08-13 | every agent shape's gold is what we *don't* know; `coverage: poor` is the refusal signal — made structural in §5.5 (decision #10) |
 | 6 | Agents read freely and *propose* writes; humans dispose via existing review queue. Agents never commit | 2026-08-13 | already the schema's rule (human tag > machine tag, always); sidesteps the "no autonomous agents" line — agent proposes, expert disposes, every disposal is a labeled judgment |
 | 7 | **OVERRULED refuse #3** — conversational / multi-turn / streaming IS in scope | 2026-08-13 | user; see §7 for the bounded form (agent carries context; we stay stateless; synthesis streams) |
 | 8 | **OVERRULED refuse #4** — structured extraction on our side IS in scope (on-demand, per-call) | 2026-08-13 | user; see §7; this is the overrule that grows the surface the most and departs furthest from "current capabilities" |
 | 9 | All other refuses (§7) stand as scope guards | 2026-08-13 | each marks a place the surface could accrete into a platform |
+| 10 | Honesty valves are **structural**, not behavioral — server returns `answer: null` on `coverage: poor`; extract returns `found: false` below a confidence floor | 2026-08-13 | §9.4: a behavioral "agent should refuse" is decorative under load; a structural refusal cannot be bypassed by a lazy/adversarial agent. Surfaces in §5.5, §5.3 |
+| 11 | `citation_url` is **load-bearing** (stable, human-resolvable permalink), promoted from open question — keeping citations must be easier than stripping them | 2026-08-13 | §9.3 risk 1: the citation-stripping end-run; ergonomics, not enforcement, is the only lever. Resolves old §8.4 |
+| 12 | Disposal throughput is a **measured risk**: v1 adds NO proposal-write API; "propose" = logged-as-reviewable; disposal debt is instrumented (§5.6) | 2026-08-13 | §9.3 risk 3: agents generate proposals faster than humans dispose; refuse #2 sharpened so the judgment loop compounds, not accrues. Open §8.9 |
+| 13 | Reproducibility (search-trail export) is a **derivative of call logging**, not a feature | 2026-08-13 | §9.2: logged query+citation sequence is a methods-section artifact; arrives free from §5.6 |
 
 ---
 
@@ -133,9 +140,9 @@ Response (extends existing shapes — does not invent a new schema):
 {
   "query": "...",
   "mode": "cite",
-  "answer": {                         // null unless mode=answer
-    "sentences": ["...", "..."],
-    "coverage": "good" | "limited" | "poor",
+  "answer": {                         // null unless mode=answer; ALSO null when gaps.coverage == "poor"
+    "sentences": ["...", "..."],      //   (server refuses on poor coverage — see §5.5; structural, not the agent's call)
+    "coverage": "good" | "limited" | "poor",  // mirrors gaps.coverage (canonical)
     "warning": "low_coverage" | null
   },
   "citations": [                       // always present — the grounded evidence
@@ -146,11 +153,11 @@ Response (extends existing shapes — does not invent a new schema):
       "relevance_tier": "strong" | "partial" | "weak",   // golden-set-calibrated
       "relation": "direct" | "indirect",                 // from /api/relates; present only if include_relates
       "relates": "...",                                   // one-line why; present only if include_relates
-      "citation_url": "...",                              // see open question §8
+      "citation_url": "...",                              // load-bearing permalink — decision log #11
       "has_english_translation": false
     }
   ],
-  "gaps": {                            // FIRST-CLASS — not debug noise
+  "gaps": {                            // FIRST-CLASS — canonical coverage field; carries the refusal when coverage == "poor"
     "coverage": "limited",
     "weak_count": 3,
     "note": "WRI has limited published evidence on this question."
@@ -161,8 +168,9 @@ Response (extends existing shapes — does not invent a new schema):
 
 How each shape uses the one primitive:
 
-- **Grounding plug** — `mode: answer`, reads `answer` + `citations`, refuses on
-  `gaps.coverage: poor`. Streams for lower time-to-first-token.
+- **Grounding plug** — `mode: answer`, reads `answer` + `citations`. The *server* refuses
+  on `gaps.coverage: poor` (`answer: null` + `gaps.note`); the agent surfaces the refusal
+  rather than suppresses a synthesis. Streams for lower time-to-first-token.
 - **Watcher** — `mode: cite`, diffs `citations` by `doc_id` + `relevance_tier` across runs
   (raw `score` explicitly *not* guaranteed stable across model swaps — see refuse §7 #8).
 - **Cite-checker** — `mode: cite` per claim, then `/api/agent/alignment` (already exists) for
@@ -207,12 +215,16 @@ Response:
 }
 ```
 
-**Honesty valve (critical):** extraction returns `found: false` + low `confidence` rather
-than inventing a value. The vision doc flags figure/table-heavy PDFs as hard to parse;
-extraction confidence must be surfaced so the agent can decide to leave a cell empty (a
-labeled gap) rather than fill it with a guess. This is the overrule that departs furthest
-from "current capabilities" — it is new logic (structured-output LLM call over a passage),
-not composition.
+**Honesty valve (critical, load-bearing):** extraction returns `found: false` + low
+`confidence` rather than inventing a value. The vision doc flags figure/table-heavy PDFs as
+hard to parse; extraction confidence must be surfaced so the agent can leave a cell empty (a
+labeled gap) rather than fill it with a guess. A configurable **confidence floor** (open
+§8.7) makes this structural: below the floor the server returns `found: false` by default, so
+the agent does not have to judge — same ergonomics principle as refusal on poor coverage
+(§5.5). This is the overrule that departs furthest from "current capabilities" — it is new
+logic (structured-output LLM call over a passage), not composition — and the biggest
+*faster*-research win (screening/extraction, §9.1) depends on it, so the valve must not be
+decorative.
 
 ### 5.4 Token + quota — thinnest possible
 
@@ -225,23 +237,38 @@ not composition.
   `X-Quota-Remaining-Calls` / `X-Quota-Remaining-Cost` headers so the agent backs off itself.
 - **Rate-limit store:** in-memory per-instance for MVP (same pattern the login route already
   uses, with the same "acceptable for internal tool" caveat). Flag it; promote to
-  Redis/DDB only if it bites. (Open question §8.)
+  Redis/DDB only if it bites. (Open question §8.2.)
 - **No agent-management UI in v1.** Tokens issued via an admin CLI / seed step.
 
-### 5.5 Gaps as a first-class contract field
+### 5.5 Gaps + refusal-as-default (structural, not behavioral)
 
 `gaps` is top-level in the response (§5.1). `coverage: poor` is the **refusal primitive** —
-the contract documents that an agent *should* answer "WRI has little/no published evidence on
-this" rather than synthesize. This is the one behavioral instruction embedded in the contract,
-because it is the whole point.
+and the refusal is **structural**: when `gaps.coverage == "poor"`, the server returns
+`answer: null` + a populated `gaps.note`, *not* a synthesis the agent must choose to
+suppress. The contract does not ask the agent to refuse; it makes refusal the path of least
+resistance. This follows the same ergonomics principle as citations (§5.1, decision log #11):
+make the honest path the easy path. A behavioral instruction ("agent *should* refuse") is
+decorative under load — a lazy or adversarial agent synthesizes anyway; a structural refusal
+cannot. This is one of the three load-bearing walls (§9.4).
 
-### 5.6 Logging — the question loop, for free
+### 5.6 Logging — the question loop, the disposal ledger, and the search trail (for free)
 
 Every `/api/agent/*` call logs `{token_id, user_id, query, mode, cost_usd, coverage,
-citations_count, ts}` to `audit_log` (exists) or a small `agent_call_log` table (open
-question §8). This *is* the question loop — no separate feature to build. Aggregate later
-for the quarterly gaps memo. Per-token privacy handled by governance (aggregate-only
-reporting), not by not collecting it.
+citations_count, ts, proposal}` to `audit_log` (exists) or a small `agent_call_log` table
+(open question §8.6). Three things come out of this one stream:
+
+1. **The question loop.** Aggregated queries → the quarterly gaps memo / research-agenda
+   signal. No separate feature to build. Per-token privacy handled by governance
+   (aggregate-only reporting), not by not collecting it.
+2. **The disposal ledger.** `proposal` marks outputs that assert something a human should
+   review (a cite-check verdict, an extracted cell, a contradiction flag). The log records
+   the proposal; disposal (accept/reject/override) is recorded when it happens — so review
+   *debt* is measurable before it overwhelms (refuse #2, sharpened; open §8.9). v1 does NOT
+   add a proposal-write API: "propose" means "the agent's output is logged as reviewable,"
+   not "the agent writes to a queue." Keeps the agent surface read-only + logging.
+3. **The search trail.** A researcher's logged query+citation sequence is a methods-section-
+   citeable reproducibility artifact — the H3 "search-trail export," arriving as a derivative
+   of logging rather than as a feature (decision log #13).
 
 ---
 
@@ -255,7 +282,7 @@ reporting), not by not collecting it.
 | `api_tokens` table + seed/CLI | token issuance + revocation, mapped to `users` |
 | `agent_call_log` (or `audit_log` rows) | the question loop, automatically |
 | `gaps` lifted to first-class | contract field on `/api/agent/ask` |
-| citation permalink | small — derive from existing `/api/pdf` route, or build a thin `/c/<doc_id>#page=N` (open §8.4) |
+| citation permalink | **load-bearing** (decision log #11) — a stable, human-resolvable `/c/<doc_id>#page=N`; scheme TBD but must resolve to the passage. Keeping citations easier than stripping them. |
 | `/api/agent/*` passthrough wrappers | expose existing endpoints under the gated namespace |
 
 Everything else is exposing + gating what already exists.
@@ -267,7 +294,7 @@ Everything else is exposing + gating what already exists.
 | # | refuse | status | consequence of overrule |
 |---|---|---|---|
 | 1 | No server-side agent state (no saved queries, run history, server-side diffs, schedules) | **stands** | — |
-| 2 | No agent-authored writes that commit (agents read + propose; humans dispose) | **stands** | — |
+| 2 | No agent-authored writes that commit (agents read + propose; humans dispose) | **stands** | sharpened: v1 adds NO proposal-write API — "propose" = "the agent's output is logged as reviewable" (§5.6), not a queue write. Disposal debt is measured via the logging ledger (open §8.9) so the judgment loop compounds instead of accruing review debt. |
 | 3 | No conversation / multi-turn / streaming | **OVERRULED** | `/api/agent/ask` accepts optional `prior_turns` (agent carries context → we stay stateless, compatible with #1) and streams synthesis in answer mode. Bounded form: we ground each turn; we do not run the conversation. This is the most "platform-y" overrule and risks the "no competing on conversation" line — kept on-side by leaving conversation to whatever model the agent already lives in. |
 | 4 | No structured-metadata extraction on our side | **OVERRULED** | new `/api/agent/extract` primitive (§5.3). On-demand per-call extraction over passages, not an ingest-time metadata schema. Biggest departure from "current capabilities" (new logic, not composition). Honesty valve: `found: false` + low confidence, never invent. Note this makes evidence-pack "strains current" → "doable server-side." |
 | 5 | No fake verdicts (cite-check v1 is three-verdict; superseded needs the supersession graph) | **stands** | — |
@@ -280,25 +307,159 @@ Everything else is exposing + gating what already exists.
 
 ## 8. Open questions (not decided; for the implementation plan)
 
-1. **Token issuance UX** — admin CLI/seed (v1 proposal) vs a small admin page. Deferred.
+1. **Token issuance UX + equity** — admin CLI/seed (v1 proposal) vs a small admin page; *and*
+   who gets agents (§9.3 risk 5 — benefits must not accrue only to the already-technical).
 2. **Rate-limit store promotion** — in-memory per-instance → Redis/DDB. Deferred until it
    bites; flagged.
 3. **Composite route vs growing `/api/answer`** — propose a *new* `/api/agent/ask` that
    composes server-side, leaving the UI-coupled `/api/answer` untouched. Confirm.
-4. **Citation URL scheme** — no `/c/` permalink route exists today. Derive from the existing
-   `/api/pdf/[filename]` route, or build a thin human-facing `/c/<doc_id>#page=N`. Small.
+4. **~~Citation URL scheme~~ — RESOLVED** (decision log #11): a stable, human-resolvable
+   permalink is load-bearing, not open. Remaining TBD is the scheme only (`/api/pdf`
+   derivation vs a thin `/c/<doc_id>#page=N`).
 5. **Quota granularity & cost attribution accuracy** — how precise must `cost_usd` be per
    call (embed + rerank + synthesis + extraction)?
-6. **Logging table** — reuse `audit_log` (exists) or a dedicated `agent_call_log`. Question
-   loop aggregation shape.
-7. **Extraction confidence calibration** — threshold below which `/api/agent/extract` should
-   refuse and return `found: false` outright; how to eval it.
+6. **Logging table + disposal columns** — reuse `audit_log` (exists) or a dedicated
+   `agent_call_log`; whether `proposal` + disposal-status are columns on the same row or a
+   paired table (§5.6).
+7. **Extraction confidence floor** — the threshold below which `/api/agent/extract` returns
+   `found: false` by default (§5.3); how to eval/calibrate it so the valve is not decorative.
 8. **Conversation boundary** — given overrule #3, how many `prior_turns` do we accept, and
    do we re-retrieve every turn or accept agent-supplied `citations` from prior turns?
+9. **Disposal capacity vs proposal volume** — how to surface review debt (dashboard? a gate
+   that throttles agent proposals when undisposed debt crosses a threshold?) before it
+   overwhelms the humans whose disposal feeds the judgment loop.
+10. **Narrow-corpus bias mitigation** — the surface is WRI-corpus-only by values (refuse: no
+   open-web search); how to keep researchers reaching for the open literature where their
+   frontier lives, rather than over-relying on fast internal synthesis.
 
 ---
 
-## 9. Explicitly out of scope for this artifact
+## 9. Impact — faster and better research at WRI
+
+The honest frame: "faster" and "better" pull in different directions for WRI, and the
+surface's contribution to each is uneven. This section is the impact analysis the surface
+must survive, not a sales case for it.
+
+### 9.1 Faster — the honest mechanism map
+
+"Faster" is **not** mostly about search. The labor studies the vision doc cites put
+searching at 15–20% of a researcher's time; screening, extraction, and drafting swallow the
+rest (systematic reviews ~1,100 person-hours, mostly middle stages; a single grant proposal
+100+ hours of a PI's time, "most of that reassembling what the organization already knows").
+
+So if the agent surface only makes search faster — which is what the watcher and the
+grounding plug primarily do — it has touched a fifth of the research clock. The real speed
+leverage is downstream, in screening and extraction, which is *exactly* where the surface is
+thinnest: it depends on `/api/agent/extract` (overrule #4), new logic, fragile on
+figure-heavy PDFs, whose honesty valve (`found: false`) is the thing standing between "fast"
+and "fast garbage." **The biggest time win lives in the place we're least certain works.**
+
+Where faster is real and concrete:
+
+- **Reassembly.** "What does WRI already know about X?" — the grant-proposal hours, the
+  country-office evidence pack — becomes a function call. The composite primitive +
+  extraction turn a season of reassembling into an afternoon. The speed win the vision doc
+  names explicitly, and the one the surface serves most directly.
+- **The review cycle.** Cite-checker hardens claims *before* the 4-internal/4-external review.
+  Reviewers stop spending their time catching lazy errors (the superseded citation, the
+  unsourced number) and spend it on substance. Compresses the long pole —
+  review-revision loops — even when it doesn't touch lab-bench time.
+- **Currency.** The watcher makes "current as of today" cheap: a brief or dossier
+  regenerated on corpus change is a re-run + diff, not a rebuild. Faster in the sense of
+  *never going stale*, which for a living literature review is the only speed that matters.
+
+### 9.2 Better — the WRI-specific quality wins
+
+WRI's product, per the vision, is "being right, and trustworthy." So "better research" for
+WRI is not "more papers" or "faster papers" — it's *work that survives external scrutiny and
+carries the logo honestly*. The agent surface's contribution to "better" sits almost entirely
+on the faithfulness and judgment axes, not throughput:
+
+- **Faithfulness as reputation protection.** The grounding plug turns the vision's enemy —
+  paste into ChatGPT, get a plausible answer citing a real WRI report that says something
+  else — into a channel. Every assistant that grounds in us is one less
+  fluency-without-faithfulness event carrying WRI's name. Reputation-level better, and the
+  single most important quality effect.
+- **Gaps as the agenda.** Every shape produces "what WRI doesn't know" as exhaust —
+  evidence-pack empty cells, watcher contradiction hits, cite-checker `coverage: poor`. The
+  logging (§5.6) turns this into a continuous, evidence-driven map of what staff actually
+  need to know, rather than a quarterly anecdote. Better-*targeted* research, a different
+  kind of "better" than better-executed, and probably the highest-order effect here.
+- **Judgment compounding.** Every agent-proposed verdict a researcher overrides, every claim
+  an author corrects, every diff an editor rejects is a labeled judgment — and the vision
+  doc's bet is that this is the asset that appreciates while models depreciate. Agents
+  generate this signal at volume as a side effect of ordinary work. The flywheel only turns
+  if disposal happens (§9.3 risk 3).
+- **Reproducibility.** Every agent call is logged with query, mode, cost, citations. A
+  researcher's search trail becomes a methods-section-citeable artifact — the H3
+  "search-trail export," arriving as a byproduct of §5.6 logging rather than as a feature
+  (decision log #13).
+- **Cross-language coverage without language switching.** An English-asking agent surfaces
+  Spanish/Chinese docs and translates the cited passage on demand. A researcher who reads
+  only English stops missing the México report. Better research = not systematically blind
+  to half the corpus.
+
+### 9.3 Deep risks — where this could make research worse
+
+1. **The citation-stripping end-run.** Once the API is open, an assistant can call us,
+   strip the citations, and emit unattributed text that *came from* grounded retrieval.
+   That's worse than vanilla hallucination — it carries WRI's authority without WRI's
+   provenance, routed *through* us. The surface that makes correct citation easy also makes
+   stripped citation possible. The contract's job is ergonomics, not enforcement: make
+   keeping citations the path of least resistance (rich, stable `citation_url`,
+   `relevance_tier`, `passage`). No enforcement, only ergonomics — which is why
+   `citation_url` is load-bearing (decision log #11), not an open question.
+2. **Confidently-wrong at higher throughput.** The agent's queries are only as good as its
+   plan. A bad evidence-pack plan produces a bad grid with *real* citations — plausible,
+   grounded, wrong at the cell level. `coverage: poor` and `found: false` only help if the
+   agent heeds them and the researcher reads them. Without that, we've built a machine for
+   producing fluent, cited, high-volume wrong work — the vision's enemy, routed through our
+   corpus. This is why refusal is structural (§5.5), not behavioral.
+3. **The disposal cold-start.** The vision doc names eval capacity as the binding
+   constraint. Agents generate *more* proposals — cite-check verdicts, tag suggestions,
+   contradiction flags, gap cells — than humans can dispose of. Refuse #2 (agents propose,
+   humans dispose) is ethically right but creates a throughput problem: without scaling
+   disposal, the surface generates review debt faster than it retires risk, and the
+   judgment loop accrues instead of compounds. Faster proposal ≠ faster improvement. v1
+   measures the debt (§5.6) and adds no proposal-write API (refuse #2 sharpened); the
+   gating question is open §8.9.
+4. **Narrow-corpus bias.** Everything is WRI's corpus only. A researcher who gets fast,
+   well-cited answers from AskWRI may stop searching the open literature where their actual
+   frontier lives. "We will not search the open web" is a values line with a research-quality
+   cost: over-reliance on the institutional view, under-exposure to external contradiction.
+   Faster internal synthesis can narrow the intellectual diet. Mitigation is open §8.10.
+5. **Equity of access.** v1 token issuance is manual/CLI. The researchers who get agents are
+   the ones who know to ask. Speed and quality benefits accrue to the already-technical,
+   widening internal gaps — not a technical problem, but real, and it shapes who "faster
+   research at WRI" actually means. Open §8.1.
+
+### 9.4 What decides it
+
+The honest synthesis: the surface's contribution to **faster** is real but bounded (it only
+bites past search, in screening/extraction, where we're least sure it works); its
+contribution to **better** is substantial but entirely dependent on three load-bearing
+things that are easy to under-build:
+
+1. **The honesty valves** — `gaps` first-class (§5.5), `coverage: poor` as *structural*
+   refusal (§5.5), `found: false` + confidence floor (§5.3). Decorative under load; must be
+   structural.
+2. **Disposal capacity** — that turns proposals into compounding judgment rather than
+   accruing review debt (§5.6, refuse #2, open §8.9).
+3. **Citation ergonomics** — that keeping citations is easier than stripping them
+   (decision log #11, `citation_url` load-bearing).
+
+If those three hold, the surface compresses the reassembly + review stages, protects
+faithfulness at scale, and turns the question loop into a continuous research-agenda signal.
+If any one slips, we've built a high-throughput machine for confidently-cited work that
+*looks* like better research and isn't. The design's refuses (#2 propose-don't-commit, #5
+no-fake-verdicts, #8 no-score-stability-guarantee) and §5.5 (gaps + refusal-as-default) are
+not polish — they are the three load-bearing walls. The overrules (#3 conversation, #4
+extraction) are precisely the two places that trade safety for capability, which is why they
+were flagged as the platform-risk ones during the brainstorm.
+
+---
+
+## 10. Explicitly out of scope for this artifact
 
 - The product-roadmap features (dossiers, standing briefs, cite-check product, "What WRI
   Says" UI, methods index, Expertise@WRI, supersession graph) — set aside per the exercise.
@@ -308,4 +469,5 @@ Everything else is exposing + gating what already exists.
   partner/external-agent rings (shape D) — all out of scope; shape D is a later ring.
 
 This artifact is a design capture of the brainstorm. It is deliberately not an
-implementation plan; the next step (if pursued) is a writing-plans pass over §5–§8.
+implementation plan; the next step (if pursued) is a writing-plans pass over §5–§8,
+constrained by the three load-bearing walls in §9.4.
