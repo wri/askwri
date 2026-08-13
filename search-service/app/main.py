@@ -86,6 +86,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 
 from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
+from app.translation_pairs import load_confirmed_pairs
 
 settings = get_settings()
 
@@ -1025,6 +1026,17 @@ async def hybrid_query(request: QueryRequest):
             before_filter = len(stage1_results)
             stage1_results = [n for n in stage1_results if n.node.metadata.get("doc_id") in request.cite_doc_ids]
             logger.info(f"Answer mode: Filtered to cite_doc_ids ({before_filter} -> {len(stage1_results)})")
+
+        # Translation pairs (#325): confirmed edges only, flag-gated (Task 9
+        # loader returns {} when off). Answer mode: a translation's chunks can
+        # never be legitimately cited (citations come from originals), so drop
+        # them before rerank. Cite mode consumes the same map at assembly.
+        translation_pairs = load_confirmed_pairs()
+        if request.mode == "answer" and translation_pairs:
+            before_tp = len(stage1_results)
+            stage1_results = [n for n in stage1_results
+                              if n.node.metadata.get("doc_id") not in translation_pairs]
+            logger.info(f"Answer mode: translation-pair filter ({before_tp} -> {len(stage1_results)})")
 
         # Stage 2: Reranking (Bedrock Cohere Rerank — 0-1 relevance scores).
         # rerank_applied gates the cite floor/tiers downstream: they are
