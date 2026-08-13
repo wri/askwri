@@ -96,4 +96,59 @@ d('getCorpusHealth (DB integration)', () => {
     expect(h.worker).toHaveProperty('queueDepth')
     expect(h.worker).toHaveProperty('intakeBacklog')
   })
+
+  // Translation-pair counts (issue #325): seeded fixture relations so the
+  // assertions don't depend on the live corpus state.
+  describe('translation-pair counts (issue #325)', () => {
+    const ext = `corpusrel_test_${Date.now()}`
+    let docA: string
+    let docB: string
+    let docC: string
+    let docD: string
+
+    beforeAll(async () => {
+      const rows = await AppDataSource.query(
+        `INSERT INTO documents (external_id, s3_key, title, status) VALUES
+           ($1, $2, 'Corpus Rel A', 'searchable'),
+           ($3, $4, 'Corpus Rel B', 'searchable'),
+           ($5, $6, 'Corpus Rel C', 'searchable'),
+           ($7, $8, 'Corpus Rel D', 'searchable') RETURNING id`,
+        [
+          `${ext}_a`, `documents/${ext}_a.pdf`,
+          `${ext}_b`, `documents/${ext}_b.pdf`,
+          `${ext}_c`, `documents/${ext}_c.pdf`,
+          `${ext}_d`, `documents/${ext}_d.pdf`,
+        ],
+      )
+      docA = rows[0].id
+      docB = rows[1].id
+      docC = rows[2].id
+      docD = rows[3].id
+      await AppDataSource.query(
+        `INSERT INTO document_relations (document_id, related_document_id, source, status, signals) VALUES
+           ($1, $2, 'system', 'suggested', '{}'),
+           ($3, $4, 'human', 'confirmed', '{}')`,
+        [docA, docB, docC, docD],
+      )
+    })
+
+    afterAll(async () => {
+      await AppDataSource.query(
+        `DELETE FROM document_relations WHERE document_id IN ($1, $2, $3, $4) OR related_document_id IN ($1, $2, $3, $4)`,
+        [docA, docB, docC, docD],
+      )
+      await AppDataSource.query(
+        `DELETE FROM documents WHERE id IN ($1, $2, $3, $4)`,
+        [docA, docB, docC, docD],
+      )
+    })
+
+    it('counts pending suggestions and confirmed translation pairs', async () => {
+      const h = await getCorpusHealth()
+      expect(typeof h.pendingRelationSuggestions).toBe('number')
+      expect(typeof h.confirmedTranslationPairs).toBe('number')
+      expect(h.pendingRelationSuggestions).toBeGreaterThanOrEqual(1)
+      expect(h.confirmedTranslationPairs).toBeGreaterThanOrEqual(1)
+    })
+  })
 })

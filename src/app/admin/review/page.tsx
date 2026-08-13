@@ -30,6 +30,8 @@ interface CorpusHealth {
   docsMissingNativeSummary: number
   docsMissingTitleEn: number
   lowConfidenceDocs: number
+  pendingRelationSuggestions: number
+  confirmedTranslationPairs: number
   worker: {
     status: string
     queueDepth: number
