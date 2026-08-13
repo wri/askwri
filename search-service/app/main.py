@@ -81,7 +81,7 @@ from llama_index.core import (
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.core.retrievers import BaseRetriever
-from llama_index.core.schema import NodeWithScore, QueryBundle
+from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 from app.bedrock_rerank import BedrockReranker
@@ -1095,12 +1095,48 @@ async def hybrid_query(request: QueryRequest):
 
         # Apply final filtering and limits - be more inclusive for cite mode
         if request.mode == "cite":
-            # Group chunks by document and take best scoring chunk per document
+            # Group chunks by document and take best scoring chunk per document.
+            # Translation pairs (#325): a hit on a confirmed translation is
+            # credited to its ORIGINAL. Originals win: when the original also
+            # matched, its own best chunk is shown; a translation-only hit is
+            # substituted via a COPIED node (legacy in-memory mode shares node
+            # objects across requests — never mutate doc_id/title in place).
             doc_groups = {}
+            translation_best = {}
             for node in stage2_results:
+                # Stale-flag hygiene for shared nodes (same reason as the
+                # relevance_tier pop below).
+                node.node.metadata.pop("has_english_translation", None)
+                node.node.metadata.pop("excerpt_from_translation", None)
                 doc_id = node.node.metadata.get("doc_id")
+                pair = translation_pairs.get(doc_id)
+                if pair is not None:
+                    canon = pair["original"]
+                    cur = translation_best.get(canon)
+                    if cur is None or node.score > cur.score:
+                        translation_best[canon] = node
+                    continue
                 if doc_id not in doc_groups or node.score > doc_groups[doc_id].score:
                     doc_groups[doc_id] = node
+
+            originals_of = {p["original"]: p for p in translation_pairs.values()}
+            for canon, tnode in translation_best.items():
+                pair = originals_of[canon]
+                if canon in doc_groups:
+                    doc_groups[canon].node.metadata["has_english_translation"] = True
+                    continue
+                if not pair["original_searchable"]:
+                    continue  # withdrawn original: the work is off the site
+                sub = TextNode(
+                    id_=tnode.node.node_id,
+                    text=tnode.node.text,
+                    metadata={**tnode.node.metadata,
+                              "doc_id": canon,
+                              "title": pair["original_title"],
+                              "has_english_translation": True,
+                              "excerpt_from_translation": True},
+                )
+                doc_groups[canon] = NodeWithScore(node=sub, score=tnode.score)
 
             # Floor + tiers are calibrated on the reranker's 0-1 relevance
             # scale — apply them only when reranking actually ran. Unreranked

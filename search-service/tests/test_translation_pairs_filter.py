@@ -11,7 +11,8 @@ into app.main so the flag-off path ({} short-circuit) is exercised too.
 import pytest
 from dataclasses import dataclass
 from typing import Optional, List
-from unittest.mock import MagicMock
+
+from llama_index.core.schema import TextNode, NodeWithScore
 
 import app.main
 
@@ -29,18 +30,17 @@ class MockRequest:
 
 def make_node(doc_id: str, chunk_id: str = "chunk_1", score: float = 0.8,
               title: str = None):
-    """Build a mock NodeWithScore matching llama_index's structure."""
-    node = MagicMock()
+    """Build a real NodeWithScore so the cite-mode collapse can construct a
+    copied TextNode from it (MagicMock would fail pydantic validation)."""
     metadata = {"doc_id": doc_id, "chunk_id": chunk_id}
     if title is not None:
         metadata["title"] = title
-    node.metadata = metadata
-    node.text = f"Content from {doc_id}/{chunk_id}"
-    node.node_id = f"{doc_id}/{chunk_id}"
-    wrapper = MagicMock()
-    wrapper.node = node
-    wrapper.score = score
-    return wrapper
+    node = TextNode(
+        text=f"Content from {doc_id}/{chunk_id}",
+        metadata=metadata,
+        id_=f"{doc_id}/{chunk_id}",
+    )
+    return NodeWithScore(node=node, score=score)
 
 
 # --- Answer-mode filter (Task 10): extracted copy kept in sync with main.py ---
@@ -56,9 +56,53 @@ def apply_translation_pairs_answer_filter(stage1_results, request):
     return stage1_results
 
 
+# --- Cite-mode collapse (Task 11): extracted copy kept in sync with main.py ---
+
+def collapse_cite_mode_pairs(stage2_results, translation_pairs):
+    """Cite mode: credit a translation hit to its original. When the original
+    also matched, its own best chunk is shown; a translation-only hit is
+    substituted via a copied node. Withdrawn original -> the pair drops."""
+    doc_groups = {}
+    translation_best = {}
+    for node in stage2_results:
+        node.node.metadata.pop("has_english_translation", None)
+        node.node.metadata.pop("excerpt_from_translation", None)
+        doc_id = node.node.metadata.get("doc_id")
+        pair = translation_pairs.get(doc_id)
+        if pair is not None:
+            canon = pair["original"]
+            cur = translation_best.get(canon)
+            if cur is None or node.score > cur.score:
+                translation_best[canon] = node
+            continue
+        if doc_id not in doc_groups or node.score > doc_groups[doc_id].score:
+            doc_groups[doc_id] = node
+    originals_of = {p["original"]: p for p in translation_pairs.values()}
+    for canon, tnode in translation_best.items():
+        pair = originals_of[canon]
+        if canon in doc_groups:
+            doc_groups[canon].node.metadata["has_english_translation"] = True
+            continue
+        if not pair["original_searchable"]:
+            continue  # withdrawn original: the work is off the site
+        sub = TextNode(
+            id_=tnode.node.node_id,
+            text=tnode.node.text,
+            metadata={**tnode.node.metadata,
+                      "doc_id": canon,
+                      "title": pair["original_title"],
+                      "has_english_translation": True,
+                      "excerpt_from_translation": True},
+        )
+        doc_groups[canon] = NodeWithScore(node=sub, score=tnode.score)
+    return doc_groups
+
+
 PAIRS = {"t1": {"original": "o1", "original_title": "Original Title",
                 "original_searchable": True}}
 
+
+# --- Task 10: answer-mode filter ---
 
 def test_answer_mode_drops_translation_chunks(monkeypatch):
     monkeypatch.setattr(app.main, "load_confirmed_pairs", lambda: PAIRS)
@@ -80,3 +124,56 @@ def test_cite_mode_drops_nothing(monkeypatch):
     results = [make_node("t1", score=0.9), make_node("o1", score=0.8)]
     filtered = apply_translation_pairs_answer_filter(results, MockRequest(mode="cite"))
     assert len(filtered) == 2, "cite mode does not apply the answer-mode filter"
+
+
+# --- Task 11: cite-mode collapse ---
+
+def test_cite_both_hit_shows_original_and_flags_translation():
+    """Both members hit -> one result, the original's own text is shown even
+    when the translation's chunk scored higher; has_english_translation is set
+    and excerpt_from_translation is absent."""
+    results = [
+        make_node("t1", score=0.95, title="Translation Title"),  # translation, higher score
+        make_node("o1", score=0.80, title="Original Title"),      # original
+    ]
+    doc_groups = collapse_cite_mode_pairs(results, PAIRS)
+    assert list(doc_groups.keys()) == ["o1"], "pair collapses to one result (the original)"
+    node = doc_groups["o1"]
+    assert node.node.metadata["doc_id"] == "o1"
+    assert node.node.text == "Content from o1/chunk_1", "original's own text shown"
+    assert node.node.metadata.get("has_english_translation") is True
+    assert node.node.metadata.get("excerpt_from_translation") is None
+
+
+def test_cite_only_translation_hit_substitutes_original():
+    """Only the translation hit -> one result credited to the original, with
+    the original's title and excerpt_from_translation=true."""
+    results = [make_node("t1", score=0.9, title="Translation Title")]
+    doc_groups = collapse_cite_mode_pairs(results, PAIRS)
+    assert list(doc_groups.keys()) == ["o1"]
+    node = doc_groups["o1"]
+    assert node.node.metadata["doc_id"] == "o1"
+    assert node.node.metadata["title"] == "Original Title"
+    assert node.node.metadata.get("excerpt_from_translation") is True
+    assert node.node.metadata.get("has_english_translation") is True
+    assert node.score == 0.9
+
+
+def test_cite_withdrawn_original_drops_pair():
+    """Original withdrawn (original_searchable False) and only the translation
+    hit -> no result for the pair (the work is off the site)."""
+    pairs = {"t1": {"original": "o1", "original_title": "Original Title",
+                    "original_searchable": False}}
+    results = [make_node("t1", score=0.9)]
+    doc_groups = collapse_cite_mode_pairs(results, pairs)
+    assert "o1" not in doc_groups, "withdrawn original: the work is off the site"
+    assert "t1" not in doc_groups, "translation not credited to a withdrawn original"
+    assert len(doc_groups) == 0
+
+
+def test_cite_flag_off_keeps_both_as_separate_results():
+    """Flag off (empty pairs) -> t1 and o1 appear as two separate results
+    (current behavior preserved)."""
+    results = [make_node("t1", score=0.9), make_node("o1", score=0.8)]
+    doc_groups = collapse_cite_mode_pairs(results, {})
+    assert set(doc_groups.keys()) == {"t1", "o1"}, "flag off: current behavior preserved"
