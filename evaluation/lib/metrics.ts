@@ -48,6 +48,60 @@ export function normalizeUrl(url: string): string {
     .replace(/^www\./, '')
 }
 
+// --- Ranking Metrics ---
+
+/**
+ * Average precision of a ranked retrieval list against a set of expected ids
+ * (exact match): the mean, over the expected docs, of precision at each rank
+ * where one is found. Docs never retrieved contribute 0. Returns a value in
+ * [0, 1]; 1 means every expected doc sits at the top of the list.
+ *
+ * Callers scoring against a corpus with known gaps should pass only the
+ * attainable expected ids, so corpus gaps cap recall reporting, not this.
+ */
+export function averagePrecision(
+  expected: string[],
+  retrieved: string[],
+): number {
+  if (expected.length === 0) return 0
+  const expectedSet = new Set(expected)
+  const found = new Set<string>()
+  let sum = 0
+  for (let i = 0; i < retrieved.length; i++) {
+    const id = retrieved[i]
+    if (!expectedSet.has(id) || found.has(id)) continue
+    found.add(id)
+    sum += found.size / (i + 1)
+  }
+  return sum / expected.length
+}
+
+/**
+ * Doc-level corpus coverage across a set of positive eval cases: how many
+ * expected documents there are in total, how many of those the target's corpus
+ * actually holds, and how many of the held ones were retrieved. Reported
+ * alongside attainable recall so a document dropped from the corpus (which
+ * raises attainable recall by shrinking its denominator) shows up as a fall in
+ * in_corpus rather than passing as a retrieval improvement.
+ */
+export function docCoverage(
+  cases: {
+    expected_ids: string[]
+    missing_from_corpus: string[]
+    attainable_retrieved?: number | null
+  }[],
+): { expected: number; in_corpus: number; retrieved: number } {
+  let expected = 0
+  let in_corpus = 0
+  let retrieved = 0
+  for (const c of cases) {
+    expected += c.expected_ids.length
+    in_corpus += c.expected_ids.length - c.missing_from_corpus.length
+    retrieved += c.attainable_retrieved ?? 0
+  }
+  return { expected, in_corpus, retrieved }
+}
+
 // --- Generic Set Metrics ---
 
 /**
