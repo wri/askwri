@@ -9,6 +9,7 @@ import { IngestionJob } from './entities/IngestionJob.entity'
 import { User } from './entities/User.entity'
 import { Tag } from './entities/Tag.entity'
 import { DocumentTag } from './entities/DocumentTag.entity'
+import { DocumentRelation } from './entities/DocumentRelation.entity'
 import { Collection } from './entities/Collection.entity'
 import { DocumentCollection } from './entities/DocumentCollection.entity'
 import { AuditLog } from './entities/AuditLog.entity'
@@ -32,6 +33,7 @@ export const AppDataSource = new DataSource({
     User,
     Tag,
     DocumentTag,
+    DocumentRelation,
     Collection,
     DocumentCollection,
     AuditLog,
