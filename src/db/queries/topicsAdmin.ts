@@ -355,6 +355,7 @@ export const EST_PER_DOC_COST = 0.0008 // gpt-5-mini per-doc classify (spec §5.
  */
 export async function enqueueReclassify(
   scope: 'all' | { tagId: string },
+  identity?: AdminIdentity,
 ): Promise<{ enqueued: number; estCost: number; runId: string }> {
   let docIds: string[]
   if (scope === 'all') {
@@ -387,6 +388,16 @@ export async function enqueueReclassify(
       [docId, scopeTagId, runId],
     )
     if (row) enqueued++
+  }
+
+  if (identity) {
+    await writeAudit({
+      ...auditActor(identity),
+      action: 'reclassify_enqueue',
+      entityType: 'tag',
+      entityId: scope === 'all' ? null : scope.tagId,
+      after: { enqueued, scope: scope === 'all' ? 'all' : scope.tagId },
+    })
   }
 
   return {
@@ -598,6 +609,7 @@ export async function importTopicsDiff(rows: ParsedRow[]): Promise<ImportDiff> {
 export async function applyTopicsImport(
   rows: ParsedRow[],
   reclassify: boolean,
+  identity?: AdminIdentity,
 ): Promise<{ applied: number }> {
   const diff = await importTopicsDiff(rows)
   if (diff.conflicts.length > 0) {
@@ -681,9 +693,23 @@ export async function applyTopicsImport(
     }
   })
 
+  if (identity) {
+    await writeAudit({
+      ...auditActor(identity),
+      action: 'tag_import',
+      entityType: 'tag',
+      entityId: null,
+      after: {
+        added: diff.added.length,
+        updated: diff.updated.length,
+        reclassify,
+      },
+    })
+  }
+
   if (reclassify && affectedTagIds.size > 0) {
     for (const tid of affectedTagIds) {
-      await enqueueReclassify({ tagId: tid })
+      await enqueueReclassify({ tagId: tid }, identity)
     }
   }
 

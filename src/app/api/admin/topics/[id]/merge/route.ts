@@ -34,7 +34,7 @@ export async function POST(
         { status: 409 },
       )
     // Enqueue scoped re-classify on the survivor tag after a successful merge
-    await enqueueReclassify({ tagId: String(intoTagId) })
+    await enqueueReclassify({ tagId: String(intoTagId) }, identity!)
     return NextResponse.json({ ok: true, moved: result.moved })
   } catch (err) {
     return internalError(err)

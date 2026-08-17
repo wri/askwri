@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  const { response } = await requireIdentity(req, 'admin')
+  const { identity, response } = await requireIdentity(req, 'admin')
   if (response) return response
   try {
     const body = (await req.json().catch(() => ({}))) ?? {}
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       body.scope === 'all' || body.tagId === undefined
         ? 'all'
         : { tagId: String(body.tagId) }
-    const result = await enqueueReclassify(scope)
+    const result = await enqueueReclassify(scope, identity!)
     return NextResponse.json({
       ok: true,
       enqueued: result.enqueued,

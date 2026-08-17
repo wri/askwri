@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  const { response } = await requireIdentity(req, 'admin')
+  const { identity, response } = await requireIdentity(req, 'admin')
   if (response) return response
   try {
     const dryRun = req.nextUrl.searchParams.get('dry_run') === 'true'
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     }
     // Apply — atomic: throws on any conflict
     try {
-      const result = await applyTopicsImport(rows, reclassify)
+      const result = await applyTopicsImport(rows, reclassify, identity!)
       return NextResponse.json({ ok: true, applied: result.applied })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
