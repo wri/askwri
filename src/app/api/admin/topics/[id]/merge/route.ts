@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { initializeDatabase } from '@/db/data-source'
-import { mergeTags, enqueueReclassify } from '@/db/queries/topicsAdmin'
+import { mergeTags } from '@/db/queries/topicsAdmin'
 import { requireIdentity } from '@/lib/auth/identity'
 import { internalError, isUuid } from '@/lib/api-error'
 
@@ -33,9 +33,11 @@ export async function POST(
         { ok: false, error: result.error },
         { status: 409 },
       )
-    // Enqueue scoped re-classify on the survivor tag after a successful merge
-    await enqueueReclassify({ tagId: String(intoTagId) }, identity!)
-    return NextResponse.json({ ok: true, moved: result.moved })
+    return NextResponse.json({
+      ok: true,
+      moved: result.moved,
+      enqueued: result.enqueued,
+    })
   } catch (err) {
     return internalError(err)
   }

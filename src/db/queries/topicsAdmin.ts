@@ -339,34 +339,104 @@ export async function deleteTopicIfUnused(
   })
 }
 
+async function enqueueReclassifyDocumentIds(
+  em: EntityManager,
+  documentIds: string[],
+  scopeTagId: string | null,
+): Promise<{ enqueued: number; runId: string }> {
+  const runId = crypto.randomUUID()
+  if (documentIds.length === 0) return { enqueued: 0, runId }
+
+  const [result] = await em.query(
+    `WITH candidates AS (
+       SELECT DISTINCT document_id
+       FROM unnest($1::uuid[]) AS candidate(document_id)
+     ), inserted AS (
+       INSERT INTO reclassify_jobs (document_id, scope_tag_id, run_id)
+       SELECT document_id, $2, $3 FROM candidates
+       ON CONFLICT (document_id) WHERE status IN ('queued', 'running')
+       DO NOTHING
+       RETURNING id
+     )
+     SELECT count(*)::int AS enqueued FROM inserted`,
+    [documentIds, scopeTagId, runId],
+  )
+
+  return { enqueued: result?.enqueued ?? 0, runId }
+}
+
 /**
- * Merge one topic tag into another. Moves document_tags from source to target,
- * drops conflicting rows (doc already on target), re-parents source's children
- * to target, deletes source's aliases, deletes source tag. All in one transaction.
- * Rejects self-merge and missing tags. Writes audit_log (tag_merge).
+ * Merge one v1 topic into another. Assignment consolidation preserves protected
+ * human/external precedence, aliases and children move to the survivor, and
+ * affected documents are queued in the same transaction as the merge audit.
  */
 export async function mergeTags(
   intoId: string,
   fromId: string,
   identity: AdminIdentity,
-): Promise<{ ok: true; moved: number } | { error: string }> {
+): Promise<{ ok: true; moved: number; enqueued: number } | { error: string }> {
   if (intoId === fromId) return { error: 'cannot merge a tag into itself' }
 
   return AppDataSource.transaction(async (em) => {
-    const into = await findV1Topic(em, intoId)
-    const from = await findV1Topic(em, fromId)
-    if (!into || !from) return { error: 'tag not found' }
+    const locked: any[] = await em.query(
+      `SELECT id, facet, taxonomy_version
+       FROM tags
+       WHERE id = ANY($1::uuid[])
+       ORDER BY id
+       FOR UPDATE`,
+      [[intoId, fromId]],
+    )
+    const byId = new Map(locked.map((tag) => [tag.id, tag]))
+    const into = byId.get(intoId)
+    const from = byId.get(fromId)
+    if (
+      !into ||
+      !from ||
+      into.facet !== 'topic' ||
+      from.facet !== 'topic' ||
+      into.taxonomy_version !== 'v1' ||
+      from.taxonomy_version !== 'v1'
+    ) {
+      return { error: 'tag not found' }
+    }
 
-    // Move document_tags: UPDATE rows where the doc doesn't already have the target tag
-    // Use a CTE to count moved rows in one statement (avoids RETURNING array ambiguity)
+    const [descendant] = await em.query(
+      `WITH RECURSIVE ancestors AS (
+         SELECT id, parent_tag_id FROM tags WHERE id = $1
+         UNION ALL
+         SELECT t.id, t.parent_tag_id FROM tags t
+         JOIN ancestors a ON t.id = a.parent_tag_id
+       )
+       SELECT 1 FROM ancestors WHERE id = $2`,
+      [intoId, fromId],
+    )
+    if (descendant) {
+      return { error: 'cannot merge a topic into its descendant' }
+    }
+
+    const affectedDocuments: any[] = await em.query(
+      `SELECT document_id FROM document_tags WHERE tag_id = $1`,
+      [fromId],
+    )
+    const affectedDocumentIds = affectedDocuments.map(
+      (row) => row.document_id as string,
+    )
+
     const [movedRow] = await em.query(
       `WITH moved AS (
-         UPDATE document_tags SET tag_id = $1
+         INSERT INTO document_tags
+           (document_id, tag_id, source, confidence, model_version, status, created_at)
+         SELECT document_id, $1, source, confidence, model_version, status, created_at
+         FROM document_tags
          WHERE tag_id = $2
-         AND NOT EXISTS (
-           SELECT 1 FROM document_tags dt
-           WHERE dt.document_id = document_tags.document_id AND dt.tag_id = $1
-         )
+         ON CONFLICT (document_id, tag_id) DO UPDATE
+         SET source = EXCLUDED.source,
+             confidence = EXCLUDED.confidence,
+             model_version = EXCLUDED.model_version,
+             status = EXCLUDED.status,
+             created_at = EXCLUDED.created_at
+         WHERE EXCLUDED.source IN ('human', 'external')
+           AND document_tags.source = 'llm'
          RETURNING document_id
        )
        SELECT count(*)::int AS moved FROM moved`,
@@ -374,20 +444,26 @@ export async function mergeTags(
     )
     const moved = movedRow?.moved ?? 0
 
-    // Drop remaining source rows (conflicts — doc already on target)
     await em.query(`DELETE FROM document_tags WHERE tag_id = $1`, [fromId])
 
-    // Re-parent source's children to target (exclude target itself to prevent
-    // a self-referencing cycle when `into` is itself a child of `from`)
     await em.query(
-      `UPDATE tags SET parent_tag_id = $1 WHERE parent_tag_id = $2 AND id <> $1`,
+      `UPDATE tags SET parent_tag_id = $1 WHERE parent_tag_id = $2`,
       [intoId, fromId],
     )
 
-    // Delete source's aliases (explicit; FK CASCADE would handle it too)
-    await em.query(`DELETE FROM tag_aliases WHERE tag_id = $1`, [fromId])
+    await em.query(
+      `INSERT INTO tag_aliases (tag_id, alias)
+       SELECT $1, alias FROM tag_aliases WHERE tag_id = $2
+       ON CONFLICT DO NOTHING`,
+      [intoId, fromId],
+    )
 
-    // Delete the source tag
+    const { enqueued } = await enqueueReclassifyDocumentIds(
+      em,
+      affectedDocumentIds,
+      intoId,
+    )
+
     await em.query(`DELETE FROM tags WHERE id = $1`, [fromId])
 
     await writeAudit(
@@ -397,12 +473,12 @@ export async function mergeTags(
         entityType: 'tag',
         entityId: intoId,
         before: { mergedFrom: fromId },
-        after: { movedDocs: moved },
+        after: { movedDocs: moved, enqueued },
       },
       em,
     )
 
-    return { ok: true as const, moved }
+    return { ok: true as const, moved, enqueued }
   })
 }
 
@@ -580,6 +656,13 @@ export interface ImportDiff {
   conflicts: { row: ParsedRow; reason: string }[]
 }
 
+export class TopicsImportConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TopicsImportConflictError'
+  }
+}
+
 /**
  * Minimal CSV parser (no new dep). Handles quoted fields with embedded commas,
  * doubled quotes (""), and embedded newlines within quoted fields.
@@ -653,15 +736,22 @@ export function parseTopicsCsv(text: string): ParsedRow[] {
 /**
  * Diff parsed CSV rows against the current topic taxonomy in the DB.
  * Matches by id (if present) else by label. Detects: empty labels,
- * duplicate labels in the input, bad parent references (parent label
- * not in DB and not in the input itself).
+ * non-topic facets, duplicate labels in the input, and bad parent references
+ * (parent label not in DB and not in the input itself).
  */
-export async function importTopicsDiff(rows: ParsedRow[]): Promise<ImportDiff> {
-  const labels = rows.map((r) => r.label)
-  const dup = labels.filter((l, i) => labels.indexOf(l) !== i)
-  const inputLabels = new Set(labels.filter(Boolean))
+async function buildTopicsImportDiff(
+  rows: ParsedRow[],
+  em: EntityManager,
+): Promise<ImportDiff> {
+  const seenLabels = new Set<string>()
+  const duplicateLabels = new Set<string>()
+  for (const { label } of rows) {
+    if (seenLabels.has(label)) duplicateLabels.add(label)
+    seenLabels.add(label)
+  }
+  const inputLabels = new Set([...seenLabels].filter(Boolean))
 
-  const existing: any[] = await AppDataSource.query(
+  const existing: any[] = await em.query(
     `SELECT t.id, t.value_id, t.description, t.parent_tag_id,
             COALESCE(
               (SELECT string_agg(a.alias, '|' ORDER BY a.alias) FROM tag_aliases a WHERE a.tag_id = t.id),
@@ -684,7 +774,11 @@ export async function importTopicsDiff(rows: ParsedRow[]): Promise<ImportDiff> {
       conflicts.push({ row: r, reason: 'empty label' })
       continue
     }
-    if (dup.includes(r.label)) {
+    if (r.facet !== 'topic') {
+      conflicts.push({ row: r, reason: 'facet must be topic' })
+      continue
+    }
+    if (duplicateLabels.has(r.label)) {
       conflicts.push({ row: r, reason: 'duplicate label' })
       continue
     }
@@ -719,6 +813,10 @@ export async function importTopicsDiff(rows: ParsedRow[]): Promise<ImportDiff> {
   return { added, updated, unchanged, conflicts }
 }
 
+export async function importTopicsDiff(rows: ParsedRow[]): Promise<ImportDiff> {
+  return buildTopicsImportDiff(rows, AppDataSource.manager)
+}
+
 /**
  * Cycle guard for parent-set during CSV import. Setting childTagId.parent =
  * parentTagId would create a cycle if childTagId is already an ancestor of
@@ -742,86 +840,48 @@ async function assertNoParentCycle(
     [parentId, childId],
   )
   if (cycle) {
-    throw new Error('import would create a cycle in the topic tree')
+    throw new TopicsImportConflictError(
+      'import would create a cycle in the topic tree',
+    )
   }
 }
 
 /**
- * Apply a CSV import atomically. Calls importTopicsDiff first; if any conflicts,
- * throws without touching the DB. Otherwise wraps all INSERT/UPDATE/alias
- * operations in a single transaction — all changes commit or none.
- * After commit, if reclassify=true, enqueues scoped re-classify per affected tag.
+ * Apply a CSV import atomically. Labels, descriptions, and aliases change first;
+ * parent relationships resolve from the final label map in a separate pass.
+ * Optional deduplicated queue rows and the audit are written in the same
+ * transaction, so every import side effect commits or rolls back together.
  */
 export async function applyTopicsImport(
   rows: ParsedRow[],
   reclassify: boolean,
   identity?: AdminIdentity,
 ): Promise<{ applied: number }> {
-  const diff = await importTopicsDiff(rows)
-  if (diff.conflicts.length > 0) {
-    throw new Error(
-      `import has ${diff.conflicts.length} conflict(s) — apply blocked`,
-    )
-  }
+  return AppDataSource.transaction(async (em) => {
+    const diff = await buildTopicsImportDiff(rows, em)
+    if (diff.conflicts.length > 0) {
+      throw new TopicsImportConflictError(
+        `import has ${diff.conflicts.length} conflict(s) — apply blocked`,
+      )
+    }
 
-  const affectedTagIds = new Set<string>()
-
-  await AppDataSource.transaction(async (em) => {
-    // Build a label→id map for parent resolution (includes existing + newly added)
-    const existing: any[] = await em.query(
-      `SELECT id, value_id FROM tags WHERE facet = 'topic' AND taxonomy_version = 'v1'`,
-    )
-    const labelToId = new Map<string, string>(
-      existing.map((t) => [t.value_id, t.id]),
-    )
+    const affectedTagIds = new Set<string>()
+    const rowTagIds = new Map<ParsedRow, string>()
 
     for (const r of diff.added) {
       const [t] = await em.query(
         `INSERT INTO tags (facet, value_id, taxonomy_version, description, needs_reembed)
-         VALUES ($1, $2, 'v1', $3, true) RETURNING id`,
-        [r.facet || 'topic', r.label, r.description || null],
+         VALUES ('topic', $1, 'v1', $2, true) RETURNING id`,
+        [r.label, r.description || null],
       )
       affectedTagIds.add(t.id)
-      labelToId.set(r.label, t.id)
+      rowTagIds.set(r, t.id)
 
       for (const a of r.aliases) {
         await em.query(
           `INSERT INTO tag_aliases (tag_id, alias) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
           [t.id, a],
         )
-      }
-
-      // In-loop parent-set: works when the parent already existed in the DB
-      // or was inserted earlier in this same adds loop.
-      if (r.parent) {
-        const parentId = labelToId.get(r.parent)
-        if (parentId) {
-          const parent = await findV1Topic(em, parentId)
-          if (!parent) throw new Error('parent must be a v1 topic')
-          await assertNoParentCycle(em, parent.id, t.id)
-          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [
-            parent.id,
-            t.id,
-          ])
-        }
-      }
-    }
-
-    // Second pass: set parent_tag_id for added tags whose parent was inserted
-    // later in the adds loop (forward reference — child before parent in CSV).
-    for (const r of diff.added) {
-      if (r.parent) {
-        const parentId = labelToId.get(r.parent)
-        const childId = labelToId.get(r.label)
-        if (parentId && childId) {
-          const parent = await findV1Topic(em, parentId)
-          if (!parent) throw new Error('parent must be a v1 topic')
-          await assertNoParentCycle(em, parent.id, childId)
-          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [
-            parent.id,
-            childId,
-          ])
-        }
       }
     }
 
@@ -832,9 +892,8 @@ export async function applyTopicsImport(
         [u.row.label, u.row.description || null, cur.id],
       )
       affectedTagIds.add(cur.id)
-      labelToId.set(u.row.label, cur.id)
+      rowTagIds.set(u.row, cur.id)
 
-      // Replace aliases
       await em.query(`DELETE FROM tag_aliases WHERE tag_id = $1`, [cur.id])
       for (const a of u.row.aliases) {
         await em.query(
@@ -842,24 +901,63 @@ export async function applyTopicsImport(
           [cur.id, a],
         )
       }
+    }
 
-      // Update parent
-      if (u.row.parent) {
-        const parentId = labelToId.get(u.row.parent)
-        if (parentId) {
-          const parent = await findV1Topic(em, parentId)
-          if (!parent) throw new Error('parent must be a v1 topic')
-          await assertNoParentCycle(em, parent.id, cur.id)
-          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [
-            parent.id,
-            cur.id,
-          ])
-        }
-      } else {
-        await em.query(`UPDATE tags SET parent_tag_id = NULL WHERE id = $1`, [
-          cur.id,
-        ])
+    const finalTopics: any[] = await em.query(
+      `SELECT id, value_id FROM tags
+       WHERE facet = 'topic' AND taxonomy_version = 'v1'`,
+    )
+    const finalLabelToId = new Map<string, string>(
+      finalTopics.map((topic) => [topic.value_id, topic.id]),
+    )
+
+    const changedRows = [
+      ...diff.added,
+      ...diff.updated.map(({ row: updatedRow }) => updatedRow),
+    ]
+    const changedTagIds = [...affectedTagIds]
+    if (changedTagIds.length > 0) {
+      await em.query(
+        `UPDATE tags SET parent_tag_id = NULL WHERE id = ANY($1::uuid[])`,
+        [changedTagIds],
+      )
+    }
+
+    for (const changedRow of changedRows) {
+      if (!changedRow.parent) continue
+      const childId = rowTagIds.get(changedRow)
+      const parentId = finalLabelToId.get(changedRow.parent)
+      if (!childId || !parentId) {
+        throw new TopicsImportConflictError(
+          `parent '${changedRow.parent}' was not found in the final topic taxonomy`,
+        )
       }
+      const parent = await findV1Topic(em, parentId)
+      if (!parent) {
+        throw new TopicsImportConflictError('parent must be a v1 topic')
+      }
+      await assertNoParentCycle(em, parent.id, childId)
+      await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [
+        parent.id,
+        childId,
+      ])
+    }
+
+    let enqueued = 0
+    let runId: string | null = null
+    if (reclassify && changedTagIds.length > 0) {
+      const affectedDocuments: any[] = await em.query(
+        `SELECT DISTINCT document_id
+         FROM document_tags WHERE tag_id = ANY($1::uuid[])`,
+        [changedTagIds],
+      )
+      const enqueueResult = await enqueueReclassifyDocumentIds(
+        em,
+        affectedDocuments.map((document) => document.document_id),
+        changedTagIds.length === 1 ? changedTagIds[0] : null,
+      )
+      enqueued = enqueueResult.enqueued
+      runId = enqueueResult.runId
     }
 
     if (identity) {
@@ -873,20 +971,16 @@ export async function applyTopicsImport(
             added: diff.added.length,
             updated: diff.updated.length,
             reclassify,
+            enqueued,
+            runId,
           },
         },
         em,
       )
     }
+
+    return { applied: diff.added.length + diff.updated.length }
   })
-
-  if (reclassify && affectedTagIds.size > 0) {
-    for (const tid of affectedTagIds) {
-      await enqueueReclassify({ tagId: tid }, identity)
-    }
-  }
-
-  return { applied: diff.added.length + diff.updated.length }
 }
 
 /**
@@ -905,7 +999,7 @@ export async function exportTopicsCsv(): Promise<string> {
   )
 
   const esc = (s: string) => {
-    if (/[,"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+    if (/[,"\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
     return s
   }
 

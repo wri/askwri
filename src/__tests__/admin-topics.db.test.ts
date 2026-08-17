@@ -922,3 +922,609 @@ d(
     })
   },
 )
+
+d('topicsAdmin guarded merge integrity (DB integration)', () => {
+  const runId = crypto.randomUUID()
+  const tagIds: string[] = []
+  const documentIds: string[] = []
+
+  async function insertTag(
+    label: string,
+    options: {
+      facet?: string
+      taxonomyVersion?: string
+      parentTagId?: string | null
+    } = {},
+  ): Promise<string> {
+    const [tag] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version, parent_tag_id)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [
+        options.facet ?? 'topic',
+        `__task2_${label}_${runId}__`,
+        options.taxonomyVersion ?? 'v1',
+        options.parentTagId ?? null,
+      ],
+    )
+    tagIds.push(tag.id)
+    return tag.id
+  }
+
+  async function insertDocument(label: string): Promise<string> {
+    const [document] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, $3, 'ready') RETURNING id`,
+      [
+        `__task2_${label}_${runId}__`,
+        `documents/__task2_${label}_${runId}__.pdf`,
+        `Task 2 ${label}`,
+      ],
+    )
+    documentIds.push(document.id)
+    return document.id
+  }
+
+  async function assign(
+    documentId: string,
+    tagId: string,
+    source: 'llm' | 'human' | 'external',
+    status: 'accepted' | 'suggested',
+    confidence: number,
+    modelVersion: string,
+  ): Promise<void> {
+    await AppDataSource.query(
+      `INSERT INTO document_tags
+         (document_id, tag_id, source, status, confidence, model_version)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [documentId, tagId, source, status, confidence, modelVersion],
+    )
+  }
+
+  beforeAll(async () => {
+    if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+  })
+
+  afterAll(async () => {
+    if (documentIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM reclassify_jobs WHERE document_id = ANY($1::uuid[])`,
+        [documentIds],
+      )
+      await AppDataSource.query(
+        `DELETE FROM document_tags WHERE document_id = ANY($1::uuid[])`,
+        [documentIds],
+      )
+      await AppDataSource.query(
+        `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+        [documentIds],
+      )
+    }
+    if (tagIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM audit_log WHERE entity_id = ANY($1::uuid[])`,
+        [tagIds],
+      )
+      await AppDataSource.query(
+        `DELETE FROM tag_aliases WHERE tag_id = ANY($1::uuid[])`,
+        [tagIds],
+      )
+      await AppDataSource.query(`DELETE FROM tags WHERE id = ANY($1::uuid[])`, [
+        tagIds,
+      ])
+    }
+    await AppDataSource.destroy()
+  })
+
+  it('rejects a cross-facet source without changing either tag', async () => {
+    const targetId = await insertTag('cross_facet_target')
+    const programId = await insertTag('cross_facet_source', {
+      facet: 'program',
+    })
+
+    await expect(
+      mergeTags(targetId, programId, adminIdentity),
+    ).resolves.toEqual({ error: 'tag not found' })
+
+    const remaining: any[] = await AppDataSource.query(
+      `SELECT id FROM tags WHERE id = ANY($1::uuid[])`,
+      [[targetId, programId]],
+    )
+    expect(remaining).toHaveLength(2)
+  })
+
+  it('rejects merging an ancestor topic into its descendant', async () => {
+    const ancestorId = await insertTag('ancestor')
+    const descendantId = await insertTag('descendant', {
+      parentTagId: ancestorId,
+    })
+
+    await expect(
+      mergeTags(descendantId, ancestorId, adminIdentity),
+    ).resolves.toEqual({
+      error: 'cannot merge a topic into its descendant',
+    })
+
+    const [descendant] = await AppDataSource.query(
+      `SELECT parent_tag_id FROM tags WHERE id = $1`,
+      [descendantId],
+    )
+    expect(descendant.parent_tag_id).toBe(ancestorId)
+  })
+
+  it('transfers source aliases and atomically enqueues affected documents', async () => {
+    const targetId = await insertTag('alias_target')
+    const sourceId = await insertTag('alias_source')
+    const documentId = await insertDocument('alias_transfer')
+    const sourceAlias = `__task2_source_alias_${runId}__`
+    await AppDataSource.query(
+      `INSERT INTO tag_aliases (tag_id, alias) VALUES ($1, $2)`,
+      [sourceId, sourceAlias],
+    )
+    await assign(documentId, sourceId, 'llm', 'accepted', 0.7, 'merge-old')
+
+    const result = await mergeTags(targetId, sourceId, adminIdentity)
+
+    const aliases: any[] = await AppDataSource.query(
+      `SELECT alias FROM tag_aliases WHERE tag_id = $1`,
+      [targetId],
+    )
+    expect(aliases.map((row) => row.alias)).toContain(sourceAlias)
+
+    const [job] = await AppDataSource.query(
+      `SELECT document_id, scope_tag_id
+       FROM reclassify_jobs WHERE document_id = $1`,
+      [documentId],
+    )
+    expect(job).toMatchObject({
+      document_id: documentId,
+      scope_tag_id: targetId,
+    })
+    expect(result).toMatchObject({ ok: true, moved: 1, enqueued: 1 })
+  })
+
+  it('promotes human and external source assignments but retains protected targets', async () => {
+    const targetId = await insertTag('precedence_target')
+    const sourceId = await insertTag('precedence_source')
+    const humanSourceDoc = await insertDocument('human_source')
+    const externalSourceDoc = await insertDocument('external_source')
+    const humanTargetDoc = await insertDocument('human_target')
+    const externalTargetDoc = await insertDocument('external_target')
+
+    await assign(
+      humanSourceDoc,
+      sourceId,
+      'human',
+      'accepted',
+      0.91,
+      'human-new',
+    )
+    await assign(humanSourceDoc, targetId, 'llm', 'suggested', 0.2, 'llm-old')
+    await assign(
+      externalSourceDoc,
+      sourceId,
+      'external',
+      'accepted',
+      0.83,
+      'external-new',
+    )
+    await assign(
+      externalSourceDoc,
+      targetId,
+      'llm',
+      'suggested',
+      0.3,
+      'llm-old',
+    )
+    await assign(humanTargetDoc, sourceId, 'llm', 'suggested', 0.4, 'llm-new')
+    await assign(
+      humanTargetDoc,
+      targetId,
+      'human',
+      'accepted',
+      0.99,
+      'human-existing',
+    )
+    await assign(
+      externalTargetDoc,
+      sourceId,
+      'llm',
+      'suggested',
+      0.5,
+      'llm-new',
+    )
+    await assign(
+      externalTargetDoc,
+      targetId,
+      'external',
+      'accepted',
+      0.95,
+      'external-existing',
+    )
+
+    const result = await mergeTags(targetId, sourceId, adminIdentity)
+
+    const assignments: any[] = await AppDataSource.query(
+      `SELECT document_id, source, status, confidence::float AS confidence,
+              model_version
+       FROM document_tags
+       WHERE tag_id = $1 AND document_id = ANY($2::uuid[])
+       ORDER BY document_id`,
+      [
+        targetId,
+        [humanSourceDoc, externalSourceDoc, humanTargetDoc, externalTargetDoc],
+      ],
+    )
+    const byDocument = new Map(assignments.map((row) => [row.document_id, row]))
+    expect(byDocument.get(humanSourceDoc)).toMatchObject({
+      source: 'human',
+      status: 'accepted',
+      confidence: 0.91,
+      model_version: 'human-new',
+    })
+    expect(byDocument.get(externalSourceDoc)).toMatchObject({
+      source: 'external',
+      status: 'accepted',
+      confidence: 0.83,
+      model_version: 'external-new',
+    })
+    expect(byDocument.get(humanTargetDoc)).toMatchObject({
+      source: 'human',
+      status: 'accepted',
+      confidence: 0.99,
+      model_version: 'human-existing',
+    })
+    expect(byDocument.get(externalTargetDoc)).toMatchObject({
+      source: 'external',
+      status: 'accepted',
+      confidence: 0.95,
+      model_version: 'external-existing',
+    })
+    expect(result).toMatchObject({ ok: true, moved: 2, enqueued: 4 })
+  })
+})
+
+d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
+  const runId = crypto.randomUUID()
+  const suffix = runId.replaceAll('-', '')
+  const tagIds: string[] = []
+  const documentIds: string[] = []
+  let actorUserId: string
+  let identity: AdminIdentity
+
+  const row = (
+    label: string,
+    options: Partial<{
+      description: string
+      aliases: string[]
+      parent: string
+      facet: string
+      id: string
+    }> = {},
+  ) => ({
+    label,
+    description: options.description ?? '',
+    aliases: options.aliases ?? [],
+    parent: options.parent ?? '',
+    facet: options.facet ?? 'topic',
+    id: options.id ?? '',
+  })
+
+  async function insertTag(
+    label: string,
+    options: {
+      description?: string
+      parentTagId?: string | null
+    } = {},
+  ): Promise<string> {
+    const [tag] = await AppDataSource.query(
+      `INSERT INTO tags
+         (facet, value_id, taxonomy_version, description, parent_tag_id)
+       VALUES ('topic', $1, 'v1', $2, $3) RETURNING id`,
+      [label, options.description ?? null, options.parentTagId ?? null],
+    )
+    tagIds.push(tag.id)
+    return tag.id
+  }
+
+  async function insertDocument(label: string): Promise<string> {
+    const [document] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, $3, 'ready') RETURNING id`,
+      [
+        `__task2_csv_${label}_${runId}__`,
+        `documents/__task2_csv_${label}_${runId}__.pdf`,
+        `Task 2 CSV ${label}`,
+      ],
+    )
+    documentIds.push(document.id)
+    return document.id
+  }
+
+  beforeAll(async () => {
+    if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+    const [actor] = await AppDataSource.query(
+      `INSERT INTO users (username, password_hash, role)
+       VALUES ($1, 'not-used-by-test', 'admin') RETURNING id`,
+      [`task2-csv-${runId}`],
+    )
+    actorUserId = actor.id
+    identity = {
+      kind: 'user',
+      userId: actorUserId,
+      username: `task2-csv-${runId}`,
+      role: 'admin',
+    }
+  })
+
+  afterAll(async () => {
+    if (documentIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM reclassify_jobs WHERE document_id = ANY($1::uuid[])`,
+        [documentIds],
+      )
+      await AppDataSource.query(
+        `DELETE FROM document_tags WHERE document_id = ANY($1::uuid[])`,
+        [documentIds],
+      )
+      await AppDataSource.query(
+        `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+        [documentIds],
+      )
+    }
+    await AppDataSource.query(
+      `DELETE FROM audit_log WHERE actor_user_id = $1`,
+      [actorUserId],
+    )
+    if (tagIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM tag_aliases WHERE tag_id = ANY($1::uuid[])`,
+        [tagIds],
+      )
+      await AppDataSource.query(`DELETE FROM tags WHERE id = ANY($1::uuid[])`, [
+        tagIds,
+      ])
+    }
+    await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [actorUserId])
+    await AppDataSource.destroy()
+  })
+
+  it('resolves a child parent from the final label after renaming an existing parent', async () => {
+    const oldParentLabel = `__task2_old_parent_${runId}__`
+    const newParentLabel = `__task2_new_parent_${runId}__`
+    const childLabel = `__task2_rename_child_${runId}__`
+    const parentId = await insertTag(oldParentLabel)
+    const childId = await insertTag(childLabel)
+
+    await applyTopicsImport(
+      [
+        row(childLabel, { id: childId, parent: newParentLabel }),
+        row(newParentLabel, { id: parentId }),
+      ],
+      false,
+      identity,
+    )
+
+    const [child] = await AppDataSource.query(
+      `SELECT parent_tag_id FROM tags WHERE id = $1`,
+      [childId],
+    )
+    expect(child.parent_tag_id).toBe(parentId)
+  })
+
+  it('reports non-topic CSV facets as typed import conflicts', async () => {
+    const label = `__task2_program_import_${runId}__`
+    const rows = [row(label, { facet: 'program' })]
+
+    const diff = await importTopicsDiff(rows)
+    expect(diff.conflicts).toEqual([
+      { row: rows[0], reason: 'facet must be topic' },
+    ])
+
+    let thrown: unknown
+    try {
+      await applyTopicsImport(rows, false, identity)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toMatchObject({ name: 'TopicsImportConflictError' })
+    const [inserted] = await AppDataSource.query(
+      `SELECT id FROM tags WHERE value_id = $1`,
+      [label],
+    )
+    expect(inserted).toBeUndefined()
+  })
+
+  it('rejects a parent label absent from the final taxonomy and rolls back renames', async () => {
+    const originalParentLabel = `__task2_final_parent_${runId}__`
+    const firstRename = `__task2_final_parent_a_${runId}__`
+    const finalRename = `__task2_final_parent_b_${runId}__`
+    const childLabel = `__task2_final_child_${runId}__`
+    const parentId = await insertTag(originalParentLabel)
+    const childId = await insertTag(childLabel)
+
+    let thrown: unknown
+    try {
+      await applyTopicsImport(
+        [
+          row(firstRename, { id: parentId }),
+          row(finalRename, { id: parentId }),
+          row(childLabel, { id: childId, parent: firstRename }),
+        ],
+        false,
+        identity,
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    const [parent] = await AppDataSource.query(
+      `SELECT value_id FROM tags WHERE id = $1`,
+      [parentId],
+    )
+    const [child] = await AppDataSource.query(
+      `SELECT parent_tag_id FROM tags WHERE id = $1`,
+      [childId],
+    )
+    expect(parent.value_id).toBe(originalParentLabel)
+    expect(child.parent_tag_id).toBeNull()
+    expect(thrown).toMatchObject({
+      name: 'TopicsImportConflictError',
+      message: expect.stringContaining('parent'),
+    })
+  })
+
+  it('rolls back all row changes when the final parent pass detects a cycle', async () => {
+    const labelA = `__task2_cycle_a_${runId}__`
+    const labelB = `__task2_cycle_b_${runId}__`
+    const tagAId = await insertTag(labelA, { description: 'original a' })
+    const tagBId = await insertTag(labelB, { description: 'original b' })
+
+    let thrown: unknown
+    try {
+      await applyTopicsImport(
+        [
+          row(labelA, {
+            id: tagAId,
+            description: 'changed a',
+            parent: labelB,
+          }),
+          row(labelB, {
+            id: tagBId,
+            description: 'changed b',
+            parent: labelA,
+          }),
+        ],
+        false,
+        identity,
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    const tags: any[] = await AppDataSource.query(
+      `SELECT id, description, parent_tag_id FROM tags
+       WHERE id = ANY($1::uuid[]) ORDER BY id`,
+      [[tagAId, tagBId]],
+    )
+    expect(tags).toHaveLength(2)
+    expect(tags.map((tag) => tag.description).sort()).toEqual([
+      'original a',
+      'original b',
+    ])
+    expect(tags.every((tag) => tag.parent_tag_id === null)).toBe(true)
+    expect(thrown).toMatchObject({ name: 'TopicsImportConflictError' })
+  })
+
+  it('rolls back imported rows when the transactional audit insert fails', async () => {
+    const label = `__task2_audit_rollback_${runId}__`
+    const tagId = await insertTag(label, { description: 'before audit' })
+    const auditFunction = `task2_csv_audit_fail_${suffix}`
+    const auditTrigger = `task2_csv_audit_fail_trigger_${suffix}`
+    await AppDataSource.query(
+      `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         IF NEW.action = 'tag_import' AND NEW.actor_user_id = '${actorUserId}'::uuid THEN
+           RAISE EXCEPTION 'task2 audit failure';
+         END IF;
+         RETURN NEW;
+       END;
+       $$`,
+    )
+    await AppDataSource.query(
+      `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+    )
+
+    let thrown: unknown
+    try {
+      await applyTopicsImport(
+        [row(label, { id: tagId, description: 'after audit' })],
+        false,
+        identity,
+      )
+    } catch (error) {
+      thrown = error
+    } finally {
+      await AppDataSource.query(
+        `DROP TRIGGER IF EXISTS ${auditTrigger} ON audit_log`,
+      )
+      await AppDataSource.query(`DROP FUNCTION IF EXISTS ${auditFunction}()`)
+    }
+
+    const [tag] = await AppDataSource.query(
+      `SELECT description FROM tags WHERE id = $1`,
+      [tagId],
+    )
+    expect(tag.description).toBe('before audit')
+    expect(thrown).toMatchObject({ name: 'QueryFailedError' })
+  })
+
+  it('rolls back imported rows and audit when set-based enqueue fails', async () => {
+    const label = `__task2_enqueue_rollback_${runId}__`
+    const tagId = await insertTag(label, { description: 'before enqueue' })
+    const documentId = await insertDocument('enqueue_rollback')
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status)
+       VALUES ($1, $2, 'llm', 'accepted')`,
+      [documentId, tagId],
+    )
+    const enqueueFunction = `task2_csv_enqueue_fail_${suffix}`
+    const enqueueTrigger = `task2_csv_enqueue_fail_trigger_${suffix}`
+    await AppDataSource.query(
+      `CREATE FUNCTION ${enqueueFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         IF NEW.document_id = '${documentId}'::uuid THEN
+           RAISE EXCEPTION 'task2 enqueue failure';
+         END IF;
+         RETURN NEW;
+       END;
+       $$`,
+    )
+    await AppDataSource.query(
+      `CREATE TRIGGER ${enqueueTrigger} BEFORE INSERT ON reclassify_jobs
+       FOR EACH ROW EXECUTE FUNCTION ${enqueueFunction}()`,
+    )
+
+    let thrown: unknown
+    try {
+      await applyTopicsImport(
+        [row(label, { id: tagId, description: 'after enqueue' })],
+        true,
+        identity,
+      )
+    } catch (error) {
+      thrown = error
+    } finally {
+      await AppDataSource.query(
+        `DROP TRIGGER IF EXISTS ${enqueueTrigger} ON reclassify_jobs`,
+      )
+      await AppDataSource.query(`DROP FUNCTION IF EXISTS ${enqueueFunction}()`)
+    }
+
+    const [tag] = await AppDataSource.query(
+      `SELECT description FROM tags WHERE id = $1`,
+      [tagId],
+    )
+    const [audit] = await AppDataSource.query(
+      `SELECT id FROM audit_log
+       WHERE actor_user_id = $1 AND action = 'tag_import'
+         AND after->>'reclassify' = 'true'`,
+      [actorUserId],
+    )
+    expect(tag.description).toBe('before enqueue')
+    expect(audit).toBeUndefined()
+    expect(thrown).toMatchObject({ name: 'QueryFailedError' })
+  })
+
+  it('quotes carriage returns so export and parse round-trip without data loss', async () => {
+    const label = `__task2_cr_export_${runId}__`
+    await insertTag(label, { description: 'first\rsecond' })
+
+    const exported = await exportTopicsCsv()
+    const parsed = parseTopicsCsv(exported)
+
+    expect(
+      parsed.find((parsedRow) => parsedRow.label === label)?.description,
+    ).toBe('first\rsecond')
+  })
+})
