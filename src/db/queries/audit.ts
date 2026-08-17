@@ -6,6 +6,8 @@ export type AuditAction =
   | 'update'
   | 'delete'
   | 'tag_decision'
+  | 'tag_create'
+  | 'tag_update'
   | 'lifecycle'
   | 'collection_change'
   | 'import'
