@@ -224,3 +224,117 @@ export async function updateTopic(
     }
   })
 }
+
+// --- Task 4: delete (children warning) + merge ---
+
+export type DeleteTopicResult =
+  | { deleted: true }
+  | { deleted: false; reason: 'in_use' | 'has_children' | 'not_found'; error: string }
+
+/**
+ * Delete a topic tag if it has no documents and no children.
+ * Checks children (parent_tag_id refs) first → has_children.
+ * Then atomic DELETE with NOT EXISTS(document_tags) guard → in_use or deleted.
+ * Topic-scoped: the tag must be facet='topic'.
+ */
+export async function deleteTopicIfUnused(
+  id: string,
+  identity: AdminIdentity,
+): Promise<DeleteTopicResult> {
+  const [tag] = await AppDataSource.query(
+    `SELECT id FROM tags WHERE id = $1 AND facet = 'topic'`,
+    [id],
+  )
+  if (!tag) return { deleted: false, reason: 'not_found', error: 'not found' }
+
+  const [children] = await AppDataSource.query(
+    `SELECT count(*)::int AS c FROM tags WHERE parent_tag_id = $1`,
+    [id],
+  )
+  if (children.c > 0) return { deleted: false, reason: 'has_children', error: 're-parent or delete children first' }
+
+  return AppDataSource.transaction(async (em) => {
+    const [rows] = await em.query(
+      `DELETE FROM tags WHERE id = $1
+       AND NOT EXISTS (SELECT 1 FROM document_tags WHERE tag_id = $1)
+       RETURNING id`,
+      [id],
+    )
+    if (!Array.isArray(rows) || rows.length === 0)
+      return { deleted: false, reason: 'in_use' as const, error: 'topic is applied to documents' }
+
+    await writeAudit({
+      ...auditActor(identity),
+      action: 'tag_delete',
+      entityType: 'tag',
+      entityId: id,
+    })
+    return { deleted: true as const }
+  })
+}
+
+/**
+ * Merge one topic tag into another. Moves document_tags from source to target,
+ * drops conflicting rows (doc already on target), re-parents source's children
+ * to target, deletes source's aliases, deletes source tag. All in one transaction.
+ * Rejects self-merge and missing tags. Writes audit_log (tag_merge).
+ */
+export async function mergeTags(
+  intoId: string,
+  fromId: string,
+  identity: AdminIdentity,
+): Promise<{ ok: true; moved: number } | { error: string }> {
+  if (intoId === fromId) return { error: 'cannot merge a tag into itself' }
+
+  return AppDataSource.transaction(async (em) => {
+    const [into] = await em.query(
+      `SELECT id FROM tags WHERE id = $1 AND facet = 'topic'`,
+      [intoId],
+    )
+    const [from] = await em.query(`SELECT id FROM tags WHERE id = $1`, [fromId])
+    if (!into || !from) return { error: 'tag not found' }
+
+    // Move document_tags: UPDATE rows where the doc doesn't already have the target tag
+    // Use a CTE to count moved rows in one statement (avoids RETURNING array ambiguity)
+    const [movedRow] = await em.query(
+      `WITH moved AS (
+         UPDATE document_tags SET tag_id = $1
+         WHERE tag_id = $2
+         AND NOT EXISTS (
+           SELECT 1 FROM document_tags dt
+           WHERE dt.document_id = document_tags.document_id AND dt.tag_id = $1
+         )
+         RETURNING document_id
+       )
+       SELECT count(*)::int AS moved FROM moved`,
+      [intoId, fromId],
+    )
+    const moved = movedRow?.moved ?? 0
+
+    // Drop remaining source rows (conflicts — doc already on target)
+    await em.query(`DELETE FROM document_tags WHERE tag_id = $1`, [fromId])
+
+    // Re-parent source's children to target
+    await em.query(
+      `UPDATE tags SET parent_tag_id = $1 WHERE parent_tag_id = $2`,
+      [intoId, fromId],
+    )
+
+    // Delete source's aliases (explicit; FK CASCADE would handle it too)
+    await em.query(`DELETE FROM tag_aliases WHERE tag_id = $1`, [fromId])
+
+    // Delete the source tag
+    await em.query(`DELETE FROM tags WHERE id = $1`, [fromId])
+
+    await writeAudit({
+      ...auditActor(identity),
+      action: 'tag_merge',
+      entityType: 'tag',
+      entityId: intoId,
+      before: { mergedFrom: fromId },
+      after: { movedDocs: moved },
+    })
+
+    return { ok: true as const, moved }
+  })
+}

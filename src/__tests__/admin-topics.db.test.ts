@@ -5,6 +5,8 @@ import {
   getTopic,
   createTopic,
   updateTopic,
+  deleteTopicIfUnused,
+  mergeTags,
 } from '@/db/queries/topicsAdmin'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
@@ -185,5 +187,81 @@ d('topicsAdmin list/get (DB integration)', () => {
       `SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'tag_update'`, [rootId],
     )
     expect(audit).toBeDefined()
+  })
+
+  // --- Task 4: deleteTopicIfUnused + mergeTags ---
+
+  it('deleteTopicIfUnused blocks a tag with children (reason: has_children)', async () => {
+    const res = await deleteTopicIfUnused(rootId, adminIdentity)
+    expect(res).toMatchObject({ deleted: false, reason: 'has_children' })
+
+    // Verify root still exists
+    const [row] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [rootId])
+    expect(row).toBeDefined()
+  })
+
+  it('deleteTopicIfUnused succeeds for an unused topic with no children', async () => {
+    // Create a throwaway topic with no children and no docs
+    const [tmp] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__test_del_ok_${Date.now()}__`],
+    )
+    const tmpId = tmp.id
+
+    const res = await deleteTopicIfUnused(tmpId, adminIdentity)
+    expect(res).toMatchObject({ deleted: true })
+
+    // Verify it's gone
+    const [gone] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [tmpId])
+    expect(gone).toBeUndefined()
+
+    // Clean up audit row
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [tmpId])
+  })
+
+  it('mergeTags moves document_tags, deletes source, and re-parents children', async () => {
+    // Ensure no stale document_tags on childId from prior runs
+    await AppDataSource.query(`DELETE FROM document_tags WHERE tag_id = $1`, [childId])
+
+    // Create a temporary document
+    const [docRow] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'Merge Test', 'needs_review') RETURNING id`,
+      [`__merge_test_${Date.now()}__`, `documents/__merge_test_${Date.now()}__.pdf`],
+    )
+    const docId = docRow.id
+
+    // Tag the doc with childId (the source tag we'll merge away)
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
+      [docId, childId],
+    )
+
+    // Merge child into root
+    const res = await mergeTags(rootId, childId, adminIdentity)
+    expect(res).toMatchObject({ ok: true, moved: 1 })
+
+    // The doc_tag should now be on rootId
+    const [moved] = await AppDataSource.query(
+      `SELECT tag_id FROM document_tags WHERE document_id = $1`, [docId],
+    )
+    expect(moved.tag_id).toBe(rootId)
+
+    // childId should be gone
+    const [gone] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [childId])
+    expect(gone).toBeUndefined()
+
+    // Audit row for the merge should exist
+    const [audit] = await AppDataSource.query(
+      `SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'tag_merge'`, [rootId],
+    )
+    expect(audit).toBeDefined()
+
+    // Cleanup: delete the doc (cascades document_tags), then audit rows
+    await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [rootId])
+    // Remove childId from ids array — it's already deleted by merge
+    const idx = ids.indexOf(childId)
+    if (idx >= 0) ids.splice(idx, 1)
   })
 })
