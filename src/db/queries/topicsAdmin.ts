@@ -390,7 +390,7 @@ export async function enqueueReclassify(
 
   return {
     enqueued,
-    estCost: +(enqueued * EST_PER_DOC_COST).toFixed(2),
+    estCost: +(enqueued * EST_PER_DOC_COST).toFixed(4),
     runId,
   }
 }
@@ -446,7 +446,7 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
       total: r.total,
       done: r.done,
       error: r.error,
-      estCost: +(r.total * EST_PER_DOC_COST).toFixed(2),
+      estCost: +(r.total * EST_PER_DOC_COST).toFixed(4),
       createdAt: r.createdAt,
     })),
   }

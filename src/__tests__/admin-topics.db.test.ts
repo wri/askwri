@@ -375,15 +375,17 @@ d('topicsAdmin list/get (DB integration)', () => {
       [`__recls_test_${Date.now()}__`, `documents/__recls_test_${Date.now()}__.pdf`],
     )
     const docId = docRow.id
+    let runId: string
 
     try {
       const r1 = await enqueueReclassify('all')
+      runId = r1.runId
       expect(r1).toHaveProperty('enqueued')
       expect(r1).toHaveProperty('estCost')
       expect(r1).toHaveProperty('runId')
       expect(typeof r1.runId).toBe('string')
       expect(r1.enqueued).toBeGreaterThanOrEqual(1) // at least our ready doc
-      expect(r1.estCost).toBe(+(r1.enqueued * 0.0008).toFixed(2))
+      expect(r1.estCost).toBe(+(r1.enqueued * 0.0008).toFixed(4))
 
       // Second call: all ready docs already queued → 0 new
       const r2 = await enqueueReclassify('all')
@@ -392,8 +394,8 @@ d('topicsAdmin list/get (DB integration)', () => {
       // runId should be different (new run, even if nothing enqueued)
       expect(r2.runId).not.toBe(r1.runId)
     } finally {
-      // Cleanup: delete reclassify_jobs for this doc, then the doc
-      await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE document_id = $1`, [docId])
+      // Cleanup: delete ALL jobs from this run (may include other ready docs), then the doc
+      await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE run_id = $1`, [runId])
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     }
   })
@@ -420,7 +422,7 @@ d('topicsAdmin list/get (DB integration)', () => {
     try {
       const r = await enqueueReclassify({ tagId })
       expect(r.enqueued).toBe(1)
-      expect(r.estCost).toBe(+(1 * 0.0008).toFixed(2))
+      expect(r.estCost).toBe(+(1 * 0.0008).toFixed(4))
       expect(typeof r.runId).toBe('string')
 
       // Verify the job row exists with the right scope_tag_id
@@ -436,25 +438,44 @@ d('topicsAdmin list/get (DB integration)', () => {
     }
   })
 
-  it('reclassifyStatus returns counts and recent runs', async () => {
-    // We should have at least some reclassify_jobs from the previous test
-    const s = await reclassifyStatus()
-    expect(s).toHaveProperty('queued')
-    expect(s).toHaveProperty('running')
-    expect(s).toHaveProperty('done')
-    expect(s).toHaveProperty('error')
-    expect(s).toHaveProperty('recent')
-    expect(Array.isArray(s.recent)).toBe(true)
-    // Each recent entry should have the right shape
-    if (s.recent.length > 0) {
-      const r = s.recent[0]
-      expect(r).toHaveProperty('runId')
-      expect(r).toHaveProperty('scope')
-      expect(r).toHaveProperty('total')
-      expect(r).toHaveProperty('done')
-      expect(r).toHaveProperty('error')
-      expect(r).toHaveProperty('estCost')
-      expect(r).toHaveProperty('createdAt')
+  it('reclassifyStatus returns counts and recent runs with full shape', async () => {
+    // Seed a known job so recent[] is non-empty regardless of prior test cleanup
+    const [docRow] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'Status Test', 'ready') RETURNING id`,
+      [`__recls_status_${Date.now()}__`, `documents/__recls_status_${Date.now()}__.pdf`],
+    )
+    const docId = docRow.id
+    let runId: string
+
+    try {
+      const r = await enqueueReclassify('all')
+      runId = r.runId
+      expect(r.enqueued).toBeGreaterThanOrEqual(1)
+
+      const s = await reclassifyStatus()
+      expect(s).toHaveProperty('queued')
+      expect(s).toHaveProperty('running')
+      expect(s).toHaveProperty('done')
+      expect(s).toHaveProperty('error')
+      expect(s).toHaveProperty('recent')
+      expect(Array.isArray(s.recent)).toBe(true)
+
+      // Find our run in recent[] and assert the full shape (ungated)
+      const entry = s.recent.find((rr) => rr.runId === runId)
+      expect(entry).toBeDefined()
+      expect(entry!).toHaveProperty('scope')
+      expect(entry!.scope).toBe('all')
+      expect(entry!).toHaveProperty('total')
+      expect(entry!.total).toBeGreaterThanOrEqual(1)
+      expect(entry!).toHaveProperty('done')
+      expect(entry!).toHaveProperty('error')
+      expect(entry!).toHaveProperty('estCost')
+      expect(entry!.estCost).toBe(+(entry!.total * 0.0008).toFixed(4))
+      expect(entry!).toHaveProperty('createdAt')
+    } finally {
+      await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE run_id = $1`, [runId])
+      await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     }
   })
 })
