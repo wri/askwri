@@ -339,3 +339,115 @@ export async function mergeTags(
     return { ok: true as const, moved }
   })
 }
+
+// --- Task 5: reclassify enqueue + status + cost estimate ---
+
+export const EST_PER_DOC_COST = 0.0008 // gpt-5-mini per-doc classify (spec §5.5)
+
+/**
+ * Enqueue reclassify jobs for a full-corpus or scoped re-classify run.
+ * 'all' scope: documents with status='ready'.
+ * {tagId} scope: documents with document_tags where tag_id=tagId AND source='llm'.
+ * One shared run_id (crypto.randomUUID()) per enqueue so the status panel
+ * can group jobs into a run. Idempotent via the partial unique index
+ * reclassify_jobs_one_open_per_doc (ON CONFLICT DO NOTHING).
+ */
+export async function enqueueReclassify(
+  scope: 'all' | { tagId: string },
+): Promise<{ enqueued: number; estCost: number; runId: string }> {
+  let docIds: string[]
+  if (scope === 'all') {
+    docIds = (
+      await AppDataSource.query(`SELECT id FROM documents WHERE status = 'ready'`)
+    ).map((r: any) => r.id)
+  } else {
+    docIds = (
+      await AppDataSource.query(
+        `SELECT dt.document_id FROM document_tags dt WHERE dt.tag_id = $1 AND dt.source = 'llm'`,
+        [scope.tagId],
+      )
+    ).map((r: any) => r.document_id)
+  }
+
+  if (docIds.length === 0) {
+    return { enqueued: 0, estCost: 0, runId: crypto.randomUUID() }
+  }
+
+  const runId = crypto.randomUUID()
+  const scopeTagId = scope === 'all' ? null : scope.tagId
+  let enqueued = 0
+
+  for (const docId of docIds) {
+    const [row] = await AppDataSource.query(
+      `INSERT INTO reclassify_jobs (document_id, scope_tag_id, run_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
+       RETURNING id`,
+      [docId, scopeTagId, runId],
+    )
+    if (row) enqueued++
+  }
+
+  return {
+    enqueued,
+    estCost: +(enqueued * EST_PER_DOC_COST).toFixed(2),
+    runId,
+  }
+}
+
+export interface ReclassifyStatus {
+  queued: number
+  running: number
+  done: number
+  error: number
+  recent: {
+    runId: string
+    scope: 'all' | string
+    total: number
+    done: number
+    error: number
+    estCost: number
+    createdAt: string
+  }[]
+}
+
+/**
+ * Get aggregate status of reclassify jobs: counts by status + recent runs
+ * grouped by run_id (up to 20). Each recent entry has total/done/error
+ * counts and estCost = total * EST_PER_DOC_COST.
+ */
+export async function reclassifyStatus(): Promise<ReclassifyStatus> {
+  const counts: any[] = await AppDataSource.query(
+    `SELECT status, count(*)::int AS c FROM reclassify_jobs GROUP BY status`,
+  )
+  const byStatus = Object.fromEntries(counts.map((r) => [r.status, r.c]))
+
+  const recent: any[] = await AppDataSource.query(
+    `SELECT run_id AS "runId",
+            scope_tag_id AS "scopeTagId",
+            count(*)::int AS total,
+            count(*) FILTER (WHERE status = 'done')::int AS done,
+            count(*) FILTER (WHERE status = 'error')::int AS error,
+            min(created_at) AS "createdAt"
+     FROM reclassify_jobs
+     GROUP BY run_id, scope_tag_id
+     ORDER BY min(created_at) DESC
+     LIMIT 20`,
+  )
+
+  return {
+    queued: byStatus.queued ?? 0,
+    running: byStatus.running ?? 0,
+    done: byStatus.done ?? 0,
+    error: byStatus.error ?? 0,
+    recent: recent.map((r) => ({
+      runId: r.runId,
+      scope: r.scopeTagId ?? 'all',
+      total: r.total,
+      done: r.done,
+      error: r.error,
+      estCost: +(r.total * EST_PER_DOC_COST).toFixed(2),
+      createdAt: r.createdAt,
+    })),
+  }
+}

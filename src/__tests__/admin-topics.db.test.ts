@@ -7,6 +7,8 @@ import {
   updateTopic,
   deleteTopicIfUnused,
   mergeTags,
+  enqueueReclassify,
+  reclassifyStatus,
 } from '@/db/queries/topicsAdmin'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
@@ -361,5 +363,98 @@ d('topicsAdmin list/get (DB integration)', () => {
     const fake = '00000000-0000-4000-8000-000000000000'
     const res = await mergeTags(rootId, fake, adminIdentity)
     expect(res).toEqual({ error: 'tag not found' })
+  })
+
+  // --- Task 5: enqueueReclassify + reclassifyStatus ---
+
+  it('enqueueReclassify("all") returns {enqueued, estCost, runId} and is idempotent', async () => {
+    // Create a temporary doc with status='ready' so enqueueReclassify picks it up
+    const [docRow] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'Reclassify Test', 'ready') RETURNING id`,
+      [`__recls_test_${Date.now()}__`, `documents/__recls_test_${Date.now()}__.pdf`],
+    )
+    const docId = docRow.id
+
+    try {
+      const r1 = await enqueueReclassify('all')
+      expect(r1).toHaveProperty('enqueued')
+      expect(r1).toHaveProperty('estCost')
+      expect(r1).toHaveProperty('runId')
+      expect(typeof r1.runId).toBe('string')
+      expect(r1.enqueued).toBeGreaterThanOrEqual(1) // at least our ready doc
+      expect(r1.estCost).toBe(+(r1.enqueued * 0.0008).toFixed(2))
+
+      // Second call: all ready docs already queued → 0 new
+      const r2 = await enqueueReclassify('all')
+      expect(r2.enqueued).toBe(0)
+      expect(r2.estCost).toBe(0)
+      // runId should be different (new run, even if nothing enqueued)
+      expect(r2.runId).not.toBe(r1.runId)
+    } finally {
+      // Cleanup: delete reclassify_jobs for this doc, then the doc
+      await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE document_id = $1`, [docId])
+      await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
+    }
+  })
+
+  it('enqueueReclassify scoped to a tagId enqueues docs tagged with that tag (source=llm)', async () => {
+    // Create a temp topic tag + temp doc + document_tag(source='llm')
+    const [tagRow] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__recls_tag_${Date.now()}__`],
+    )
+    const tagId = tagRow.id
+    ids.push(tagId)
+    const [docRow] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'Scoped Reclassify Test', 'needs_review') RETURNING id`,
+      [`__recls_scoped_${Date.now()}__`, `documents/__recls_scoped_${Date.now()}__.pdf`],
+    )
+    const docId = docRow.id
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
+      [docId, tagId],
+    )
+
+    try {
+      const r = await enqueueReclassify({ tagId })
+      expect(r.enqueued).toBe(1)
+      expect(r.estCost).toBe(+(1 * 0.0008).toFixed(2))
+      expect(typeof r.runId).toBe('string')
+
+      // Verify the job row exists with the right scope_tag_id
+      const [job] = await AppDataSource.query(
+        `SELECT scope_tag_id, run_id FROM reclassify_jobs WHERE document_id = $1`, [docId],
+      )
+      expect(job.scope_tag_id).toBe(tagId)
+      expect(job.run_id).toBe(r.runId)
+    } finally {
+      await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE document_id = $1`, [docId])
+      await AppDataSource.query(`DELETE FROM document_tags WHERE document_id = $1`, [docId])
+      await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
+    }
+  })
+
+  it('reclassifyStatus returns counts and recent runs', async () => {
+    // We should have at least some reclassify_jobs from the previous test
+    const s = await reclassifyStatus()
+    expect(s).toHaveProperty('queued')
+    expect(s).toHaveProperty('running')
+    expect(s).toHaveProperty('done')
+    expect(s).toHaveProperty('error')
+    expect(s).toHaveProperty('recent')
+    expect(Array.isArray(s.recent)).toBe(true)
+    // Each recent entry should have the right shape
+    if (s.recent.length > 0) {
+      const r = s.recent[0]
+      expect(r).toHaveProperty('runId')
+      expect(r).toHaveProperty('scope')
+      expect(r).toHaveProperty('total')
+      expect(r).toHaveProperty('done')
+      expect(r).toHaveProperty('error')
+      expect(r).toHaveProperty('estCost')
+      expect(r).toHaveProperty('createdAt')
+    }
   })
 })
