@@ -274,6 +274,7 @@ describe('TopicTaxonomyManager (jsdom)', () => {
         patchBody = JSON.parse(init.body)
         return Promise.resolve({
           ok: true,
+          status: 200,
           json: () => Promise.resolve({ ok: true, tag: { ...mockTags[0], valueId: 'Coal Updated' } }),
         }) as any
       }
@@ -322,6 +323,7 @@ describe('TopicTaxonomyManager (jsdom)', () => {
       if (url.startsWith('/api/admin/topics/t1') && init?.method === 'PATCH') {
         return Promise.resolve({
           ok: false,
+          status: 409,
           json: () => Promise.resolve({ ok: false, error: 'cycle' }),
         }) as any
       }
@@ -348,10 +350,57 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     // Click Save (will trigger a cycle error)
     fireEvent.click(screen.getByText('Save'))
 
-    // Should show inline cycle error on parent field
+    // Should show inline cycle error on parent field (not top-of-drawer)
     await waitFor(() => {
       expect(screen.getByText(/cycle/i)).toBeTruthy()
     })
+  })
+
+  it('shows top-of-drawer error for non-cycle failure (500)', async () => {
+    global.fetch = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url.startsWith('/api/admin/topics/t1') && init?.method === 'PATCH') {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ ok: false, error: 'Internal server error' }),
+        }) as any
+      }
+      if (url.startsWith('/api/admin/topics/t1') && init?.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tag: mockTags[0] }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    // Open drawer
+    fireEvent.click(screen.getByText('Coal'))
+    await waitFor(() => expect(screen.getByDisplayValue('Coal')).toBeTruthy())
+
+    // Click Save (will trigger a 500 error)
+    fireEvent.click(screen.getByText('Save'))
+
+    // Should show error at top of drawer, NOT on parent field
+    await waitFor(() => {
+      expect(screen.getByText('Internal server error')).toBeTruthy()
+    })
+    // Parent field should NOT have an error
+    const parentSection = screen.getByText('Parent topic')
+    expect(parentSection.parentElement?.querySelector('[style*="C11101"]')).toBeNull()
   })
 
   it('shows history tab with audit entries', async () => {

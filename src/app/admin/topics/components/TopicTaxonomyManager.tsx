@@ -533,6 +533,7 @@ const EditDrawer = ({
   const [parentTagId, setParentTagId] = useState<string>(tag.parentTagId ?? '')
   const [saving, setSaving] = useState(false)
   const [parentError, setParentError] = useState<string | null>(null)
+  const [drawerError, setDrawerError] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
@@ -570,9 +571,11 @@ const EditDrawer = ({
   const handleSave = async () => {
     setSaving(true)
     setParentError(null)
+    setDrawerError(null)
     try {
-      await adminFetch(`/api/admin/topics/${tag.id}`, {
+      const res = await fetch(`/api/admin/topics/${tag.id}`, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           valueId: label !== tag.valueId ? label : undefined,
           description: description || null,
@@ -580,14 +583,23 @@ const EditDrawer = ({
           parentTagId: parentTagId || null,
         }),
       })
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const body = await res.json().catch(() => ({}))
+      if (res.status === 409 && body.error === 'cycle') {
+        setParentError('Would create a cycle')
+        return
+      }
+      if (!res.ok) {
+        setDrawerError(body.error || 'Save failed')
+        return
+      }
       onSaved()
       onClose()
     } catch (err: any) {
-      if (err.message === 'cycle') {
-        setParentError('Would create a cycle')
-      } else {
-        setParentError(err.message)
-      }
+      setDrawerError(err.message || 'Network error')
     } finally {
       setSaving(false)
     }
@@ -649,6 +661,21 @@ const EditDrawer = ({
             ✕
           </Box>
         </Box>
+
+        {/* Top-of-drawer error (non-cycle errors) */}
+        {drawerError && (
+          <Box style={{
+            fontSize: 11,
+            color: '#C11101',
+            background: '#fff0f0',
+            border: '1px solid #f0b4b4',
+            borderRadius: 7,
+            padding: '6px 10px',
+            marginBottom: 12,
+          }}>
+            {drawerError}
+          </Box>
+        )}
 
         {/* Tabs */}
         <Box style={{ display: 'flex', gap: 14, borderBottom: '1px solid #e2e8f0', marginBottom: 12 }}>
@@ -733,7 +760,7 @@ const EditDrawer = ({
               <label style={fieldLabel}>Parent topic</label>
               <select
                 value={parentTagId}
-                onChange={(e) => { setParentTagId(e.target.value); setParentError(null) }}
+                onChange={(e) => { setParentTagId(e.target.value); setParentError(null); setDrawerError(null) }}
                 style={inputStyle}
               >
                 <option value=''>(root)</option>
