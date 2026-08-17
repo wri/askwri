@@ -278,3 +278,179 @@ class TestProcessOneReclassify:
 
         result = reclassify_mod.process_one_reclassify()
         assert result is False, "should return False when no jobs to process"
+
+
+# ---------------------------------------------------------------------------
+# Task 12: worker/main.py poll-loop ordering + embed sweep tick
+# ---------------------------------------------------------------------------
+
+class TestPollLoopOrdering:
+    """run_tick polls reclassify_jobs BEFORE ingestion_jobs when
+    reclassify_poll_first=True."""
+
+    def test_reclassify_polled_before_ingest(self, clean_db, monkeypatch):
+        """With reclassify_poll_first=True, a queued reclassify job is processed
+        BEFORE any ingest job. Asserts via call-order recording."""
+        import worker.main as main_mod
+
+        call_order: list[str] = []
+
+        def fake_reclassify():
+            call_order.append("reclassify")
+            return True  # did work → tick returns early
+
+        def fake_intake_sweep():
+            call_order.append("intake")
+            return False
+
+        def fake_process_one_job():
+            call_order.append("ingest_job")
+            return False
+
+        monkeypatch.setattr(main_mod, "process_one_reclassify", fake_reclassify)
+        monkeypatch.setattr(main_mod.intake_s3, "sweep", fake_intake_sweep)
+        monkeypatch.setattr(main_mod, "process_one_job", fake_process_one_job)
+
+        # reclassify_poll_first defaults True in config, but set explicitly
+        monkeypatch.setattr(main_mod.get_settings(), "reclassify_poll_first", True)
+
+        result = main_mod.run_tick()
+        assert result is True, "run_tick should return True when reclassify did work"
+        assert call_order[0] == "reclassify", (
+            f"reclassify must be polled first, got {call_order}"
+        )
+        assert "ingest_job" not in call_order, (
+            "ingest job should not be polled when reclassify did work (early return)"
+        )
+
+    def test_ingest_polled_when_reclassify_empty(self, clean_db, monkeypatch):
+        """When reclassify_poll_first=True but no reclassify jobs, the tick
+        falls through to intake + ingest."""
+        import worker.main as main_mod
+
+        call_order: list[str] = []
+
+        def fake_reclassify():
+            call_order.append("reclassify")
+            return False  # no work
+
+        def fake_intake_sweep():
+            call_order.append("intake")
+            return False
+
+        def fake_process_one_job():
+            call_order.append("ingest_job")
+            return False
+
+        monkeypatch.setattr(main_mod, "process_one_reclassify", fake_reclassify)
+        monkeypatch.setattr(main_mod.intake_s3, "sweep", fake_intake_sweep)
+        monkeypatch.setattr(main_mod, "process_one_job", fake_process_one_job)
+        monkeypatch.setattr(main_mod.get_settings(), "reclassify_poll_first", True)
+
+        result = main_mod.run_tick()
+        assert result is False
+        assert call_order == ["reclassify", "intake", "ingest_job"]
+
+    def test_reclassify_skipped_when_poll_first_false(self, clean_db, monkeypatch):
+        """When reclassify_poll_first=False, reclassify is NOT polled."""
+        import worker.main as main_mod
+
+        call_order: list[str] = []
+
+        def fake_reclassify():
+            call_order.append("reclassify")
+            return True
+
+        def fake_intake_sweep():
+            call_order.append("intake")
+            return False
+
+        def fake_process_one_job():
+            call_order.append("ingest_job")
+            return False
+
+        monkeypatch.setattr(main_mod, "process_one_reclassify", fake_reclassify)
+        monkeypatch.setattr(main_mod.intake_s3, "sweep", fake_intake_sweep)
+        monkeypatch.setattr(main_mod, "process_one_job", fake_process_one_job)
+        monkeypatch.setattr(main_mod.get_settings(), "reclassify_poll_first", False)
+
+        result = main_mod.run_tick()
+        assert result is False
+        assert "reclassify" not in call_order, (
+            "reclassify should not be polled when reclassify_poll_first=False"
+        )
+
+
+class TestEmbedSweepTick:
+    """The embed sweep tick runs sweep_pending + build_all_embeddings each tick,
+    clearing needs_reembed flags and creating tag_embeddings rows."""
+
+    def test_sweep_clears_needs_reembed_and_creates_embedding(self, clean_db, monkeypatch):
+        """A topic tag with needs_reembed=true gets embedded (embed_one stubbed),
+        flag cleared, and a tag_embeddings row created."""
+        import worker.main as main_mod
+
+        # Stub embed_one to avoid a real Bedrock call
+        monkeypatch.setattr(
+            "worker.stages.embed_tags.embed_one",
+            lambda text: [0.1] * 1536,
+        )
+
+        with psycopg.connect(clean_db) as conn:
+            # Insert a topic tag with needs_reembed=true
+            row = conn.execute(
+                """INSERT INTO tags (facet, value_id, taxonomy_version, needs_reembed)
+                   VALUES ('topic', '__sweep_test__', 'v1', true)
+                   RETURNING id""",
+            ).fetchone()
+            tag_id = row[0]
+            conn.commit()
+
+        # Run the embed sweep tick directly
+        main_mod._embed_sweep_tick()
+
+        with psycopg.connect(clean_db) as conn:
+            tag_row = conn.execute(
+                "SELECT needs_reembed FROM tags WHERE id = %s", (tag_id,)
+            ).fetchone()
+            assert tag_row[0] is False, (
+                f"needs_reembed should be cleared after sweep, got {tag_row[0]}"
+            )
+
+            emb_row = conn.execute(
+                """SELECT embedding_model, dimension FROM tag_embeddings
+                   WHERE tag_id = %s""",
+                (tag_id,),
+            ).fetchone()
+            assert emb_row is not None, "tag_embeddings row should be created"
+            assert emb_row[0] == "cohere-embed-v4"
+            assert emb_row[1] == 1536
+
+    def test_sweep_failure_does_not_abort_tick(self, clean_db, monkeypatch):
+        """If embed_one (Bedrock) fails, the sweep logs + continues; the tick
+        still completes (returns to the caller, does not raise)."""
+        import worker.main as main_mod
+
+        def boom(text):
+            raise RuntimeError("Bedrock unavailable")
+
+        monkeypatch.setattr("worker.stages.embed_tags.embed_one", boom)
+
+        with psycopg.connect(clean_db) as conn:
+            conn.execute(
+                """INSERT INTO tags (facet, value_id, taxonomy_version, needs_reembed)
+                   VALUES ('topic', '__sweep_fail__', 'v1', true)""",
+            )
+            conn.commit()
+
+        # Must not raise
+        main_mod._embed_sweep_tick()
+
+        # Tag still has needs_reembed=true (sweep failed, flag NOT cleared)
+        with psycopg.connect(clean_db) as conn:
+            row = conn.execute(
+                "SELECT needs_reembed FROM tags WHERE value_id = '__sweep_fail__'"
+            ).fetchone()
+            assert row[0] is True, (
+                "needs_reembed should remain true when Bedrock fails"
+            )

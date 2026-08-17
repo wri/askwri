@@ -16,6 +16,8 @@ from app.config import get_settings  # noqa: E402
 from app.db import get_pool  # noqa: E402
 from worker import intake_s3, queue  # noqa: E402
 from worker.stages import STAGE_ORDER, fetch_document, run_stage  # noqa: E402
+from worker.stages.reclassify import process_one_reclassify  # noqa: E402
+from worker.stages.embed_tags import sweep_pending, build_all_embeddings  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("worker")
@@ -55,6 +57,58 @@ def process_one_job() -> bool:
     return True
 
 
+def _embed_sweep_tick() -> None:
+    """Run the tag-embed sweep: sweep_pending + build_all_embeddings.
+
+    Spec §5.3 mandates this standalone tick so needs_reembed=true flags set
+    by the admin "Rebuild embeddings" route actually get built without
+    requiring a classify run. Wrapped so a Bedrock failure logs + continues —
+    never aborts the poll loop.
+    """
+    try:
+        with get_pool().connection() as conn:
+            sweep_pending(conn)
+            build_all_embeddings(conn)
+    except Exception:  # noqa: BLE001
+        logger.exception("embed sweep tick failed — continuing poll loop")
+
+
+def run_tick() -> bool:
+    """Process one poll-cycle tick. Returns True if reclassify work was done
+    (early return), False if we fell through to intake + ingest.
+
+    Order each tick:
+    1. If reclassify_poll_first: process_one_reclassify() (return early if work done)
+    2. Embed sweep tick (sweep_pending + build_all_embeddings, wrapped try/except)
+    3. Reap stale jobs + intake_s3 sweep + process_one_job (existing poll loop)
+    """
+    settings = get_settings()
+
+    # (1) Reclassify-first poll
+    if settings.reclassify_poll_first:
+        if process_one_reclassify():
+            return True
+
+    # (2) Embed sweep tick (standalone, per spec §5.3)
+    _embed_sweep_tick()
+
+    # (3) Existing intake + job poll
+    try:
+        with get_pool().connection() as conn:
+            reclaimed = queue.reap_stale_jobs(conn, settings.worker_reap_minutes)
+        if reclaimed:
+            logger.warning(f"reaped stale running jobs back to queued: {reclaimed}")
+    except Exception:  # noqa: BLE001
+        logger.exception("reap_stale_jobs failed — continuing poll loop")
+    try:
+        swept = intake_s3.sweep()
+    except Exception:  # noqa: BLE001
+        logger.exception("intake sweep failed — continuing poll loop")
+        swept = False
+    worked = process_one_job()
+    return swept or worked
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true")
@@ -62,25 +116,10 @@ def main() -> None:
     settings = get_settings()
     logger.info("Ingestion worker started")
     while True:
-        # Reap and sweep are each guarded: one poison object or transient DB
-        # error must cost a log line per poll, not an ECS crash-loop that
-        # blocks all ingestion.
-        try:
-            with get_pool().connection() as conn:
-                reclaimed = queue.reap_stale_jobs(conn, settings.worker_reap_minutes)
-            if reclaimed:
-                logger.warning(f"reaped stale running jobs back to queued: {reclaimed}")
-        except Exception:  # noqa: BLE001
-            logger.exception("reap_stale_jobs failed — continuing poll loop")
-        try:
-            swept = intake_s3.sweep()
-        except Exception:  # noqa: BLE001
-            logger.exception("intake sweep failed — continuing poll loop")
-            swept = False
-        worked = process_one_job()
+        worked = run_tick()
         if args.once:
             break
-        if not swept and not worked:
+        if not worked:
             time.sleep(settings.worker_poll_seconds)
 
 
