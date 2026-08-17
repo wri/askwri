@@ -2,6 +2,7 @@ import { AppDataSource } from '../data-source'
 import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
+import type { EntityManager } from 'typeorm'
 
 export interface TopicRow {
   id: string
@@ -464,6 +465,37 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
   }
 }
 
+/**
+ * Mark all topic tags lacking a tag_embeddings row for re-embedding. The worker's
+ * embed sweep (embed_tags.sweep_pending / build_all_embeddings) picks these up —
+ * the app never calls Bedrock. Returns the number of tags queued. Audited because
+ * it mutates tags.needs_reembed for potentially the whole topic tree.
+ */
+export async function rebuildTagEmbeddings(
+  identity?: AdminIdentity,
+): Promise<{ queued: number }> {
+  const rows: any[] = await AppDataSource.query(
+    `UPDATE tags
+     SET needs_reembed = true
+     WHERE facet = 'topic'
+       AND taxonomy_version = 'v1'
+       AND NOT EXISTS (
+         SELECT 1 FROM tag_embeddings te WHERE te.tag_id = tags.id
+       )
+     RETURNING id`,
+  )
+  if (identity) {
+    await writeAudit({
+      ...auditActor(identity),
+      action: 'tag_embeddings_rebuild',
+      entityType: 'tag',
+      entityId: null,
+      after: { queued: rows.length },
+    })
+  }
+  return { queued: rows.length }
+}
+
 // --- Task 6: CSV import (dry-run diff + atomic apply) + export ---
 
 export interface ParsedRow {
@@ -601,6 +633,33 @@ export async function importTopicsDiff(rows: ParsedRow[]): Promise<ImportDiff> {
 }
 
 /**
+ * Cycle guard for parent-set during CSV import. Setting childTagId.parent =
+ * parentTagId would create a cycle if childTagId is already an ancestor of
+ * parentTagId (i.e. parentTagId is a descendant of childTagId). Mirrors the
+ * ancestor-walk CTE used by updateTopic. Throws on cycle — the import route
+ * maps the throw to 409, and the surrounding transaction rolls back.
+ */
+async function assertNoParentCycle(
+  em: EntityManager,
+  parentId: string,
+  childId: string,
+): Promise<void> {
+  const [cycle] = await em.query(
+    `WITH RECURSIVE ancestors AS (
+       SELECT id, parent_tag_id FROM tags WHERE id = $1
+       UNION ALL
+       SELECT t.id, t.parent_tag_id FROM tags t
+       JOIN ancestors a ON t.id = a.parent_tag_id
+     )
+     SELECT 1 FROM ancestors WHERE id = $2`,
+    [parentId, childId],
+  )
+  if (cycle) {
+    throw new Error('import would create a cycle in the topic tree')
+  }
+}
+
+/**
  * Apply a CSV import atomically. Calls importTopicsDiff first; if any conflicts,
  * throws without touching the DB. Otherwise wraps all INSERT/UPDATE/alias
  * operations in a single transaction — all changes commit or none.
@@ -646,6 +705,7 @@ export async function applyTopicsImport(
       if (r.parent) {
         const parentId = labelToId.get(r.parent)
         if (parentId) {
+          await assertNoParentCycle(em, parentId, t.id)
           await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, t.id])
         }
       }
@@ -658,6 +718,7 @@ export async function applyTopicsImport(
         const parentId = labelToId.get(r.parent)
         const childId = labelToId.get(r.label)
         if (parentId && childId) {
+          await assertNoParentCycle(em, parentId, childId)
           await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, childId])
         }
       }
@@ -685,6 +746,7 @@ export async function applyTopicsImport(
       if (u.row.parent) {
         const parentId = labelToId.get(u.row.parent)
         if (parentId) {
+          await assertNoParentCycle(em, parentId, cur.id)
           await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, cur.id])
         }
       } else {

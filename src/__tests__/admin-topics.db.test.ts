@@ -13,6 +13,7 @@ import {
   importTopicsDiff,
   applyTopicsImport,
   exportTopicsCsv,
+  rebuildTagEmbeddings,
 } from '@/db/queries/topicsAdmin'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
@@ -566,5 +567,53 @@ d('topicsAdmin list/get (DB integration)', () => {
     // cleanup
     await AppDataSource.query(`DELETE FROM tag_aliases WHERE tag_id IN (SELECT id FROM tags WHERE value_id IN ($1, $2))`, [childLabel, parentLabel])
     await AppDataSource.query(`DELETE FROM tags WHERE value_id IN ($1, $2) AND facet = 'topic'`, [childLabel, parentLabel])
+  })
+
+  it('rebuildTagEmbeddings sets needs_reembed and writes a tag_embeddings_rebuild audit row', async () => {
+    // Fresh topic tag with needs_reembed=false and no embedding row → eligible for rebuild
+    const label = `__imp_rebuild_${Date.now()}__`
+    const [tagRow] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version, description, needs_reembed)
+       VALUES ('topic', $1, 'v1', 'rebuild test', false) RETURNING id`,
+      [label],
+    )
+    const tagId = tagRow.id
+    try {
+      const { queued } = await rebuildTagEmbeddings(adminIdentity)
+      expect(queued).toBeGreaterThanOrEqual(1)
+
+      // Our tag must now have needs_reembed=true
+      const [row] = await AppDataSource.query(
+        `SELECT needs_reembed FROM tags WHERE id = $1`, [tagId],
+      )
+      expect(row.needs_reembed).toBe(true)
+
+      // Audit row must exist for the rebuild (entityId is null — query by action)
+      const [audit] = await AppDataSource.query(
+        `SELECT action FROM audit_log WHERE action = 'tag_embeddings_rebuild' ORDER BY created_at DESC LIMIT 1`,
+      )
+      expect(audit).toBeDefined()
+      expect(audit.action).toBe('tag_embeddings_rebuild')
+    } finally {
+      await AppDataSource.query(`DELETE FROM audit_log WHERE action = 'tag_embeddings_rebuild'`)
+      await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tagId])
+    }
+  })
+
+  it('applyTopicsImport rejects a cyclic parent assignment (A→B, B→A) and rolls back', async () => {
+    const labelA = `__imp_cyc_a_${Date.now()}__`
+    const labelB = `__imp_cyc_b_${Date.now()}__`
+    const rows = [
+      { label: labelA, description: '', aliases: [], parent: labelB, facet: 'topic', id: '' },
+      { label: labelB, description: '', aliases: [], parent: labelA, facet: 'topic', id: '' },
+    ]
+    await expect(applyTopicsImport(rows, false)).rejects.toThrow(/cycle/i)
+
+    // Neither tag should exist (transaction rolled back)
+    const left: any[] = await AppDataSource.query(
+      `SELECT 1 FROM tags WHERE value_id IN ($1, $2) AND facet = 'topic'`,
+      [labelA, labelB],
+    )
+    expect(left.length).toBe(0)
   })
 })
