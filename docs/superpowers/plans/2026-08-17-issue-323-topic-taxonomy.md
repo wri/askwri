@@ -66,7 +66,7 @@
 
 **Interfaces:**
 - Consumes: existing `tags`/`document_tags`/`documents` tables (migration `1781280000000`).
-- Produces: `tags.parent_tag_id`/`description`/`needs_reembed`; tables `tag_aliases`, `tag_embeddings`, `reclassify_jobs`; entities `Tag` (extended), `TagAlias`, `ReclassifyJob`.
+- Produces: `tags.parent_tag_id`/`description`/`needs_reembed`; tables `tag_aliases`, `tag_embeddings`, `reclassify_jobs` (with `run_id` so a single enqueue's jobs group into one "run" for the status panel); entities `Tag` (extended), `TagAlias`, `ReclassifyJob`.
 
 - [ ] **Step 1: Write the failing schema test** — `src/__tests__/topic-taxonomy-schema.db.test.ts`:
 ```ts
@@ -97,7 +97,7 @@ d('topic taxonomy schema (DB integration)', () => {
 })
 ```
 - [ ] **Step 2: Run test — FAIL** — `npx jest src/__tests__/topic-taxonomy-schema.db.test.ts --runInBand`
-- [ ] **Step 3: Write the migration** — `src/db/migrations/1787160000000-TopicTaxonomy.ts` (full `up`/`down` per spec §4.1–4.4: `ALTER TABLE tags ADD parent_tag_id/description/needs_reembed` + 2 indexes; `CREATE TABLE tag_aliases` + index; `CREATE TABLE tag_embeddings` + HNSW index; `CREATE TABLE reclassify_jobs` + 2 indexes). Use the exact DDL in the spec.
+- [ ] **Step 3: Write the migration** — `src/db/migrations/1787160000000-TopicTaxonomy.ts` (full `up`/`down` per spec §4.1–4.4: `ALTER TABLE tags ADD parent_tag_id/description/needs_reembed` + 2 indexes; `CREATE TABLE tag_aliases` + index; `CREATE TABLE tag_embeddings` + HNSW index; `CREATE TABLE reclassify_jobs` + 2 indexes). **Add a `run_id uuid NOT NULL DEFAULT uuid_generate_v4()` column to `reclassify_jobs`** (not in spec §4.4 — added to support the status panel's per-run grouping; spec §6.4 shows `[full corpus — 203 docs — $0.17]` which requires grouping jobs by run). Also add `CREATE INDEX "idx_reclassify_jobs_run" ON "reclassify_jobs" ("run_id", "created_at")`.
 - [ ] **Step 4: Run migration** — `npm run migration:run`. If `data-source.ts` needs the class registered, add the import per the existing migration-array pattern (check `src/db/data-source.ts`).
 - [ ] **Step 5: Update `Tag.entity.ts`** — add `parentTagId` (`@Column('text',{name:'parent_tag_id',nullable:true})`), `description` (`@Column('text',{nullable:true})`), `needsReembed` (`@Column('boolean',{name:'needs_reembed',default:false})`).
 - [ ] **Step 6: Create `TagAlias.entity.ts`** — composite PK `tagId` (`@PrimaryColumn('uuid',{name:'tag_id'})`) + `alias` (`@PrimaryColumn('text')`) + `createdAt`.
@@ -145,11 +145,11 @@ d('topic taxonomy schema (DB integration)', () => {
 ### Task 5: reclassify enqueue + status + cost estimate
 
 **Files:** Modify `src/db/queries/topicsAdmin.ts`; append tests
-**Interfaces:** `enqueueReclassify(scope: 'all' | {tagId: string}): Promise<{enqueued:number; estCost:number}>` (idempotent via partial unique index); `reclassifyStatus(): Promise<{queued,running,done,error, recent[]}>`. `EST_PER_DOC_COST = 0.0008`.
+**Interfaces:** `enqueueReclassify(scope: 'all' | {tagId: string}): Promise<{enqueued:number; estCost:number; runId:string}>` (idempotent via partial unique index; one shared `run_id` per enqueue so the status panel can group jobs into a run); `reclassifyStatus(): Promise<{queued,running,done,error, recent: {runId, scope:'all'|string, total, done, error, estCost, createdAt}[]}>` — `recent` groups by `run_id` (count jobs, sum est cost via `EST_PER_DOC_COST`). `EST_PER_DOC_COST = 0.0008`.
 
 - [ ] **Step 1: Write failing tests (append)** — `enqueueReclassify('all')` returns `{enqueued, estCost}` and is idempotent (second call enqueues 0); `reclassifyStatus` returns `queued` + `recent` fields. (Cleanup: delete reclassify rows for the test docs in `afterAll`.)
 - [ ] **Step 2: Run — FAIL**
-- [ ] **Step 3: Implement** — `enqueueReclassify` (resolve docIds: all `status='ready'` docs, or docs with `document_tags` source='llm' for the scope tag; per-doc `INSERT ... ON CONFLICT (document_id) WHERE status IN ('queued','running') DO NOTHING`); `reclassifyStatus` (GROUP BY status + recent 20).
+- [ ] **Step 3: Implement** — `enqueueReclassify` (resolve docIds: all `status='ready'` docs, or docs with `document_tags` source='llm' for the scope tag; generate ONE `run_id = uuid()` for the whole enqueue; per-doc `INSERT ... ON CONFLICT (document_id) WHERE status IN ('queued','running') DO NOTHING` carrying that `run_id`); `reclassifyStatus` (GROUP BY status for counts; for `recent`, `SELECT run_id, scope_tag_id, count(*) AS total, count(*) FILTER (WHERE status='done') AS done, count(*) FILTER (WHERE status='error') AS error, min(created_at) AS created_at FROM reclassify_jobs GROUP BY run_id, scope_tag_id ORDER BY min(created_at) DESC LIMIT 20` and compute `estCost = total * EST_PER_DOC_COST`).
 - [ ] **Step 4: Run — PASS** (9 tests)
 - [ ] **Step 5: Commit** — `feat(queries): reclassify enqueue + status — issue #323`
 
@@ -169,7 +169,7 @@ d('topic taxonomy schema (DB integration)', () => {
 **Files:** Create the 8 route files under `src/app/api/admin/topics/`; Test `src/__tests__/admin-topics-routes.test.ts`
 **Interfaces:** Endpoints per spec §7.1. All use `requireIdentity`; writes require `identity.role==='admin'` (403).
 
-- [ ] **Step 1: Write failing route test** — `src/__tests__/admin-topics-routes.test.ts`: import `GET` from the topics route; assert `GET` returns <500 with a fake request (follow the auth-bypass/seed-token pattern from existing admin route tests; query behavior is covered by `admin-topics.db.test.ts`, so this is a wiring smoke).
+- [ ] **Step 1: Write failing route test** — `src/__tests__/admin-topics-routes.test.ts`: follow the DB-integration + real-session pattern in `src/__tests__/admin-auth-routes.test.ts` (set `SESSION_SECRET`/`ADMIN_API_TOKEN` in `beforeAll`, seed an admin user, log in to get a session cookie). Assert `GET /api/admin/topics` returns `200` with body `{ ok: true, tags: Array }` (assert `ok === true` and `Array.isArray(tags)` — not merely `status < 500`). Also assert `POST` with a non-admin session returns `403`. Query behavior itself is covered by `admin-topics.db.test.ts`.
 - [ ] **Step 2: Run — FAIL** — `npx jest src/__tests__/admin-topics-routes.test.ts --runInBand`
 - [ ] **Step 3: Implement routes** —
   - `route.ts`: GET → `listTopicsWithCounts`; POST → `createTopic` (409 on error, 403 non-admin).
@@ -212,7 +212,7 @@ d('topic taxonomy schema (DB integration)', () => {
 ### Task 10: classify.py rewrite (retrieve-then-classify)
 
 **Files:** Modify `search-service/worker/stages/classify.py`; Tests `search-service/tests/test_classify_topic.py` (new), `search-service/tests/test_worker_stages.py` (update)
-**Interfaces:** Same entrypoint `@stage("classify") def run(document_id)`. Internal `_classify_topic(conn, doc, basis, protected)` (embed basis → top-N candidates by cosine → one `chat_json` call, enum = candidate labels, top-5) + `_classify_other_facets(...)` (existing full-enum per non-topic facet). `ON CONFLICT DO NOTHING` on inserts; protected rows (`source IN ('human','external')`) never overwritten.
+**Interfaces:** Entrypoint `@stage("classify") def run(document_id, topic_only: bool = False)` — `topic_only` defaults False (preserves existing ingest callers); when True, skip non-topic facets (used by reclassify jobs). Internal `_classify_topic(conn, doc, basis, protected)` (embed basis → top-N candidates by cosine → one `chat_json` call, enum = candidate labels, top-5) + `_classify_other_facets(...)` (existing full-enum per non-topic facet). `ON CONFLICT DO NOTHING` on inserts; protected rows (`source IN ('human','external')`) never overwritten.
 
 - [ ] **Step 1: Write failing test** — `test_classify_topic.py`: fixture creates topic tags + embeddings + a doc with a known summary; monkeypatch `embed_one` (vector near expected) and `chat_json` (returns expected tag, confidence 0.8). Tests: picks top-5 → `status='accepted'`; does NOT overwrite a pre-existing `source='human'` row; empty `tag_embeddings` → topic facet skipped, no error.
 - [ ] **Step 2: Run — FAIL** — current `run` uses full-enum.
@@ -223,9 +223,9 @@ d('topic taxonomy schema (DB integration)', () => {
 ### Task 11: reclassify.py claim loop
 
 **Files:** Create `search-service/worker/stages/reclassify.py`; Test `search-service/tests/test_reclassify.py`
-**Interfaces:** `claim_job(conn): (id, document_id, scope_tag_id) | None` (`UPDATE ... SET status='running' WHERE id=(SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING`); `process_one_reclassify(): bool` (claim → `classify.run(document_id)` with `topic_only=True` → mark `done`; on error `attempts+=1` → requeue or `error`). `MAX_ATTEMPTS=2`.
+**Interfaces:** `claim_job(conn): (id, document_id, scope_tag_id) | None` (`UPDATE ... SET status='running' WHERE id=(SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING`); `process_one_reclassify(): bool` (claim → `classify.run(document_id, topic_only=True)` → mark `done`; on error `attempts+=1` → requeue or `error`). `MAX_ATTEMPTS=2`.
 
-- [ ] **Step 1: Write failing test** — `test_reclassify.py`: two calls to `claim_job` on a single queued row → only the first claims (second returns None); `process_one_reclassify` marks `done` on success (stub `classify.run`); on repeated failure reaches `status='error'`.
+- [ ] **Step 1: Write failing test** — `test_reclassify.py`: two calls to `claim_job` on a single queued row → only the first claims (second returns None); `process_one_reclassify` marks `done` on success (stub `classify.run(document_id, topic_only=True)`); on repeated failure reaches `status='error'`. Assert `classify.run` is called with `topic_only=True`.
 - [ ] **Step 2: Run — FAIL** — module not found.
 - [ ] **Step 3: Implement** — `reclassify.py`: `claim_job` (SKIP LOCKED), `process_one_reclassify` (claim, run `classify.run` with a thread/flag for `topic_only` — pass via a module-level setting or call the internal `_classify_topic` directly), mark done/error with attempts.
 - [ ] **Step 4: Run — PASS**
@@ -234,11 +234,11 @@ d('topic taxonomy schema (DB integration)', () => {
 ### Task 12: worker/main.py polls reclassify first
 
 **Files:** Modify `search-service/worker/main.py`; Test `search-service/tests/test_reclassify.py` (append)
-**Interfaces:** `main()` loop: if `settings.reclassify_poll_first`, call `process_one_reclassify()` before `process_one_job()` each tick.
+**Interfaces:** `main()` loop does, in order each tick: (1) if `settings.reclassify_poll_first`, call `process_one_reclassify()` first; (2) a tag-embed sweep tick — call `sweep_pending(conn)` then `build_all_embeddings(conn)` (both from Task 9's `embed_tags`) so `needs_reembed=true` flags set by the admin "Rebuild embeddings" route (Task 7) actually get built without requiring a classify run (spec §5.3 mandates this standalone tick); (3) the existing intake + `process_one_job()` poll.
 
-- [ ] **Step 1: Write failing test** — append: with `reclassify_poll_first=True` and a queued reclassify job + a queued ingest job, the first processed job is the reclassify one (assert via ordering stubs).
+- [ ] **Step 1: Write failing test** — append: with `reclassify_poll_first=True` and a queued reclassify job + a queued ingest job, the first processed job is the reclassify one (assert via ordering stubs); and a tick with a `needs_reembed=true` topic tag calls `sweep_pending`/`build_all_embeddings` (assert the tag's flag is cleared and a `tag_embeddings` row appears, with `embed_one` stubbed).
 - [ ] **Step 2: Run — FAIL**
-- [ ] **Step 3: Implement** — in `main()`/poll loop, add `if get_settings().reclassify_poll_first: if process_one_reclassify(): return` before the existing intake/job poll.
+- [ ] **Step 3: Implement** — in `main()`/poll loop, add `if get_settings().reclassify_poll_first: if process_one_reclassify(): return` before the existing intake/job poll; then add the embed sweep tick: `with get_pool().connection() as conn: sweep_pending(conn); build_all_embeddings(conn)` (wrap so a Bedrock failure logs + continues, never aborts the poll loop). Import `sweep_pending`, `build_all_embeddings` from `worker.stages.embed_tags`.
 - [ ] **Step 4: Run — PASS** — `./venv/bin/python -m pytest tests/test_reclassify.py -v`
 - [ ] **Step 5: Commit** — `feat(worker): poll reclassify before ingestion — issue #323`
 
