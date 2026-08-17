@@ -8,6 +8,7 @@ const d = hasDb ? describe : describe.skip
 d('topicsAdmin list/get (DB integration)', () => {
   let rootId: string
   let childId: string
+  let nonTopicId: string
   const ids: string[] = []
 
   beforeAll(async () => {
@@ -34,6 +35,14 @@ d('topicsAdmin list/get (DB integration)', () => {
     )
     childId = childRow.id
     ids.push(childId)
+
+    // Create a non-topic tag (facet='program') to verify getTopic is topic-scoped
+    const [nonTopicRow] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('program', '__test_program__', 'v1') RETURNING id`,
+    )
+    nonTopicId = nonTopicRow.id
+    ids.push(nonTopicId)
   })
 
   afterAll(async () => {
@@ -93,6 +102,11 @@ d('topicsAdmin list/get (DB integration)', () => {
 
   it('getTopic returns null for a non-existent id', async () => {
     const t = await getTopic('00000000-0000-4000-8000-000000000000')
+    expect(t).toBeNull()
+  })
+
+  it('getTopic returns null for a non-topic facet tag (topic-scoped filter)', async () => {
+    const t = await getTopic(nonTopicId)
     expect(t).toBeNull()
   })
 })

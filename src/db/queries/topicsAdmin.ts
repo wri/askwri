@@ -1,7 +1,4 @@
 import { AppDataSource } from '../data-source'
-import { writeAudit } from './audit'
-import type { AdminIdentity } from '../../lib/auth/identity'
-import { auditActor } from '../../lib/auth/identity'
 
 export interface TopicRow {
   id: string
@@ -15,7 +12,7 @@ export interface TopicRow {
   suggestedCount: number
 }
 
-export interface TopicDetail extends TopicRow {}
+export type TopicDetail = TopicRow
 
 /**
  * List all topic-facet tags with document counts and aliases.
@@ -56,7 +53,7 @@ export async function getTopic(id: string): Promise<TopicDetail | null> {
             count(*) FILTER (WHERE dt.status = 'suggested')::int AS "suggestedCount"
      FROM tags t
      LEFT JOIN document_tags dt ON dt.tag_id = t.id
-     WHERE t.id = $1
+     WHERE t.id = $1 AND t.facet = 'topic' AND t.taxonomy_version = 'v1'
      GROUP BY t.id`,
     [id],
   )
