@@ -73,6 +73,10 @@ export const TopicTaxonomyManager = () => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const ioRef = useRef<IntersectionObserver | null>(null)
 
+  // ---- edit drawer state ----
+  const [editingTag, setEditingTag] = useState<TopicRow | null>(null)
+  const [flash, setFlash] = useState<string | null>(null)
+
   // ---- load ----
   const load = useCallback(async () => {
     setLoading(true)
@@ -281,6 +285,22 @@ export const TopicTaxonomyManager = () => {
         </Box>
       )}
 
+      {/* Flash notice */}
+      {flash && (
+        <Box
+          style={{
+            padding: '8px 12px',
+            marginBottom: 10,
+            color: '#2f855a',
+            background: '#f0fff4',
+            border: '1px solid #c6f6d5',
+            borderRadius: 6,
+          }}
+        >
+          {flash}
+        </Box>
+      )}
+
       {/* List */}
       {loading ? (
         <Text style={{ color: '#595959' }}>Loading…</Text>
@@ -354,7 +374,7 @@ export const TopicTaxonomyManager = () => {
                   </Box>
                 )}
                 {/* Label + sub-text */}
-                <Box style={{ flex: 1, minWidth: 0 }}>
+                <Box style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setEditingTag(tag)}>
                   <Box
                     as='span'
                     style={{
@@ -419,6 +439,20 @@ export const TopicTaxonomyManager = () => {
       >
         {displayList.length} tags{hasMore ? `, showing ${visibleTags.length}` : ''}
       </Text>
+
+      {/* Edit drawer */}
+      {editingTag && (
+        <EditDrawer
+          tag={editingTag}
+          allTags={tags}
+          onClose={() => setEditingTag(null)}
+          onSaved={() => {
+            setFlash('Topic saved.')
+            setTimeout(() => setFlash(null), 3000)
+            load()
+          }}
+        />
+      )}
     </Box>
   )
 }
@@ -468,3 +502,302 @@ const ViewToggle = ({
     {label}
   </Box>
 )
+
+// ---- Edit Drawer ----
+
+interface HistoryEntry {
+  at: string
+  action: string
+  source: string
+  actor: string
+  before: Record<string, any> | null
+  after: Record<string, any> | null
+}
+
+const EditDrawer = ({
+  tag,
+  allTags,
+  onClose,
+  onSaved,
+}: {
+  tag: TopicRow
+  allTags: TopicRow[]
+  onClose: () => void
+  onSaved: () => void
+}) => {
+  const [tab, setTab] = useState<'edit' | 'history' | 'docs'>('edit')
+  const [label, setLabel] = useState(tag.valueId)
+  const [description, setDescription] = useState(tag.description ?? '')
+  const [aliases, setAliases] = useState<string[]>(tag.aliases)
+  const [aliasInput, setAliasInput] = useState('')
+  const [parentTagId, setParentTagId] = useState<string>(tag.parentTagId ?? '')
+  const [saving, setSaving] = useState(false)
+  const [parentError, setParentError] = useState<string | null>(null)
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Parent options: all topic tags except self
+  const parentOptions = useMemo(
+    () => allTags.filter((t) => t.id !== tag.id),
+    [allTags, tag.id],
+  )
+
+  // Load history when History tab is clicked
+  useEffect(() => {
+    if (tab !== 'history' || history.length > 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHistoryLoading(true)
+    fetch(`/api/admin/topics/${tag.id}/history`)
+      .then((r) => (r.ok ? r.json() : { entries: [] }))
+      .then((body) => setHistory(body.entries ?? []))
+      .catch(() => setHistory([]))
+      .finally(() => setHistoryLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
+  const addAlias = () => {
+    const trimmed = aliasInput.trim()
+    if (trimmed && !aliases.includes(trimmed)) {
+      setAliases([...aliases, trimmed])
+    }
+    setAliasInput('')
+  }
+
+  const removeAlias = (alias: string) => {
+    setAliases(aliases.filter((a) => a !== alias))
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setParentError(null)
+    try {
+      await adminFetch(`/api/admin/topics/${tag.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          valueId: label !== tag.valueId ? label : undefined,
+          description: description || null,
+          aliases,
+          parentTagId: parentTagId || null,
+        }),
+      })
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      if (err.message === 'cycle') {
+        setParentError('Would create a cycle')
+      } else {
+        setParentError(err.message)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const fieldLabel: React.CSSProperties = {
+    display: 'block',
+    fontSize: 10,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.05em',
+    color: '#595959',
+    marginBottom: 3,
+  }
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    border: '1px solid #e2e8f0',
+    borderRadius: 6,
+    padding: '5px 8px',
+    fontSize: 12,
+    fontFamily: 'inherit',
+    color: '#2d3748',
+  }
+
+  return (
+    <>
+      {/* Overlay */}
+      <Box
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(26,54,93,0.35)',
+          zIndex: 100,
+        }}
+      />
+      {/* Drawer */}
+      <Box
+        style={{
+          position: 'fixed',
+          right: 0,
+          top: 0,
+          height: '100vh',
+          width: 380,
+          background: '#fff',
+          borderLeft: '1px solid #e2e8f0',
+          boxShadow: '-12px 0 40px rgba(26,54,93,0.15)',
+          zIndex: 101,
+          overflowY: 'auto',
+          padding: 16,
+        }}
+      >
+        {/* Header */}
+        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Heading size='sm' style={{ color: '#1a365d' }}>Edit topic</Heading>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+            ✕
+          </Box>
+        </Box>
+
+        {/* Tabs */}
+        <Box style={{ display: 'flex', gap: 14, borderBottom: '1px solid #e2e8f0', marginBottom: 12 }}>
+          {(['edit', 'history', 'docs'] as const).map((t) => (
+            <Box
+              key={t}
+              as='button'
+              onClick={() => setTab(t)}
+              style={{
+                font: 'inherit',
+                fontSize: 12,
+                padding: '5px 2px',
+                border: 'none',
+                borderBottom: tab === t ? '2px solid #1a365d' : '2px solid transparent',
+                color: tab === t ? '#1a365d' : '#595959',
+                fontWeight: tab === t ? 700 : 400,
+                cursor: 'pointer',
+                background: 'transparent',
+                textTransform: 'capitalize' as const,
+              }}
+            >
+              {t === 'docs' ? `Docs (${tag.acceptedCount})` : t === 'history' ? 'History' : 'Edit'}
+            </Box>
+          ))}
+        </Box>
+
+        {/* Edit tab */}
+        {tab === 'edit' && (
+          <Box>
+            <Box style={{ marginBottom: 9 }}>
+              <label style={fieldLabel}>Label</label>
+              <input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                style={inputStyle}
+              />
+            </Box>
+            <Box style={{ marginBottom: 9 }}>
+              <label style={fieldLabel}>Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                style={{ ...inputStyle, minHeight: 50, resize: 'vertical' as const }}
+              />
+            </Box>
+            <Box style={{ marginBottom: 9 }}>
+              <label style={fieldLabel}>Aliases</label>
+              <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                {aliases.map((a) => (
+                  <Box key={a} style={{
+                    fontSize: 11,
+                    background: '#ebf4ff',
+                    color: '#1a365d',
+                    border: '1px solid #c3dafe',
+                    borderRadius: 999,
+                    padding: '2px 8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}>
+                    {a}
+                    <Box as='button' onClick={() => removeAlias(a)} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11 }}>
+                      ✕
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+              <Box style={{ display: 'flex', gap: 4 }}>
+                <input
+                  value={aliasInput}
+                  onChange={(e) => setAliasInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAlias() } }}
+                  placeholder='Add alias…'
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <Box as='button' onClick={addAlias} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                  Add
+                </Box>
+              </Box>
+            </Box>
+            <Box style={{ marginBottom: 9 }}>
+              <label style={fieldLabel}>Parent topic</label>
+              <select
+                value={parentTagId}
+                onChange={(e) => { setParentTagId(e.target.value); setParentError(null) }}
+                style={inputStyle}
+              >
+                <option value=''>(root)</option>
+                {parentOptions.map((t) => (
+                  <option key={t.id} value={t.id}>{t.valueId}</option>
+                ))}
+              </select>
+              {parentError && (
+                <Box style={{ fontSize: 11, color: '#C11101', marginTop: 3 }}>
+                  {parentError}
+                </Box>
+              )}
+            </Box>
+            {/* Save / Cancel */}
+            <Box style={{ display: 'flex', gap: 7, justifyContent: 'flex-end', marginTop: 12 }}>
+              <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                Cancel
+              </Box>
+              <Box as='button' onClick={handleSave} disabled={saving} style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}>
+                {saving ? 'Saving…' : 'Save'}
+              </Box>
+            </Box>
+          </Box>
+        )}
+
+        {/* History tab */}
+        {tab === 'history' && (
+          <Box>
+            {historyLoading ? (
+              <Text style={{ color: '#595959', fontSize: 12 }}>Loading history…</Text>
+            ) : history.length === 0 ? (
+              <Text style={{ color: '#595959', fontSize: 12 }}>No history entries.</Text>
+            ) : (
+              history.map((entry, i) => (
+                <Box key={i} style={{ padding: '8px 0', borderBottom: '1px solid #edf2f7' }}>
+                  <Box style={{ fontSize: 12, fontWeight: 600, color: '#1a365d' }}>{entry.action}</Box>
+                  <Box style={{ fontSize: 11, color: '#595959' }}>
+                    {entry.actor} · {new Date(entry.at).toLocaleDateString()}
+                  </Box>
+                  {entry.before && (
+                    <Box style={{ fontSize: 11, color: '#718096', marginTop: 2 }}>
+                      before: {JSON.stringify(entry.before)}
+                    </Box>
+                  )}
+                  {entry.after && (
+                    <Box style={{ fontSize: 11, color: '#718096' }}>
+                      after: {JSON.stringify(entry.after)}
+                    </Box>
+                  )}
+                </Box>
+              ))
+            )}
+          </Box>
+        )}
+
+        {/* Docs tab */}
+        {tab === 'docs' && (
+          <Box>
+            <Text style={{ fontSize: 12, color: '#595959' }}>
+              {tag.acceptedCount} accepted · {tag.suggestedCount} suggested
+            </Text>
+          </Box>
+        )}
+      </Box>
+    </>
+  )
+}

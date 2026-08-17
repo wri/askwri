@@ -718,3 +718,30 @@ export async function exportTopicsCsv(): Promise<string> {
 
   return ['label,description,aliases,parent,facet,id', ...body].join('\n')
 }
+
+// --- Task 14: topic history (audit_log query) ---
+
+export interface TopicHistoryEntry {
+  at: string
+  action: string
+  source: string
+  actor: string
+  before: Record<string, any> | null
+  after: Record<string, any> | null
+}
+
+export async function getTopicHistory(
+  tagId: string,
+): Promise<TopicHistoryEntry[]> {
+  return AppDataSource.query(
+    `SELECT al.at, al.action, al.source,
+            COALESCE(u.username, al.source) AS actor,
+            al.before, al.after
+     FROM audit_log al
+     LEFT JOIN users u ON u.id = al.actor_user_id
+     WHERE al.entity_type = 'tag' AND al.entity_id = $1
+     ORDER BY al.at DESC, al.id DESC
+     LIMIT 20`,
+    [tagId],
+  )
+}

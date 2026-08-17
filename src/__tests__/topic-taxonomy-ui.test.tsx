@@ -234,4 +234,173 @@ describe('TopicTaxonomyManager (jsdom)', () => {
       expect(screen.getByText('Topic 200')).toBeTruthy()
     })
   })
+
+  // ---- Task 14: Edit drawer ----
+
+  it('opens edit drawer on row click with pre-filled fields', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Coal')).toBeTruthy()
+    })
+
+    // Click the Coal row label to open the drawer
+    fireEvent.click(screen.getByText('Coal'))
+
+    // Drawer should appear with pre-filled fields
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Coal')).toBeTruthy()
+      expect(screen.getByDisplayValue('Fossil fuel')).toBeTruthy()
+      expect(screen.getByText('Coal Industry')).toBeTruthy() // alias chip
+    })
+  })
+
+  it('saves edits via PATCH and shows success flash', async () => {
+    let patchUrl = ''
+    let patchBody: any = null
+    global.fetch = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url.startsWith('/api/admin/topics/t1') && init?.method === 'PATCH') {
+        patchUrl = url
+        patchBody = JSON.parse(init.body)
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tag: { ...mockTags[0], valueId: 'Coal Updated' } }),
+        }) as any
+      }
+      if (url.startsWith('/api/admin/topics/t1') && init?.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tag: mockTags[0] }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    // Open drawer
+    fireEvent.click(screen.getByText('Coal'))
+    await waitFor(() => expect(screen.getByDisplayValue('Coal')).toBeTruthy())
+
+    // Change label
+    const labelInput = screen.getByDisplayValue('Coal') as HTMLInputElement
+    fireEvent.change(labelInput, { target: { value: 'Coal Updated' } })
+
+    // Click Save
+    fireEvent.click(screen.getByText('Save'))
+
+    // Assert PATCH was called
+    await waitFor(() => {
+      expect(patchUrl).toBe('/api/admin/topics/t1')
+      expect(patchBody.valueId).toBe('Coal Updated')
+    })
+  })
+
+  it('shows inline parent error on cycle (409)', async () => {
+    global.fetch = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url.startsWith('/api/admin/topics/t1') && init?.method === 'PATCH') {
+        return Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({ ok: false, error: 'cycle' }),
+        }) as any
+      }
+      if (url.startsWith('/api/admin/topics/t1') && init?.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tag: mockTags[0] }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    // Open drawer
+    fireEvent.click(screen.getByText('Coal'))
+    await waitFor(() => expect(screen.getByDisplayValue('Coal')).toBeTruthy())
+
+    // Click Save (will trigger a cycle error)
+    fireEvent.click(screen.getByText('Save'))
+
+    // Should show inline cycle error on parent field
+    await waitFor(() => {
+      expect(screen.getByText(/cycle/i)).toBeTruthy()
+    })
+  })
+
+  it('shows history tab with audit entries', async () => {
+    global.fetch = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url.startsWith('/api/admin/topics/t1') && init?.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tag: mockTags[0] }),
+        }) as any
+      }
+      if (url.includes('/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ok: true,
+            entries: [
+              { at: '2026-01-01T00:00:00Z', action: 'tag_update', actor: 'admin', source: 'human', before: { valueId: 'Old' }, after: { valueId: 'Coal' } },
+              { at: '2025-12-01T00:00:00Z', action: 'tag_create', actor: 'admin', source: 'human', before: null, after: { valueId: 'Old' } },
+            ],
+          }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    // Open drawer
+    fireEvent.click(screen.getByText('Coal'))
+    await waitFor(() => expect(screen.getByDisplayValue('Coal')).toBeTruthy())
+
+    // Click History tab
+    fireEvent.click(screen.getByText('History'))
+
+    // Should show audit entries
+    await waitFor(() => {
+      expect(screen.getByText('tag_update')).toBeTruthy()
+      expect(screen.getByText('tag_create')).toBeTruthy()
+    })
+  })
 })
