@@ -225,6 +225,10 @@ export const TopicTaxonomyManager = () => {
       try {
         const res = await fetch(`/api/admin/topics/${tag.id}`, { method: 'DELETE' })
         const body = await res.json().catch(() => ({}))
+        if (res.status === 401) {
+          window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+          return
+        }
         if (res.ok) {
           deleted++
         } else {
@@ -1270,7 +1274,7 @@ const ReparentModal = ({
           </label>
           <select
             value={parentTagId}
-            onChange={(e) => setParentTagId(e.target.value)}
+            onChange={(e) => { setParentTagId(e.target.value); setErrors([]) }}
             style={inputStyle}
           >
             <option value=''>(root)</option>
