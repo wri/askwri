@@ -5,6 +5,8 @@ import { Box, Heading, Text } from '@chakra-ui/react'
 import { adminFetch } from '../lib/api'
 import { actionButton, dangerButton } from '../lib/buttonStyles'
 import { Flash } from '../components/Flash'
+import { TopicTaxonomyManager } from '../topics/components/TopicTaxonomyManager'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 interface Tag {
   id: string
@@ -23,6 +25,185 @@ const cell: React.CSSProperties = {
   borderBottom: '1px solid #eee',
 }
 
+/** Simple per-facet table with add/delete/rename (the legacy UI for non-topic facets). */
+const FacetTable = ({
+  facet,
+  tags,
+  isAdmin,
+  onNotice,
+  onError,
+  onReload,
+}: {
+  facet: string
+  tags: Tag[]
+  isAdmin: boolean
+  onNotice: (s: string) => void
+  onError: (s: string) => void
+  onReload: () => Promise<void>
+}) => {
+  const [renameId, setRenameId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameFacet, setRenameFacet] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+
+  const deleteTag = async (id: string, valueId: string) => {
+    if (!window.confirm(`Delete tag "${valueId}"? This cannot be undone.`))
+      return
+    onNotice('')
+    onError('')
+    try {
+      await adminFetch(`/api/admin/tags/${id}`, { method: 'DELETE' })
+      onNotice(`Tag "${valueId}" deleted.`)
+      await onReload()
+    } catch (err: any) {
+      onError(err.message)
+    }
+  }
+
+  const saveRename = async (id: string) => {
+    onNotice('')
+    onError('')
+    setRenameBusy(true)
+    try {
+      const patch: Record<string, string> = {}
+      if (renameFacet.trim()) patch.facet = renameFacet.trim()
+      if (renameValue.trim()) patch.valueId = renameValue.trim()
+      await adminFetch(`/api/admin/tags/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      })
+      setRenameId(null)
+      onNotice('Tag renamed.')
+      await onReload()
+    } catch (err: any) {
+      onError(err.message)
+    } finally {
+      setRenameBusy(false)
+    }
+  }
+
+  return (
+    <section style={{ marginBottom: 24 }}>
+      <Heading size="md" style={{ marginBottom: 8 }}>
+        {facet}
+      </Heading>
+      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr>
+            {[
+              'Value',
+              'Facet',
+              'Accepted',
+              'Suggested',
+              'Taxonomy version',
+              ...(isAdmin ? [''] : []),
+            ].map((h, i) => (
+              <th
+                key={i}
+                scope="col"
+                style={{
+                  ...cell,
+                  textAlign: 'left',
+                  background: '#f7f7f7',
+                }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {tags.map((tag) => (
+            <tr key={tag.id}>
+              <td style={cell}>
+                {renameId === tag.id && isAdmin ? (
+                  <input
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    style={{
+                      fontFamily: 'inherit',
+                      fontSize: 'inherit',
+                      width: '100%',
+                    }}
+                  />
+                ) : (
+                  tag.valueId
+                )}
+              </td>
+              <td style={cell}>
+                {renameId === tag.id && isAdmin ? (
+                  <input
+                    value={renameFacet}
+                    onChange={(e) => setRenameFacet(e.target.value)}
+                    style={{
+                      fontFamily: 'inherit',
+                      fontSize: 'inherit',
+                      width: '100%',
+                    }}
+                  />
+                ) : (
+                  tag.facet
+                )}
+              </td>
+              <td style={cell}>{tag.acceptedCount}</td>
+              <td style={cell}>{tag.suggestedCount}</td>
+              <td style={cell}>{tag.taxonomyVersion ?? '—'}</td>
+              {isAdmin && (
+                <td style={cell}>
+                  {renameId === tag.id ? (
+                    <>
+                      <button
+                        onClick={() => saveRename(tag.id)}
+                        disabled={renameBusy}
+                        className="admin-btn"
+                        style={{ ...actionButton, marginRight: 8 }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setRenameId(null)}
+                        className="admin-btn"
+                        style={actionButton}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setRenameId(tag.id)
+                          setRenameValue(tag.valueId)
+                          setRenameFacet(tag.facet)
+                        }}
+                        className="admin-btn"
+                        style={{ ...actionButton, marginRight: 8 }}
+                        title="Rename this tag value or facet (admin only)"
+                      >
+                        Rename
+                      </button>
+                      {tag.acceptedCount === 0 &&
+                        tag.suggestedCount === 0 && (
+                          <button
+                            onClick={() => deleteTag(tag.id, tag.valueId)}
+                            className="admin-btn"
+                            style={dangerButton}
+                          >
+                            Delete
+                          </button>
+                        )}
+                    </>
+                  )}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
 const TagsPage = () => {
   const [tags, setTags] = useState<Tag[]>([])
   const [me, setMe] = useState<{ role?: string }>({})
@@ -34,11 +215,9 @@ const TagsPage = () => {
   const [addBusy, setAddBusy] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // Rename state (admin-only)
-  const [renameId, setRenameId] = useState<string | null>(null)
-  const [renameValue, setRenameValue] = useState('')
-  const [renameFacet, setRenameFacet] = useState('')
-  const [renameBusy, setRenameBusy] = useState(false)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const activeFacet = searchParams.get('facet') || 'topic'
 
   const isAdmin = me.role === 'admin'
 
@@ -63,18 +242,8 @@ const TagsPage = () => {
       .catch(() => setMe({}))
   }, [load])
 
-  const deleteTag = async (id: string, valueId: string) => {
-    if (!window.confirm(`Delete tag "${valueId}"? This cannot be undone.`))
-      return
-    setNotice(null)
-    setError(null)
-    try {
-      await adminFetch(`/api/admin/tags/${id}`, { method: 'DELETE' })
-      setNotice(`Tag "${valueId}" deleted.`)
-      await load()
-    } catch (err: any) {
-      setError(err.message)
-    }
+  const setFacet = (facet: string) => {
+    router.push(`/admin/tags?facet=${facet}`)
   }
 
   const addTag = async (e: React.FormEvent) => {
@@ -106,34 +275,6 @@ const TagsPage = () => {
     }
   }
 
-  const startRename = (tag: Tag) => {
-    setRenameId(tag.id)
-    setRenameValue(tag.valueId)
-    setRenameFacet(tag.facet)
-  }
-
-  const saveRename = async (id: string) => {
-    setNotice(null)
-    setError(null)
-    setRenameBusy(true)
-    try {
-      const patch: Record<string, string> = {}
-      if (renameFacet.trim()) patch.facet = renameFacet.trim()
-      if (renameValue.trim()) patch.valueId = renameValue.trim()
-      await adminFetch(`/api/admin/tags/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patch),
-      })
-      setRenameId(null)
-      setNotice('Tag renamed.')
-      await load()
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setRenameBusy(false)
-    }
-  }
-
   // Group by facet
   const byFacet: Record<string, Tag[]> = {}
   for (const tag of tags) {
@@ -150,9 +291,21 @@ const TagsPage = () => {
     ...distinctFacets.filter((f) => !CANONICAL_FACETS.includes(f)),
   ]
 
+  const tabStyle = (facet: string): React.CSSProperties => ({
+    padding: '6px 14px',
+    border: '1px solid #e2e8f0',
+    borderBottom: activeFacet === facet ? '2px solid #1a365d' : '1px solid #e2e8f0',
+    background: activeFacet === facet ? '#fff' : '#f7f7f7',
+    color: activeFacet === facet ? '#1a365d' : '#595959',
+    fontWeight: activeFacet === facet ? 700 : 400,
+    cursor: 'pointer',
+    borderRadius: '6px 6px 0 0',
+    fontSize: 13,
+  })
+
   return (
     <Box style={{ paddingBottom: 48 }}>
-      <Heading size='lg' style={{ marginBottom: 8 }}>
+      <Heading size="lg" style={{ marginBottom: 8 }}>
         Tags
       </Heading>
       <Text style={{ marginBottom: 8, color: '#555', fontStyle: 'italic' }}>
@@ -183,190 +336,111 @@ const TagsPage = () => {
         }}
       />
 
-      {loading ? (
-        <Text>Loading…</Text>
-      ) : tags.length === 0 ? (
-        <Text>No tags yet.</Text>
-      ) : (
-        distinctFacets.map((facet) => (
-          <section key={facet} style={{ marginBottom: 24 }}>
-            <Heading size='md' style={{ marginBottom: 8 }}>
-              {facet}
-            </Heading>
-            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-              <thead>
-                <tr>
-                  {[
-                    'Value',
-                    'Facet',
-                    'Accepted',
-                    'Suggested',
-                    'Taxonomy version',
-                    ...(isAdmin ? [''] : []),
-                  ].map((h, i) => (
-                    <th
-                      key={i}
-                      scope='col'
-                      style={{
-                        ...cell,
-                        textAlign: 'left',
-                        background: '#f7f7f7',
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {byFacet[facet].map((tag) => (
-                  <tr key={tag.id}>
-                    <td style={cell}>
-                      {renameId === tag.id && isAdmin ? (
-                        <input
-                          value={renameValue}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          style={{
-                            fontFamily: 'inherit',
-                            fontSize: 'inherit',
-                            width: '100%',
-                          }}
-                        />
-                      ) : (
-                        tag.valueId
-                      )}
-                    </td>
-                    <td style={cell}>
-                      {renameId === tag.id && isAdmin ? (
-                        <input
-                          value={renameFacet}
-                          onChange={(e) => setRenameFacet(e.target.value)}
-                          style={{
-                            fontFamily: 'inherit',
-                            fontSize: 'inherit',
-                            width: '100%',
-                          }}
-                        />
-                      ) : (
-                        tag.facet
-                      )}
-                    </td>
-                    <td style={cell}>{tag.acceptedCount}</td>
-                    <td style={cell}>{tag.suggestedCount}</td>
-                    <td style={cell}>{tag.taxonomyVersion ?? '—'}</td>
-                    {isAdmin && (
-                      <td style={cell}>
-                        {renameId === tag.id ? (
-                          <>
-                            <button
-                              onClick={() => saveRename(tag.id)}
-                              disabled={renameBusy}
-                              className='admin-btn'
-                              style={{ ...actionButton, marginRight: 8 }}
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setRenameId(null)}
-                              className='admin-btn'
-                              style={actionButton}
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => startRename(tag)}
-                              className='admin-btn'
-                              style={{ ...actionButton, marginRight: 8 }}
-                              title='Rename this tag value or facet (admin only)'
-                            >
-                              Rename
-                            </button>
-                            {tag.acceptedCount === 0 &&
-                              tag.suggestedCount === 0 && (
-                                <button
-                                  onClick={() => deleteTag(tag.id, tag.valueId)}
-                                  className='admin-btn'
-                                  style={dangerButton}
-                                >
-                                  Delete
-                                </button>
-                              )}
-                          </>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        ))
-      )}
+      {/* Facet tab strip */}
+      <Box style={{ display: 'flex', gap: 4, marginBottom: 0, borderBottom: '1px solid #e2e8f0' }}>
+        {CANONICAL_FACETS.map((facet) => (
+          <Box
+            key={facet}
+            as="button"
+            onClick={() => setFacet(facet)}
+            style={tabStyle(facet)}
+            _hover={undefined}
+          >
+            {facet === 'topic' ? 'Topic' : facet.charAt(0).toUpperCase() + facet.slice(1)}
+          </Box>
+        ))}
+      </Box>
 
-      {/* Add form */}
-      <Heading size='md' style={{ marginBottom: 12 }}>
-        New tag
-      </Heading>
-      <form
-        onSubmit={addTag}
-        style={{
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          alignItems: 'flex-start',
-        }}
-      >
-        <select
-          value={addFacet}
-          onChange={(e) => setAddFacet(e.target.value)}
-          style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
-          required
-          aria-label='Facet'
-        >
-          <option value=''>— facet —</option>
-          {dropdownFacets.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-          <option value='__new__'>Create new facet…</option>
-        </select>
-        {addFacet === '__new__' && (
-          <input
-            placeholder='Facet name'
-            value={addNewFacet}
-            onChange={(e) => setAddNewFacet(e.target.value)}
-            required
-            style={{
-              fontFamily: 'inherit',
-              fontSize: 'inherit',
-              padding: '2px 6px',
-            }}
-          />
+      {/* Tab content */}
+      <Box style={{ paddingTop: 16 }}>
+        {activeFacet === 'topic' ? (
+          <TopicTaxonomyManager />
+        ) : loading ? (
+          <Text>Loading…</Text>
+        ) : tags.length === 0 ? (
+          <Text>No tags yet.</Text>
+        ) : (
+          distinctFacets
+            .filter((f) => f === activeFacet)
+            .map((facet) => (
+              <FacetTable
+                key={facet}
+                facet={facet}
+                tags={byFacet[facet]}
+                isAdmin={isAdmin}
+                onNotice={(s) => setNotice(s)}
+                onError={(s) => setError(s)}
+                onReload={load}
+              />
+            ))
         )}
-        <input
-          placeholder='Value'
-          value={addValue}
-          onChange={(e) => setAddValue(e.target.value)}
-          required
-          style={{
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-            padding: '2px 6px',
-          }}
-        />
-        <button
-          type='submit'
-          disabled={addBusy}
-          className='admin-btn'
-          style={actionButton}
-        >
-          Add
-        </button>
-      </form>
+      </Box>
+
+      {/* Add form (only for non-topic facets; topic uses the rich UI) */}
+      {activeFacet !== 'topic' && (
+        <>
+          <Heading size="md" style={{ marginBottom: 12, marginTop: 16 }}>
+            New tag
+          </Heading>
+          <form
+            onSubmit={addTag}
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              alignItems: 'flex-start',
+            }}
+          >
+            <select
+              value={addFacet}
+              onChange={(e) => setAddFacet(e.target.value)}
+              style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+              required
+              aria-label="Facet"
+            >
+              <option value="">— facet —</option>
+              {dropdownFacets.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+              <option value="__new__">Create new facet…</option>
+            </select>
+            {addFacet === '__new__' && (
+              <input
+                placeholder="Facet name"
+                value={addNewFacet}
+                onChange={(e) => setAddNewFacet(e.target.value)}
+                required
+                style={{
+                  fontFamily: 'inherit',
+                  fontSize: 'inherit',
+                  padding: '2px 6px',
+                }}
+              />
+            )}
+            <input
+              placeholder="Value"
+              value={addValue}
+              onChange={(e) => setAddValue(e.target.value)}
+              required
+              style={{
+                fontFamily: 'inherit',
+                fontSize: 'inherit',
+                padding: '2px 6px',
+              }}
+            />
+            <button
+              type="submit"
+              disabled={addBusy}
+              className="admin-btn"
+              style={actionButton}
+            >
+              Add
+            </button>
+          </form>
+        </>
+      )}
     </Box>
   )
 }
