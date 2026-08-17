@@ -104,7 +104,7 @@ export const TopicTaxonomyManager = () => {
   const [reclassifyModalOpen, setReclassifyModalOpen] = useState(false)
   const [reclassifyScope, setReclassifyScope] = useState<'all' | string>('all')
   const [reclassifyEstimate, setReclassifyEstimate] = useState<{ enqueued: number; estCost: number } | null>(null)
-  const [reclassifyEnqueuing, setReclassifyEnqueuing] = useState(false)
+
   const [reclassifyStatus, setReclassifyStatus] = useState<{
     queued: number
     running: number
@@ -493,17 +493,12 @@ export const TopicTaxonomyManager = () => {
 
   const handleStartReclassify = async () => {
     if (!reclassifyEstimate || reclassifyEstimate.enqueued === 0) return
-    setReclassifyEnqueuing(true)
-    try {
-      // Already enqueued from the estimate call — just close modal + flash
-      setReclassifyModalOpen(false)
-      setFlash(`Re-classify enqueued: ${reclassifyEstimate.enqueued} docs (≈$${reclassifyEstimate.estCost.toFixed(4)}).`)
-      setTimeout(() => setFlash(null), 4000)
-      setReclassifyPanelOpen(true)
-      fetchReclassifyStatus()
-    } finally {
-      setReclassifyEnqueuing(false)
-    }
+    // Already enqueued from the estimate call — just close modal + flash
+    setReclassifyModalOpen(false)
+    setFlash(`Re-classify enqueued: ${reclassifyEstimate.enqueued} docs (≈$${reclassifyEstimate.estCost.toFixed(4)}).`)
+    setTimeout(() => setFlash(null), 4000)
+    setReclassifyPanelOpen(true)
+    fetchReclassifyStatus()
   }
 
   const handleRetryRun = async (runId: string, scope: 'all' | string) => {
@@ -972,7 +967,6 @@ export const TopicTaxonomyManager = () => {
           estimate={reclassifyEstimate}
           loading={!reclassifyEstimate && !reclassifyError}
           error={reclassifyError}
-          enqueuing={reclassifyEnqueuing}
           allTags={tags}
           onStart={handleStartReclassify}
           onClose={() => setReclassifyModalOpen(false)}
@@ -994,6 +988,7 @@ export const TopicTaxonomyManager = () => {
       {reclassifyPanelOpen && reclassifyStatus && (
         <ReclassifyPanel
           status={reclassifyStatus}
+          allTags={tags}
           expandedErrors={expandedErrors}
           onToggleError={toggleErrorExpand}
           onRetryRun={handleRetryRun}
@@ -1859,7 +1854,6 @@ const ReclassifyConfirmModal = ({
   estimate,
   loading,
   error,
-  enqueuing,
   allTags,
   onStart,
   onClose,
@@ -1868,13 +1862,12 @@ const ReclassifyConfirmModal = ({
   estimate: { enqueued: number; estCost: number } | null
   loading: boolean
   error: string | null
-  enqueuing: boolean
   allTags: TopicRow[]
   onStart: () => void
   onClose: () => void
 }) => {
   const scopeLabel = scope === 'all' ? 'All docs' : `Topic: ${allTags.find((t) => t.id === scope)?.valueId ?? scope}`
-  const canStart = estimate && estimate.enqueued > 0 && !enqueuing
+  const canStart = estimate && estimate.enqueued > 0
 
   return (
     <>
@@ -1935,7 +1928,7 @@ const ReclassifyConfirmModal = ({
             onClick={onStart}
             disabled={!canStart}
             style={{ font: 'inherit', fontSize: 11, border: canStart ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: canStart ? 'pointer' : 'not-allowed', color: '#fff', background: canStart ? '#1a365d' : '#a0aec0' }}
-          >{enqueuing ? 'Starting…' : 'Start'}</Box>
+          >Start</Box>
         </Box>
       </Box>
     </>
@@ -1995,6 +1988,7 @@ const ScopedTopicPicker = ({
 
 const ReclassifyPanel = ({
   status,
+  allTags,
   expandedErrors,
   onToggleError,
   onRetryRun,
@@ -2006,6 +2000,7 @@ const ReclassifyPanel = ({
     error: number
     recent: { runId: string; scope: 'all' | string; total: number; done: number; error: number; estCost: number; createdAt: string }[]
   }
+  allTags: TopicRow[]
   expandedErrors: Set<string>
   onToggleError: (runId: string) => void
   onRetryRun: (runId: string, scope: 'all' | string) => void
@@ -2034,7 +2029,7 @@ const ReclassifyPanel = ({
           <Box style={{ background: '#ebf4ff', border: '1px solid #c3e2f7', borderRadius: 9, padding: '14px 16px', marginBottom: 16 }}>
             <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 9 }}>
               <Box style={{ fontSize: 13, fontWeight: 700, color: '#3182ce' }}>
-                {activeRun.scope === 'all' ? 'Full corpus' : `Scoped: ${activeRun.scope}`} · in progress
+                {activeRun.scope === 'all' ? 'Full corpus' : `Scoped: ${allTags.find((t) => t.id === activeRun.scope)?.valueId ?? activeRun.scope}`} · in progress
               </Box>
               <Box style={{ fontSize: 13, color: '#2d3748' }}>
                 <b>{doneActive}</b> / {totalActive} docs · {pct}%
@@ -2057,7 +2052,7 @@ const ReclassifyPanel = ({
             <Box style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#595959', marginBottom: 8 }}>Recent runs</Box>
             <Box style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {status.recent.map((run) => {
-                const scopeLabel = run.scope === 'all' ? 'Full corpus' : `Scoped: ${run.scope}`
+                const scopeLabel = run.scope === 'all' ? 'Full corpus' : `Scoped: ${allTags.find((t) => t.id === run.scope)?.valueId ?? run.scope}`
                 const isExpanded = expandedErrors.has(run.runId)
                 return (
                   <Box key={run.runId} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #edf2f7', borderRadius: 9, padding: '10px 12px' }}>
