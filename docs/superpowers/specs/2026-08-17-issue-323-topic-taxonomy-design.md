@@ -273,12 +273,13 @@ Every route: `runtime='nodejs'`, `dynamic='force-dynamic'`, calls `initializeDat
 
 **Query module**: new `src/db/queries/topicsAdmin.ts` (sibling to `tagsAdmin.ts`), typed functions, reuses `writeAudit` + `auditActor` for every mutation (audit actions: `tag_create`, `tag_update`, `tag_merge`, `tag_import`, `reclassify_enqueue`, `tag_embeddings_rebuild`). Existing `tagsAdmin.ts` stays for legacy routes + non-topic facets.
 
-**Cycle prevention** (PATCH parent) — ancestor-walk CTE inside the update transaction:
+**Cycle prevention** (PATCH parent) — ancestor-walk CTE inside the update transaction (walks UP from the proposed new parent toward the root; if the tag being edited appears as an ancestor of its own proposed parent, that's a cycle):
 ```sql
-WITH ancestors AS (
-  SELECT id FROM tags WHERE id = $new_parent
+WITH RECURSIVE ancestors AS (
+  SELECT id, parent_tag_id FROM tags WHERE id = $new_parent
   UNION ALL
-  SELECT t.id FROM tags t JOIN ancestors a ON t.parent_tag_id = a.id
+  SELECT t.id, t.parent_tag_id FROM tags t
+  JOIN ancestors a ON t.id = a.parent_tag_id
 )
 SELECT 1 FROM ancestors WHERE id = $tag_id   -- if any row, reject (cycle)
 ```
