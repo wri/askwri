@@ -13,6 +13,8 @@ import { DocumentRelation } from './entities/DocumentRelation.entity'
 import { Collection } from './entities/Collection.entity'
 import { DocumentCollection } from './entities/DocumentCollection.entity'
 import { AuditLog } from './entities/AuditLog.entity'
+import { TagAlias } from './entities/TagAlias.entity'
+import { ReclassifyJob } from './entities/ReclassifyJob.entity'
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -37,6 +39,8 @@ export const AppDataSource = new DataSource({
     Collection,
     DocumentCollection,
     AuditLog,
+    TagAlias,
+    ReclassifyJob,
   ],
   // DATABASE_SSL=false disables SSL for local dev databases (docker has no SSL);
   // default stays SSL-on for RDS.
