@@ -86,6 +86,20 @@ export const TopicTaxonomyManager = () => {
     failed: { label: string; reason: string }[]
   } | null>(null)
 
+  // ---- CSV import/export state ----
+  const [csvDiff, setCsvDiff] = useState<{
+    added: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }[]
+    updated: { row: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }; current: any }[]
+    unchanged: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }[]
+    conflicts: { row: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }; reason: string }[]
+  } | null>(null)
+  const [csvLoading, setCsvLoading] = useState(false)
+  const [csvError, setCsvError] = useState<string | null>(null)
+  const [csvReclassify, setCsvReclassify] = useState(true)
+  const [csvApplying, setCsvApplying] = useState(false)
+  const [csvFilename, setCsvFilename] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // ---- load ----
   const load = useCallback(async () => {
     setLoading(true)
@@ -247,6 +261,123 @@ export const TopicTaxonomyManager = () => {
     setSelected(new Set())
   }
 
+  // ---- CSV import/export ----
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCsvFilename(file.name)
+    setCsvLoading(true)
+    setCsvError(null)
+    setCsvDiff(null)
+    try {
+      const text = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error('Failed to read file'))
+        reader.readAsText(file)
+      })
+      if (!text.trim()) {
+        setCsvError('CSV file is empty.')
+        setCsvLoading(false)
+        return
+      }
+      const res = await fetch('/api/admin/topics/import?dry_run=true', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv' },
+        body: text,
+      })
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || body.ok === false) {
+        setCsvError(body.error || 'Failed to parse CSV.')
+        setCsvLoading(false)
+        return
+      }
+      setCsvDiff(body.diff)
+    } catch (err: any) {
+      setCsvError(err.message || 'Network error.')
+    }
+    setCsvLoading(false)
+  }
+
+  const handleApplyImport = async () => {
+    if (!csvDiff || csvDiff.conflicts.length > 0) return
+    setCsvApplying(true)
+    setCsvError(null)
+    try {
+      // Re-read the file to get the CSV text
+      const file = fileInputRef.current?.files?.[0]
+      if (!file) {
+        setCsvError('File not found. Please re-select.')
+        setCsvApplying(false)
+        return
+      }
+      const text = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error('Failed to read file'))
+        reader.readAsText(file)
+      })
+      const res = await fetch(`/api/admin/topics/import?reclassify=${csvReclassify}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv' },
+        body: text,
+      })
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || body.ok === false) {
+        setCsvError(body.error || 'Apply failed.')
+        setCsvApplying(false)
+        return
+      }
+      setFlash(`Imported ${body.applied} change${body.applied !== 1 ? 's' : ''}.`)
+      setTimeout(() => setFlash(null), 3000)
+      setCsvDiff(null)
+      setCsvFilename('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      load()
+    } catch (err: any) {
+      setCsvError(err.message || 'Network error.')
+    }
+    setCsvApplying(false)
+  }
+
+  const closeCsvModal = () => {
+    setCsvDiff(null)
+    setCsvError(null)
+    setCsvFilename('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleExport = async () => {
+    try {
+      const res = await fetch('/api/admin/topics/export')
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const text = await res.text()
+      const blob = new Blob([text], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'topic-taxonomy.csv'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      setFlash('Export failed.')
+      setTimeout(() => setFlash(null), 3000)
+    }
+  }
+
   // ---- render ----
   return (
     <Box style={{ paddingBottom: 48 }}>
@@ -357,7 +488,43 @@ export const TopicTaxonomyManager = () => {
               />
             </Box>
           )}
+          <Box as='button'
+            onClick={() => fileInputRef.current?.click()}
+            style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Import CSV
+          </Box>
+          <Box as='button'
+            onClick={handleExport}
+            style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Export CSV
+          </Box>
         </Box>
+      )}
+
+      {/* Hidden file input for CSV import */}
+      <input
+        ref={fileInputRef}
+        type='file'
+        accept='.csv,text/csv'
+        style={{ display: 'none' }}
+        onChange={handleFileSelect}
+      />
+
+      {/* CSV import modal */}
+      {(csvDiff || csvLoading || csvError) && (
+        <CsvImportModal
+          diff={csvDiff}
+          loading={csvLoading}
+          error={csvError}
+          reclassify={csvReclassify}
+          applying={csvApplying}
+          filename={csvFilename}
+          onReclassifyChange={setCsvReclassify}
+          onApply={handleApplyImport}
+          onClose={closeCsvModal}
+        />
       )}
 
       {/* Error */}
@@ -1296,6 +1463,179 @@ const ReparentModal = ({
             {saving ? 'Saving…' : 'Re-parent'}
           </Box>
         </Box>
+      </Box>
+    </>
+  )
+}
+
+// ---- CSV Import Modal (Task 16) ----
+
+interface CsvDiffData {
+  added: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }[]
+  updated: { row: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }; current: any }[]
+  unchanged: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }[]
+  conflicts: { row: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }; reason: string }[]
+}
+
+const CsvImportModal = ({
+  diff,
+  loading,
+  error,
+  reclassify,
+  applying,
+  filename,
+  onReclassifyChange,
+  onApply,
+  onClose,
+}: {
+  diff: CsvDiffData | null
+  loading: boolean
+  error: string | null
+  reclassify: boolean
+  applying: boolean
+  filename: string
+  onReclassifyChange: (v: boolean) => void
+  onApply: () => void
+  onClose: () => void
+}) => {
+  const addedCount = diff?.added.length ?? 0
+  const updatedCount = diff?.updated.length ?? 0
+  const unchangedCount = diff?.unchanged.length ?? 0
+  const conflictCount = diff?.conflicts.length ?? 0
+  const totalChanges = addedCount + updatedCount
+  const canApply = conflictCount === 0 && totalChanges > 0 && !applying
+
+  return (
+    <>
+      <Box
+        style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(26,54,93,0.35)',
+          zIndex: 100,
+        }}
+        onClick={onClose}
+      />
+      <Box
+        style={{
+          position: 'fixed',
+          top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 560,
+          maxWidth: '90vw',
+          maxHeight: '80vh',
+          overflow: 'auto',
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 20px 60px rgba(26,54,93,0.30)',
+          zIndex: 101,
+          padding: 18,
+        }}
+      >
+        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <Heading size='sm' style={{ color: '#1a365d' }}>
+            Import CSV{filename ? ` — ${filename}` : ''}
+          </Heading>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+            ✕
+          </Box>
+        </Box>
+
+        {loading && (
+          <Text style={{ color: '#595959', padding: '20px 0' }}>Parsing CSV…</Text>
+        )}
+
+        {error && (
+          <Box style={{ fontSize: 12, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '8px 12px', marginBottom: 12 }}>
+            {error}
+          </Box>
+        )}
+
+        {diff && (
+          <>
+            {/* Summary chips */}
+            <Box style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #c6f6d5', background: '#f0fff4', color: '#2f855a', borderRadius: 999, padding: '4px 11px' }}>
+                {addedCount} added
+              </Box>
+              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #f6e2b3', background: '#fffaf0', color: '#b7791f', borderRadius: 999, padding: '4px 11px' }}>
+                {updatedCount} updated
+              </Box>
+              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #e2e8f0', background: '#fff', color: '#595959', borderRadius: 999, padding: '4px 11px' }}>
+                {unchangedCount} unchanged
+              </Box>
+              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #f0b4b4', background: '#fff0f0', color: '#C11101', borderRadius: 999, padding: '4px 11px' }}>
+                {conflictCount} {conflictCount === 1 ? 'conflict' : 'conflicts'}
+              </Box>
+            </Box>
+
+            {/* Diff table */}
+            <Box style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', maxHeight: 300, overflowY: 'auto' }}>
+              {/* Added rows */}
+              {diff.added.map((r, i) => (
+                <Box key={`add-${i}`} style={{ display: 'grid', gridTemplateColumns: '64px 1fr', padding: '8px 12px', borderBottom: '1px solid #edf2f7', background: '#f0fff4' }}>
+                  <Box style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#2f855a', background: '#c6f6d5', borderRadius: 5, padding: '2px 7px', display: 'inline-block', textAlign: 'center', height: 'fit-content' }}>Add</Box>
+                  <Box>
+                    <Box style={{ fontWeight: 600, color: '#2d3748', fontSize: 13 }}>{r.label}</Box>
+                    {r.description && <Box style={{ color: '#718096', fontSize: 11 }}>desc: {r.description}</Box>}
+                    {r.aliases.length > 0 && <Box style={{ color: '#718096', fontSize: 11 }}>aliases: {r.aliases.join(' | ')}</Box>}
+                  </Box>
+                </Box>
+              ))}
+              {/* Updated rows */}
+              {diff.updated.map((u, i) => (
+                <Box key={`upd-${i}`} style={{ display: 'grid', gridTemplateColumns: '64px 1fr', padding: '8px 12px', borderBottom: '1px solid #edf2f7', background: '#fffaf0' }}>
+                  <Box style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#b7791f', background: '#f6e2b3', borderRadius: 5, padding: '2px 7px', display: 'inline-block', textAlign: 'center', height: 'fit-content' }}>Edit</Box>
+                  <Box>
+                    <Box style={{ fontWeight: 600, color: '#2d3748', fontSize: 13 }}>{u.row.label}</Box>
+                    {u.row.description && <Box style={{ color: '#718096', fontSize: 11 }}>desc: {u.row.description}</Box>}
+                    {u.row.aliases.length > 0 && <Box style={{ color: '#718096', fontSize: 11 }}>aliases: {u.row.aliases.join(' | ')}</Box>}
+                  </Box>
+                </Box>
+              ))}
+              {/* Conflict rows */}
+              {diff.conflicts.map((c, i) => (
+                <Box key={`con-${i}`} style={{ display: 'grid', gridTemplateColumns: '64px 1fr', padding: '8px 12px', borderBottom: '1px solid #edf2f7', background: '#fff0f0' }}>
+                  <Box style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#C11101', background: '#fbd5d5', borderRadius: 5, padding: '2px 7px', display: 'inline-block', textAlign: 'center', height: 'fit-content' }}>Conflict</Box>
+                  <Box>
+                    <Box style={{ fontWeight: 600, color: '#2d3748', fontSize: 13 }}>{c.row.label}</Box>
+                    <Box style={{ color: '#C11101', fontSize: 11 }}>{c.reason}</Box>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+
+            {/* Footer */}
+            <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
+              <Box style={{ fontSize: 12, color: '#595959' }}>
+                {conflictCount > 0
+                  ? `Resolve ${conflictCount} conflict${conflictCount !== 1 ? 's' : ''} before applying. Nothing is applied until conflicts = 0.`
+                  : 'Import commits atomically — all or nothing.'}
+              </Box>
+              <Box style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Box style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#2d3748', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px' }}>
+                  <input
+                    type='checkbox'
+                    checked={reclassify}
+                    onChange={(e) => onReclassifyChange(e.target.checked)}
+                    style={{ accentColor: '#1a365d' }}
+                  />
+                  Re-classify affected docs
+                </Box>
+                <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                  Cancel
+                </Box>
+                <Box as='button'
+                  onClick={onApply}
+                  disabled={!canApply}
+                  style={{ font: 'inherit', fontSize: 11, border: canApply ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 10px', cursor: canApply ? 'pointer' : 'not-allowed', color: '#fff', background: canApply ? '#1a365d' : '#a0aec0', opacity: applying ? 0.5 : 1 }}
+                >
+                  {applying ? 'Applying…' : `Apply ${totalChanges} change${totalChanges !== 1 ? 's' : ''}`}
+                </Box>
+              </Box>
+            </Box>
+          </>
+        )}
       </Box>
     </>
   )

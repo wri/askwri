@@ -517,6 +517,124 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     })
   })
 
+  // ---- CSV import/export (Task 16) ----
+
+  it('shows Import and Export buttons in the toolbar', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    expect(screen.getByText('Import CSV')).toBeTruthy()
+    expect(screen.getByText('Export CSV')).toBeTruthy()
+  })
+
+  it('disables Apply button when dry-run has conflicts', async () => {
+    global.fetch = jest.fn((url: string, _init?: any) => {
+      const u = url.toString()
+      if (u === '/api/admin/topics') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, tags: mockTags }) }) as any
+      }
+      if (u.startsWith('/api/admin/topics/import')) {
+        if (u.includes('dry_run=true')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              ok: true,
+              diff: {
+                added: [{ label: 'NewTopic', description: '', aliases: [], parent: '', facet: 'topic', id: '' }],
+                updated: [],
+                unchanged: [],
+                conflicts: [{ row: { label: 'BadRef', description: '', aliases: [], parent: 'NoSuch', facet: 'topic', id: '' }, reason: 'bad parent reference' }],
+              },
+            }),
+          }) as any
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, applied: 1 }) }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    const csvContent = `label,description,aliases,parent,facet,id
+NewTopic,,, ,topic,
+BadRef,,,NoSuch,topic,
+`
+    const file = new File([csvContent], 'test.csv', { type: 'text/csv' })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(fileInput).toBeTruthy()
+    fireEvent.change(fileInput, { target: { files: [file] } })
+
+    await waitFor(() => {
+      expect(screen.getByText('1 added')).toBeTruthy()
+      expect(screen.getByText('1 conflict')).toBeTruthy()
+    })
+
+    const applyBtn = screen.getByText('Apply 1 change')
+    expect(applyBtn).toBeTruthy()
+    expect((applyBtn as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('enables Apply button when dry-run has no conflicts', async () => {
+    global.fetch = jest.fn((url: string, _init?: any) => {
+      const u = url.toString()
+      if (u === '/api/admin/topics') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, tags: mockTags }) }) as any
+      }
+      if (u.startsWith('/api/admin/topics/import')) {
+        if (u.includes('dry_run=true')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              ok: true,
+              diff: {
+                added: [{ label: 'NewTopic', description: 'desc', aliases: [], parent: '', facet: 'topic', id: '' }],
+                updated: [],
+                unchanged: [],
+                conflicts: [],
+              },
+            }),
+          }) as any
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, applied: 1 }) }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    const csvContent = `label,description,aliases,parent,facet,id
+NewTopic,desc,, ,topic,
+`
+    const file = new File([csvContent], 'test.csv', { type: 'text/csv' })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(fileInput, { target: { files: [file] } })
+
+    await waitFor(() => {
+      expect(screen.getByText('1 added')).toBeTruthy()
+      expect(screen.getByText('0 conflicts')).toBeTruthy()
+    })
+
+    const applyBtn = screen.getByText('Apply 1 change')
+    expect(applyBtn).toBeTruthy()
+    expect((applyBtn as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('shows history tab with audit entries', async () => {
     global.fetch = jest.fn((url: string, init?: any) => {
       if (url === '/api/admin/topics') {
