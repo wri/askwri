@@ -16,6 +16,7 @@ interface TopicRow {
   aliases: string[]
   acceptedCount: number
   suggestedCount: number
+  needsReembed: boolean
 }
 
 // ---- constants ----
@@ -40,21 +41,18 @@ function buildChildrenMap(tags: TopicRow[]): Map<string | null, TopicRow[]> {
   return map
 }
 
-/** Flatten the tree into a display order (DFS, roots first). */
-function flattenTree(tags: TopicRow[]): TopicRow[] {
+/** Flatten the tree into a display order (DFS, roots first).
+ *  Only recurses into children whose parent is expanded. */
+function flattenTree(tags: TopicRow[], expanded: Set<string>): TopicRow[] {
   const childrenMap = buildChildrenMap(tags)
   const roots = childrenMap.get(null) ?? []
   const result: TopicRow[] = []
-  const visit = (tag: TopicRow, depth: number) => {
+  const visit = (tag: TopicRow) => {
     result.push(tag)
-    const children = childrenMap.get(tag.id) ?? []
-    for (const child of children) {
-      visit(child, depth + 1)
-    }
+    if (!expanded.has(tag.id)) return // collapsed: don't recurse
+    for (const child of childrenMap.get(tag.id) ?? []) visit(child)
   }
-  for (const root of roots) {
-    visit(root, 0)
-  }
+  for (const root of roots) visit(root)
   return result
 }
 
@@ -73,7 +71,6 @@ export const TopicTaxonomyManager = () => {
   const [viewMode, setViewMode] = useState<'tree' | 'flat'>('tree')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const sentinelRef = useRef<HTMLDivElement>(null)
   const ioRef = useRef<IntersectionObserver | null>(null)
 
   // ---- load ----
@@ -106,11 +103,16 @@ export const TopicTaxonomyManager = () => {
     }
   }, [tags, viewMode])
 
-  // ---- progressive render via IntersectionObserver ----
-  useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') return
-    const sentinel = sentinelRef.current
-    if (!sentinel) return
+  // ---- progressive render via IntersectionObserver (callback ref) ----
+  // A callback ref attaches whenever the sentinel node mounts (after loading
+  // completes), and cleans up on unmount — unlike a useEffect with empty deps
+  // which runs once at mount when the sentinel isn't in the DOM yet.
+  const sentinelCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    if (ioRef.current) {
+      ioRef.current.disconnect()
+      ioRef.current = null
+    }
+    if (!node || typeof IntersectionObserver === 'undefined') return
     const io = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
@@ -120,11 +122,7 @@ export const TopicTaxonomyManager = () => {
       { rootMargin: '200px' },
     )
     ioRef.current = io
-    io.observe(sentinel)
-    return () => {
-      io.disconnect()
-      ioRef.current = null
-    }
+    io.observe(node)
   }, [])
 
   // ---- search filter ----
@@ -144,9 +142,9 @@ export const TopicTaxonomyManager = () => {
   const useTree = !isSearching && viewMode === 'tree' && hasTree(filteredTags)
   const displayList = useMemo(() => {
     if (isSearching) return filteredTags // flat filtered list on search
-    if (useTree) return flattenTree(filteredTags) // DFS order for tree
+    if (useTree) return flattenTree(filteredTags, expanded) // DFS order, collapsed nodes hide children
     return [...filteredTags].sort((a, b) => a.valueId.localeCompare(b.valueId))
-  }, [filteredTags, isSearching, useTree])
+  }, [filteredTags, isSearching, useTree, expanded])
 
   // Build depth map for tree indentation
   const depthMap = useMemo(() => {
@@ -178,6 +176,7 @@ export const TopicTaxonomyManager = () => {
   const topicCount = tags.length
   const docsTagged = tags.reduce((sum, t) => sum + t.acceptedCount, 0)
   const suggestedCount = tags.reduce((sum, t) => sum + t.suggestedCount, 0)
+  const needsReembedCount = tags.filter((t) => t.needsReembed).length
 
   // ---- toggle expand ----
   const toggleExpand = (id: string) => {
@@ -210,6 +209,9 @@ export const TopicTaxonomyManager = () => {
         <Stat label='topics' value={topicCount} />
         <Stat label='docs tagged' value={docsTagged} />
         <Stat label='suggested' value={suggestedCount} />
+        {needsReembedCount > 0 && (
+          <Stat label='need re-embed' value={needsReembedCount} warn />
+        )}
       </Box>
 
       {/* Toolbar */}
@@ -402,7 +404,7 @@ export const TopicTaxonomyManager = () => {
           })}
           {/* Progressive-render sentinel */}
           {hasMore && (
-            <div ref={sentinelRef} style={{ height: 1, background: 'transparent' }} />
+            <div ref={sentinelCallbackRef} style={{ height: 1, background: 'transparent' }} />
           )}
         </Box>
       )}
@@ -423,18 +425,18 @@ export const TopicTaxonomyManager = () => {
 
 // ---- sub-components ----
 
-const Stat = ({ label, value }: { label: string; value: number }) => (
+const Stat = ({ label, value, warn }: { label: string; value: number; warn?: boolean }) => (
   <Box
     style={{
-      background: '#f7f7f7',
-      border: '1px solid #e2e8f0',
+      background: warn ? '#fffbeb' : '#f7f7f7',
+      border: `1px solid ${warn ? '#f6e2b3' : '#e2e8f0'}`,
       borderRadius: 8,
       padding: '6px 11px',
       fontSize: 11,
-      color: '#595959',
+      color: warn ? '#b7791f' : '#595959',
     }}
   >
-    <Box as='span' style={{ fontSize: 14, fontWeight: 700, color: '#2d3748' }}>
+    <Box as='span' style={{ fontSize: 14, fontWeight: 700, color: warn ? '#b7791f' : '#2d3748' }}>
       {value}
     </Box>{' '}
     {label}

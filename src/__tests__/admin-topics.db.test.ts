@@ -88,6 +88,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       parentTagId: null,
       acceptedCount: 0,
       suggestedCount: 0,
+      needsReembed: false,
     })
     expect(root!.aliases).toContain('__test_alias__')
 

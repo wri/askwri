@@ -13,6 +13,7 @@ export interface TopicRow {
   aliases: string[]
   acceptedCount: number
   suggestedCount: number
+  needsReembed: boolean
 }
 
 export type TopicDetail = TopicRow
@@ -25,7 +26,7 @@ export type TopicDetail = TopicRow
 export async function listTopicsWithCounts(): Promise<TopicRow[]> {
   return AppDataSource.query(`
     SELECT t.id, t.facet, t.value_id AS "valueId", t.taxonomy_version AS "taxonomyVersion",
-           t.parent_tag_id AS "parentTagId", t.description,
+           t.parent_tag_id AS "parentTagId", t.description, t.needs_reembed AS "needsReembed",
            COALESCE(
              (SELECT array_agg(a.alias) FROM tag_aliases a WHERE a.tag_id = t.id),
              '{}'::text[]
@@ -47,7 +48,7 @@ export async function listTopicsWithCounts(): Promise<TopicRow[]> {
 export async function getTopic(id: string): Promise<TopicDetail | null> {
   const [row] = await AppDataSource.query(
     `SELECT t.id, t.facet, t.value_id AS "valueId", t.taxonomy_version AS "taxonomyVersion",
-            t.parent_tag_id AS "parentTagId", t.description,
+            t.parent_tag_id AS "parentTagId", t.description, t.needs_reembed AS "needsReembed",
             COALESCE(
               (SELECT array_agg(a.alias) FROM tag_aliases a WHERE a.tag_id = t.id),
               '{}'::text[]
