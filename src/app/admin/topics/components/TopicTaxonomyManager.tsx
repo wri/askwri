@@ -1008,10 +1008,10 @@ const Stat = ({ label, value, warn }: { label: string; value: number; warn?: boo
       borderRadius: 8,
       padding: '6px 11px',
       fontSize: 11,
-      color: warn ? '#b7791f' : '#595959',
+      color: warn ? '#7c3a00' : '#595959',
     }}
   >
-    <Box as='span' style={{ fontSize: 14, fontWeight: 700, color: warn ? '#b7791f' : '#2d3748' }}>
+    <Box as='span' style={{ fontSize: 14, fontWeight: 700, color: warn ? '#7c3a00' : '#2d3748' }}>
       {value}
     </Box>{' '}
     {label}
@@ -1512,7 +1512,7 @@ const MergeModal = ({
                 <strong>{s.valueId}</strong> → <strong>{target?.valueId}</strong> · {s.acceptedCount} docs move
               </Box>
             ))}
-            <Box style={{ fontSize: 11, color: '#b7791f', marginTop: 6 }}>
+            <Box style={{ fontSize: 11, color: '#7c3a00', marginTop: 6 }}>
               {sources.length} tag{sources.length !== 1 ? 's' : ''} will be deleted; aliases merged into {target?.valueId}.
             </Box>
           </Box>
@@ -1764,7 +1764,7 @@ const CsvImportModal = ({
               <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #c6f6d5', background: '#f0fff4', color: '#2f855a', borderRadius: 999, padding: '4px 11px' }}>
                 {addedCount} added
               </Box>
-              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #f6e2b3', background: '#fffaf0', color: '#b7791f', borderRadius: 999, padding: '4px 11px' }}>
+              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #f6e2b3', background: '#fffaf0', color: '#7c3a00', borderRadius: 999, padding: '4px 11px' }}>
                 {updatedCount} updated
               </Box>
               <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #e2e8f0', background: '#fff', color: '#595959', borderRadius: 999, padding: '4px 11px' }}>
@@ -1791,7 +1791,7 @@ const CsvImportModal = ({
               {/* Updated rows */}
               {diff.updated.map((u, i) => (
                 <Box key={`upd-${i}`} style={{ display: 'grid', gridTemplateColumns: '64px 1fr', padding: '8px 12px', borderBottom: '1px solid #edf2f7', background: '#fffaf0' }}>
-                  <Box style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#b7791f', background: '#f6e2b3', borderRadius: 5, padding: '2px 7px', display: 'inline-block', textAlign: 'center', height: 'fit-content' }}>Edit</Box>
+                  <Box style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#7c3a00', background: '#f6e2b3', borderRadius: 5, padding: '2px 7px', display: 'inline-block', textAlign: 'center', height: 'fit-content' }}>Edit</Box>
                   <Box>
                     <Box style={{ fontWeight: 600, color: '#2d3748', fontSize: 13 }}>{u.row.label}</Box>
                     {u.row.description && <Box style={{ color: '#718096', fontSize: 11 }}>desc: {u.row.description}</Box>}
