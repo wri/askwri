@@ -82,3 +82,16 @@ def test_b3_known_fields_still_validate(monkeypatch):
     settings = get_settings()
     assert settings.retrieval_backend == "postgres"
     assert settings.keyword_backend == "memory"
+
+
+# --- Issue #323: topic tagging config defaults ---
+
+
+def test_topic_tagging_settings_defaults():
+    """All 5 new topic-tagging fields have correct defaults."""
+    s = get_settings()
+    assert s.tag_candidate_top_n == 20
+    assert s.tag_reclassify_concurrency == 4
+    assert s.tag_embed_batch_size == 100
+    assert s.classify_topic_only is False
+    assert s.reclassify_poll_first is True
