@@ -451,3 +451,255 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
     })),
   }
 }
+
+// --- Task 6: CSV import (dry-run diff + atomic apply) + export ---
+
+export interface ParsedRow {
+  label: string
+  description: string
+  aliases: string[]
+  parent: string
+  facet: string
+  id: string
+}
+
+export interface ImportDiff {
+  added: ParsedRow[]
+  updated: { row: ParsedRow; current: any }[]
+  unchanged: ParsedRow[]
+  conflicts: { row: ParsedRow; reason: string }[]
+}
+
+/**
+ * Minimal CSV parser (no new dep). Handles quoted fields with embedded commas,
+ * doubled quotes (""), and embedded newlines within quoted fields.
+ * Returns rows mapped to ParsedRow objects with the header:
+ * label,description,aliases(pipe-delimited),parent,facet,id
+ */
+export function parseTopicsCsv(text: string): ParsedRow[] {
+  const lines: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQ = false
+
+  const pushField = () => { row.push(field); field = '' }
+  const pushRow = () => { lines.push(row); row = [] }
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQ) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ }
+        else inQ = false
+      } else {
+        field += ch
+      }
+    } else {
+      if (ch === '"') inQ = true
+      else if (ch === ',') pushField()
+      else if (ch === '\n') { pushField(); pushRow() }
+      else if (ch !== '\r') field += ch
+    }
+  }
+  if (field.length > 0 || row.length > 0) { pushField(); pushRow() }
+
+  const [header, ...body] = lines
+  if (!header) return []
+
+  const idx: Record<string, number> = {}
+  for (let i = 0; i < header.length; i++) idx[header[i].trim()] = i
+
+  const get = (r: string[], k: string) => (idx[k] !== undefined ? r[idx[k]] ?? '' : '')
+
+  return body
+    .filter((r) => r.some((c) => c !== ''))
+    .map((r) => ({
+      label: get(r, 'label').trim(),
+      description: get(r, 'description').trim(),
+      aliases: get(r, 'aliases').split('|').map((a) => a.trim()).filter(Boolean),
+      parent: get(r, 'parent').trim(),
+      facet: get(r, 'facet').trim() || 'topic',
+      id: get(r, 'id').trim(),
+    }))
+}
+
+/**
+ * Diff parsed CSV rows against the current topic taxonomy in the DB.
+ * Matches by id (if present) else by label. Detects: empty labels,
+ * duplicate labels in the input, bad parent references (parent label
+ * not in DB and not in the input itself).
+ */
+export async function importTopicsDiff(rows: ParsedRow[]): Promise<ImportDiff> {
+  const labels = rows.map((r) => r.label)
+  const dup = labels.filter((l, i) => labels.indexOf(l) !== i)
+  const inputLabels = new Set(labels.filter(Boolean))
+
+  const existing: any[] = await AppDataSource.query(
+    `SELECT t.id, t.value_id, t.description, t.parent_tag_id,
+            COALESCE(
+              (SELECT string_agg(a.alias, '|' ORDER BY a.alias) FROM tag_aliases a WHERE a.tag_id = t.id),
+              ''
+            ) AS aliases_str,
+            COALESCE((SELECT p.value_id FROM tags p WHERE p.id = t.parent_tag_id), '') AS parent_label
+     FROM tags t
+     WHERE t.facet = 'topic' AND t.taxonomy_version = 'v1'`,
+  )
+  const byId = new Map(existing.map((t) => [t.id, t]))
+  const byLabel = new Map(existing.map((t) => [t.value_id, t]))
+
+  const added: ParsedRow[] = []
+  const updated: { row: ParsedRow; current: any }[] = []
+  const unchanged: ParsedRow[] = []
+  const conflicts: { row: ParsedRow; reason: string }[] = []
+
+  for (const r of rows) {
+    if (!r.label) {
+      conflicts.push({ row: r, reason: 'empty label' })
+      continue
+    }
+    if (dup.includes(r.label)) {
+      conflicts.push({ row: r, reason: 'duplicate label' })
+      continue
+    }
+    if (r.parent && !byLabel.has(r.parent) && !inputLabels.has(r.parent)) {
+      conflicts.push({ row: r, reason: 'bad parent reference' })
+      continue
+    }
+
+    const cur = r.id ? byId.get(r.id) : byLabel.get(r.label)
+    if (!cur) {
+      added.push(r)
+    } else {
+      const descChanged = r.description !== (cur.description ?? '')
+      const labelChanged = r.label !== cur.value_id
+      const parentChanged = r.parent !== (cur.parent_label ?? '')
+      const inputAliasesStr = [...r.aliases].sort().join('|')
+      const curAliasesStr = (cur.aliases_str ?? '').split('|').filter(Boolean).sort().join('|')
+      const aliasesChanged = inputAliasesStr !== curAliasesStr
+
+      if (descChanged || labelChanged || parentChanged || aliasesChanged) {
+        updated.push({ row: r, current: cur })
+      } else {
+        unchanged.push(r)
+      }
+    }
+  }
+
+  return { added, updated, unchanged, conflicts }
+}
+
+/**
+ * Apply a CSV import atomically. Calls importTopicsDiff first; if any conflicts,
+ * throws without touching the DB. Otherwise wraps all INSERT/UPDATE/alias
+ * operations in a single transaction — all changes commit or none.
+ * After commit, if reclassify=true, enqueues scoped re-classify per affected tag.
+ */
+export async function applyTopicsImport(
+  rows: ParsedRow[],
+  reclassify: boolean,
+): Promise<{ applied: number }> {
+  const diff = await importTopicsDiff(rows)
+  if (diff.conflicts.length > 0) {
+    throw new Error(`import has ${diff.conflicts.length} conflict(s) — apply blocked`)
+  }
+
+  const affectedTagIds = new Set<string>()
+
+  await AppDataSource.transaction(async (em) => {
+    // Build a label→id map for parent resolution (includes existing + newly added)
+    const existing: any[] = await em.query(
+      `SELECT id, value_id FROM tags WHERE facet = 'topic' AND taxonomy_version = 'v1'`,
+    )
+    const labelToId = new Map<string, string>(existing.map((t) => [t.value_id, t.id]))
+
+    for (const r of diff.added) {
+      const [t] = await em.query(
+        `INSERT INTO tags (facet, value_id, taxonomy_version, description, needs_reembed)
+         VALUES ($1, $2, 'v1', $3, true) RETURNING id`,
+        [r.facet || 'topic', r.label, r.description || null],
+      )
+      affectedTagIds.add(t.id)
+      labelToId.set(r.label, t.id)
+
+      for (const a of r.aliases) {
+        await em.query(
+          `INSERT INTO tag_aliases (tag_id, alias) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [t.id, a],
+        )
+      }
+
+      if (r.parent) {
+        const parentId = labelToId.get(r.parent)
+        if (parentId) {
+          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, t.id])
+        }
+      }
+    }
+
+    for (const u of diff.updated) {
+      const cur = u.current
+      await em.query(
+        `UPDATE tags SET value_id = $1, description = $2, needs_reembed = true WHERE id = $3`,
+        [u.row.label, u.row.description || null, cur.id],
+      )
+      affectedTagIds.add(cur.id)
+      labelToId.set(u.row.label, cur.id)
+
+      // Replace aliases
+      await em.query(`DELETE FROM tag_aliases WHERE tag_id = $1`, [cur.id])
+      for (const a of u.row.aliases) {
+        await em.query(
+          `INSERT INTO tag_aliases (tag_id, alias) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [cur.id, a],
+        )
+      }
+
+      // Update parent
+      if (u.row.parent) {
+        const parentId = labelToId.get(u.row.parent)
+        if (parentId) {
+          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, cur.id])
+        }
+      } else {
+        await em.query(`UPDATE tags SET parent_tag_id = NULL WHERE id = $1`, [cur.id])
+      }
+    }
+  })
+
+  if (reclassify && affectedTagIds.size > 0) {
+    for (const tid of affectedTagIds) {
+      await enqueueReclassify({ tagId: tid })
+    }
+  }
+
+  return { applied: diff.added.length + diff.updated.length }
+}
+
+/**
+ * Export the current topic taxonomy as CSV (richer format, separate from WRI CSV).
+ * Columns: label,description,aliases(pipe-delimited),parent,facet,id.
+ * CSV-escapes fields containing commas, quotes, or newlines.
+ */
+export async function exportTopicsCsv(): Promise<string> {
+  const rows: any[] = await AppDataSource.query(
+    `SELECT t.id, t.value_id AS label, t.description,
+            COALESCE((SELECT string_agg(a.alias, '|') FROM tag_aliases a WHERE a.tag_id = t.id), '') AS aliases,
+            COALESCE((SELECT p.value_id FROM tags p WHERE p.id = t.parent_tag_id), '') AS parent
+     FROM tags t
+     WHERE t.facet = 'topic' AND t.taxonomy_version = 'v1'
+     ORDER BY t.value_id`,
+  )
+
+  const esc = (s: string) => {
+    if (/[,"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+    return s
+  }
+
+  const body = rows.map((r) =>
+    [r.label, r.description ?? '', r.aliases ?? '', r.parent ?? '', 'topic', r.id]
+      .map(esc)
+      .join(','),
+  )
+
+  return ['label,description,aliases,parent,facet,id', ...body].join('\n')
+}

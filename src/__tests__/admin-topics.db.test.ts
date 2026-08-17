@@ -9,6 +9,10 @@ import {
   mergeTags,
   enqueueReclassify,
   reclassifyStatus,
+  parseTopicsCsv,
+  importTopicsDiff,
+  applyTopicsImport,
+  exportTopicsCsv,
 } from '@/db/queries/topicsAdmin'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
@@ -477,5 +481,65 @@ d('topicsAdmin list/get (DB integration)', () => {
       await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE run_id = $1`, [runId])
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     }
+  })
+
+  // --- Task 6: CSV import (dry-run diff + atomic apply) + export ---
+
+  it('parseTopicsCsv parses quoted fields with commas, pipe aliases, and embedded newlines', () => {
+    const csv = [
+      'label,description,aliases,parent,facet,id',
+    '"Water, Sanitation, and Hygiene","A description",WASH|Sanitation,,topic,',
+      'Coal,,Fossil|Energy,Water,topic,',
+      '"Multi\nLine","desc with\nnewline",,,topic,',
+    ].join('\n')
+    const rows = parseTopicsCsv(csv)
+    expect(rows.length).toBe(3)
+
+    expect(rows[0].label).toBe('Water, Sanitation, and Hygiene')
+    expect(rows[0].description).toBe('A description')
+    expect(rows[0].aliases).toEqual(['WASH', 'Sanitation'])
+    expect(rows[0].parent).toBe('')
+    expect(rows[0].facet).toBe('topic')
+    expect(rows[0].id).toBe('')
+
+    expect(rows[1].label).toBe('Coal')
+    expect(rows[1].description).toBe('')
+    expect(rows[1].aliases).toEqual(['Fossil', 'Energy'])
+    expect(rows[1].parent).toBe('Water')
+
+    expect(rows[2].label).toBe('Multi\nLine')
+    expect(rows[2].description).toBe('desc with\nnewline')
+  })
+
+  it('importTopicsDiff reports a conflict for a bad parent reference', async () => {
+    const diff = await importTopicsDiff([
+      { label: `__imp_bad_${Date.now()}__`, description: '', aliases: [], parent: 'NoSuchTopic', facet: 'topic', id: '' },
+    ])
+    expect(diff.conflicts.length).toBe(1)
+    expect(diff.conflicts[0].reason).toContain('parent')
+  })
+
+  it('applyTopicsImport is atomic — throws on conflict and the good row was NOT inserted', async () => {
+    const goodLabel = `__imp_good_${Date.now()}__`
+    const rows = [
+      { label: goodLabel, description: 'x', aliases: [], parent: '', facet: 'topic', id: '' },
+      { label: `__imp_conflict_${Date.now()}__`, description: '', aliases: [], parent: 'NoSuchTopic', facet: 'topic', id: '' },
+    ]
+    await expect(applyTopicsImport(rows, false)).rejects.toThrow(/conflict/i)
+
+    // Verify the good row was NOT inserted (rolled back / never started)
+    const [gone] = await AppDataSource.query(
+      `SELECT 1 FROM tags WHERE value_id = $1 AND facet = 'topic'`, [goodLabel],
+    )
+    expect(gone).toBeUndefined()
+  })
+
+  it('exportTopicsCsv round-trips through importTopicsDiff with 0 adds/updates/conflicts', async () => {
+    const csv = await exportTopicsCsv()
+    const rows = parseTopicsCsv(csv)
+    const diff = await importTopicsDiff(rows)
+    expect(diff.added.length).toBe(0)
+    expect(diff.updated.length).toBe(0)
+    expect(diff.conflicts.length).toBe(0)
   })
 })
