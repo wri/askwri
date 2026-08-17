@@ -403,6 +403,120 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     expect(parentSection.parentElement?.querySelector('[style*="C11101"]')).toBeNull()
   })
 
+  // ---- Task 15: Bulk ops ----
+
+  it('shows bulk actions bar with count when rows are selected', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    // Wait for ALL tags to appear (expanded effect must run so Coal Combustion is visible)
+    await waitFor(() => {
+      expect(screen.getByText('Coal')).toBeTruthy()
+      expect(screen.getByText('Coal Combustion')).toBeTruthy()
+      expect(screen.getByText('Climate')).toBeTruthy()
+    })
+
+    // Select Coal and Climate via their row checkboxes
+    const checkboxes = screen.getAllByRole('checkbox')
+    // [0] = select-all in header, [1] = Climate (alpha-sorted roots), [2] = Coal, [3] = Coal Combustion
+    fireEvent.click(checkboxes[2]) // Coal
+    fireEvent.click(checkboxes[1]) // Climate
+
+    // Bulk bar should appear with count "2 selected"
+    await waitFor(() => {
+      expect(screen.getByText('2 selected')).toBeTruthy()
+    })
+    // Bulk action buttons should be visible
+    expect(screen.getByText(/merge into/i)).toBeTruthy()
+    expect(screen.getByText(/re-parent/i)).toBeTruthy()
+    expect(screen.getByText(/delete unused/i)).toBeTruthy()
+  })
+
+  it('opens merge modal when Merge button is clicked', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Coal')).toBeTruthy()
+      expect(screen.getByText('Coal Combustion')).toBeTruthy()
+    })
+
+    // Select Coal Combustion
+    const checkboxes = screen.getAllByRole('checkbox')
+    fireEvent.click(checkboxes[3]) // Coal Combustion
+
+    // Click Merge button
+    fireEvent.click(screen.getByText(/merge into/i))
+
+    // Merge modal should appear with title containing topic count
+    await waitFor(() => {
+      expect(screen.getByText(/merge.*1.*topic/i)).toBeTruthy()
+    })
+  })
+
+  it('calls merge endpoint with correct intoTagId', async () => {
+    const mergeCalls: { url: string; body: any }[] = []
+    global.fetch = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url.includes('/merge') && init?.method === 'POST') {
+        mergeCalls.push({ url, body: JSON.parse(init.body) })
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, moved: 1 }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Coal')).toBeTruthy()
+      expect(screen.getByText('Coal Combustion')).toBeTruthy()
+    })
+
+    // Select Coal Combustion (t2)
+    const checkboxes = screen.getAllByRole('checkbox')
+    fireEvent.click(checkboxes[3]) // Coal Combustion
+
+    // Click Merge
+    fireEvent.click(screen.getByText(/merge into/i))
+
+    // Wait for modal and select target
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toBeTruthy()
+    })
+
+    // Select Coal (t1) as target
+    const select = screen.getByRole('combobox') as HTMLSelectElement
+    fireEvent.change(select, { target: { value: 't1' } })
+
+    // Click "Merge & re-classify" button
+    fireEvent.click(screen.getByText(/merge.*re-classify/i))
+
+    // Assert POST /merge was called
+    await waitFor(() => {
+      expect(mergeCalls.length).toBe(1)
+      expect(mergeCalls[0].url).toContain('/api/admin/topics/t2/merge')
+      expect(mergeCalls[0].body.intoTagId).toBe('t1')
+    })
+  })
+
   it('shows history tab with audit entries', async () => {
     global.fetch = jest.fn((url: string, init?: any) => {
       if (url === '/api/admin/topics') {

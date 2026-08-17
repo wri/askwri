@@ -77,6 +77,15 @@ export const TopicTaxonomyManager = () => {
   const [editingTag, setEditingTag] = useState<TopicRow | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
 
+  // ---- bulk ops state ----
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [mergeModalOpen, setMergeModalOpen] = useState(false)
+  const [reparentModalOpen, setReparentModalOpen] = useState(false)
+  const [deleteResults, setDeleteResults] = useState<{
+    deleted: number
+    failed: { label: string; reason: string }[]
+  } | null>(null)
+
   // ---- load ----
   const load = useCallback(async () => {
     setLoading(true)
@@ -192,6 +201,48 @@ export const TopicTaxonomyManager = () => {
     })
   }
 
+  // ---- bulk ops ----
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const clearSelection = () => setSelected(new Set())
+
+  const selectedTags = useMemo(
+    () => tags.filter((t) => selected.has(t.id)),
+    [tags, selected],
+  )
+
+  const handleDelete = async () => {
+    let deleted = 0
+    const failed: { label: string; reason: string }[] = []
+    for (const tag of selectedTags) {
+      try {
+        const res = await fetch(`/api/admin/topics/${tag.id}`, { method: 'DELETE' })
+        const body = await res.json().catch(() => ({}))
+        if (res.ok) {
+          deleted++
+        } else {
+          failed.push({ label: tag.valueId, reason: body.error || 'unknown error' })
+        }
+      } catch {
+        failed.push({ label: tag.valueId, reason: 'network error' })
+      }
+    }
+    setDeleteResults({ deleted, failed })
+    if (deleted > 0) {
+      setFlash(`${deleted} topic${deleted !== 1 ? 's' : ''} deleted.`)
+      setTimeout(() => setFlash(null), 3000)
+      load()
+    }
+    setSelected(new Set())
+  }
+
   // ---- render ----
   return (
     <Box style={{ paddingBottom: 48 }}>
@@ -218,56 +269,92 @@ export const TopicTaxonomyManager = () => {
         )}
       </Box>
 
-      {/* Toolbar */}
-      <Box
-        style={{
-          display: 'flex',
-          gap: 7,
-          alignItems: 'center',
-          marginBottom: 10,
-          flexWrap: 'wrap',
-        }}
-      >
-        <input
-          placeholder='Search topics, aliases…'
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
-            setVisibleCount(PAGE_SIZE) // reset pagination on search
-          }}
+      {/* Toolbar or Bulk bar */}
+      {selected.size > 0 ? (
+        <Box
           style={{
-            flex: 1,
-            minWidth: 120,
-            border: '1px solid #e2e8f0',
-            borderRadius: 7,
-            padding: '6px 10px',
-            fontSize: 13,
-            fontFamily: 'inherit',
-            color: '#4a5568',
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginBottom: 10,
+            flexWrap: 'wrap',
+            background: '#ebf4ff',
+            border: '1px solid #c3dafe',
+            borderRadius: 8,
+            padding: '8px 10px',
           }}
-        />
-        {!isSearching && hasTree(tags) && (
-          <Box
+        >
+          <Box as='span' style={{ fontSize: 12, fontWeight: 700, color: '#1a365d' }}>
+            {selected.size} selected
+          </Box>
+          <Box as='button' onClick={() => setMergeModalOpen(true)} style={{ font: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
+            Merge into…
+          </Box>
+          <Box as='button' onClick={() => setReparentModalOpen(true)} style={{ font: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
+            Re-parent…
+          </Box>
+          <Box as='button' onClick={handleDelete} style={{ font: 'inherit', fontSize: 11, border: '1px solid #f0b4b4', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#C11101', background: '#fff', fontWeight: 600 }}>
+            Delete unused
+          </Box>
+          <Box style={{ flex: 1 }} />
+          <Box as='button' onClick={() => setSelected(new Set(filteredTags.map((t) => t.id)))} style={{ font: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
+            Select all
+          </Box>
+          <Box as='button' onClick={clearSelection} style={{ font: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
+            Clear
+          </Box>
+        </Box>
+      ) : (
+        <Box
+          style={{
+            display: 'flex',
+            gap: 7,
+            alignItems: 'center',
+            marginBottom: 10,
+            flexWrap: 'wrap',
+          }}
+        >
+          <input
+            placeholder='Search topics, aliases…'
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setVisibleCount(PAGE_SIZE) // reset pagination on search
+            }}
             style={{
-              display: 'flex',
+              flex: 1,
+              minWidth: 120,
               border: '1px solid #e2e8f0',
               borderRadius: 7,
-              overflow: 'hidden',
+              padding: '6px 10px',
+              fontSize: 13,
+              fontFamily: 'inherit',
+              color: '#4a5568',
             }}
-          >
-            <ViewToggle
-              label='Tree'
-              active={viewMode === 'tree'}
-              onClick={() => setViewMode('tree')}
-            />
-            <ViewToggle
-              label='Flat'
-              active={viewMode === 'flat'}
-              onClick={() => setViewMode('flat')}
-            />
-          </Box>
-        )}
-      </Box>
+          />
+          {!isSearching && hasTree(tags) && (
+            <Box
+              style={{
+                display: 'flex',
+                border: '1px solid #e2e8f0',
+                borderRadius: 7,
+                overflow: 'hidden',
+              }}
+            >
+              <ViewToggle
+                label='Tree'
+                active={viewMode === 'tree'}
+                onClick={() => setViewMode('tree')}
+              />
+              <ViewToggle
+                label='Flat'
+                active={viewMode === 'flat'}
+                onClick={() => setViewMode('flat')}
+              />
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Error */}
       {error && (
@@ -301,6 +388,29 @@ export const TopicTaxonomyManager = () => {
         </Box>
       )}
 
+      {/* Delete results */}
+      {deleteResults && deleteResults.failed.length > 0 && (
+        <Box
+          style={{
+            padding: '8px 12px',
+            marginBottom: 10,
+            color: '#C11101',
+            background: '#fff0f0',
+            border: '1px solid #f0b4b4',
+            borderRadius: 6,
+            fontSize: 12,
+          }}
+        >
+          {deleteResults.deleted > 0 && (
+            <Box style={{ marginBottom: 4, color: '#2f855a' }}>
+              {deleteResults.deleted} topic{deleteResults.deleted !== 1 ? 's' : ''} deleted.
+            </Box>
+          )}
+          {deleteResults.failed.length} tag{deleteResults.failed.length !== 1 ? 's' : ''} in use, cannot delete:{' '}
+          {deleteResults.failed.map((f) => f.label).join(', ')}
+        </Box>
+      )}
+
       {/* List */}
       {loading ? (
         <Text style={{ color: '#595959' }}>Loading…</Text>
@@ -329,7 +439,17 @@ export const TopicTaxonomyManager = () => {
               letterSpacing: '0.05em' as const,
             }}
           >
-            <Box style={{ width: 14 }} />
+            <Box style={{ width: 14, display: 'flex', alignItems: 'center' }}>
+              <input
+                type='checkbox'
+                checked={visibleTags.length > 0 && visibleTags.every((t) => selected.has(t.id))}
+                onChange={(e) => {
+                  if (e.target.checked) setSelected(new Set(filteredTags.map((t) => t.id)))
+                  else setSelected(new Set())
+                }}
+                style={{ margin: 0, cursor: 'pointer' }}
+              />
+            </Box>
             <Box style={{ flex: 1 }}>Topic</Box>
             <Box style={{ width: 50, textAlign: 'right' }}>Docs</Box>
           </Box>
@@ -352,6 +472,18 @@ export const TopicTaxonomyManager = () => {
                   paddingLeft: 10 + indent,
                 }}
               >
+              <Box style={{ width: 14, display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type='checkbox'
+                    checked={selected.has(tag.id)}
+                    onChange={(e) => {
+                      e.stopPropagation()
+                      toggleSelect(tag.id)
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ margin: 0, cursor: 'pointer' }}
+                  />
+                </Box>
                 {/* Chevron for tree nodes with children */}
                 {useTree && hasChildren ? (
                   <Box
@@ -449,6 +581,38 @@ export const TopicTaxonomyManager = () => {
           onSaved={() => {
             setFlash('Topic saved.')
             setTimeout(() => setFlash(null), 3000)
+            load()
+          }}
+        />
+      )}
+
+      {/* Merge modal */}
+      {mergeModalOpen && selectedTags.length > 0 && (
+        <MergeModal
+          selectedTags={selectedTags}
+          allTags={tags}
+          onClose={() => setMergeModalOpen(false)}
+          onMerged={() => {
+            setMergeModalOpen(false)
+            setFlash('Topics merged.')
+            setTimeout(() => setFlash(null), 3000)
+            setSelected(new Set())
+            load()
+          }}
+        />
+      )}
+
+      {/* Re-parent modal */}
+      {reparentModalOpen && selectedTags.length > 0 && (
+        <ReparentModal
+          selectedTags={selectedTags}
+          allTags={tags}
+          onClose={() => setReparentModalOpen(false)}
+          onDone={() => {
+            setReparentModalOpen(false)
+            setFlash('Topics re-parented.')
+            setTimeout(() => setFlash(null), 3000)
+            setSelected(new Set())
             load()
           }}
         />
@@ -824,6 +988,310 @@ const EditDrawer = ({
             </Text>
           </Box>
         )}
+      </Box>
+    </>
+  )
+}
+
+// ---- MergeModal ----
+
+const MergeModal = ({
+  selectedTags,
+  allTags,
+  onClose,
+  onMerged,
+}: {
+  selectedTags: TopicRow[]
+  allTags: TopicRow[]
+  onClose: () => void
+  onMerged: () => void
+}) => {
+  const [targetId, setTargetId] = useState('')
+  const [merging, setMerging] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // All topics are candidates for the target (including selected — the target
+  // is skipped in the merge loop, so it survives as the survivor).
+  const targetOptions = allTags
+  const sources = selectedTags.filter((t) => t.id !== targetId)
+  const target = allTags.find((t) => t.id === targetId)
+
+  const handleMerge = async () => {
+    if (!targetId || sources.length === 0) return
+    setMerging(true)
+    setError(null)
+    try {
+      for (const source of sources) {
+        const res = await fetch(`/api/admin/topics/${source.id}/merge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ intoTagId: targetId }),
+        })
+        if (res.status === 401) {
+          // eslint-disable-next-line react-hooks/immutability
+          window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+          return
+        }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          setError(body.error || 'Merge failed')
+          return
+        }
+      }
+      onMerged()
+    } catch (err: any) {
+      setError(err.message || 'Network error')
+    } finally {
+      setMerging(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    border: '1px solid #e2e8f0',
+    borderRadius: 6,
+    padding: '5px 8px',
+    fontSize: 12,
+    fontFamily: 'inherit',
+    color: '#2d3748',
+  }
+
+  return (
+    <>
+      <Box
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(26,54,93,0.35)',
+          zIndex: 100,
+        }}
+      />
+      <Box
+        style={{
+          position: 'fixed',
+          top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 420,
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 20px 60px rgba(26,54,93,0.30)',
+          zIndex: 101,
+          padding: 18,
+        }}
+      >
+        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <Heading size='sm' style={{ color: '#1a365d' }}>
+            Merge {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
+          </Heading>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+            ✕
+          </Box>
+        </Box>
+
+        {error && (
+          <Box style={{ fontSize: 11, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '6px 10px', marginBottom: 12 }}>
+            {error}
+          </Box>
+        )}
+
+        {/* Selected topics */}
+        <Box style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>
+            Selected topics
+          </label>
+          <Box style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {selectedTags.map((t) => (
+              <Box key={t.id} style={{ fontSize: 12, color: '#2d3748', background: '#ebf4ff', border: '1px solid #c3dafe', borderRadius: 999, padding: '4px 10px', alignSelf: 'flex-start' }}>
+                {t.valueId}
+              </Box>
+            ))}
+          </Box>
+        </Box>
+
+        {/* Target picker */}
+        <Box style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>
+            Merge all into
+          </label>
+          <select
+            value={targetId}
+            onChange={(e) => { setTargetId(e.target.value); setError(null) }}
+            style={inputStyle}
+          >
+            <option value=''>— select target —</option>
+            {targetOptions.map((t) => (
+              <option key={t.id} value={t.id}>{t.valueId} ({t.acceptedCount} docs)</option>
+            ))}
+          </select>
+        </Box>
+
+        {/* Preview */}
+        {targetId && sources.length > 0 && (
+          <Box style={{ background: '#f7f7f7', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 13px', marginBottom: 12 }}>
+            <Box style={{ fontSize: 11, fontWeight: 700, color: '#1a365d', marginBottom: 6 }}>Preview</Box>
+            {sources.map((s) => (
+              <Box key={s.id} style={{ fontSize: 12, color: '#2d3748', lineHeight: 1.6 }}>
+                <strong>{s.valueId}</strong> → <strong>{target?.valueId}</strong> · {s.acceptedCount} docs move
+              </Box>
+            ))}
+            <Box style={{ fontSize: 11, color: '#b7791f', marginTop: 6 }}>
+              {sources.length} tag{sources.length !== 1 ? 's' : ''} will be deleted; aliases merged into {target?.valueId}.
+            </Box>
+          </Box>
+        )}
+
+        {/* Buttons */}
+        <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+            Cancel
+          </Box>
+          <Box as='button'
+            onClick={handleMerge}
+            disabled={merging || !targetId || sources.length === 0}
+            style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: merging || !targetId || sources.length === 0 ? 0.5 : 1 }}
+          >
+            {merging ? 'Merging…' : 'Merge & re-classify'}
+          </Box>
+        </Box>
+      </Box>
+    </>
+  )
+}
+
+// ---- ReparentModal ----
+
+const ReparentModal = ({
+  selectedTags,
+  allTags,
+  onClose,
+  onDone,
+}: {
+  selectedTags: TopicRow[]
+  allTags: TopicRow[]
+  onClose: () => void
+  onDone: () => void
+}) => {
+  const [parentTagId, setParentTagId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<{ label: string; reason: string }[]>([])
+
+  // Parent options: all tags except the selected ones (can't be own parent)
+  const parentOptions = useMemo(
+    () => allTags.filter((t) => !selectedTags.some((s) => s.id === t.id)),
+    [allTags, selectedTags],
+  )
+
+  const handleReparent = async () => {
+    setSaving(true)
+    setErrors([])
+    const failures: { label: string; reason: string }[] = []
+    for (const tag of selectedTags) {
+      try {
+        const res = await fetch(`/api/admin/topics/${tag.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentTagId: parentTagId || null }),
+        })
+        if (res.status === 401) {
+          window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+          return
+        }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          failures.push({ label: tag.valueId, reason: body.error || 'failed' })
+        }
+      } catch {
+        failures.push({ label: tag.valueId, reason: 'network error' })
+      }
+    }
+    setSaving(false)
+    if (failures.length === 0) {
+      onDone()
+    } else {
+      setErrors(failures)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    border: '1px solid #e2e8f0',
+    borderRadius: 6,
+    padding: '5px 8px',
+    fontSize: 12,
+    fontFamily: 'inherit',
+    color: '#2d3748',
+  }
+
+  return (
+    <>
+      <Box
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(26,54,93,0.35)',
+          zIndex: 100,
+        }}
+      />
+      <Box
+        style={{
+          position: 'fixed',
+          top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 380,
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 20px 60px rgba(26,54,93,0.30)',
+          zIndex: 101,
+          padding: 18,
+        }}
+      >
+        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <Heading size='sm' style={{ color: '#1a365d' }}>
+            Re-parent {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
+          </Heading>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+            ✕
+          </Box>
+        </Box>
+
+        {errors.length > 0 && (
+          <Box style={{ fontSize: 11, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '6px 10px', marginBottom: 12 }}>
+            {errors.map((e, i) => (
+              <Box key={i} style={{ marginBottom: 2 }}>{e.label}: {e.reason}</Box>
+            ))}
+          </Box>
+        )}
+
+        <Box style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>
+            New parent topic
+          </label>
+          <select
+            value={parentTagId}
+            onChange={(e) => setParentTagId(e.target.value)}
+            style={inputStyle}
+          >
+            <option value=''>(root)</option>
+            {parentOptions.map((t) => (
+              <option key={t.id} value={t.id}>{t.valueId}</option>
+            ))}
+          </select>
+        </Box>
+
+        <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+            Cancel
+          </Box>
+          <Box as='button'
+            onClick={handleReparent}
+            disabled={saving}
+            style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}
+          >
+            {saving ? 'Saving…' : 'Re-parent'}
+          </Box>
+        </Box>
       </Box>
     </>
   )
