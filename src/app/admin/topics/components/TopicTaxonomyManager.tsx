@@ -100,6 +100,26 @@ export const TopicTaxonomyManager = () => {
   const [csvFilename, setCsvFilename] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // ---- reclassify state ----
+  const [reclassifyModalOpen, setReclassifyModalOpen] = useState(false)
+  const [reclassifyScope, setReclassifyScope] = useState<'all' | string>('all')
+  const [reclassifyEstimate, setReclassifyEstimate] = useState<{ enqueued: number; estCost: number } | null>(null)
+  const [reclassifyEnqueuing, setReclassifyEnqueuing] = useState(false)
+  const [reclassifyStatus, setReclassifyStatus] = useState<{
+    queued: number
+    running: number
+    done: number
+    error: number
+    recent: { runId: string; scope: 'all' | string; total: number; done: number; error: number; estCost: number; createdAt: string }[]
+  } | null>(null)
+  const [reclassifyPanelOpen, setReclassifyPanelOpen] = useState(false)
+  const [reclassifyError, setReclassifyError] = useState<string | null>(null)
+  const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set())
+  const reclassifyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Scoped topic picker
+  const [scopedTopicId, setScopedTopicId] = useState('')
+  const [scopedModalOpen, setScopedModalOpen] = useState(false)
+
   // ---- load ----
   const load = useCallback(async () => {
     setLoading(true)
@@ -378,6 +398,151 @@ export const TopicTaxonomyManager = () => {
     }
   }
 
+  // ---- reclassify handlers ----
+
+  const fetchReclassifyStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/topics/reclassify/status')
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const body = await res.json().catch(() => ({}))
+      if (res.ok && body.ok !== false) {
+        const { ok: _ok, ...rest } = body
+        setReclassifyStatus(rest)
+      }
+    } catch {
+      // Best-effort polling; don't spam errors
+    }
+  }, [])
+
+  // Poll status every 5s when panel is open
+  useEffect(() => {
+    if (reclassifyPanelOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchReclassifyStatus()
+      reclassifyTimerRef.current = setInterval(fetchReclassifyStatus, 5000)
+    }
+    return () => {
+      if (reclassifyTimerRef.current) {
+        clearInterval(reclassifyTimerRef.current)
+        reclassifyTimerRef.current = null
+      }
+    }
+  }, [reclassifyPanelOpen, fetchReclassifyStatus])
+
+  const openReclassifyAll = async () => {
+    setReclassifyModalOpen(true)
+    setReclassifyScope('all')
+    setReclassifyEstimate(null)
+    setReclassifyError(null)
+    try {
+      const res = await fetch('/api/admin/topics/reclassify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'all' }),
+      })
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const body = await res.json().catch(() => ({}))
+      if (res.ok && body.ok !== false) {
+        setReclassifyEstimate({ enqueued: body.enqueued, estCost: body.estCost })
+      } else {
+        setReclassifyError(body.error || 'Failed to estimate re-classify.')
+      }
+    } catch {
+      setReclassifyError('Network error.')
+    }
+  }
+
+  const openReclassifyScoped = () => {
+    setScopedModalOpen(true)
+    setScopedTopicId('')
+  }
+
+  const confirmScopedReclassify = async () => {
+    if (!scopedTopicId) return
+    setScopedModalOpen(false)
+    setReclassifyModalOpen(true)
+    setReclassifyScope(scopedTopicId)
+    setReclassifyEstimate(null)
+    setReclassifyError(null)
+    try {
+      const res = await fetch('/api/admin/topics/reclassify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagId: scopedTopicId }),
+      })
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const body = await res.json().catch(() => ({}))
+      if (res.ok && body.ok !== false) {
+        setReclassifyEstimate({ enqueued: body.enqueued, estCost: body.estCost })
+      } else {
+        setReclassifyError(body.error || 'Failed to estimate re-classify.')
+      }
+    } catch {
+      setReclassifyError('Network error.')
+    }
+  }
+
+  const handleStartReclassify = async () => {
+    if (!reclassifyEstimate || reclassifyEstimate.enqueued === 0) return
+    setReclassifyEnqueuing(true)
+    try {
+      // Already enqueued from the estimate call — just close modal + flash
+      setReclassifyModalOpen(false)
+      setFlash(`Re-classify enqueued: ${reclassifyEstimate.enqueued} docs (≈$${reclassifyEstimate.estCost.toFixed(4)}).`)
+      setTimeout(() => setFlash(null), 4000)
+      setReclassifyPanelOpen(true)
+      fetchReclassifyStatus()
+    } finally {
+      setReclassifyEnqueuing(false)
+    }
+  }
+
+  const handleRetryRun = async (runId: string, scope: 'all' | string) => {
+    try {
+      const body: Record<string, unknown> =
+        scope === 'all' ? { scope: 'all' } : { tagId: scope }
+      const res = await fetch('/api/admin/topics/reclassify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const resBody = await res.json().catch(() => ({}))
+      if (res.ok && resBody.ok !== false) {
+        setFlash(`Retry enqueued: ${resBody.enqueued} docs.`)
+        setTimeout(() => setFlash(null), 3000)
+        fetchReclassifyStatus()
+      } else {
+        setFlash(resBody.error || 'Retry failed.')
+        setTimeout(() => setFlash(null), 3000)
+      }
+    } catch {
+      setFlash('Network error during retry.')
+      setTimeout(() => setFlash(null), 3000)
+    }
+  }
+
+  const toggleErrorExpand = (runId: string) => {
+    setExpandedErrors((prev) => {
+      const next = new Set(prev)
+      if (next.has(runId)) next.delete(runId)
+      else next.add(runId)
+      return next
+    })
+  }
+
   // ---- render ----
   return (
     <Box style={{ paddingBottom: 48 }}>
@@ -497,9 +662,20 @@ export const TopicTaxonomyManager = () => {
           <Box as='button'
             onClick={handleExport}
             style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
-          >
-            Export CSV
-          </Box>
+          >Export CSV</Box>
+          <Box style={{ flex: 1 }} />
+          <Box as='button'
+            onClick={openReclassifyAll}
+            style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 11px', color: '#fff', background: '#1a365d', fontWeight: 600, cursor: 'pointer' }}
+          >Re-classify all</Box>
+          <Box as='button'
+            onClick={openReclassifyScoped}
+            style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+          >Scoped to topic…</Box>
+          <Box as='button'
+            onClick={() => { setReclassifyPanelOpen(!reclassifyPanelOpen) }}
+            style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+          >{reclassifyPanelOpen ? 'Hide' : 'Show'} jobs</Box>
         </Box>
       )}
 
@@ -786,6 +962,41 @@ export const TopicTaxonomyManager = () => {
             setSelected(new Set())
             load()
           }}
+        />
+      )}
+
+      {/* Re-classify confirm modal */}
+      {reclassifyModalOpen && (
+        <ReclassifyConfirmModal
+          scope={reclassifyScope}
+          estimate={reclassifyEstimate}
+          loading={!reclassifyEstimate && !reclassifyError}
+          error={reclassifyError}
+          enqueuing={reclassifyEnqueuing}
+          allTags={tags}
+          onStart={handleStartReclassify}
+          onClose={() => setReclassifyModalOpen(false)}
+        />
+      )}
+
+      {/* Scoped topic picker modal */}
+      {scopedModalOpen && (
+        <ScopedTopicPicker
+          allTags={tags}
+          selectedId={scopedTopicId}
+          onSelect={setScopedTopicId}
+          onConfirm={confirmScopedReclassify}
+          onClose={() => setScopedModalOpen(false)}
+        />
+      )}
+
+      {/* Re-classify status panel */}
+      {reclassifyPanelOpen && reclassifyStatus && (
+        <ReclassifyPanel
+          status={reclassifyStatus}
+          expandedErrors={expandedErrors}
+          onToggleError={toggleErrorExpand}
+          onRetryRun={handleRetryRun}
         />
       )}
     </Box>
@@ -1638,5 +1849,256 @@ const CsvImportModal = ({
         )}
       </Box>
     </>
+  )
+}
+
+// ---- Reclassify confirm modal ----
+
+const ReclassifyConfirmModal = ({
+  scope,
+  estimate,
+  loading,
+  error,
+  enqueuing,
+  allTags,
+  onStart,
+  onClose,
+}: {
+  scope: 'all' | string
+  estimate: { enqueued: number; estCost: number } | null
+  loading: boolean
+  error: string | null
+  enqueuing: boolean
+  allTags: TopicRow[]
+  onStart: () => void
+  onClose: () => void
+}) => {
+  const scopeLabel = scope === 'all' ? 'All docs' : `Topic: ${allTags.find((t) => t.id === scope)?.valueId ?? scope}`
+  const canStart = estimate && estimate.enqueued > 0 && !enqueuing
+
+  return (
+    <>
+      <Box
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          background: 'rgba(26,54,93,0.35)',
+          zIndex: 100,
+        }}
+      />
+      <Box
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 440,
+          maxWidth: '90vw',
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 20px 60px rgba(26,54,93,0.30)',
+          zIndex: 101,
+          padding: 18,
+        }}
+      >
+        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <Heading size='sm' style={{ color: '#1a365d' }}>Re-classify: {scopeLabel}</Heading>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</Box>
+        </Box>
+
+        {loading && (
+          <Text style={{ color: '#595959', fontSize: 13 }}>Estimating…</Text>
+        )}
+        {error && (
+          <Box style={{ padding: '8px 12px', marginBottom: 10, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 6, fontSize: 13 }}>
+            {error}
+          </Box>
+        )}
+        {estimate && (
+          <>
+            <Box style={{ fontSize: 13, color: '#2d3748', marginBottom: 8 }}>
+              Re-classify <b>{estimate.enqueued}</b> docs? Estimated cost: <b>≈${estimate.estCost.toFixed(4)}</b>.
+            </Box>
+            <Box style={{ fontSize: 12, color: '#595959', marginBottom: 14 }}>
+              Each doc gets one LLM call (gpt-5-mini, topic-only). Human overrides are preserved.
+            </Box>
+          </>
+        )}
+
+        <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</Box>
+          <Box as='button'
+            onClick={onStart}
+            disabled={!canStart}
+            style={{ font: 'inherit', fontSize: 11, border: canStart ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: canStart ? 'pointer' : 'not-allowed', color: '#fff', background: canStart ? '#1a365d' : '#a0aec0' }}
+          >{enqueuing ? 'Starting…' : 'Start'}</Box>
+        </Box>
+      </Box>
+    </>
+  )
+}
+
+// ---- Scoped topic picker ----
+
+const ScopedTopicPicker = ({
+  allTags,
+  selectedId,
+  onSelect,
+  onConfirm,
+  onClose,
+}: {
+  allTags: TopicRow[]
+  selectedId: string
+  onSelect: (id: string) => void
+  onConfirm: () => void
+  onClose: () => void
+}) => { // eslint-disable-line arrow-body-style
+  return (
+    <>
+      <Box onClick={onClose} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, background: 'rgba(26,54,93,0.35)', zIndex: 100 }} />
+      <Box style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 380, maxWidth: '90vw', background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(26,54,93,0.30)', zIndex: 101, padding: 18 }}>
+        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <Heading size='sm' style={{ color: '#1a365d' }}>Scoped re-classify</Heading>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</Box>
+        </Box>
+        <Box style={{ marginBottom: 10 }}>
+          <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>Pick a topic</label>
+          <select
+            value={selectedId}
+            onChange={(e) => onSelect(e.target.value)}
+            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, fontFamily: 'inherit', color: '#2d3748' }}
+          >
+            <option value=''>— select a topic —</option>
+            {allTags.map((t) => (
+              <option key={t.id} value={t.id}>{t.valueId} ({t.acceptedCount} docs)</option>
+            ))}
+          </select>
+        </Box>
+        <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</Box>
+          <Box as='button'
+            onClick={onConfirm}
+            disabled={!selectedId}
+            style={{ font: 'inherit', fontSize: 11, border: selectedId ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: selectedId ? 'pointer' : 'not-allowed', color: '#fff', background: selectedId ? '#1a365d' : '#a0aec0' }}
+          >Confirm</Box>
+        </Box>
+      </Box>
+    </>
+  )
+}
+
+// ---- Reclassify status panel ----
+
+const ReclassifyPanel = ({
+  status,
+  expandedErrors,
+  onToggleError,
+  onRetryRun,
+}: {
+  status: {
+    queued: number
+    running: number
+    done: number
+    error: number
+    recent: { runId: string; scope: 'all' | string; total: number; done: number; error: number; estCost: number; createdAt: string }[]
+  }
+  expandedErrors: Set<string>
+  onToggleError: (runId: string) => void
+  onRetryRun: (runId: string, scope: 'all' | string) => void
+}) => {
+  const activeRun = status.recent[0]
+  const totalActive = activeRun ? activeRun.total : 0
+  const doneActive = activeRun ? activeRun.done : 0
+  const pct = totalActive > 0 ? Math.round((doneActive / totalActive) * 100) : 0
+
+  return (
+    <Box style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 12 }}>
+      {/* Panel header */}
+      <Box style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f7f7f7', borderBottom: '1px solid #e2e8f0' }}>
+        <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {(status.queued > 0 || status.running > 0) && (
+            <Box style={{ width: 9, height: 9, borderRadius: '50%', background: '#3182ce' }} />
+          )}
+          <Heading size='sm' style={{ color: '#1a365d' }}>Re-classify jobs</Heading>
+        </Box>
+        <Box style={{ fontSize: 11, color: '#595959' }}>Auto-refresh 5s</Box>
+      </Box>
+
+      <Box style={{ padding: 16 }}>
+        {/* Live progress */}
+        {activeRun && (status.queued > 0 || status.running > 0) && (
+          <Box style={{ background: '#ebf4ff', border: '1px solid #c3e2f7', borderRadius: 9, padding: '14px 16px', marginBottom: 16 }}>
+            <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 9 }}>
+              <Box style={{ fontSize: 13, fontWeight: 700, color: '#3182ce' }}>
+                {activeRun.scope === 'all' ? 'Full corpus' : `Scoped: ${activeRun.scope}`} · in progress
+              </Box>
+              <Box style={{ fontSize: 13, color: '#2d3748' }}>
+                <b>{doneActive}</b> / {totalActive} docs · {pct}%
+              </Box>
+            </Box>
+            {/* Progress bar */}
+            <Box style={{ height: 10, background: '#fff', borderRadius: 999, overflow: 'hidden', border: '1px solid #c3e2f7' }}>
+              <Box style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, #3182ce, #63b3ed)', borderRadius: 999, transition: 'width 0.5s' }} />
+            </Box>
+            <Box style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 11, color: '#595959', flexWrap: 'wrap' }}>
+              <span>est. cost <b>${activeRun.estCost.toFixed(4)}</b></span>
+              {status.error > 0 && <span style={{ color: '#C11101' }}>{status.error} error{status.error !== 1 ? 's' : ''}</span>}
+            </Box>
+          </Box>
+        )}
+
+        {/* Recent runs */}
+        {status.recent.length > 0 && (
+          <>
+            <Box style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#595959', marginBottom: 8 }}>Recent runs</Box>
+            <Box style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {status.recent.map((run) => {
+                const scopeLabel = run.scope === 'all' ? 'Full corpus' : `Scoped: ${run.scope}`
+                const isExpanded = expandedErrors.has(run.runId)
+                return (
+                  <Box key={run.runId} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #edf2f7', borderRadius: 9, padding: '10px 12px' }}>
+                    <Box style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flex: '0 0 30px', background: run.scope === 'all' ? '#ebf4ff' : '#f0fff4', color: run.scope === 'all' ? '#3182ce' : '#2f855a' }}>
+                      {run.scope === 'all' ? '∞' : '⌖'}
+                    </Box>
+                    <Box style={{ flex: 1, minWidth: 0 }}>
+                      <Box style={{ fontSize: 13, fontWeight: 600, color: '#2d3748' }}>{scopeLabel}</Box>
+                      <Box style={{ fontSize: 11, color: '#595959', marginTop: 1 }}>{run.done}/{run.total} docs{run.error > 0 && <span style={{ color: '#C11101' }}> · {run.error} error{run.error !== 1 ? 's' : ''}</span>}</Box>
+                    </Box>
+                    <Box style={{ textAlign: 'right', fontSize: 11, color: '#595959', whiteSpace: 'nowrap' }}>
+                      <b style={{ color: '#2d3748' }}>${run.estCost.toFixed(4)}</b>
+                      <br />
+                      <span style={{ fontSize: 10, color: '#718096' }}>{new Date(run.createdAt).toLocaleString()}</span>
+                    </Box>
+                    {run.error > 0 && (
+                      <Box as='button'
+                        onClick={() => onToggleError(run.runId)}
+                        style={{ font: 'inherit', fontSize: 10, border: '1px solid #f0b4b4', borderRadius: 999, padding: '2px 8px', cursor: 'pointer', color: '#C11101', background: '#fff0f0', fontWeight: 600 }}
+                      >{isExpanded ? 'Hide' : `${run.error} error${run.error !== 1 ? 's' : ''}`}</Box>
+                    )}
+                    {run.error > 0 && isExpanded && (
+                      <Box style={{ width: '100%', padding: '8px 10px', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 8, fontSize: 11, color: '#C11101' }}>
+                        <Box style={{ display: 'flex', gap: 6, padding: '2px 0' }}>
+                          <Box style={{ fontWeight: 600 }}>{run.error} failed doc{run.error !== 1 ? 's' : ''}</Box>
+                          <Box as='button' onClick={() => onRetryRun(run.runId, run.scope)} style={{ font: 'inherit', color: '#1a365d', textDecoration: 'underline', cursor: 'pointer', background: 'transparent', border: 'none' }}>Retry</Box>
+                        </Box>
+                      </Box>
+                    )}
+                  </Box>
+                )
+              })}
+            </Box>
+          </>
+        )}
+
+        {/* Empty state */}
+        {status.recent.length === 0 && (status.queued + status.running + status.done + status.error) === 0 && (
+          <Text style={{ color: '#595959', fontSize: 12 }}>No re-classify jobs yet.</Text>
+        )}
+      </Box>
+    </Box>
   )
 }

@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
 import { TopicTaxonomyManager } from '@/app/admin/topics/components/TopicTaxonomyManager'
@@ -683,5 +683,158 @@ NewTopic,desc,, ,topic,
       expect(screen.getByText('tag_update')).toBeTruthy()
       expect(screen.getByText('tag_create')).toBeTruthy()
     })
+  })
+
+  // ---- Task 17: Re-classify panel + trigger bar ----
+
+  it('shows Re-classify trigger buttons in the toolbar', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Re-classify all')).toBeTruthy()
+      expect(screen.getByText('Scoped to topic…')).toBeTruthy()
+    })
+  })
+
+  it('opens confirm modal with estCost when Re-classify all is clicked', async () => {
+    global.fetch = jest.fn((url: string) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify' && (url as any).method !== 'GET') {
+        // For POST reclassify
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, enqueued: 203, estCost: 0.17, runId: 'run-1' }),
+        }) as any
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
+    })
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    // Click the Re-classify all button
+    fireEvent.click(screen.getByText('Re-classify all'))
+
+    // Confirm modal should show the estimated count + cost
+    await waitFor(() => {
+      expect(screen.getByText(/203/)).toBeTruthy()
+      expect(screen.getByText(/\$0\.17/)).toBeTruthy()
+      expect(screen.getByText('Start')).toBeTruthy()
+    })
+  })
+
+  it('calls POST /reclassify when Re-classify all is clicked', async () => {
+    const fetchMock = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify') {
+        if (init?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ ok: true, enqueued: 203, estCost: 0.17, runId: 'run-1' }),
+          }) as any
+        }
+        // GET status
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ok: true, queued: 0, running: 0, done: 203, error: 0, recent: [] }),
+          }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    // Click Re-classify all — this triggers POST /reclassify (estimate = enqueue)
+    fireEvent.click(screen.getByText('Re-classify all'))
+
+    // Verify POST /reclassify was called (estimate call IS the enqueue)
+    await waitFor(() => {
+      const postCalls = fetchMock.mock.calls.filter(
+        ([u, init]: any) => u === '/api/admin/topics/reclassify' && init?.method === 'POST',
+      )
+      expect(postCalls.length).toBeGreaterThanOrEqual(1)
+    })
+
+    // Start button should be visible and clickable
+    await waitFor(() => expect(screen.getByText('Start')).toBeTruthy())
+  })
+
+  it('displays reclassify status panel with recent runs', async () => {
+    // Use fake timers to avoid waiting 5s for the polling interval
+    jest.useFakeTimers()
+    global.fetch = jest.fn((url: string) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify/status') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ok: true, queued: 47, running: 0, done: 156, error: 0,
+            recent: [
+              { runId: 'run-1', scope: 'all', total: 203, done: 156, error: 0, estCost: 0.17, createdAt: '2026-08-17T12:00:00Z' },
+              { runId: 'run-2', scope: 't1', total: 12, done: 12, error: 0, estCost: 0.01, createdAt: '2026-08-17T11:00:00Z' },
+            ],
+          }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    const { unmount } = render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    // Wait for initial tags load
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    // Open the status panel — the useEffect immediately fetches status
+    fireEvent.click(screen.getByText('Show jobs'))
+
+    // With fake timers, fetch promises resolve on microtasks.
+    // Use act() to flush them + trigger re-render.
+    await act(async () => {
+      jest.advanceTimersByTime(6000)
+      await Promise.resolve()
+    })
+
+    // Status panel should show progress + recent runs
+    expect(screen.getByText(/Re-classify jobs/i)).toBeTruthy()
+    // The first recent run is 'Full corpus' with 203 total — appears in progress + recent
+    expect(screen.getAllByText(/Full corpus/i).length).toBeGreaterThanOrEqual(1)
+
+    unmount()
+    jest.useRealTimers()
   })
 })
