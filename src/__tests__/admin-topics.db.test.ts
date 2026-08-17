@@ -68,10 +68,9 @@ d('topicsAdmin list/get (DB integration)', () => {
       `DELETE FROM tag_aliases WHERE tag_id = ANY($1::uuid[])`,
       [ids],
     )
-    await AppDataSource.query(
-      `DELETE FROM tags WHERE id = ANY($1::uuid[])`,
-      [ids],
-    )
+    await AppDataSource.query(`DELETE FROM tags WHERE id = ANY($1::uuid[])`, [
+      ids,
+    ])
     await AppDataSource.destroy()
   })
 
@@ -132,41 +131,57 @@ d('topicsAdmin list/get (DB integration)', () => {
 
   it('createTopic sets needs_reembed, writes aliases, and writes audit', async () => {
     const result = await createTopic(
-      { valueId: '__test_create__', description: 'created desc', aliases: ['__c_alias1__', '__c_alias2__'] },
+      {
+        valueId: '__test_create__',
+        description: 'created desc',
+        aliases: ['__c_alias1__', '__c_alias2__'],
+      },
       adminIdentity,
     )
     // Guard: ensure we got a Tag back, not an error
-    if ('error' in result) throw new Error(`createTopic returned error: ${result.error}`)
+    if ('error' in result)
+      throw new Error(`createTopic returned error: ${result.error}`)
     const created = result as any
     ids.push(created.id)
 
     // needs_reembed must be true
     const [row] = await AppDataSource.query(
-      `SELECT needs_reembed FROM tags WHERE id = $1`, [created.id],
+      `SELECT needs_reembed FROM tags WHERE id = $1`,
+      [created.id],
     )
     expect(row.needs_reembed).toBe(true)
 
     // Aliases must be inserted
     const aliases: any[] = await AppDataSource.query(
-      `SELECT alias FROM tag_aliases WHERE tag_id = $1 ORDER BY alias`, [created.id],
+      `SELECT alias FROM tag_aliases WHERE tag_id = $1 ORDER BY alias`,
+      [created.id],
     )
-    expect(aliases.map((a) => a.alias)).toEqual(['__c_alias1__', '__c_alias2__'])
+    expect(aliases.map((a) => a.alias)).toEqual([
+      '__c_alias1__',
+      '__c_alias2__',
+    ])
 
     // Audit row must exist
     const [audit] = await AppDataSource.query(
-      `SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'tag_create'`, [created.id],
+      `SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'tag_create'`,
+      [created.id],
     )
     expect(audit).toBeDefined()
   })
 
-  it('updateTopic rejects a cycle A→B→A (root.parent = child where root is child\'s parent)', async () => {
+  it("updateTopic rejects a cycle A→B→A (root.parent = child where root is child's parent)", async () => {
     // rootId is parent of childId. Setting root.parent = child creates a cycle.
-    const res = await updateTopic(rootId, { parentTagId: childId }, adminIdentity)
+    const res = await updateTopic(
+      rootId,
+      { parentTagId: childId },
+      adminIdentity,
+    )
     expect(res).toEqual({ error: 'cycle' })
 
     // Verify root's parent was NOT changed
     const [row] = await AppDataSource.query(
-      `SELECT parent_tag_id FROM tags WHERE id = $1`, [rootId],
+      `SELECT parent_tag_id FROM tags WHERE id = $1`,
+      [rootId],
     )
     expect(row.parent_tag_id).toBeNull()
   })
@@ -174,25 +189,33 @@ d('topicsAdmin list/get (DB integration)', () => {
   it('updateTopic edits description + replaces aliases + sets needs_reembed', async () => {
     // Reset needs_reembed to false first so we can detect the flip
     await AppDataSource.query(
-      `UPDATE tags SET needs_reembed = false WHERE id = $1`, [rootId],
+      `UPDATE tags SET needs_reembed = false WHERE id = $1`,
+      [rootId],
     )
 
-    await updateTopic(rootId, { description: 'changed desc', aliases: ['__new_alias__'] }, adminIdentity)
+    await updateTopic(
+      rootId,
+      { description: 'changed desc', aliases: ['__new_alias__'] },
+      adminIdentity,
+    )
 
     const [row] = await AppDataSource.query(
-      `SELECT description, needs_reembed FROM tags WHERE id = $1`, [rootId],
+      `SELECT description, needs_reembed FROM tags WHERE id = $1`,
+      [rootId],
     )
     expect(row.description).toBe('changed desc')
     expect(row.needs_reembed).toBe(true)
 
     const aliases: any[] = await AppDataSource.query(
-      `SELECT alias FROM tag_aliases WHERE tag_id = $1`, [rootId],
+      `SELECT alias FROM tag_aliases WHERE tag_id = $1`,
+      [rootId],
     )
     expect(aliases.map((a) => a.alias)).toEqual(['__new_alias__'])
 
     // Audit row must exist for the update
     const [audit] = await AppDataSource.query(
-      `SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'tag_update'`, [rootId],
+      `SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'tag_update'`,
+      [rootId],
     )
     expect(audit).toBeDefined()
   })
@@ -204,7 +227,10 @@ d('topicsAdmin list/get (DB integration)', () => {
     expect(res).toMatchObject({ deleted: false, reason: 'has_children' })
 
     // Verify root still exists
-    const [row] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [rootId])
+    const [row] = await AppDataSource.query(
+      `SELECT 1 FROM tags WHERE id = $1`,
+      [rootId],
+    )
     expect(row).toBeDefined()
   })
 
@@ -220,22 +246,32 @@ d('topicsAdmin list/get (DB integration)', () => {
     expect(res).toMatchObject({ deleted: true })
 
     // Verify it's gone
-    const [gone] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [tmpId])
+    const [gone] = await AppDataSource.query(
+      `SELECT 1 FROM tags WHERE id = $1`,
+      [tmpId],
+    )
     expect(gone).toBeUndefined()
 
     // Clean up audit row
-    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [tmpId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+      tmpId,
+    ])
   })
 
   it('mergeTags moves document_tags, deletes source, and re-parents children', async () => {
     // Ensure no stale document_tags on childId from prior runs
-    await AppDataSource.query(`DELETE FROM document_tags WHERE tag_id = $1`, [childId])
+    await AppDataSource.query(`DELETE FROM document_tags WHERE tag_id = $1`, [
+      childId,
+    ])
 
     // Create a temporary document
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Merge Test', 'needs_review') RETURNING id`,
-      [`__merge_test_${Date.now()}__`, `documents/__merge_test_${Date.now()}__.pdf`],
+      [
+        `__merge_test_${Date.now()}__`,
+        `documents/__merge_test_${Date.now()}__.pdf`,
+      ],
     )
     const docId = docRow.id
 
@@ -251,23 +287,30 @@ d('topicsAdmin list/get (DB integration)', () => {
 
     // The doc_tag should now be on rootId
     const [moved] = await AppDataSource.query(
-      `SELECT tag_id FROM document_tags WHERE document_id = $1`, [docId],
+      `SELECT tag_id FROM document_tags WHERE document_id = $1`,
+      [docId],
     )
     expect(moved.tag_id).toBe(rootId)
 
     // childId should be gone
-    const [gone] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [childId])
+    const [gone] = await AppDataSource.query(
+      `SELECT 1 FROM tags WHERE id = $1`,
+      [childId],
+    )
     expect(gone).toBeUndefined()
 
     // Audit row for the merge should exist
     const [audit] = await AppDataSource.query(
-      `SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'tag_merge'`, [rootId],
+      `SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'tag_merge'`,
+      [rootId],
     )
     expect(audit).toBeDefined()
 
     // Cleanup: delete the doc (cascades document_tags), then audit rows
     await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
-    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [rootId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+      rootId,
+    ])
     // Remove childId from ids array — it's already deleted by merge
     const idx = ids.indexOf(childId)
     if (idx >= 0) ids.splice(idx, 1)
@@ -309,18 +352,24 @@ d('topicsAdmin list/get (DB integration)', () => {
 
     // Exactly one row on tagB for this doc
     const rows: any[] = await AppDataSource.query(
-      `SELECT tag_id FROM document_tags WHERE document_id = $1`, [docId],
+      `SELECT tag_id FROM document_tags WHERE document_id = $1`,
+      [docId],
     )
     expect(rows.length).toBe(1)
     expect(rows[0].tag_id).toBe(tagB.id)
 
     // tagA should be deleted
-    const [gone] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [tagA.id])
+    const [gone] = await AppDataSource.query(
+      `SELECT 1 FROM tags WHERE id = $1`,
+      [tagA.id],
+    )
     expect(gone).toBeUndefined()
 
     // Cleanup
     await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
-    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [tagB.id])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+      tagB.id,
+    ])
     const aIdx = ids.indexOf(tagA.id)
     if (aIdx >= 0) ids.splice(aIdx, 1)
   })
@@ -335,7 +384,10 @@ d('topicsAdmin list/get (DB integration)', () => {
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'In-Use Test', 'needs_review') RETURNING id`,
-      [`__inuse_test_${Date.now()}__`, `documents/__inuse_test_${Date.now()}__.pdf`],
+      [
+        `__inuse_test_${Date.now()}__`,
+        `documents/__inuse_test_${Date.now()}__.pdf`,
+      ],
     )
     const docId = docRow.id
     await AppDataSource.query(
@@ -347,16 +399,25 @@ d('topicsAdmin list/get (DB integration)', () => {
     expect(res).toMatchObject({ deleted: false, reason: 'in_use' })
 
     // Tag should still exist
-    const [still] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [tmpTag.id])
+    const [still] = await AppDataSource.query(
+      `SELECT 1 FROM tags WHERE id = $1`,
+      [tmpTag.id],
+    )
     expect(still).toBeDefined()
 
     // Cleanup
-    await AppDataSource.query(`DELETE FROM document_tags WHERE document_id = $1`, [docId])
+    await AppDataSource.query(
+      `DELETE FROM document_tags WHERE document_id = $1`,
+      [docId],
+    )
     await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
   })
 
   it('deleteTopicIfUnused returns not_found for a non-existent id', async () => {
-    const res = await deleteTopicIfUnused('00000000-0000-4000-8000-000000000000', adminIdentity)
+    const res = await deleteTopicIfUnused(
+      '00000000-0000-4000-8000-000000000000',
+      adminIdentity,
+    )
     expect(res).toMatchObject({ deleted: false, reason: 'not_found' })
   })
 
@@ -378,7 +439,10 @@ d('topicsAdmin list/get (DB integration)', () => {
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Reclassify Test', 'ready') RETURNING id`,
-      [`__recls_test_${Date.now()}__`, `documents/__recls_test_${Date.now()}__.pdf`],
+      [
+        `__recls_test_${Date.now()}__`,
+        `documents/__recls_test_${Date.now()}__.pdf`,
+      ],
     )
     const docId = docRow.id
     let runId: string
@@ -401,7 +465,10 @@ d('topicsAdmin list/get (DB integration)', () => {
       expect(r2.runId).not.toBe(r1.runId)
     } finally {
       // Cleanup: delete ALL jobs from this run (may include other ready docs), then the doc
-      await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE run_id = $1`, [runId])
+      await AppDataSource.query(
+        `DELETE FROM reclassify_jobs WHERE run_id = $1`,
+        [runId],
+      )
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     }
   })
@@ -417,7 +484,10 @@ d('topicsAdmin list/get (DB integration)', () => {
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Scoped Reclassify Test', 'needs_review') RETURNING id`,
-      [`__recls_scoped_${Date.now()}__`, `documents/__recls_scoped_${Date.now()}__.pdf`],
+      [
+        `__recls_scoped_${Date.now()}__`,
+        `documents/__recls_scoped_${Date.now()}__.pdf`,
+      ],
     )
     const docId = docRow.id
     await AppDataSource.query(
@@ -433,13 +503,20 @@ d('topicsAdmin list/get (DB integration)', () => {
 
       // Verify the job row exists with the right scope_tag_id
       const [job] = await AppDataSource.query(
-        `SELECT scope_tag_id, run_id FROM reclassify_jobs WHERE document_id = $1`, [docId],
+        `SELECT scope_tag_id, run_id FROM reclassify_jobs WHERE document_id = $1`,
+        [docId],
       )
       expect(job.scope_tag_id).toBe(tagId)
       expect(job.run_id).toBe(r.runId)
     } finally {
-      await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE document_id = $1`, [docId])
-      await AppDataSource.query(`DELETE FROM document_tags WHERE document_id = $1`, [docId])
+      await AppDataSource.query(
+        `DELETE FROM reclassify_jobs WHERE document_id = $1`,
+        [docId],
+      )
+      await AppDataSource.query(
+        `DELETE FROM document_tags WHERE document_id = $1`,
+        [docId],
+      )
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     }
   })
@@ -449,7 +526,10 @@ d('topicsAdmin list/get (DB integration)', () => {
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Status Test', 'ready') RETURNING id`,
-      [`__recls_status_${Date.now()}__`, `documents/__recls_status_${Date.now()}__.pdf`],
+      [
+        `__recls_status_${Date.now()}__`,
+        `documents/__recls_status_${Date.now()}__.pdf`,
+      ],
     )
     const docId = docRow.id
     let runId: string
@@ -480,7 +560,10 @@ d('topicsAdmin list/get (DB integration)', () => {
       expect(entry!.estCost).toBe(+(entry!.total * 0.0008).toFixed(4))
       expect(entry!).toHaveProperty('createdAt')
     } finally {
-      await AppDataSource.query(`DELETE FROM reclassify_jobs WHERE run_id = $1`, [runId])
+      await AppDataSource.query(
+        `DELETE FROM reclassify_jobs WHERE run_id = $1`,
+        [runId],
+      )
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     }
   })
@@ -490,7 +573,7 @@ d('topicsAdmin list/get (DB integration)', () => {
   it('parseTopicsCsv parses quoted fields with commas, pipe aliases, and embedded newlines', () => {
     const csv = [
       'label,description,aliases,parent,facet,id',
-    '"Water, Sanitation, and Hygiene","A description",WASH|Sanitation,,topic,',
+      '"Water, Sanitation, and Hygiene","A description",WASH|Sanitation,,topic,',
       'Coal,,Fossil|Energy,Water,topic,',
       '"Multi\nLine","desc with\nnewline",,,topic,',
     ].join('\n')
@@ -515,7 +598,14 @@ d('topicsAdmin list/get (DB integration)', () => {
 
   it('importTopicsDiff reports a conflict for a bad parent reference', async () => {
     const diff = await importTopicsDiff([
-      { label: `__imp_bad_${Date.now()}__`, description: '', aliases: [], parent: 'NoSuchTopic', facet: 'topic', id: '' },
+      {
+        label: `__imp_bad_${Date.now()}__`,
+        description: '',
+        aliases: [],
+        parent: 'NoSuchTopic',
+        facet: 'topic',
+        id: '',
+      },
     ])
     expect(diff.conflicts.length).toBe(1)
     expect(diff.conflicts[0].reason).toContain('parent')
@@ -524,14 +614,29 @@ d('topicsAdmin list/get (DB integration)', () => {
   it('applyTopicsImport is atomic — throws on conflict and the good row was NOT inserted', async () => {
     const goodLabel = `__imp_good_${Date.now()}__`
     const rows = [
-      { label: goodLabel, description: 'x', aliases: [], parent: '', facet: 'topic', id: '' },
-      { label: `__imp_conflict_${Date.now()}__`, description: '', aliases: [], parent: 'NoSuchTopic', facet: 'topic', id: '' },
+      {
+        label: goodLabel,
+        description: 'x',
+        aliases: [],
+        parent: '',
+        facet: 'topic',
+        id: '',
+      },
+      {
+        label: `__imp_conflict_${Date.now()}__`,
+        description: '',
+        aliases: [],
+        parent: 'NoSuchTopic',
+        facet: 'topic',
+        id: '',
+      },
     ]
     await expect(applyTopicsImport(rows, false)).rejects.toThrow(/conflict/i)
 
     // Verify the good row was NOT inserted (rolled back / never started)
     const [gone] = await AppDataSource.query(
-      `SELECT 1 FROM tags WHERE value_id = $1 AND facet = 'topic'`, [goodLabel],
+      `SELECT 1 FROM tags WHERE value_id = $1 AND facet = 'topic'`,
+      [goodLabel],
     )
     expect(gone).toBeUndefined()
   })
@@ -549,24 +654,46 @@ d('topicsAdmin list/get (DB integration)', () => {
     const parentLabel = `__imp_fwd_parent_${Date.now()}__`
     const childLabel = `__imp_fwd_child_${Date.now()}__`
     const rows = [
-      { label: childLabel, description: '', aliases: [], parent: parentLabel, facet: 'topic', id: '' },
-      { label: parentLabel, description: 'the parent', aliases: [], parent: '', facet: 'topic', id: '' },
+      {
+        label: childLabel,
+        description: '',
+        aliases: [],
+        parent: parentLabel,
+        facet: 'topic',
+        id: '',
+      },
+      {
+        label: parentLabel,
+        description: 'the parent',
+        aliases: [],
+        parent: '',
+        facet: 'topic',
+        id: '',
+      },
     ]
     await applyTopicsImport(rows, false)
 
     const [parentRow] = await AppDataSource.query(
-      `SELECT id FROM tags WHERE value_id = $1 AND facet = 'topic'`, [parentLabel],
+      `SELECT id FROM tags WHERE value_id = $1 AND facet = 'topic'`,
+      [parentLabel],
     )
     const [childRow] = await AppDataSource.query(
-      `SELECT parent_tag_id FROM tags WHERE value_id = $1 AND facet = 'topic'`, [childLabel],
+      `SELECT parent_tag_id FROM tags WHERE value_id = $1 AND facet = 'topic'`,
+      [childLabel],
     )
     expect(parentRow).toBeDefined()
     expect(childRow).toBeDefined()
     expect(childRow.parent_tag_id).toBe(parentRow.id)
 
     // cleanup
-    await AppDataSource.query(`DELETE FROM tag_aliases WHERE tag_id IN (SELECT id FROM tags WHERE value_id IN ($1, $2))`, [childLabel, parentLabel])
-    await AppDataSource.query(`DELETE FROM tags WHERE value_id IN ($1, $2) AND facet = 'topic'`, [childLabel, parentLabel])
+    await AppDataSource.query(
+      `DELETE FROM tag_aliases WHERE tag_id IN (SELECT id FROM tags WHERE value_id IN ($1, $2))`,
+      [childLabel, parentLabel],
+    )
+    await AppDataSource.query(
+      `DELETE FROM tags WHERE value_id IN ($1, $2) AND facet = 'topic'`,
+      [childLabel, parentLabel],
+    )
   })
 
   it('rebuildTagEmbeddings sets needs_reembed and writes a tag_embeddings_rebuild audit row', async () => {
@@ -584,18 +711,21 @@ d('topicsAdmin list/get (DB integration)', () => {
 
       // Our tag must now have needs_reembed=true
       const [row] = await AppDataSource.query(
-        `SELECT needs_reembed FROM tags WHERE id = $1`, [tagId],
+        `SELECT needs_reembed FROM tags WHERE id = $1`,
+        [tagId],
       )
       expect(row.needs_reembed).toBe(true)
 
       // Audit row must exist for the rebuild (entityId is null — query by action)
       const [audit] = await AppDataSource.query(
-        `SELECT action FROM audit_log WHERE action = 'tag_embeddings_rebuild' ORDER BY created_at DESC LIMIT 1`,
+        `SELECT action FROM audit_log WHERE action = 'tag_embeddings_rebuild' ORDER BY at DESC LIMIT 1`,
       )
       expect(audit).toBeDefined()
       expect(audit.action).toBe('tag_embeddings_rebuild')
     } finally {
-      await AppDataSource.query(`DELETE FROM audit_log WHERE action = 'tag_embeddings_rebuild'`)
+      await AppDataSource.query(
+        `DELETE FROM audit_log WHERE action = 'tag_embeddings_rebuild'`,
+      )
       await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tagId])
     }
   })
@@ -604,8 +734,22 @@ d('topicsAdmin list/get (DB integration)', () => {
     const labelA = `__imp_cyc_a_${Date.now()}__`
     const labelB = `__imp_cyc_b_${Date.now()}__`
     const rows = [
-      { label: labelA, description: '', aliases: [], parent: labelB, facet: 'topic', id: '' },
-      { label: labelB, description: '', aliases: [], parent: labelA, facet: 'topic', id: '' },
+      {
+        label: labelA,
+        description: '',
+        aliases: [],
+        parent: labelB,
+        facet: 'topic',
+        id: '',
+      },
+      {
+        label: labelB,
+        description: '',
+        aliases: [],
+        parent: labelA,
+        facet: 'topic',
+        id: '',
+      },
     ]
     await expect(applyTopicsImport(rows, false)).rejects.toThrow(/cycle/i)
 
@@ -617,3 +761,164 @@ d('topicsAdmin list/get (DB integration)', () => {
     expect(left.length).toBe(0)
   })
 })
+
+d(
+  'topicsAdmin transaction-aware audit and parent validation (DB integration)',
+  () => {
+    const runId = crypto.randomUUID()
+    const labels = {
+      parent: `__task1_parent_${runId}__`,
+      program: `__task1_program_${runId}__`,
+      legacy: `__task1_legacy_${runId}__`,
+      create: `__task1_create_${runId}__`,
+      audited: `__task1_audited_${runId}__`,
+    }
+    const tagIds: string[] = []
+    let identity: AdminIdentity
+    let actorUserId: string
+
+    beforeAll(async () => {
+      if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+
+      const [actor] = await AppDataSource.query(
+        `INSERT INTO users (username, password_hash, role)
+       VALUES ($1, 'not-used-by-test', 'admin') RETURNING id`,
+        [`task1-audit-${runId}`],
+      )
+      actorUserId = actor.id
+      identity = {
+        kind: 'user',
+        userId: actorUserId,
+        username: `task1-audit-${runId}`,
+        role: 'admin',
+      }
+
+      const [parent] = await AppDataSource.query(
+        `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+        [labels.parent],
+      )
+      const [program] = await AppDataSource.query(
+        `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('program', $1, 'v1') RETURNING id`,
+        [labels.program],
+      )
+      const [legacy] = await AppDataSource.query(
+        `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v2') RETURNING id`,
+        [labels.legacy],
+      )
+      tagIds.push(parent.id, program.id, legacy.id)
+    })
+
+    afterAll(async () => {
+      await AppDataSource.query(
+        `DELETE FROM audit_log WHERE actor_user_id = $1 AND entity_id = ANY($2::uuid[])`,
+        [actorUserId, tagIds],
+      )
+      await AppDataSource.query(
+        `DELETE FROM tag_aliases WHERE tag_id = ANY($1::uuid[])`,
+        [tagIds],
+      )
+      await AppDataSource.query(`DELETE FROM tags WHERE id = ANY($1::uuid[])`, [
+        tagIds,
+      ])
+      await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [
+        actorUserId,
+      ])
+      await AppDataSource.destroy()
+    })
+
+    it('create rejects a non-topic parent and returns a camel-case valueId', async () => {
+      const [program] = await AppDataSource.query(
+        `SELECT id FROM tags WHERE facet = 'program' AND value_id = $1 AND taxonomy_version = 'v1'`,
+        [labels.program],
+      )
+
+      await expect(
+        createTopic(
+          { valueId: labels.create, parentTagId: program.id },
+          identity,
+        ),
+      ).resolves.toEqual({ error: 'parent must be a v1 topic' })
+
+      const created = await createTopic({ valueId: labels.create }, identity)
+      expect(created).toMatchObject({ valueId: labels.create })
+      if (!('error' in created)) tagIds.push(created.id)
+    })
+
+    it('update rejects a non-v1 parent', async () => {
+      const [parent] = await AppDataSource.query(
+        `SELECT id FROM tags WHERE facet = 'topic' AND value_id = $1 AND taxonomy_version = 'v1'`,
+        [labels.parent],
+      )
+      const [legacy] = await AppDataSource.query(
+        `SELECT id FROM tags WHERE facet = 'topic' AND value_id = $1 AND taxonomy_version = 'v2'`,
+        [labels.legacy],
+      )
+
+      await expect(
+        updateTopic(parent.id, { parentTagId: legacy.id }, identity),
+      ).resolves.toEqual({ error: 'parent must be a v1 topic' })
+    })
+
+    it('writes the topic audit in the topic mutation transaction', async () => {
+      const suffix = runId.replaceAll('-', '')
+      const tagFunction = `task1_tag_txid_${suffix}`
+      const auditFunction = `task1_audit_txid_${suffix}`
+      const tagTrigger = `task1_tag_txid_trigger_${suffix}`
+      const auditTrigger = `task1_audit_txid_trigger_${suffix}`
+
+      await AppDataSource.query(
+        `CREATE FUNCTION ${tagFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         NEW.description := COALESCE(NEW.description, '') || '__task1_txid=' || txid_current()::text;
+         RETURN NEW;
+       END;
+       $$`,
+      )
+      await AppDataSource.query(
+        `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         NEW.after := COALESCE(NEW.after, '{}'::jsonb)
+           || jsonb_build_object('__task1_txid', txid_current()::text);
+         RETURN NEW;
+       END;
+       $$`,
+      )
+      await AppDataSource.query(
+        `CREATE TRIGGER ${tagTrigger} BEFORE INSERT ON tags
+       FOR EACH ROW EXECUTE FUNCTION ${tagFunction}()`,
+      )
+      await AppDataSource.query(
+        `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+      )
+
+      try {
+        const created = await createTopic({ valueId: labels.audited }, identity)
+        if ('error' in created)
+          throw new Error(`createTopic returned error: ${created.error}`)
+        tagIds.push(created.id)
+
+        const [row] = await AppDataSource.query(
+          `SELECT t.description, a.after->>'__task1_txid' AS audit_txid
+         FROM tags t
+         JOIN audit_log a ON a.entity_id = t.id
+         WHERE t.id = $1 AND a.actor_user_id = $2 AND a.action = 'tag_create'`,
+          [created.id, actorUserId],
+        )
+        expect(row.description).toBe(`__task1_txid=${row.audit_txid}`)
+      } finally {
+        await AppDataSource.query(
+          `DROP TRIGGER IF EXISTS ${tagTrigger} ON tags`,
+        )
+        await AppDataSource.query(
+          `DROP TRIGGER IF EXISTS ${auditTrigger} ON audit_log`,
+        )
+        await AppDataSource.query(`DROP FUNCTION IF EXISTS ${tagFunction}()`)
+        await AppDataSource.query(`DROP FUNCTION IF EXISTS ${auditFunction}()`)
+      }
+    })
+  },
+)

@@ -1,5 +1,6 @@
 import { AppDataSource } from '../data-source'
 import { AuditLog } from '../entities/AuditLog.entity'
+import type { EntityManager } from 'typeorm'
 
 export type AuditAction =
   | 'create'
@@ -27,9 +28,11 @@ export interface AuditEntry {
   after?: Record<string, any> | null
 }
 
-export async function writeAudit(entry: AuditEntry): Promise<void> {
-  const repo = AppDataSource.getRepository(AuditLog)
-  await repo.insert({
+export async function writeAudit(
+  entry: AuditEntry,
+  manager: EntityManager = AppDataSource.manager,
+): Promise<void> {
+  await manager.getRepository(AuditLog).insert({
     actorUserId: entry.actorUserId,
     source: entry.source,
     action: entry.action,

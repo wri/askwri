@@ -74,6 +74,17 @@ export interface CreateTopicInput {
   parentTagId?: string | null
 }
 
+async function findV1Topic(
+  em: EntityManager,
+  id: string,
+): Promise<{ id: string } | null> {
+  const [topic] = await em.query(
+    `SELECT id FROM tags WHERE id = $1 AND facet = 'topic' AND taxonomy_version = 'v1'`,
+    [id],
+  )
+  return topic ?? null
+}
+
 /**
  * Create a new topic tag. Sets needs_reembed=true (new tag needs an embedding).
  * Writes aliases and an audit_log row. Topic-scoped: always facet='topic',
@@ -95,10 +106,15 @@ export async function createTopic(
     )
     if (existing.length > 0) return { error: 'topic already exists' }
 
+    if (input.parentTagId !== undefined && input.parentTagId !== null) {
+      const parent = await findV1Topic(em, input.parentTagId)
+      if (!parent) return { error: 'parent must be a v1 topic' }
+    }
+
     const [tag] = await em.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version, description, parent_tag_id, needs_reembed)
        VALUES ('topic', $1, 'v1', $2, $3, true)
-       RETURNING id, value_id`,
+       RETURNING id, value_id AS "valueId"`,
       [valueId, input.description ?? null, input.parentTagId ?? null],
     )
 
@@ -109,13 +125,21 @@ export async function createTopic(
       )
     }
 
-    await writeAudit({
-      ...auditActor(identity),
-      action: 'tag_create',
-      entityType: 'tag',
-      entityId: tag.id,
-      after: { valueId, description: input.description, aliases, parentTagId: input.parentTagId ?? null },
-    })
+    await writeAudit(
+      {
+        ...auditActor(identity),
+        action: 'tag_create',
+        entityType: 'tag',
+        entityId: tag.id,
+        after: {
+          valueId,
+          description: input.description,
+          aliases,
+          parentTagId: input.parentTagId ?? null,
+        },
+      },
+      em,
+    )
 
     return tag
   })
@@ -140,7 +164,16 @@ export async function updateTopic(
   id: string,
   patch: UpdateTopicPatch,
   identity: AdminIdentity,
-): Promise<{ id: string; valueId: string; description: string | null; parentTagId: string | null } | null | { error: string }> {
+): Promise<
+  | {
+      id: string
+      valueId: string
+      description: string | null
+      parentTagId: string | null
+    }
+  | null
+  | { error: string }
+> {
   const reembedNeeded =
     patch.valueId !== undefined ||
     patch.description !== undefined ||
@@ -155,6 +188,8 @@ export async function updateTopic(
 
     // Cycle check: if setting a parent, that parent must not be a descendant of this tag.
     if (patch.parentTagId !== undefined && patch.parentTagId !== null) {
+      const parent = await findV1Topic(em, patch.parentTagId)
+      if (!parent) return { error: 'parent must be a v1 topic' }
       const [cycle] = await em.query(
         `WITH RECURSIVE ancestors AS (
            SELECT id, parent_tag_id FROM tags WHERE id = $1
@@ -181,7 +216,8 @@ export async function updateTopic(
       push('value_id', trimmed)
     }
     if (patch.description !== undefined) push('description', patch.description)
-    if (patch.parentTagId !== undefined) push('parent_tag_id', patch.parentTagId)
+    if (patch.parentTagId !== undefined)
+      push('parent_tag_id', patch.parentTagId)
     if (reembedNeeded) push('needs_reembed', true)
 
     if (sets.length > 0) {
@@ -209,14 +245,26 @@ export async function updateTopic(
       [id],
     )
 
-    await writeAudit({
-      ...auditActor(identity),
-      action: 'tag_update',
-      entityType: 'tag',
-      entityId: id,
-      before: { valueId: tag.value_id, description: tag.description, parentTagId: tag.parent_tag_id },
-      after: { valueId: after.value_id, description: after.description, parentTagId: after.parent_tag_id, aliases: patch.aliases },
-    })
+    await writeAudit(
+      {
+        ...auditActor(identity),
+        action: 'tag_update',
+        entityType: 'tag',
+        entityId: id,
+        before: {
+          valueId: tag.value_id,
+          description: tag.description,
+          parentTagId: tag.parent_tag_id,
+        },
+        after: {
+          valueId: after.value_id,
+          description: after.description,
+          parentTagId: after.parent_tag_id,
+          aliases: patch.aliases,
+        },
+      },
+      em,
+    )
 
     return {
       id: after.id,
@@ -231,7 +279,11 @@ export async function updateTopic(
 
 export type DeleteTopicResult =
   | { deleted: true }
-  | { deleted: false; reason: 'in_use' | 'has_children' | 'not_found'; error: string }
+  | {
+      deleted: false
+      reason: 'in_use' | 'has_children' | 'not_found'
+      error: string
+    }
 
 /**
  * Delete a topic tag if it has no documents and no children.
@@ -253,7 +305,12 @@ export async function deleteTopicIfUnused(
     `SELECT count(*)::int AS c FROM tags WHERE parent_tag_id = $1`,
     [id],
   )
-  if (children.c > 0) return { deleted: false, reason: 'has_children', error: 're-parent or delete children first' }
+  if (children.c > 0)
+    return {
+      deleted: false,
+      reason: 'has_children',
+      error: 're-parent or delete children first',
+    }
 
   return AppDataSource.transaction(async (em) => {
     const [rows] = await em.query(
@@ -263,14 +320,21 @@ export async function deleteTopicIfUnused(
       [id],
     )
     if (!Array.isArray(rows) || rows.length === 0)
-      return { deleted: false, reason: 'in_use' as const, error: 'topic is applied to documents' }
+      return {
+        deleted: false,
+        reason: 'in_use' as const,
+        error: 'topic is applied to documents',
+      }
 
-    await writeAudit({
-      ...auditActor(identity),
-      action: 'tag_delete',
-      entityType: 'tag',
-      entityId: id,
-    })
+    await writeAudit(
+      {
+        ...auditActor(identity),
+        action: 'tag_delete',
+        entityType: 'tag',
+        entityId: id,
+      },
+      em,
+    )
     return { deleted: true as const }
   })
 }
@@ -289,11 +353,8 @@ export async function mergeTags(
   if (intoId === fromId) return { error: 'cannot merge a tag into itself' }
 
   return AppDataSource.transaction(async (em) => {
-    const [into] = await em.query(
-      `SELECT id FROM tags WHERE id = $1 AND facet = 'topic'`,
-      [intoId],
-    )
-    const [from] = await em.query(`SELECT id FROM tags WHERE id = $1`, [fromId])
+    const into = await findV1Topic(em, intoId)
+    const from = await findV1Topic(em, fromId)
     if (!into || !from) return { error: 'tag not found' }
 
     // Move document_tags: UPDATE rows where the doc doesn't already have the target tag
@@ -329,14 +390,17 @@ export async function mergeTags(
     // Delete the source tag
     await em.query(`DELETE FROM tags WHERE id = $1`, [fromId])
 
-    await writeAudit({
-      ...auditActor(identity),
-      action: 'tag_merge',
-      entityType: 'tag',
-      entityId: intoId,
-      before: { mergedFrom: fromId },
-      after: { movedDocs: moved },
-    })
+    await writeAudit(
+      {
+        ...auditActor(identity),
+        action: 'tag_merge',
+        entityType: 'tag',
+        entityId: intoId,
+        before: { mergedFrom: fromId },
+        after: { movedDocs: moved },
+      },
+      em,
+    )
 
     return { ok: true as const, moved }
   })
@@ -361,7 +425,9 @@ export async function enqueueReclassify(
   let docIds: string[]
   if (scope === 'all') {
     docIds = (
-      await AppDataSource.query(`SELECT id FROM documents WHERE status = 'ready'`)
+      await AppDataSource.query(
+        `SELECT id FROM documents WHERE status = 'ready'`,
+      )
     ).map((r: any) => r.id)
   } else {
     docIds = (
@@ -526,26 +592,39 @@ export function parseTopicsCsv(text: string): ParsedRow[] {
   let field = ''
   let inQ = false
 
-  const pushField = () => { row.push(field); field = '' }
-  const pushRow = () => { lines.push(row); row = [] }
+  const pushField = () => {
+    row.push(field)
+    field = ''
+  }
+  const pushRow = () => {
+    lines.push(row)
+    row = []
+  }
 
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
     if (inQ) {
       if (ch === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++ }
-        else inQ = false
+        if (text[i + 1] === '"') {
+          field += '"'
+          i++
+        } else inQ = false
       } else {
         field += ch
       }
     } else {
       if (ch === '"') inQ = true
       else if (ch === ',') pushField()
-      else if (ch === '\n') { pushField(); pushRow() }
-      else if (ch !== '\r') field += ch
+      else if (ch === '\n') {
+        pushField()
+        pushRow()
+      } else if (ch !== '\r') field += ch
     }
   }
-  if (field.length > 0 || row.length > 0) { pushField(); pushRow() }
+  if (field.length > 0 || row.length > 0) {
+    pushField()
+    pushRow()
+  }
 
   const [header, ...body] = lines
   if (!header) return []
@@ -553,14 +632,18 @@ export function parseTopicsCsv(text: string): ParsedRow[] {
   const idx: Record<string, number> = {}
   for (let i = 0; i < header.length; i++) idx[header[i].trim()] = i
 
-  const get = (r: string[], k: string) => (idx[k] !== undefined ? r[idx[k]] ?? '' : '')
+  const get = (r: string[], k: string) =>
+    idx[k] !== undefined ? (r[idx[k]] ?? '') : ''
 
   return body
     .filter((r) => r.some((c) => c !== ''))
     .map((r) => ({
       label: get(r, 'label').trim(),
       description: get(r, 'description').trim(),
-      aliases: get(r, 'aliases').split('|').map((a) => a.trim()).filter(Boolean),
+      aliases: get(r, 'aliases')
+        .split('|')
+        .map((a) => a.trim())
+        .filter(Boolean),
       parent: get(r, 'parent').trim(),
       facet: get(r, 'facet').trim() || 'topic',
       id: get(r, 'id').trim(),
@@ -618,7 +701,11 @@ export async function importTopicsDiff(rows: ParsedRow[]): Promise<ImportDiff> {
       const labelChanged = r.label !== cur.value_id
       const parentChanged = r.parent !== (cur.parent_label ?? '')
       const inputAliasesStr = [...r.aliases].sort().join('|')
-      const curAliasesStr = (cur.aliases_str ?? '').split('|').filter(Boolean).sort().join('|')
+      const curAliasesStr = (cur.aliases_str ?? '')
+        .split('|')
+        .filter(Boolean)
+        .sort()
+        .join('|')
       const aliasesChanged = inputAliasesStr !== curAliasesStr
 
       if (descChanged || labelChanged || parentChanged || aliasesChanged) {
@@ -672,7 +759,9 @@ export async function applyTopicsImport(
 ): Promise<{ applied: number }> {
   const diff = await importTopicsDiff(rows)
   if (diff.conflicts.length > 0) {
-    throw new Error(`import has ${diff.conflicts.length} conflict(s) — apply blocked`)
+    throw new Error(
+      `import has ${diff.conflicts.length} conflict(s) — apply blocked`,
+    )
   }
 
   const affectedTagIds = new Set<string>()
@@ -682,7 +771,9 @@ export async function applyTopicsImport(
     const existing: any[] = await em.query(
       `SELECT id, value_id FROM tags WHERE facet = 'topic' AND taxonomy_version = 'v1'`,
     )
-    const labelToId = new Map<string, string>(existing.map((t) => [t.value_id, t.id]))
+    const labelToId = new Map<string, string>(
+      existing.map((t) => [t.value_id, t.id]),
+    )
 
     for (const r of diff.added) {
       const [t] = await em.query(
@@ -705,8 +796,13 @@ export async function applyTopicsImport(
       if (r.parent) {
         const parentId = labelToId.get(r.parent)
         if (parentId) {
-          await assertNoParentCycle(em, parentId, t.id)
-          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, t.id])
+          const parent = await findV1Topic(em, parentId)
+          if (!parent) throw new Error('parent must be a v1 topic')
+          await assertNoParentCycle(em, parent.id, t.id)
+          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [
+            parent.id,
+            t.id,
+          ])
         }
       }
     }
@@ -718,8 +814,13 @@ export async function applyTopicsImport(
         const parentId = labelToId.get(r.parent)
         const childId = labelToId.get(r.label)
         if (parentId && childId) {
-          await assertNoParentCycle(em, parentId, childId)
-          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, childId])
+          const parent = await findV1Topic(em, parentId)
+          if (!parent) throw new Error('parent must be a v1 topic')
+          await assertNoParentCycle(em, parent.id, childId)
+          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [
+            parent.id,
+            childId,
+          ])
         }
       }
     }
@@ -746,28 +847,38 @@ export async function applyTopicsImport(
       if (u.row.parent) {
         const parentId = labelToId.get(u.row.parent)
         if (parentId) {
-          await assertNoParentCycle(em, parentId, cur.id)
-          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, cur.id])
+          const parent = await findV1Topic(em, parentId)
+          if (!parent) throw new Error('parent must be a v1 topic')
+          await assertNoParentCycle(em, parent.id, cur.id)
+          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [
+            parent.id,
+            cur.id,
+          ])
         }
       } else {
-        await em.query(`UPDATE tags SET parent_tag_id = NULL WHERE id = $1`, [cur.id])
+        await em.query(`UPDATE tags SET parent_tag_id = NULL WHERE id = $1`, [
+          cur.id,
+        ])
       }
     }
-  })
 
-  if (identity) {
-    await writeAudit({
-      ...auditActor(identity),
-      action: 'tag_import',
-      entityType: 'tag',
-      entityId: null,
-      after: {
-        added: diff.added.length,
-        updated: diff.updated.length,
-        reclassify,
-      },
-    })
-  }
+    if (identity) {
+      await writeAudit(
+        {
+          ...auditActor(identity),
+          action: 'tag_import',
+          entityType: 'tag',
+          entityId: null,
+          after: {
+            added: diff.added.length,
+            updated: diff.updated.length,
+            reclassify,
+          },
+        },
+        em,
+      )
+    }
+  })
 
   if (reclassify && affectedTagIds.size > 0) {
     for (const tid of affectedTagIds) {
@@ -799,7 +910,14 @@ export async function exportTopicsCsv(): Promise<string> {
   }
 
   const body = rows.map((r) =>
-    [r.label, r.description ?? '', r.aliases ?? '', r.parent ?? '', 'topic', r.id]
+    [
+      r.label,
+      r.description ?? '',
+      r.aliases ?? '',
+      r.parent ?? '',
+      'topic',
+      r.id,
+    ]
       .map(esc)
       .join(','),
   )
