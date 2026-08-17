@@ -542,4 +542,28 @@ d('topicsAdmin list/get (DB integration)', () => {
     expect(diff.updated.length).toBe(0)
     expect(diff.conflicts.length).toBe(0)
   })
+
+  it('applyTopicsImport sets parent_tag_id for forward-referencing child (child before parent in CSV)', async () => {
+    const parentLabel = `__imp_fwd_parent_${Date.now()}__`
+    const childLabel = `__imp_fwd_child_${Date.now()}__`
+    const rows = [
+      { label: childLabel, description: '', aliases: [], parent: parentLabel, facet: 'topic', id: '' },
+      { label: parentLabel, description: 'the parent', aliases: [], parent: '', facet: 'topic', id: '' },
+    ]
+    await applyTopicsImport(rows, false)
+
+    const [parentRow] = await AppDataSource.query(
+      `SELECT id FROM tags WHERE value_id = $1 AND facet = 'topic'`, [parentLabel],
+    )
+    const [childRow] = await AppDataSource.query(
+      `SELECT parent_tag_id FROM tags WHERE value_id = $1 AND facet = 'topic'`, [childLabel],
+    )
+    expect(parentRow).toBeDefined()
+    expect(childRow).toBeDefined()
+    expect(childRow.parent_tag_id).toBe(parentRow.id)
+
+    // cleanup
+    await AppDataSource.query(`DELETE FROM tag_aliases WHERE tag_id IN (SELECT id FROM tags WHERE value_id IN ($1, $2))`, [childLabel, parentLabel])
+    await AppDataSource.query(`DELETE FROM tags WHERE value_id IN ($1, $2) AND facet = 'topic'`, [childLabel, parentLabel])
+  })
 })

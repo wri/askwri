@@ -628,10 +628,24 @@ export async function applyTopicsImport(
         )
       }
 
+      // In-loop parent-set: works when the parent already existed in the DB
+      // or was inserted earlier in this same adds loop.
       if (r.parent) {
         const parentId = labelToId.get(r.parent)
         if (parentId) {
           await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, t.id])
+        }
+      }
+    }
+
+    // Second pass: set parent_tag_id for added tags whose parent was inserted
+    // later in the adds loop (forward reference — child before parent in CSV).
+    for (const r of diff.added) {
+      if (r.parent) {
+        const parentId = labelToId.get(r.parent)
+        const childId = labelToId.get(r.label)
+        if (parentId && childId) {
+          await em.query(`UPDATE tags SET parent_tag_id = $1 WHERE id = $2`, [parentId, childId])
         }
       }
     }
