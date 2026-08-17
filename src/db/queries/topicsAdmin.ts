@@ -314,9 +314,10 @@ export async function mergeTags(
     // Drop remaining source rows (conflicts — doc already on target)
     await em.query(`DELETE FROM document_tags WHERE tag_id = $1`, [fromId])
 
-    // Re-parent source's children to target
+    // Re-parent source's children to target (exclude target itself to prevent
+    // a self-referencing cycle when `into` is itself a child of `from`)
     await em.query(
-      `UPDATE tags SET parent_tag_id = $1 WHERE parent_tag_id = $2`,
+      `UPDATE tags SET parent_tag_id = $1 WHERE parent_tag_id = $2 AND id <> $1`,
       [intoId, fromId],
     )
 

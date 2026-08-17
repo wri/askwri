@@ -264,4 +264,102 @@ d('topicsAdmin list/get (DB integration)', () => {
     const idx = ids.indexOf(childId)
     if (idx >= 0) ids.splice(idx, 1)
   })
+
+  // --- Task 4 fix round: branch coverage tests ---
+
+  it('mergeTags PK-conflict: doc on both tags → moved:0, one row on target, zero on source', async () => {
+    // Create two fresh temp topic tags
+    const [tagA] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__test_pk_a_${Date.now()}__`],
+    )
+    const [tagB] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__test_pk_b_${Date.now()}__`],
+    )
+    ids.push(tagA.id, tagB.id)
+
+    // Create a temp doc and tag it with BOTH tags
+    const [docRow] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'PK Conflict Test', 'needs_review') RETURNING id`,
+      [`__pk_test_${Date.now()}__`, `documents/__pk_test_${Date.now()}__.pdf`],
+    )
+    const docId = docRow.id
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
+      [docId, tagA.id],
+    )
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
+      [docId, tagB.id],
+    )
+
+    // Merge tagA into tagB — doc already on tagB, so 0 moved
+    const res = await mergeTags(tagB.id, tagA.id, adminIdentity)
+    expect(res).toMatchObject({ ok: true, moved: 0 })
+
+    // Exactly one row on tagB for this doc
+    const rows: any[] = await AppDataSource.query(
+      `SELECT tag_id FROM document_tags WHERE document_id = $1`, [docId],
+    )
+    expect(rows.length).toBe(1)
+    expect(rows[0].tag_id).toBe(tagB.id)
+
+    // tagA should be deleted
+    const [gone] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [tagA.id])
+    expect(gone).toBeUndefined()
+
+    // Cleanup
+    await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
+    await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [tagB.id])
+    const aIdx = ids.indexOf(tagA.id)
+    if (aIdx >= 0) ids.splice(aIdx, 1)
+  })
+
+  it('deleteTopicIfUnused returns in_use for a tag with documents', async () => {
+    // Create a temp topic tag + temp doc, tag the doc
+    const [tmpTag] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__test_inuse_${Date.now()}__`],
+    )
+    ids.push(tmpTag.id)
+    const [docRow] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES ($1, $2, 'In-Use Test', 'needs_review') RETURNING id`,
+      [`__inuse_test_${Date.now()}__`, `documents/__inuse_test_${Date.now()}__.pdf`],
+    )
+    const docId = docRow.id
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
+      [docId, tmpTag.id],
+    )
+
+    const res = await deleteTopicIfUnused(tmpTag.id, adminIdentity)
+    expect(res).toMatchObject({ deleted: false, reason: 'in_use' })
+
+    // Tag should still exist
+    const [still] = await AppDataSource.query(`SELECT 1 FROM tags WHERE id = $1`, [tmpTag.id])
+    expect(still).toBeDefined()
+
+    // Cleanup
+    await AppDataSource.query(`DELETE FROM document_tags WHERE document_id = $1`, [docId])
+    await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
+  })
+
+  it('deleteTopicIfUnused returns not_found for a non-existent id', async () => {
+    const res = await deleteTopicIfUnused('00000000-0000-4000-8000-000000000000', adminIdentity)
+    expect(res).toMatchObject({ deleted: false, reason: 'not_found' })
+  })
+
+  it('mergeTags rejects self-merge (into === from)', async () => {
+    const res = await mergeTags(rootId, rootId, adminIdentity)
+    expect(res).toEqual({ error: 'cannot merge a tag into itself' })
+  })
+
+  it('mergeTags rejects missing tags (non-existent id)', async () => {
+    const fake = '00000000-0000-4000-8000-000000000000'
+    const res = await mergeTags(rootId, fake, adminIdentity)
+    expect(res).toEqual({ error: 'tag not found' })
+  })
 })
