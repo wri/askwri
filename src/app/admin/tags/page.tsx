@@ -7,6 +7,7 @@ import { actionButton, dangerButton } from '../lib/buttonStyles'
 import { Flash } from '../components/Flash'
 import { TopicTaxonomyManager } from '../topics/components/TopicTaxonomyManager'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
 interface Tag {
   id: string
@@ -445,4 +446,10 @@ const TagsPage = () => {
   )
 }
 
-export default TagsPage
+const TagsPageWrapper = () => (
+  <Suspense fallback={<Box style={{ padding: 24 }}><Text>Loading…</Text></Box>}>
+    <TagsPage />
+  </Suspense>
+)
+
+export default TagsPageWrapper

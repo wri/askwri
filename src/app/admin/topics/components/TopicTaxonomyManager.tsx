@@ -582,22 +582,22 @@ export const TopicTaxonomyManager = () => {
           <Box as='span' style={{ fontSize: 12, fontWeight: 700, color: '#1a365d' }}>
             {selected.size} selected
           </Box>
-          <Box as='button' onClick={() => setMergeModalOpen(true)} style={{ font: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
+          <button className="admin-btn" onClick={() => setMergeModalOpen(true)} style={{ font: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
             Merge into…
-          </Box>
-          <Box as='button' onClick={() => setReparentModalOpen(true)} style={{ font: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
+          </button>
+          <button className="admin-btn" onClick={() => setReparentModalOpen(true)} style={{ font: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
             Re-parent…
-          </Box>
-          <Box as='button' onClick={handleDelete} style={{ font: 'inherit', fontSize: 11, border: '1px solid #f0b4b4', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#C11101', background: '#fff', fontWeight: 600 }}>
+          </button>
+          <button className="admin-btn" onClick={handleDelete} style={{ font: 'inherit', fontSize: 11, border: '1px solid #f0b4b4', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#C11101', background: '#fff', fontWeight: 600 }}>
             Delete unused
-          </Box>
+          </button>
           <Box style={{ flex: 1 }} />
-          <Box as='button' onClick={() => setSelected(new Set(filteredTags.map((t) => t.id)))} style={{ font: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
+          <button className="admin-btn" onClick={() => setSelected(new Set(filteredTags.map((t) => t.id)))} style={{ font: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
             Select all
-          </Box>
-          <Box as='button' onClick={clearSelection} style={{ font: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
+          </button>
+          <button className="admin-btn" onClick={clearSelection} style={{ font: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
             Clear
-          </Box>
+          </button>
         </Box>
       ) : (
         <Box
@@ -648,29 +648,29 @@ export const TopicTaxonomyManager = () => {
               />
             </Box>
           )}
-          <Box as='button'
+          <button className="admin-btn"
             onClick={() => fileInputRef.current?.click()}
             style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
           >
             Import CSV
-          </Box>
-          <Box as='button'
+          </button>
+          <button className="admin-btn"
             onClick={handleExport}
             style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
-          >Export CSV</Box>
+          >Export CSV</button>
           <Box style={{ flex: 1 }} />
-          <Box as='button'
+          <button className="admin-btn"
             onClick={openReclassifyAll}
             style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 11px', color: '#fff', background: '#1a365d', fontWeight: 600, cursor: 'pointer' }}
-          >Re-classify all</Box>
-          <Box as='button'
+          >Re-classify all</button>
+          <button className="admin-btn"
             onClick={openReclassifyScoped}
             style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
-          >Scoped to topic…</Box>
-          <Box as='button'
+          >Scoped to topic…</button>
+          <button className="admin-btn"
             onClick={() => { setReclassifyPanelOpen(!reclassifyPanelOpen) }}
             style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
-          >{reclassifyPanelOpen ? 'Hide' : 'Show'} jobs</Box>
+          >{reclassifyPanelOpen ? 'Hide' : 'Show'} jobs</button>
         </Box>
       )}
 
@@ -1198,9 +1198,9 @@ const EditDrawer = ({
         {/* Header */}
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <Heading size='sm' style={{ color: '#1a365d' }}>Edit topic</Heading>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
-          </Box>
+          </button>
         </Box>
 
         {/* Top-of-drawer error (non-cycle errors) */}
@@ -1278,9 +1278,9 @@ const EditDrawer = ({
                     gap: 4,
                   }}>
                     {a}
-                    <Box as='button' onClick={() => removeAlias(a)} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11 }}>
+                    <button className="admin-btn" onClick={() => removeAlias(a)} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11 }}>
                       ✕
-                    </Box>
+                    </button>
                   </Box>
                 ))}
               </Box>
@@ -1292,9 +1292,9 @@ const EditDrawer = ({
                   placeholder='Add alias…'
                   style={{ ...inputStyle, flex: 1 }}
                 />
-                <Box as='button' onClick={addAlias} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                <button className="admin-btn" onClick={addAlias} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
                   Add
-                </Box>
+                </button>
               </Box>
             </Box>
             <Box style={{ marginBottom: 9 }}>
@@ -1317,12 +1317,12 @@ const EditDrawer = ({
             </Box>
             {/* Save / Cancel */}
             <Box style={{ display: 'flex', gap: 7, justifyContent: 'flex-end', marginTop: 12 }}>
-              <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+              <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
                 Cancel
-              </Box>
-              <Box as='button' onClick={handleSave} disabled={saving} style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}>
+              </button>
+              <button className="admin-btn" onClick={handleSave} disabled={saving} style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}>
                 {saving ? 'Saving…' : 'Save'}
-              </Box>
+              </button>
             </Box>
           </Box>
         )}
@@ -1461,9 +1461,9 @@ const MergeModal = ({
           <Heading size='sm' style={{ color: '#1a365d' }}>
             Merge {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
           </Heading>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
-          </Box>
+          </button>
         </Box>
 
         {error && (
@@ -1520,16 +1520,16 @@ const MergeModal = ({
 
         {/* Buttons */}
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
             Cancel
-          </Box>
-          <Box as='button'
+          </button>
+          <button className="admin-btn"
             onClick={handleMerge}
             disabled={merging || !targetId || sources.length === 0}
             style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: merging || !targetId || sources.length === 0 ? 0.5 : 1 }}
           >
             {merging ? 'Merging…' : 'Merge & re-classify'}
-          </Box>
+          </button>
         </Box>
       </Box>
     </>
@@ -1628,9 +1628,9 @@ const ReparentModal = ({
           <Heading size='sm' style={{ color: '#1a365d' }}>
             Re-parent {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
           </Heading>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
-          </Box>
+          </button>
         </Box>
 
         {errors.length > 0 && (
@@ -1658,16 +1658,16 @@ const ReparentModal = ({
         </Box>
 
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
             Cancel
-          </Box>
-          <Box as='button'
+          </button>
+          <button className="admin-btn"
             onClick={handleReparent}
             disabled={saving}
             style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}
           >
             {saving ? 'Saving…' : 'Re-parent'}
-          </Box>
+          </button>
         </Box>
       </Box>
     </>
@@ -1742,9 +1742,9 @@ const CsvImportModal = ({
           <Heading size='sm' style={{ color: '#1a365d' }}>
             Import CSV{filename ? ` — ${filename}` : ''}
           </Heading>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
-          </Box>
+          </button>
         </Box>
 
         {loading && (
@@ -1828,16 +1828,16 @@ const CsvImportModal = ({
                   />
                   Re-classify affected docs
                 </Box>
-                <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
                   Cancel
-                </Box>
-                <Box as='button'
+                </button>
+                <button className="admin-btn"
                   onClick={onApply}
                   disabled={!canApply}
                   style={{ font: 'inherit', fontSize: 11, border: canApply ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 10px', cursor: canApply ? 'pointer' : 'not-allowed', color: '#fff', background: canApply ? '#1a365d' : '#a0aec0', opacity: applying ? 0.5 : 1 }}
                 >
                   {applying ? 'Applying…' : `Apply ${totalChanges} change${totalChanges !== 1 ? 's' : ''}`}
-                </Box>
+                </button>
               </Box>
             </Box>
           </>
@@ -1900,7 +1900,7 @@ const ReclassifyConfirmModal = ({
       >
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <Heading size='sm' style={{ color: '#1a365d' }}>Re-classify: {scopeLabel}</Heading>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</Box>
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
         </Box>
 
         {loading && (
@@ -1923,12 +1923,12 @@ const ReclassifyConfirmModal = ({
         )}
 
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</Box>
-          <Box as='button'
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
+          <button className="admin-btn"
             onClick={onStart}
             disabled={!canStart}
             style={{ font: 'inherit', fontSize: 11, border: canStart ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: canStart ? 'pointer' : 'not-allowed', color: '#fff', background: canStart ? '#1a365d' : '#a0aec0' }}
-          >Start</Box>
+          >Start</button>
         </Box>
       </Box>
     </>
@@ -1956,7 +1956,7 @@ const ScopedTopicPicker = ({
       <Box style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 380, maxWidth: '90vw', background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(26,54,93,0.30)', zIndex: 101, padding: 18 }}>
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <Heading size='sm' style={{ color: '#1a365d' }}>Scoped re-classify</Heading>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</Box>
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
         </Box>
         <Box style={{ marginBottom: 10 }}>
           <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>Pick a topic</label>
@@ -1972,12 +1972,12 @@ const ScopedTopicPicker = ({
           </select>
         </Box>
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Box as='button' onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</Box>
-          <Box as='button'
+          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
+          <button className="admin-btn"
             onClick={onConfirm}
             disabled={!selectedId}
             style={{ font: 'inherit', fontSize: 11, border: selectedId ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: selectedId ? 'pointer' : 'not-allowed', color: '#fff', background: selectedId ? '#1a365d' : '#a0aec0' }}
-          >Confirm</Box>
+          >Confirm</button>
         </Box>
       </Box>
     </>
@@ -2069,16 +2069,16 @@ const ReclassifyPanel = ({
                       <span style={{ fontSize: 10, color: '#718096' }}>{new Date(run.createdAt).toLocaleString()}</span>
                     </Box>
                     {run.error > 0 && (
-                      <Box as='button'
+                      <button className="admin-btn"
                         onClick={() => onToggleError(run.runId)}
                         style={{ font: 'inherit', fontSize: 10, border: '1px solid #f0b4b4', borderRadius: 999, padding: '2px 8px', cursor: 'pointer', color: '#C11101', background: '#fff0f0', fontWeight: 600 }}
-                      >{isExpanded ? 'Hide' : `${run.error} error${run.error !== 1 ? 's' : ''}`}</Box>
+                      >{isExpanded ? 'Hide' : `${run.error} error${run.error !== 1 ? 's' : ''}`}</button>
                     )}
                     {run.error > 0 && isExpanded && (
                       <Box style={{ width: '100%', padding: '8px 10px', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 8, fontSize: 11, color: '#C11101' }}>
                         <Box style={{ display: 'flex', gap: 6, padding: '2px 0' }}>
                           <Box style={{ fontWeight: 600 }}>{run.error} failed doc{run.error !== 1 ? 's' : ''}</Box>
-                          <Box as='button' onClick={() => onRetryRun(run.runId, run.scope)} style={{ font: 'inherit', color: '#1a365d', textDecoration: 'underline', cursor: 'pointer', background: 'transparent', border: 'none' }}>Retry</Box>
+                          <button className="admin-btn" onClick={() => onRetryRun(run.runId, run.scope)} style={{ font: 'inherit', color: '#1a365d', textDecoration: 'underline', cursor: 'pointer', background: 'transparent', border: 'none' }}>Retry</button>
                         </Box>
                       </Box>
                     )}
