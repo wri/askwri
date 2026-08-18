@@ -12,6 +12,7 @@ settings.tag_confidence_accept) or 'suggested'. Logs a cost estimate before
 calling the LLM.
 """
 import logging
+import math
 
 from app.config import get_settings
 from app.db import get_pool
@@ -21,6 +22,39 @@ from worker.stages import fetch_document, stage
 from worker.stages.embed_tags import sweep_pending
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_topic_picks(result: object, label_to_id: dict) -> list[tuple]:
+    """Validate the complete topic response before returning up to five picks."""
+    if not isinstance(result, dict) or set(result) != {"topic"}:
+        raise RuntimeError("malformed topic classification response")
+    picks = result["topic"]
+    if not isinstance(picks, list):
+        raise RuntimeError("malformed topic classification response")
+
+    selected: list[tuple] = []
+    selected_ids = set()
+    for pick in picks:
+        if not isinstance(pick, dict) or set(pick) != {"value", "confidence"}:
+            raise RuntimeError("malformed topic classification response")
+        label = pick["value"]
+        raw_confidence = pick["confidence"]
+        if (
+            not isinstance(label, str)
+            or isinstance(raw_confidence, bool)
+            or not isinstance(raw_confidence, (int, float))
+        ):
+            raise RuntimeError("malformed topic classification response")
+        confidence = float(raw_confidence)
+        if not math.isfinite(confidence):
+            raise RuntimeError("malformed topic classification response")
+
+        tag_id = label_to_id.get(label)
+        if tag_id is None or tag_id in selected_ids or len(selected) == 5:
+            continue
+        selected.append((tag_id, max(0.0, min(1.0, confidence))))
+        selected_ids.add(tag_id)
+    return selected
 
 
 def _topic_schema(candidate_labels: list[str]) -> dict:
@@ -156,17 +190,8 @@ def _classify_topic(
         max_tokens=600,
     )
 
-    selected: list[tuple] = []
-    selected_ids = set()
-    for pick in result.get("topic", []):
-        tag_id = label_to_id.get(pick["value"])
-        if tag_id is None or tag_id in selected_ids:
-            continue
-        conf = max(0.0, min(1.0, float(pick["confidence"])))
-        selected.append((tag_id, conf))
-        selected_ids.add(tag_id)
-        if len(selected) == 5:
-            break
+    selected = _normalize_topic_picks(result, label_to_id)
+    selected_ids = {tag_id for tag_id, _confidence in selected}
 
     conn.execute(
         """DELETE FROM document_tags dt

@@ -300,6 +300,19 @@ class TestClassifyTopicRetrieveThenClassify:
                    FROM document_tags WHERE document_id=%s AND tag_id=%s""",
                 (doc_id, non_topic_id),
             ).fetchone()
+            selected_llm_topics = {
+                row[0]
+                for row in conn.execute(
+                    """SELECT dt.tag_id
+                       FROM document_tags dt
+                       JOIN tags t ON t.id=dt.tag_id
+                       WHERE dt.document_id=%s
+                         AND dt.source='llm'
+                         AND t.facet='topic'
+                         AND t.taxonomy_version='v1'""",
+                    (doc_id,),
+                ).fetchall()
+            }
 
         assert stale_llm_row is None
         assert refreshed == ("llm", pytest.approx(0.91), "test-new-model", "accepted")
@@ -307,6 +320,12 @@ class TestClassifyTopicRetrieveThenClassify:
         assert protected_external == ("external",)
         assert truncated is None
         assert non_topic == ("llm", pytest.approx(0.66), "old-model")
+        assert selected_llm_topics == {
+            topic_ids["topic-0"],
+            topic_ids["topic-2"],
+            topic_ids["topic-3"],
+            topic_ids["topic-4"],
+        }
         assert captured["schema"]["properties"]["topic"]["maxItems"] == 5
         assert "- topic-0 (aka: first alias; Primary candidate)" in captured["user"]
         assert "(; " not in captured["user"]
@@ -314,6 +333,61 @@ class TestClassifyTopicRetrieveThenClassify:
         assert str(topic_ids["topic-0"]) in candidate_log
         assert "label=topic-0" in candidate_log
         assert "cosine_distance=" in candidate_log
+
+    @pytest.mark.parametrize("llm_behavior", ["raises", "malformed"])
+    def test_failed_or_malformed_llm_output_preserves_existing_llm_topics(
+        self, clean_db, monkeypatch, llm_behavior
+    ):
+        """No corrective mutation occurs until the complete response is valid."""
+        import worker.stages.classify as classify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            forests = _make_topic_tag(conn, "forests")
+            water = _make_topic_tag(conn, "water")
+            _insert_tag_embedding(conn, forests)
+            _insert_tag_embedding(conn, water)
+            doc_id = _insert_document(
+                conn,
+                external_id=f"safe-{llm_behavior}",
+                title="Preserve prior topic assignments",
+            )
+            conn.execute(
+                """INSERT INTO document_tags
+                       (document_id, tag_id, source, confidence, model_version, status)
+                   VALUES
+                       (%s, %s, 'llm', 0.81, 'prior-model', 'accepted'),
+                       (%s, %s, 'llm', 0.62, 'prior-model', 'suggested')""",
+                (doc_id, forests, doc_id, water),
+            )
+            conn.commit()
+
+        monkeypatch.setattr(classify_mod, "embed_one", lambda text: [0.1] * 1536)
+        monkeypatch.setattr(classify_mod, "sweep_pending", lambda conn: 0)
+
+        def fake_chat_json(*args, **kwargs):
+            if llm_behavior == "raises":
+                raise RuntimeError("LLM unavailable")
+            return {}  # missing required topic array
+
+        monkeypatch.setattr(classify_mod, "chat_json", fake_chat_json)
+
+        with pytest.raises(RuntimeError):
+            classify_mod.run(doc_id, topic_only=True)
+
+        with psycopg.connect(clean_db) as conn:
+            rows = conn.execute(
+                """SELECT tag_id, confidence::float, model_version, status
+                   FROM document_tags
+                   WHERE document_id=%s AND source='llm'
+                   ORDER BY tag_id""",
+                (doc_id,),
+            ).fetchall()
+
+        rows_by_tag = {row[0]: row[1:] for row in rows}
+        assert rows_by_tag == {
+            forests: (pytest.approx(0.81), "prior-model", "accepted"),
+            water: (pytest.approx(0.62), "prior-model", "suggested"),
+        }
 
     def test_picks_top5_and_preserves_human(self, clean_db, monkeypatch):
         """Topic retrieve-then-classify: embed_one returns a vector, chat_json
@@ -378,14 +452,16 @@ class TestClassifyTopicRetrieveThenClassify:
             assert abs(water_row[1] - 0.99) < 0.001
             assert water_row[2] == "manual"
 
-    def test_empty_embeddings_skips_topic_no_error(self, clean_db, monkeypatch):
-        """No tag_embeddings rows → topic facet is skipped (log warning), no error.
-        No document_tags rows written for topic."""
+    def test_empty_topic_candidates_continue_non_topic_classification(
+        self, clean_db, monkeypatch
+    ):
+        """Normal ingest skips missing topic candidates but writes other facets."""
         import worker.stages.classify as classify_mod
 
         with psycopg.connect(clean_db) as conn:
             tag1 = _make_topic_tag(conn, "forests")
             tag2 = _make_topic_tag(conn, "water")
+            report_tag = _make_other_facet_tag(conn, "doc_type", "report")
             # NO tag_embeddings inserted
 
             doc_id = _insert_document(
@@ -400,13 +476,15 @@ class TestClassifyTopicRetrieveThenClassify:
 
         def fake_chat_json(system, user, schema, model, max_tokens=1500):
             call_count[0] += 1
-            return {}
+            assert set(schema["properties"]) == {"doc_type"}
+            return {"doc_type": [{"value": "report", "confidence": 0.86}]}
 
         monkeypatch.setattr(classify_mod, "chat_json", fake_chat_json)
 
         # Should not raise
         result = classify_mod.run(doc_id)
         assert result is None
+        assert call_count[0] == 1
 
         # Topic facet was skipped — 0 LLM calls for topic
         # (might be 0 total if only topic, or 1 if non-topic facets exist)
@@ -418,6 +496,12 @@ class TestClassifyTopicRetrieveThenClassify:
                 (doc_id,),
             ).fetchone()[0]
             assert topic_count == 0, "no topic tags should be written without embeddings"
+            report = conn.execute(
+                """SELECT source, confidence::float, status
+                   FROM document_tags WHERE document_id=%s AND tag_id=%s""",
+                (doc_id, report_tag),
+            ).fetchone()
+            assert report == ("llm", pytest.approx(0.86), "accepted")
 
     def test_topic_only_empty_candidates_raises_retryable_error(
         self, clean_db, monkeypatch

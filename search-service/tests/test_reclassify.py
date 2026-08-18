@@ -158,26 +158,25 @@ def _insert_reclassify_job(conn, document_id, scope_tag_id=None, run_id=None):
 class TestClaimJob:
     """claim_job: FOR UPDATE SKIP LOCKED — two claims on one row, first wins."""
 
-    def test_first_claim_wins_second_returns_none(self, clean_db):
+    def test_two_connections_claim_one_job_exactly_once(self, clean_db):
         from worker.stages.reclassify import claim_job
 
-        conn = psycopg.connect(clean_db)
+        first_conn = psycopg.connect(clean_db)
+        second_conn = psycopg.connect(clean_db)
         try:
-            doc_id = _insert_document(conn, external_id="claim1")
-            job = _insert_reclassify_job(conn, doc_id)
-            conn.commit()
+            doc_id = _insert_document(first_conn, external_id="claim1")
+            job = _insert_reclassify_job(first_conn, doc_id)
+            first_conn.commit()
 
-            # First claim gets the row
-            claimed = claim_job(conn)
-            assert claimed is not None
-            assert claimed == job
-            assert claimed[3] == job[3]  # run_id is propagated to the worker
+            # Keep the first transaction open so its row lock overlaps the
+            # second connection's SKIP LOCKED claim.
+            claims = [claim_job(first_conn), claim_job(second_conn)]
 
-            # Second claim on the same connection (row is now 'running') → None
-            claimed2 = claim_job(conn)
-            assert claimed2 is None
+            assert [claim for claim in claims if claim is not None] == [job]
+            assert claims[0][3] == job[3]  # run_id is propagated to the worker
         finally:
-            conn.close()
+            first_conn.close()
+            second_conn.close()
 
     def test_claim_returns_none_when_queue_empty(self, clean_db):
         from worker.stages.reclassify import claim_job
@@ -329,6 +328,156 @@ class TestProcessOneReclassify:
 
 class TestProcessReclassifyBatch:
 
+    def test_stale_running_claim_is_recovered_after_worker_restart(
+        self, clean_db, monkeypatch
+    ):
+        """A committed claim from a dead worker is retried on the next batch."""
+        import worker.stages.reclassify as reclassify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            doc_id = _insert_document(conn, external_id="crash-recovery")
+            job = _insert_reclassify_job(conn, doc_id)
+            conn.execute(
+                """UPDATE reclassify_jobs
+                   SET status='running', updated_at=now() - interval '16 minutes'
+                   WHERE id=%s""",
+                (job[0],),
+            )
+            conn.commit()
+
+        calls = []
+        monkeypatch.setattr(
+            reclassify_mod,
+            "classify_run",
+            lambda document_id, topic_only=False: calls.append(
+                (document_id, topic_only)
+            ),
+        )
+        monkeypatch.setattr(
+            reclassify_mod.get_settings(), "worker_reap_minutes", 15
+        )
+
+        assert reclassify_mod.process_reclassify_batch(1) == 1
+
+        with psycopg.connect(clean_db) as conn:
+            state = conn.execute(
+                """SELECT status, attempts, error
+                   FROM reclassify_jobs WHERE id=%s""",
+                (job[0],),
+            ).fetchone()
+
+        assert calls == [(doc_id, True)]
+        assert state == ("done", 1, None)
+
+    def test_stale_final_attempt_becomes_error_and_completes_run(
+        self, clean_db, monkeypatch
+    ):
+        """A second expired lease consumes the last attempt without re-running."""
+        import worker.stages.reclassify as reclassify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            doc_id = _insert_document(conn, external_id="crash-final-error")
+            job = _insert_reclassify_job(conn, doc_id)
+            conn.execute(
+                """UPDATE reclassify_jobs
+                   SET status='running', attempts=1,
+                       updated_at=now() - interval '16 minutes'
+                   WHERE id=%s""",
+                (job[0],),
+            )
+            conn.commit()
+
+        monkeypatch.setattr(
+            reclassify_mod,
+            "classify_run",
+            lambda *args, **kwargs: pytest.fail(
+                "an expired final attempt must not be claimed again"
+            ),
+        )
+        monkeypatch.setattr(
+            reclassify_mod.get_settings(), "worker_reap_minutes", 15
+        )
+
+        assert reclassify_mod.process_reclassify_batch(1) == 0
+
+        with psycopg.connect(clean_db) as conn:
+            state = conn.execute(
+                """SELECT status, attempts, error
+                   FROM reclassify_jobs WHERE id=%s""",
+                (job[0],),
+            ).fetchone()
+            audit = conn.execute(
+                """SELECT after FROM audit_log
+                   WHERE action='reclassify_run' AND entity_id=%s""",
+                (job[3],),
+            ).fetchone()
+
+        assert state == ("error", 2, "worker lease expired")
+        assert audit == (
+            {
+                "runId": str(job[3]),
+                "total": 1,
+                "done": 0,
+                "error": 1,
+                "estCost": 0.0008,
+            },
+        )
+
+    def test_running_job_lease_can_be_renewed(self, clean_db):
+        """Heartbeat renewal keeps live work newer than the stale threshold."""
+        import worker.stages.reclassify as reclassify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            doc_id = _insert_document(conn, external_id="lease-heartbeat")
+            job = _insert_reclassify_job(conn, doc_id)
+            conn.execute(
+                """UPDATE reclassify_jobs
+                   SET status='running', updated_at=now() - interval '16 minutes'
+                   WHERE id=%s""",
+                (job[0],),
+            )
+            conn.commit()
+
+        assert reclassify_mod._renew_lease(job[0]) is True
+
+        with psycopg.connect(clean_db) as conn:
+            renewed = conn.execute(
+                """SELECT status, updated_at > now() - interval '5 seconds'
+                   FROM reclassify_jobs WHERE id=%s""",
+                (job[0],),
+            ).fetchone()
+        assert renewed == ("running", True)
+
+    def test_late_worker_cannot_finish_a_reclaimed_lease(self, clean_db):
+        """An expired worker's fencing token cannot terminate the new attempt."""
+        import worker.stages.reclassify as reclassify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            doc_id = _insert_document(conn, external_id="lease-fencing")
+            job = _insert_reclassify_job(conn, doc_id)
+            conn.execute(
+                """UPDATE reclassify_jobs
+                   SET status='running', error='lease:new-owner'
+                   WHERE id=%s""",
+                (job[0],),
+            )
+            conn.commit()
+
+        with psycopg.connect(clean_db) as conn:
+            updated = reclassify_mod._mark_done(
+                conn, job[0], lease_token="lease:expired-owner"
+            )
+            conn.commit()
+
+        with psycopg.connect(clean_db) as conn:
+            state = conn.execute(
+                "SELECT status, error FROM reclassify_jobs WHERE id=%s",
+                (job[0],),
+            ).fetchone()
+
+        assert updated is False
+        assert state == ("running", "lease:new-owner")
+
     def test_uses_exact_bounded_concurrency(self, monkeypatch):
         """Three requested slots execute three claims with at most three active."""
         import worker.stages.reclassify as reclassify_mod
@@ -403,6 +552,63 @@ class TestProcessReclassifyBatch:
                     "done": 2,
                     "error": 0,
                     "estCost": 0.0016,
+                },
+            )
+        ]
+
+    def test_error_retry_success_refreshes_single_completion_audit(
+        self, clean_db, monkeypatch
+    ):
+        """Supported same-run retry replaces the stale error completion summary."""
+        import worker.stages.reclassify as reclassify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            doc_id = _insert_document(conn, external_id="retry-success-audit")
+            job = _insert_reclassify_job(conn, doc_id)
+            conn.execute(
+                "UPDATE reclassify_jobs SET attempts=1 WHERE id=%s",
+                (job[0],),
+            )
+            conn.commit()
+
+        monkeypatch.setattr(
+            reclassify_mod,
+            "classify_run",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                RuntimeError("first cycle failed")
+            ),
+        )
+        assert reclassify_mod.process_reclassify_batch(1) == 1
+
+        # Mirrors retryReclassifyRun: preserve run_id, reopen only error rows,
+        # clear error/attempts, and update the lease timestamp.
+        with psycopg.connect(clean_db) as conn:
+            conn.execute(
+                """UPDATE reclassify_jobs
+                   SET status='queued', attempts=0, error=NULL, updated_at=now()
+                   WHERE run_id=%s AND status='error'""",
+                (job[3],),
+            )
+            conn.commit()
+
+        monkeypatch.setattr(reclassify_mod, "classify_run", lambda *args, **kwargs: None)
+        assert reclassify_mod.process_reclassify_batch(1) == 1
+
+        with psycopg.connect(clean_db) as conn:
+            audits = conn.execute(
+                """SELECT after FROM audit_log
+                   WHERE action='reclassify_run' AND entity_id=%s""",
+                (job[3],),
+            ).fetchall()
+
+        assert audits == [
+            (
+                {
+                    "runId": str(job[3]),
+                    "total": 1,
+                    "done": 1,
+                    "error": 0,
+                    "estCost": 0.0008,
                 },
             )
         ]
