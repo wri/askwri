@@ -18,6 +18,7 @@ import {
   retryReclassifyRun,
   TopicsImportConflictError,
   embeddingsProgress,
+  EST_PER_DOC_COST,
 } from '@/db/queries/topicsAdmin'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
@@ -540,7 +541,7 @@ d('topicsAdmin list/get (DB integration)', () => {
         expect(r1).toHaveProperty('runId')
         expect(typeof r1.runId).toBe('string')
         expect(r1.enqueued).toBeGreaterThanOrEqual(1)
-        expect(r1.estCost).toBe(+(r1.enqueued * 0.0008).toFixed(4))
+        expect(r1.estCost).toBe(+(r1.enqueued * EST_PER_DOC_COST).toFixed(4))
 
         // Simulate a worker completing the first run before a second enqueue.
         await AppDataSource.query(
@@ -609,7 +610,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       const r = await enqueueReclassify({ tagId }, adminIdentity)
       runIds.push(r.runId)
       expect(r.enqueued).toBe(1)
-      expect(r.estCost).toBe(+(1 * 0.0008).toFixed(4))
+      expect(r.estCost).toBe(+(1 * EST_PER_DOC_COST).toFixed(4))
       expect(typeof r.runId).toBe('string')
 
       // Verify the job row exists with the right scope_tag_id
@@ -675,7 +676,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       expect(entry!).toHaveProperty('done')
       expect(entry!).toHaveProperty('error')
       expect(entry!).toHaveProperty('estCost')
-      expect(entry!.estCost).toBe(+(entry!.total * 0.0008).toFixed(4))
+      expect(entry!.estCost).toBe(+(entry!.total * EST_PER_DOC_COST).toFixed(4))
       expect(entry!).toHaveProperty('createdAt')
     } finally {
       await AppDataSource.query(
@@ -736,11 +737,11 @@ d('topicsAdmin list/get (DB integration)', () => {
     try {
       await expect(estimateReclassify('all')).resolves.toEqual({
         eligible: before.eligible + 1,
-        estCost: +((before.eligible + 1) * 0.0008).toFixed(4),
+        estCost: +((before.eligible + 1) * EST_PER_DOC_COST).toFixed(4),
       })
       await expect(estimateReclassify({ tagId: topic.id })).resolves.toEqual({
         eligible: 1,
-        estCost: 0.0008,
+        estCost: EST_PER_DOC_COST,
       })
       await expect(
         estimateReclassify({ tagId: outOfScope.id }),
@@ -860,7 +861,7 @@ d('topicsAdmin list/get (DB integration)', () => {
         retryReclassifyRun(requestedRunId, adminIdentity),
       ).resolves.toEqual({
         enqueued: 1,
-        estCost: 0.0008,
+        estCost: EST_PER_DOC_COST,
         runId: requestedRunId,
       })
       const jobs: any[] = await AppDataSource.query(

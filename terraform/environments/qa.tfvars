@@ -53,6 +53,12 @@ search_service_environment_variables = {
   "WORKERS"     = "1"
 }
 
+# Ingestion Worker LLM model: pin QA to the current small/fast classifier even
+# if the global default (variables.tf) is reverted. gpt-5.6-luna is the
+# cost tier of the newest (Feb 2026) GPT-5.6 line; supports structured
+# outputs via Chat Completions (required by worker/llm.py chat_json).
+worker_llm_model = "gpt-5.6-luna"
+
 # Ingestion Worker Environment Variables
 # SPARSE_EN_HANDLES must match the sparse-backfill operator's setting
 # (docs/runbooks/qa-push-deploy.md Step 3) — qa's corpus was rebuilt flag-on
