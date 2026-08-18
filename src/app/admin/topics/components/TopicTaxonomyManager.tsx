@@ -203,6 +203,12 @@ export const TopicTaxonomyManager = () => {
   const [editingTag, setEditingTag] = useState<TopicRow | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [rebuildBusy, setRebuildBusy] = useState(false)
+  const [embedProgress, setEmbedProgress] = useState<{
+    total: number
+    embedded: number
+    pending: number
+  } | null>(null)
+  const embedPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -342,6 +348,39 @@ export const TopicTaxonomyManager = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
   }, [load])
+
+  // ---- tag-embed sweep progress (read-only GET on the rebuild route) ----
+  // After a big import or a Rebuild, the worker's embed sweep drains
+  // tags.needs_reembed asynchronously. Poll while there are pending tags so
+  // the admin sees "embedded/total (pending N)" settle to 0 instead of guessing.
+  const loadEmbedProgress = useCallback(async () => {
+    try {
+      const body = await adminFetch<{
+        ok: boolean
+        total: number
+        embedded: number
+        pending: number
+      }>('/api/admin/topics/embeddings/rebuild')
+      setEmbedProgress({
+        total: body.total,
+        embedded: body.embedded,
+        pending: body.pending,
+      })
+    } catch {
+      // Non-fatal: the panel degrades to no count.
+    }
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadEmbedProgress()
+    if (embedPollRef.current) clearInterval(embedPollRef.current)
+    embedPollRef.current = setInterval(loadEmbedProgress, 5000)
+    return () => {
+      if (embedPollRef.current) clearInterval(embedPollRef.current)
+      embedPollRef.current = null
+    }
+  }, [loadEmbedProgress])
 
   // ---- expand all roots by default once tags load ----
   useEffect(() => {
@@ -529,6 +568,7 @@ export const TopicTaxonomyManager = () => {
         `Queued ${body.queued} topic embeddings for rebuild.`,
       )
       load()
+      loadEmbedProgress()
     } catch {
       showNotice('error', 'Embedding rebuild failed.')
     } finally {
@@ -1195,6 +1235,26 @@ export const TopicTaxonomyManager = () => {
           >
             {rebuildBusy ? 'Rebuilding…' : 'Rebuild embeddings'}
           </button>
+          {embedProgress && embedProgress.total > 0 && (
+            <Text
+              style={{
+                fontFamily: 'inherit',
+                fontSize: 11,
+                color: embedProgress.pending > 0 ? '#b7791f' : '#2f855a',
+                whiteSpace: 'nowrap',
+              }}
+              title={
+                embedProgress.pending > 0
+                  ? 'Worker embed sweep in progress — polls every 5s'
+                  : 'All topic tags have cohere-embed-v4 embeddings'
+              }
+            >
+              Embeddings: {embedProgress.embedded}/{embedProgress.total}
+              {embedProgress.pending > 0
+                ? ` (${embedProgress.pending} pending)`
+                : ' ✓'}
+            </Text>
+          )}
           <Box style={{ flex: 1 }} />
           <button
             className='admin-btn'
