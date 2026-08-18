@@ -301,6 +301,7 @@ export const TopicTaxonomyManager = () => {
     }[]
   } | null>(null)
   const [reclassifyPanelOpen, setReclassifyPanelOpen] = useState(false)
+  const [reclassifyError, setReclassifyError] = useState<string | null>(null)
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set())
   const reclassifyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // Scoped topic picker
@@ -714,9 +715,21 @@ export const TopicTaxonomyManager = () => {
       if (res.ok && body.ok !== false) {
         const { ok: _ok, ...rest } = body
         setReclassifyStatus(rest)
+        setReclassifyError(null)
+      } else {
+        // Don't overwrite a good status with an error, but surface the failure
+        // so the Show/Hide jobs button doesn't look dead when the endpoint is
+        // broken (e.g. a pending migration). Only set when we have nothing
+        // better to show.
+        setReclassifyError(
+          body?.error || `Re-classify status unavailable (HTTP ${res.status}).`,
+        )
       }
     } catch {
-      // Best-effort polling; don't spam errors
+      // Network/abort: surface it rather than swallow it silently.
+      setReclassifyError(
+        'Re-classify status unavailable (network error). The ingestion worker or database may be down.',
+      )
     }
   }, [])
 
@@ -1663,6 +1676,24 @@ export const TopicTaxonomyManager = () => {
           onToggleError={toggleErrorExpand}
           onRetryRun={handleRetryRun}
         />
+      )}
+      {/* Error state: surface a failing status endpoint instead of letting the
+          Show/Hide jobs button look dead. Shown only when the panel is open and
+          we have no good status to render. */}
+      {reclassifyPanelOpen && !reclassifyStatus && reclassifyError && (
+        <Box
+          style={{
+            border: '1px solid #f0b4b4',
+            background: '#fdeaea',
+            color: '#C11101',
+            borderRadius: 7,
+            padding: '10px 12px',
+            fontSize: 12,
+            marginTop: 8,
+          }}
+        >
+          {reclassifyError}
+        </Box>
       )}
     </Box>
   )
