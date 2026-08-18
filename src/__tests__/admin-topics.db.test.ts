@@ -14,6 +14,8 @@ import {
   applyTopicsImport,
   exportTopicsCsv,
   rebuildTagEmbeddings,
+  estimateReclassify,
+  retryReclassifyRun,
 } from '@/db/queries/topicsAdmin'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
@@ -445,10 +447,11 @@ d('topicsAdmin list/get (DB integration)', () => {
       ],
     )
     const docId = docRow.id
-    let runId: string
+    let runId: string | undefined
+    let secondRunId: string | undefined
 
     try {
-      const r1 = await enqueueReclassify('all')
+      const r1 = await enqueueReclassify('all', adminIdentity)
       runId = r1.runId
       expect(r1).toHaveProperty('enqueued')
       expect(r1).toHaveProperty('estCost')
@@ -458,17 +461,26 @@ d('topicsAdmin list/get (DB integration)', () => {
       expect(r1.estCost).toBe(+(r1.enqueued * 0.0008).toFixed(4))
 
       // Second call: all ready docs already queued → 0 new
-      const r2 = await enqueueReclassify('all')
+      const r2 = await enqueueReclassify('all', adminIdentity)
+      secondRunId = r2.runId
       expect(r2.enqueued).toBe(0)
       expect(r2.estCost).toBe(0)
       // runId should be different (new run, even if nothing enqueued)
       expect(r2.runId).not.toBe(r1.runId)
     } finally {
       // Cleanup: delete ALL jobs from this run (may include other ready docs), then the doc
-      await AppDataSource.query(
-        `DELETE FROM reclassify_jobs WHERE run_id = $1`,
-        [runId],
-      )
+      if (runId) {
+        await AppDataSource.query(
+          `DELETE FROM reclassify_jobs WHERE run_id = $1`,
+          [runId],
+        )
+        await AppDataSource.query(
+          `DELETE FROM audit_log
+           WHERE action = 'reclassify_enqueue'
+             AND after->>'runId' IN ($1, $2)`,
+          [runId, secondRunId ?? runId],
+        )
+      }
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
     }
   })
@@ -496,7 +508,7 @@ d('topicsAdmin list/get (DB integration)', () => {
     )
 
     try {
-      const r = await enqueueReclassify({ tagId })
+      const r = await enqueueReclassify({ tagId }, adminIdentity)
       expect(r.enqueued).toBe(1)
       expect(r.estCost).toBe(+(1 * 0.0008).toFixed(4))
       expect(typeof r.runId).toBe('string')
@@ -512,6 +524,11 @@ d('topicsAdmin list/get (DB integration)', () => {
       await AppDataSource.query(
         `DELETE FROM reclassify_jobs WHERE document_id = $1`,
         [docId],
+      )
+      await AppDataSource.query(
+        `DELETE FROM audit_log
+         WHERE action = 'reclassify_enqueue' AND entity_id = $1`,
+        [tagId],
       )
       await AppDataSource.query(
         `DELETE FROM document_tags WHERE document_id = $1`,
@@ -535,7 +552,7 @@ d('topicsAdmin list/get (DB integration)', () => {
     let runId: string
 
     try {
-      const r = await enqueueReclassify('all')
+      const r = await enqueueReclassify('all', adminIdentity)
       runId = r.runId
       expect(r.enqueued).toBeGreaterThanOrEqual(1)
 
@@ -564,7 +581,326 @@ d('topicsAdmin list/get (DB integration)', () => {
         `DELETE FROM reclassify_jobs WHERE run_id = $1`,
         [runId],
       )
+      await AppDataSource.query(
+        `DELETE FROM audit_log
+         WHERE action = 'reclassify_enqueue' AND after->>'runId' = $1`,
+        [runId],
+      )
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [docId])
+    }
+  })
+
+  it('estimateReclassify counts only currently eligible rows without queue mutation', async () => {
+    const nonce = crypto.randomUUID()
+    const [topic] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__estimate_topic_${nonce}__`],
+    )
+    const [outOfScope] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('program', $1, 'v1') RETURNING id`,
+      [`__estimate_program_${nonce}__`],
+    )
+    const documents: any[] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES
+         ($1, $2, 'Eligible', 'ready'),
+         ($3, $4, 'Already queued', 'ready'),
+         ($5, $6, 'Human scoped', 'needs_review')
+       RETURNING id`,
+      [
+        `__estimate_eligible_${nonce}__`,
+        `documents/estimate-eligible-${nonce}.pdf`,
+        `__estimate_queued_${nonce}__`,
+        `documents/estimate-queued-${nonce}.pdf`,
+        `__estimate_human_${nonce}__`,
+        `documents/estimate-human-${nonce}.pdf`,
+      ],
+    )
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status)
+       VALUES ($1, $2, 'llm', 'accepted'), ($3, $2, 'human', 'accepted')`,
+      [documents[0].id, topic.id, documents[2].id],
+    )
+    await AppDataSource.query(
+      `INSERT INTO reclassify_jobs (document_id, run_id, status)
+       VALUES ($1, $2, 'queued')`,
+      [documents[1].id, crypto.randomUUID()],
+    )
+
+    try {
+      await expect(estimateReclassify('all')).resolves.toEqual({
+        eligible: 1,
+        estCost: 0.0008,
+      })
+      await expect(estimateReclassify({ tagId: topic.id })).resolves.toEqual({
+        eligible: 1,
+        estCost: 0.0008,
+      })
+      await expect(
+        estimateReclassify({ tagId: outOfScope.id }),
+      ).resolves.toEqual({ eligible: 0, estCost: 0 })
+      const [jobCount] = await AppDataSource.query(
+        `SELECT count(*)::int AS count FROM reclassify_jobs
+         WHERE document_id = ANY($1::uuid[])`,
+        [documents.map((document) => document.id)],
+      )
+      expect(jobCount.count).toBe(1)
+    } finally {
+      await AppDataSource.query(
+        `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+        [documents.map((document) => document.id)],
+      )
+      await AppDataSource.query(`DELETE FROM tags WHERE id = ANY($1::uuid[])`, [
+        [topic.id, outOfScope.id],
+      ])
+    }
+  })
+
+  it('enqueueReclassify rolls back every set-based queue row when its audit fails', async () => {
+    const nonce = crypto.randomUUID().replaceAll('-', '')
+    const auditFunction = `task3_enqueue_audit_fail_${nonce}`
+    const auditTrigger = `task3_enqueue_audit_fail_trigger_${nonce}`
+    const documents: any[] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES
+         ($1, $2, 'Atomic enqueue one', 'ready'),
+         ($3, $4, 'Atomic enqueue two', 'ready')
+       RETURNING id`,
+      [
+        `__atomic_enqueue_one_${nonce}__`,
+        `documents/atomic-enqueue-one-${nonce}.pdf`,
+        `__atomic_enqueue_two_${nonce}__`,
+        `documents/atomic-enqueue-two-${nonce}.pdf`,
+      ],
+    )
+    await AppDataSource.query(
+      `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         IF NEW.action = 'reclassify_enqueue' THEN
+           RAISE EXCEPTION 'task3 enqueue audit failure';
+         END IF;
+         RETURN NEW;
+       END;
+       $$`,
+    )
+    await AppDataSource.query(
+      `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+    )
+
+    try {
+      await expect(enqueueReclassify('all', adminIdentity)).rejects.toThrow(
+        /task3 enqueue audit failure/i,
+      )
+      const [jobCount] = await AppDataSource.query(
+        `SELECT count(*)::int AS count FROM reclassify_jobs
+         WHERE document_id = ANY($1::uuid[])`,
+        [documents.map((document) => document.id)],
+      )
+      expect(jobCount.count).toBe(0)
+    } finally {
+      await AppDataSource.query(
+        `DROP TRIGGER IF EXISTS ${auditTrigger} ON audit_log`,
+      )
+      await AppDataSource.query(`DROP FUNCTION IF EXISTS ${auditFunction}()`)
+      await AppDataSource.query(
+        `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+        [documents.map((document) => document.id)],
+      )
+    }
+  })
+
+  it('retryReclassifyRun resets only errors in the requested run and audits atomically', async () => {
+    const nonce = crypto.randomUUID()
+    const requestedRunId = crypto.randomUUID()
+    const otherRunId = crypto.randomUUID()
+    const documents: any[] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       VALUES
+         ($1, $2, 'Retry target', 'ready'),
+         ($3, $4, 'Done target', 'ready'),
+         ($5, $6, 'Other run target', 'ready')
+       RETURNING id`,
+      [
+        `__retry_target_${nonce}__`,
+        `documents/retry-target-${nonce}.pdf`,
+        `__retry_done_${nonce}__`,
+        `documents/retry-done-${nonce}.pdf`,
+        `__retry_other_${nonce}__`,
+        `documents/retry-other-${nonce}.pdf`,
+      ],
+    )
+    await AppDataSource.query(
+      `INSERT INTO reclassify_jobs
+         (document_id, run_id, status, attempts, error)
+       VALUES
+         ($1, $4, 'error', 2, 'retry me'),
+         ($2, $4, 'done', 2, NULL),
+         ($3, $5, 'error', 2, 'other run')`,
+      [
+        documents[0].id,
+        documents[1].id,
+        documents[2].id,
+        requestedRunId,
+        otherRunId,
+      ],
+    )
+
+    try {
+      await expect(
+        retryReclassifyRun(requestedRunId, adminIdentity),
+      ).resolves.toEqual({
+        enqueued: 1,
+        estCost: 0.0008,
+        runId: requestedRunId,
+      })
+      const jobs: any[] = await AppDataSource.query(
+        `SELECT document_id, run_id, status, attempts, error
+         FROM reclassify_jobs WHERE document_id = ANY($1::uuid[])
+         ORDER BY document_id`,
+        [documents.map((document) => document.id)],
+      )
+      expect(jobs).toEqual(
+        expect.arrayContaining([
+          {
+            document_id: documents[0].id,
+            run_id: requestedRunId,
+            status: 'queued',
+            attempts: 0,
+            error: null,
+          },
+          {
+            document_id: documents[1].id,
+            run_id: requestedRunId,
+            status: 'done',
+            attempts: 2,
+            error: null,
+          },
+          {
+            document_id: documents[2].id,
+            run_id: otherRunId,
+            status: 'error',
+            attempts: 2,
+            error: 'other run',
+          },
+        ]),
+      )
+      const [audit] = await AppDataSource.query(
+        `SELECT action, entity_id, after FROM audit_log
+         WHERE action = 'reclassify_enqueue' AND entity_id = $1
+         ORDER BY at DESC LIMIT 1`,
+        [requestedRunId],
+      )
+      expect(audit).toMatchObject({
+        action: 'reclassify_enqueue',
+        entity_id: requestedRunId,
+        after: { enqueued: 1, retryRunId: requestedRunId },
+      })
+    } finally {
+      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
+        requestedRunId,
+      ])
+      await AppDataSource.query(
+        `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+        [documents.map((document) => document.id)],
+      )
+    }
+  })
+
+  it('reclassifyStatus returns at most 20 joined document error details per run', async () => {
+    const nonce = crypto.randomUUID().replaceAll('-', '')
+    const runId = crypto.randomUUID()
+    const documents: any[] = await AppDataSource.query(
+      `INSERT INTO documents (external_id, s3_key, title, status)
+       SELECT
+         $1 || series::text,
+         'documents/status-error-' || $1 || series::text || '.pdf',
+         'Status error ' || series::text,
+         'ready'
+       FROM generate_series(1, 21) AS series
+       RETURNING id`,
+      [`__status_error_${nonce}_`],
+    )
+    await AppDataSource.query(
+      `INSERT INTO reclassify_jobs
+         (document_id, run_id, status, attempts, error)
+       SELECT id, $2, 'error', 2, 'classification failed'
+       FROM documents WHERE id = ANY($1::uuid[])`,
+      [documents.map((document) => document.id), runId],
+    )
+
+    try {
+      const status = await reclassifyStatus()
+      const run = status.recent.find((entry) => entry.runId === runId) as
+        | ((typeof status.recent)[number] & {
+            errors?: {
+              documentId: string
+              externalId: string
+              title: string | null
+              attempts: number
+              error: string
+            }[]
+          })
+        | undefined
+      expect(run).toBeDefined()
+      expect(run?.errors).toHaveLength(20)
+      expect(run?.errors?.[0]).toEqual({
+        documentId: expect.any(String),
+        externalId: expect.stringContaining(`__status_error_${nonce}_`),
+        title: expect.stringMatching(/^Status error /),
+        attempts: 2,
+        error: 'classification failed',
+      })
+    } finally {
+      await AppDataSource.query(
+        `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+        [documents.map((document) => document.id)],
+      )
+    }
+  })
+
+  it('rebuildTagEmbeddings rolls back needs_reembed when its audit fails', async () => {
+    const nonce = crypto.randomUUID().replaceAll('-', '')
+    const auditFunction = `task3_rebuild_audit_fail_${nonce}`
+    const auditTrigger = `task3_rebuild_audit_fail_trigger_${nonce}`
+    const [tag] = await AppDataSource.query(
+      `INSERT INTO tags
+         (facet, value_id, taxonomy_version, needs_reembed)
+       VALUES ('topic', $1, 'v1', false) RETURNING id`,
+      [`__atomic_rebuild_${nonce}__`],
+    )
+    await AppDataSource.query(
+      `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         IF NEW.action = 'tag_embeddings_rebuild' THEN
+           RAISE EXCEPTION 'task3 rebuild audit failure';
+         END IF;
+         RETURN NEW;
+       END;
+       $$`,
+    )
+    await AppDataSource.query(
+      `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+    )
+
+    try {
+      await expect(rebuildTagEmbeddings(adminIdentity)).rejects.toThrow(
+        /task3 rebuild audit failure/i,
+      )
+      const [row] = await AppDataSource.query(
+        `SELECT needs_reembed FROM tags WHERE id = $1`,
+        [tag.id],
+      )
+      expect(row.needs_reembed).toBe(false)
+    } finally {
+      await AppDataSource.query(
+        `DROP TRIGGER IF EXISTS ${auditTrigger} ON audit_log`,
+      )
+      await AppDataSource.query(`DROP FUNCTION IF EXISTS ${auditFunction}()`)
+      await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tag.id])
     }
   })
 

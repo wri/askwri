@@ -13,6 +13,7 @@ export type AuditAction =
   | 'tag_merge'
   | 'tag_import'
   | 'reclassify_enqueue'
+  | 'reclassify_run'
   | 'tag_embeddings_rebuild'
   | 'lifecycle'
   | 'collection_change'

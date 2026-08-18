@@ -10,6 +10,10 @@ import {
 } from '@/app/api/admin/topics/route'
 import { POST as importTopics } from '@/app/api/admin/topics/import/route'
 import { POST as mergeTopic } from '@/app/api/admin/topics/[id]/merge/route'
+import {
+  GET as estimateReclassifyRoute,
+  POST as enqueueReclassifyRoute,
+} from '@/app/api/admin/topics/reclassify/route'
 import { SESSION_COOKIE } from '@/lib/auth/session'
 
 const hasDb = !!process.env.DATABASE_URL
@@ -401,5 +405,294 @@ d('topics API routes (DB integration)', () => {
       await AppDataSource.query(`DELETE FROM tags WHERE value_id = $1`, [label])
       consoleError.mockRestore()
     }
+  })
+
+  describe('/api/admin/topics/reclassify contract', () => {
+    it('GET estimates an explicit all scope without enqueueing work', async () => {
+      const nonce = crypto.randomUUID()
+      const [document] = await AppDataSource.query(
+        `INSERT INTO documents (external_id, s3_key, title, status)
+         VALUES ($1, $2, 'Estimate all', 'ready') RETURNING id`,
+        [`__route_estimate_all_${nonce}__`, `documents/${nonce}.pdf`],
+      )
+      try {
+        const response = await estimateReclassifyRoute(
+          makeReq(
+            'GET',
+            'http://localhost/api/admin/topics/reclassify?scope=all',
+            undefined,
+            adminCookie,
+          ),
+        )
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({
+          ok: true,
+          eligible: 1,
+          estCost: 0.0008,
+        })
+        const [job] = await AppDataSource.query(
+          `SELECT id FROM reclassify_jobs WHERE document_id = $1`,
+          [document.id],
+        )
+        expect(job).toBeUndefined()
+      } finally {
+        await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [
+          document.id,
+        ])
+      }
+    })
+
+    it('GET estimates an explicit v1 topic scope without enqueueing work', async () => {
+      const nonce = crypto.randomUUID()
+      const [tag] = await AppDataSource.query(
+        `INSERT INTO tags (facet, value_id, taxonomy_version)
+         VALUES ('topic', $1, 'v1') RETURNING id`,
+        [`__route_estimate_tag_${nonce}__`],
+      )
+      const [document] = await AppDataSource.query(
+        `INSERT INTO documents (external_id, s3_key, title, status)
+         VALUES ($1, $2, 'Estimate scoped', 'needs_review') RETURNING id`,
+        [`__route_estimate_doc_${nonce}__`, `documents/${nonce}.pdf`],
+      )
+      await AppDataSource.query(
+        `INSERT INTO document_tags (document_id, tag_id, source, status)
+         VALUES ($1, $2, 'llm', 'accepted')`,
+        [document.id, tag.id],
+      )
+      try {
+        const response = await estimateReclassifyRoute(
+          makeReq(
+            'GET',
+            `http://localhost/api/admin/topics/reclassify?tagId=${tag.id}`,
+            undefined,
+            adminCookie,
+          ),
+        )
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({
+          ok: true,
+          eligible: 1,
+          estCost: 0.0008,
+        })
+        const [job] = await AppDataSource.query(
+          `SELECT id FROM reclassify_jobs WHERE document_id = $1`,
+          [document.id],
+        )
+        expect(job).toBeUndefined()
+      } finally {
+        await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [
+          document.id,
+        ])
+        await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tag.id])
+      }
+    })
+
+    it('POST enqueues an explicit all scope with the exact result shape', async () => {
+      const nonce = crypto.randomUUID()
+      const [document] = await AppDataSource.query(
+        `INSERT INTO documents (external_id, s3_key, title, status)
+         VALUES ($1, $2, 'Enqueue all', 'ready') RETURNING id`,
+        [`__route_enqueue_all_${nonce}__`, `documents/${nonce}.pdf`],
+      )
+      let runId: string | undefined
+      try {
+        const response = await enqueueReclassifyRoute(
+          makeReq(
+            'POST',
+            'http://localhost/api/admin/topics/reclassify',
+            { scope: 'all' },
+            adminCookie,
+          ),
+        )
+        expect(response.status).toBe(200)
+        const body = await response.json()
+        runId = body.runId
+        expect(body).toEqual({
+          ok: true,
+          enqueued: 1,
+          estCost: 0.0008,
+          runId: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+          ),
+        })
+      } finally {
+        await AppDataSource.query(
+          `DELETE FROM reclassify_jobs WHERE document_id = $1`,
+          [document.id],
+        )
+        await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [
+          document.id,
+        ])
+        if (runId) {
+          await AppDataSource.query(
+            `DELETE FROM audit_log
+             WHERE action = 'reclassify_enqueue' AND after->>'runId' = $1`,
+            [runId],
+          )
+        }
+      }
+    })
+
+    it('POST enqueues an explicit scoped request with the exact result shape', async () => {
+      const nonce = crypto.randomUUID()
+      const [tag] = await AppDataSource.query(
+        `INSERT INTO tags (facet, value_id, taxonomy_version)
+         VALUES ('topic', $1, 'v1') RETURNING id`,
+        [`__route_enqueue_tag_${nonce}__`],
+      )
+      const [document] = await AppDataSource.query(
+        `INSERT INTO documents (external_id, s3_key, title, status)
+         VALUES ($1, $2, 'Enqueue scoped', 'needs_review') RETURNING id`,
+        [`__route_enqueue_doc_${nonce}__`, `documents/${nonce}.pdf`],
+      )
+      await AppDataSource.query(
+        `INSERT INTO document_tags (document_id, tag_id, source, status)
+         VALUES ($1, $2, 'llm', 'accepted')`,
+        [document.id, tag.id],
+      )
+      try {
+        const response = await enqueueReclassifyRoute(
+          makeReq(
+            'POST',
+            'http://localhost/api/admin/topics/reclassify',
+            { tagId: tag.id },
+            adminCookie,
+          ),
+        )
+        expect(response.status).toBe(200)
+        const body = await response.json()
+        expect(body).toEqual({
+          ok: true,
+          enqueued: 1,
+          estCost: 0.0008,
+          runId: expect.any(String),
+        })
+        const [job] = await AppDataSource.query(
+          `SELECT scope_tag_id FROM reclassify_jobs WHERE document_id = $1`,
+          [document.id],
+        )
+        expect(job.scope_tag_id).toBe(tag.id)
+      } finally {
+        await AppDataSource.query(
+          `DELETE FROM reclassify_jobs WHERE document_id = $1`,
+          [document.id],
+        )
+        await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [
+          document.id,
+        ])
+        await AppDataSource.query(
+          `DELETE FROM audit_log
+           WHERE action = 'reclassify_enqueue' AND entity_id = $1`,
+          [tag.id],
+        )
+        await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tag.id])
+      }
+    })
+
+    it('POST retries only the requested run and preserves its run id', async () => {
+      const nonce = crypto.randomUUID()
+      const runId = crypto.randomUUID()
+      const [document] = await AppDataSource.query(
+        `INSERT INTO documents (external_id, s3_key, title, status)
+         VALUES ($1, $2, 'Retry route', 'ready') RETURNING id`,
+        [`__route_retry_${nonce}__`, `documents/${nonce}.pdf`],
+      )
+      await AppDataSource.query(
+        `INSERT INTO reclassify_jobs
+           (document_id, run_id, status, attempts, error)
+         VALUES ($1, $2, 'error', 2, 'route retry error')`,
+        [document.id, runId],
+      )
+      try {
+        const response = await enqueueReclassifyRoute(
+          makeReq(
+            'POST',
+            'http://localhost/api/admin/topics/reclassify',
+            { retryRunId: runId },
+            adminCookie,
+          ),
+        )
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({
+          ok: true,
+          enqueued: 1,
+          estCost: 0.0008,
+          runId,
+        })
+        const [job] = await AppDataSource.query(
+          `SELECT status, attempts, error FROM reclassify_jobs
+           WHERE document_id = $1 AND run_id = $2`,
+          [document.id, runId],
+        )
+        expect(job).toEqual({ status: 'queued', attempts: 0, error: null })
+      } finally {
+        await AppDataSource.query(
+          `DELETE FROM reclassify_jobs WHERE document_id = $1`,
+          [document.id],
+        )
+        await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [
+          document.id,
+        ])
+        await AppDataSource.query(
+          `DELETE FROM audit_log WHERE entity_id = $1`,
+          [runId],
+        )
+      }
+    })
+
+    it.each([
+      ['missing discriminator', {}],
+      ['mixed discriminators', { scope: 'all', tagId: crypto.randomUUID() }],
+      ['unknown properties', { scope: 'all', extra: true }],
+      ['invalid scope', { scope: 'tagged' }],
+      ['invalid tag id', { tagId: 'not-a-uuid' }],
+      ['invalid retry run id', { retryRunId: 'not-a-uuid' }],
+      ['null body', null],
+      ['array body', []],
+    ])('POST rejects %s with 400', async (_label, body) => {
+      const response = await enqueueReclassifyRoute(
+        makeReq(
+          'POST',
+          'http://localhost/api/admin/topics/reclassify',
+          body,
+          adminCookie,
+        ),
+      )
+      expect(response.status).toBe(400)
+    })
+
+    it('POST rejects malformed JSON and an empty body with 400', async () => {
+      for (const body of ['{', undefined]) {
+        const response = await enqueueReclassifyRoute(
+          new NextRequest('http://localhost/api/admin/topics/reclassify', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              cookie: `${SESSION_COOKIE}=${adminCookie}`,
+            },
+            body,
+          }),
+        )
+        expect(response.status).toBe(400)
+      }
+    })
+
+    it.each([
+      ['missing discriminator', ''],
+      ['mixed discriminators', `?scope=all&tagId=${crypto.randomUUID()}`],
+      ['unknown parameter', '?scope=all&extra=true'],
+      ['invalid scope', '?scope=tagged'],
+      ['invalid tag id', '?tagId=not-a-uuid'],
+    ])('GET rejects %s with 400', async (_label, query) => {
+      const response = await estimateReclassifyRoute(
+        makeReq(
+          'GET',
+          `http://localhost/api/admin/topics/reclassify${query}`,
+          undefined,
+          adminCookie,
+        ),
+      )
+      expect(response.status).toBe(400)
+    })
   })
 })

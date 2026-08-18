@@ -339,27 +339,81 @@ export async function deleteTopicIfUnused(
   })
 }
 
-async function enqueueReclassifyDocumentIds(
+export type ReclassifyScope = 'all' | { tagId: string }
+
+type ReclassifyCandidates =
+  { documentIds: string[] } | { scope: ReclassifyScope }
+
+function reclassifyCandidateQuery(scope: ReclassifyScope): {
+  sql: string
+  parameters: unknown[]
+  scopeTagId: string | null
+} {
+  if (scope === 'all') {
+    return {
+      sql: `SELECT d.id AS document_id
+            FROM documents d
+            WHERE d.status = 'ready'`,
+      parameters: [],
+      scopeTagId: null,
+    }
+  }
+
+  return {
+    sql: `SELECT DISTINCT dt.document_id
+          FROM document_tags dt
+          JOIN tags t ON t.id = dt.tag_id
+          WHERE dt.tag_id = $1
+            AND dt.source = 'llm'
+            AND t.facet = 'topic'
+            AND t.taxonomy_version = 'v1'`,
+    parameters: [scope.tagId],
+    scopeTagId: scope.tagId,
+  }
+}
+
+/**
+ * Manager-bound, set-based queue primitive shared by merge/import and the
+ * public enqueue operation. Its caller owns the surrounding transaction.
+ */
+async function enqueueReclassifyCandidates(
   em: EntityManager,
-  documentIds: string[],
-  scopeTagId: string | null,
+  candidates: ReclassifyCandidates,
+  explicitScopeTagId?: string | null,
 ): Promise<{ enqueued: number; runId: string }> {
   const runId = crypto.randomUUID()
-  if (documentIds.length === 0) return { enqueued: 0, runId }
+  let candidateSql: string
+  let candidateParameters: unknown[]
+  let scopeTagId: string | null
+
+  if ('documentIds' in candidates) {
+    if (candidates.documentIds.length === 0) return { enqueued: 0, runId }
+    candidateSql = `SELECT DISTINCT document_id
+                    FROM unnest($1::uuid[]) AS candidate(document_id)`
+    candidateParameters = [candidates.documentIds]
+    scopeTagId = explicitScopeTagId ?? null
+  } else {
+    const query = reclassifyCandidateQuery(candidates.scope)
+    candidateSql = query.sql
+    candidateParameters = query.parameters
+    scopeTagId = query.scopeTagId
+  }
+
+  const scopeParameter = `$${candidateParameters.length + 1}`
+  const runParameter = `$${candidateParameters.length + 2}`
 
   const [result] = await em.query(
     `WITH candidates AS (
-       SELECT DISTINCT document_id
-       FROM unnest($1::uuid[]) AS candidate(document_id)
+       ${candidateSql}
      ), inserted AS (
        INSERT INTO reclassify_jobs (document_id, scope_tag_id, run_id)
-       SELECT document_id, $2, $3 FROM candidates
+       SELECT document_id, ${scopeParameter}, ${runParameter} FROM candidates
        ON CONFLICT (document_id) WHERE status IN ('queued', 'running')
        DO NOTHING
        RETURNING id
      )
      SELECT count(*)::int AS enqueued FROM inserted`,
-    [documentIds, scopeTagId, runId],
+    [...candidateParameters, scopeTagId, runId],
   )
 
   return { enqueued: result?.enqueued ?? 0, runId }
@@ -479,9 +533,9 @@ export async function mergeTags(
       [intoId, fromId],
     )
 
-    const { enqueued } = await enqueueReclassifyDocumentIds(
+    const { enqueued } = await enqueueReclassifyCandidates(
       em,
-      affectedDocumentIds,
+      { documentIds: affectedDocumentIds },
       intoId,
     )
 
@@ -507,6 +561,32 @@ export async function mergeTags(
 
 export const EST_PER_DOC_COST = 0.0008 // gpt-5-mini per-doc classify (spec §5.5)
 
+function estimateCost(documentCount: number): number {
+  return +(documentCount * EST_PER_DOC_COST).toFixed(4)
+}
+
+/** Count rows that a matching enqueue can insert, without mutating the queue. */
+export async function estimateReclassify(
+  scope: ReclassifyScope,
+): Promise<{ eligible: number; estCost: number }> {
+  const candidates = reclassifyCandidateQuery(scope)
+  const [result] = await AppDataSource.query(
+    `WITH candidates AS (
+       ${candidates.sql}
+     )
+     SELECT count(*)::int AS eligible
+     FROM candidates c
+     WHERE NOT EXISTS (
+       SELECT 1 FROM reclassify_jobs j
+       WHERE j.document_id = c.document_id
+         AND j.status IN ('queued', 'running')
+     )`,
+    candidates.parameters,
+  )
+  const eligible = result?.eligible ?? 0
+  return { eligible, estCost: estimateCost(eligible) }
+}
+
 /**
  * Enqueue reclassify jobs for a full-corpus or scoped re-classify run.
  * 'all' scope: documents with status='ready'.
@@ -516,59 +596,73 @@ export const EST_PER_DOC_COST = 0.0008 // gpt-5-mini per-doc classify (spec §5.
  * reclassify_jobs_one_open_per_doc (ON CONFLICT DO NOTHING).
  */
 export async function enqueueReclassify(
-  scope: 'all' | { tagId: string },
-  identity?: AdminIdentity,
+  scope: ReclassifyScope,
+  identity: AdminIdentity,
+  manager?: EntityManager,
 ): Promise<{ enqueued: number; estCost: number; runId: string }> {
-  let docIds: string[]
-  if (scope === 'all') {
-    docIds = (
-      await AppDataSource.query(
-        `SELECT id FROM documents WHERE status = 'ready'`,
-      )
-    ).map((r: any) => r.id)
-  } else {
-    docIds = (
-      await AppDataSource.query(
-        `SELECT dt.document_id FROM document_tags dt WHERE dt.tag_id = $1 AND dt.source = 'llm'`,
-        [scope.tagId],
-      )
-    ).map((r: any) => r.document_id)
-  }
-
-  if (docIds.length === 0) {
-    return { enqueued: 0, estCost: 0, runId: crypto.randomUUID() }
-  }
-
-  const runId = crypto.randomUUID()
-  const scopeTagId = scope === 'all' ? null : scope.tagId
-  let enqueued = 0
-
-  for (const docId of docIds) {
-    const [row] = await AppDataSource.query(
-      `INSERT INTO reclassify_jobs (document_id, scope_tag_id, run_id)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (document_id) WHERE status IN ('queued', 'running') DO NOTHING
-       RETURNING id`,
-      [docId, scopeTagId, runId],
-    )
-    if (row) enqueued++
-  }
-
-  if (identity) {
-    await writeAudit({
-      ...auditActor(identity),
-      action: 'reclassify_enqueue',
-      entityType: 'tag',
-      entityId: scope === 'all' ? null : scope.tagId,
-      after: { enqueued, scope: scope === 'all' ? 'all' : scope.tagId },
+  const run = async (em: EntityManager) => {
+    const { enqueued, runId } = await enqueueReclassifyCandidates(em, {
+      scope,
     })
+    await writeAudit(
+      {
+        ...auditActor(identity),
+        action: 'reclassify_enqueue',
+        entityType: 'tag',
+        entityId: scope === 'all' ? null : scope.tagId,
+        after: {
+          enqueued,
+          scope: scope === 'all' ? 'all' : scope.tagId,
+          runId,
+        },
+      },
+      em,
+    )
+
+    return { enqueued, estCost: estimateCost(enqueued), runId }
   }
 
-  return {
-    enqueued,
-    estCost: +(enqueued * EST_PER_DOC_COST).toFixed(4),
-    runId,
-  }
+  return manager ? run(manager) : AppDataSource.transaction(run)
+}
+
+/** Reset only terminal errors from one run, preserving the original run ID. */
+export async function retryReclassifyRun(
+  runId: string,
+  identity: AdminIdentity,
+): Promise<{ enqueued: number; estCost: number; runId: string }> {
+  return AppDataSource.transaction(async (em) => {
+    const [result] = await em.query(
+      `WITH retried AS (
+         UPDATE reclassify_jobs retry
+         SET status = 'queued', attempts = 0, error = NULL, updated_at = now()
+         WHERE retry.run_id = $1
+           AND retry.status = 'error'
+           AND NOT EXISTS (
+             SELECT 1 FROM reclassify_jobs active
+             WHERE active.document_id = retry.document_id
+               AND active.id <> retry.id
+               AND active.status IN ('queued', 'running')
+           )
+         RETURNING retry.id
+       )
+       SELECT count(*)::int AS enqueued FROM retried`,
+      [runId],
+    )
+    const enqueued = result?.enqueued ?? 0
+
+    await writeAudit(
+      {
+        ...auditActor(identity),
+        action: 'reclassify_enqueue',
+        entityType: 'reclassify_run',
+        entityId: runId,
+        after: { enqueued, retryRunId: runId },
+      },
+      em,
+    )
+
+    return { enqueued, estCost: estimateCost(enqueued), runId }
+  })
 }
 
 export interface ReclassifyStatus {
@@ -584,6 +678,13 @@ export interface ReclassifyStatus {
     error: number
     estCost: number
     createdAt: string
+    errors: {
+      documentId: string
+      externalId: string
+      title: string | null
+      attempts: number
+      error: string | null
+    }[]
   }[]
 }
 
@@ -599,16 +700,43 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
   const byStatus = Object.fromEntries(counts.map((r) => [r.status, r.c]))
 
   const recent: any[] = await AppDataSource.query(
-    `SELECT run_id AS "runId",
-            scope_tag_id AS "scopeTagId",
-            count(*)::int AS total,
-            count(*) FILTER (WHERE status = 'done')::int AS done,
-            count(*) FILTER (WHERE status = 'error')::int AS error,
-            min(created_at) AS "createdAt"
-     FROM reclassify_jobs
-     GROUP BY run_id, scope_tag_id
-     ORDER BY min(created_at) DESC
-     LIMIT 20`,
+    `WITH recent_runs AS (
+       SELECT run_id AS "runId",
+              scope_tag_id AS "scopeTagId",
+              count(*)::int AS total,
+              count(*) FILTER (WHERE status = 'done')::int AS done,
+              count(*) FILTER (WHERE status = 'error')::int AS error,
+              min(created_at) AS "createdAt"
+       FROM reclassify_jobs
+       GROUP BY run_id, scope_tag_id
+       ORDER BY min(created_at) DESC
+       LIMIT 20
+     )
+     SELECT recent_runs.*,
+            COALESCE(error_details.errors, '[]'::json) AS errors
+     FROM recent_runs
+     LEFT JOIN LATERAL (
+       SELECT json_agg(
+         json_build_object(
+           'documentId', bounded.document_id,
+           'externalId', bounded.external_id,
+           'title', bounded.title,
+           'attempts', bounded.attempts,
+           'error', bounded.error
+         ) ORDER BY bounded.created_at, bounded.id
+       ) AS errors
+       FROM (
+         SELECT j.id, j.document_id, d.external_id, d.title,
+                j.attempts, j.error, j.created_at
+         FROM reclassify_jobs j
+         JOIN documents d ON d.id = j.document_id
+         WHERE j.run_id = recent_runs."runId"
+           AND j.status = 'error'
+         ORDER BY j.created_at, j.id
+         LIMIT 20
+       ) bounded
+     ) error_details ON true
+     ORDER BY recent_runs."createdAt" DESC`,
   )
 
   return {
@@ -624,6 +752,7 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
       error: r.error,
       estCost: +(r.total * EST_PER_DOC_COST).toFixed(4),
       createdAt: r.createdAt,
+      errors: r.errors,
     })),
   }
 }
@@ -637,26 +766,31 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
 export async function rebuildTagEmbeddings(
   identity?: AdminIdentity,
 ): Promise<{ queued: number }> {
-  const rows: any[] = await AppDataSource.query(
-    `UPDATE tags
-     SET needs_reembed = true
-     WHERE facet = 'topic'
-       AND taxonomy_version = 'v1'
-       AND NOT EXISTS (
-         SELECT 1 FROM tag_embeddings te WHERE te.tag_id = tags.id
-       )
-     RETURNING id`,
-  )
-  if (identity) {
-    await writeAudit({
-      ...auditActor(identity),
-      action: 'tag_embeddings_rebuild',
-      entityType: 'tag',
-      entityId: null,
-      after: { queued: rows.length },
-    })
-  }
-  return { queued: rows.length }
+  return AppDataSource.transaction(async (em) => {
+    const rows: any[] = await em.query(
+      `UPDATE tags
+       SET needs_reembed = true
+       WHERE facet = 'topic'
+         AND taxonomy_version = 'v1'
+         AND NOT EXISTS (
+           SELECT 1 FROM tag_embeddings te WHERE te.tag_id = tags.id
+         )
+       RETURNING id`,
+    )
+    if (identity) {
+      await writeAudit(
+        {
+          ...auditActor(identity),
+          action: 'tag_embeddings_rebuild',
+          entityType: 'tag',
+          entityId: null,
+          after: { queued: rows.length },
+        },
+        em,
+      )
+    }
+    return { queued: rows.length }
+  })
 }
 
 // --- Task 6: CSV import (dry-run diff + atomic apply) + export ---
@@ -1023,9 +1157,13 @@ export async function applyTopicsImport(
          FROM document_tags WHERE tag_id = ANY($1::uuid[])`,
         [changedTagIds],
       )
-      const enqueueResult = await enqueueReclassifyDocumentIds(
+      const enqueueResult = await enqueueReclassifyCandidates(
         em,
-        affectedDocuments.map((document) => document.document_id),
+        {
+          documentIds: affectedDocuments.map(
+            (document) => document.document_id,
+          ),
+        },
         changedTagIds.length === 1 ? changedTagIds[0] : null,
       )
       enqueued = enqueueResult.enqueued

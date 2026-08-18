@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     await initializeDatabase()
     // Mark all unembedded topic tags for re-embed; the worker's embed sweep
     // (embed_tags.sweep_pending / build_all_embeddings) builds the actual rows.
-    // rebuildTagEmbeddings also writes the tag_embeddings_rebuild audit row.
+    // rebuildTagEmbeddings writes the flag changes and audit row atomically.
     const { queued } = await rebuildTagEmbeddings(identity!)
     return NextResponse.json({ ok: true, queued })
   } catch (err) {
