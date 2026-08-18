@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
 import { TopicTaxonomyManager } from '@/app/admin/topics/components/TopicTaxonomyManager'
@@ -227,7 +227,9 @@ describe('TopicTaxonomyManager (jsdom)', () => {
 
     // Fire the IO callback to simulate sentinel intersection
     expect(ioCallback).toBeTruthy()
-    ioCallback!([{ isIntersecting: true }])
+    await act(async () => {
+      ioCallback!([{ isIntersecting: true }])
+    })
 
     // Now Topic 200 should be visible (200 more loaded)
     await waitFor(() => {
@@ -401,6 +403,197 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     // Parent field should NOT have an error
     const parentSection = screen.getByText('Parent topic')
     expect(parentSection.parentElement?.querySelector('[style*="C11101"]')).toBeNull()
+  })
+
+  it('shows descriptions and aliases together in topic rows', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    expect(screen.getByText('Fossil fuel')).toBeTruthy()
+    expect(screen.getByText(/Coal Industry/)).toBeTruthy()
+  })
+
+  it('excludes the edited topic and all descendants from parent choices', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    fireEvent.click(screen.getByText('Coal'))
+
+    const parentSelect = await screen.findByRole('combobox', { name: 'Parent topic' })
+    expect(within(parentSelect).queryByRole('option', { name: 'Coal' })).toBeNull()
+    expect(
+      within(parentSelect).queryByRole('option', { name: 'Coal Combustion' }),
+    ).toBeNull()
+    expect(within(parentSelect).getByRole('option', { name: 'Climate' })).toBeTruthy()
+  })
+
+  it('closes the edit drawer on Escape when it is not busy', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    fireEvent.click(screen.getByText('Coal'))
+    await screen.findByDisplayValue('Coal')
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(screen.queryByDisplayValue('Coal')).toBeNull()
+  })
+
+  it('creates a new topic with description, aliases, and parent, then closes with a flash', async () => {
+    const createCalls: any[][] = []
+    const fetchMock = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics' && init?.method === 'POST') {
+        createCalls.push([url, init])
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            ok: true,
+            tag: {
+              ...mockTags[0],
+              id: 't4',
+              valueId: 'Methane',
+              description: 'Short-lived climate pollutant',
+              aliases: ['CH4'],
+              parentTagId: 't3',
+            },
+          }),
+        }) as any
+      }
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'New topic' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Topic label' }), {
+      target: { value: 'Methane' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Topic description' }), {
+      target: { value: 'Short-lived climate pollutant' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('Add alias…'), {
+      target: { value: 'CH4' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add alias' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Parent topic' }), {
+      target: { value: 't3' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create topic' }))
+
+    await waitFor(() => {
+      expect(createCalls).toHaveLength(1)
+      expect(JSON.parse(createCalls[0][1].body)).toEqual({
+        valueId: 'Methane',
+        description: 'Short-lived climate pollutant',
+        aliases: ['CH4'],
+        parentTagId: 't3',
+      })
+      expect(screen.queryByRole('heading', { name: 'New topic' })).toBeNull()
+      expect(screen.getByText('Topic created.')).toBeTruthy()
+    })
+  })
+
+  it('rebuilds missing embeddings and reports the queued count', async () => {
+    const fetchMock = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/embeddings/rebuild' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, queued: 2 }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rebuild embeddings' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/admin/topics/embeddings/rebuild',
+        { method: 'POST' },
+      )
+      expect(screen.getByText('Queued 2 topic embeddings for rebuild.')).toBeTruthy()
+    })
+  })
+
+  it('filters topics by parent state, document count, and re-embed state', async () => {
+    mockFetch([
+      mockTags[0],
+      { ...mockTags[1], needsReembed: true },
+      mockTags[2],
+    ])
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal Combustion')).toBeTruthy())
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Parent state' }), {
+      target: { value: 'child' },
+    })
+    expect(screen.getByText('Coal Combustion')).toBeTruthy()
+    expect(screen.queryByText('Coal')).toBeNull()
+    expect(screen.queryByText('Climate')).toBeNull()
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Parent state' }), {
+      target: { value: 'all' },
+    })
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum documents' }), {
+      target: { value: '40' },
+    })
+    expect(screen.getByText('Climate')).toBeTruthy()
+    expect(screen.queryByText('Coal')).toBeNull()
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum documents' }), {
+      target: { value: '' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Re-embed state' }), {
+      target: { value: 'needed' },
+    })
+    expect(screen.getByText('Coal Combustion')).toBeTruthy()
+    expect(screen.queryByText('Climate')).toBeNull()
   })
 
   // ---- Task 15: Bulk ops ----
@@ -635,6 +828,100 @@ NewTopic,desc,, ,topic,
     expect((applyBtn as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('applies a successful import with the exact reclassify query parameter', async () => {
+    const fetchMock = jest.fn((url: string, _init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/import?dry_run=true') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            ok: true,
+            diff: {
+              added: [{ label: 'NewTopic', description: 'desc', aliases: [], parent: '', facet: 'topic', id: '' }],
+              updated: [],
+              unchanged: [],
+              conflicts: [],
+            },
+          }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/import?reclassify=true') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, applied: 1 }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+
+    const csvContent = `label,description,aliases,parent,facet,id
+NewTopic,desc,,,topic,
+`
+    const file = new File([csvContent], 'test.csv', { type: 'text/csv' })
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    fireEvent.change(document.querySelector('input[type="file"]')!, {
+      target: { files: [file] },
+    })
+    await screen.findByRole('button', { name: 'Apply 1 change' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+
+    await waitFor(() => {
+      const applyCalls = fetchMock.mock.calls.filter(
+        ([url, init]) =>
+          url === '/api/admin/topics/import?reclassify=true' &&
+          init?.method === 'POST',
+      )
+      expect(applyCalls).toHaveLength(1)
+      expect(applyCalls[0][1].headers).toEqual({ 'Content-Type': 'text/csv' })
+      expect(applyCalls[0][1].body).toBe(csvContent)
+    })
+  })
+
+  it('does not construct a download from a failed export response', async () => {
+    const responseText = jest.fn(() => Promise.resolve('server failure'))
+    global.fetch = jest.fn((url: string) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/export') {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          text: responseText,
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => expect(screen.getByText('Export failed.')).toBeTruthy())
+    expect(responseText).not.toHaveBeenCalled()
+  })
+
   it('shows history tab with audit entries', async () => {
     global.fetch = jest.fn((url: string, init?: any) => {
       if (url === '/api/admin/topics') {
@@ -700,16 +987,22 @@ NewTopic,desc,, ,topic,
     })
   })
 
-  it('opens confirm modal with estCost when Re-classify all is clicked', async () => {
-    global.fetch = jest.fn((url: string) => {
+  it('uses GET to estimate full reclassification and cancel never enqueues', async () => {
+    const fetchMock = jest.fn((url: string, init?: RequestInit) => {
       if (url === '/api/admin/topics') {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ ok: true, tags: mockTags }),
         }) as any
       }
-      if (url === '/api/admin/topics/reclassify' && (url as any).method !== 'GET') {
-        // For POST reclassify
+      if (url === '/api/admin/topics/reclassify?scope=all') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -721,6 +1014,7 @@ NewTopic,desc,, ,topic,
         json: () => Promise.resolve({}),
       }) as any
     })
+    global.fetch = fetchMock
     render(
       <ChakraProvider>
         <TopicTaxonomyManager />
@@ -728,18 +1022,32 @@ NewTopic,desc,, ,topic,
     )
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
 
-    // Click the Re-classify all button
-    fireEvent.click(screen.getByText('Re-classify all'))
+    fireEvent.click(screen.getByRole('button', { name: 'Re-classify all' }))
 
-    // Confirm modal should show the estimated count + cost
     await waitFor(() => {
       expect(screen.getByText(/203/)).toBeTruthy()
       expect(screen.getByText(/\$0\.17/)).toBeTruthy()
-      expect(screen.getByText('Start')).toBeTruthy()
     })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/topics/reclassify?scope=all')
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]) =>
+          url === '/api/admin/topics/reclassify' && init?.method === 'POST',
+      ),
+    ).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]) =>
+          url === '/api/admin/topics/reclassify' && init?.method === 'POST',
+      ),
+    ).toHaveLength(0)
   })
 
-  it('calls POST /reclassify when Re-classify all is clicked', async () => {
+  it('POSTs full reclassification exactly once on Start and reports the actual enqueue', async () => {
     const fetchMock = jest.fn((url: string, init?: any) => {
       if (url === '/api/admin/topics') {
         return Promise.resolve({
@@ -747,18 +1055,27 @@ NewTopic,desc,, ,topic,
           json: () => Promise.resolve({ ok: true, tags: mockTags }),
         }) as any
       }
+      if (url === '/api/admin/topics/reclassify?scope=all') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+        }) as any
+      }
       if (url === '/api/admin/topics/reclassify') {
         if (init?.method === 'POST') {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ ok: true, enqueued: 203, estCost: 0.17, runId: 'run-1' }),
+            status: 200,
+            json: () => Promise.resolve({ ok: true, enqueued: 201, estCost: 0.19, runId: 'run-1' }),
           }) as any
         }
-        // GET status
+      }
+      if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({
-            ok: true, queued: 0, running: 0, done: 203, error: 0, recent: [] }),
+            ok: true, queued: 201, running: 0, done: 0, error: 0, recent: [] }),
           }) as any
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
@@ -771,19 +1088,261 @@ NewTopic,desc,, ,topic,
     )
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
 
-    // Click Re-classify all — this triggers POST /reclassify (estimate = enqueue)
-    fireEvent.click(screen.getByText('Re-classify all'))
+    fireEvent.click(screen.getByRole('button', { name: 'Re-classify all' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled())
 
-    // Verify POST /reclassify was called (estimate call IS the enqueue)
+    const postCallsBeforeStart = fetchMock.mock.calls.filter(
+      ([url, init]: any) =>
+        url === '/api/admin/topics/reclassify' && init?.method === 'POST',
+    )
+    expect(postCallsBeforeStart).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
     await waitFor(() => {
       const postCalls = fetchMock.mock.calls.filter(
-        ([u, init]: any) => u === '/api/admin/topics/reclassify' && init?.method === 'POST',
+        ([url, init]: any) =>
+          url === '/api/admin/topics/reclassify' && init?.method === 'POST',
       )
-      expect(postCalls.length).toBeGreaterThanOrEqual(1)
+      expect(postCalls).toHaveLength(1)
+      expect(JSON.parse(postCalls[0][1].body)).toEqual({ scope: 'all' })
+      expect(screen.getByText(/Re-classify enqueued: 201 docs \(≈\$0\.1900\)/)).toBeTruthy()
+    })
+  })
+
+  it('preserves tagId in scoped estimate and Start requests', async () => {
+    const fetchMock = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify?tagId=t1') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, eligible: 12, estCost: 0.01 }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, enqueued: 11, estCost: 0.009, runId: 'run-scoped' }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify/status') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, queued: 11, running: 0, done: 0, error: 0, recent: [] }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scoped to topic…' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pick a topic' }), {
+      target: { value: 't1' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() => expect(screen.getByText(/12/)).toBeTruthy())
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/topics/reclassify?tagId=t1')
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]: any) =>
+          url === '/api/admin/topics/reclassify' && init?.method === 'POST',
+      ),
+    ).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => {
+      const postCalls = fetchMock.mock.calls.filter(
+        ([url, init]: any) =>
+          url === '/api/admin/topics/reclassify' && init?.method === 'POST',
+      )
+      expect(postCalls).toHaveLength(1)
+      expect(JSON.parse(postCalls[0][1].body)).toEqual({ tagId: 't1' })
+    })
+  })
+
+  it('redirects to login when a reclassification estimate returns 401', async () => {
+    const originalLocation = window.location
+    delete (window as any).location
+    ;(window as any).location = { href: '', pathname: '/admin/tags', search: '?facet=topic' }
+
+    try {
+      global.fetch = jest.fn((url: string) => {
+        if (url === '/api/admin/topics') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ ok: true, tags: mockTags }),
+          }) as any
+        }
+        if (url === '/api/admin/topics/reclassify?scope=all') {
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            json: () => Promise.resolve({ ok: false, error: 'unauthorized' }),
+          }) as any
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }) as any
+      })
+
+      render(
+        <ChakraProvider>
+          <TopicTaxonomyManager />
+        </ChakraProvider>,
+      )
+      await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+      fireEvent.click(screen.getByRole('button', { name: 'Re-classify all' }))
+
+      await waitFor(() => {
+        expect((window as any).location.href).toBe(
+          '/admin/login?next=%2Fadmin%2Ftags%3Ffacet%3Dtopic',
+        )
+      })
+    } finally {
+      ;(window as any).location = originalLocation
+    }
+  })
+
+  it('renders document-level details for failed reclassification jobs', async () => {
+    global.fetch = jest.fn((url: string) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify/status') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ok: true,
+            queued: 0,
+            running: 0,
+            done: 0,
+            error: 1,
+            recent: [
+              {
+                runId: '2cb8df76-60e1-4582-9839-082d512e4b57',
+                scope: 'all',
+                total: 1,
+                done: 0,
+                error: 1,
+                estCost: 0.001,
+                createdAt: '2026-08-17T12:00:00Z',
+                updatedAt: '2026-08-17T12:01:00Z',
+                errors: [
+                  {
+                    documentId: '77f1a7c6-6dba-4dc4-b10f-d62d9143b6bd',
+                    externalId: 'WRI-42',
+                    title: 'Climate report',
+                    attempts: 2,
+                    error: 'model timeout',
+                  },
+                ],
+              },
+            ],
+          }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
     })
 
-    // Start button should be visible and clickable
-    await waitFor(() => expect(screen.getByText('Start')).toBeTruthy())
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: '1 error' }))
+
+    expect(screen.getByText('Climate report')).toBeTruthy()
+    expect(screen.getByText(/WRI-42/)).toBeTruthy()
+    expect(screen.getByText(/attempts: 2/i)).toBeTruthy()
+    expect(screen.getByText('model timeout')).toBeTruthy()
+  })
+
+  it('retries only the expanded failed run', async () => {
+    const runId = '2cb8df76-60e1-4582-9839-082d512e4b57'
+    const fetchMock = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify/status') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ok: true,
+            queued: 0,
+            running: 0,
+            done: 0,
+            error: 1,
+            recent: [
+              {
+                runId,
+                scope: 'all',
+                total: 1,
+                done: 0,
+                error: 1,
+                estCost: 0.001,
+                createdAt: '2026-08-17T12:00:00Z',
+                updatedAt: '2026-08-17T12:01:00Z',
+                errors: [],
+              },
+            ],
+          }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, enqueued: 1, estCost: 0.001, runId }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '1 error' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => {
+      const postCalls = fetchMock.mock.calls.filter(
+        ([url, init]: any) =>
+          url === '/api/admin/topics/reclassify' && init?.method === 'POST',
+      )
+      expect(postCalls).toHaveLength(1)
+      expect(JSON.parse(postCalls[0][1].body)).toEqual({ retryRunId: runId })
+    })
   })
 
   it('displays reclassify status panel with recent runs', async () => {

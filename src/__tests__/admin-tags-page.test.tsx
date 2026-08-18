@@ -152,4 +152,15 @@ describe('TagsPage facet tabs (jsdom)', () => {
       expect(screen.getByText('Topic taxonomy')).toBeInTheDocument()
     })
   })
+
+  it('uses a human-readable Doc type tab label', async () => {
+    mockFacet = 'doc_type'
+    renderPage()
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Doc type' }),
+      ).toBeInTheDocument()
+    })
+  })
 })

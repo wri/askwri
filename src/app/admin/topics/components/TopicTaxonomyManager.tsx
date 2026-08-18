@@ -61,6 +61,32 @@ function hasTree(tags: TopicRow[]): boolean {
   return tags.some((t) => t.parentTagId !== null)
 }
 
+function descendantIds(tags: TopicRow[], tagIds: Iterable<string>): Set<string> {
+  const children = buildChildrenMap(tags)
+  const descendants = new Set<string>()
+  const pending = [...tagIds]
+  while (pending.length > 0) {
+    const id = pending.pop()!
+    for (const child of children.get(id) ?? []) {
+      if (descendants.has(child.id)) continue
+      descendants.add(child.id)
+      pending.push(child.id)
+    }
+  }
+  return descendants
+}
+
+function useEscapeClose(onClose: () => void, busy = false) {
+  useEffect(() => {
+    if (busy) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [busy, onClose])
+}
+
 // ---- component ----
 
 export const TopicTaxonomyManager = () => {
@@ -68,6 +94,10 @@ export const TopicTaxonomyManager = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [parentFilter, setParentFilter] = useState<'all' | 'root' | 'child'>('all')
+  const [minimumDocs, setMinimumDocs] = useState('')
+  const [maximumDocs, setMaximumDocs] = useState('')
+  const [reembedFilter, setReembedFilter] = useState<'all' | 'needed' | 'current'>('all')
   const [viewMode, setViewMode] = useState<'tree' | 'flat'>('tree')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -75,6 +105,8 @@ export const TopicTaxonomyManager = () => {
 
   // ---- edit drawer state ----
   const [editingTag, setEditingTag] = useState<TopicRow | null>(null)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [rebuildBusy, setRebuildBusy] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
 
   // ---- bulk ops state ----
@@ -103,14 +135,31 @@ export const TopicTaxonomyManager = () => {
   // ---- reclassify state ----
   const [reclassifyModalOpen, setReclassifyModalOpen] = useState(false)
   const [reclassifyScope, setReclassifyScope] = useState<'all' | string>('all')
-  const [reclassifyEstimate, setReclassifyEstimate] = useState<{ enqueued: number; estCost: number } | null>(null)
+  const [reclassifyEstimate, setReclassifyEstimate] = useState<{ eligible: number; estCost: number } | null>(null)
+  const [reclassifyStarting, setReclassifyStarting] = useState(false)
 
   const [reclassifyStatus, setReclassifyStatus] = useState<{
     queued: number
     running: number
     done: number
     error: number
-    recent: { runId: string; scope: 'all' | string; total: number; done: number; error: number; estCost: number; createdAt: string }[]
+    recent: {
+      runId: string
+      scope: 'all' | string
+      total: number
+      done: number
+      error: number
+      estCost: number
+      createdAt: string
+      updatedAt: string
+      errors: {
+        documentId: string
+        externalId: string
+        title: string | null
+        attempts: number
+        error: string | null
+      }[]
+    }[]
   } | null>(null)
   const [reclassifyPanelOpen, setReclassifyPanelOpen] = useState(false)
   const [reclassifyError, setReclassifyError] = useState<string | null>(null)
@@ -174,19 +223,36 @@ export const TopicTaxonomyManager = () => {
 
   // ---- search filter ----
   const filteredTags = useMemo(() => {
-    if (!search.trim()) return tags
     const q = search.toLowerCase()
     return tags.filter((t) => {
-      if (t.valueId.toLowerCase().includes(q)) return true
-      if (t.description && t.description.toLowerCase().includes(q)) return true
-      if (t.aliases.some((a) => a.toLowerCase().includes(q))) return true
-      return false
+      const matchesSearch =
+        !q.trim() ||
+        t.valueId.toLowerCase().includes(q) ||
+        Boolean(t.description?.toLowerCase().includes(q)) ||
+        t.aliases.some((a) => a.toLowerCase().includes(q))
+      if (!matchesSearch) return false
+      if (parentFilter === 'root' && t.parentTagId !== null) return false
+      if (parentFilter === 'child' && t.parentTagId === null) return false
+      if (minimumDocs !== '' && t.acceptedCount < Number(minimumDocs)) return false
+      if (maximumDocs !== '' && t.acceptedCount > Number(maximumDocs)) return false
+      if (reembedFilter === 'needed' && !t.needsReembed) return false
+      if (reembedFilter === 'current' && t.needsReembed) return false
+      return true
     })
-  }, [tags, search])
+  }, [tags, search, parentFilter, minimumDocs, maximumDocs, reembedFilter])
 
   // ---- display list: flat on search, tree or flat per toggle ----
   const isSearching = search.trim().length > 0
-  const useTree = !isSearching && viewMode === 'tree' && hasTree(filteredTags)
+  const isFiltering =
+    parentFilter !== 'all' ||
+    minimumDocs !== '' ||
+    maximumDocs !== '' ||
+    reembedFilter !== 'all'
+  const useTree =
+    !isSearching &&
+    !isFiltering &&
+    viewMode === 'tree' &&
+    hasTree(filteredTags)
   const displayList = useMemo(() => {
     if (isSearching) return filteredTags // flat filtered list on search
     if (useTree) return flattenTree(filteredTags, expanded) // DFS order, collapsed nodes hide children
@@ -279,6 +345,33 @@ export const TopicTaxonomyManager = () => {
       load()
     }
     setSelected(new Set())
+  }
+
+  const handleRebuildEmbeddings = async () => {
+    setRebuildBusy(true)
+    try {
+      const res = await fetch('/api/admin/topics/embeddings/rebuild', {
+        method: 'POST',
+      })
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || body.ok === false) {
+        setFlash(body.error || 'Embedding rebuild failed.')
+        setTimeout(() => setFlash(null), 3000)
+        return
+      }
+      setFlash(`Queued ${body.queued} topic embeddings for rebuild.`)
+      setTimeout(() => setFlash(null), 3000)
+      load()
+    } catch {
+      setFlash('Embedding rebuild failed.')
+      setTimeout(() => setFlash(null), 3000)
+    } finally {
+      setRebuildBusy(false)
+    }
   }
 
   // ---- CSV import/export ----
@@ -382,6 +475,11 @@ export const TopicTaxonomyManager = () => {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
       }
+      if (!res.ok) {
+        setFlash('Export failed.')
+        setTimeout(() => setFlash(null), 3000)
+        return
+      }
       const text = await res.text()
       const blob = new Blob([text], { type: 'text/csv' })
       const url = URL.createObjectURL(blob)
@@ -432,24 +530,24 @@ export const TopicTaxonomyManager = () => {
     }
   }, [reclassifyPanelOpen, fetchReclassifyStatus])
 
-  const openReclassifyAll = async () => {
+  const fetchReclassifyEstimate = async (scope: 'all' | string) => {
     setReclassifyModalOpen(true)
-    setReclassifyScope('all')
+    setReclassifyScope(scope)
     setReclassifyEstimate(null)
     setReclassifyError(null)
     try {
-      const res = await fetch('/api/admin/topics/reclassify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope: 'all' }),
-      })
+      const query =
+        scope === 'all'
+          ? 'scope=all'
+          : `tagId=${encodeURIComponent(scope)}`
+      const res = await fetch(`/api/admin/topics/reclassify?${query}`)
       if (res.status === 401) {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
       }
       const body = await res.json().catch(() => ({}))
       if (res.ok && body.ok !== false) {
-        setReclassifyEstimate({ enqueued: body.enqueued, estCost: body.estCost })
+        setReclassifyEstimate({ eligible: body.eligible, estCost: body.estCost })
       } else {
         setReclassifyError(body.error || 'Failed to estimate re-classify.')
       }
@@ -457,58 +555,60 @@ export const TopicTaxonomyManager = () => {
       setReclassifyError('Network error.')
     }
   }
+
+  const openReclassifyAll = () => fetchReclassifyEstimate('all')
 
   const openReclassifyScoped = () => {
     setScopedModalOpen(true)
     setScopedTopicId('')
   }
 
-  const confirmScopedReclassify = async () => {
+  const confirmScopedReclassify = () => {
     if (!scopedTopicId) return
     setScopedModalOpen(false)
-    setReclassifyModalOpen(true)
-    setReclassifyScope(scopedTopicId)
-    setReclassifyEstimate(null)
+    fetchReclassifyEstimate(scopedTopicId)
+  }
+
+  const handleStartReclassify = async () => {
+    if (!reclassifyEstimate || reclassifyEstimate.eligible === 0) return
+    setReclassifyStarting(true)
     setReclassifyError(null)
     try {
+      const payload =
+        reclassifyScope === 'all'
+          ? { scope: 'all' as const }
+          : { tagId: reclassifyScope }
       const res = await fetch('/api/admin/topics/reclassify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagId: scopedTopicId }),
+        body: JSON.stringify(payload),
       })
       if (res.status === 401) {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
       }
       const body = await res.json().catch(() => ({}))
-      if (res.ok && body.ok !== false) {
-        setReclassifyEstimate({ enqueued: body.enqueued, estCost: body.estCost })
-      } else {
-        setReclassifyError(body.error || 'Failed to estimate re-classify.')
+      if (!res.ok || body.ok === false) {
+        setReclassifyError(body.error || 'Failed to start re-classify.')
+        return
       }
+      setReclassifyModalOpen(false)
+      setFlash(`Re-classify enqueued: ${body.enqueued} docs (≈$${body.estCost.toFixed(4)}).`)
+      setTimeout(() => setFlash(null), 4000)
+      setReclassifyPanelOpen(true)
     } catch {
       setReclassifyError('Network error.')
+    } finally {
+      setReclassifyStarting(false)
     }
   }
 
-  const handleStartReclassify = async () => {
-    if (!reclassifyEstimate || reclassifyEstimate.enqueued === 0) return
-    // Already enqueued from the estimate call — just close modal + flash
-    setReclassifyModalOpen(false)
-    setFlash(`Re-classify enqueued: ${reclassifyEstimate.enqueued} docs (≈$${reclassifyEstimate.estCost.toFixed(4)}).`)
-    setTimeout(() => setFlash(null), 4000)
-    setReclassifyPanelOpen(true)
-    fetchReclassifyStatus()
-  }
-
-  const handleRetryRun = async (runId: string, scope: 'all' | string) => {
+  const handleRetryRun = async (runId: string) => {
     try {
-      const body: Record<string, unknown> =
-        scope === 'all' ? { scope: 'all' } : { tagId: scope }
       const res = await fetch('/api/admin/topics/reclassify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ retryRunId: runId }),
       })
       if (res.status === 401) {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
@@ -582,20 +682,20 @@ export const TopicTaxonomyManager = () => {
           <Box as='span' style={{ fontSize: 12, fontWeight: 700, color: '#1a365d' }}>
             {selected.size} selected
           </Box>
-          <button className="admin-btn" onClick={() => setMergeModalOpen(true)} style={{ font: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
+          <button className="admin-btn" onClick={() => setMergeModalOpen(true)} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
             Merge into…
           </button>
-          <button className="admin-btn" onClick={() => setReparentModalOpen(true)} style={{ font: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
+          <button className="admin-btn" onClick={() => setReparentModalOpen(true)} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
             Re-parent…
           </button>
-          <button className="admin-btn" onClick={handleDelete} style={{ font: 'inherit', fontSize: 11, border: '1px solid #f0b4b4', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#C11101', background: '#fff', fontWeight: 600 }}>
+          <button className="admin-btn" onClick={handleDelete} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #f0b4b4', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#C11101', background: '#fff', fontWeight: 600 }}>
             Delete unused
           </button>
           <Box style={{ flex: 1 }} />
-          <button className="admin-btn" onClick={() => setSelected(new Set(filteredTags.map((t) => t.id)))} style={{ font: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
+          <button className="admin-btn" onClick={() => setSelected(new Set(filteredTags.map((t) => t.id)))} style={{ fontFamily: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
             Select all
           </button>
-          <button className="admin-btn" onClick={clearSelection} style={{ font: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
+          <button className="admin-btn" onClick={clearSelection} style={{ fontFamily: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
             Clear
           </button>
         </Box>
@@ -627,6 +727,56 @@ export const TopicTaxonomyManager = () => {
               color: '#4a5568',
             }}
           />
+          <select
+            aria-label='Parent state'
+            value={parentFilter}
+            onChange={(e) => {
+              setParentFilter(e.target.value as 'all' | 'root' | 'child')
+              setVisibleCount(PAGE_SIZE)
+            }}
+            style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 11, fontFamily: 'inherit', color: '#4a5568' }}
+          >
+            <option value='all'>All parents</option>
+            <option value='root'>Root only</option>
+            <option value='child'>Has parent</option>
+          </select>
+          <input
+            type='number'
+            min='0'
+            aria-label='Minimum documents'
+            placeholder='Min docs'
+            value={minimumDocs}
+            onChange={(e) => {
+              setMinimumDocs(e.target.value)
+              setVisibleCount(PAGE_SIZE)
+            }}
+            style={{ width: 74, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 11, fontFamily: 'inherit', color: '#4a5568' }}
+          />
+          <input
+            type='number'
+            min='0'
+            aria-label='Maximum documents'
+            placeholder='Max docs'
+            value={maximumDocs}
+            onChange={(e) => {
+              setMaximumDocs(e.target.value)
+              setVisibleCount(PAGE_SIZE)
+            }}
+            style={{ width: 74, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 11, fontFamily: 'inherit', color: '#4a5568' }}
+          />
+          <select
+            aria-label='Re-embed state'
+            value={reembedFilter}
+            onChange={(e) => {
+              setReembedFilter(e.target.value as 'all' | 'needed' | 'current')
+              setVisibleCount(PAGE_SIZE)
+            }}
+            style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 11, fontFamily: 'inherit', color: '#4a5568' }}
+          >
+            <option value='all'>All embeddings</option>
+            <option value='needed'>Needs re-embed</option>
+            <option value='current'>Embedding current</option>
+          </select>
           {!isSearching && hasTree(tags) && (
             <Box
               style={{
@@ -649,27 +799,36 @@ export const TopicTaxonomyManager = () => {
             </Box>
           )}
           <button className="admin-btn"
+            onClick={() => setCreateModalOpen(true)}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 11px', color: '#fff', background: '#1a365d', fontWeight: 600, cursor: 'pointer' }}
+          >New topic</button>
+          <button className="admin-btn"
             onClick={() => fileInputRef.current?.click()}
-            style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
           >
             Import CSV
           </button>
           <button className="admin-btn"
             onClick={handleExport}
-            style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
           >Export CSV</button>
+          <button className="admin-btn"
+            onClick={handleRebuildEmbeddings}
+            disabled={rebuildBusy}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: rebuildBusy ? 'wait' : 'pointer', opacity: rebuildBusy ? 0.6 : 1 }}
+          >{rebuildBusy ? 'Rebuilding…' : 'Rebuild embeddings'}</button>
           <Box style={{ flex: 1 }} />
           <button className="admin-btn"
             onClick={openReclassifyAll}
-            style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 11px', color: '#fff', background: '#1a365d', fontWeight: 600, cursor: 'pointer' }}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 11px', color: '#fff', background: '#1a365d', fontWeight: 600, cursor: 'pointer' }}
           >Re-classify all</button>
           <button className="admin-btn"
             onClick={openReclassifyScoped}
-            style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
           >Scoped to topic…</button>
           <button className="admin-btn"
             onClick={() => { setReclassifyPanelOpen(!reclassifyPanelOpen) }}
-            style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
           >{reclassifyPanelOpen ? 'Hide' : 'Show'} jobs</button>
         </Box>
       )}
@@ -864,12 +1023,10 @@ export const TopicTaxonomyManager = () => {
                       as='span'
                       style={{ color: '#718096', fontSize: 11, marginLeft: 6 }}
                     >
-                      {tag.aliases.length > 0
-                        ? `aliased: ${tag.aliases.join(', ')}`
-                        : tag.description}
+                      {tag.description}
                     </Box>
                   )}
-                  {!tag.description && tag.aliases.length > 0 && (
+                  {tag.aliases.length > 0 && (
                     <Box
                       as='span'
                       style={{ color: '#718096', fontSize: 11, marginLeft: 6 }}
@@ -928,6 +1085,20 @@ export const TopicTaxonomyManager = () => {
         />
       )}
 
+      {/* Create modal */}
+      {createModalOpen && (
+        <CreateTopicModal
+          allTags={tags}
+          onClose={() => setCreateModalOpen(false)}
+          onCreated={() => {
+            setCreateModalOpen(false)
+            setFlash('Topic created.')
+            setTimeout(() => setFlash(null), 3000)
+            load()
+          }}
+        />
+      )}
+
       {/* Merge modal */}
       {mergeModalOpen && selectedTags.length > 0 && (
         <MergeModal
@@ -969,6 +1140,7 @@ export const TopicTaxonomyManager = () => {
           error={reclassifyError}
           allTags={tags}
           onStart={handleStartReclassify}
+          starting={reclassifyStarting}
           onClose={() => setReclassifyModalOpen(false)}
         />
       )}
@@ -1044,6 +1216,169 @@ const ViewToggle = ({
   </Box>
 )
 
+// ---- Create Modal ----
+
+const CreateTopicModal = ({
+  allTags,
+  onClose,
+  onCreated,
+}: {
+  allTags: TopicRow[]
+  onClose: () => void
+  onCreated: () => void
+}) => {
+  const [label, setLabel] = useState('')
+  const [description, setDescription] = useState('')
+  const [aliases, setAliases] = useState<string[]>([])
+  const [aliasInput, setAliasInput] = useState('')
+  const [parentTagId, setParentTagId] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEscapeClose(onClose, creating)
+
+  const addAlias = () => {
+    const alias = aliasInput.trim()
+    if (alias && !aliases.includes(alias)) setAliases([...aliases, alias])
+    setAliasInput('')
+  }
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!label.trim() || creating) return
+    setCreating(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          valueId: label.trim(),
+          description: description.trim() || null,
+          aliases,
+          parentTagId: parentTagId || null,
+        }),
+      })
+      if (res.status === 401) {
+        window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        return
+      }
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || body.ok === false) {
+        setError(body.error || 'Create failed.')
+        return
+      }
+      onCreated()
+    } catch {
+      setError('Network error.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    border: '1px solid #e2e8f0',
+    borderRadius: 6,
+    padding: '6px 8px',
+    fontSize: 12,
+    fontFamily: 'inherit',
+    color: '#2d3748',
+  }
+
+  return (
+    <>
+      <Box
+        onClick={() => {
+          if (!creating) onClose()
+        }}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(26,54,93,0.35)', zIndex: 100 }}
+      />
+      <Box
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 440,
+          maxWidth: '90vw',
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 20px 60px rgba(26,54,93,0.30)',
+          zIndex: 101,
+          padding: 18,
+        }}
+      >
+        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <Heading size='sm' style={{ color: '#1a365d' }}>New topic</Heading>
+          <button type='button' aria-label='Close new topic' className='admin-btn' onClick={onClose} disabled={creating} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>✕</button>
+        </Box>
+        {error && (
+          <Box style={{ fontSize: 12, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '8px 12px', marginBottom: 12 }}>
+            {error}
+          </Box>
+        )}
+        <form onSubmit={handleCreate}>
+          <Box style={{ marginBottom: 10 }}>
+            <label style={{ display: 'block', fontSize: 10, color: '#595959', marginBottom: 3 }}>Label</label>
+            <input aria-label='Topic label' value={label} onChange={(e) => setLabel(e.target.value)} style={inputStyle} />
+          </Box>
+          <Box style={{ marginBottom: 10 }}>
+            <label style={{ display: 'block', fontSize: 10, color: '#595959', marginBottom: 3 }}>Description</label>
+            <textarea aria-label='Topic description' value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} />
+          </Box>
+          <Box style={{ marginBottom: 10 }}>
+            <label style={{ display: 'block', fontSize: 10, color: '#595959', marginBottom: 3 }}>Aliases</label>
+            {aliases.length > 0 && (
+              <Box style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 5 }}>
+                {aliases.map((alias) => (
+                  <Box key={alias} style={{ fontSize: 11, background: '#ebf4ff', color: '#1a365d', borderRadius: 999, padding: '2px 8px' }}>
+                    {alias}
+                  </Box>
+                ))}
+              </Box>
+            )}
+            <Box style={{ display: 'flex', gap: 5 }}>
+              <input
+                placeholder='Add alias…'
+                value={aliasInput}
+                onChange={(e) => setAliasInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addAlias()
+                  }
+                }}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button type='button' aria-label='Add alias' className='admin-btn' onClick={addAlias} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 9px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                Add
+              </button>
+            </Box>
+          </Box>
+          <Box style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 10, color: '#595959', marginBottom: 3 }}>Parent topic</label>
+            <select aria-label='Parent topic' value={parentTagId} onChange={(e) => setParentTagId(e.target.value)} style={inputStyle}>
+              <option value=''>(root)</option>
+              {allTags.map((tag) => (
+                <option key={tag.id} value={tag.id}>{tag.valueId}</option>
+              ))}
+            </select>
+          </Box>
+          <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type='button' className='admin-btn' onClick={onClose} disabled={creating} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+              Cancel
+            </button>
+            <button type='submit' className='admin-btn' disabled={creating || !label.trim()} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: creating || !label.trim() ? 0.5 : 1 }}>
+              {creating ? 'Creating…' : 'Create topic'}
+            </button>
+          </Box>
+        </form>
+      </Box>
+    </>
+  )
+}
+
 // ---- Edit Drawer ----
 
 interface HistoryEntry {
@@ -1078,9 +1413,15 @@ const EditDrawer = ({
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
-  // Parent options: all topic tags except self
+  useEscapeClose(onClose, saving)
+
+  // Exclude self and descendants so the UI cannot offer a cyclic parent.
   const parentOptions = useMemo(
-    () => allTags.filter((t) => t.id !== tag.id),
+    () => {
+      const excluded = descendantIds(allTags, [tag.id])
+      excluded.add(tag.id)
+      return allTags.filter((t) => !excluded.has(t.id))
+    },
     [allTags, tag.id],
   )
 
@@ -1198,7 +1539,7 @@ const EditDrawer = ({
         {/* Header */}
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <Heading size='sm' style={{ color: '#1a365d' }}>Edit topic</Heading>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
           </button>
         </Box>
@@ -1226,7 +1567,7 @@ const EditDrawer = ({
               as='button'
               onClick={() => setTab(t)}
               style={{
-                font: 'inherit',
+                fontFamily: 'inherit',
                 fontSize: 12,
                 padding: '5px 2px',
                 border: 'none',
@@ -1278,7 +1619,7 @@ const EditDrawer = ({
                     gap: 4,
                   }}>
                     {a}
-                    <button className="admin-btn" onClick={() => removeAlias(a)} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11 }}>
+                    <button className="admin-btn" onClick={() => removeAlias(a)} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11 }}>
                       ✕
                     </button>
                   </Box>
@@ -1292,7 +1633,7 @@ const EditDrawer = ({
                   placeholder='Add alias…'
                   style={{ ...inputStyle, flex: 1 }}
                 />
-                <button className="admin-btn" onClick={addAlias} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                <button className="admin-btn" onClick={addAlias} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
                   Add
                 </button>
               </Box>
@@ -1300,6 +1641,7 @@ const EditDrawer = ({
             <Box style={{ marginBottom: 9 }}>
               <label style={fieldLabel}>Parent topic</label>
               <select
+                aria-label='Parent topic'
                 value={parentTagId}
                 onChange={(e) => { setParentTagId(e.target.value); setParentError(null); setDrawerError(null) }}
                 style={inputStyle}
@@ -1317,10 +1659,10 @@ const EditDrawer = ({
             </Box>
             {/* Save / Cancel */}
             <Box style={{ display: 'flex', gap: 7, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+              <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
                 Cancel
               </button>
-              <button className="admin-btn" onClick={handleSave} disabled={saving} style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}>
+              <button className="admin-btn" onClick={handleSave} disabled={saving} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}>
                 {saving ? 'Saving…' : 'Save'}
               </button>
             </Box>
@@ -1386,6 +1728,8 @@ const MergeModal = ({
   const [targetId, setTargetId] = useState('')
   const [merging, setMerging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEscapeClose(onClose, merging)
 
   // All topics are candidates for the target (including selected — the target
   // is skipped in the merge loop, so it survives as the survivor).
@@ -1461,7 +1805,7 @@ const MergeModal = ({
           <Heading size='sm' style={{ color: '#1a365d' }}>
             Merge {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
           </Heading>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
           </button>
         </Box>
@@ -1520,13 +1864,13 @@ const MergeModal = ({
 
         {/* Buttons */}
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
             Cancel
           </button>
           <button className="admin-btn"
             onClick={handleMerge}
             disabled={merging || !targetId || sources.length === 0}
-            style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: merging || !targetId || sources.length === 0 ? 0.5 : 1 }}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: merging || !targetId || sources.length === 0 ? 0.5 : 1 }}
           >
             {merging ? 'Merging…' : 'Merge & re-classify'}
           </button>
@@ -1553,9 +1897,16 @@ const ReparentModal = ({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<{ label: string; reason: string }[]>([])
 
-  // Parent options: all tags except the selected ones (can't be own parent)
+  useEscapeClose(onClose, saving)
+
+  // Exclude selected subtrees so no selected topic can become its own ancestor.
   const parentOptions = useMemo(
-    () => allTags.filter((t) => !selectedTags.some((s) => s.id === t.id)),
+    () => {
+      const selectedIds = selectedTags.map((tag) => tag.id)
+      const excluded = descendantIds(allTags, selectedIds)
+      for (const id of selectedIds) excluded.add(id)
+      return allTags.filter((tag) => !excluded.has(tag.id))
+    },
     [allTags, selectedTags],
   )
 
@@ -1628,7 +1979,7 @@ const ReparentModal = ({
           <Heading size='sm' style={{ color: '#1a365d' }}>
             Re-parent {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
           </Heading>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
           </button>
         </Box>
@@ -1658,13 +2009,13 @@ const ReparentModal = ({
         </Box>
 
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
             Cancel
           </button>
           <button className="admin-btn"
             onClick={handleReparent}
             disabled={saving}
-            style={{ font: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}
           >
             {saving ? 'Saving…' : 'Re-parent'}
           </button>
@@ -1711,6 +2062,8 @@ const CsvImportModal = ({
   const totalChanges = addedCount + updatedCount
   const canApply = conflictCount === 0 && totalChanges > 0 && !applying
 
+  useEscapeClose(onClose, applying || loading)
+
   return (
     <>
       <Box
@@ -1742,7 +2095,7 @@ const CsvImportModal = ({
           <Heading size='sm' style={{ color: '#1a365d' }}>
             Import CSV{filename ? ` — ${filename}` : ''}
           </Heading>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
           </button>
         </Box>
@@ -1828,13 +2181,13 @@ const CsvImportModal = ({
                   />
                   Re-classify affected docs
                 </Box>
-                <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
                   Cancel
                 </button>
                 <button className="admin-btn"
                   onClick={onApply}
                   disabled={!canApply}
-                  style={{ font: 'inherit', fontSize: 11, border: canApply ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 10px', cursor: canApply ? 'pointer' : 'not-allowed', color: '#fff', background: canApply ? '#1a365d' : '#a0aec0', opacity: applying ? 0.5 : 1 }}
+                  style={{ fontFamily: 'inherit', fontSize: 11, border: canApply ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 10px', cursor: canApply ? 'pointer' : 'not-allowed', color: '#fff', background: canApply ? '#1a365d' : '#a0aec0', opacity: applying ? 0.5 : 1 }}
                 >
                   {applying ? 'Applying…' : `Apply ${totalChanges} change${totalChanges !== 1 ? 's' : ''}`}
                 </button>
@@ -1856,18 +2209,22 @@ const ReclassifyConfirmModal = ({
   error,
   allTags,
   onStart,
+  starting,
   onClose,
 }: {
   scope: 'all' | string
-  estimate: { enqueued: number; estCost: number } | null
+  estimate: { eligible: number; estCost: number } | null
   loading: boolean
   error: string | null
   allTags: TopicRow[]
   onStart: () => void
+  starting: boolean
   onClose: () => void
 }) => {
   const scopeLabel = scope === 'all' ? 'All docs' : `Topic: ${allTags.find((t) => t.id === scope)?.valueId ?? scope}`
-  const canStart = estimate && estimate.enqueued > 0
+  const canStart = Boolean(estimate && estimate.eligible > 0 && !starting)
+
+  useEscapeClose(onClose, starting || loading)
 
   return (
     <>
@@ -1900,7 +2257,7 @@ const ReclassifyConfirmModal = ({
       >
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <Heading size='sm' style={{ color: '#1a365d' }}>Re-classify: {scopeLabel}</Heading>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
         </Box>
 
         {loading && (
@@ -1914,7 +2271,7 @@ const ReclassifyConfirmModal = ({
         {estimate && (
           <>
             <Box style={{ fontSize: 13, color: '#2d3748', marginBottom: 8 }}>
-              Re-classify <b>{estimate.enqueued}</b> docs? Estimated cost: <b>≈${estimate.estCost.toFixed(4)}</b>.
+              Re-classify <b>{estimate.eligible}</b> docs? Estimated cost: <b>≈${estimate.estCost.toFixed(4)}</b>.
             </Box>
             <Box style={{ fontSize: 12, color: '#595959', marginBottom: 14 }}>
               Each doc gets one LLM call (gpt-5-mini, topic-only). Human overrides are preserved.
@@ -1923,12 +2280,12 @@ const ReclassifyConfirmModal = ({
         )}
 
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
           <button className="admin-btn"
             onClick={onStart}
             disabled={!canStart}
-            style={{ font: 'inherit', fontSize: 11, border: canStart ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: canStart ? 'pointer' : 'not-allowed', color: '#fff', background: canStart ? '#1a365d' : '#a0aec0' }}
-          >Start</button>
+            style={{ fontFamily: 'inherit', fontSize: 11, border: canStart ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: canStart ? 'pointer' : 'not-allowed', color: '#fff', background: canStart ? '#1a365d' : '#a0aec0' }}
+          >{starting ? 'Starting…' : 'Start'}</button>
         </Box>
       </Box>
     </>
@@ -1949,18 +2306,21 @@ const ScopedTopicPicker = ({
   onSelect: (id: string) => void
   onConfirm: () => void
   onClose: () => void
-}) => { // eslint-disable-line arrow-body-style
+}) => {
+  useEscapeClose(onClose)
+
   return (
     <>
       <Box onClick={onClose} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, background: 'rgba(26,54,93,0.35)', zIndex: 100 }} />
       <Box style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 380, maxWidth: '90vw', background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(26,54,93,0.30)', zIndex: 101, padding: 18 }}>
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <Heading size='sm' style={{ color: '#1a365d' }}>Scoped re-classify</Heading>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
         </Box>
         <Box style={{ marginBottom: 10 }}>
           <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>Pick a topic</label>
           <select
+            aria-label='Pick a topic'
             value={selectedId}
             onChange={(e) => onSelect(e.target.value)}
             style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, fontFamily: 'inherit', color: '#2d3748' }}
@@ -1972,11 +2332,11 @@ const ScopedTopicPicker = ({
           </select>
         </Box>
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} style={{ font: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
+          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
           <button className="admin-btn"
             onClick={onConfirm}
             disabled={!selectedId}
-            style={{ font: 'inherit', fontSize: 11, border: selectedId ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: selectedId ? 'pointer' : 'not-allowed', color: '#fff', background: selectedId ? '#1a365d' : '#a0aec0' }}
+            style={{ fontFamily: 'inherit', fontSize: 11, border: selectedId ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: selectedId ? 'pointer' : 'not-allowed', color: '#fff', background: selectedId ? '#1a365d' : '#a0aec0' }}
           >Confirm</button>
         </Box>
       </Box>
@@ -1998,12 +2358,28 @@ const ReclassifyPanel = ({
     running: number
     done: number
     error: number
-    recent: { runId: string; scope: 'all' | string; total: number; done: number; error: number; estCost: number; createdAt: string }[]
+    recent: {
+      runId: string
+      scope: 'all' | string
+      total: number
+      done: number
+      error: number
+      estCost: number
+      createdAt: string
+      updatedAt?: string
+      errors?: {
+        documentId: string
+        externalId: string
+        title: string | null
+        attempts: number
+        error: string | null
+      }[]
+    }[]
   }
   allTags: TopicRow[]
   expandedErrors: Set<string>
   onToggleError: (runId: string) => void
-  onRetryRun: (runId: string, scope: 'all' | string) => void
+  onRetryRun: (runId: string) => void
 }) => {
   const activeRun = status.recent[0]
   const totalActive = activeRun ? activeRun.total : 0
@@ -2055,7 +2431,7 @@ const ReclassifyPanel = ({
                 const scopeLabel = run.scope === 'all' ? 'Full corpus' : `Scoped: ${allTags.find((t) => t.id === run.scope)?.valueId ?? run.scope}`
                 const isExpanded = expandedErrors.has(run.runId)
                 return (
-                  <Box key={run.runId} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #edf2f7', borderRadius: 9, padding: '10px 12px' }}>
+                  <Box key={run.runId} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', border: '1px solid #edf2f7', borderRadius: 9, padding: '10px 12px' }}>
                     <Box style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flex: '0 0 30px', background: run.scope === 'all' ? '#ebf4ff' : '#f0fff4', color: run.scope === 'all' ? '#3182ce' : '#2f855a' }}>
                       {run.scope === 'all' ? '∞' : '⌖'}
                     </Box>
@@ -2071,15 +2447,26 @@ const ReclassifyPanel = ({
                     {run.error > 0 && (
                       <button className="admin-btn"
                         onClick={() => onToggleError(run.runId)}
-                        style={{ font: 'inherit', fontSize: 10, border: '1px solid #f0b4b4', borderRadius: 999, padding: '2px 8px', cursor: 'pointer', color: '#C11101', background: '#fff0f0', fontWeight: 600 }}
+                        style={{ fontFamily: 'inherit', fontSize: 10, border: '1px solid #f0b4b4', borderRadius: 999, padding: '2px 8px', cursor: 'pointer', color: '#C11101', background: '#fff0f0', fontWeight: 600 }}
                       >{isExpanded ? 'Hide' : `${run.error} error${run.error !== 1 ? 's' : ''}`}</button>
                     )}
                     {run.error > 0 && isExpanded && (
                       <Box style={{ width: '100%', padding: '8px 10px', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 8, fontSize: 11, color: '#C11101' }}>
                         <Box style={{ display: 'flex', gap: 6, padding: '2px 0' }}>
                           <Box style={{ fontWeight: 600 }}>{run.error} failed doc{run.error !== 1 ? 's' : ''}</Box>
-                          <button className="admin-btn" onClick={() => onRetryRun(run.runId, run.scope)} style={{ font: 'inherit', color: '#1a365d', textDecoration: 'underline', cursor: 'pointer', background: 'transparent', border: 'none' }}>Retry</button>
+                          <button className="admin-btn" onClick={() => onRetryRun(run.runId)} style={{ fontFamily: 'inherit', color: '#1a365d', textDecoration: 'underline', cursor: 'pointer', background: 'transparent', border: 'none' }}>Retry</button>
                         </Box>
+                        {(run.errors ?? []).map((detail) => (
+                          <Box key={detail.documentId} style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #f0b4b4' }}>
+                            <Box style={{ fontWeight: 600 }}>
+                              {detail.title ?? detail.externalId ?? detail.documentId}
+                            </Box>
+                            <Box>
+                              {detail.externalId} · attempts: {detail.attempts}
+                            </Box>
+                            <Box>{detail.error ?? 'Unknown error'}</Box>
+                          </Box>
+                        ))}
                       </Box>
                     )}
                   </Box>

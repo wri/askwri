@@ -20,6 +20,15 @@ interface Tag {
 
 /** The canonical taxonomy v1 facets (from the Phase-0 migration script's FACETS). */
 const CANONICAL_FACETS = ['program', 'office', 'topic', 'doc_type']
+const FACET_LABELS: Record<string, string> = {
+  program: 'Program',
+  office: 'Office',
+  topic: 'Topic',
+  doc_type: 'Doc type',
+}
+
+const facetLabel = (facet: string) =>
+  FACET_LABELS[facet] ?? facet.charAt(0).toUpperCase() + facet.slice(1)
 
 const cell: React.CSSProperties = {
   padding: '8px 12px',
@@ -86,7 +95,7 @@ const FacetTable = ({
   return (
     <section style={{ marginBottom: 24 }}>
       <Heading size="md" style={{ marginBottom: 8 }}>
-        {facet}
+        {facetLabel(facet)}
       </Heading>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
@@ -347,7 +356,7 @@ const TagsPage = () => {
             style={tabStyle(facet)}
             _hover={undefined}
           >
-            {facet === 'topic' ? 'Topic' : facet.charAt(0).toUpperCase() + facet.slice(1)}
+            {facetLabel(facet)}
           </Box>
         ))}
       </Box>
