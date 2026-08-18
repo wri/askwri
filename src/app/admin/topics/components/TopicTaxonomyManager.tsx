@@ -3665,8 +3665,8 @@ const ReclassifyConfirmModal = ({
               <b>≈${estimate.estCost.toFixed(4)}</b>.
             </Box>
             <Box style={{ fontSize: 12, color: '#595959', marginBottom: 14 }}>
-              Each doc gets one LLM call (gpt-5-mini, topic-only). Human
-              overrides are preserved.
+              Each doc gets one LLM call (topic-only). Human overrides are
+              preserved. See the worker config for the current model.
             </Box>
           </>
         )}
