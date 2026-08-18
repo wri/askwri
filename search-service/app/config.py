@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     worker_poll_seconds: int = 10
     worker_max_attempts: int = 3
     worker_reap_minutes: int = 15              # requeue 'running' jobs idle longer than this
-    worker_llm_model: str = "gpt-5-mini"      # summaries + tagging; override in env
+    worker_llm_model: str = "gpt-5.6-luna"   # summaries + tagging; override in env
     intake_s3_prefix: str = "intake/"          # watched S3 prefix (bulk drop)
     intake_local_dir: str = ""                 # local-dev alternative to S3 intake
     documents_s3_bucket: str = ""              # reuse the existing env var name

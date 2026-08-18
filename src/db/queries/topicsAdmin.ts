@@ -570,7 +570,7 @@ export async function mergeTags(
 
 // --- Task 5: reclassify enqueue + status + cost estimate ---
 
-export const EST_PER_DOC_COST = 0.0008 // gpt-5-mini per-doc classify (spec §5.5)
+export const EST_PER_DOC_COST = 0.0002 // gpt-5.6-luna per-doc classify (spec §5.5); ~2000 in-tok * $0.05/1M + ~100 out-tok * $1.20/1M, rounded up
 
 function estimateCost(documentCount: number): number {
   return +(documentCount * EST_PER_DOC_COST).toFixed(4)
