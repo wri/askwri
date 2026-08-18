@@ -1,8 +1,7 @@
 """End-to-end pipeline integration test.
 
 Drives the REAL pipeline (no stage mocked except external services:
-LLM + embeddings + reindex POST) against a dedicated scratch DB:
-  askwri_pipeline_test
+LLM + embeddings + reindex POST) against a UUID-suffixed scratch DB.
 
 Hermetic pattern: create / migrate / drop — never touches the qa database.
 Skip guard: requires DATABASE_URL (same convention as other DB tests).
@@ -10,6 +9,7 @@ Skip guard: requires DATABASE_URL (same convention as other DB tests).
 import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 import psycopg
@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(
 # Constants
 # ---------------------------------------------------------------------------
 _SUPERDB_URL = "postgresql://askwri:password@localhost:5432/postgres"
-_TEST_DB = "askwri_pipeline_test"
+_TEST_DB = f"askwri_pipeline_{uuid.uuid4().hex[:12]}"
 _TEST_DB_URL = f"postgresql://askwri:password@localhost:5432/{_TEST_DB}"
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _FIXTURE_PDF = Path(__file__).parent / "fixtures" / "sample.pdf"
@@ -180,7 +180,7 @@ def _run_full_pipeline(monkeypatch, tmp_path) -> None:
 
 @pytest.fixture(scope="session")
 def pipeline_test_db():
-    """Create askwri_pipeline_test, apply migrations, yield URL, then drop."""
+    """Create a uniquely named scratch DB, apply migrations, then drop it."""
     with psycopg.connect(_SUPERDB_URL, autocommit=True) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {_TEST_DB}")
         conn.execute(f"CREATE DATABASE {_TEST_DB}")

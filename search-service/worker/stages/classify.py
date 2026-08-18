@@ -31,6 +31,7 @@ def _topic_schema(candidate_labels: list[str]) -> dict:
         "properties": {
             "topic": {
                 "type": "array",
+                "maxItems": 5,
                 "items": {
                     "type": "object", "additionalProperties": False,
                     "properties": {
@@ -67,7 +68,9 @@ def _other_facets_schema(vocab: dict) -> dict:
     }
 
 
-def _classify_topic(conn, doc, basis: str, protected: set) -> None:
+def _classify_topic(
+    conn, doc, basis: str, protected: set, *, require_candidates: bool = False
+) -> None:
     """Retrieve-then-classify for the topic facet.
 
     1. Embed the doc basis (one Bedrock call).
@@ -88,37 +91,50 @@ def _classify_topic(conn, doc, basis: str, protected: set) -> None:
                   COALESCE(
                     (SELECT array_agg(a.alias) FROM tag_aliases a WHERE a.tag_id = t.id),
                     '{}'::text[]
-                  ) AS aliases
+                  ) AS aliases,
+                  te.embedding <=> %s::vector AS cosine_distance
            FROM tag_embeddings te
            JOIN tags t ON t.id = te.tag_id
            WHERE t.facet = 'topic'
              AND t.taxonomy_version = 'v1'
              AND te.embedding_model = 'cohere-embed-v4'
-           ORDER BY te.embedding <=> %s::vector
+           ORDER BY cosine_distance
            LIMIT %s""",
         (vec_str, settings.tag_candidate_top_n),
     ).fetchall()
 
     if not candidates:
+        if require_candidates:
+            raise RuntimeError(
+                f"classify {doc['external_id']}: no candidate topic embeddings"
+            )
         logger.warning("classify %s: no candidate topic tags — skipping topic facet", doc['external_id'])
         return
 
     # Build label→id map and candidate labels for the enum schema
     label_to_id: dict[str, str] = {}
     candidate_labels: list[str] = []
-    for tag_id, label, _desc, _aliases in candidates:
+    for tag_id, label, _desc, _aliases, distance in candidates:
         label_to_id[label] = tag_id
         candidate_labels.append(label)
+        logger.info(
+            "classify %s: topic candidate tag_id=%s label=%s cosine_distance=%.6f",
+            doc["external_id"],
+            tag_id,
+            label,
+            float(distance),
+        )
 
     # Build candidate description for the user prompt
     candidate_lines = []
-    for _id, label, desc, aliases in candidates:
-        parts = [label]
+    for _id, label, desc, aliases, _distance in candidates:
+        details = []
         if aliases:
-            parts.append(f"aka: {', '.join(aliases)}")
+            details.append(f"aka: {', '.join(aliases)}")
         if desc:
-            parts.append(desc)
-        candidate_lines.append(" - " + " (".join(parts[:1]) + ("; " + "; ".join(parts[1:]) if len(parts) > 1 else "") + (")" if len(parts) > 1 else ""))
+            details.append(desc)
+        suffix = f" ({'; '.join(details)})" if details else ""
+        candidate_lines.append(f"- {label}{suffix}")
 
     logger.info(
         "classify %s: topic 1 LLM call, %d candidates, model=%s",
@@ -140,21 +156,47 @@ def _classify_topic(conn, doc, basis: str, protected: set) -> None:
         max_tokens=600,
     )
 
+    selected: list[tuple] = []
+    selected_ids = set()
     for pick in result.get("topic", []):
         tag_id = label_to_id.get(pick["value"])
-        if tag_id is None or tag_id in protected:
+        if tag_id is None or tag_id in selected_ids:
             continue
         conf = max(0.0, min(1.0, float(pick["confidence"])))
+        selected.append((tag_id, conf))
+        selected_ids.add(tag_id)
+        if len(selected) == 5:
+            break
+
+    conn.execute(
+        """DELETE FROM document_tags dt
+           USING tags t
+           WHERE dt.tag_id = t.id
+             AND dt.document_id = %s
+             AND dt.source = 'llm'
+             AND t.facet = 'topic'
+             AND t.taxonomy_version = 'v1'
+             AND NOT (dt.tag_id = ANY(%s::uuid[]))""",
+        (doc["id"], list(selected_ids)),
+    )
+
+    for tag_id, conf in selected:
+        if tag_id in protected:
+            continue
         status = "accepted" if conf >= settings.tag_confidence_accept else "suggested"
         conn.execute(
             """INSERT INTO document_tags (document_id, tag_id, source, confidence, model_version, status)
                VALUES (%s, %s, 'llm', %s, %s, %s)
-               ON CONFLICT (document_id, tag_id) DO NOTHING""",
+               ON CONFLICT (document_id, tag_id) DO UPDATE
+               SET confidence = EXCLUDED.confidence,
+                   model_version = EXCLUDED.model_version,
+                   status = EXCLUDED.status
+               WHERE document_tags.source = 'llm'""",
             (doc['id'], tag_id, conf, settings.worker_llm_model, status),
         )
 
 
-def _classify_other_facets(conn, doc, basis: str, protected: set, tag_ids: dict) -> None:
+def _classify_other_facets(conn, doc, basis: str, protected: set) -> None:
     """Existing full-enum classification for non-topic facets (program/office/doc_type).
 
     Small vocabs → one LLM call with enum over the whole vocab per facet.
@@ -172,8 +214,6 @@ def _classify_other_facets(conn, doc, basis: str, protected: set, tag_ids: dict)
 
     if not vocab:
         return  # no non-topic tags — nothing to do
-
-    tag_ids.update(other_tag_ids)
 
     logger.info(
         "classify %s: %d non-topic facet(s), 1 LLM call, model=%s",
@@ -240,11 +280,12 @@ def run(document_id, topic_only: bool = False):
         }
 
         # Topic facet: always classify (retrieve-then-classify)
-        _classify_topic(conn, doc, basis, protected)
+        _classify_topic(
+            conn, doc, basis, protected, require_candidates=topic_only
+        )
 
         # Non-topic facets: skip when topic_only=True
         if not topic_only and not settings.classify_topic_only:
-            tag_ids: dict[tuple, str] = {}
-            _classify_other_facets(conn, doc, basis, protected, tag_ids)
+            _classify_other_facets(conn, doc, basis, protected)
 
     return None

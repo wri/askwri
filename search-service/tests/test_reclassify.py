@@ -1,11 +1,11 @@
 """reclassify: classify-only re-run queue worker (issue #323).
 
 Tests the FOR UPDATE SKIP LOCKED claim loop, the classify.run(topic_only=True)
-call, and the attempts→error retry logic. Uses the same scratch-DB fixture
-pattern as test_classify_topic.py.
+call, and the attempts→error retry logic. Uses a UUID-suffixed scratch DB.
 """
 import os
 import subprocess
+import threading
 import uuid as _uuid
 
 import psycopg
@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 _SUPERDB_URL = "postgresql://askwri:password@localhost:5432/postgres"
-_TEST_DB = "askwri_reclassify_test"
+_TEST_DB = f"askwri_reclassify_{_uuid.uuid4().hex[:12]}"
 _TEST_DB_URL = f"postgresql://askwri:password@localhost:5432/{_TEST_DB}"
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -41,7 +41,7 @@ def _reset_app_state(db_url: str) -> None:
 
 @pytest.fixture(scope="session")
 def reclassify_test_db():
-    """Create askwri_reclassify_test, apply migrations, yield URL, then drop."""
+    """Create a uniquely named scratch DB, apply migrations, then drop it."""
     _orig_db_url = os.environ.get("DATABASE_URL")
     with psycopg.connect(_SUPERDB_URL, autocommit=True) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {_TEST_DB}")
@@ -125,19 +125,28 @@ def _insert_document(conn, *, external_id="reclassify-doc", title="Test Doc"):
     from psycopg.types.json import Jsonb
     row = conn.execute(
         """INSERT INTO documents (external_id, s3_key, title, status, content_hash, language, languages, metadata_source)
-           VALUES (%s, %s, %s, 'ready', 'abc123', 'en', ARRAY['en'], %s)
+           VALUES (%s, %s, %s, 'ready', %s, 'en', ARRAY['en'], %s)
            RETURNING id""",
-        (external_id, f"documents/{external_id}.pdf", title, Jsonb({})),
+        (
+            external_id,
+            f"documents/{external_id}.pdf",
+            title,
+            f"hash-{external_id}",
+            Jsonb({}),
+        ),
     ).fetchone()
     return row[0]
 
 
-def _insert_reclassify_job(conn, document_id, scope_tag_id=None):
-    """Insert a queued reclassify_job; return (id, document_id, scope_tag_id)."""
+def _insert_reclassify_job(conn, document_id, scope_tag_id=None, run_id=None):
+    """Insert a queued job; return its four-column worker claim shape."""
+    run_id = run_id or _uuid.uuid4()
     row = conn.execute(
-        """INSERT INTO reclassify_jobs (document_id, scope_tag_id, status)
-           VALUES (%s, %s, 'queued') RETURNING id, document_id, scope_tag_id""",
-        (document_id, scope_tag_id),
+        """INSERT INTO reclassify_jobs
+               (document_id, scope_tag_id, run_id, status)
+           VALUES (%s, %s, %s, 'queued')
+           RETURNING id, document_id, scope_tag_id, run_id""",
+        (document_id, scope_tag_id, run_id),
     ).fetchone()
     return row
 
@@ -161,8 +170,8 @@ class TestClaimJob:
             # First claim gets the row
             claimed = claim_job(conn)
             assert claimed is not None
-            assert claimed[0] == job[0]  # id
-            assert claimed[1] == doc_id  # document_id
+            assert claimed == job
+            assert claimed[3] == job[3]  # run_id is propagated to the worker
 
             # Second claim on the same connection (row is now 'running') → None
             claimed2 = claim_job(conn)
@@ -214,6 +223,24 @@ class TestProcessOneReclassify:
                 "SELECT status FROM reclassify_jobs WHERE id = %s", (job[0],)
             ).fetchone()
             assert status[0] == "done"
+            audit = conn.execute(
+                """SELECT source, entity_type, entity_id, after
+                   FROM audit_log
+                   WHERE action='reclassify_run' AND entity_id=%s""",
+                (job[3],),
+            ).fetchone()
+            assert audit == (
+                "system",
+                "reclassify_run",
+                job[3],
+                {
+                    "runId": str(job[3]),
+                    "total": 1,
+                    "done": 1,
+                    "error": 0,
+                    "estCost": 0.0008,
+                },
+            )
 
     def test_requeues_on_first_failure(self, clean_db, monkeypatch):
         """First failure: attempts goes 0→1, status back to 'queued' (not error yet)."""
@@ -241,6 +268,12 @@ class TestProcessOneReclassify:
             ).fetchone()
             assert row[0] == "queued", f"first failure should requeue, got {row[0]}"
             assert row[1] == 1, f"attempts should be 1 after first failure, got {row[1]}"
+            audit_count = conn.execute(
+                """SELECT count(*) FROM audit_log
+                   WHERE action='reclassify_run' AND entity_id=%s""",
+                (job[3],),
+            ).fetchone()[0]
+            assert audit_count == 0, "a retryable failure is not a terminal run"
 
     def test_marks_error_after_max_attempts(self, clean_db, monkeypatch):
         """After MAX_ATTEMPTS (2) failures, status becomes 'error' with the message."""
@@ -271,6 +304,20 @@ class TestProcessOneReclassify:
             assert row[1] == 2, f"attempts should be 2, got {row[1]}"
             assert row[2] is not None, "error message should be recorded"
             assert "persistent LLM failure" in row[2]
+            audit = conn.execute(
+                """SELECT after FROM audit_log
+                   WHERE action='reclassify_run' AND entity_id=%s""",
+                (job[3],),
+            ).fetchone()
+            assert audit == (
+                {
+                    "runId": str(job[3]),
+                    "total": 1,
+                    "done": 0,
+                    "error": 1,
+                    "estCost": 0.0008,
+                },
+            )
 
     def test_returns_false_when_queue_empty(self, clean_db, monkeypatch):
         """No queued jobs → process_one_reclassify returns False (no work done)."""
@@ -280,13 +327,93 @@ class TestProcessOneReclassify:
         assert result is False, "should return False when no jobs to process"
 
 
+class TestProcessReclassifyBatch:
+
+    def test_uses_exact_bounded_concurrency(self, monkeypatch):
+        """Three requested slots execute three claims with at most three active."""
+        import worker.stages.reclassify as reclassify_mod
+
+        barrier = threading.Barrier(3)
+        lock = threading.Lock()
+        active = 0
+        max_active = 0
+        calls = 0
+
+        def fake_process_one():
+            nonlocal active, max_active, calls
+            with lock:
+                active += 1
+                calls += 1
+                max_active = max(max_active, active)
+            barrier.wait(timeout=2)
+            with lock:
+                active -= 1
+            return True
+
+        monkeypatch.setattr(reclassify_mod, "process_one_reclassify", fake_process_one)
+
+        worked = reclassify_mod.process_reclassify_batch(3)
+
+        assert worked == 3
+        assert calls == 3
+        assert max_active == 3
+
+    def test_concurrent_final_jobs_emit_one_completion_audit(
+        self, clean_db, monkeypatch
+    ):
+        """The final terminal transition wins one run-scoped completion audit."""
+        import worker.stages.reclassify as reclassify_mod
+
+        run_id = _uuid.uuid4()
+        with psycopg.connect(clean_db) as conn:
+            first_doc = _insert_document(conn, external_id="concurrent-audit-1")
+            second_doc = _insert_document(conn, external_id="concurrent-audit-2")
+            _insert_reclassify_job(conn, first_doc, run_id=run_id)
+            _insert_reclassify_job(conn, second_doc, run_id=run_id)
+            conn.commit()
+
+        both_claimed = threading.Barrier(2)
+
+        def synchronized_classify(document_id, topic_only=False):
+            assert topic_only is True
+            both_claimed.wait(timeout=2)
+
+        monkeypatch.setattr(reclassify_mod, "classify_run", synchronized_classify)
+
+        assert reclassify_mod.process_reclassify_batch(2) == 2
+
+        with psycopg.connect(clean_db) as conn:
+            statuses = conn.execute(
+                """SELECT status, count(*) FROM reclassify_jobs
+                   WHERE run_id=%s GROUP BY status""",
+                (run_id,),
+            ).fetchall()
+            audits = conn.execute(
+                """SELECT after FROM audit_log
+                   WHERE action='reclassify_run' AND entity_id=%s""",
+                (run_id,),
+            ).fetchall()
+
+        assert statuses == [("done", 2)]
+        assert audits == [
+            (
+                {
+                    "runId": str(run_id),
+                    "total": 2,
+                    "done": 2,
+                    "error": 0,
+                    "estCost": 0.0016,
+                },
+            )
+        ]
+
+
 # ---------------------------------------------------------------------------
 # Task 12: worker/main.py poll-loop ordering + embed sweep tick
 # ---------------------------------------------------------------------------
 
 class TestPollLoopOrdering:
-    """run_tick polls reclassify_jobs BEFORE ingestion_jobs when
-    reclassify_poll_first=True."""
+    """run_tick maintains embeddings before bounded reclassification claims."""
 
     def test_reclassify_polled_before_ingest(self, clean_db, monkeypatch):
         """With reclassify_poll_first=True, a queued reclassify job is processed
@@ -295,9 +422,16 @@ class TestPollLoopOrdering:
 
         call_order: list[str] = []
 
-        def fake_reclassify():
-            call_order.append("reclassify")
-            return True  # did work → tick returns early
+        def fake_embed_sweep():
+            call_order.append("embed")
+
+        def fake_reclassify_batch(concurrency):
+            call_order.append(f"reclassify:{concurrency}")
+            return 1  # did work → tick returns early
+
+        def legacy_reclassify():
+            call_order.append("legacy-reclassify")
+            return True
 
         def fake_intake_sweep():
             call_order.append("intake")
@@ -307,18 +441,23 @@ class TestPollLoopOrdering:
             call_order.append("ingest_job")
             return False
 
-        monkeypatch.setattr(main_mod, "process_one_reclassify", fake_reclassify)
+        monkeypatch.setattr(main_mod, "_embed_sweep_tick", fake_embed_sweep)
+        monkeypatch.setattr(
+            main_mod, "process_reclassify_batch", fake_reclassify_batch, raising=False
+        )
+        monkeypatch.setattr(
+            main_mod, "process_one_reclassify", legacy_reclassify, raising=False
+        )
         monkeypatch.setattr(main_mod.intake_s3, "sweep", fake_intake_sweep)
         monkeypatch.setattr(main_mod, "process_one_job", fake_process_one_job)
 
         # reclassify_poll_first defaults True in config, but set explicitly
         monkeypatch.setattr(main_mod.get_settings(), "reclassify_poll_first", True)
+        monkeypatch.setattr(main_mod.get_settings(), "tag_reclassify_concurrency", 3)
 
         result = main_mod.run_tick()
         assert result is True, "run_tick should return True when reclassify did work"
-        assert call_order[0] == "reclassify", (
-            f"reclassify must be polled first, got {call_order}"
-        )
+        assert call_order == ["embed", "reclassify:3"]
         assert "ingest_job" not in call_order, (
             "ingest job should not be polled when reclassify did work (early return)"
         )
@@ -330,9 +469,16 @@ class TestPollLoopOrdering:
 
         call_order: list[str] = []
 
-        def fake_reclassify():
-            call_order.append("reclassify")
-            return False  # no work
+        def fake_embed_sweep():
+            call_order.append("embed")
+
+        def fake_reclassify_batch(concurrency):
+            call_order.append(f"reclassify:{concurrency}")
+            return 0  # no work
+
+        def legacy_reclassify():
+            call_order.append("legacy-reclassify")
+            return False
 
         def fake_intake_sweep():
             call_order.append("intake")
@@ -342,14 +488,26 @@ class TestPollLoopOrdering:
             call_order.append("ingest_job")
             return False
 
-        monkeypatch.setattr(main_mod, "process_one_reclassify", fake_reclassify)
+        monkeypatch.setattr(main_mod, "_embed_sweep_tick", fake_embed_sweep)
+        monkeypatch.setattr(
+            main_mod, "process_reclassify_batch", fake_reclassify_batch, raising=False
+        )
+        monkeypatch.setattr(
+            main_mod, "process_one_reclassify", legacy_reclassify, raising=False
+        )
         monkeypatch.setattr(main_mod.intake_s3, "sweep", fake_intake_sweep)
         monkeypatch.setattr(main_mod, "process_one_job", fake_process_one_job)
         monkeypatch.setattr(main_mod.get_settings(), "reclassify_poll_first", True)
 
         result = main_mod.run_tick()
         assert result is False
-        assert call_order == ["reclassify", "intake", "ingest_job"]
+        expected_concurrency = main_mod.get_settings().tag_reclassify_concurrency
+        assert call_order == [
+            "embed",
+            f"reclassify:{expected_concurrency}",
+            "intake",
+            "ingest_job",
+        ]
 
     def test_reclassify_skipped_when_poll_first_false(self, clean_db, monkeypatch):
         """When reclassify_poll_first=False, reclassify is NOT polled."""
@@ -357,8 +515,15 @@ class TestPollLoopOrdering:
 
         call_order: list[str] = []
 
-        def fake_reclassify():
+        def fake_embed_sweep():
+            call_order.append("embed")
+
+        def fake_reclassify_batch(concurrency):
             call_order.append("reclassify")
+            return 1
+
+        def legacy_reclassify():
+            call_order.append("legacy-reclassify")
             return True
 
         def fake_intake_sweep():
@@ -369,7 +534,13 @@ class TestPollLoopOrdering:
             call_order.append("ingest_job")
             return False
 
-        monkeypatch.setattr(main_mod, "process_one_reclassify", fake_reclassify)
+        monkeypatch.setattr(main_mod, "_embed_sweep_tick", fake_embed_sweep)
+        monkeypatch.setattr(
+            main_mod, "process_reclassify_batch", fake_reclassify_batch, raising=False
+        )
+        monkeypatch.setattr(
+            main_mod, "process_one_reclassify", legacy_reclassify, raising=False
+        )
         monkeypatch.setattr(main_mod.intake_s3, "sweep", fake_intake_sweep)
         monkeypatch.setattr(main_mod, "process_one_job", fake_process_one_job)
         monkeypatch.setattr(main_mod.get_settings(), "reclassify_poll_first", False)
@@ -379,6 +550,8 @@ class TestPollLoopOrdering:
         assert "reclassify" not in call_order, (
             "reclassify should not be polled when reclassify_poll_first=False"
         )
+        assert "legacy-reclassify" not in call_order
+        assert call_order == ["embed", "intake", "ingest_job"]
 
 
 class TestEmbedSweepTick:

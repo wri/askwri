@@ -1,11 +1,12 @@
 """classify: retrieve-then-classify for the topic facet; enum for others.
 
-Uses the same scratch-DB pattern as test_embed_tags.py: a session-scoped
-fixture creates askwri_classify_test, applies TypeORM migrations, and drops
-it after. embed_one and chat_json are monkeypatched so tests are hermetic.
+Uses a UUID-suffixed scratch DB: a session-scoped fixture creates it, applies
+TypeORM migrations, and drops it after. embed_one and chat_json are
+monkeypatched so tests are hermetic.
 """
 import os
 import subprocess
+import uuid
 
 import psycopg
 import pytest
@@ -20,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 _SUPERDB_URL = "postgresql://askwri:password@localhost:5432/postgres"
-_TEST_DB = "askwri_classify_test"
+_TEST_DB = f"askwri_classify_{uuid.uuid4().hex[:12]}"
 _TEST_DB_URL = f"postgresql://askwri:password@localhost:5432/{_TEST_DB}"
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -40,7 +41,7 @@ def _reset_app_state(db_url: str) -> None:
 
 @pytest.fixture(scope="session")
 def classify_test_db():
-    """Create askwri_classify_test, apply migrations, yield URL, then drop."""
+    """Create a uniquely named scratch DB, apply migrations, then drop it."""
     _orig_db_url = os.environ.get("DATABASE_URL")
     with psycopg.connect(_SUPERDB_URL, autocommit=True) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {_TEST_DB}")
@@ -183,6 +184,137 @@ def _insert_document(conn, *, external_id="classify-doc", title="Test Doc", text
 
 class TestClassifyTopicRetrieveThenClassify:
 
+    def test_topic_schema_caps_llm_selection_at_five(self):
+        from worker.stages.classify import _topic_schema
+
+        schema = _topic_schema(["forests", "water"])
+
+        assert schema["properties"]["topic"]["maxItems"] == 5
+
+    def test_reclassification_corrects_only_llm_topic_rows(
+        self, clean_db, monkeypatch, caplog
+    ):
+        """A successful topic response replaces the prior LLM-owned topic set.
+
+        The first five unique valid picks win. Existing selected LLM rows are
+        refreshed, omitted LLM topic rows are removed, and protected/non-topic
+        assignments survive unchanged.
+        """
+        import logging
+
+        import worker.stages.classify as classify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            topic_ids = {
+                f"topic-{index}": _make_topic_tag(
+                    conn,
+                    f"topic-{index}",
+                    description="Primary candidate" if index == 0 else None,
+                    aliases=["first alias"] if index == 0 else None,
+                )
+                for index in range(8)
+            }
+            for tag_id in topic_ids.values():
+                _insert_tag_embedding(conn, tag_id)
+            non_topic_id = _make_other_facet_tag(conn, "doc_type", "report")
+            doc_id = _insert_document(
+                conn,
+                external_id="corrective",
+                title="Corrective classification",
+            )
+            conn.execute(
+                """INSERT INTO document_tags
+                       (document_id, tag_id, source, confidence, model_version, status)
+                   VALUES
+                       (%s, %s, 'llm', 0.11, 'old-model', 'suggested'),
+                       (%s, %s, 'llm', 0.77, 'old-model', 'accepted'),
+                       (%s, %s, 'human', 0.99, 'manual', 'accepted'),
+                       (%s, %s, 'external', 0.98, 'external-feed', 'accepted'),
+                       (%s, %s, 'llm', 0.66, 'old-model', 'suggested')""",
+                (
+                    doc_id,
+                    topic_ids["topic-0"],
+                    doc_id,
+                    topic_ids["topic-6"],
+                    doc_id,
+                    topic_ids["topic-1"],
+                    doc_id,
+                    topic_ids["topic-7"],
+                    doc_id,
+                    non_topic_id,
+                ),
+            )
+            conn.commit()
+
+        monkeypatch.setattr(classify_mod, "embed_one", lambda text: [0.1] * 1536)
+        monkeypatch.setattr(classify_mod, "sweep_pending", lambda conn: 0)
+        monkeypatch.setattr(
+            classify_mod.get_settings(), "worker_llm_model", "test-new-model"
+        )
+        captured = {}
+
+        def fake_chat_json(system, user, schema, model, max_tokens=1500):
+            captured.update(user=user, schema=schema)
+            return {
+                "topic": [
+                    {"value": "topic-0", "confidence": 0.91},
+                    {"value": "topic-0", "confidence": 0.12},
+                    {"value": "topic-1", "confidence": 0.88},
+                    {"value": "topic-2", "confidence": 0.81},
+                    {"value": "topic-3", "confidence": 0.71},
+                    {"value": "topic-4", "confidence": 0.61},
+                    {"value": "topic-5", "confidence": 0.99},
+                ]
+            }
+
+        monkeypatch.setattr(classify_mod, "chat_json", fake_chat_json)
+
+        with caplog.at_level(logging.INFO, logger=classify_mod.__name__):
+            classify_mod.run(doc_id, topic_only=True)
+
+        with psycopg.connect(clean_db) as conn:
+            stale_llm_row = conn.execute(
+                "SELECT 1 FROM document_tags WHERE document_id=%s AND tag_id=%s",
+                (doc_id, topic_ids["topic-6"]),
+            ).fetchone()
+            refreshed = conn.execute(
+                """SELECT source, confidence::float, model_version, status
+                   FROM document_tags WHERE document_id=%s AND tag_id=%s""",
+                (doc_id, topic_ids["topic-0"]),
+            ).fetchone()
+            protected_human = conn.execute(
+                """SELECT source, confidence::float, model_version
+                   FROM document_tags WHERE document_id=%s AND tag_id=%s""",
+                (doc_id, topic_ids["topic-1"]),
+            ).fetchone()
+            protected_external = conn.execute(
+                "SELECT source FROM document_tags WHERE document_id=%s AND tag_id=%s",
+                (doc_id, topic_ids["topic-7"]),
+            ).fetchone()
+            truncated = conn.execute(
+                "SELECT 1 FROM document_tags WHERE document_id=%s AND tag_id=%s",
+                (doc_id, topic_ids["topic-5"]),
+            ).fetchone()
+            non_topic = conn.execute(
+                """SELECT source, confidence::float, model_version
+                   FROM document_tags WHERE document_id=%s AND tag_id=%s""",
+                (doc_id, non_topic_id),
+            ).fetchone()
+
+        assert stale_llm_row is None
+        assert refreshed == ("llm", pytest.approx(0.91), "test-new-model", "accepted")
+        assert protected_human == ("human", pytest.approx(0.99), "manual")
+        assert protected_external == ("external",)
+        assert truncated is None
+        assert non_topic == ("llm", pytest.approx(0.66), "old-model")
+        assert captured["schema"]["properties"]["topic"]["maxItems"] == 5
+        assert "- topic-0 (aka: first alias; Primary candidate)" in captured["user"]
+        assert "(; " not in captured["user"]
+        candidate_log = "\n".join(caplog.messages)
+        assert str(topic_ids["topic-0"]) in candidate_log
+        assert "label=topic-0" in candidate_log
+        assert "cosine_distance=" in candidate_log
+
     def test_picks_top5_and_preserves_human(self, clean_db, monkeypatch):
         """Topic retrieve-then-classify: embed_one returns a vector, chat_json
         returns a candidate tag with confidence 0.8 → status='accepted'.
@@ -286,6 +418,32 @@ class TestClassifyTopicRetrieveThenClassify:
                 (doc_id,),
             ).fetchone()[0]
             assert topic_count == 0, "no topic tags should be written without embeddings"
+
+    def test_topic_only_empty_candidates_raises_retryable_error(
+        self, clean_db, monkeypatch
+    ):
+        """A reclassification cannot silently succeed without topic candidates."""
+        import worker.stages.classify as classify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            _make_topic_tag(conn, "forests")
+            doc_id = _insert_document(
+                conn,
+                external_id="topic-only-empty",
+                title="No candidate embeddings",
+            )
+            conn.commit()
+
+        monkeypatch.setattr(classify_mod, "embed_one", lambda text: [0.1] * 1536)
+        monkeypatch.setattr(classify_mod, "sweep_pending", lambda conn: 0)
+        monkeypatch.setattr(
+            classify_mod,
+            "chat_json",
+            lambda *args, **kwargs: pytest.fail("LLM must not run without candidates"),
+        )
+
+        with pytest.raises(RuntimeError, match="no candidate topic"):
+            classify_mod.run(doc_id, topic_only=True)
 
     def test_topic_only_skips_non_topic_facets(self, clean_db, monkeypatch):
         """run(document_id, topic_only=True) → only the topic LLM call runs;

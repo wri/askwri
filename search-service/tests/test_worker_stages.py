@@ -1,7 +1,7 @@
 """Integration tests for worker stages against a scratch database.
 
 Uses the same hermetic pattern as test_worker_queue.py:
-  - Create askwri_stages_test scratch DB (distinct name for coexistence)
+  - Create a UUID-suffixed scratch DB
   - Apply TypeORM migrations via subprocess
   - Point DATABASE_URL at it; reset app.db._pool
   - Never touch the qa database
@@ -13,6 +13,7 @@ import json as json_mod
 import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 import psycopg
@@ -32,10 +33,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 # ---------------------------------------------------------------------------
-# Constants — distinct scratch DB name to coexist with askwri_worker_test
+# Constants — unique scratch DB name for safe concurrent test runs
 # ---------------------------------------------------------------------------
 _SUPERDB_URL = "postgresql://askwri:password@localhost:5432/postgres"
-_TEST_DB = "askwri_stages_test"
+_TEST_DB = f"askwri_stages_{uuid.uuid4().hex[:12]}"
 _TEST_DB_URL = f"postgresql://askwri:password@localhost:5432/{_TEST_DB}"
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -64,7 +65,7 @@ def _reset_app_state(db_url: str) -> None:
 
 @pytest.fixture(scope="session")
 def stages_test_db():
-    """Create askwri_stages_test, apply migrations, yield URL, then drop."""
+    """Create a uniquely named scratch DB, apply migrations, then drop it."""
     with psycopg.connect(_SUPERDB_URL, autocommit=True) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {_TEST_DB}")
         conn.execute(f"CREATE DATABASE {_TEST_DB}")

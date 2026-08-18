@@ -16,7 +16,7 @@ from app.config import get_settings  # noqa: E402
 from app.db import get_pool  # noqa: E402
 from worker import intake_s3, queue  # noqa: E402
 from worker.stages import STAGE_ORDER, fetch_document, run_stage  # noqa: E402
-from worker.stages.reclassify import process_one_reclassify  # noqa: E402
+from worker.stages.reclassify import process_reclassify_batch  # noqa: E402
 from worker.stages.embed_tags import sweep_pending, build_all_embeddings  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -78,19 +78,19 @@ def run_tick() -> bool:
     (early return), False if we fell through to intake + ingest.
 
     Order each tick:
-    1. If reclassify_poll_first: process_one_reclassify() (return early if work done)
-    2. Embed sweep tick (sweep_pending + build_all_embeddings, wrapped try/except)
+    1. Embed sweep tick (sweep_pending + build_all_embeddings, wrapped try/except)
+    2. If reclassify_poll_first: process a configured batch (return early if worked)
     3. Reap stale jobs + intake_s3 sweep + process_one_job (existing poll loop)
     """
     settings = get_settings()
 
-    # (1) Reclassify-first poll
-    if settings.reclassify_poll_first:
-        if process_one_reclassify():
-            return True
-
-    # (2) Embed sweep tick (standalone, per spec §5.3)
+    # (1) Maintain candidate embeddings before any reclassification claim.
     _embed_sweep_tick()
+
+    # (2) Reclassify-before-ingest poll, bounded by the configured concurrency.
+    if settings.reclassify_poll_first:
+        if process_reclassify_batch(settings.tag_reclassify_concurrency):
+            return True
 
     # (3) Existing intake + job poll
     try:
