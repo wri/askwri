@@ -414,6 +414,18 @@ export async function mergeTags(
       return { error: 'cannot merge a topic into its descendant' }
     }
 
+    const [outOfScopeChild] = await em.query(
+      `SELECT id FROM tags
+       WHERE parent_tag_id = $1
+         AND (facet <> 'topic' OR taxonomy_version <> 'v1')
+       LIMIT 1
+       FOR UPDATE`,
+      [fromId],
+    )
+    if (outOfScopeChild) {
+      return { error: 'cannot merge a topic with out-of-scope children' }
+    }
+
     const affectedDocuments: any[] = await em.query(
       `SELECT document_id FROM document_tags WHERE tag_id = $1`,
       [fromId],
@@ -447,7 +459,10 @@ export async function mergeTags(
     await em.query(`DELETE FROM document_tags WHERE tag_id = $1`, [fromId])
 
     await em.query(
-      `UPDATE tags SET parent_tag_id = $1 WHERE parent_tag_id = $2`,
+      `UPDATE tags SET parent_tag_id = $1
+       WHERE parent_tag_id = $2
+         AND facet = 'topic'
+         AND taxonomy_version = 'v1'`,
       [intoId, fromId],
     )
 
@@ -455,6 +470,12 @@ export async function mergeTags(
       `INSERT INTO tag_aliases (tag_id, alias)
        SELECT $1, alias FROM tag_aliases WHERE tag_id = $2
        ON CONFLICT DO NOTHING`,
+      [intoId, fromId],
+    )
+    await em.query(
+      `UPDATE tags SET needs_reembed = true
+       WHERE id = $1
+         AND EXISTS (SELECT 1 FROM tag_aliases WHERE tag_id = $2)`,
       [intoId, fromId],
     )
 
@@ -745,9 +766,16 @@ async function buildTopicsImportDiff(
 ): Promise<ImportDiff> {
   const seenLabels = new Set<string>()
   const duplicateLabels = new Set<string>()
+  const seenIds = new Set<string>()
+  const duplicateIds = new Set<string>()
   for (const { label } of rows) {
     if (seenLabels.has(label)) duplicateLabels.add(label)
     seenLabels.add(label)
+  }
+  for (const { id } of rows) {
+    if (!id) continue
+    if (seenIds.has(id)) duplicateIds.add(id)
+    seenIds.add(id)
   }
   const inputLabels = new Set([...seenLabels].filter(Boolean))
 
@@ -782,12 +810,27 @@ async function buildTopicsImportDiff(
       conflicts.push({ row: r, reason: 'duplicate label' })
       continue
     }
+    if (r.id && duplicateIds.has(r.id)) {
+      conflicts.push({ row: r, reason: 'duplicate topic id' })
+      continue
+    }
     if (r.parent && !byLabel.has(r.parent) && !inputLabels.has(r.parent)) {
       conflicts.push({ row: r, reason: 'bad parent reference' })
       continue
     }
 
-    const cur = r.id ? byId.get(r.id) : byLabel.get(r.label)
+    const idMatch = r.id ? byId.get(r.id) : undefined
+    if (r.id && !idMatch) {
+      conflicts.push({ row: r, reason: 'unknown topic id' })
+      continue
+    }
+    const labelOwner = byLabel.get(r.label)
+    if (r.id && labelOwner && labelOwner.id !== r.id) {
+      conflicts.push({ row: r, reason: 'label belongs to another topic' })
+      continue
+    }
+
+    const cur = idMatch ?? labelOwner
     if (!cur) {
       added.push(r)
     } else {
@@ -911,27 +954,55 @@ export async function applyTopicsImport(
       finalTopics.map((topic) => [topic.value_id, topic.id]),
     )
 
-    const changedRows = [
+    for (const unchangedRow of diff.unchanged) {
+      const unchangedId =
+        unchangedRow.id || finalLabelToId.get(unchangedRow.label)
+      if (!unchangedId) {
+        throw new TopicsImportConflictError(
+          `topic '${unchangedRow.label}' was not found in the final topic taxonomy`,
+        )
+      }
+      rowTagIds.set(unchangedRow, unchangedId)
+    }
+
+    const importedRows = [
       ...diff.added,
       ...diff.updated.map(({ row: updatedRow }) => updatedRow),
+      ...diff.unchanged,
     ]
-    const changedTagIds = [...affectedTagIds]
-    if (changedTagIds.length > 0) {
+    const resolvedParentIds = new Map<ParsedRow, string | null>()
+    for (const importedRow of importedRows) {
+      const childId = rowTagIds.get(importedRow)
+      if (!childId) {
+        throw new TopicsImportConflictError(
+          `topic '${importedRow.label}' was not found in the final topic taxonomy`,
+        )
+      }
+      if (!importedRow.parent) {
+        resolvedParentIds.set(importedRow, null)
+        continue
+      }
+      const parentId = finalLabelToId.get(importedRow.parent)
+      if (!parentId) {
+        throw new TopicsImportConflictError(
+          `parent '${importedRow.parent}' was not found in the final topic taxonomy`,
+        )
+      }
+      resolvedParentIds.set(importedRow, parentId)
+    }
+
+    const importedTagIds = [...new Set(rowTagIds.values())]
+    if (importedTagIds.length > 0) {
       await em.query(
         `UPDATE tags SET parent_tag_id = NULL WHERE id = ANY($1::uuid[])`,
-        [changedTagIds],
+        [importedTagIds],
       )
     }
 
-    for (const changedRow of changedRows) {
-      if (!changedRow.parent) continue
-      const childId = rowTagIds.get(changedRow)
-      const parentId = finalLabelToId.get(changedRow.parent)
-      if (!childId || !parentId) {
-        throw new TopicsImportConflictError(
-          `parent '${changedRow.parent}' was not found in the final topic taxonomy`,
-        )
-      }
+    for (const importedRow of importedRows) {
+      const childId = rowTagIds.get(importedRow)!
+      const parentId = resolvedParentIds.get(importedRow)
+      if (!parentId) continue
       const parent = await findV1Topic(em, parentId)
       if (!parent) {
         throw new TopicsImportConflictError('parent must be a v1 topic')
@@ -943,6 +1014,7 @@ export async function applyTopicsImport(
       ])
     }
 
+    const changedTagIds = [...affectedTagIds]
     let enqueued = 0
     let runId: string | null = null
     if (reclassify && changedTagIds.length > 0) {

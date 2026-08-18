@@ -87,14 +87,13 @@ d('topics API routes (DB integration)', () => {
   })
 
   afterAll(async () => {
-    // cleanup topic tags created by POST test
-    for (const tid of tagIds) {
-      await AppDataSource.query(`DELETE FROM tag_aliases WHERE tag_id = $1`, [
-        tid,
-      ])
-      await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tid])
+    // Delete test-owned jobs before their scoped tags can become null.
+    if (docIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM reclassify_jobs WHERE document_id = ANY($1::uuid[])`,
+        [docIds],
+      )
     }
-    // cleanup docs
     for (const did of docIds) {
       await AppDataSource.query(
         `DELETE FROM document_tags WHERE document_id = $1`,
@@ -102,18 +101,17 @@ d('topics API routes (DB integration)', () => {
       )
       await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [did])
     }
-    // cleanup reclassify jobs
-    await AppDataSource.query(
-      `DELETE FROM reclassify_jobs WHERE scope_tag_id = ANY($1::uuid[]) OR scope_tag_id IS NULL`,
-      [tagIds.length ? tagIds : ['00000000-0000-0000-0000-000000000000']],
-    )
-    // cleanup audit
+    for (const tid of tagIds) {
+      await AppDataSource.query(`DELETE FROM tag_aliases WHERE tag_id = $1`, [
+        tid,
+      ])
+      await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tid])
+    }
     for (const tid of tagIds) {
       await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
         tid,
       ])
     }
-    // cleanup users
     const repo = AppDataSource.getRepository(User)
     await repo.delete({ id: adminId })
     await repo.delete({ id: editorId })
@@ -307,6 +305,56 @@ d('topics API routes (DB integration)', () => {
         const index = tagIds.indexOf(tag.id)
         if (index >= 0) tagIds.splice(index, 1)
       }
+    }
+  })
+
+  it('POST /api/admin/topics/import maps a label ownership collision to 409', async () => {
+    const nonce = crypto.randomUUID()
+    const firstLabel = `__route_import_owner_a_${nonce}__`
+    const secondLabel = `__route_import_owner_b_${nonce}__`
+    const [first] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [firstLabel],
+    )
+    const [second] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [secondLabel],
+    )
+    tagIds.push(first.id, second.id)
+    const csv = [
+      'label,description,aliases,parent,facet,id',
+      `${secondLabel},,,,topic,${first.id}`,
+    ].join('\n')
+    const consoleError = jest.spyOn(console, 'error').mockImplementation()
+
+    try {
+      const response = await importTopics(
+        makeReq(
+          'POST',
+          'http://localhost/api/admin/topics/import',
+          { csv },
+          adminCookie,
+        ),
+      )
+      expect(response.status).toBe(409)
+      await expect(response.json()).resolves.toMatchObject({
+        ok: false,
+        error: expect.stringContaining('conflict'),
+      })
+      const labels: any[] = await AppDataSource.query(
+        `SELECT id, value_id FROM tags WHERE id = ANY($1::uuid[])`,
+        [[first.id, second.id]],
+      )
+      expect(labels).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: first.id, value_id: firstLabel }),
+          expect.objectContaining({ id: second.id, value_id: secondLabel }),
+        ]),
+      )
+    } finally {
+      consoleError.mockRestore()
     }
   })
 

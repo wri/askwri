@@ -925,6 +925,7 @@ d(
 
 d('topicsAdmin guarded merge integrity (DB integration)', () => {
   const runId = crypto.randomUUID()
+  const suffix = runId.replaceAll('-', '')
   const tagIds: string[] = []
   const documentIds: string[] = []
 
@@ -1051,6 +1052,36 @@ d('topicsAdmin guarded merge integrity (DB integration)', () => {
     expect(descendant.parent_tag_id).toBe(ancestorId)
   })
 
+  it('rejects a merge when the source has children outside topic/v1', async () => {
+    const targetId = await insertTag('scoped_child_target')
+    const sourceId = await insertTag('scoped_child_source')
+    const programChildId = await insertTag('scoped_program_child', {
+      facet: 'program',
+      parentTagId: sourceId,
+    })
+    const v2ChildId = await insertTag('scoped_v2_child', {
+      taxonomyVersion: 'v2',
+      parentTagId: sourceId,
+    })
+
+    await expect(mergeTags(targetId, sourceId, adminIdentity)).resolves.toEqual(
+      {
+        error: 'cannot merge a topic with out-of-scope children',
+      },
+    )
+
+    const dependents: any[] = await AppDataSource.query(
+      `SELECT id, parent_tag_id FROM tags WHERE id = ANY($1::uuid[])`,
+      [[sourceId, programChildId, v2ChildId]],
+    )
+    expect(dependents).toHaveLength(3)
+    expect(
+      dependents
+        .filter((tag) => tag.id !== sourceId)
+        .every((tag) => tag.parent_tag_id === sourceId),
+    ).toBe(true)
+  })
+
   it('transfers source aliases and atomically enqueues affected documents', async () => {
     const targetId = await insertTag('alias_target')
     const sourceId = await insertTag('alias_source')
@@ -1069,6 +1100,11 @@ d('topicsAdmin guarded merge integrity (DB integration)', () => {
       [targetId],
     )
     expect(aliases.map((row) => row.alias)).toContain(sourceAlias)
+    const [target] = await AppDataSource.query(
+      `SELECT needs_reembed FROM tags WHERE id = $1`,
+      [targetId],
+    )
+    expect(target.needs_reembed).toBe(true)
 
     const [job] = await AppDataSource.query(
       `SELECT document_id, scope_tag_id
@@ -1180,6 +1216,77 @@ d('topicsAdmin guarded merge integrity (DB integration)', () => {
       model_version: 'external-existing',
     })
     expect(result).toMatchObject({ ok: true, moved: 2, enqueued: 4 })
+  })
+
+  it('rolls back assignments, aliases, source deletion, audit, and jobs when merge enqueue fails', async () => {
+    const targetId = await insertTag('enqueue_failure_target')
+    const sourceId = await insertTag('enqueue_failure_source')
+    const documentId = await insertDocument('merge_enqueue_failure')
+    const sourceAlias = `__task2_rollback_alias_${runId}__`
+    await AppDataSource.query(
+      `INSERT INTO tag_aliases (tag_id, alias) VALUES ($1, $2)`,
+      [sourceId, sourceAlias],
+    )
+    await assign(documentId, sourceId, 'llm', 'accepted', 0.75, 'merge-old')
+
+    const enqueueFunction = `task2_merge_enqueue_fail_${suffix}`
+    const enqueueTrigger = `task2_merge_enqueue_fail_trigger_${suffix}`
+    await AppDataSource.query(
+      `CREATE FUNCTION ${enqueueFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         IF NEW.document_id = '${documentId}'::uuid THEN
+           RAISE EXCEPTION 'task2 merge enqueue failure';
+         END IF;
+         RETURN NEW;
+       END;
+       $$`,
+    )
+    await AppDataSource.query(
+      `CREATE TRIGGER ${enqueueTrigger} BEFORE INSERT ON reclassify_jobs
+       FOR EACH ROW EXECUTE FUNCTION ${enqueueFunction}()`,
+    )
+
+    let thrown: unknown
+    try {
+      await mergeTags(targetId, sourceId, adminIdentity)
+    } catch (error) {
+      thrown = error
+    } finally {
+      await AppDataSource.query(
+        `DROP TRIGGER IF EXISTS ${enqueueTrigger} ON reclassify_jobs`,
+      )
+      await AppDataSource.query(`DROP FUNCTION IF EXISTS ${enqueueFunction}()`)
+    }
+
+    const tags: any[] = await AppDataSource.query(
+      `SELECT id, needs_reembed FROM tags WHERE id = ANY($1::uuid[])`,
+      [[targetId, sourceId]],
+    )
+    const assignments: any[] = await AppDataSource.query(
+      `SELECT tag_id FROM document_tags WHERE document_id = $1`,
+      [documentId],
+    )
+    const aliases: any[] = await AppDataSource.query(
+      `SELECT tag_id, alias FROM tag_aliases WHERE alias = $1`,
+      [sourceAlias],
+    )
+    const [job] = await AppDataSource.query(
+      `SELECT id FROM reclassify_jobs WHERE document_id = $1`,
+      [documentId],
+    )
+    const [audit] = await AppDataSource.query(
+      `SELECT id FROM audit_log
+       WHERE entity_id = $1 AND action = 'tag_merge'`,
+      [targetId],
+    )
+
+    expect(thrown).toMatchObject({ name: 'QueryFailedError' })
+    expect(tags).toHaveLength(2)
+    expect(tags.find((tag) => tag.id === targetId)?.needs_reembed).toBe(false)
+    expect(assignments).toEqual([{ tag_id: sourceId }])
+    expect(aliases).toEqual([{ tag_id: sourceId, alias: sourceAlias }])
+    expect(job).toBeUndefined()
+    expect(audit).toBeUndefined()
   })
 })
 
@@ -1334,21 +1441,19 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
     expect(inserted).toBeUndefined()
   })
 
-  it('rejects a parent label absent from the final taxonomy and rolls back renames', async () => {
-    const originalParentLabel = `__task2_final_parent_${runId}__`
-    const firstRename = `__task2_final_parent_a_${runId}__`
-    const finalRename = `__task2_final_parent_b_${runId}__`
+  it('rejects an unchanged child that names a renamed parent by its old label', async () => {
+    const oldParentLabel = `__task2_final_parent_old_${runId}__`
+    const newParentLabel = `__task2_final_parent_new_${runId}__`
     const childLabel = `__task2_final_child_${runId}__`
-    const parentId = await insertTag(originalParentLabel)
-    const childId = await insertTag(childLabel)
+    const parentId = await insertTag(oldParentLabel)
+    const childId = await insertTag(childLabel, { parentTagId: parentId })
 
     let thrown: unknown
     try {
       await applyTopicsImport(
         [
-          row(firstRename, { id: parentId }),
-          row(finalRename, { id: parentId }),
-          row(childLabel, { id: childId, parent: firstRename }),
+          row(newParentLabel, { id: parentId }),
+          row(childLabel, { id: childId, parent: oldParentLabel }),
         ],
         false,
         identity,
@@ -1365,12 +1470,55 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
       `SELECT parent_tag_id FROM tags WHERE id = $1`,
       [childId],
     )
-    expect(parent.value_id).toBe(originalParentLabel)
-    expect(child.parent_tag_id).toBeNull()
+    expect(parent.value_id).toBe(oldParentLabel)
+    expect(child.parent_tag_id).toBe(parentId)
     expect(thrown).toMatchObject({
       name: 'TopicsImportConflictError',
       message: expect.stringContaining('parent'),
     })
+  })
+
+  it('reports unknown CSV IDs as typed conflicts instead of inserting them', async () => {
+    const label = `__task2_unknown_id_${runId}__`
+    const rows = [row(label, { id: crypto.randomUUID() })]
+
+    const diff = await importTopicsDiff(rows)
+    expect(diff.conflicts).toEqual([
+      { row: rows[0], reason: 'unknown topic id' },
+    ])
+    await expect(
+      applyTopicsImport(rows, false, identity),
+    ).rejects.toMatchObject({ name: 'TopicsImportConflictError' })
+    const [inserted] = await AppDataSource.query(
+      `SELECT id FROM tags WHERE value_id = $1`,
+      [label],
+    )
+    expect(inserted).toBeUndefined()
+  })
+
+  it('reports duplicate CSV IDs as conflicts before applying either row', async () => {
+    const originalLabel = `__task2_duplicate_id_original_${runId}__`
+    const firstLabel = `__task2_duplicate_id_first_${runId}__`
+    const secondLabel = `__task2_duplicate_id_second_${runId}__`
+    const tagId = await insertTag(originalLabel)
+    const rows = [
+      row(firstLabel, { id: tagId }),
+      row(secondLabel, { id: tagId }),
+    ]
+
+    const diff = await importTopicsDiff(rows)
+    expect(diff.conflicts).toEqual([
+      { row: rows[0], reason: 'duplicate topic id' },
+      { row: rows[1], reason: 'duplicate topic id' },
+    ])
+    await expect(
+      applyTopicsImport(rows, false, identity),
+    ).rejects.toMatchObject({ name: 'TopicsImportConflictError' })
+    const [tag] = await AppDataSource.query(
+      `SELECT value_id FROM tags WHERE id = $1`,
+      [tagId],
+    )
+    expect(tag.value_id).toBe(originalLabel)
   })
 
   it('rolls back all row changes when the final parent pass detects a cycle', async () => {
@@ -1415,15 +1563,30 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
     expect(thrown).toMatchObject({ name: 'TopicsImportConflictError' })
   })
 
-  it('rolls back imported rows when the transactional audit insert fails', async () => {
+  it('rolls back a successfully inserted queue job when the later import audit fails', async () => {
     const label = `__task2_audit_rollback_${runId}__`
     const tagId = await insertTag(label, { description: 'before audit' })
+    const documentId = await insertDocument('audit_rollback')
+    await AppDataSource.query(
+      `INSERT INTO document_tags (document_id, tag_id, source, status)
+       VALUES ($1, $2, 'llm', 'accepted')`,
+      [documentId, tagId],
+    )
     const auditFunction = `task2_csv_audit_fail_${suffix}`
     const auditTrigger = `task2_csv_audit_fail_trigger_${suffix}`
+    const auditSequence = `task2_csv_audit_seen_queue_${suffix}`
+    await AppDataSource.query(`CREATE SEQUENCE ${auditSequence}`)
     await AppDataSource.query(
       `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
        BEGIN
          IF NEW.action = 'tag_import' AND NEW.actor_user_id = '${actorUserId}'::uuid THEN
+           IF NOT EXISTS (
+             SELECT 1 FROM reclassify_jobs
+             WHERE document_id = '${documentId}'::uuid
+           ) THEN
+             RAISE EXCEPTION 'task2 audit ran before queue insert';
+           END IF;
+           PERFORM nextval('${auditSequence}');
            RAISE EXCEPTION 'task2 audit failure';
          END IF;
          RETURN NEW;
@@ -1436,10 +1599,11 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
     )
 
     let thrown: unknown
+    let auditSawQueuedJob = false
     try {
       await applyTopicsImport(
         [row(label, { id: tagId, description: 'after audit' })],
-        false,
+        true,
         identity,
       )
     } catch (error) {
@@ -1449,13 +1613,31 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
         `DROP TRIGGER IF EXISTS ${auditTrigger} ON audit_log`,
       )
       await AppDataSource.query(`DROP FUNCTION IF EXISTS ${auditFunction}()`)
+      const [sequence] = await AppDataSource.query(
+        `SELECT is_called FROM ${auditSequence}`,
+      )
+      auditSawQueuedJob = sequence.is_called
+      await AppDataSource.query(`DROP SEQUENCE IF EXISTS ${auditSequence}`)
     }
 
     const [tag] = await AppDataSource.query(
       `SELECT description FROM tags WHERE id = $1`,
       [tagId],
     )
+    const [job] = await AppDataSource.query(
+      `SELECT id FROM reclassify_jobs WHERE document_id = $1`,
+      [documentId],
+    )
+    const [audit] = await AppDataSource.query(
+      `SELECT id FROM audit_log
+       WHERE actor_user_id = $1 AND action = 'tag_import'
+         AND after->>'reclassify' = 'true'`,
+      [actorUserId],
+    )
     expect(tag.description).toBe('before audit')
+    expect(auditSawQueuedJob).toBe(true)
+    expect(job).toBeUndefined()
+    expect(audit).toBeUndefined()
     expect(thrown).toMatchObject({ name: 'QueryFailedError' })
   })
 
