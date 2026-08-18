@@ -201,6 +201,9 @@ export const TopicTaxonomyManager = () => {
 
   // ---- edit drawer state ----
   const [editingTag, setEditingTag] = useState<TopicRow | null>(null)
+  const [editingTab, setEditingTab] = useState<'edit' | 'history' | 'docs'>(
+    'edit',
+  )
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [rebuildBusy, setRebuildBusy] = useState(false)
   const [embedProgress, setEmbedProgress] = useState<{
@@ -938,8 +941,16 @@ export const TopicTaxonomyManager = () => {
         style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}
       >
         <Stat label='topics' value={topicCount} />
-        <Stat label='docs tagged' value={docsTagged} />
-        <Stat label='suggested' value={suggestedCount} />
+        <Stat
+          label='tag applications'
+          value={docsTagged}
+          title='Total accepted tag assignments across all topics (a doc with 5 tags counts 5), not unique documents.'
+        />
+        <Stat
+          label='pending tags'
+          value={suggestedCount}
+          title='Tag assignments the AI made below the confidence threshold. Not searchable until an editor accepts them in the document editor’s Tags panel.'
+        />
         {needsReembedCount > 0 && (
           <Stat label='need re-embed' value={needsReembedCount} warn />
         )}
@@ -1515,7 +1526,10 @@ export const TopicTaxonomyManager = () => {
                 {/* Label + sub-text */}
                 <Box
                   style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
-                  onClick={() => setEditingTag(tag)}
+                  onClick={() => {
+                    setEditingTab('edit')
+                    setEditingTag(tag)
+                  }}
                 >
                   <Box
                     as='span'
@@ -1544,9 +1558,16 @@ export const TopicTaxonomyManager = () => {
                     </Box>
                   )}
                 </Box>
-                {/* Doc count */}
-                <Box
+                {/* Doc count — click to open this tag’s Docs tab in the drawer */}
+                <button
+                  type='button'
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingTab('docs')
+                    setEditingTag(tag)
+                  }}
                   style={{
+                    fontFamily: 'inherit',
                     fontSize: 11,
                     color: '#595959',
                     background: '#f7f7f7',
@@ -1555,10 +1576,12 @@ export const TopicTaxonomyManager = () => {
                     padding: '1px 8px',
                     minWidth: 50,
                     textAlign: 'center' as const,
+                    cursor: 'pointer',
                   }}
+                  title={`${tag.acceptedCount} document${tag.acceptedCount !== 1 ? 's' : ''} tagged — click to open the list`}
                 >
                   {tag.acceptedCount}
-                </Box>
+                </button>
               </Box>
             )
           })}
@@ -1589,6 +1612,7 @@ export const TopicTaxonomyManager = () => {
         <EditDrawer
           tag={editingTag}
           allTags={tags}
+          initialTab={editingTab}
           onClose={() => setEditingTag(null)}
           onSaved={() => {
             showNotice('success', 'Topic saved.')
@@ -1695,6 +1719,21 @@ export const TopicTaxonomyManager = () => {
           {reclassifyError}
         </Box>
       )}
+      {/* Loading state: the first status fetch hasn’t returned yet. */}
+      {reclassifyPanelOpen && !reclassifyStatus && !reclassifyError && (
+        <Box
+          style={{
+            border: '1px solid #e2e8f0',
+            borderRadius: 12,
+            padding: '12px 16px',
+            fontSize: 12,
+            color: '#595959',
+            marginTop: 8,
+          }}
+        >
+          Loading re-classify status…
+        </Box>
+      )}
     </Box>
   )
 }
@@ -1705,12 +1744,15 @@ const Stat = ({
   label,
   value,
   warn,
+  title,
 }: {
   label: string
   value: number
   warn?: boolean
+  title?: string
 }) => (
   <Box
+    title={title}
     style={{
       background: warn ? '#fffbeb' : '#f7f7f7',
       border: `1px solid ${warn ? '#f6e2b3' : '#e2e8f0'}`,
@@ -1718,6 +1760,7 @@ const Stat = ({
       padding: '6px 11px',
       fontSize: 11,
       color: warn ? '#7c3a00' : '#595959',
+      cursor: title ? 'help' : 'default',
     }}
   >
     <Box
@@ -2103,13 +2146,17 @@ const EditDrawer = ({
   allTags,
   onClose,
   onSaved,
+  initialTab,
 }: {
   tag: TopicRow
   allTags: TopicRow[]
   onClose: () => void
   onSaved: () => void
+  initialTab?: 'edit' | 'history' | 'docs'
 }) => {
-  const [tab, setTab] = useState<'edit' | 'history' | 'docs'>('edit')
+  const [tab, setTab] = useState<'edit' | 'history' | 'docs'>(
+    initialTab ?? 'edit',
+  )
   const [label, setLabel] = useState(tag.valueId)
   const [description, setDescription] = useState(tag.description ?? '')
   const [aliases, setAliases] = useState<string[]>(tag.aliases)
@@ -2120,6 +2167,18 @@ const EditDrawer = ({
   const [drawerError, setDrawerError] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [docs, setDocs] = useState<
+    {
+      id: string
+      title: string | null
+      titleEn: string | null
+      externalId: string
+      status: string
+      source: string
+      confidence: number | null
+    }[]
+  >([])
+  const [docsLoading, setDocsLoading] = useState(false)
 
   useEscapeClose(onClose, saving)
 
@@ -2140,6 +2199,19 @@ const EditDrawer = ({
       .then((body) => setHistory(body.entries ?? []))
       .catch(() => setHistory([]))
       .finally(() => setHistoryLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
+  // Load documents when Docs tab is clicked
+  useEffect(() => {
+    if (tab !== 'docs' || docs.length > 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDocsLoading(true)
+    fetch(`/api/admin/topics/${tag.id}/documents`)
+      .then((r) => (r.ok ? r.json() : { documents: [] }))
+      .then((body) => setDocs(body.documents ?? []))
+      .catch(() => setDocs([]))
+      .finally(() => setDocsLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
 
@@ -2542,9 +2614,44 @@ const EditDrawer = ({
         {/* Docs tab */}
         {tab === 'docs' && (
           <Box>
-            <Text style={{ fontSize: 12, color: '#595959' }}>
-              {tag.acceptedCount} accepted · {tag.suggestedCount} suggested
+            <Text style={{ fontSize: 12, color: '#595959', marginBottom: 8 }}>
+              {tag.acceptedCount} accepted · {tag.suggestedCount} suggested —
+              click a document to open it in a new tab.
             </Text>
+            {docsLoading ? (
+              <Text style={{ fontSize: 12, color: '#595959' }}>Loading…</Text>
+            ) : docs.length === 0 ? (
+              <Text style={{ fontSize: 12, color: '#595959' }}>
+                No documents tagged with this topic.
+              </Text>
+            ) : (
+              <Box style={{ maxHeight: 360, overflowY: 'auto' }}>
+                {docs.map((d) => (
+                  <a
+                    key={d.id}
+                    href={`/admin/documents/${d.id}`}
+                    target='_blank'
+                    rel='noreferrer'
+                    style={{
+                      display: 'block',
+                      padding: '6px 4px',
+                      borderBottom: '1px solid #eee',
+                      color: '#1a365d',
+                      textDecoration: 'none',
+                      fontSize: 12,
+                    }}
+                    title={`${d.externalId} — ${d.status}${d.source ? ` (set by ${d.source})` : ''}`}
+                  >
+                    <strong>{d.titleEn || d.title || d.externalId}</strong>
+                    <span style={{ color: '#718096', marginLeft: 6 }}>
+                      {d.source === 'llm'
+                        ? `AI ${d.confidence != null ? d.confidence.toFixed(2) : ''}`
+                        : d.source}
+                    </span>
+                  </a>
+                ))}
+              </Box>
+            )}
           </Box>
         )}
       </Box>

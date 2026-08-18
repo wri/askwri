@@ -77,6 +77,7 @@ const CatalogInner = () => {
   // filters.search (from the URL); the input must NOT bind to it directly, but
   // is seeded from it on mount and re-synced on external URL changes below.
   const [searchText, setSearchText] = useState(searchParams.get('search') ?? '')
+  const [tagSearch, setTagSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkCollectionId, setBulkCollectionId] = useState<string>('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -364,10 +365,18 @@ const CatalogInner = () => {
         >
           <option value=''>All tags</option>
           {Object.entries(
-            tags.reduce<Record<string, Tag[]>>((acc, t) => {
-              ;(acc[t.facet] ??= []).push(t)
-              return acc
-            }, {}),
+            tags
+              .filter((t) =>
+                tagSearch.trim()
+                  ? t.valueId
+                      .toLowerCase()
+                      .includes(tagSearch.trim().toLowerCase())
+                  : true,
+              )
+              .reduce<Record<string, Tag[]>>((acc, t) => {
+                ;(acc[t.facet] ??= []).push(t)
+                return acc
+              }, {}),
           )
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([facet, ts]) => (
@@ -380,6 +389,14 @@ const CatalogInner = () => {
               </optgroup>
             ))}
         </select>
+        <input
+          type='text'
+          value={tagSearch}
+          onChange={(e) => setTagSearch(e.target.value)}
+          placeholder='filter tags…'
+          aria-label='Filter tags by name'
+          style={{ width: 110, fontFamily: 'inherit', fontSize: 'inherit' }}
+        />
 
         <input
           type='text'
