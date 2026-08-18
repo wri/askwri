@@ -1751,7 +1751,7 @@ const Stat = ({
   warn?: boolean
   title?: string
 }) => (
-  <Box
+  <div
     title={title}
     style={{
       background: warn ? '#fffbeb' : '#f7f7f7',
@@ -1763,8 +1763,7 @@ const Stat = ({
       cursor: title ? 'help' : 'default',
     }}
   >
-    <Box
-      as='span'
+    <span
       style={{
         fontSize: 14,
         fontWeight: 700,
@@ -1772,9 +1771,9 @@ const Stat = ({
       }}
     >
       {value}
-    </Box>{' '}
+    </span>{' '}
     {label}
-  </Box>
+  </div>
 )
 
 const ViewToggle = ({
@@ -2653,7 +2652,7 @@ const EditDrawer = ({
                     <strong>{d.titleEn || d.title || d.externalId}</strong>
                     <span style={{ color: '#718096', marginLeft: 6 }}>
                       {d.source === 'llm'
-                        ? `AI ${d.confidence != null ? d.confidence.toFixed(2) : ''}`
+                        ? `AI ${d.confidence != null ? Number(d.confidence).toFixed(2) : ''}`
                         : d.source}
                     </span>
                   </a>
