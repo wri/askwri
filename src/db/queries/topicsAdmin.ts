@@ -353,7 +353,7 @@ function reclassifyCandidateQuery(scope: ReclassifyScope): {
     return {
       sql: `SELECT d.id AS document_id
             FROM documents d
-            WHERE d.status = 'ready'`,
+            WHERE d.status IN ('ready', 'searchable')`,
       parameters: [],
       scopeTagId: null,
     }
