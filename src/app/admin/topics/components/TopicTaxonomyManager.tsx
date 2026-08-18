@@ -1240,7 +1240,7 @@ export const TopicTaxonomyManager = () => {
               style={{
                 fontFamily: 'inherit',
                 fontSize: 11,
-                color: embedProgress.pending > 0 ? '#b7791f' : '#2f855a',
+                color: embedProgress.pending > 0 ? '#8a5a15' : '#2f855a',
                 whiteSpace: 'nowrap',
               }}
               title={
