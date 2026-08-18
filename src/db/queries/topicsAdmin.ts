@@ -825,6 +825,38 @@ export async function rebuildTagEmbeddings(
   return manager ? run(manager) : AppDataSource.transaction(run)
 }
 
+export interface EmbeddingsProgress {
+  total: number
+  embedded: number
+  pending: number
+}
+
+/**
+ * Read-only progress of the tag-embed worker sweep. `total` = all v1 topic tags,
+ * `embedded` = those with a tag_embeddings row for cohere-embed-v4, `pending` =
+ * total - embedded (tags still awaiting an embedding, whether flagged
+ * needs_reembed or just never built). Surfaces "is the sweep done?" after a
+ * big import or a Rebuild — the admin gets a number instead of guessing.
+ * No mutation, no audit. Pure read.
+ */
+export async function embeddingsProgress(): Promise<EmbeddingsProgress> {
+  const [row] = await AppDataSource.query(
+    `SELECT
+       count(*)::int  AS "total",
+       count(*) FILTER (
+         WHERE EXISTS (
+           SELECT 1 FROM tag_embeddings te
+           WHERE te.tag_id = t.id AND te.embedding_model = 'cohere-embed-v4'
+         )
+       )::int AS "embedded"
+     FROM tags t
+     WHERE t.facet = 'topic' AND t.taxonomy_version = 'v1'`,
+  )
+  const total = row?.total ?? 0
+  const embedded = row?.embedded ?? 0
+  return { total, embedded, pending: Math.max(0, total - embedded) }
+}
+
 // --- Task 6: CSV import (dry-run diff + atomic apply) + export ---
 
 export interface ParsedRow {
@@ -901,6 +933,17 @@ export function parseTopicsCsv(text: string): ParsedRow[] {
 
   const idx: Record<string, number> = {}
   for (let i = 0; i < header.length; i++) idx[header[i].trim()] = i
+
+  // Fail fast with an actionable message when the CSV is not in the managed
+  // format. Without this, a headerless WRI keyword CSV (e.g. `Access Rights,,,`)
+  // is read with line 1 as the header, finds no `label` column, and returns an
+  // empty label for every body row — surfacing as a wall of N "empty label"
+  // conflicts instead of one clear message. Spec §7.2.
+  if (idx['label'] === undefined) {
+    throw new TopicsImportConflictError(
+      'CSV is missing the required "label" header column; expected header: label,description,aliases,parent,facet,id',
+    )
+  }
 
   const get = (r: string[], k: string) =>
     idx[k] !== undefined ? (r[idx[k]] ?? '') : ''

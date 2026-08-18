@@ -16,6 +16,8 @@ import {
   rebuildTagEmbeddings,
   estimateReclassify,
   retryReclassifyRun,
+  TopicsImportConflictError,
+  embeddingsProgress,
 } from '@/db/queries/topicsAdmin'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
@@ -1202,6 +1204,80 @@ d('topicsAdmin list/get (DB integration)', () => {
       expect(row.needs_reembed).toBe(false)
     } finally {
       await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tag.id])
+    }
+  })
+
+  it('embeddingsProgress counts total/embedded/pending for v1 topic tags (read-only)', async () => {
+    // Two topic tags: one with an embedding row, one without. A non-topic tag
+    // and a non-v1 topic tag are inserted to confirm the filter excludes them.
+    const nonce = crypto.randomUUID().replaceAll('-', '')
+    const [embedded] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__emb_progress_yes_${nonce}__`],
+    )
+    const [pending] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v1') RETURNING id`,
+      [`__emb_progress_no_${nonce}__`],
+    )
+    const [programTag] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('program', $1, 'v1') RETURNING id`,
+      [`__emb_progress_program_${nonce}__`],
+    )
+    const [v0Tag] = await AppDataSource.query(
+      `INSERT INTO tags (facet, value_id, taxonomy_version)
+       VALUES ('topic', $1, 'v0') RETURNING id`,
+      [`__emb_progress_v0_${nonce}__`],
+    )
+    try {
+      const vec1536 = '[' + Array(1536).fill(0).join(',') + ']'
+      await AppDataSource.query(
+        `INSERT INTO tag_embeddings (tag_id, embedding_model, dimension, embedding)
+         VALUES ($1, 'cohere-embed-v4', 1536, $2::vector)`,
+        [embedded.id, vec1536],
+      )
+      // An embedding for a different model must NOT count as embedded.
+      await AppDataSource.query(
+        `INSERT INTO tag_embeddings (tag_id, embedding_model, dimension, embedding)
+         VALUES ($1, 'other-model', 4, '[1,0,0,0]')`,
+        [pending.id],
+      )
+
+      const before = await embeddingsProgress()
+      expect(before.total).toBeGreaterThanOrEqual(2)
+      // Exactly one of our two fixture tags has a cohere-embed-v4 row, so the
+      // embedded count includes it; pending includes the other. (Counts are
+      // inclusive of pre-existing tags, so assert deltas, not absolutes.)
+      const afterAddingOne = await AppDataSource.query(
+        `SELECT count(*)::int AS c FROM tag_embeddings
+         WHERE tag_id = $1 AND embedding_model = 'cohere-embed-v4'`,
+        [embedded.id],
+      )
+      expect(afterAddingOne[0].c).toBe(1)
+      expect(before.pending).toBeGreaterThanOrEqual(1)
+
+      // Flip the pending tag to embedded via cohere and re-check: embedded
+      // grows by 1, pending drops by 1, total unchanged.
+      const totalBefore = before.total
+      await AppDataSource.query(
+        `INSERT INTO tag_embeddings (tag_id, embedding_model, dimension, embedding)
+         VALUES ($1, 'cohere-embed-v4', 1536, $2::vector)`,
+        [pending.id, vec1536],
+      )
+      const after = await embeddingsProgress()
+      expect(after.embedded).toBe(before.embedded + 1)
+      expect(after.pending).toBe(before.pending - 1)
+      expect(after.total).toBe(totalBefore)
+    } finally {
+      await AppDataSource.query(
+        `DELETE FROM tag_embeddings WHERE tag_id = ANY($1::uuid[])`,
+        [[embedded.id, pending.id]],
+      )
+      await AppDataSource.query(`DELETE FROM tags WHERE id = ANY($1::uuid[])`, [
+        [embedded.id, pending.id, programTag.id, v0Tag.id],
+      ])
     }
   })
 
@@ -2447,5 +2523,21 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
     expect(
       parsed.find((parsedRow) => parsedRow.label === label)?.description,
     ).toBe('first\rsecond')
+  })
+})
+
+// Pure-parser tests — no DB required. Kept out of the DB-gated describe above so
+// they run in every environment (CI, local without docker, worktree checks).
+describe('parseTopicsCsv (no DB)', () => {
+  it('throws TopicsImportConflictError when the CSV lacks a `label` header', () => {
+    // Regression: a headerless WRI keyword CSV (e.g. `Access Rights,,,`)
+    // used to read line 1 as the header, find no `label` column, and return
+    // an empty label for every body row — producing a wall of N "empty
+    // label" conflicts instead of one clear, actionable message.
+    const wriCsv = ['Access Rights,,,', 'Accessibility,,,', 'Coal,,,'].join(
+      '\n',
+    )
+    expect(() => parseTopicsCsv(wriCsv)).toThrow(TopicsImportConflictError)
+    expect(() => parseTopicsCsv(wriCsv)).toThrow(/label.*header/i)
   })
 })

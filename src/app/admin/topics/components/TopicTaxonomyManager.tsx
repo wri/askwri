@@ -203,6 +203,12 @@ export const TopicTaxonomyManager = () => {
   const [editingTag, setEditingTag] = useState<TopicRow | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [rebuildBusy, setRebuildBusy] = useState(false)
+  const [embedProgress, setEmbedProgress] = useState<{
+    total: number
+    embedded: number
+    pending: number
+  } | null>(null)
+  const embedPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -295,6 +301,7 @@ export const TopicTaxonomyManager = () => {
     }[]
   } | null>(null)
   const [reclassifyPanelOpen, setReclassifyPanelOpen] = useState(false)
+  const [reclassifyError, setReclassifyError] = useState<string | null>(null)
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set())
   const reclassifyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // Scoped topic picker
@@ -342,6 +349,39 @@ export const TopicTaxonomyManager = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
   }, [load])
+
+  // ---- tag-embed sweep progress (read-only GET on the rebuild route) ----
+  // After a big import or a Rebuild, the worker's embed sweep drains
+  // tags.needs_reembed asynchronously. Poll while there are pending tags so
+  // the admin sees "embedded/total (pending N)" settle to 0 instead of guessing.
+  const loadEmbedProgress = useCallback(async () => {
+    try {
+      const body = await adminFetch<{
+        ok: boolean
+        total: number
+        embedded: number
+        pending: number
+      }>('/api/admin/topics/embeddings/rebuild')
+      setEmbedProgress({
+        total: body.total,
+        embedded: body.embedded,
+        pending: body.pending,
+      })
+    } catch {
+      // Non-fatal: the panel degrades to no count.
+    }
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadEmbedProgress()
+    if (embedPollRef.current) clearInterval(embedPollRef.current)
+    embedPollRef.current = setInterval(loadEmbedProgress, 5000)
+    return () => {
+      if (embedPollRef.current) clearInterval(embedPollRef.current)
+      embedPollRef.current = null
+    }
+  }, [loadEmbedProgress])
 
   // ---- expand all roots by default once tags load ----
   useEffect(() => {
@@ -529,6 +569,7 @@ export const TopicTaxonomyManager = () => {
         `Queued ${body.queued} topic embeddings for rebuild.`,
       )
       load()
+      loadEmbedProgress()
     } catch {
       showNotice('error', 'Embedding rebuild failed.')
     } finally {
@@ -674,9 +715,21 @@ export const TopicTaxonomyManager = () => {
       if (res.ok && body.ok !== false) {
         const { ok: _ok, ...rest } = body
         setReclassifyStatus(rest)
+        setReclassifyError(null)
+      } else {
+        // Don't overwrite a good status with an error, but surface the failure
+        // so the Show/Hide jobs button doesn't look dead when the endpoint is
+        // broken (e.g. a pending migration). Only set when we have nothing
+        // better to show.
+        setReclassifyError(
+          body?.error || `Re-classify status unavailable (HTTP ${res.status}).`,
+        )
       }
     } catch {
-      // Best-effort polling; don't spam errors
+      // Network/abort: surface it rather than swallow it silently.
+      setReclassifyError(
+        'Re-classify status unavailable (network error). The ingestion worker or database may be down.',
+      )
     }
   }, [])
 
@@ -1195,6 +1248,26 @@ export const TopicTaxonomyManager = () => {
           >
             {rebuildBusy ? 'Rebuilding…' : 'Rebuild embeddings'}
           </button>
+          {embedProgress && embedProgress.total > 0 && (
+            <Text
+              style={{
+                fontFamily: 'inherit',
+                fontSize: 11,
+                color: embedProgress.pending > 0 ? '#8a5a15' : '#2f855a',
+                whiteSpace: 'nowrap',
+              }}
+              title={
+                embedProgress.pending > 0
+                  ? 'Worker embed sweep in progress — polls every 5s'
+                  : 'All topic tags have cohere-embed-v4 embeddings'
+              }
+            >
+              Embeddings: {embedProgress.embedded}/{embedProgress.total}
+              {embedProgress.pending > 0
+                ? ` (${embedProgress.pending} pending)`
+                : ' ✓'}
+            </Text>
+          )}
           <Box style={{ flex: 1 }} />
           <button
             className='admin-btn'
@@ -1603,6 +1676,24 @@ export const TopicTaxonomyManager = () => {
           onToggleError={toggleErrorExpand}
           onRetryRun={handleRetryRun}
         />
+      )}
+      {/* Error state: surface a failing status endpoint instead of letting the
+          Show/Hide jobs button look dead. Shown only when the panel is open and
+          we have no good status to render. */}
+      {reclassifyPanelOpen && !reclassifyStatus && reclassifyError && (
+        <Box
+          style={{
+            border: '1px solid #f0b4b4',
+            background: '#fdeaea',
+            color: '#C11101',
+            borderRadius: 7,
+            padding: '10px 12px',
+            fontSize: 12,
+            marginTop: 8,
+          }}
+        >
+          {reclassifyError}
+        </Box>
       )}
     </Box>
   )

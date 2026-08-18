@@ -38,7 +38,8 @@
     "eval:download": "npx tsx --env-file-if-exists=.env evaluation/download-eval-from-s3.ts",
     "test:python": "cd search-service && ./venv/bin/python -m pytest tests/ -v",
     "test:db": "DATABASE_URL=postgresql://askwri:password@localhost:5432/qa DATABASE_SSL=false RUN_CORPUS_TESTS=1 jest --testPathPattern='db.test' --runInBand",
-    "seed:admin": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/seed-admin.ts"
+    "seed:admin": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/seed-admin.ts",
+    "convert:wri-keywords": "ts-node --project tsconfig.typeorm.json --transpile-only scripts/convert-wri-keywords-csv.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.997.0",
