@@ -15,6 +15,7 @@ import {
   POST as enqueueReclassifyRoute,
 } from '@/app/api/admin/topics/reclassify/route'
 import { SESSION_COOKIE } from '@/lib/auth/session'
+import { EST_PER_DOC_COST } from '@/db/queries/topicsAdmin'
 
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
@@ -512,7 +513,7 @@ d('topics API routes (DB integration)', () => {
         await expect(response.json()).resolves.toEqual({
           ok: true,
           eligible: before.eligible + 1,
-          estCost: +((before.eligible + 1) * 0.0008).toFixed(4),
+          estCost: +((before.eligible + 1) * EST_PER_DOC_COST).toFixed(4),
         })
         const [job] = await AppDataSource.query(
           `SELECT id FROM reclassify_jobs WHERE document_id = $1`,
@@ -558,7 +559,7 @@ d('topics API routes (DB integration)', () => {
         await expect(response.json()).resolves.toEqual({
           ok: true,
           eligible: 1,
-          estCost: 0.0008,
+          estCost: EST_PER_DOC_COST,
         })
         const [job] = await AppDataSource.query(
           `SELECT id FROM reclassify_jobs WHERE document_id = $1`,
@@ -673,7 +674,7 @@ d('topics API routes (DB integration)', () => {
         expect(body).toEqual({
           ok: true,
           enqueued: 1,
-          estCost: 0.0008,
+          estCost: EST_PER_DOC_COST,
           runId: expect.any(String),
         })
         const [job] = await AppDataSource.query(
@@ -727,7 +728,7 @@ d('topics API routes (DB integration)', () => {
         await expect(response.json()).resolves.toEqual({
           ok: true,
           enqueued: 1,
-          estCost: 0.0008,
+          estCost: EST_PER_DOC_COST,
           runId,
         })
         const [job] = await AppDataSource.query(
