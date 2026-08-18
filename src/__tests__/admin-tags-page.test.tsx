@@ -3,7 +3,8 @@ import '@testing-library/jest-dom'
 import TagsPage from '@/app/admin/tags/page'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
 
-// Mock next/navigation
+// Mutable search-params facet so individual tests can control which tab is active
+let mockFacet = 'program'
 jest.mock('next/navigation', () => ({
   useParams: () => ({}),
   useRouter: () => ({
@@ -12,7 +13,9 @@ jest.mock('next/navigation', () => ({
     refresh: jest.fn(),
   }),
   usePathname: () => '/admin/tags',
-  useSearchParams: () => ({ get: () => null }),
+  useSearchParams: () => ({
+    get: (key: string) => (key === 'facet' ? mockFacet : null),
+  }),
 }))
 
 const mockTags = [
@@ -113,6 +116,62 @@ describe('TagsPage (jsdom)', () => {
     renderPage('editor')
     await waitFor(() => {
       expect(screen.queryByText('Rename')).not.toBeInTheDocument()
+    })
+  })
+})
+
+describe('TagsPage facet tabs (jsdom)', () => {
+  afterEach(() => {
+    mockFacet = 'program'
+  })
+
+  it('renders the Topic tab and, when clicked, shows the TopicTaxonomyManager heading', async () => {
+    mockFacet = 'topic'
+
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/tags')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        })
+      if (url === '/api/admin/auth/me')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ identity: { role: 'admin' } }),
+        })
+      if (url === '/api/admin/topics')
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: [] }),
+        })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    })
+    global.fetch = fetchMock as any
+
+    render(
+      <ChakraProvider>
+        <TagsPage />
+      </ChakraProvider>,
+    )
+
+    // The Topic tab should be present in the tab strip
+    await waitFor(() => {
+      expect(screen.getByText('Topic')).toBeInTheDocument()
+    })
+    // The TopicTaxonomyManager heading should appear (active tab is topic)
+    await waitFor(() => {
+      expect(screen.getByText('Topic taxonomy')).toBeInTheDocument()
+    })
+  })
+
+  it('uses a human-readable Doc type tab label', async () => {
+    mockFacet = 'doc_type'
+    renderPage()
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Doc type' }),
+      ).toBeInTheDocument()
     })
   })
 })

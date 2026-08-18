@@ -106,6 +106,11 @@ class Settings(BaseSettings):
     documents_s3_bucket: str = ""              # reuse the existing env var name
     documents_s3_prefix: str = "documents/"
     tag_confidence_accept: float = 0.7         # >= -> accepted, else suggested
+    tag_candidate_top_n: int = 20              # retrieve-then-classify candidate set size
+    tag_reclassify_concurrency: int = 4        # reclassify_jobs claim parallelism
+    tag_embed_batch_size: int = 100            # one-time/batch tag-embedding build
+    classify_topic_only: bool = False          # restrict a classify run to the topic facet
+    reclassify_poll_first: bool = True          # poll reclassify_jobs before ingestion_jobs
     quality_min_chars_per_page: int = 200      # extraction_confidence gate input
 
     # Dense embedding model for BOTH worker chunk writes and query-side

@@ -107,6 +107,16 @@ def embed_query(text: str) -> List[float]:
     return list(_embed_query_cached(text))
 
 
+def embed_one(text: str) -> List[float]:
+    """Encode a single text as a search document (for tag embeddings).
+
+    Uses input_type=search_document (not search_query like embed_query) so
+    tag embeddings match the same input_type as document chunks, making
+    doc↔tag cosine similarity meaningful. Not cached — tag embedding builds
+    are infrequent and always replace the prior vector."""
+    return _invoke([text], "search_document")[0]
+
+
 class BedrockCohereQueryEmbedding:
     """Adapter with the llama_index embed-model surface PgVectorRetriever uses."""
 

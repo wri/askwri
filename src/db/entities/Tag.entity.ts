@@ -13,4 +13,13 @@ export class Tag {
 
   @Column('text', { name: 'taxonomy_version', default: 'v1' })
   taxonomyVersion!: string
+
+  @Column('uuid', { name: 'parent_tag_id', nullable: true })
+  parentTagId!: string | null
+
+  @Column('text', { nullable: true })
+  description!: string | null
+
+  @Column('boolean', { name: 'needs_reembed', default: false })
+  needsReembed!: boolean
 }

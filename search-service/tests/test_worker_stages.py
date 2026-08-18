@@ -1,7 +1,7 @@
 """Integration tests for worker stages against a scratch database.
 
 Uses the same hermetic pattern as test_worker_queue.py:
-  - Create askwri_stages_test scratch DB (distinct name for coexistence)
+  - Create a UUID-suffixed scratch DB
   - Apply TypeORM migrations via subprocess
   - Point DATABASE_URL at it; reset app.db._pool
   - Never touch the qa database
@@ -13,6 +13,7 @@ import json as json_mod
 import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 import psycopg
@@ -32,10 +33,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 # ---------------------------------------------------------------------------
-# Constants — distinct scratch DB name to coexist with askwri_worker_test
+# Constants — unique scratch DB name for safe concurrent test runs
 # ---------------------------------------------------------------------------
 _SUPERDB_URL = "postgresql://askwri:password@localhost:5432/postgres"
-_TEST_DB = "askwri_stages_test"
+_TEST_DB = f"askwri_stages_{uuid.uuid4().hex[:12]}"
 _TEST_DB_URL = f"postgresql://askwri:password@localhost:5432/{_TEST_DB}"
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -64,7 +65,7 @@ def _reset_app_state(db_url: str) -> None:
 
 @pytest.fixture(scope="session")
 def stages_test_db():
-    """Create askwri_stages_test, apply migrations, yield URL, then drop."""
+    """Create a uniquely named scratch DB, apply migrations, then drop it."""
     with psycopg.connect(_SUPERDB_URL, autocommit=True) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {_TEST_DB}")
         conn.execute(f"CREATE DATABASE {_TEST_DB}")
@@ -2020,7 +2021,11 @@ class TestSummarizeStage:
 # ---------------------------------------------------------------------------
 
 def _seed_tags(conn):
-    """Insert taxonomy rows for classify tests; return {(facet, value_id): tag_id}."""
+    """Insert taxonomy rows for classify tests; return {(facet, value_id): tag_id}.
+
+    Also inserts tag_embeddings for topic tags so the retrieve-then-classify
+    path finds candidates.
+    """
     tag_map = {}
     for facet, value_id in [("topic", "forests"), ("topic", "water"), ("doc_type", "report")]:
         tag_id = conn.execute(
@@ -2031,6 +2036,15 @@ def _seed_tags(conn):
             (facet, value_id),
         ).fetchone()[0]
         tag_map[(facet, value_id)] = tag_id
+        # Insert a tag_embeddings row for topic tags so classify can find candidates
+        if facet == "topic":
+            vec_str = "[" + ",".join("0.1" for _ in range(1536)) + "]"
+            conn.execute(
+                """INSERT INTO tag_embeddings (tag_id, embedding_model, dimension, embedding, embedded_text, embedded_at)
+                   VALUES (%s, 'cohere-embed-v4', 1536, %s::vector, %s, now())
+                   ON CONFLICT (tag_id, embedding_model) DO NOTHING""",
+                (tag_id, vec_str, value_id),
+            )
     conn.commit()
     return tag_map
 
@@ -2038,16 +2052,33 @@ def _seed_tags(conn):
 class TestClassifyStage:
 
     def _make_fake_llm(self, calls: list, response: dict):
-        """Return a fake chat_json that records calls and returns a fixed response."""
+        """Return a fake chat_json that records calls and returns a fixed response.
+
+        The topic path and the non-topic path call chat_json separately; this
+        fake inspects the schema to return the right portion of `response`.
+        """
         def fake(system, user, schema, model, max_tokens=1500):
-            calls.append({"system": system, "user": user, "model": model})
-            return response
+            calls.append({"system": system, "user": user, "model": model, "schema": schema})
+            # Return only the facets present in this schema's properties
+            props = schema.get("properties", {})
+            return {k: response.get(k, []) for k in props}
         return fake
+
+    def _patch_embed(self, monkeypatch):
+        """Patch embed_one and sweep_pending in the classify module to avoid
+        real Bedrock calls and sweep side-effects."""
+        import worker.stages.classify as cls_mod
+        monkeypatch.setattr(cls_mod, "embed_one", lambda text: [0.1] * 1536)
+        monkeypatch.setattr(cls_mod, "sweep_pending", lambda conn, batch_size=None: 0)
 
     def test_accepted_and_suggested_rows_written(self, stages_test_db, monkeypatch):
         """Mock returns confidence 0.9 (accepted) and 0.4 (suggested); both rows written
         with correct status, source='llm', confidence stored. Also verifies summary
-        basis selection (en/long summary row is used)."""
+        basis selection (en/long summary row is used).
+
+        Topic uses retrieve-then-classify (1 LLM call over candidates),
+        non-topic uses full-enum (1 LLM call over doc_type vocab) = 2 calls total."""
+        self._patch_embed(monkeypatch)
         calls = []
         canned = {
             "topic": [
@@ -2060,6 +2091,7 @@ class TestClassifyStage:
 
         with psycopg.connect(stages_test_db) as conn:
             conn.execute("DELETE FROM tags")
+            conn.execute("DELETE FROM tag_embeddings")
             conn.commit()
             tag_map = _seed_tags(conn)
             doc_id = _insert_document_with_lang(
@@ -2078,7 +2110,7 @@ class TestClassifyStage:
         from worker.stages.classify import run
         result = run(doc_id)
         assert result is None
-        assert len(calls) == 1, f"Expected 1 LLM call, got {len(calls)}"
+        assert len(calls) == 2, f"Expected 2 LLM calls (topic + non-topic), got {len(calls)}"
 
         with psycopg.connect(stages_test_db) as conn:
             rows = conn.execute(
@@ -2108,6 +2140,7 @@ class TestClassifyStage:
     def test_human_external_rows_not_overwritten(self, stages_test_db, monkeypatch):
         """Pre-existing human-sourced tag row is not modified when LLM returns same
         facet/value with high confidence."""
+        self._patch_embed(monkeypatch)
         calls = []
         canned = {
             "topic": [{"value": "forests", "confidence": 0.95}],
@@ -2117,6 +2150,7 @@ class TestClassifyStage:
 
         with psycopg.connect(stages_test_db) as conn:
             conn.execute("DELETE FROM tags")
+            conn.execute("DELETE FROM tag_embeddings")
             conn.commit()
             tag_map = _seed_tags(conn)
             doc_id = _insert_document_with_lang(
@@ -2147,13 +2181,19 @@ class TestClassifyStage:
             assert row[2] == "manual", "model_version should remain 'manual'"
 
     def test_empty_taxonomy_returns_none_no_llm_call(self, stages_test_db, monkeypatch):
-        """No tags rows → run returns None, makes 0 LLM calls, writes nothing."""
+        """No tags rows → run returns None, makes 0 LLM calls, writes nothing.
+
+        No topic tags → no tag_embeddings → topic facet skipped.
+        No non-topic tags → no vocab → non-topic facets skipped.
+        """
+        self._patch_embed(monkeypatch)
         calls = []
         monkeypatch.setattr("worker.stages.classify.chat_json",
                             self._make_fake_llm(calls, {}))
 
         with psycopg.connect(stages_test_db) as conn:
             conn.execute("DELETE FROM tags")
+            conn.execute("DELETE FROM tag_embeddings")
             conn.commit()
             doc_id = _insert_document_with_lang(
                 conn, external_id="classify-doc3", language="en", languages=["en"],
@@ -2174,7 +2214,13 @@ class TestClassifyStage:
             assert count == 0, "No document_tags rows should be written with empty taxonomy"
 
     def test_out_of_vocab_value_ignored(self, stages_test_db, monkeypatch):
-        """LLM returns a value not in the taxonomy → ignored, no row written."""
+        """LLM returns a value not in the candidate set → ignored, no row written.
+
+        With retrieve-then-classify, the topic enum is constrained to candidate
+        labels. The mock LLM bypasses the schema constraint and returns
+        'unicorns' — the code must still ignore it (label→id lookup fails).
+        """
+        self._patch_embed(monkeypatch)
         calls = []
         canned = {
             "topic": [{"value": "unicorns", "confidence": 0.95}],
@@ -2184,6 +2230,7 @@ class TestClassifyStage:
 
         with psycopg.connect(stages_test_db) as conn:
             conn.execute("DELETE FROM tags")
+            conn.execute("DELETE FROM tag_embeddings")
             conn.commit()
             _seed_tags(conn)
             doc_id = _insert_document_with_lang(
