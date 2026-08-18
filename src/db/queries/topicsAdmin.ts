@@ -399,21 +399,32 @@ async function enqueueReclassifyCandidates(
     scopeTagId = query.scopeTagId
   }
 
-  const scopeParameter = `$${candidateParameters.length + 1}`
-  const runParameter = `$${candidateParameters.length + 2}`
+  const lockedDocuments: any[] = await em.query(
+    `SELECT d.id
+     FROM documents d
+     JOIN (
+       ${candidateSql}
+     ) candidate ON candidate.document_id = d.id
+     ORDER BY d.id
+     FOR UPDATE OF d`,
+    candidateParameters,
+  )
+  const documentIds = lockedDocuments.map((document) => document.id as string)
+  if (documentIds.length === 0) return { enqueued: 0, runId }
 
   const [result] = await em.query(
     `WITH candidates AS (
-       ${candidateSql}
+       SELECT DISTINCT document_id
+       FROM unnest($1::uuid[]) AS candidate(document_id)
      ), inserted AS (
        INSERT INTO reclassify_jobs (document_id, scope_tag_id, run_id)
-       SELECT document_id, ${scopeParameter}, ${runParameter} FROM candidates
+       SELECT document_id, $2, $3 FROM candidates
        ON CONFLICT (document_id) WHERE status IN ('queued', 'running')
        DO NOTHING
        RETURNING id
      )
      SELECT count(*)::int AS enqueued FROM inserted`,
-    [...candidateParameters, scopeTagId, runId],
+    [documentIds, scopeTagId, runId],
   )
 
   return { enqueued: result?.enqueued ?? 0, runId }
@@ -631,6 +642,20 @@ export async function retryReclassifyRun(
   identity: AdminIdentity,
 ): Promise<{ enqueued: number; estCost: number; runId: string }> {
   return AppDataSource.transaction(async (em) => {
+    await em.query(
+      `SELECT d.id
+       FROM documents d
+       WHERE EXISTS (
+         SELECT 1 FROM reclassify_jobs retry
+         WHERE retry.document_id = d.id
+           AND retry.run_id = $1
+           AND retry.status = 'error'
+       )
+       ORDER BY d.id
+       FOR UPDATE OF d`,
+      [runId],
+    )
+
     const [result] = await em.query(
       `WITH retried AS (
          UPDATE reclassify_jobs retry
@@ -678,6 +703,7 @@ export interface ReclassifyStatus {
     error: number
     estCost: number
     createdAt: string
+    updatedAt: string
     errors: {
       documentId: string
       externalId: string
@@ -706,10 +732,11 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
               count(*)::int AS total,
               count(*) FILTER (WHERE status = 'done')::int AS done,
               count(*) FILTER (WHERE status = 'error')::int AS error,
-              min(created_at) AS "createdAt"
+              min(created_at) AS "createdAt",
+              max(updated_at) AS "updatedAt"
        FROM reclassify_jobs
        GROUP BY run_id, scope_tag_id
-       ORDER BY min(created_at) DESC
+       ORDER BY max(updated_at) DESC, min(created_at) DESC, run_id
        LIMIT 20
      )
      SELECT recent_runs.*,
@@ -736,7 +763,9 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
          LIMIT 20
        ) bounded
      ) error_details ON true
-     ORDER BY recent_runs."createdAt" DESC`,
+     ORDER BY recent_runs."updatedAt" DESC,
+              recent_runs."createdAt" DESC,
+              recent_runs."runId"`,
   )
 
   return {
@@ -752,6 +781,7 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
       error: r.error,
       estCost: +(r.total * EST_PER_DOC_COST).toFixed(4),
       createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
       errors: r.errors,
     })),
   }
@@ -764,33 +794,35 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
  * it mutates tags.needs_reembed for potentially the whole topic tree.
  */
 export async function rebuildTagEmbeddings(
-  identity?: AdminIdentity,
+  identity: AdminIdentity,
+  manager?: EntityManager,
 ): Promise<{ queued: number }> {
-  return AppDataSource.transaction(async (em) => {
-    const rows: any[] = await em.query(
+  const run = async (em: EntityManager) => {
+    const [rows] = await em.query(
       `UPDATE tags
        SET needs_reembed = true
        WHERE facet = 'topic'
          AND taxonomy_version = 'v1'
+         AND needs_reembed = false
          AND NOT EXISTS (
            SELECT 1 FROM tag_embeddings te WHERE te.tag_id = tags.id
          )
        RETURNING id`,
     )
-    if (identity) {
-      await writeAudit(
-        {
-          ...auditActor(identity),
-          action: 'tag_embeddings_rebuild',
-          entityType: 'tag',
-          entityId: null,
-          after: { queued: rows.length },
-        },
-        em,
-      )
-    }
+    await writeAudit(
+      {
+        ...auditActor(identity),
+        action: 'tag_embeddings_rebuild',
+        entityType: 'tag',
+        entityId: null,
+        after: { queued: rows.length },
+      },
+      em,
+    )
     return { queued: rows.length }
-  })
+  }
+
+  return manager ? run(manager) : AppDataSource.transaction(run)
 }
 
 // --- Task 6: CSV import (dry-run diff + atomic apply) + export ---
