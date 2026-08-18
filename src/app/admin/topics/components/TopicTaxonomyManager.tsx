@@ -19,6 +19,17 @@ interface TopicRow {
   needsReembed: boolean
 }
 
+type Notice =
+  | { kind: 'success'; message: string }
+  | { kind: 'error'; message: string }
+
+interface ReclassifyConfirmation {
+  requestId: number
+  scope: 'all' | string
+  estimate: { eligible: number; estCost: number } | null
+  error: string | null
+}
+
 // ---- constants ----
 
 const PAGE_SIZE = 200
@@ -87,6 +98,77 @@ function useEscapeClose(onClose: () => void, busy = false) {
   }, [busy, onClose])
 }
 
+const DIALOG_FOCUSABLE = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'a[href]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function useDialogBehavior(onClose: () => void, busy = false) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  const busyRef = useRef(busy)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    busyRef.current = busy
+  }, [busy])
+
+  useEffect(() => {
+    const returnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    const dialog = dialogRef.current
+    const initialFocus = dialog?.querySelector<HTMLElement>('[data-autofocus]') ?? dialog
+    initialFocus?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (!busyRef.current) {
+          event.preventDefault()
+          onCloseRef.current()
+        }
+        return
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return
+
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE),
+      )
+      if (focusable.length === 0) {
+        event.preventDefault()
+        dialogRef.current.focus()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || !dialogRef.current.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || !dialogRef.current.contains(active))) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      if (returnFocus?.isConnected) returnFocus.focus()
+    }
+  }, [])
+
+  return dialogRef
+}
+
 // ---- component ----
 
 export const TopicTaxonomyManager = () => {
@@ -107,7 +189,8 @@ export const TopicTaxonomyManager = () => {
   const [editingTag, setEditingTag] = useState<TopicRow | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [rebuildBusy, setRebuildBusy] = useState(false)
-  const [flash, setFlash] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ---- bulk ops state ----
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -133,10 +216,11 @@ export const TopicTaxonomyManager = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ---- reclassify state ----
-  const [reclassifyModalOpen, setReclassifyModalOpen] = useState(false)
-  const [reclassifyScope, setReclassifyScope] = useState<'all' | string>('all')
-  const [reclassifyEstimate, setReclassifyEstimate] = useState<{ eligible: number; estCost: number } | null>(null)
+  const [reclassifyConfirmation, setReclassifyConfirmation] = useState<ReclassifyConfirmation | null>(null)
   const [reclassifyStarting, setReclassifyStarting] = useState(false)
+  const reclassifyStartingRef = useRef(false)
+  const reclassifyRequestIdRef = useRef(0)
+  const reclassifyPostIdRef = useRef(0)
 
   const [reclassifyStatus, setReclassifyStatus] = useState<{
     queued: number
@@ -162,12 +246,26 @@ export const TopicTaxonomyManager = () => {
     }[]
   } | null>(null)
   const [reclassifyPanelOpen, setReclassifyPanelOpen] = useState(false)
-  const [reclassifyError, setReclassifyError] = useState<string | null>(null)
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set())
   const reclassifyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // Scoped topic picker
   const [scopedTopicId, setScopedTopicId] = useState('')
   const [scopedModalOpen, setScopedModalOpen] = useState(false)
+
+  const showNotice = useCallback((kind: Notice['kind'], message: string, duration = 3000) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+    setNotice({ kind, message })
+    noticeTimerRef.current = setTimeout(() => {
+      setNotice(null)
+      noticeTimerRef.current = null
+    }, duration)
+  }, [])
+
+  useEffect(() => () => {
+    reclassifyRequestIdRef.current += 1
+    reclassifyPostIdRef.current += 1
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+  }, [])
 
   // ---- load ----
   const load = useCallback(async () => {
@@ -340,8 +438,7 @@ export const TopicTaxonomyManager = () => {
     }
     setDeleteResults({ deleted, failed })
     if (deleted > 0) {
-      setFlash(`${deleted} topic${deleted !== 1 ? 's' : ''} deleted.`)
-      setTimeout(() => setFlash(null), 3000)
+      showNotice('success', `${deleted} topic${deleted !== 1 ? 's' : ''} deleted.`)
       load()
     }
     setSelected(new Set())
@@ -359,16 +456,13 @@ export const TopicTaxonomyManager = () => {
       }
       const body = await res.json().catch(() => ({}))
       if (!res.ok || body.ok === false) {
-        setFlash(body.error || 'Embedding rebuild failed.')
-        setTimeout(() => setFlash(null), 3000)
+        showNotice('error', body.error || 'Embedding rebuild failed.')
         return
       }
-      setFlash(`Queued ${body.queued} topic embeddings for rebuild.`)
-      setTimeout(() => setFlash(null), 3000)
+      showNotice('success', `Queued ${body.queued} topic embeddings for rebuild.`)
       load()
     } catch {
-      setFlash('Embedding rebuild failed.')
-      setTimeout(() => setFlash(null), 3000)
+      showNotice('error', 'Embedding rebuild failed.')
     } finally {
       setRebuildBusy(false)
     }
@@ -449,8 +543,7 @@ export const TopicTaxonomyManager = () => {
         setCsvApplying(false)
         return
       }
-      setFlash(`Imported ${body.applied} change${body.applied !== 1 ? 's' : ''}.`)
-      setTimeout(() => setFlash(null), 3000)
+      showNotice('success', `Imported ${body.applied} change${body.applied !== 1 ? 's' : ''}.`)
       setCsvDiff(null)
       setCsvFilename('')
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -476,8 +569,7 @@ export const TopicTaxonomyManager = () => {
         return
       }
       if (!res.ok) {
-        setFlash('Export failed.')
-        setTimeout(() => setFlash(null), 3000)
+        showNotice('error', 'Export failed.')
         return
       }
       const text = await res.text()
@@ -491,8 +583,7 @@ export const TopicTaxonomyManager = () => {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch {
-      setFlash('Export failed.')
-      setTimeout(() => setFlash(null), 3000)
+      showNotice('error', 'Export failed.')
     }
   }
 
@@ -531,34 +622,50 @@ export const TopicTaxonomyManager = () => {
   }, [reclassifyPanelOpen, fetchReclassifyStatus])
 
   const fetchReclassifyEstimate = async (scope: 'all' | string) => {
-    setReclassifyModalOpen(true)
-    setReclassifyScope(scope)
-    setReclassifyEstimate(null)
-    setReclassifyError(null)
+    if (reclassifyStartingRef.current) return
+    const requestId = reclassifyRequestIdRef.current + 1
+    reclassifyRequestIdRef.current = requestId
+    setReclassifyConfirmation({ requestId, scope, estimate: null, error: null })
     try {
       const query =
         scope === 'all'
           ? 'scope=all'
           : `tagId=${encodeURIComponent(scope)}`
       const res = await fetch(`/api/admin/topics/reclassify?${query}`)
+      if (reclassifyRequestIdRef.current !== requestId) return
       if (res.status === 401) {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
       }
       const body = await res.json().catch(() => ({}))
+      if (reclassifyRequestIdRef.current !== requestId) return
       if (res.ok && body.ok !== false) {
-        setReclassifyEstimate({ eligible: body.eligible, estCost: body.estCost })
+        setReclassifyConfirmation((current) =>
+          current?.requestId === requestId && current.scope === scope
+            ? { ...current, estimate: { eligible: body.eligible, estCost: body.estCost } }
+            : current,
+        )
       } else {
-        setReclassifyError(body.error || 'Failed to estimate re-classify.')
+        setReclassifyConfirmation((current) =>
+          current?.requestId === requestId && current.scope === scope
+            ? { ...current, error: body.error || 'Failed to estimate re-classify.' }
+            : current,
+        )
       }
     } catch {
-      setReclassifyError('Network error.')
+      if (reclassifyRequestIdRef.current !== requestId) return
+      setReclassifyConfirmation((current) =>
+        current?.requestId === requestId && current.scope === scope
+          ? { ...current, error: 'Network error.' }
+          : current,
+      )
     }
   }
 
   const openReclassifyAll = () => fetchReclassifyEstimate('all')
 
   const openReclassifyScoped = () => {
+    if (reclassifyStartingRef.current) return
     setScopedModalOpen(true)
     setScopedTopicId('')
   }
@@ -569,37 +676,78 @@ export const TopicTaxonomyManager = () => {
     fetchReclassifyEstimate(scopedTopicId)
   }
 
+  const closeReclassifyConfirmation = () => {
+    if (reclassifyStartingRef.current) return
+    reclassifyRequestIdRef.current += 1
+    setReclassifyConfirmation(null)
+  }
+
   const handleStartReclassify = async () => {
-    if (!reclassifyEstimate || reclassifyEstimate.eligible === 0) return
+    const confirmation = reclassifyConfirmation
+    if (
+      !confirmation?.estimate ||
+      confirmation.estimate.eligible === 0 ||
+      reclassifyStartingRef.current
+    ) return
+    const { requestId, scope } = confirmation
+    const postId = reclassifyPostIdRef.current + 1
+    reclassifyPostIdRef.current = postId
+    reclassifyStartingRef.current = true
     setReclassifyStarting(true)
-    setReclassifyError(null)
+    setReclassifyConfirmation((current) =>
+      current?.requestId === requestId ? { ...current, error: null } : current,
+    )
     try {
       const payload =
-        reclassifyScope === 'all'
+        scope === 'all'
           ? { scope: 'all' as const }
-          : { tagId: reclassifyScope }
+          : { tagId: scope }
       const res = await fetch('/api/admin/topics/reclassify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
+      if (
+        reclassifyPostIdRef.current !== postId ||
+        reclassifyRequestIdRef.current !== requestId
+      ) return
       if (res.status === 401) {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
       }
       const body = await res.json().catch(() => ({}))
+      if (
+        reclassifyPostIdRef.current !== postId ||
+        reclassifyRequestIdRef.current !== requestId
+      ) return
       if (!res.ok || body.ok === false) {
-        setReclassifyError(body.error || 'Failed to start re-classify.')
+        setReclassifyConfirmation((current) =>
+          current?.requestId === requestId
+            ? { ...current, error: body.error || 'Failed to start re-classify.' }
+            : current,
+        )
         return
       }
-      setReclassifyModalOpen(false)
-      setFlash(`Re-classify enqueued: ${body.enqueued} docs (≈$${body.estCost.toFixed(4)}).`)
-      setTimeout(() => setFlash(null), 4000)
+      reclassifyRequestIdRef.current += 1
+      setReclassifyConfirmation(null)
+      showNotice('success', `Re-classify enqueued: ${body.enqueued} docs (≈$${body.estCost.toFixed(4)}).`, 4000)
       setReclassifyPanelOpen(true)
     } catch {
-      setReclassifyError('Network error.')
+      if (
+        reclassifyPostIdRef.current === postId &&
+        reclassifyRequestIdRef.current === requestId
+      ) {
+        setReclassifyConfirmation((current) =>
+          current?.requestId === requestId
+            ? { ...current, error: 'Network error.' }
+            : current,
+        )
+      }
     } finally {
-      setReclassifyStarting(false)
+      if (reclassifyPostIdRef.current === postId) {
+        reclassifyStartingRef.current = false
+        setReclassifyStarting(false)
+      }
     }
   }
 
@@ -616,16 +764,13 @@ export const TopicTaxonomyManager = () => {
       }
       const resBody = await res.json().catch(() => ({}))
       if (res.ok && resBody.ok !== false) {
-        setFlash(`Retry enqueued: ${resBody.enqueued} docs.`)
-        setTimeout(() => setFlash(null), 3000)
+        showNotice('success', `Retry enqueued: ${resBody.enqueued} docs.`)
         fetchReclassifyStatus()
       } else {
-        setFlash(resBody.error || 'Retry failed.')
-        setTimeout(() => setFlash(null), 3000)
+        showNotice('error', resBody.error || 'Retry failed.')
       }
     } catch {
-      setFlash('Network error during retry.')
-      setTimeout(() => setFlash(null), 3000)
+      showNotice('error', 'Network error during retry.')
     }
   }
 
@@ -873,19 +1018,21 @@ export const TopicTaxonomyManager = () => {
         </Box>
       )}
 
-      {/* Flash notice */}
-      {flash && (
+      {/* Success/error notice */}
+      {notice && (
         <Box
+          role={notice.kind === 'error' ? 'alert' : 'status'}
+          aria-live={notice.kind === 'error' ? 'assertive' : 'polite'}
           style={{
             padding: '8px 12px',
             marginBottom: 10,
-            color: '#2f855a',
-            background: '#f0fff4',
-            border: '1px solid #c6f6d5',
+            color: notice.kind === 'error' ? '#C11101' : '#2f855a',
+            background: notice.kind === 'error' ? '#FDEDEC' : '#f0fff4',
+            border: `1px solid ${notice.kind === 'error' ? '#f0b4b4' : '#c6f6d5'}`,
             borderRadius: 6,
           }}
         >
-          {flash}
+          {notice.message}
         </Box>
       )}
 
@@ -917,7 +1064,11 @@ export const TopicTaxonomyManager = () => {
         <Text style={{ color: '#595959' }}>Loading…</Text>
       ) : visibleTags.length === 0 ? (
         <Text style={{ color: '#595959' }}>
-          {isSearching ? 'No topics match your search.' : 'No topics yet.'}
+          {isSearching
+            ? 'No topics match your search.'
+            : isFiltering
+              ? 'No topics match your filters.'
+              : 'No topics yet.'}
         </Text>
       ) : (
         <Box
@@ -1078,8 +1229,7 @@ export const TopicTaxonomyManager = () => {
           allTags={tags}
           onClose={() => setEditingTag(null)}
           onSaved={() => {
-            setFlash('Topic saved.')
-            setTimeout(() => setFlash(null), 3000)
+            showNotice('success', 'Topic saved.')
             load()
           }}
         />
@@ -1092,8 +1242,7 @@ export const TopicTaxonomyManager = () => {
           onClose={() => setCreateModalOpen(false)}
           onCreated={() => {
             setCreateModalOpen(false)
-            setFlash('Topic created.')
-            setTimeout(() => setFlash(null), 3000)
+            showNotice('success', 'Topic created.')
             load()
           }}
         />
@@ -1107,8 +1256,7 @@ export const TopicTaxonomyManager = () => {
           onClose={() => setMergeModalOpen(false)}
           onMerged={() => {
             setMergeModalOpen(false)
-            setFlash('Topics merged.')
-            setTimeout(() => setFlash(null), 3000)
+            showNotice('success', 'Topics merged.')
             setSelected(new Set())
             load()
           }}
@@ -1123,8 +1271,7 @@ export const TopicTaxonomyManager = () => {
           onClose={() => setReparentModalOpen(false)}
           onDone={() => {
             setReparentModalOpen(false)
-            setFlash('Topics re-parented.')
-            setTimeout(() => setFlash(null), 3000)
+            showNotice('success', 'Topics re-parented.')
             setSelected(new Set())
             load()
           }}
@@ -1132,16 +1279,16 @@ export const TopicTaxonomyManager = () => {
       )}
 
       {/* Re-classify confirm modal */}
-      {reclassifyModalOpen && (
+      {reclassifyConfirmation && (
         <ReclassifyConfirmModal
-          scope={reclassifyScope}
-          estimate={reclassifyEstimate}
-          loading={!reclassifyEstimate && !reclassifyError}
-          error={reclassifyError}
+          scope={reclassifyConfirmation.scope}
+          estimate={reclassifyConfirmation.estimate}
+          loading={!reclassifyConfirmation.estimate && !reclassifyConfirmation.error}
+          error={reclassifyConfirmation.error}
           allTags={tags}
           onStart={handleStartReclassify}
           starting={reclassifyStarting}
-          onClose={() => setReclassifyModalOpen(false)}
+          onClose={closeReclassifyConfirmation}
         />
       )}
 
@@ -1235,7 +1382,7 @@ const CreateTopicModal = ({
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEscapeClose(onClose, creating)
+  const dialogRef = useDialogBehavior(onClose, creating)
 
   const addAlias = () => {
     const alias = aliasInput.trim()
@@ -1295,6 +1442,11 @@ const CreateTopicModal = ({
         style={{ position: 'fixed', inset: 0, background: 'rgba(26,54,93,0.35)', zIndex: 100 }}
       />
       <Box
+        ref={dialogRef}
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='create-topic-title'
+        tabIndex={-1}
         style={{
           position: 'fixed',
           top: '50%',
@@ -1310,8 +1462,8 @@ const CreateTopicModal = ({
         }}
       >
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading size='sm' style={{ color: '#1a365d' }}>New topic</Heading>
-          <button type='button' aria-label='Close new topic' className='admin-btn' onClick={onClose} disabled={creating} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          <Heading id='create-topic-title' size='sm' style={{ color: '#1a365d' }}>New topic</Heading>
+          <button type='button' aria-label='Close new topic' data-autofocus className='admin-btn' onClick={onClose} disabled={creating} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>✕</button>
         </Box>
         {error && (
           <Box style={{ fontSize: 12, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '8px 12px', marginBottom: 12 }}>
@@ -1729,7 +1881,7 @@ const MergeModal = ({
   const [merging, setMerging] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEscapeClose(onClose, merging)
+  const dialogRef = useDialogBehavior(onClose, merging)
 
   // All topics are candidates for the target (including selected — the target
   // is skipped in the merge loop, so it survives as the survivor).
@@ -1789,6 +1941,11 @@ const MergeModal = ({
         }}
       />
       <Box
+        ref={dialogRef}
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='merge-topics-title'
+        tabIndex={-1}
         style={{
           position: 'fixed',
           top: '50%', left: '50%',
@@ -1802,10 +1959,10 @@ const MergeModal = ({
         }}
       >
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading size='sm' style={{ color: '#1a365d' }}>
+          <Heading id='merge-topics-title' size='sm' style={{ color: '#1a365d' }}>
             Merge {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
           </Heading>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" aria-label='Close merge topics' data-autofocus onClick={onClose} disabled={merging} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: merging ? 'not-allowed' : 'pointer', fontSize: 16 }}>
             ✕
           </button>
         </Box>
@@ -1897,7 +2054,7 @@ const ReparentModal = ({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<{ label: string; reason: string }[]>([])
 
-  useEscapeClose(onClose, saving)
+  const dialogRef = useDialogBehavior(onClose, saving)
 
   // Exclude selected subtrees so no selected topic can become its own ancestor.
   const parentOptions = useMemo(
@@ -1963,6 +2120,11 @@ const ReparentModal = ({
         }}
       />
       <Box
+        ref={dialogRef}
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='reparent-topics-title'
+        tabIndex={-1}
         style={{
           position: 'fixed',
           top: '50%', left: '50%',
@@ -1976,10 +2138,10 @@ const ReparentModal = ({
         }}
       >
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading size='sm' style={{ color: '#1a365d' }}>
+          <Heading id='reparent-topics-title' size='sm' style={{ color: '#1a365d' }}>
             Re-parent {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
           </Heading>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" aria-label='Close re-parent topics' data-autofocus onClick={onClose} disabled={saving} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 16 }}>
             ✕
           </button>
         </Box>
@@ -2062,7 +2224,7 @@ const CsvImportModal = ({
   const totalChanges = addedCount + updatedCount
   const canApply = conflictCount === 0 && totalChanges > 0 && !applying
 
-  useEscapeClose(onClose, applying || loading)
+  const dialogRef = useDialogBehavior(onClose, applying || loading)
 
   return (
     <>
@@ -2076,6 +2238,11 @@ const CsvImportModal = ({
         onClick={onClose}
       />
       <Box
+        ref={dialogRef}
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='csv-import-title'
+        tabIndex={-1}
         style={{
           position: 'fixed',
           top: '50%', left: '50%',
@@ -2092,10 +2259,10 @@ const CsvImportModal = ({
         }}
       >
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading size='sm' style={{ color: '#1a365d' }}>
+          <Heading id='csv-import-title' size='sm' style={{ color: '#1a365d' }}>
             Import CSV{filename ? ` — ${filename}` : ''}
           </Heading>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button className="admin-btn" aria-label='Close CSV import' data-autofocus onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
             ✕
           </button>
         </Box>
@@ -2224,12 +2391,15 @@ const ReclassifyConfirmModal = ({
   const scopeLabel = scope === 'all' ? 'All docs' : `Topic: ${allTags.find((t) => t.id === scope)?.valueId ?? scope}`
   const canStart = Boolean(estimate && estimate.eligible > 0 && !starting)
 
-  useEscapeClose(onClose, starting || loading)
+  const dialogRef = useDialogBehavior(onClose, starting)
 
   return (
     <>
       <Box
-        onClick={onClose}
+        data-testid='reclassify-backdrop'
+        onClick={() => {
+          if (!starting) onClose()
+        }}
         style={{
           position: 'fixed',
           top: 0,
@@ -2241,6 +2411,11 @@ const ReclassifyConfirmModal = ({
         }}
       />
       <Box
+        ref={dialogRef}
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='reclassify-confirm-title'
+        tabIndex={-1}
         style={{
           position: 'fixed',
           top: '50%',
@@ -2256,8 +2431,8 @@ const ReclassifyConfirmModal = ({
         }}
       >
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading size='sm' style={{ color: '#1a365d' }}>Re-classify: {scopeLabel}</Heading>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
+          <Heading id='reclassify-confirm-title' size='sm' style={{ color: '#1a365d' }}>Re-classify: {scopeLabel}</Heading>
+          <button className="admin-btn" aria-label='Close re-classification confirmation' data-autofocus onClick={onClose} disabled={starting} style={{ fontFamily: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: starting ? 'not-allowed' : 'pointer' }}>✕</button>
         </Box>
 
         {loading && (
@@ -2280,7 +2455,7 @@ const ReclassifyConfirmModal = ({
         )}
 
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
+          <button className="admin-btn" onClick={onClose} disabled={starting} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: starting ? 'not-allowed' : 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
           <button className="admin-btn"
             onClick={onStart}
             disabled={!canStart}
@@ -2307,15 +2482,15 @@ const ScopedTopicPicker = ({
   onConfirm: () => void
   onClose: () => void
 }) => {
-  useEscapeClose(onClose)
+  const dialogRef = useDialogBehavior(onClose)
 
   return (
     <>
       <Box onClick={onClose} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, background: 'rgba(26,54,93,0.35)', zIndex: 100 }} />
-      <Box style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 380, maxWidth: '90vw', background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(26,54,93,0.30)', zIndex: 101, padding: 18 }}>
+      <Box ref={dialogRef} role='dialog' aria-modal='true' aria-labelledby='scoped-reclassify-title' tabIndex={-1} style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 380, maxWidth: '90vw', background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(26,54,93,0.30)', zIndex: 101, padding: 18 }}>
         <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading size='sm' style={{ color: '#1a365d' }}>Scoped re-classify</Heading>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
+          <Heading id='scoped-reclassify-title' size='sm' style={{ color: '#1a365d' }}>Scoped re-classify</Heading>
+          <button className="admin-btn" aria-label='Close scoped re-classify' data-autofocus onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
         </Box>
         <Box style={{ marginBottom: 10 }}>
           <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>Pick a topic</label>

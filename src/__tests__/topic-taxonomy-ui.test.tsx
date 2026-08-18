@@ -75,6 +75,16 @@ function mockFetch(tags: any[]) {
   })
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: any) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 describe('TopicTaxonomyManager (jsdom)', () => {
   afterEach(() => {
     jest.restoreAllMocks()
@@ -520,6 +530,34 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     })
   })
 
+  it('gives the create modal dialog semantics, traps focus, and restores its trigger', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    const trigger = screen.getByRole('button', { name: 'New topic' })
+    trigger.focus()
+    fireEvent.click(trigger)
+
+    const dialog = await screen.findByRole('dialog', { name: 'New topic' })
+    const close = within(dialog).getByRole('button', { name: 'Close new topic' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(close).toHaveFocus()
+
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+    cancel.focus()
+    fireEvent.keyDown(dialog, { key: 'Tab' })
+    expect(close).toHaveFocus()
+
+    fireEvent.click(cancel)
+    expect(screen.queryByRole('dialog', { name: 'New topic' })).toBeNull()
+    expect(trigger).toHaveFocus()
+  })
+
   it('rebuilds missing embeddings and reports the queued count', async () => {
     const fetchMock = jest.fn((url: string, init?: any) => {
       if (url === '/api/admin/topics') {
@@ -554,7 +592,42 @@ describe('TopicTaxonomyManager (jsdom)', () => {
         { method: 'POST' },
       )
       expect(screen.getByText('Queued 2 topic embeddings for rebuild.')).toBeTruthy()
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Queued 2 topic embeddings for rebuild.',
+      )
     })
+  })
+
+  it('announces an embedding rebuild failure as an error notice', async () => {
+    global.fetch = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/embeddings/rebuild' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ ok: false, error: 'Embedding queue unavailable.' }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rebuild embeddings' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Embedding queue unavailable.')
+    expect(alert).toHaveStyle({ color: '#C11101', background: '#FDEDEC' })
   })
 
   it('filters topics by parent state, document count, and re-embed state', async () => {
@@ -594,6 +667,23 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     })
     expect(screen.getByText('Coal Combustion')).toBeTruthy()
     expect(screen.queryByText('Climate')).toBeNull()
+  })
+
+  it('shows a no-matches message when non-search filters exclude every topic', async () => {
+    mockFetch(mockTags)
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum documents' }), {
+      target: { value: '100' },
+    })
+
+    expect(screen.getByText('No topics match your filters.')).toBeTruthy()
+    expect(screen.queryByText('No topics yet.')).toBeNull()
   })
 
   // ---- Task 15: Bulk ops ----
@@ -918,7 +1008,9 @@ NewTopic,desc,,,topic,
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
 
-    await waitFor(() => expect(screen.getByText('Export failed.')).toBeTruthy())
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Export failed.')
+    expect(alert).toHaveStyle({ color: '#C11101', background: '#FDEDEC' })
     expect(responseText).not.toHaveBeenCalled()
   })
 
@@ -1045,6 +1137,209 @@ NewTopic,desc,,,topic,
           url === '/api/admin/topics/reclassify' && init?.method === 'POST',
       ),
     ).toHaveLength(0)
+  })
+
+  it('keeps a scoped estimate and payload when an older all-scope GET resolves last', async () => {
+    const allEstimate = deferred<any>()
+    const scopedEstimate = deferred<any>()
+    const fetchMock = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify?scope=all') return allEstimate.promise
+      if (url === '/api/admin/topics/reclassify?tagId=t1') return scopedEstimate.promise
+      if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, enqueued: 12, estCost: 0.01, runId: 'run-scoped' }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify/status') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, queued: 12, running: 0, done: 0, error: 0, recent: [] }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-classify all' }))
+    expect(await screen.findByText('Estimating…')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scoped to topic…' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pick a topic' }), {
+      target: { value: 't1' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    await act(async () => {
+      scopedEstimate.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ ok: true, eligible: 12, estCost: 0.01 }),
+      })
+      await scopedEstimate.promise
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Re-classify: Topic: Coal' })).toHaveTextContent(
+        'Re-classify 12 docs? Estimated cost: ≈$0.0100.',
+      )
+    })
+
+    await act(async () => {
+      allEstimate.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+      })
+      await allEstimate.promise
+    })
+
+    const dialog = screen.getByRole('dialog', { name: 'Re-classify: Topic: Coal' })
+    expect(dialog).toHaveTextContent('Re-classify 12 docs? Estimated cost: ≈$0.0100.')
+    expect(dialog).not.toHaveTextContent('203')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start' }))
+    await waitFor(() => {
+      const postCalls = fetchMock.mock.calls.filter(
+        ([url, init]: any) =>
+          url === '/api/admin/topics/reclassify' && init?.method === 'POST',
+      )
+      expect(postCalls).toHaveLength(1)
+      expect(JSON.parse(postCalls[0][1].body)).toEqual({ tagId: 't1' })
+    })
+  })
+
+  it('blocks every confirmation close path while Start is pending', async () => {
+    const postResponse = deferred<any>()
+    const fetchMock = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify?scope=all') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
+        return postResponse.promise
+      }
+      if (url === '/api/admin/topics/reclassify/status') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, queued: 201, running: 0, done: 0, error: 0, recent: [] }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Re-classify all' }))
+    const start = await screen.findByRole('button', { name: 'Start' })
+    await waitFor(() => expect(start).toBeEnabled())
+    fireEvent.click(start)
+
+    const dialog = screen.getByRole('dialog', { name: 'Re-classify: All docs' })
+    const close = within(dialog).getByRole('button', { name: 'Close re-classification confirmation' })
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+    expect(close).toBeDisabled()
+    expect(cancel).toBeDisabled()
+
+    fireEvent.click(close)
+    fireEvent.click(cancel)
+    fireEvent.click(screen.getByTestId('reclassify-backdrop'))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Scoped to topic…' }))
+
+    expect(screen.getByRole('dialog', { name: 'Re-classify: All docs' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Scoped re-classify' })).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/topics/reclassify?tagId=t1')
+
+    await act(async () => {
+      postResponse.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ ok: true, enqueued: 201, estCost: 0.19, runId: 'run-1' }),
+      })
+      await postResponse.promise
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Re-classify: All docs' })).toBeNull()
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Re-classify enqueued: 201 docs (≈$0.1900).',
+      )
+    })
+  })
+
+  it('gives the reclassification confirmation keyboard semantics and restores focus', async () => {
+    const fetchMock = jest.fn((url: string) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify?scope=all') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+    global.fetch = fetchMock
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+
+    const trigger = screen.getByRole('button', { name: 'Re-classify all' })
+    trigger.focus()
+    fireEvent.click(trigger)
+
+    const dialog = await screen.findByRole('dialog', { name: 'Re-classify: All docs' })
+    const close = within(dialog).getByRole('button', { name: 'Close re-classification confirmation' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(close).toHaveFocus()
+
+    const start = await within(dialog).findByRole('button', { name: 'Start' })
+    await waitFor(() => expect(start).toBeEnabled())
+    start.focus()
+    fireEvent.keyDown(dialog, { key: 'Tab' })
+    expect(close).toHaveFocus()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Re-classify: All docs' })).toBeNull()
+    expect(trigger).toHaveFocus()
   })
 
   it('POSTs full reclassification exactly once on Start and reports the actual enqueue', async () => {
@@ -1343,6 +1638,66 @@ NewTopic,desc,,,topic,
       expect(postCalls).toHaveLength(1)
       expect(JSON.parse(postCalls[0][1].body)).toEqual({ retryRunId: runId })
     })
+  })
+
+  it('announces a retry failure as an error notice', async () => {
+    const runId = '2cb8df76-60e1-4582-9839-082d512e4b57'
+    global.fetch = jest.fn((url: string, init?: any) => {
+      if (url === '/api/admin/topics') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify/status') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ok: true,
+            queued: 0,
+            running: 0,
+            done: 0,
+            error: 1,
+            recent: [
+              {
+                runId,
+                scope: 'all',
+                total: 1,
+                done: 0,
+                error: 1,
+                estCost: 0.001,
+                createdAt: '2026-08-17T12:00:00Z',
+                updatedAt: '2026-08-17T12:01:00Z',
+                errors: [],
+              },
+            ],
+          }),
+        }) as any
+      }
+      if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ ok: false, error: 'Retry queue unavailable.' }),
+        }) as any
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+    })
+
+    render(
+      <ChakraProvider>
+        <TopicTaxonomyManager />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '1 error' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Retry queue unavailable.')
+    expect(alert).toHaveStyle({ color: '#C11101', background: '#FDEDEC' })
   })
 
   it('displays reclassify status panel with recent runs', async () => {
