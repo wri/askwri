@@ -2180,6 +2180,14 @@ const EditDrawer = ({
   >([])
   const [docsLoading, setDocsLoading] = useState(false)
 
+  // Reset per-tag state when the tag changes (same drawer instance reused for
+  // different tags after close/reopen) so stale docs/history don't bleed across.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHistory([])
+    setDocs([])
+  }, [tag.id])
+
   useEscapeClose(onClose, saving)
 
   // Exclude self and descendants so the UI cannot offer a cyclic parent.

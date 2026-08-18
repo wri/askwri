@@ -12,10 +12,11 @@ export const dynamic = 'force-dynamic'
  * source (human/external/llm) + confidence for this document. */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { response } = await requireIdentity(req)
   if (response) return response
+  const { id } = await params
   try {
     await initializeDatabase()
     const rows = await AppDataSource.query(
@@ -25,7 +26,7 @@ export async function GET(
        JOIN documents d ON d.id = dt.document_id
        WHERE dt.tag_id = $1
        ORDER BY d.title_en, d.title`,
-      [params.id],
+      [id],
     )
     return NextResponse.json({ ok: true, documents: rows })
   } catch (err) {
