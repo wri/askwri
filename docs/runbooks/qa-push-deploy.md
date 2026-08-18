@@ -389,8 +389,10 @@ different candidate or concurrency limit:
 Deploy and migrate before editors start taxonomy work. On each poll the worker
 runs topic-embedding maintenance before claiming any reclassification job, so
 new/renamed topics become candidates before classification. Keep the worker at
-one replica for the initial rollout; the database's `SKIP LOCKED` claims also
-support later replicas.
+one replica for the initial rollout. `SKIP LOCKED` prevents duplicate
+reclassification-job claims across threads or replicas, but the embedding sweep
+does not take an equivalent claim lock; multiple replicas can duplicate Bedrock
+embedding calls for the same pending topics.
 
 Cost-bearing admin actions require two separate steps. Opening Reclassify sends
 GET with `scope=all` or `tagId=<uuid>` and only estimates eligibility at $0.0008
@@ -424,10 +426,10 @@ After deployment:
 4. Force one scoped job to error only in a controlled QA check, use Retry, and
    verify other runs and completed jobs are unchanged.
 
-Rollback is configuration-first: set `RECLASSIFY_POLL_FIRST=false` to stop
-prioritizing this queue, or reduce `TAG_RECLASSIFY_CONCURRENCY`; do not delete
-jobs or audits. Existing human/external assignments remain protected either
-way.
+Rollback is configuration-first: set `RECLASSIFY_POLL_FIRST=false` to disable
+reclassification polling in the worker, or reduce
+`TAG_RECLASSIFY_CONCURRENCY` while polling remains enabled; do not delete jobs
+or audits. Existing human/external assignments remain protected either way.
 
 ---
 

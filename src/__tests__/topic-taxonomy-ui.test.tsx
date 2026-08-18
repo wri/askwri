@@ -1,5 +1,12 @@
 /** @jest-environment jsdom */
-import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react'
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  act,
+  within,
+} from '@testing-library/react'
 import '@testing-library/jest-dom'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
 import { TopicTaxonomyManager } from '@/app/admin/topics/components/TopicTaxonomyManager'
@@ -124,11 +131,12 @@ describe('TopicTaxonomyManager (jsdom)', () => {
   })
 
   it('shows error message on fetch failure', async () => {
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: false,
-        json: () => Promise.resolve({ error: 'something went wrong' }),
-      }) as any,
+    global.fetch = jest.fn(
+      () =>
+        Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({ error: 'something went wrong' }),
+        }) as any,
     )
     render(
       <ChakraProvider>
@@ -287,7 +295,11 @@ describe('TopicTaxonomyManager (jsdom)', () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, tag: { ...mockTags[0], valueId: 'Coal Updated' } }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              tag: { ...mockTags[0], valueId: 'Coal Updated' },
+            }),
         }) as any
       }
       if (url.startsWith('/api/admin/topics/t1') && init?.method === 'GET') {
@@ -296,7 +308,10 @@ describe('TopicTaxonomyManager (jsdom)', () => {
           json: () => Promise.resolve({ ok: true, tag: mockTags[0] }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -345,7 +360,10 @@ describe('TopicTaxonomyManager (jsdom)', () => {
           json: () => Promise.resolve({ ok: true, tag: mockTags[0] }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -380,7 +398,8 @@ describe('TopicTaxonomyManager (jsdom)', () => {
         return Promise.resolve({
           ok: false,
           status: 500,
-          json: () => Promise.resolve({ ok: false, error: 'Internal server error' }),
+          json: () =>
+            Promise.resolve({ ok: false, error: 'Internal server error' }),
         }) as any
       }
       if (url.startsWith('/api/admin/topics/t1') && init?.method === 'GET') {
@@ -389,7 +408,10 @@ describe('TopicTaxonomyManager (jsdom)', () => {
           json: () => Promise.resolve({ ok: true, tag: mockTags[0] }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -412,7 +434,9 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     })
     // Parent field should NOT have an error
     const parentSection = screen.getByText('Parent topic')
-    expect(parentSection.parentElement?.querySelector('[style*="C11101"]')).toBeNull()
+    expect(
+      parentSection.parentElement?.querySelector('[style*="C11101"]'),
+    ).toBeNull()
   })
 
   it('shows descriptions and aliases together in topic rows', async () => {
@@ -439,12 +463,18 @@ describe('TopicTaxonomyManager (jsdom)', () => {
 
     fireEvent.click(screen.getByText('Coal'))
 
-    const parentSelect = await screen.findByRole('combobox', { name: 'Parent topic' })
-    expect(within(parentSelect).queryByRole('option', { name: 'Coal' })).toBeNull()
+    const parentSelect = await screen.findByRole('combobox', {
+      name: 'Parent topic',
+    })
+    expect(
+      within(parentSelect).queryByRole('option', { name: 'Coal' }),
+    ).toBeNull()
     expect(
       within(parentSelect).queryByRole('option', { name: 'Coal Combustion' }),
     ).toBeNull()
-    expect(within(parentSelect).getByRole('option', { name: 'Climate' })).toBeTruthy()
+    expect(
+      within(parentSelect).getByRole('option', { name: 'Climate' }),
+    ).toBeTruthy()
   })
 
   it('closes the edit drawer on Escape when it is not busy', async () => {
@@ -471,17 +501,18 @@ describe('TopicTaxonomyManager (jsdom)', () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({
-            ok: true,
-            tag: {
-              ...mockTags[0],
-              id: 't4',
-              valueId: 'Methane',
-              description: 'Short-lived climate pollutant',
-              aliases: ['CH4'],
-              parentTagId: 't3',
-            },
-          }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              tag: {
+                ...mockTags[0],
+                id: 't4',
+                valueId: 'Methane',
+                description: 'Short-lived climate pollutant',
+                aliases: ['CH4'],
+                parentTagId: 't3',
+              },
+            }),
         }) as any
       }
       if (url === '/api/admin/topics') {
@@ -490,7 +521,10 @@ describe('TopicTaxonomyManager (jsdom)', () => {
           json: () => Promise.resolve({ ok: true, tags: mockTags }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
 
@@ -505,9 +539,12 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Topic label' }), {
       target: { value: 'Methane' },
     })
-    fireEvent.change(screen.getByRole('textbox', { name: 'Topic description' }), {
-      target: { value: 'Short-lived climate pollutant' },
-    })
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Topic description' }),
+      {
+        target: { value: 'Short-lived climate pollutant' },
+      },
+    )
     fireEvent.change(screen.getByPlaceholderText('Add alias…'), {
       target: { value: 'CH4' },
     })
@@ -544,7 +581,9 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     fireEvent.click(trigger)
 
     const dialog = await screen.findByRole('dialog', { name: 'New topic' })
-    const close = within(dialog).getByRole('button', { name: 'Close new topic' })
+    const close = within(dialog).getByRole('button', {
+      name: 'Close new topic',
+    })
     expect(dialog).toHaveAttribute('aria-modal', 'true')
     expect(close).toHaveFocus()
 
@@ -566,14 +605,20 @@ describe('TopicTaxonomyManager (jsdom)', () => {
           json: () => Promise.resolve({ ok: true, tags: mockTags }),
         }) as any
       }
-      if (url === '/api/admin/topics/embeddings/rebuild' && init?.method === 'POST') {
+      if (
+        url === '/api/admin/topics/embeddings/rebuild' &&
+        init?.method === 'POST'
+      ) {
         return Promise.resolve({
           ok: true,
           status: 200,
           json: () => Promise.resolve({ ok: true, queued: 2 }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
 
@@ -591,7 +636,9 @@ describe('TopicTaxonomyManager (jsdom)', () => {
         '/api/admin/topics/embeddings/rebuild',
         { method: 'POST' },
       )
-      expect(screen.getByText('Queued 2 topic embeddings for rebuild.')).toBeTruthy()
+      expect(
+        screen.getByText('Queued 2 topic embeddings for rebuild.'),
+      ).toBeTruthy()
       expect(screen.getByRole('status')).toHaveTextContent(
         'Queued 2 topic embeddings for rebuild.',
       )
@@ -606,14 +653,24 @@ describe('TopicTaxonomyManager (jsdom)', () => {
           json: () => Promise.resolve({ ok: true, tags: mockTags }),
         }) as any
       }
-      if (url === '/api/admin/topics/embeddings/rebuild' && init?.method === 'POST') {
+      if (
+        url === '/api/admin/topics/embeddings/rebuild' &&
+        init?.method === 'POST'
+      ) {
         return Promise.resolve({
           ok: false,
           status: 500,
-          json: () => Promise.resolve({ ok: false, error: 'Embedding queue unavailable.' }),
+          json: () =>
+            Promise.resolve({
+              ok: false,
+              error: 'Embedding queue unavailable.',
+            }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -641,7 +698,9 @@ describe('TopicTaxonomyManager (jsdom)', () => {
         <TopicTaxonomyManager />
       </ChakraProvider>,
     )
-    await waitFor(() => expect(screen.getByText('Coal Combustion')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText('Coal Combustion')).toBeTruthy(),
+    )
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Parent state' }), {
       target: { value: 'child' },
@@ -653,15 +712,21 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Parent state' }), {
       target: { value: 'all' },
     })
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum documents' }), {
-      target: { value: '40' },
-    })
+    fireEvent.change(
+      screen.getByRole('spinbutton', { name: 'Minimum documents' }),
+      {
+        target: { value: '40' },
+      },
+    )
     expect(screen.getByText('Climate')).toBeTruthy()
     expect(screen.queryByText('Coal')).toBeNull()
 
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum documents' }), {
-      target: { value: '' },
-    })
+    fireEvent.change(
+      screen.getByRole('spinbutton', { name: 'Minimum documents' }),
+      {
+        target: { value: '' },
+      },
+    )
     fireEvent.change(screen.getByRole('combobox', { name: 'Re-embed state' }), {
       target: { value: 'needed' },
     })
@@ -678,9 +743,12 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     )
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
 
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum documents' }), {
-      target: { value: '100' },
-    })
+    fireEvent.change(
+      screen.getByRole('spinbutton', { name: 'Minimum documents' }),
+      {
+        target: { value: '100' },
+      },
+    )
 
     expect(screen.getByText('No topics match your filters.')).toBeTruthy()
     expect(screen.queryByText('No topics yet.')).toBeNull()
@@ -760,7 +828,10 @@ describe('TopicTaxonomyManager (jsdom)', () => {
           json: () => Promise.resolve({ ok: true, moved: 1 }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -818,26 +889,57 @@ describe('TopicTaxonomyManager (jsdom)', () => {
     global.fetch = jest.fn((url: string, _init?: any) => {
       const u = url.toString()
       if (u === '/api/admin/topics') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, tags: mockTags }) }) as any
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
       }
       if (u.startsWith('/api/admin/topics/import')) {
         if (u.includes('dry_run=true')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              ok: true,
-              diff: {
-                added: [{ label: 'NewTopic', description: '', aliases: [], parent: '', facet: 'topic', id: '' }],
-                updated: [],
-                unchanged: [],
-                conflicts: [{ row: { label: 'BadRef', description: '', aliases: [], parent: 'NoSuch', facet: 'topic', id: '' }, reason: 'bad parent reference' }],
-              },
-            }),
+            json: () =>
+              Promise.resolve({
+                ok: true,
+                diff: {
+                  added: [
+                    {
+                      label: 'NewTopic',
+                      description: '',
+                      aliases: [],
+                      parent: '',
+                      facet: 'topic',
+                      id: '',
+                    },
+                  ],
+                  updated: [],
+                  unchanged: [],
+                  conflicts: [
+                    {
+                      row: {
+                        label: 'BadRef',
+                        description: '',
+                        aliases: [],
+                        parent: 'NoSuch',
+                        facet: 'topic',
+                        id: '',
+                      },
+                      reason: 'bad parent reference',
+                    },
+                  ],
+                },
+              }),
           }) as any
         }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, applied: 1 }) }) as any
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, applied: 1 }),
+        }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     const csvContent = `label,description,aliases,parent,facet,id
@@ -853,7 +955,9 @@ BadRef,,,NoSuch,topic,
     )
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
 
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement
     expect(fileInput).toBeTruthy()
     fireEvent.change(fileInput, { target: { files: [file] } })
 
@@ -871,26 +975,45 @@ BadRef,,,NoSuch,topic,
     global.fetch = jest.fn((url: string, _init?: any) => {
       const u = url.toString()
       if (u === '/api/admin/topics') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, tags: mockTags }) }) as any
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        }) as any
       }
       if (u.startsWith('/api/admin/topics/import')) {
         if (u.includes('dry_run=true')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              ok: true,
-              diff: {
-                added: [{ label: 'NewTopic', description: 'desc', aliases: [], parent: '', facet: 'topic', id: '' }],
-                updated: [],
-                unchanged: [],
-                conflicts: [],
-              },
-            }),
+            json: () =>
+              Promise.resolve({
+                ok: true,
+                diff: {
+                  added: [
+                    {
+                      label: 'NewTopic',
+                      description: 'desc',
+                      aliases: [],
+                      parent: '',
+                      facet: 'topic',
+                      id: '',
+                    },
+                  ],
+                  updated: [],
+                  unchanged: [],
+                  conflicts: [],
+                },
+              }),
           }) as any
         }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, applied: 1 }) }) as any
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, applied: 1 }),
+        }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     const csvContent = `label,description,aliases,parent,facet,id
@@ -905,7 +1028,9 @@ NewTopic,desc,, ,topic,
     )
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
 
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement
     fireEvent.change(fileInput, { target: { files: [file] } })
 
     await waitFor(() => {
@@ -930,15 +1055,25 @@ NewTopic,desc,, ,topic,
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({
-            ok: true,
-            diff: {
-              added: [{ label: 'NewTopic', description: 'desc', aliases: [], parent: '', facet: 'topic', id: '' }],
-              updated: [],
-              unchanged: [],
-              conflicts: [],
-            },
-          }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              diff: {
+                added: [
+                  {
+                    label: 'NewTopic',
+                    description: 'desc',
+                    aliases: [],
+                    parent: '',
+                    facet: 'topic',
+                    id: '',
+                  },
+                ],
+                updated: [],
+                unchanged: [],
+                conflicts: [],
+              },
+            }),
         }) as any
       }
       if (url === '/api/admin/topics/import?reclassify=true') {
@@ -948,7 +1083,10 @@ NewTopic,desc,, ,topic,
           json: () => Promise.resolve({ ok: true, applied: 1 }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
 
@@ -997,7 +1135,10 @@ NewTopic,desc,,,topic,
           text: responseText,
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -1031,16 +1172,34 @@ NewTopic,desc,,,topic,
       if (url.includes('/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            ok: true,
-            entries: [
-              { at: '2026-01-01T00:00:00Z', action: 'tag_update', actor: 'admin', source: 'human', before: { valueId: 'Old' }, after: { valueId: 'Coal' } },
-              { at: '2025-12-01T00:00:00Z', action: 'tag_create', actor: 'admin', source: 'human', before: null, after: { valueId: 'Old' } },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              entries: [
+                {
+                  at: '2026-01-01T00:00:00Z',
+                  action: 'tag_update',
+                  actor: 'admin',
+                  source: 'human',
+                  before: { valueId: 'Old' },
+                  after: { valueId: 'Coal' },
+                },
+                {
+                  at: '2025-12-01T00:00:00Z',
+                  action: 'tag_create',
+                  actor: 'admin',
+                  source: 'human',
+                  before: null,
+                  after: { valueId: 'Old' },
+                },
+              ],
+            }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -1091,14 +1250,21 @@ NewTopic,desc,,,topic,
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+          json: () =>
+            Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
         }) as any
       }
       if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, enqueued: 203, estCost: 0.17, runId: 'run-1' }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              enqueued: 203,
+              estCost: 0.17,
+              runId: 'run-1',
+            }),
         }) as any
       }
       return Promise.resolve({
@@ -1121,7 +1287,9 @@ NewTopic,desc,,,topic,
       expect(screen.getByText(/\$0\.17/)).toBeTruthy()
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/admin/topics/reclassify?scope=all')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/topics/reclassify?scope=all',
+    )
     expect(
       fetchMock.mock.calls.filter(
         ([url, init]) =>
@@ -1130,7 +1298,9 @@ NewTopic,desc,,,topic,
     ).toHaveLength(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Start' }),
+    ).not.toBeInTheDocument()
     expect(
       fetchMock.mock.calls.filter(
         ([url, init]) =>
@@ -1149,22 +1319,41 @@ NewTopic,desc,,,topic,
           json: () => Promise.resolve({ ok: true, tags: mockTags }),
         }) as any
       }
-      if (url === '/api/admin/topics/reclassify?scope=all') return allEstimate.promise
-      if (url === '/api/admin/topics/reclassify?tagId=t1') return scopedEstimate.promise
+      if (url === '/api/admin/topics/reclassify?scope=all')
+        return allEstimate.promise
+      if (url === '/api/admin/topics/reclassify?tagId=t1')
+        return scopedEstimate.promise
       if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, enqueued: 12, estCost: 0.01, runId: 'run-scoped' }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              enqueued: 12,
+              estCost: 0.01,
+              runId: 'run-scoped',
+            }),
         }) as any
       }
       if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ ok: true, queued: 12, running: 0, done: 0, error: 0, recent: [] }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              queued: 12,
+              running: 0,
+              done: 0,
+              error: 0,
+              recent: [],
+            }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
 
@@ -1194,9 +1383,9 @@ NewTopic,desc,,,topic,
       await scopedEstimate.promise
     })
     await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: 'Re-classify: Topic: Coal' })).toHaveTextContent(
-        'Re-classify 12 docs? Estimated cost: ≈$0.0100.',
-      )
+      expect(
+        screen.getByRole('dialog', { name: 'Re-classify: Topic: Coal' }),
+      ).toHaveTextContent('Re-classify 12 docs? Estimated cost: ≈$0.0100.')
     })
 
     await act(async () => {
@@ -1208,8 +1397,12 @@ NewTopic,desc,,,topic,
       await allEstimate.promise
     })
 
-    const dialog = screen.getByRole('dialog', { name: 'Re-classify: Topic: Coal' })
-    expect(dialog).toHaveTextContent('Re-classify 12 docs? Estimated cost: ≈$0.0100.')
+    const dialog = screen.getByRole('dialog', {
+      name: 'Re-classify: Topic: Coal',
+    })
+    expect(dialog).toHaveTextContent(
+      'Re-classify 12 docs? Estimated cost: ≈$0.0100.',
+    )
     expect(dialog).not.toHaveTextContent('203')
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start' }))
@@ -1236,7 +1429,8 @@ NewTopic,desc,,,topic,
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+          json: () =>
+            Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
         }) as any
       }
       if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
@@ -1245,10 +1439,21 @@ NewTopic,desc,,,topic,
       if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ ok: true, queued: 201, running: 0, done: 0, error: 0, recent: [] }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              queued: 201,
+              running: 0,
+              done: 0,
+              error: 0,
+              recent: [],
+            }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
 
@@ -1264,7 +1469,9 @@ NewTopic,desc,,,topic,
     fireEvent.click(start)
 
     const dialog = screen.getByRole('dialog', { name: 'Re-classify: All docs' })
-    const close = within(dialog).getByRole('button', { name: 'Close re-classification confirmation' })
+    const close = within(dialog).getByRole('button', {
+      name: 'Close re-classification confirmation',
+    })
     const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
     expect(close).toBeDisabled()
     expect(cancel).toBeDisabled()
@@ -1275,21 +1482,35 @@ NewTopic,desc,,,topic,
     fireEvent.keyDown(document, { key: 'Escape' })
     fireEvent.click(screen.getByRole('button', { name: 'Scoped to topic…' }))
 
-    expect(screen.getByRole('dialog', { name: 'Re-classify: All docs' })).toBeTruthy()
-    expect(screen.queryByRole('dialog', { name: 'Scoped re-classify' })).toBeNull()
-    expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/topics/reclassify?tagId=t1')
+    expect(
+      screen.getByRole('dialog', { name: 'Re-classify: All docs' }),
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('dialog', { name: 'Scoped re-classify' }),
+    ).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/admin/topics/reclassify?tagId=t1',
+    )
 
     await act(async () => {
       postResponse.resolve({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ ok: true, enqueued: 201, estCost: 0.19, runId: 'run-1' }),
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            enqueued: 201,
+            estCost: 0.19,
+            runId: 'run-1',
+          }),
       })
       await postResponse.promise
     })
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Re-classify: All docs' })).toBeNull()
+      expect(
+        screen.queryByRole('dialog', { name: 'Re-classify: All docs' }),
+      ).toBeNull()
       expect(screen.getByRole('status')).toHaveTextContent(
         'Re-classify enqueued: 201 docs (≈$0.1900).',
       )
@@ -1308,10 +1529,14 @@ NewTopic,desc,,,topic,
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+          json: () =>
+            Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
 
@@ -1326,8 +1551,12 @@ NewTopic,desc,,,topic,
     trigger.focus()
     fireEvent.click(trigger)
 
-    const dialog = await screen.findByRole('dialog', { name: 'Re-classify: All docs' })
-    const close = within(dialog).getByRole('button', { name: 'Close re-classification confirmation' })
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Re-classify: All docs',
+    })
+    const close = within(dialog).getByRole('button', {
+      name: 'Close re-classification confirmation',
+    })
     expect(dialog).toHaveAttribute('aria-modal', 'true')
     expect(close).toHaveFocus()
 
@@ -1338,7 +1567,9 @@ NewTopic,desc,,,topic,
     expect(close).toHaveFocus()
 
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog', { name: 'Re-classify: All docs' })).toBeNull()
+    expect(
+      screen.queryByRole('dialog', { name: 'Re-classify: All docs' }),
+    ).toBeNull()
     expect(trigger).toHaveFocus()
   })
 
@@ -1354,7 +1585,8 @@ NewTopic,desc,,,topic,
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
+          json: () =>
+            Promise.resolve({ ok: true, eligible: 203, estCost: 0.17 }),
         }) as any
       }
       if (url === '/api/admin/topics/reclassify') {
@@ -1362,18 +1594,34 @@ NewTopic,desc,,,topic,
           return Promise.resolve({
             ok: true,
             status: 200,
-            json: () => Promise.resolve({ ok: true, enqueued: 201, estCost: 0.19, runId: 'run-1' }),
+            json: () =>
+              Promise.resolve({
+                ok: true,
+                enqueued: 201,
+                estCost: 0.19,
+                runId: 'run-1',
+              }),
           }) as any
         }
       }
       if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            ok: true, queued: 201, running: 0, done: 0, error: 0, recent: [] }),
-          }) as any
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              queued: 201,
+              running: 0,
+              done: 0,
+              error: 0,
+              recent: [],
+            }),
+        }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
     render(
@@ -1384,7 +1632,9 @@ NewTopic,desc,,,topic,
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'Re-classify all' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
 
     const postCallsBeforeStart = fetchMock.mock.calls.filter(
       ([url, init]: any) =>
@@ -1401,7 +1651,9 @@ NewTopic,desc,,,topic,
       )
       expect(postCalls).toHaveLength(1)
       expect(JSON.parse(postCalls[0][1].body)).toEqual({ scope: 'all' })
-      expect(screen.getByText(/Re-classify enqueued: 201 docs \(≈\$0\.1900\)/)).toBeTruthy()
+      expect(
+        screen.getByText(/Re-classify enqueued: 201 docs \(≈\$0\.1900\)/),
+      ).toBeTruthy()
     })
   })
 
@@ -1417,23 +1669,41 @@ NewTopic,desc,,,topic,
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, eligible: 12, estCost: 0.01 }),
+          json: () =>
+            Promise.resolve({ ok: true, eligible: 12, estCost: 0.01 }),
         }) as any
       }
       if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, enqueued: 11, estCost: 0.009, runId: 'run-scoped' }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              enqueued: 11,
+              estCost: 0.009,
+              runId: 'run-scoped',
+            }),
         }) as any
       }
       if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ ok: true, queued: 11, running: 0, done: 0, error: 0, recent: [] }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              queued: 11,
+              running: 0,
+              done: 0,
+              error: 0,
+              recent: [],
+            }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
 
@@ -1451,7 +1721,9 @@ NewTopic,desc,,,topic,
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
 
     await waitFor(() => expect(screen.getByText(/12/)).toBeTruthy())
-    expect(fetchMock).toHaveBeenCalledWith('/api/admin/topics/reclassify?tagId=t1')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/topics/reclassify?tagId=t1',
+    )
     expect(
       fetchMock.mock.calls.filter(
         ([url, init]: any) =>
@@ -1474,7 +1746,11 @@ NewTopic,desc,,,topic,
   it('redirects to login when a reclassification estimate returns 401', async () => {
     const originalLocation = window.location
     delete (window as any).location
-    ;(window as any).location = { href: '', pathname: '/admin/tags', search: '?facet=topic' }
+    ;(window as any).location = {
+      href: '',
+      pathname: '/admin/tags',
+      search: '?facet=topic',
+    }
 
     try {
       global.fetch = jest.fn((url: string) => {
@@ -1491,7 +1767,11 @@ NewTopic,desc,,,topic,
             json: () => Promise.resolve({ ok: false, error: 'unauthorized' }),
           }) as any
         }
-        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }) as any
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({}),
+        }) as any
       })
 
       render(
@@ -1524,37 +1804,41 @@ NewTopic,desc,,,topic,
       if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            ok: true,
-            queued: 0,
-            running: 0,
-            done: 0,
-            error: 1,
-            recent: [
-              {
-                runId: '2cb8df76-60e1-4582-9839-082d512e4b57',
-                scope: 'all',
-                total: 1,
-                done: 0,
-                error: 1,
-                estCost: 0.001,
-                createdAt: '2026-08-17T12:00:00Z',
-                updatedAt: '2026-08-17T12:01:00Z',
-                errors: [
-                  {
-                    documentId: '77f1a7c6-6dba-4dc4-b10f-d62d9143b6bd',
-                    externalId: 'WRI-42',
-                    title: 'Climate report',
-                    attempts: 2,
-                    error: 'model timeout',
-                  },
-                ],
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              queued: 0,
+              running: 0,
+              done: 0,
+              error: 1,
+              recent: [
+                {
+                  runId: '2cb8df76-60e1-4582-9839-082d512e4b57',
+                  scope: 'all',
+                  total: 1,
+                  done: 0,
+                  error: 1,
+                  estCost: 0.001,
+                  createdAt: '2026-08-17T12:00:00Z',
+                  updatedAt: '2026-08-17T12:01:00Z',
+                  errors: [
+                    {
+                      documentId: '77f1a7c6-6dba-4dc4-b10f-d62d9143b6bd',
+                      externalId: 'WRI-42',
+                      title: 'Climate report',
+                      attempts: 2,
+                      error: 'model timeout',
+                    },
+                  ],
+                },
+              ],
+            }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -1564,7 +1848,9 @@ NewTopic,desc,,,topic,
     )
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy(),
+    )
 
     fireEvent.click(screen.getByRole('button', { name: '1 error' }))
 
@@ -1586,36 +1872,41 @@ NewTopic,desc,,,topic,
       if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            ok: true,
-            queued: 0,
-            running: 0,
-            done: 0,
-            error: 1,
-            recent: [
-              {
-                runId,
-                scope: 'all',
-                total: 1,
-                done: 0,
-                error: 1,
-                estCost: 0.001,
-                createdAt: '2026-08-17T12:00:00Z',
-                updatedAt: '2026-08-17T12:01:00Z',
-                errors: [],
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              queued: 0,
+              running: 0,
+              done: 0,
+              error: 1,
+              recent: [
+                {
+                  runId,
+                  scope: 'all',
+                  total: 1,
+                  done: 0,
+                  error: 1,
+                  estCost: 0.001,
+                  createdAt: '2026-08-17T12:00:00Z',
+                  updatedAt: '2026-08-17T12:01:00Z',
+                  errors: [],
+                },
+              ],
+            }),
         }) as any
       }
       if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ ok: true, enqueued: 1, estCost: 0.001, runId }),
+          json: () =>
+            Promise.resolve({ ok: true, enqueued: 1, estCost: 0.001, runId }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
     global.fetch = fetchMock
 
@@ -1626,7 +1917,9 @@ NewTopic,desc,,,topic,
     )
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy(),
+    )
     fireEvent.click(screen.getByRole('button', { name: '1 error' }))
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
@@ -1652,36 +1945,41 @@ NewTopic,desc,,,topic,
       if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            ok: true,
-            queued: 0,
-            running: 0,
-            done: 0,
-            error: 1,
-            recent: [
-              {
-                runId,
-                scope: 'all',
-                total: 1,
-                done: 0,
-                error: 1,
-                estCost: 0.001,
-                createdAt: '2026-08-17T12:00:00Z',
-                updatedAt: '2026-08-17T12:01:00Z',
-                errors: [],
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              queued: 0,
+              running: 0,
+              done: 0,
+              error: 1,
+              recent: [
+                {
+                  runId,
+                  scope: 'all',
+                  total: 1,
+                  done: 0,
+                  error: 1,
+                  estCost: 0.001,
+                  createdAt: '2026-08-17T12:00:00Z',
+                  updatedAt: '2026-08-17T12:01:00Z',
+                  errors: [],
+                },
+              ],
+            }),
         }) as any
       }
       if (url === '/api/admin/topics/reclassify' && init?.method === 'POST') {
         return Promise.resolve({
           ok: false,
           status: 500,
-          json: () => Promise.resolve({ ok: false, error: 'Retry queue unavailable.' }),
+          json: () =>
+            Promise.resolve({ ok: false, error: 'Retry queue unavailable.' }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     render(
@@ -1691,7 +1989,9 @@ NewTopic,desc,,,topic,
     )
     await waitFor(() => expect(screen.getByText('Coal')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '1 error' })).toBeTruthy(),
+    )
     fireEvent.click(screen.getByRole('button', { name: '1 error' }))
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
@@ -1713,16 +2013,40 @@ NewTopic,desc,,,topic,
       if (url === '/api/admin/topics/reclassify/status') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            ok: true, queued: 47, running: 0, done: 156, error: 0,
-            recent: [
-              { runId: 'run-1', scope: 'all', total: 203, done: 156, error: 0, estCost: 0.17, createdAt: '2026-08-17T12:00:00Z' },
-              { runId: 'run-2', scope: 't1', total: 12, done: 12, error: 0, estCost: 0.01, createdAt: '2026-08-17T11:00:00Z' },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              queued: 47,
+              running: 0,
+              done: 156,
+              error: 0,
+              recent: [
+                {
+                  runId: 'run-1',
+                  scope: 'all',
+                  total: 203,
+                  done: 156,
+                  error: 0,
+                  estCost: 0.17,
+                  createdAt: '2026-08-17T12:00:00Z',
+                },
+                {
+                  runId: 'run-2',
+                  scope: 't1',
+                  total: 12,
+                  done: 12,
+                  error: 0,
+                  estCost: 0.01,
+                  createdAt: '2026-08-17T11:00:00Z',
+                },
+              ],
+            }),
         }) as any
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) as any
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }) as any
     })
 
     const { unmount } = render(

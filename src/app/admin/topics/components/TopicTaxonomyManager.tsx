@@ -20,8 +20,7 @@ interface TopicRow {
 }
 
 type Notice =
-  | { kind: 'success'; message: string }
-  | { kind: 'error'; message: string }
+  { kind: 'success'; message: string } | { kind: 'error'; message: string }
 
 interface ReclassifyConfirmation {
   requestId: number
@@ -72,7 +71,10 @@ function hasTree(tags: TopicRow[]): boolean {
   return tags.some((t) => t.parentTagId !== null)
 }
 
-function descendantIds(tags: TopicRow[], tagIds: Iterable<string>): Set<string> {
+function descendantIds(
+  tags: TopicRow[],
+  tagIds: Iterable<string>,
+): Set<string> {
   const children = buildChildrenMap(tags)
   const descendants = new Set<string>()
   const pending = [...tagIds]
@@ -121,11 +123,13 @@ function useDialogBehavior(onClose: () => void, busy = false) {
   }, [busy])
 
   useEffect(() => {
-    const returnFocus = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null
+    const returnFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
     const dialog = dialogRef.current
-    const initialFocus = dialog?.querySelector<HTMLElement>('[data-autofocus]') ?? dialog
+    const initialFocus =
+      dialog?.querySelector<HTMLElement>('[data-autofocus]') ?? dialog
     initialFocus?.focus()
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -150,10 +154,16 @@ function useDialogBehavior(onClose: () => void, busy = false) {
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
       const active = document.activeElement
-      if (event.shiftKey && (active === first || !dialogRef.current.contains(active))) {
+      if (
+        event.shiftKey &&
+        (active === first || !dialogRef.current.contains(active))
+      ) {
         event.preventDefault()
         last.focus()
-      } else if (!event.shiftKey && (active === last || !dialogRef.current.contains(active))) {
+      } else if (
+        !event.shiftKey &&
+        (active === last || !dialogRef.current.contains(active))
+      ) {
         event.preventDefault()
         first.focus()
       }
@@ -176,10 +186,14 @@ export const TopicTaxonomyManager = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [parentFilter, setParentFilter] = useState<'all' | 'root' | 'child'>('all')
+  const [parentFilter, setParentFilter] = useState<'all' | 'root' | 'child'>(
+    'all',
+  )
   const [minimumDocs, setMinimumDocs] = useState('')
   const [maximumDocs, setMaximumDocs] = useState('')
-  const [reembedFilter, setReembedFilter] = useState<'all' | 'needed' | 'current'>('all')
+  const [reembedFilter, setReembedFilter] = useState<
+    'all' | 'needed' | 'current'
+  >('all')
   const [viewMode, setViewMode] = useState<'tree' | 'flat'>('tree')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -203,10 +217,44 @@ export const TopicTaxonomyManager = () => {
 
   // ---- CSV import/export state ----
   const [csvDiff, setCsvDiff] = useState<{
-    added: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }[]
-    updated: { row: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }; current: any }[]
-    unchanged: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }[]
-    conflicts: { row: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }; reason: string }[]
+    added: {
+      label: string
+      description: string
+      aliases: string[]
+      parent: string
+      facet: string
+      id: string
+    }[]
+    updated: {
+      row: {
+        label: string
+        description: string
+        aliases: string[]
+        parent: string
+        facet: string
+        id: string
+      }
+      current: any
+    }[]
+    unchanged: {
+      label: string
+      description: string
+      aliases: string[]
+      parent: string
+      facet: string
+      id: string
+    }[]
+    conflicts: {
+      row: {
+        label: string
+        description: string
+        aliases: string[]
+        parent: string
+        facet: string
+        id: string
+      }
+      reason: string
+    }[]
   } | null>(null)
   const [csvLoading, setCsvLoading] = useState(false)
   const [csvError, setCsvError] = useState<string | null>(null)
@@ -216,7 +264,8 @@ export const TopicTaxonomyManager = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ---- reclassify state ----
-  const [reclassifyConfirmation, setReclassifyConfirmation] = useState<ReclassifyConfirmation | null>(null)
+  const [reclassifyConfirmation, setReclassifyConfirmation] =
+    useState<ReclassifyConfirmation | null>(null)
   const [reclassifyStarting, setReclassifyStarting] = useState(false)
   const reclassifyStartingRef = useRef(false)
   const reclassifyRequestIdRef = useRef(0)
@@ -252,20 +301,26 @@ export const TopicTaxonomyManager = () => {
   const [scopedTopicId, setScopedTopicId] = useState('')
   const [scopedModalOpen, setScopedModalOpen] = useState(false)
 
-  const showNotice = useCallback((kind: Notice['kind'], message: string, duration = 3000) => {
-    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
-    setNotice({ kind, message })
-    noticeTimerRef.current = setTimeout(() => {
-      setNotice(null)
-      noticeTimerRef.current = null
-    }, duration)
-  }, [])
+  const showNotice = useCallback(
+    (kind: Notice['kind'], message: string, duration = 3000) => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+      setNotice({ kind, message })
+      noticeTimerRef.current = setTimeout(() => {
+        setNotice(null)
+        noticeTimerRef.current = null
+      }, duration)
+    },
+    [],
+  )
 
-  useEffect(() => () => {
-    reclassifyRequestIdRef.current += 1
-    reclassifyPostIdRef.current += 1
-    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
-  }, [])
+  useEffect(
+    () => () => {
+      reclassifyRequestIdRef.current += 1
+      reclassifyPostIdRef.current += 1
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+    },
+    [],
+  )
 
   // ---- load ----
   const load = useCallback(async () => {
@@ -331,8 +386,10 @@ export const TopicTaxonomyManager = () => {
       if (!matchesSearch) return false
       if (parentFilter === 'root' && t.parentTagId !== null) return false
       if (parentFilter === 'child' && t.parentTagId === null) return false
-      if (minimumDocs !== '' && t.acceptedCount < Number(minimumDocs)) return false
-      if (maximumDocs !== '' && t.acceptedCount > Number(maximumDocs)) return false
+      if (minimumDocs !== '' && t.acceptedCount < Number(minimumDocs))
+        return false
+      if (maximumDocs !== '' && t.acceptedCount > Number(maximumDocs))
+        return false
       if (reembedFilter === 'needed' && !t.needsReembed) return false
       if (reembedFilter === 'current' && t.needsReembed) return false
       return true
@@ -347,10 +404,7 @@ export const TopicTaxonomyManager = () => {
     maximumDocs !== '' ||
     reembedFilter !== 'all'
   const useTree =
-    !isSearching &&
-    !isFiltering &&
-    viewMode === 'tree' &&
-    hasTree(filteredTags)
+    !isSearching && !isFiltering && viewMode === 'tree' && hasTree(filteredTags)
   const displayList = useMemo(() => {
     if (isSearching) return filteredTags // flat filtered list on search
     if (useTree) return flattenTree(filteredTags, expanded) // DFS order, collapsed nodes hide children
@@ -376,7 +430,10 @@ export const TopicTaxonomyManager = () => {
 
   // Build children count for tree toggle display
   const childrenMap = useMemo(
-    () => (useTree ? buildChildrenMap(filteredTags) : new Map<string | null, TopicRow[]>()),
+    () =>
+      useTree
+        ? buildChildrenMap(filteredTags)
+        : new Map<string | null, TopicRow[]>(),
     [filteredTags, useTree],
   )
 
@@ -421,7 +478,9 @@ export const TopicTaxonomyManager = () => {
     const failed: { label: string; reason: string }[] = []
     for (const tag of selectedTags) {
       try {
-        const res = await fetch(`/api/admin/topics/${tag.id}`, { method: 'DELETE' })
+        const res = await fetch(`/api/admin/topics/${tag.id}`, {
+          method: 'DELETE',
+        })
         const body = await res.json().catch(() => ({}))
         if (res.status === 401) {
           window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
@@ -430,7 +489,10 @@ export const TopicTaxonomyManager = () => {
         if (res.ok) {
           deleted++
         } else {
-          failed.push({ label: tag.valueId, reason: body.error || 'unknown error' })
+          failed.push({
+            label: tag.valueId,
+            reason: body.error || 'unknown error',
+          })
         }
       } catch {
         failed.push({ label: tag.valueId, reason: 'network error' })
@@ -438,7 +500,10 @@ export const TopicTaxonomyManager = () => {
     }
     setDeleteResults({ deleted, failed })
     if (deleted > 0) {
-      showNotice('success', `${deleted} topic${deleted !== 1 ? 's' : ''} deleted.`)
+      showNotice(
+        'success',
+        `${deleted} topic${deleted !== 1 ? 's' : ''} deleted.`,
+      )
       load()
     }
     setSelected(new Set())
@@ -459,7 +524,10 @@ export const TopicTaxonomyManager = () => {
         showNotice('error', body.error || 'Embedding rebuild failed.')
         return
       }
-      showNotice('success', `Queued ${body.queued} topic embeddings for rebuild.`)
+      showNotice(
+        'success',
+        `Queued ${body.queued} topic embeddings for rebuild.`,
+      )
       load()
     } catch {
       showNotice('error', 'Embedding rebuild failed.')
@@ -528,11 +596,14 @@ export const TopicTaxonomyManager = () => {
         reader.onerror = () => reject(new Error('Failed to read file'))
         reader.readAsText(file)
       })
-      const res = await fetch(`/api/admin/topics/import?reclassify=${csvReclassify}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/csv' },
-        body: text,
-      })
+      const res = await fetch(
+        `/api/admin/topics/import?reclassify=${csvReclassify}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/csv' },
+          body: text,
+        },
+      )
       if (res.status === 401) {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
@@ -543,7 +614,10 @@ export const TopicTaxonomyManager = () => {
         setCsvApplying(false)
         return
       }
-      showNotice('success', `Imported ${body.applied} change${body.applied !== 1 ? 's' : ''}.`)
+      showNotice(
+        'success',
+        `Imported ${body.applied} change${body.applied !== 1 ? 's' : ''}.`,
+      )
       setCsvDiff(null)
       setCsvFilename('')
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -628,9 +702,7 @@ export const TopicTaxonomyManager = () => {
     setReclassifyConfirmation({ requestId, scope, estimate: null, error: null })
     try {
       const query =
-        scope === 'all'
-          ? 'scope=all'
-          : `tagId=${encodeURIComponent(scope)}`
+        scope === 'all' ? 'scope=all' : `tagId=${encodeURIComponent(scope)}`
       const res = await fetch(`/api/admin/topics/reclassify?${query}`)
       if (reclassifyRequestIdRef.current !== requestId) return
       if (res.status === 401) {
@@ -642,13 +714,19 @@ export const TopicTaxonomyManager = () => {
       if (res.ok && body.ok !== false) {
         setReclassifyConfirmation((current) =>
           current?.requestId === requestId && current.scope === scope
-            ? { ...current, estimate: { eligible: body.eligible, estCost: body.estCost } }
+            ? {
+                ...current,
+                estimate: { eligible: body.eligible, estCost: body.estCost },
+              }
             : current,
         )
       } else {
         setReclassifyConfirmation((current) =>
           current?.requestId === requestId && current.scope === scope
-            ? { ...current, error: body.error || 'Failed to estimate re-classify.' }
+            ? {
+                ...current,
+                error: body.error || 'Failed to estimate re-classify.',
+              }
             : current,
         )
       }
@@ -688,7 +766,8 @@ export const TopicTaxonomyManager = () => {
       !confirmation?.estimate ||
       confirmation.estimate.eligible === 0 ||
       reclassifyStartingRef.current
-    ) return
+    )
+      return
     const { requestId, scope } = confirmation
     const postId = reclassifyPostIdRef.current + 1
     reclassifyPostIdRef.current = postId
@@ -699,9 +778,7 @@ export const TopicTaxonomyManager = () => {
     )
     try {
       const payload =
-        scope === 'all'
-          ? { scope: 'all' as const }
-          : { tagId: scope }
+        scope === 'all' ? { scope: 'all' as const } : { tagId: scope }
       const res = await fetch('/api/admin/topics/reclassify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -710,7 +787,8 @@ export const TopicTaxonomyManager = () => {
       if (
         reclassifyPostIdRef.current !== postId ||
         reclassifyRequestIdRef.current !== requestId
-      ) return
+      )
+        return
       if (res.status === 401) {
         window.location.href = `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
         return
@@ -719,18 +797,26 @@ export const TopicTaxonomyManager = () => {
       if (
         reclassifyPostIdRef.current !== postId ||
         reclassifyRequestIdRef.current !== requestId
-      ) return
+      )
+        return
       if (!res.ok || body.ok === false) {
         setReclassifyConfirmation((current) =>
           current?.requestId === requestId
-            ? { ...current, error: body.error || 'Failed to start re-classify.' }
+            ? {
+                ...current,
+                error: body.error || 'Failed to start re-classify.',
+              }
             : current,
         )
         return
       }
       reclassifyRequestIdRef.current += 1
       setReclassifyConfirmation(null)
-      showNotice('success', `Re-classify enqueued: ${body.enqueued} docs (≈$${body.estCost.toFixed(4)}).`, 4000)
+      showNotice(
+        'success',
+        `Re-classify enqueued: ${body.enqueued} docs (≈$${body.estCost.toFixed(4)}).`,
+        4000,
+      )
       setReclassifyPanelOpen(true)
     } catch {
       if (
@@ -786,21 +872,18 @@ export const TopicTaxonomyManager = () => {
   // ---- render ----
   return (
     <Box style={{ paddingBottom: 48 }}>
-      <Heading
-        size='lg'
-        style={{ marginBottom: 8, color: '#1a365d' }}
-      >
+      <Heading size='lg' style={{ marginBottom: 8, color: '#1a365d' }}>
         Topic taxonomy
       </Heading>
-      <Text
-        style={{ marginBottom: 16, color: '#595959', fontStyle: 'italic' }}
-      >
+      <Text style={{ marginBottom: 16, color: '#595959', fontStyle: 'italic' }}>
         The controlled vocabulary of topics used to classify documents.
         Language-neutral; extensible to other facets later.
       </Text>
 
       {/* Stats strip */}
-      <Box style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+      <Box
+        style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}
+      >
         <Stat label='topics' value={topicCount} />
         <Stat label='docs tagged' value={docsTagged} />
         <Stat label='suggested' value={suggestedCount} />
@@ -824,23 +907,92 @@ export const TopicTaxonomyManager = () => {
             padding: '8px 10px',
           }}
         >
-          <Box as='span' style={{ fontSize: 12, fontWeight: 700, color: '#1a365d' }}>
+          <Box
+            as='span'
+            style={{ fontSize: 12, fontWeight: 700, color: '#1a365d' }}
+          >
             {selected.size} selected
           </Box>
-          <button className="admin-btn" onClick={() => setMergeModalOpen(true)} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
+          <button
+            className='admin-btn'
+            onClick={() => setMergeModalOpen(true)}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #c3dafe',
+              borderRadius: 7,
+              padding: '4px 10px',
+              cursor: 'pointer',
+              color: '#1a365d',
+              background: '#fff',
+              fontWeight: 600,
+            }}
+          >
             Merge into…
           </button>
-          <button className="admin-btn" onClick={() => setReparentModalOpen(true)} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #c3dafe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff', fontWeight: 600 }}>
+          <button
+            className='admin-btn'
+            onClick={() => setReparentModalOpen(true)}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #c3dafe',
+              borderRadius: 7,
+              padding: '4px 10px',
+              cursor: 'pointer',
+              color: '#1a365d',
+              background: '#fff',
+              fontWeight: 600,
+            }}
+          >
             Re-parent…
           </button>
-          <button className="admin-btn" onClick={handleDelete} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #f0b4b4', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: '#C11101', background: '#fff', fontWeight: 600 }}>
+          <button
+            className='admin-btn'
+            onClick={handleDelete}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #f0b4b4',
+              borderRadius: 7,
+              padding: '4px 10px',
+              cursor: 'pointer',
+              color: '#C11101',
+              background: '#fff',
+              fontWeight: 600,
+            }}
+          >
             Delete unused
           </button>
           <Box style={{ flex: 1 }} />
-          <button className="admin-btn" onClick={() => setSelected(new Set(filteredTags.map((t) => t.id)))} style={{ fontFamily: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
+          <button
+            className='admin-btn'
+            onClick={() => setSelected(new Set(filteredTags.map((t) => t.id)))}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: 'none',
+              background: 'transparent',
+              color: '#1a365d',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
             Select all
           </button>
-          <button className="admin-btn" onClick={clearSelection} style={{ fontFamily: 'inherit', fontSize: 11, border: 'none', background: 'transparent', color: '#1a365d', cursor: 'pointer', textDecoration: 'underline' }}>
+          <button
+            className='admin-btn'
+            onClick={clearSelection}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: 'none',
+              background: 'transparent',
+              color: '#1a365d',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
             Clear
           </button>
         </Box>
@@ -879,7 +1031,14 @@ export const TopicTaxonomyManager = () => {
               setParentFilter(e.target.value as 'all' | 'root' | 'child')
               setVisibleCount(PAGE_SIZE)
             }}
-            style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 11, fontFamily: 'inherit', color: '#4a5568' }}
+            style={{
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 8px',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              color: '#4a5568',
+            }}
           >
             <option value='all'>All parents</option>
             <option value='root'>Root only</option>
@@ -895,7 +1054,15 @@ export const TopicTaxonomyManager = () => {
               setMinimumDocs(e.target.value)
               setVisibleCount(PAGE_SIZE)
             }}
-            style={{ width: 74, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 11, fontFamily: 'inherit', color: '#4a5568' }}
+            style={{
+              width: 74,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 8px',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              color: '#4a5568',
+            }}
           />
           <input
             type='number'
@@ -907,7 +1074,15 @@ export const TopicTaxonomyManager = () => {
               setMaximumDocs(e.target.value)
               setVisibleCount(PAGE_SIZE)
             }}
-            style={{ width: 74, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 11, fontFamily: 'inherit', color: '#4a5568' }}
+            style={{
+              width: 74,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 8px',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              color: '#4a5568',
+            }}
           />
           <select
             aria-label='Re-embed state'
@@ -916,7 +1091,14 @@ export const TopicTaxonomyManager = () => {
               setReembedFilter(e.target.value as 'all' | 'needed' | 'current')
               setVisibleCount(PAGE_SIZE)
             }}
-            style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 11, fontFamily: 'inherit', color: '#4a5568' }}
+            style={{
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 8px',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              color: '#4a5568',
+            }}
           >
             <option value='all'>All embeddings</option>
             <option value='needed'>Needs re-embed</option>
@@ -943,38 +1125,130 @@ export const TopicTaxonomyManager = () => {
               />
             </Box>
           )}
-          <button className="admin-btn"
+          <button
+            className='admin-btn'
             onClick={() => setCreateModalOpen(true)}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 11px', color: '#fff', background: '#1a365d', fontWeight: 600, cursor: 'pointer' }}
-          >New topic</button>
-          <button className="admin-btn"
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #1a365d',
+              borderRadius: 7,
+              padding: '5px 11px',
+              color: '#fff',
+              background: '#1a365d',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            New topic
+          </button>
+          <button
+            className='admin-btn'
             onClick={() => fileInputRef.current?.click()}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              color: '#1a365d',
+              background: '#fff',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
           >
             Import CSV
           </button>
-          <button className="admin-btn"
+          <button
+            className='admin-btn'
             onClick={handleExport}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
-          >Export CSV</button>
-          <button className="admin-btn"
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              color: '#1a365d',
+              background: '#fff',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Export CSV
+          </button>
+          <button
+            className='admin-btn'
             onClick={handleRebuildEmbeddings}
             disabled={rebuildBusy}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: rebuildBusy ? 'wait' : 'pointer', opacity: rebuildBusy ? 0.6 : 1 }}
-          >{rebuildBusy ? 'Rebuilding…' : 'Rebuild embeddings'}</button>
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              color: '#1a365d',
+              background: '#fff',
+              fontWeight: 600,
+              cursor: rebuildBusy ? 'wait' : 'pointer',
+              opacity: rebuildBusy ? 0.6 : 1,
+            }}
+          >
+            {rebuildBusy ? 'Rebuilding…' : 'Rebuild embeddings'}
+          </button>
           <Box style={{ flex: 1 }} />
-          <button className="admin-btn"
+          <button
+            className='admin-btn'
             onClick={openReclassifyAll}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 11px', color: '#fff', background: '#1a365d', fontWeight: 600, cursor: 'pointer' }}
-          >Re-classify all</button>
-          <button className="admin-btn"
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #1a365d',
+              borderRadius: 7,
+              padding: '5px 11px',
+              color: '#fff',
+              background: '#1a365d',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Re-classify all
+          </button>
+          <button
+            className='admin-btn'
             onClick={openReclassifyScoped}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
-          >Scoped to topic…</button>
-          <button className="admin-btn"
-            onClick={() => { setReclassifyPanelOpen(!reclassifyPanelOpen) }}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', color: '#1a365d', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
-          >{reclassifyPanelOpen ? 'Hide' : 'Show'} jobs</button>
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              color: '#1a365d',
+              background: '#fff',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Scoped to topic…
+          </button>
+          <button
+            className='admin-btn'
+            onClick={() => {
+              setReclassifyPanelOpen(!reclassifyPanelOpen)
+            }}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              color: '#1a365d',
+              background: '#fff',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {reclassifyPanelOpen ? 'Hide' : 'Show'} jobs
+          </button>
         </Box>
       )}
 
@@ -1051,10 +1325,12 @@ export const TopicTaxonomyManager = () => {
         >
           {deleteResults.deleted > 0 && (
             <Box style={{ marginBottom: 4, color: '#2f855a' }}>
-              {deleteResults.deleted} topic{deleteResults.deleted !== 1 ? 's' : ''} deleted.
+              {deleteResults.deleted} topic
+              {deleteResults.deleted !== 1 ? 's' : ''} deleted.
             </Box>
           )}
-          {deleteResults.failed.length} tag{deleteResults.failed.length !== 1 ? 's' : ''} in use, cannot delete:{' '}
+          {deleteResults.failed.length} tag
+          {deleteResults.failed.length !== 1 ? 's' : ''} in use, cannot delete:{' '}
           {deleteResults.failed.map((f) => f.label).join(', ')}
         </Box>
       )}
@@ -1094,9 +1370,13 @@ export const TopicTaxonomyManager = () => {
             <Box style={{ width: 14, display: 'flex', alignItems: 'center' }}>
               <input
                 type='checkbox'
-                checked={visibleTags.length > 0 && visibleTags.every((t) => selected.has(t.id))}
+                checked={
+                  visibleTags.length > 0 &&
+                  visibleTags.every((t) => selected.has(t.id))
+                }
                 onChange={(e) => {
-                  if (e.target.checked) setSelected(new Set(filteredTags.map((t) => t.id)))
+                  if (e.target.checked)
+                    setSelected(new Set(filteredTags.map((t) => t.id)))
                   else setSelected(new Set())
                 }}
                 style={{ margin: 0, cursor: 'pointer' }}
@@ -1124,7 +1404,9 @@ export const TopicTaxonomyManager = () => {
                   paddingLeft: 10 + indent,
                 }}
               >
-              <Box style={{ width: 14, display: 'flex', alignItems: 'center' }}>
+                <Box
+                  style={{ width: 14, display: 'flex', alignItems: 'center' }}
+                >
                   <input
                     type='checkbox'
                     checked={selected.has(tag.id)}
@@ -1158,7 +1440,10 @@ export const TopicTaxonomyManager = () => {
                   </Box>
                 )}
                 {/* Label + sub-text */}
-                <Box style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setEditingTag(tag)}>
+                <Box
+                  style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                  onClick={() => setEditingTag(tag)}
+                >
                   <Box
                     as='span'
                     style={{
@@ -1206,7 +1491,10 @@ export const TopicTaxonomyManager = () => {
           })}
           {/* Progressive-render sentinel */}
           {hasMore && (
-            <div ref={sentinelCallbackRef} style={{ height: 1, background: 'transparent' }} />
+            <div
+              ref={sentinelCallbackRef}
+              style={{ height: 1, background: 'transparent' }}
+            />
           )}
         </Box>
       )}
@@ -1219,7 +1507,8 @@ export const TopicTaxonomyManager = () => {
           color: '#595959',
         }}
       >
-        {displayList.length} tags{hasMore ? `, showing ${visibleTags.length}` : ''}
+        {displayList.length} tags
+        {hasMore ? `, showing ${visibleTags.length}` : ''}
       </Text>
 
       {/* Edit drawer */}
@@ -1283,7 +1572,9 @@ export const TopicTaxonomyManager = () => {
         <ReclassifyConfirmModal
           scope={reclassifyConfirmation.scope}
           estimate={reclassifyConfirmation.estimate}
-          loading={!reclassifyConfirmation.estimate && !reclassifyConfirmation.error}
+          loading={
+            !reclassifyConfirmation.estimate && !reclassifyConfirmation.error
+          }
           error={reclassifyConfirmation.error}
           allTags={tags}
           onStart={handleStartReclassify}
@@ -1319,7 +1610,15 @@ export const TopicTaxonomyManager = () => {
 
 // ---- sub-components ----
 
-const Stat = ({ label, value, warn }: { label: string; value: number; warn?: boolean }) => (
+const Stat = ({
+  label,
+  value,
+  warn,
+}: {
+  label: string
+  value: number
+  warn?: boolean
+}) => (
   <Box
     style={{
       background: warn ? '#fffbeb' : '#f7f7f7',
@@ -1330,7 +1629,14 @@ const Stat = ({ label, value, warn }: { label: string; value: number; warn?: boo
       color: warn ? '#7c3a00' : '#595959',
     }}
   >
-    <Box as='span' style={{ fontSize: 14, fontWeight: 700, color: warn ? '#7c3a00' : '#2d3748' }}>
+    <Box
+      as='span'
+      style={{
+        fontSize: 14,
+        fontWeight: 700,
+        color: warn ? '#7c3a00' : '#2d3748',
+      }}
+    >
       {value}
     </Box>{' '}
     {label}
@@ -1439,7 +1745,12 @@ const CreateTopicModal = ({
         onClick={() => {
           if (!creating) onClose()
         }}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(26,54,93,0.35)', zIndex: 100 }}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(26,54,93,0.35)',
+          zIndex: 100,
+        }}
       />
       <Box
         ref={dialogRef}
@@ -1461,30 +1772,123 @@ const CreateTopicModal = ({
           padding: 18,
         }}
       >
-        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading id='create-topic-title' size='sm' style={{ color: '#1a365d' }}>New topic</Heading>
-          <button type='button' aria-label='Close new topic' data-autofocus className='admin-btn' onClick={onClose} disabled={creating} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>✕</button>
+        <Box
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 14,
+          }}
+        >
+          <Heading
+            id='create-topic-title'
+            size='sm'
+            style={{ color: '#1a365d' }}
+          >
+            New topic
+          </Heading>
+          <button
+            type='button'
+            aria-label='Close new topic'
+            data-autofocus
+            className='admin-btn'
+            onClick={onClose}
+            disabled={creating}
+            style={{
+              fontFamily: 'inherit',
+              color: '#a0aec0',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 16,
+            }}
+          >
+            ✕
+          </button>
         </Box>
         {error && (
-          <Box style={{ fontSize: 12, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '8px 12px', marginBottom: 12 }}>
+          <Box
+            style={{
+              fontSize: 12,
+              color: '#C11101',
+              background: '#fff0f0',
+              border: '1px solid #f0b4b4',
+              borderRadius: 7,
+              padding: '8px 12px',
+              marginBottom: 12,
+            }}
+          >
             {error}
           </Box>
         )}
         <form onSubmit={handleCreate}>
           <Box style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 10, color: '#595959', marginBottom: 3 }}>Label</label>
-            <input aria-label='Topic label' value={label} onChange={(e) => setLabel(e.target.value)} style={inputStyle} />
+            <label
+              style={{
+                display: 'block',
+                fontSize: 10,
+                color: '#595959',
+                marginBottom: 3,
+              }}
+            >
+              Label
+            </label>
+            <input
+              aria-label='Topic label'
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              style={inputStyle}
+            />
           </Box>
           <Box style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 10, color: '#595959', marginBottom: 3 }}>Description</label>
-            <textarea aria-label='Topic description' value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} />
+            <label
+              style={{
+                display: 'block',
+                fontSize: 10,
+                color: '#595959',
+                marginBottom: 3,
+              }}
+            >
+              Description
+            </label>
+            <textarea
+              aria-label='Topic description'
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+            />
           </Box>
           <Box style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 10, color: '#595959', marginBottom: 3 }}>Aliases</label>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 10,
+                color: '#595959',
+                marginBottom: 3,
+              }}
+            >
+              Aliases
+            </label>
             {aliases.length > 0 && (
-              <Box style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 5 }}>
+              <Box
+                style={{
+                  display: 'flex',
+                  gap: 4,
+                  flexWrap: 'wrap',
+                  marginBottom: 5,
+                }}
+              >
                 {aliases.map((alias) => (
-                  <Box key={alias} style={{ fontSize: 11, background: '#ebf4ff', color: '#1a365d', borderRadius: 999, padding: '2px 8px' }}>
+                  <Box
+                    key={alias}
+                    style={{
+                      fontSize: 11,
+                      background: '#ebf4ff',
+                      color: '#1a365d',
+                      borderRadius: 999,
+                      padding: '2px 8px',
+                    }}
+                  >
                     {alias}
                   </Box>
                 ))}
@@ -1503,25 +1907,86 @@ const CreateTopicModal = ({
                 }}
                 style={{ ...inputStyle, flex: 1 }}
               />
-              <button type='button' aria-label='Add alias' className='admin-btn' onClick={addAlias} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 9px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+              <button
+                type='button'
+                aria-label='Add alias'
+                className='admin-btn'
+                onClick={addAlias}
+                style={{
+                  fontFamily: 'inherit',
+                  fontSize: 11,
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 6,
+                  padding: '2px 9px',
+                  cursor: 'pointer',
+                  color: '#1a365d',
+                  background: '#fff',
+                }}
+              >
                 Add
               </button>
             </Box>
           </Box>
           <Box style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 10, color: '#595959', marginBottom: 3 }}>Parent topic</label>
-            <select aria-label='Parent topic' value={parentTagId} onChange={(e) => setParentTagId(e.target.value)} style={inputStyle}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 10,
+                color: '#595959',
+                marginBottom: 3,
+              }}
+            >
+              Parent topic
+            </label>
+            <select
+              aria-label='Parent topic'
+              value={parentTagId}
+              onChange={(e) => setParentTagId(e.target.value)}
+              style={inputStyle}
+            >
               <option value=''>(root)</option>
               {allTags.map((tag) => (
-                <option key={tag.id} value={tag.id}>{tag.valueId}</option>
+                <option key={tag.id} value={tag.id}>
+                  {tag.valueId}
+                </option>
               ))}
             </select>
           </Box>
           <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button type='button' className='admin-btn' onClick={onClose} disabled={creating} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+            <button
+              type='button'
+              className='admin-btn'
+              onClick={onClose}
+              disabled={creating}
+              style={{
+                fontFamily: 'inherit',
+                fontSize: 11,
+                border: '1px solid #e2e8f0',
+                borderRadius: 7,
+                padding: '5px 10px',
+                cursor: 'pointer',
+                color: '#1a365d',
+                background: '#fff',
+              }}
+            >
               Cancel
             </button>
-            <button type='submit' className='admin-btn' disabled={creating || !label.trim()} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: creating || !label.trim() ? 0.5 : 1 }}>
+            <button
+              type='submit'
+              className='admin-btn'
+              disabled={creating || !label.trim()}
+              style={{
+                fontFamily: 'inherit',
+                fontSize: 11,
+                border: '1px solid #1a365d',
+                borderRadius: 7,
+                padding: '5px 10px',
+                cursor: 'pointer',
+                color: '#fff',
+                background: '#1a365d',
+                opacity: creating || !label.trim() ? 0.5 : 1,
+              }}
+            >
               {creating ? 'Creating…' : 'Create topic'}
             </button>
           </Box>
@@ -1568,14 +2033,11 @@ const EditDrawer = ({
   useEscapeClose(onClose, saving)
 
   // Exclude self and descendants so the UI cannot offer a cyclic parent.
-  const parentOptions = useMemo(
-    () => {
-      const excluded = descendantIds(allTags, [tag.id])
-      excluded.add(tag.id)
-      return allTags.filter((t) => !excluded.has(t.id))
-    },
-    [allTags, tag.id],
-  )
+  const parentOptions = useMemo(() => {
+    const excluded = descendantIds(allTags, [tag.id])
+    excluded.add(tag.id)
+    return allTags.filter((t) => !excluded.has(t.id))
+  }, [allTags, tag.id])
 
   // Load history when History tab is clicked
   useEffect(() => {
@@ -1689,30 +2151,59 @@ const EditDrawer = ({
         }}
       >
         {/* Header */}
-        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <Heading size='sm' style={{ color: '#1a365d' }}>Edit topic</Heading>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+        <Box
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 12,
+          }}
+        >
+          <Heading size='sm' style={{ color: '#1a365d' }}>
+            Edit topic
+          </Heading>
+          <button
+            className='admin-btn'
+            onClick={onClose}
+            style={{
+              fontFamily: 'inherit',
+              color: '#a0aec0',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 16,
+            }}
+          >
             ✕
           </button>
         </Box>
 
         {/* Top-of-drawer error (non-cycle errors) */}
         {drawerError && (
-          <Box style={{
-            fontSize: 11,
-            color: '#C11101',
-            background: '#fff0f0',
-            border: '1px solid #f0b4b4',
-            borderRadius: 7,
-            padding: '6px 10px',
-            marginBottom: 12,
-          }}>
+          <Box
+            style={{
+              fontSize: 11,
+              color: '#C11101',
+              background: '#fff0f0',
+              border: '1px solid #f0b4b4',
+              borderRadius: 7,
+              padding: '6px 10px',
+              marginBottom: 12,
+            }}
+          >
             {drawerError}
           </Box>
         )}
 
         {/* Tabs */}
-        <Box style={{ display: 'flex', gap: 14, borderBottom: '1px solid #e2e8f0', marginBottom: 12 }}>
+        <Box
+          style={{
+            display: 'flex',
+            gap: 14,
+            borderBottom: '1px solid #e2e8f0',
+            marginBottom: 12,
+          }}
+        >
           {(['edit', 'history', 'docs'] as const).map((t) => (
             <Box
               key={t}
@@ -1723,7 +2214,8 @@ const EditDrawer = ({
                 fontSize: 12,
                 padding: '5px 2px',
                 border: 'none',
-                borderBottom: tab === t ? '2px solid #1a365d' : '2px solid transparent',
+                borderBottom:
+                  tab === t ? '2px solid #1a365d' : '2px solid transparent',
                 color: tab === t ? '#1a365d' : '#595959',
                 fontWeight: tab === t ? 700 : 400,
                 cursor: 'pointer',
@@ -1731,7 +2223,11 @@ const EditDrawer = ({
                 textTransform: 'capitalize' as const,
               }}
             >
-              {t === 'docs' ? `Docs (${tag.acceptedCount})` : t === 'history' ? 'History' : 'Edit'}
+              {t === 'docs'
+                ? `Docs (${tag.acceptedCount})`
+                : t === 'history'
+                  ? 'History'
+                  : 'Edit'}
             </Box>
           ))}
         </Box>
@@ -1752,26 +2248,52 @@ const EditDrawer = ({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                style={{ ...inputStyle, minHeight: 50, resize: 'vertical' as const }}
+                style={{
+                  ...inputStyle,
+                  minHeight: 50,
+                  resize: 'vertical' as const,
+                }}
               />
             </Box>
             <Box style={{ marginBottom: 9 }}>
               <label style={fieldLabel}>Aliases</label>
-              <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+              <Box
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 4,
+                  marginBottom: 4,
+                }}
+              >
                 {aliases.map((a) => (
-                  <Box key={a} style={{
-                    fontSize: 11,
-                    background: '#ebf4ff',
-                    color: '#1a365d',
-                    border: '1px solid #c3dafe',
-                    borderRadius: 999,
-                    padding: '2px 8px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}>
+                  <Box
+                    key={a}
+                    style={{
+                      fontSize: 11,
+                      background: '#ebf4ff',
+                      color: '#1a365d',
+                      border: '1px solid #c3dafe',
+                      borderRadius: 999,
+                      padding: '2px 8px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
                     {a}
-                    <button className="admin-btn" onClick={() => removeAlias(a)} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11 }}>
+                    <button
+                      className='admin-btn'
+                      onClick={() => removeAlias(a)}
+                      style={{
+                        fontFamily: 'inherit',
+                        color: '#a0aec0',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontSize: 11,
+                      }}
+                    >
                       ✕
                     </button>
                   </Box>
@@ -1781,11 +2303,29 @@ const EditDrawer = ({
                 <input
                   value={aliasInput}
                   onChange={(e) => setAliasInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAlias() } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addAlias()
+                    }
+                  }}
                   placeholder='Add alias…'
                   style={{ ...inputStyle, flex: 1 }}
                 />
-                <button className="admin-btn" onClick={addAlias} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                <button
+                  className='admin-btn'
+                  onClick={addAlias}
+                  style={{
+                    fontFamily: 'inherit',
+                    fontSize: 11,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 6,
+                    padding: '2px 8px',
+                    cursor: 'pointer',
+                    color: '#1a365d',
+                    background: '#fff',
+                  }}
+                >
                   Add
                 </button>
               </Box>
@@ -1795,12 +2335,18 @@ const EditDrawer = ({
               <select
                 aria-label='Parent topic'
                 value={parentTagId}
-                onChange={(e) => { setParentTagId(e.target.value); setParentError(null); setDrawerError(null) }}
+                onChange={(e) => {
+                  setParentTagId(e.target.value)
+                  setParentError(null)
+                  setDrawerError(null)
+                }}
                 style={inputStyle}
               >
                 <option value=''>(root)</option>
                 {parentOptions.map((t) => (
-                  <option key={t.id} value={t.id}>{t.valueId}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.valueId}
+                  </option>
                 ))}
               </select>
               {parentError && (
@@ -1810,11 +2356,46 @@ const EditDrawer = ({
               )}
             </Box>
             {/* Save / Cancel */}
-            <Box style={{ display: 'flex', gap: 7, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+            <Box
+              style={{
+                display: 'flex',
+                gap: 7,
+                justifyContent: 'flex-end',
+                marginTop: 12,
+              }}
+            >
+              <button
+                className='admin-btn'
+                onClick={onClose}
+                style={{
+                  fontFamily: 'inherit',
+                  fontSize: 11,
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 7,
+                  padding: '5px 10px',
+                  cursor: 'pointer',
+                  color: '#1a365d',
+                  background: '#fff',
+                }}
+              >
                 Cancel
               </button>
-              <button className="admin-btn" onClick={handleSave} disabled={saving} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}>
+              <button
+                className='admin-btn'
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  fontFamily: 'inherit',
+                  fontSize: 11,
+                  border: '1px solid #1a365d',
+                  borderRadius: 7,
+                  padding: '5px 10px',
+                  cursor: 'pointer',
+                  color: '#fff',
+                  background: '#1a365d',
+                  opacity: saving ? 0.5 : 1,
+                }}
+              >
                 {saving ? 'Saving…' : 'Save'}
               </button>
             </Box>
@@ -1825,18 +2406,34 @@ const EditDrawer = ({
         {tab === 'history' && (
           <Box>
             {historyLoading ? (
-              <Text style={{ color: '#595959', fontSize: 12 }}>Loading history…</Text>
+              <Text style={{ color: '#595959', fontSize: 12 }}>
+                Loading history…
+              </Text>
             ) : history.length === 0 ? (
-              <Text style={{ color: '#595959', fontSize: 12 }}>No history entries.</Text>
+              <Text style={{ color: '#595959', fontSize: 12 }}>
+                No history entries.
+              </Text>
             ) : (
               history.map((entry, i) => (
-                <Box key={i} style={{ padding: '8px 0', borderBottom: '1px solid #edf2f7' }}>
-                  <Box style={{ fontSize: 12, fontWeight: 600, color: '#1a365d' }}>{entry.action}</Box>
+                <Box
+                  key={i}
+                  style={{
+                    padding: '8px 0',
+                    borderBottom: '1px solid #edf2f7',
+                  }}
+                >
+                  <Box
+                    style={{ fontSize: 12, fontWeight: 600, color: '#1a365d' }}
+                  >
+                    {entry.action}
+                  </Box>
                   <Box style={{ fontSize: 11, color: '#595959' }}>
                     {entry.actor} · {new Date(entry.at).toLocaleDateString()}
                   </Box>
                   {entry.before && (
-                    <Box style={{ fontSize: 11, color: '#718096', marginTop: 2 }}>
+                    <Box
+                      style={{ fontSize: 11, color: '#718096', marginTop: 2 }}
+                    >
                       before: {JSON.stringify(entry.before)}
                     </Box>
                   )}
@@ -1935,7 +2532,10 @@ const MergeModal = ({
         onClick={onClose}
         style={{
           position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           background: 'rgba(26,54,93,0.35)',
           zIndex: 100,
         }}
@@ -1948,7 +2548,8 @@ const MergeModal = ({
         tabIndex={-1}
         style={{
           position: 'fixed',
-          top: '50%', left: '50%',
+          top: '50%',
+          left: '50%',
           transform: 'translate(-50%, -50%)',
           width: 420,
           background: '#fff',
@@ -1958,29 +2559,85 @@ const MergeModal = ({
           padding: 18,
         }}
       >
-        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading id='merge-topics-title' size='sm' style={{ color: '#1a365d' }}>
-            Merge {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
+        <Box
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 14,
+          }}
+        >
+          <Heading
+            id='merge-topics-title'
+            size='sm'
+            style={{ color: '#1a365d' }}
+          >
+            Merge {selectedTags.length} topic
+            {selectedTags.length !== 1 ? 's' : ''}
           </Heading>
-          <button className="admin-btn" aria-label='Close merge topics' data-autofocus onClick={onClose} disabled={merging} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: merging ? 'not-allowed' : 'pointer', fontSize: 16 }}>
+          <button
+            className='admin-btn'
+            aria-label='Close merge topics'
+            data-autofocus
+            onClick={onClose}
+            disabled={merging}
+            style={{
+              fontFamily: 'inherit',
+              color: '#a0aec0',
+              background: 'transparent',
+              border: 'none',
+              cursor: merging ? 'not-allowed' : 'pointer',
+              fontSize: 16,
+            }}
+          >
             ✕
           </button>
         </Box>
 
         {error && (
-          <Box style={{ fontSize: 11, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '6px 10px', marginBottom: 12 }}>
+          <Box
+            style={{
+              fontSize: 11,
+              color: '#C11101',
+              background: '#fff0f0',
+              border: '1px solid #f0b4b4',
+              borderRadius: 7,
+              padding: '6px 10px',
+              marginBottom: 12,
+            }}
+          >
             {error}
           </Box>
         )}
 
         {/* Selected topics */}
         <Box style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: 10,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: '#595959',
+              marginBottom: 3,
+            }}
+          >
             Selected topics
           </label>
           <Box style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {selectedTags.map((t) => (
-              <Box key={t.id} style={{ fontSize: 12, color: '#2d3748', background: '#ebf4ff', border: '1px solid #c3dafe', borderRadius: 999, padding: '4px 10px', alignSelf: 'flex-start' }}>
+              <Box
+                key={t.id}
+                style={{
+                  fontSize: 12,
+                  color: '#2d3748',
+                  background: '#ebf4ff',
+                  border: '1px solid #c3dafe',
+                  borderRadius: 999,
+                  padding: '4px 10px',
+                  alignSelf: 'flex-start',
+                }}
+              >
                 {t.valueId}
               </Box>
             ))}
@@ -1989,45 +2646,105 @@ const MergeModal = ({
 
         {/* Target picker */}
         <Box style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: 10,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: '#595959',
+              marginBottom: 3,
+            }}
+          >
             Merge all into
           </label>
           <select
             value={targetId}
-            onChange={(e) => { setTargetId(e.target.value); setError(null) }}
+            onChange={(e) => {
+              setTargetId(e.target.value)
+              setError(null)
+            }}
             style={inputStyle}
           >
             <option value=''>— select target —</option>
             {targetOptions.map((t) => (
-              <option key={t.id} value={t.id}>{t.valueId} ({t.acceptedCount} docs)</option>
+              <option key={t.id} value={t.id}>
+                {t.valueId} ({t.acceptedCount} docs)
+              </option>
             ))}
           </select>
         </Box>
 
         {/* Preview */}
         {targetId && sources.length > 0 && (
-          <Box style={{ background: '#f7f7f7', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 13px', marginBottom: 12 }}>
-            <Box style={{ fontSize: 11, fontWeight: 700, color: '#1a365d', marginBottom: 6 }}>Preview</Box>
+          <Box
+            style={{
+              background: '#f7f7f7',
+              border: '1px solid #e2e8f0',
+              borderRadius: 8,
+              padding: '10px 13px',
+              marginBottom: 12,
+            }}
+          >
+            <Box
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#1a365d',
+                marginBottom: 6,
+              }}
+            >
+              Preview
+            </Box>
             {sources.map((s) => (
-              <Box key={s.id} style={{ fontSize: 12, color: '#2d3748', lineHeight: 1.6 }}>
-                <strong>{s.valueId}</strong> → <strong>{target?.valueId}</strong> · {s.acceptedCount} docs move
+              <Box
+                key={s.id}
+                style={{ fontSize: 12, color: '#2d3748', lineHeight: 1.6 }}
+              >
+                <strong>{s.valueId}</strong> →{' '}
+                <strong>{target?.valueId}</strong> · {s.acceptedCount} docs move
               </Box>
             ))}
             <Box style={{ fontSize: 11, color: '#7c3a00', marginTop: 6 }}>
-              {sources.length} tag{sources.length !== 1 ? 's' : ''} will be deleted; aliases merged into {target?.valueId}.
+              {sources.length} tag{sources.length !== 1 ? 's' : ''} will be
+              deleted; aliases merged into {target?.valueId}.
             </Box>
           </Box>
         )}
 
         {/* Buttons */}
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+          <button
+            className='admin-btn'
+            onClick={onClose}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 10px',
+              cursor: 'pointer',
+              color: '#1a365d',
+              background: '#fff',
+            }}
+          >
             Cancel
           </button>
-          <button className="admin-btn"
+          <button
+            className='admin-btn'
             onClick={handleMerge}
             disabled={merging || !targetId || sources.length === 0}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: merging || !targetId || sources.length === 0 ? 0.5 : 1 }}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #1a365d',
+              borderRadius: 7,
+              padding: '5px 10px',
+              cursor: 'pointer',
+              color: '#fff',
+              background: '#1a365d',
+              opacity: merging || !targetId || sources.length === 0 ? 0.5 : 1,
+            }}
           >
             {merging ? 'Merging…' : 'Merge & re-classify'}
           </button>
@@ -2057,15 +2774,12 @@ const ReparentModal = ({
   const dialogRef = useDialogBehavior(onClose, saving)
 
   // Exclude selected subtrees so no selected topic can become its own ancestor.
-  const parentOptions = useMemo(
-    () => {
-      const selectedIds = selectedTags.map((tag) => tag.id)
-      const excluded = descendantIds(allTags, selectedIds)
-      for (const id of selectedIds) excluded.add(id)
-      return allTags.filter((tag) => !excluded.has(tag.id))
-    },
-    [allTags, selectedTags],
-  )
+  const parentOptions = useMemo(() => {
+    const selectedIds = selectedTags.map((tag) => tag.id)
+    const excluded = descendantIds(allTags, selectedIds)
+    for (const id of selectedIds) excluded.add(id)
+    return allTags.filter((tag) => !excluded.has(tag.id))
+  }, [allTags, selectedTags])
 
   const handleReparent = async () => {
     setSaving(true)
@@ -2114,7 +2828,10 @@ const ReparentModal = ({
         onClick={onClose}
         style={{
           position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           background: 'rgba(26,54,93,0.35)',
           zIndex: 100,
         }}
@@ -2127,7 +2844,8 @@ const ReparentModal = ({
         tabIndex={-1}
         style={{
           position: 'fixed',
-          top: '50%', left: '50%',
+          top: '50%',
+          left: '50%',
           transform: 'translate(-50%, -50%)',
           width: 380,
           background: '#fff',
@@ -2137,47 +2855,123 @@ const ReparentModal = ({
           padding: 18,
         }}
       >
-        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading id='reparent-topics-title' size='sm' style={{ color: '#1a365d' }}>
-            Re-parent {selectedTags.length} topic{selectedTags.length !== 1 ? 's' : ''}
+        <Box
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 14,
+          }}
+        >
+          <Heading
+            id='reparent-topics-title'
+            size='sm'
+            style={{ color: '#1a365d' }}
+          >
+            Re-parent {selectedTags.length} topic
+            {selectedTags.length !== 1 ? 's' : ''}
           </Heading>
-          <button className="admin-btn" aria-label='Close re-parent topics' data-autofocus onClick={onClose} disabled={saving} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 16 }}>
+          <button
+            className='admin-btn'
+            aria-label='Close re-parent topics'
+            data-autofocus
+            onClick={onClose}
+            disabled={saving}
+            style={{
+              fontFamily: 'inherit',
+              color: '#a0aec0',
+              background: 'transparent',
+              border: 'none',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              fontSize: 16,
+            }}
+          >
             ✕
           </button>
         </Box>
 
         {errors.length > 0 && (
-          <Box style={{ fontSize: 11, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '6px 10px', marginBottom: 12 }}>
+          <Box
+            style={{
+              fontSize: 11,
+              color: '#C11101',
+              background: '#fff0f0',
+              border: '1px solid #f0b4b4',
+              borderRadius: 7,
+              padding: '6px 10px',
+              marginBottom: 12,
+            }}
+          >
             {errors.map((e, i) => (
-              <Box key={i} style={{ marginBottom: 2 }}>{e.label}: {e.reason}</Box>
+              <Box key={i} style={{ marginBottom: 2 }}>
+                {e.label}: {e.reason}
+              </Box>
             ))}
           </Box>
         )}
 
         <Box style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: 10,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: '#595959',
+              marginBottom: 3,
+            }}
+          >
             New parent topic
           </label>
           <select
             value={parentTagId}
-            onChange={(e) => { setParentTagId(e.target.value); setErrors([]) }}
+            onChange={(e) => {
+              setParentTagId(e.target.value)
+              setErrors([])
+            }}
             style={inputStyle}
           >
             <option value=''>(root)</option>
             {parentOptions.map((t) => (
-              <option key={t.id} value={t.id}>{t.valueId}</option>
+              <option key={t.id} value={t.id}>
+                {t.valueId}
+              </option>
             ))}
           </select>
         </Box>
 
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+          <button
+            className='admin-btn'
+            onClick={onClose}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 10px',
+              cursor: 'pointer',
+              color: '#1a365d',
+              background: '#fff',
+            }}
+          >
             Cancel
           </button>
-          <button className="admin-btn"
+          <button
+            className='admin-btn'
             onClick={handleReparent}
             disabled={saving}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #1a365d', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#fff', background: '#1a365d', opacity: saving ? 0.5 : 1 }}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #1a365d',
+              borderRadius: 7,
+              padding: '5px 10px',
+              cursor: 'pointer',
+              color: '#fff',
+              background: '#1a365d',
+              opacity: saving ? 0.5 : 1,
+            }}
           >
             {saving ? 'Saving…' : 'Re-parent'}
           </button>
@@ -2190,10 +2984,44 @@ const ReparentModal = ({
 // ---- CSV Import Modal (Task 16) ----
 
 interface CsvDiffData {
-  added: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }[]
-  updated: { row: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }; current: any }[]
-  unchanged: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }[]
-  conflicts: { row: { label: string; description: string; aliases: string[]; parent: string; facet: string; id: string }; reason: string }[]
+  added: {
+    label: string
+    description: string
+    aliases: string[]
+    parent: string
+    facet: string
+    id: string
+  }[]
+  updated: {
+    row: {
+      label: string
+      description: string
+      aliases: string[]
+      parent: string
+      facet: string
+      id: string
+    }
+    current: any
+  }[]
+  unchanged: {
+    label: string
+    description: string
+    aliases: string[]
+    parent: string
+    facet: string
+    id: string
+  }[]
+  conflicts: {
+    row: {
+      label: string
+      description: string
+      aliases: string[]
+      parent: string
+      facet: string
+      id: string
+    }
+    reason: string
+  }[]
 }
 
 const CsvImportModal = ({
@@ -2231,7 +3059,10 @@ const CsvImportModal = ({
       <Box
         style={{
           position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           background: 'rgba(26,54,93,0.35)',
           zIndex: 100,
         }}
@@ -2245,7 +3076,8 @@ const CsvImportModal = ({
         tabIndex={-1}
         style={{
           position: 'fixed',
-          top: '50%', left: '50%',
+          top: '50%',
+          left: '50%',
           transform: 'translate(-50%, -50%)',
           width: 560,
           maxWidth: '90vw',
@@ -2258,21 +3090,53 @@ const CsvImportModal = ({
           padding: 18,
         }}
       >
-        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <Box
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 14,
+          }}
+        >
           <Heading id='csv-import-title' size='sm' style={{ color: '#1a365d' }}>
             Import CSV{filename ? ` — ${filename}` : ''}
           </Heading>
-          <button className="admin-btn" aria-label='Close CSV import' data-autofocus onClick={onClose} style={{ fontFamily: 'inherit', color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>
+          <button
+            className='admin-btn'
+            aria-label='Close CSV import'
+            data-autofocus
+            onClick={onClose}
+            style={{
+              fontFamily: 'inherit',
+              color: '#a0aec0',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 16,
+            }}
+          >
             ✕
           </button>
         </Box>
 
         {loading && (
-          <Text style={{ color: '#595959', padding: '20px 0' }}>Parsing CSV…</Text>
+          <Text style={{ color: '#595959', padding: '20px 0' }}>
+            Parsing CSV…
+          </Text>
         )}
 
         {error && (
-          <Box style={{ fontSize: 12, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 7, padding: '8px 12px', marginBottom: 12 }}>
+          <Box
+            style={{
+              fontSize: 12,
+              color: '#C11101',
+              background: '#fff0f0',
+              border: '1px solid #f0b4b4',
+              borderRadius: 7,
+              padding: '8px 12px',
+              marginBottom: 12,
+            }}
+          >
             {error}
           </Box>
         )}
@@ -2280,66 +3144,256 @@ const CsvImportModal = ({
         {diff && (
           <>
             {/* Summary chips */}
-            <Box style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #c6f6d5', background: '#f0fff4', color: '#2f855a', borderRadius: 999, padding: '4px 11px' }}>
+            <Box
+              style={{
+                display: 'flex',
+                gap: 8,
+                marginBottom: 14,
+                flexWrap: 'wrap',
+              }}
+            >
+              <Box
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: '1px solid #c6f6d5',
+                  background: '#f0fff4',
+                  color: '#2f855a',
+                  borderRadius: 999,
+                  padding: '4px 11px',
+                }}
+              >
                 {addedCount} added
               </Box>
-              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #f6e2b3', background: '#fffaf0', color: '#7c3a00', borderRadius: 999, padding: '4px 11px' }}>
+              <Box
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: '1px solid #f6e2b3',
+                  background: '#fffaf0',
+                  color: '#7c3a00',
+                  borderRadius: 999,
+                  padding: '4px 11px',
+                }}
+              >
                 {updatedCount} updated
               </Box>
-              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #e2e8f0', background: '#fff', color: '#595959', borderRadius: 999, padding: '4px 11px' }}>
+              <Box
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: '1px solid #e2e8f0',
+                  background: '#fff',
+                  color: '#595959',
+                  borderRadius: 999,
+                  padding: '4px 11px',
+                }}
+              >
                 {unchangedCount} unchanged
               </Box>
-              <Box style={{ fontSize: 11, fontWeight: 700, border: '1px solid #f0b4b4', background: '#fff0f0', color: '#C11101', borderRadius: 999, padding: '4px 11px' }}>
+              <Box
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: '1px solid #f0b4b4',
+                  background: '#fff0f0',
+                  color: '#C11101',
+                  borderRadius: 999,
+                  padding: '4px 11px',
+                }}
+              >
                 {conflictCount} {conflictCount === 1 ? 'conflict' : 'conflicts'}
               </Box>
             </Box>
 
             {/* Diff table */}
-            <Box style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', maxHeight: 300, overflowY: 'auto' }}>
+            <Box
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                overflow: 'hidden',
+                maxHeight: 300,
+                overflowY: 'auto',
+              }}
+            >
               {/* Added rows */}
               {diff.added.map((r, i) => (
-                <Box key={`add-${i}`} style={{ display: 'grid', gridTemplateColumns: '64px 1fr', padding: '8px 12px', borderBottom: '1px solid #edf2f7', background: '#f0fff4' }}>
-                  <Box style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#2f855a', background: '#c6f6d5', borderRadius: 5, padding: '2px 7px', display: 'inline-block', textAlign: 'center', height: 'fit-content' }}>Add</Box>
+                <Box
+                  key={`add-${i}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '64px 1fr',
+                    padding: '8px 12px',
+                    borderBottom: '1px solid #edf2f7',
+                    background: '#f0fff4',
+                  }}
+                >
+                  <Box
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      color: '#2f855a',
+                      background: '#c6f6d5',
+                      borderRadius: 5,
+                      padding: '2px 7px',
+                      display: 'inline-block',
+                      textAlign: 'center',
+                      height: 'fit-content',
+                    }}
+                  >
+                    Add
+                  </Box>
                   <Box>
-                    <Box style={{ fontWeight: 600, color: '#2d3748', fontSize: 13 }}>{r.label}</Box>
-                    {r.description && <Box style={{ color: '#718096', fontSize: 11 }}>desc: {r.description}</Box>}
-                    {r.aliases.length > 0 && <Box style={{ color: '#718096', fontSize: 11 }}>aliases: {r.aliases.join(' | ')}</Box>}
+                    <Box
+                      style={{
+                        fontWeight: 600,
+                        color: '#2d3748',
+                        fontSize: 13,
+                      }}
+                    >
+                      {r.label}
+                    </Box>
+                    {r.description && (
+                      <Box style={{ color: '#718096', fontSize: 11 }}>
+                        desc: {r.description}
+                      </Box>
+                    )}
+                    {r.aliases.length > 0 && (
+                      <Box style={{ color: '#718096', fontSize: 11 }}>
+                        aliases: {r.aliases.join(' | ')}
+                      </Box>
+                    )}
                   </Box>
                 </Box>
               ))}
               {/* Updated rows */}
               {diff.updated.map((u, i) => (
-                <Box key={`upd-${i}`} style={{ display: 'grid', gridTemplateColumns: '64px 1fr', padding: '8px 12px', borderBottom: '1px solid #edf2f7', background: '#fffaf0' }}>
-                  <Box style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#7c3a00', background: '#f6e2b3', borderRadius: 5, padding: '2px 7px', display: 'inline-block', textAlign: 'center', height: 'fit-content' }}>Edit</Box>
+                <Box
+                  key={`upd-${i}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '64px 1fr',
+                    padding: '8px 12px',
+                    borderBottom: '1px solid #edf2f7',
+                    background: '#fffaf0',
+                  }}
+                >
+                  <Box
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      color: '#7c3a00',
+                      background: '#f6e2b3',
+                      borderRadius: 5,
+                      padding: '2px 7px',
+                      display: 'inline-block',
+                      textAlign: 'center',
+                      height: 'fit-content',
+                    }}
+                  >
+                    Edit
+                  </Box>
                   <Box>
-                    <Box style={{ fontWeight: 600, color: '#2d3748', fontSize: 13 }}>{u.row.label}</Box>
-                    {u.row.description && <Box style={{ color: '#718096', fontSize: 11 }}>desc: {u.row.description}</Box>}
-                    {u.row.aliases.length > 0 && <Box style={{ color: '#718096', fontSize: 11 }}>aliases: {u.row.aliases.join(' | ')}</Box>}
+                    <Box
+                      style={{
+                        fontWeight: 600,
+                        color: '#2d3748',
+                        fontSize: 13,
+                      }}
+                    >
+                      {u.row.label}
+                    </Box>
+                    {u.row.description && (
+                      <Box style={{ color: '#718096', fontSize: 11 }}>
+                        desc: {u.row.description}
+                      </Box>
+                    )}
+                    {u.row.aliases.length > 0 && (
+                      <Box style={{ color: '#718096', fontSize: 11 }}>
+                        aliases: {u.row.aliases.join(' | ')}
+                      </Box>
+                    )}
                   </Box>
                 </Box>
               ))}
               {/* Conflict rows */}
               {diff.conflicts.map((c, i) => (
-                <Box key={`con-${i}`} style={{ display: 'grid', gridTemplateColumns: '64px 1fr', padding: '8px 12px', borderBottom: '1px solid #edf2f7', background: '#fff0f0' }}>
-                  <Box style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#C11101', background: '#fbd5d5', borderRadius: 5, padding: '2px 7px', display: 'inline-block', textAlign: 'center', height: 'fit-content' }}>Conflict</Box>
+                <Box
+                  key={`con-${i}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '64px 1fr',
+                    padding: '8px 12px',
+                    borderBottom: '1px solid #edf2f7',
+                    background: '#fff0f0',
+                  }}
+                >
+                  <Box
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      color: '#C11101',
+                      background: '#fbd5d5',
+                      borderRadius: 5,
+                      padding: '2px 7px',
+                      display: 'inline-block',
+                      textAlign: 'center',
+                      height: 'fit-content',
+                    }}
+                  >
+                    Conflict
+                  </Box>
                   <Box>
-                    <Box style={{ fontWeight: 600, color: '#2d3748', fontSize: 13 }}>{c.row.label}</Box>
-                    <Box style={{ color: '#C11101', fontSize: 11 }}>{c.reason}</Box>
+                    <Box
+                      style={{
+                        fontWeight: 600,
+                        color: '#2d3748',
+                        fontSize: 13,
+                      }}
+                    >
+                      {c.row.label}
+                    </Box>
+                    <Box style={{ color: '#C11101', fontSize: 11 }}>
+                      {c.reason}
+                    </Box>
                   </Box>
                 </Box>
               ))}
             </Box>
 
             {/* Footer */}
-            <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
+            <Box
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: 14,
+                flexWrap: 'wrap',
+                gap: 10,
+              }}
+            >
               <Box style={{ fontSize: 12, color: '#595959' }}>
                 {conflictCount > 0
                   ? `Resolve ${conflictCount} conflict${conflictCount !== 1 ? 's' : ''} before applying. Nothing is applied until conflicts = 0.`
                   : 'Import commits atomically — all or nothing.'}
               </Box>
               <Box style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <Box style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#2d3748', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px' }}>
+                <Box
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 12,
+                    color: '#2d3748',
+                    background: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 7,
+                    padding: '5px 10px',
+                  }}
+                >
                   <input
                     type='checkbox'
                     checked={reclassify}
@@ -2348,15 +3402,43 @@ const CsvImportModal = ({
                   />
                   Re-classify affected docs
                 </Box>
-                <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>
+                <button
+                  className='admin-btn'
+                  onClick={onClose}
+                  style={{
+                    fontFamily: 'inherit',
+                    fontSize: 11,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 7,
+                    padding: '5px 10px',
+                    cursor: 'pointer',
+                    color: '#1a365d',
+                    background: '#fff',
+                  }}
+                >
                   Cancel
                 </button>
-                <button className="admin-btn"
+                <button
+                  className='admin-btn'
                   onClick={onApply}
                   disabled={!canApply}
-                  style={{ fontFamily: 'inherit', fontSize: 11, border: canApply ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 10px', cursor: canApply ? 'pointer' : 'not-allowed', color: '#fff', background: canApply ? '#1a365d' : '#a0aec0', opacity: applying ? 0.5 : 1 }}
+                  style={{
+                    fontFamily: 'inherit',
+                    fontSize: 11,
+                    border: canApply
+                      ? '1px solid #1a365d'
+                      : '1px solid #a0aec0',
+                    borderRadius: 7,
+                    padding: '5px 10px',
+                    cursor: canApply ? 'pointer' : 'not-allowed',
+                    color: '#fff',
+                    background: canApply ? '#1a365d' : '#a0aec0',
+                    opacity: applying ? 0.5 : 1,
+                  }}
                 >
-                  {applying ? 'Applying…' : `Apply ${totalChanges} change${totalChanges !== 1 ? 's' : ''}`}
+                  {applying
+                    ? 'Applying…'
+                    : `Apply ${totalChanges} change${totalChanges !== 1 ? 's' : ''}`}
                 </button>
               </Box>
             </Box>
@@ -2388,7 +3470,10 @@ const ReclassifyConfirmModal = ({
   starting: boolean
   onClose: () => void
 }) => {
-  const scopeLabel = scope === 'all' ? 'All docs' : `Topic: ${allTags.find((t) => t.id === scope)?.valueId ?? scope}`
+  const scopeLabel =
+    scope === 'all'
+      ? 'All docs'
+      : `Topic: ${allTags.find((t) => t.id === scope)?.valueId ?? scope}`
   const canStart = Boolean(estimate && estimate.eligible > 0 && !starting)
 
   const dialogRef = useDialogBehavior(onClose, starting)
@@ -2430,37 +3515,106 @@ const ReclassifyConfirmModal = ({
           padding: 18,
         }}
       >
-        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading id='reclassify-confirm-title' size='sm' style={{ color: '#1a365d' }}>Re-classify: {scopeLabel}</Heading>
-          <button className="admin-btn" aria-label='Close re-classification confirmation' data-autofocus onClick={onClose} disabled={starting} style={{ fontFamily: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: starting ? 'not-allowed' : 'pointer' }}>✕</button>
+        <Box
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 14,
+          }}
+        >
+          <Heading
+            id='reclassify-confirm-title'
+            size='sm'
+            style={{ color: '#1a365d' }}
+          >
+            Re-classify: {scopeLabel}
+          </Heading>
+          <button
+            className='admin-btn'
+            aria-label='Close re-classification confirmation'
+            data-autofocus
+            onClick={onClose}
+            disabled={starting}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 14,
+              color: '#a0aec0',
+              background: 'transparent',
+              border: 'none',
+              cursor: starting ? 'not-allowed' : 'pointer',
+            }}
+          >
+            ✕
+          </button>
         </Box>
 
         {loading && (
           <Text style={{ color: '#595959', fontSize: 13 }}>Estimating…</Text>
         )}
         {error && (
-          <Box style={{ padding: '8px 12px', marginBottom: 10, color: '#C11101', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 6, fontSize: 13 }}>
+          <Box
+            style={{
+              padding: '8px 12px',
+              marginBottom: 10,
+              color: '#C11101',
+              background: '#fff0f0',
+              border: '1px solid #f0b4b4',
+              borderRadius: 6,
+              fontSize: 13,
+            }}
+          >
             {error}
           </Box>
         )}
         {estimate && (
           <>
             <Box style={{ fontSize: 13, color: '#2d3748', marginBottom: 8 }}>
-              Re-classify <b>{estimate.eligible}</b> docs? Estimated cost: <b>≈${estimate.estCost.toFixed(4)}</b>.
+              Re-classify <b>{estimate.eligible}</b> docs? Estimated cost:{' '}
+              <b>≈${estimate.estCost.toFixed(4)}</b>.
             </Box>
             <Box style={{ fontSize: 12, color: '#595959', marginBottom: 14 }}>
-              Each doc gets one LLM call (gpt-5-mini, topic-only). Human overrides are preserved.
+              Each doc gets one LLM call (gpt-5-mini, topic-only). Human
+              overrides are preserved.
             </Box>
           </>
         )}
 
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} disabled={starting} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: starting ? 'not-allowed' : 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
-          <button className="admin-btn"
+          <button
+            className='admin-btn'
+            onClick={onClose}
+            disabled={starting}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              cursor: starting ? 'not-allowed' : 'pointer',
+              color: '#1a365d',
+              background: '#fff',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            className='admin-btn'
             onClick={onStart}
             disabled={!canStart}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: canStart ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: canStart ? 'pointer' : 'not-allowed', color: '#fff', background: canStart ? '#1a365d' : '#a0aec0' }}
-          >{starting ? 'Starting…' : 'Start'}</button>
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: canStart ? '1px solid #1a365d' : '1px solid #a0aec0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              cursor: canStart ? 'pointer' : 'not-allowed',
+              color: '#fff',
+              background: canStart ? '#1a365d' : '#a0aec0',
+            }}
+          >
+            {starting ? 'Starting…' : 'Start'}
+          </button>
         </Box>
       </Box>
     </>
@@ -2486,33 +3640,139 @@ const ScopedTopicPicker = ({
 
   return (
     <>
-      <Box onClick={onClose} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, background: 'rgba(26,54,93,0.35)', zIndex: 100 }} />
-      <Box ref={dialogRef} role='dialog' aria-modal='true' aria-labelledby='scoped-reclassify-title' tabIndex={-1} style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 380, maxWidth: '90vw', background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(26,54,93,0.30)', zIndex: 101, padding: 18 }}>
-        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Heading id='scoped-reclassify-title' size='sm' style={{ color: '#1a365d' }}>Scoped re-classify</Heading>
-          <button className="admin-btn" aria-label='Close scoped re-classify' data-autofocus onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 14, color: '#a0aec0', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
+      <Box
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          background: 'rgba(26,54,93,0.35)',
+          zIndex: 100,
+        }}
+      />
+      <Box
+        ref={dialogRef}
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='scoped-reclassify-title'
+        tabIndex={-1}
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 380,
+          maxWidth: '90vw',
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 20px 60px rgba(26,54,93,0.30)',
+          zIndex: 101,
+          padding: 18,
+        }}
+      >
+        <Box
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 14,
+          }}
+        >
+          <Heading
+            id='scoped-reclassify-title'
+            size='sm'
+            style={{ color: '#1a365d' }}
+          >
+            Scoped re-classify
+          </Heading>
+          <button
+            className='admin-btn'
+            aria-label='Close scoped re-classify'
+            data-autofocus
+            onClick={onClose}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 14,
+              color: '#a0aec0',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            ✕
+          </button>
         </Box>
         <Box style={{ marginBottom: 10 }}>
-          <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#595959', marginBottom: 3 }}>Pick a topic</label>
+          <label
+            style={{
+              display: 'block',
+              fontSize: 10,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: '#595959',
+              marginBottom: 3,
+            }}
+          >
+            Pick a topic
+          </label>
           <select
             aria-label='Pick a topic'
             value={selectedId}
             onChange={(e) => onSelect(e.target.value)}
-            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, fontFamily: 'inherit', color: '#2d3748' }}
+            style={{
+              width: '100%',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6,
+              padding: '6px 8px',
+              fontSize: 12,
+              fontFamily: 'inherit',
+              color: '#2d3748',
+            }}
           >
             <option value=''>— select a topic —</option>
             {allTags.map((t) => (
-              <option key={t.id} value={t.id}>{t.valueId} ({t.acceptedCount} docs)</option>
+              <option key={t.id} value={t.id}>
+                {t.valueId} ({t.acceptedCount} docs)
+              </option>
             ))}
           </select>
         </Box>
         <Box style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="admin-btn" onClick={onClose} style={{ fontFamily: 'inherit', fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 11px', cursor: 'pointer', color: '#1a365d', background: '#fff' }}>Cancel</button>
-          <button className="admin-btn"
+          <button
+            className='admin-btn'
+            onClick={onClose}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: '1px solid #e2e8f0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              cursor: 'pointer',
+              color: '#1a365d',
+              background: '#fff',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            className='admin-btn'
             onClick={onConfirm}
             disabled={!selectedId}
-            style={{ fontFamily: 'inherit', fontSize: 11, border: selectedId ? '1px solid #1a365d' : '1px solid #a0aec0', borderRadius: 7, padding: '5px 11px', cursor: selectedId ? 'pointer' : 'not-allowed', color: '#fff', background: selectedId ? '#1a365d' : '#a0aec0' }}
-          >Confirm</button>
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              border: selectedId ? '1px solid #1a365d' : '1px solid #a0aec0',
+              borderRadius: 7,
+              padding: '5px 11px',
+              cursor: selectedId ? 'pointer' : 'not-allowed',
+              color: '#fff',
+              background: selectedId ? '#1a365d' : '#a0aec0',
+            }}
+          >
+            Confirm
+          </button>
         </Box>
       </Box>
     </>
@@ -2562,14 +3822,39 @@ const ReclassifyPanel = ({
   const pct = totalActive > 0 ? Math.round((doneActive / totalActive) * 100) : 0
 
   return (
-    <Box style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 12 }}>
+    <Box
+      style={{
+        border: '1px solid #e2e8f0',
+        borderRadius: 12,
+        overflow: 'hidden',
+        marginBottom: 12,
+      }}
+    >
       {/* Panel header */}
-      <Box style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f7f7f7', borderBottom: '1px solid #e2e8f0' }}>
+      <Box
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          background: '#f7f7f7',
+          borderBottom: '1px solid #e2e8f0',
+        }}
+      >
         <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {(status.queued > 0 || status.running > 0) && (
-            <Box style={{ width: 9, height: 9, borderRadius: '50%', background: '#3182ce' }} />
+            <Box
+              style={{
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                background: '#3182ce',
+              }}
+            />
           )}
-          <Heading size='sm' style={{ color: '#1a365d' }}>Re-classify jobs</Heading>
+          <Heading size='sm' style={{ color: '#1a365d' }}>
+            Re-classify jobs
+          </Heading>
         </Box>
         <Box style={{ fontSize: 11, color: '#595959' }}>Auto-refresh 5s</Box>
       </Box>
@@ -2577,22 +3862,71 @@ const ReclassifyPanel = ({
       <Box style={{ padding: 16 }}>
         {/* Live progress */}
         {activeRun && (status.queued > 0 || status.running > 0) && (
-          <Box style={{ background: '#ebf4ff', border: '1px solid #c3e2f7', borderRadius: 9, padding: '14px 16px', marginBottom: 16 }}>
-            <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 9 }}>
+          <Box
+            style={{
+              background: '#ebf4ff',
+              border: '1px solid #c3e2f7',
+              borderRadius: 9,
+              padding: '14px 16px',
+              marginBottom: 16,
+            }}
+          >
+            <Box
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                marginBottom: 9,
+              }}
+            >
               <Box style={{ fontSize: 13, fontWeight: 700, color: '#3182ce' }}>
-                {activeRun.scope === 'all' ? 'Full corpus' : `Scoped: ${allTags.find((t) => t.id === activeRun.scope)?.valueId ?? activeRun.scope}`} · in progress
+                {activeRun.scope === 'all'
+                  ? 'Full corpus'
+                  : `Scoped: ${allTags.find((t) => t.id === activeRun.scope)?.valueId ?? activeRun.scope}`}{' '}
+                · in progress
               </Box>
               <Box style={{ fontSize: 13, color: '#2d3748' }}>
                 <b>{doneActive}</b> / {totalActive} docs · {pct}%
               </Box>
             </Box>
             {/* Progress bar */}
-            <Box style={{ height: 10, background: '#fff', borderRadius: 999, overflow: 'hidden', border: '1px solid #c3e2f7' }}>
-              <Box style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, #3182ce, #63b3ed)', borderRadius: 999, transition: 'width 0.5s' }} />
+            <Box
+              style={{
+                height: 10,
+                background: '#fff',
+                borderRadius: 999,
+                overflow: 'hidden',
+                border: '1px solid #c3e2f7',
+              }}
+            >
+              <Box
+                style={{
+                  width: `${pct}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #3182ce, #63b3ed)',
+                  borderRadius: 999,
+                  transition: 'width 0.5s',
+                }}
+              />
             </Box>
-            <Box style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 11, color: '#595959', flexWrap: 'wrap' }}>
-              <span>est. cost <b>${activeRun.estCost.toFixed(4)}</b></span>
-              {status.error > 0 && <span style={{ color: '#C11101' }}>{status.error} error{status.error !== 1 ? 's' : ''}</span>}
+            <Box
+              style={{
+                display: 'flex',
+                gap: 14,
+                marginTop: 8,
+                fontSize: 11,
+                color: '#595959',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span>
+                est. cost <b>${activeRun.estCost.toFixed(4)}</b>
+              </span>
+              {status.error > 0 && (
+                <span style={{ color: '#C11101' }}>
+                  {status.error} error{status.error !== 1 ? 's' : ''}
+                </span>
+              )}
             </Box>
           </Box>
         )}
@@ -2600,41 +3934,158 @@ const ReclassifyPanel = ({
         {/* Recent runs */}
         {status.recent.length > 0 && (
           <>
-            <Box style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#595959', marginBottom: 8 }}>Recent runs</Box>
+            <Box
+              style={{
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: '#595959',
+                marginBottom: 8,
+              }}
+            >
+              Recent runs
+            </Box>
             <Box style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {status.recent.map((run) => {
-                const scopeLabel = run.scope === 'all' ? 'Full corpus' : `Scoped: ${allTags.find((t) => t.id === run.scope)?.valueId ?? run.scope}`
+                const scopeLabel =
+                  run.scope === 'all'
+                    ? 'Full corpus'
+                    : `Scoped: ${allTags.find((t) => t.id === run.scope)?.valueId ?? run.scope}`
                 const isExpanded = expandedErrors.has(run.runId)
                 return (
-                  <Box key={run.runId} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', border: '1px solid #edf2f7', borderRadius: 9, padding: '10px 12px' }}>
-                    <Box style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flex: '0 0 30px', background: run.scope === 'all' ? '#ebf4ff' : '#f0fff4', color: run.scope === 'all' ? '#3182ce' : '#2f855a' }}>
+                  <Box
+                    key={run.runId}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      flexWrap: 'wrap',
+                      border: '1px solid #edf2f7',
+                      borderRadius: 9,
+                      padding: '10px 12px',
+                    }}
+                  >
+                    <Box
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 14,
+                        flex: '0 0 30px',
+                        background: run.scope === 'all' ? '#ebf4ff' : '#f0fff4',
+                        color: run.scope === 'all' ? '#3182ce' : '#2f855a',
+                      }}
+                    >
                       {run.scope === 'all' ? '∞' : '⌖'}
                     </Box>
                     <Box style={{ flex: 1, minWidth: 0 }}>
-                      <Box style={{ fontSize: 13, fontWeight: 600, color: '#2d3748' }}>{scopeLabel}</Box>
-                      <Box style={{ fontSize: 11, color: '#595959', marginTop: 1 }}>{run.done}/{run.total} docs{run.error > 0 && <span style={{ color: '#C11101' }}> · {run.error} error{run.error !== 1 ? 's' : ''}</span>}</Box>
+                      <Box
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: '#2d3748',
+                        }}
+                      >
+                        {scopeLabel}
+                      </Box>
+                      <Box
+                        style={{ fontSize: 11, color: '#595959', marginTop: 1 }}
+                      >
+                        {run.done}/{run.total} docs
+                        {run.error > 0 && (
+                          <span style={{ color: '#C11101' }}>
+                            {' '}
+                            · {run.error} error{run.error !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </Box>
                     </Box>
-                    <Box style={{ textAlign: 'right', fontSize: 11, color: '#595959', whiteSpace: 'nowrap' }}>
-                      <b style={{ color: '#2d3748' }}>${run.estCost.toFixed(4)}</b>
+                    <Box
+                      style={{
+                        textAlign: 'right',
+                        fontSize: 11,
+                        color: '#595959',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <b style={{ color: '#2d3748' }}>
+                        ${run.estCost.toFixed(4)}
+                      </b>
                       <br />
-                      <span style={{ fontSize: 10, color: '#718096' }}>{new Date(run.createdAt).toLocaleString()}</span>
+                      <span style={{ fontSize: 10, color: '#718096' }}>
+                        {new Date(run.createdAt).toLocaleString()}
+                      </span>
                     </Box>
                     {run.error > 0 && (
-                      <button className="admin-btn"
+                      <button
+                        className='admin-btn'
                         onClick={() => onToggleError(run.runId)}
-                        style={{ fontFamily: 'inherit', fontSize: 10, border: '1px solid #f0b4b4', borderRadius: 999, padding: '2px 8px', cursor: 'pointer', color: '#C11101', background: '#fff0f0', fontWeight: 600 }}
-                      >{isExpanded ? 'Hide' : `${run.error} error${run.error !== 1 ? 's' : ''}`}</button>
+                        style={{
+                          fontFamily: 'inherit',
+                          fontSize: 10,
+                          border: '1px solid #f0b4b4',
+                          borderRadius: 999,
+                          padding: '2px 8px',
+                          cursor: 'pointer',
+                          color: '#C11101',
+                          background: '#fff0f0',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {isExpanded
+                          ? 'Hide'
+                          : `${run.error} error${run.error !== 1 ? 's' : ''}`}
+                      </button>
                     )}
                     {run.error > 0 && isExpanded && (
-                      <Box style={{ width: '100%', padding: '8px 10px', background: '#fff0f0', border: '1px solid #f0b4b4', borderRadius: 8, fontSize: 11, color: '#C11101' }}>
-                        <Box style={{ display: 'flex', gap: 6, padding: '2px 0' }}>
-                          <Box style={{ fontWeight: 600 }}>{run.error} failed doc{run.error !== 1 ? 's' : ''}</Box>
-                          <button className="admin-btn" onClick={() => onRetryRun(run.runId)} style={{ fontFamily: 'inherit', color: '#1a365d', textDecoration: 'underline', cursor: 'pointer', background: 'transparent', border: 'none' }}>Retry</button>
+                      <Box
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          background: '#fff0f0',
+                          border: '1px solid #f0b4b4',
+                          borderRadius: 8,
+                          fontSize: 11,
+                          color: '#C11101',
+                        }}
+                      >
+                        <Box
+                          style={{ display: 'flex', gap: 6, padding: '2px 0' }}
+                        >
+                          <Box style={{ fontWeight: 600 }}>
+                            {run.error} failed doc{run.error !== 1 ? 's' : ''}
+                          </Box>
+                          <button
+                            className='admin-btn'
+                            onClick={() => onRetryRun(run.runId)}
+                            style={{
+                              fontFamily: 'inherit',
+                              color: '#1a365d',
+                              textDecoration: 'underline',
+                              cursor: 'pointer',
+                              background: 'transparent',
+                              border: 'none',
+                            }}
+                          >
+                            Retry
+                          </button>
                         </Box>
                         {(run.errors ?? []).map((detail) => (
-                          <Box key={detail.documentId} style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #f0b4b4' }}>
+                          <Box
+                            key={detail.documentId}
+                            style={{
+                              marginTop: 6,
+                              paddingTop: 6,
+                              borderTop: '1px solid #f0b4b4',
+                            }}
+                          >
                             <Box style={{ fontWeight: 600 }}>
-                              {detail.title ?? detail.externalId ?? detail.documentId}
+                              {detail.title ??
+                                detail.externalId ??
+                                detail.documentId}
                             </Box>
                             <Box>
                               {detail.externalId} · attempts: {detail.attempts}
@@ -2652,9 +4103,12 @@ const ReclassifyPanel = ({
         )}
 
         {/* Empty state */}
-        {status.recent.length === 0 && (status.queued + status.running + status.done + status.error) === 0 && (
-          <Text style={{ color: '#595959', fontSize: 12 }}>No re-classify jobs yet.</Text>
-        )}
+        {status.recent.length === 0 &&
+          status.queued + status.running + status.done + status.error === 0 && (
+            <Text style={{ color: '#595959', fontSize: 12 }}>
+              No re-classify jobs yet.
+            </Text>
+          )}
       </Box>
     </Box>
   )

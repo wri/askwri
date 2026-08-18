@@ -94,7 +94,7 @@ const FacetTable = ({
 
   return (
     <section style={{ marginBottom: 24 }}>
-      <Heading size="md" style={{ marginBottom: 8 }}>
+      <Heading size='md' style={{ marginBottom: 8 }}>
         {facetLabel(facet)}
       </Heading>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
@@ -110,7 +110,7 @@ const FacetTable = ({
             ].map((h, i) => (
               <th
                 key={i}
-                scope="col"
+                scope='col'
                 style={{
                   ...cell,
                   textAlign: 'left',
@@ -165,14 +165,14 @@ const FacetTable = ({
                       <button
                         onClick={() => saveRename(tag.id)}
                         disabled={renameBusy}
-                        className="admin-btn"
+                        className='admin-btn'
                         style={{ ...actionButton, marginRight: 8 }}
                       >
                         Save
                       </button>
                       <button
                         onClick={() => setRenameId(null)}
-                        className="admin-btn"
+                        className='admin-btn'
                         style={actionButton}
                       >
                         Cancel
@@ -186,22 +186,21 @@ const FacetTable = ({
                           setRenameValue(tag.valueId)
                           setRenameFacet(tag.facet)
                         }}
-                        className="admin-btn"
+                        className='admin-btn'
                         style={{ ...actionButton, marginRight: 8 }}
-                        title="Rename this tag value or facet (admin only)"
+                        title='Rename this tag value or facet (admin only)'
                       >
                         Rename
                       </button>
-                      {tag.acceptedCount === 0 &&
-                        tag.suggestedCount === 0 && (
-                          <button
-                            onClick={() => deleteTag(tag.id, tag.valueId)}
-                            className="admin-btn"
-                            style={dangerButton}
-                          >
-                            Delete
-                          </button>
-                        )}
+                      {tag.acceptedCount === 0 && tag.suggestedCount === 0 && (
+                        <button
+                          onClick={() => deleteTag(tag.id, tag.valueId)}
+                          className='admin-btn'
+                          style={dangerButton}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </>
                   )}
                 </td>
@@ -304,7 +303,8 @@ const TagsPage = () => {
   const tabStyle = (facet: string): React.CSSProperties => ({
     padding: '6px 14px',
     border: '1px solid #e2e8f0',
-    borderBottom: activeFacet === facet ? '2px solid #1a365d' : '1px solid #e2e8f0',
+    borderBottom:
+      activeFacet === facet ? '2px solid #1a365d' : '1px solid #e2e8f0',
     background: activeFacet === facet ? '#fff' : '#f7f7f7',
     color: activeFacet === facet ? '#1a365d' : '#595959',
     fontWeight: activeFacet === facet ? 700 : 400,
@@ -315,7 +315,7 @@ const TagsPage = () => {
 
   return (
     <Box style={{ paddingBottom: 48 }}>
-      <Heading size="lg" style={{ marginBottom: 8 }}>
+      <Heading size='lg' style={{ marginBottom: 8 }}>
         Tags
       </Heading>
       <Text style={{ marginBottom: 8, color: '#555', fontStyle: 'italic' }}>
@@ -347,11 +347,18 @@ const TagsPage = () => {
       />
 
       {/* Facet tab strip */}
-      <Box style={{ display: 'flex', gap: 4, marginBottom: 0, borderBottom: '1px solid #e2e8f0' }}>
+      <Box
+        style={{
+          display: 'flex',
+          gap: 4,
+          marginBottom: 0,
+          borderBottom: '1px solid #e2e8f0',
+        }}
+      >
         {CANONICAL_FACETS.map((facet) => (
           <Box
             key={facet}
-            as="button"
+            as='button'
             onClick={() => setFacet(facet)}
             style={tabStyle(facet)}
             _hover={undefined}
@@ -389,7 +396,7 @@ const TagsPage = () => {
       {/* Add form (only for non-topic facets; topic uses the rich UI) */}
       {activeFacet !== 'topic' && (
         <>
-          <Heading size="md" style={{ marginBottom: 12, marginTop: 16 }}>
+          <Heading size='md' style={{ marginBottom: 12, marginTop: 16 }}>
             New tag
           </Heading>
           <form
@@ -406,19 +413,19 @@ const TagsPage = () => {
               onChange={(e) => setAddFacet(e.target.value)}
               style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
               required
-              aria-label="Facet"
+              aria-label='Facet'
             >
-              <option value="">— facet —</option>
+              <option value=''>— facet —</option>
               {dropdownFacets.map((f) => (
                 <option key={f} value={f}>
                   {f}
                 </option>
               ))}
-              <option value="__new__">Create new facet…</option>
+              <option value='__new__'>Create new facet…</option>
             </select>
             {addFacet === '__new__' && (
               <input
-                placeholder="Facet name"
+                placeholder='Facet name'
                 value={addNewFacet}
                 onChange={(e) => setAddNewFacet(e.target.value)}
                 required
@@ -430,7 +437,7 @@ const TagsPage = () => {
               />
             )}
             <input
-              placeholder="Value"
+              placeholder='Value'
               value={addValue}
               onChange={(e) => setAddValue(e.target.value)}
               required
@@ -441,9 +448,9 @@ const TagsPage = () => {
               }}
             />
             <button
-              type="submit"
+              type='submit'
               disabled={addBusy}
-              className="admin-btn"
+              className='admin-btn'
               style={actionButton}
             >
               Add
@@ -456,7 +463,13 @@ const TagsPage = () => {
 }
 
 const TagsPageWrapper = () => (
-  <Suspense fallback={<Box style={{ padding: 24 }}><Text>Loading…</Text></Box>}>
+  <Suspense
+    fallback={
+      <Box style={{ padding: 24 }}>
+        <Text>Loading…</Text>
+      </Box>
+    }
+  >
     <TagsPage />
   </Suspense>
 )

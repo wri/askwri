@@ -106,6 +106,7 @@ d('topics API routes (DB integration)', () => {
   })
 
   afterAll(async () => {
+    if (!AppDataSource.isInitialized) return
     // Delete test-owned jobs before their scoped tags can become null.
     if (docIds.length > 0 || jobRunIds.length > 0) {
       await AppDataSource.query(
@@ -127,13 +128,16 @@ d('topics API routes (DB integration)', () => {
       ])
       await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tid])
     }
-    await AppDataSource.query(
-      `DELETE FROM audit_log WHERE actor_user_id = ANY($1::uuid[])`,
-      [[adminId, editorId]],
-    )
+    const userIds = [adminId, editorId].filter((id) => id !== '')
+    if (userIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM audit_log WHERE actor_user_id = ANY($1::uuid[])`,
+        [userIds],
+      )
+    }
     const repo = AppDataSource.getRepository(User)
-    await repo.delete({ id: adminId })
-    await repo.delete({ id: editorId })
+    if (adminId) await repo.delete({ id: adminId })
+    if (editorId) await repo.delete({ id: editorId })
     await AppDataSource.destroy()
   })
 
@@ -175,62 +179,104 @@ d('topics API routes (DB integration)', () => {
   })
 
   it('POST /api/admin/topics creates a topic (admin)', async () => {
-    const res = await createTopic(
-      makeReq(
-        'POST',
-        'http://localhost/api/admin/topics',
-        {
-          valueId: `__route_test_${routeRunId}`,
-          description: 'route test tag',
-          aliases: ['__rt_alias__'],
-        },
-        adminCookie,
-      ),
-    )
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body.ok).toBe(true)
-    expect(body.tag).toBeDefined()
-    tagIds.push(body.tag.id)
+    const valueId = `__route_test_${routeRunId}`
+    try {
+      const res = await createTopic(
+        makeReq(
+          'POST',
+          'http://localhost/api/admin/topics',
+          {
+            valueId,
+            description: 'route test tag',
+            aliases: [`__rt_alias_${routeRunId}__`],
+          },
+          adminCookie,
+        ),
+      )
+      const [created] = await AppDataSource.query(
+        `SELECT id FROM tags
+         WHERE facet = 'topic' AND taxonomy_version = 'v1' AND value_id = $1`,
+        [valueId],
+      )
+      if (created) tagIds.push(created.id)
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(created).toBeDefined()
+      expect(body.ok).toBe(true)
+      expect(body.tag).toMatchObject({ id: created.id, valueId })
+    } finally {
+      await AppDataSource.query(`DELETE FROM tags WHERE value_id = $1`, [
+        valueId,
+      ])
+    }
   })
 
   it('POST /api/admin/topics returns 403 for non-admin (editor)', async () => {
-    const res = await createTopic(
-      makeReq(
-        'POST',
-        'http://localhost/api/admin/topics',
-        {
-          valueId: `__route_forbidden_${routeRunId}`,
-        },
-        editorCookie,
-      ),
-    )
-    expect(res.status).toBe(403)
+    const valueId = `__route_forbidden_${routeRunId}`
+    try {
+      const res = await createTopic(
+        makeReq(
+          'POST',
+          'http://localhost/api/admin/topics',
+          { valueId },
+          editorCookie,
+        ),
+      )
+      const [inserted] = await AppDataSource.query(
+        `SELECT id FROM tags WHERE value_id = $1`,
+        [valueId],
+      )
+      if (inserted) tagIds.push(inserted.id)
+
+      expect(res.status).toBe(403)
+      expect(inserted).toBeUndefined()
+    } finally {
+      await AppDataSource.query(`DELETE FROM tags WHERE value_id = $1`, [
+        valueId,
+      ])
+    }
   })
 
   it('POST /api/admin/topics returns 409 on duplicate', async () => {
     const valueId = `__route_dup_${routeRunId}`
-    // first create succeeds
-    const r1 = await createTopic(
-      makeReq(
-        'POST',
-        'http://localhost/api/admin/topics',
-        { valueId },
-        adminCookie,
-      ),
-    )
-    expect(r1.status).toBe(200)
-    tagIds.push((await r1.json()).tag.id)
-    // second create → 409
-    const r2 = await createTopic(
-      makeReq(
-        'POST',
-        'http://localhost/api/admin/topics',
-        { valueId },
-        adminCookie,
-      ),
-    )
-    expect(r2.status).toBe(409)
+    try {
+      const r1 = await createTopic(
+        makeReq(
+          'POST',
+          'http://localhost/api/admin/topics',
+          { valueId },
+          adminCookie,
+        ),
+      )
+      const [created] = await AppDataSource.query(
+        `SELECT id FROM tags
+         WHERE facet = 'topic' AND taxonomy_version = 'v1' AND value_id = $1`,
+        [valueId],
+      )
+      if (created) tagIds.push(created.id)
+
+      expect(r1.status).toBe(200)
+      expect(created).toBeDefined()
+      await expect(r1.json()).resolves.toMatchObject({
+        ok: true,
+        tag: { id: created.id, valueId },
+      })
+
+      const r2 = await createTopic(
+        makeReq(
+          'POST',
+          'http://localhost/api/admin/topics',
+          { valueId },
+          adminCookie,
+        ),
+      )
+      expect(r2.status).toBe(409)
+    } finally {
+      await AppDataSource.query(`DELETE FROM tags WHERE value_id = $1`, [
+        valueId,
+      ])
+    }
   })
 
   it('GET /api/admin/topics works with bearer token (admin)', async () => {
@@ -301,47 +347,6 @@ d('topics API routes (DB integration)', () => {
       `${label},,,,program,`,
     ].join('\n')
 
-    const response = await importTopics(
-      makeReq(
-        'POST',
-        'http://localhost/api/admin/topics/import',
-        { csv },
-        adminCookie,
-      ),
-    )
-    expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toMatchObject({
-      ok: false,
-      error: expect.stringContaining('conflict'),
-    })
-    const [inserted] = await AppDataSource.query(
-      `SELECT id FROM tags WHERE value_id = $1`,
-      [label],
-    )
-    expect(inserted).toBeUndefined()
-  })
-
-  it('POST /api/admin/topics/import maps a label ownership collision to 409', async () => {
-    const nonce = crypto.randomUUID()
-    const firstLabel = `__route_import_owner_a_${nonce}__`
-    const secondLabel = `__route_import_owner_b_${nonce}__`
-    const [first] = await AppDataSource.query(
-      `INSERT INTO tags (facet, value_id, taxonomy_version)
-       VALUES ('topic', $1, 'v1') RETURNING id`,
-      [firstLabel],
-    )
-    const [second] = await AppDataSource.query(
-      `INSERT INTO tags (facet, value_id, taxonomy_version)
-       VALUES ('topic', $1, 'v1') RETURNING id`,
-      [secondLabel],
-    )
-    tagIds.push(first.id, second.id)
-    const csv = [
-      'label,description,aliases,parent,facet,id',
-      `${secondLabel},,,,topic,${first.id}`,
-    ].join('\n')
-    const consoleError = jest.spyOn(console, 'error').mockImplementation()
-
     try {
       const response = await importTopics(
         makeReq(
@@ -351,15 +356,64 @@ d('topics API routes (DB integration)', () => {
           adminCookie,
         ),
       )
+      const [inserted] = await AppDataSource.query(
+        `SELECT id FROM tags WHERE value_id = $1`,
+        [label],
+      )
+      if (inserted) tagIds.push(inserted.id)
+
       expect(response.status).toBe(409)
       await expect(response.json()).resolves.toMatchObject({
         ok: false,
         error: expect.stringContaining('conflict'),
       })
+      expect(inserted).toBeUndefined()
+    } finally {
+      await AppDataSource.query(`DELETE FROM tags WHERE value_id = $1`, [label])
+    }
+  })
+
+  it('POST /api/admin/topics/import maps a label ownership collision to 409', async () => {
+    const nonce = crypto.randomUUID()
+    const firstLabel = `__route_import_owner_a_${nonce}__`
+    const secondLabel = `__route_import_owner_b_${nonce}__`
+    const consoleError = jest.spyOn(console, 'error').mockImplementation()
+
+    try {
+      const [first] = await AppDataSource.query(
+        `INSERT INTO tags (facet, value_id, taxonomy_version)
+         VALUES ('topic', $1, 'v1') RETURNING id`,
+        [firstLabel],
+      )
+      tagIds.push(first.id)
+      const [second] = await AppDataSource.query(
+        `INSERT INTO tags (facet, value_id, taxonomy_version)
+         VALUES ('topic', $1, 'v1') RETURNING id`,
+        [secondLabel],
+      )
+      tagIds.push(second.id)
+      const csv = [
+        'label,description,aliases,parent,facet,id',
+        `${secondLabel},,,,topic,${first.id}`,
+      ].join('\n')
+      const response = await importTopics(
+        makeReq(
+          'POST',
+          'http://localhost/api/admin/topics/import',
+          { csv },
+          adminCookie,
+        ),
+      )
       const labels: any[] = await AppDataSource.query(
         `SELECT id, value_id FROM tags WHERE id = ANY($1::uuid[])`,
         [[first.id, second.id]],
       )
+
+      expect(response.status).toBe(409)
+      await expect(response.json()).resolves.toMatchObject({
+        ok: false,
+        error: expect.stringContaining('conflict'),
+      })
       expect(labels).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: first.id, value_id: firstLabel }),
@@ -367,6 +421,10 @@ d('topics API routes (DB integration)', () => {
         ]),
       )
     } finally {
+      await AppDataSource.query(
+        `DELETE FROM tags WHERE value_id = ANY($1::text[])`,
+        [[firstLabel, secondLabel]],
+      )
       consoleError.mockRestore()
     }
   })
@@ -405,12 +463,20 @@ d('topics API routes (DB integration)', () => {
           adminCookie,
         ),
       )
+      const [inserted] = await AppDataSource.query(
+        `SELECT id FROM tags WHERE value_id = $1`,
+        [label],
+      )
+      if (inserted) tagIds.push(inserted.id)
+
       expect(response.status).toBe(500)
+      expect(inserted).toBeUndefined()
     } finally {
       await AppDataSource.query(
         `DROP TRIGGER IF EXISTS ${auditTrigger} ON audit_log`,
       )
       await AppDataSource.query(`DROP FUNCTION IF EXISTS ${auditFunction}()`)
+      await AppDataSource.query(`DELETE FROM tags WHERE value_id = $1`, [label])
       consoleError.mockRestore()
     }
   })
@@ -534,17 +600,24 @@ d('topics API routes (DB integration)', () => {
             adminCookie,
           ),
         )
+        const [ownedJob] = await AppDataSource.query(
+          `SELECT run_id FROM reclassify_jobs
+           WHERE document_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          [document.id],
+        )
+        if (ownedJob) {
+          runId = ownedJob.run_id
+          jobRunIds.push(ownedJob.run_id)
+        }
+
         expect(response.status).toBe(200)
         const body = await response.json()
-        runId = body.runId
-        jobRunIds.push(body.runId)
+        expect(ownedJob).toBeDefined()
         expect(body).toEqual({
           ok: true,
           enqueued: estimate.eligible,
           estCost: estimate.estCost,
-          runId: expect.stringMatching(
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-          ),
+          runId: ownedJob.run_id,
         })
       } finally {
         if (runId) {

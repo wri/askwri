@@ -13,7 +13,9 @@ jest.mock('next/navigation', () => ({
     refresh: jest.fn(),
   }),
   usePathname: () => '/admin/tags',
-  useSearchParams: () => ({ get: (key: string) => (key === 'facet' ? mockFacet : null) }),
+  useSearchParams: () => ({
+    get: (key: string) => (key === 'facet' ? mockFacet : null),
+  }),
 }))
 
 const mockTags = [
@@ -128,11 +130,20 @@ describe('TagsPage facet tabs (jsdom)', () => {
 
     const fetchMock = jest.fn((url: string) => {
       if (url === '/api/admin/tags')
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, tags: mockTags }) })
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: mockTags }),
+        })
       if (url === '/api/admin/auth/me')
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ identity: { role: 'admin' } }) })
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ identity: { role: 'admin' } }),
+        })
       if (url === '/api/admin/topics')
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, tags: [] }) })
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, tags: [] }),
+        })
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
     })
     global.fetch = fetchMock as any

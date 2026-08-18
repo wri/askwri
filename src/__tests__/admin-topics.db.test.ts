@@ -46,12 +46,15 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!hasDb) return
   if (!AppDataSource.isInitialized) await AppDataSource.initialize()
-  await AppDataSource.query(`DELETE FROM audit_log WHERE actor_user_id = $1`, [
-    adminActorUserId,
-  ])
-  await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [
-    adminActorUserId,
-  ])
+  if (adminActorUserId) {
+    await AppDataSource.query(
+      `DELETE FROM audit_log WHERE actor_user_id = $1`,
+      [adminActorUserId],
+    )
+    await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [
+      adminActorUserId,
+    ])
+  }
   await AppDataSource.destroy()
 })
 
@@ -1247,6 +1250,7 @@ d('topicsAdmin list/get (DB integration)', () => {
 
   it('applyTopicsImport is atomic — throws on conflict and the good row was NOT inserted', async () => {
     const goodLabel = `__imp_good_${runId}__`
+    const conflictLabel = `__imp_conflict_${runId}__`
     const rows = [
       {
         label: goodLabel,
@@ -1257,7 +1261,7 @@ d('topicsAdmin list/get (DB integration)', () => {
         id: '',
       },
       {
-        label: `__imp_conflict_${runId}__`,
+        label: conflictLabel,
         description: '',
         aliases: [],
         parent: 'NoSuchTopic',
@@ -1265,14 +1269,29 @@ d('topicsAdmin list/get (DB integration)', () => {
         id: '',
       },
     ]
-    await expect(applyTopicsImport(rows, false)).rejects.toThrow(/conflict/i)
+    try {
+      let error: unknown
+      try {
+        await applyTopicsImport(rows, false)
+      } catch (caught) {
+        error = caught
+      }
 
-    // Verify the good row was NOT inserted (rolled back / never started)
-    const [gone] = await AppDataSource.query(
-      `SELECT 1 FROM tags WHERE value_id = $1 AND facet = 'topic'`,
-      [goodLabel],
-    )
-    expect(gone).toBeUndefined()
+      const inserted: any[] = await AppDataSource.query(
+        `SELECT id, value_id FROM tags
+         WHERE value_id = ANY($1::text[])`,
+        [[goodLabel, conflictLabel]],
+      )
+      ids.push(...inserted.map((tag) => tag.id))
+      expect(error).toBeInstanceOf(Error)
+      expect((error as Error).message).toMatch(/conflict/i)
+      expect(inserted).toHaveLength(0)
+    } finally {
+      await AppDataSource.query(
+        `DELETE FROM tags WHERE value_id = ANY($1::text[])`,
+        [[goodLabel, conflictLabel]],
+      )
+    }
   })
 
   it('exportTopicsCsv round-trips through importTopicsDiff with 0 adds/updates/conflicts', async () => {
@@ -1426,14 +1445,29 @@ d('topicsAdmin list/get (DB integration)', () => {
         id: '',
       },
     ]
-    await expect(applyTopicsImport(rows, false)).rejects.toThrow(/cycle/i)
+    try {
+      let error: unknown
+      try {
+        await applyTopicsImport(rows, false)
+      } catch (caught) {
+        error = caught
+      }
 
-    // Neither tag should exist (transaction rolled back)
-    const left: any[] = await AppDataSource.query(
-      `SELECT 1 FROM tags WHERE value_id IN ($1, $2) AND facet = 'topic'`,
-      [labelA, labelB],
-    )
-    expect(left.length).toBe(0)
+      const inserted: any[] = await AppDataSource.query(
+        `SELECT id, value_id FROM tags
+         WHERE value_id = ANY($1::text[])`,
+        [[labelA, labelB]],
+      )
+      ids.push(...inserted.map((tag) => tag.id))
+      expect(error).toBeInstanceOf(Error)
+      expect((error as Error).message).toMatch(/cycle/i)
+      expect(inserted).toHaveLength(0)
+    } finally {
+      await AppDataSource.query(
+        `DELETE FROM tags WHERE value_id = ANY($1::text[])`,
+        [[labelA, labelB]],
+      )
+    }
   })
 })
 
@@ -1473,34 +1507,44 @@ d(
        VALUES ('topic', $1, 'v1') RETURNING id`,
         [labels.parent],
       )
+      tagIds.push(parent.id)
       const [program] = await AppDataSource.query(
         `INSERT INTO tags (facet, value_id, taxonomy_version)
        VALUES ('program', $1, 'v1') RETURNING id`,
         [labels.program],
       )
+      tagIds.push(program.id)
       const [legacy] = await AppDataSource.query(
         `INSERT INTO tags (facet, value_id, taxonomy_version)
        VALUES ('topic', $1, 'v2') RETURNING id`,
         [labels.legacy],
       )
-      tagIds.push(parent.id, program.id, legacy.id)
+      tagIds.push(legacy.id)
     })
 
     afterAll(async () => {
-      await AppDataSource.query(
-        `DELETE FROM audit_log WHERE actor_user_id = $1 AND entity_id = ANY($2::uuid[])`,
-        [actorUserId, tagIds],
-      )
-      await AppDataSource.query(
-        `DELETE FROM tag_aliases WHERE tag_id = ANY($1::uuid[])`,
-        [tagIds],
-      )
-      await AppDataSource.query(`DELETE FROM tags WHERE id = ANY($1::uuid[])`, [
-        tagIds,
-      ])
-      await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [
-        actorUserId,
-      ])
+      if (!AppDataSource.isInitialized) return
+      if (actorUserId) {
+        await AppDataSource.query(
+          `DELETE FROM audit_log WHERE actor_user_id = $1`,
+          [actorUserId],
+        )
+      }
+      if (tagIds.length > 0) {
+        await AppDataSource.query(
+          `DELETE FROM tag_aliases WHERE tag_id = ANY($1::uuid[])`,
+          [tagIds],
+        )
+        await AppDataSource.query(
+          `DELETE FROM tags WHERE id = ANY($1::uuid[])`,
+          [tagIds],
+        )
+      }
+      if (actorUserId) {
+        await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [
+          actorUserId,
+        ])
+      }
       await AppDataSource.destroy()
     })
 
@@ -2062,10 +2106,12 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
         [documentIds],
       )
     }
-    await AppDataSource.query(
-      `DELETE FROM audit_log WHERE actor_user_id = $1`,
-      [actorUserId],
-    )
+    if (actorUserId) {
+      await AppDataSource.query(
+        `DELETE FROM audit_log WHERE actor_user_id = $1`,
+        [actorUserId],
+      )
+    }
     if (tagIds.length > 0) {
       await AppDataSource.query(
         `DELETE FROM tag_aliases WHERE tag_id = ANY($1::uuid[])`,
@@ -2075,7 +2121,11 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
         tagIds,
       ])
     }
-    await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [actorUserId])
+    if (actorUserId) {
+      await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [
+        actorUserId,
+      ])
+    }
     await AppDataSource.destroy()
   })
 

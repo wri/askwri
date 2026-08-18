@@ -33,7 +33,9 @@ export class Migration1787160000000 implements MigrationInterface {
         "created_at" timestamptz NOT NULL DEFAULT now(),
         CONSTRAINT "PK_tag_aliases" PRIMARY KEY ("tag_id", "alias")
       )`)
-    await q.query(`CREATE INDEX "idx_tag_aliases_alias" ON "tag_aliases" ("alias")`)
+    await q.query(
+      `CREATE INDEX "idx_tag_aliases_alias" ON "tag_aliases" ("alias")`,
+    )
 
     // -- tag_embeddings (python-owned, pgvector, NO TypeORM entity)
     //    Mirrors document_chunks: per-row embedding_model/dimension,
