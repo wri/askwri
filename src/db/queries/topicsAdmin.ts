@@ -902,6 +902,17 @@ export function parseTopicsCsv(text: string): ParsedRow[] {
   const idx: Record<string, number> = {}
   for (let i = 0; i < header.length; i++) idx[header[i].trim()] = i
 
+  // Fail fast with an actionable message when the CSV is not in the managed
+  // format. Without this, a headerless WRI keyword CSV (e.g. `Access Rights,,,`)
+  // is read with line 1 as the header, finds no `label` column, and returns an
+  // empty label for every body row — surfacing as a wall of N "empty label"
+  // conflicts instead of one clear message. Spec §7.2.
+  if (idx['label'] === undefined) {
+    throw new TopicsImportConflictError(
+      'CSV is missing the required "label" header column; expected header: label,description,aliases,parent,facet,id',
+    )
+  }
+
   const get = (r: string[], k: string) =>
     idx[k] !== undefined ? (r[idx[k]] ?? '') : ''
 

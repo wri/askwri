@@ -16,6 +16,7 @@ import {
   rebuildTagEmbeddings,
   estimateReclassify,
   retryReclassifyRun,
+  TopicsImportConflictError,
 } from '@/db/queries/topicsAdmin'
 import type { AdminIdentity } from '@/lib/auth/identity'
 
@@ -2447,5 +2448,21 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
     expect(
       parsed.find((parsedRow) => parsedRow.label === label)?.description,
     ).toBe('first\rsecond')
+  })
+})
+
+// Pure-parser tests — no DB required. Kept out of the DB-gated describe above so
+// they run in every environment (CI, local without docker, worktree checks).
+describe('parseTopicsCsv (no DB)', () => {
+  it('throws TopicsImportConflictError when the CSV lacks a `label` header', () => {
+    // Regression: a headerless WRI keyword CSV (e.g. `Access Rights,,,`)
+    // used to read line 1 as the header, find no `label` column, and return
+    // an empty label for every body row — producing a wall of N "empty
+    // label" conflicts instead of one clear, actionable message.
+    const wriCsv = ['Access Rights,,,', 'Accessibility,,,', 'Coal,,,'].join(
+      '\n',
+    )
+    expect(() => parseTopicsCsv(wriCsv)).toThrow(TopicsImportConflictError)
+    expect(() => parseTopicsCsv(wriCsv)).toThrow(/label.*header/i)
   })
 })
