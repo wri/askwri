@@ -18,10 +18,24 @@ import { SESSION_COOKIE } from '@/lib/auth/session'
 
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
+const routeRunId = crypto.randomUUID()
+const adminApiToken = `test-admin-token-${routeRunId}`
+let previousSessionSecret: string | undefined
+let previousAdminApiToken: string | undefined
 
 beforeAll(() => {
+  previousSessionSecret = process.env.SESSION_SECRET
+  previousAdminApiToken = process.env.ADMIN_API_TOKEN
   process.env.SESSION_SECRET = 'test-secret-test-secret-test-secret-1234'
-  process.env.ADMIN_API_TOKEN = 'test-admin-token'
+  process.env.ADMIN_API_TOKEN = adminApiToken
+})
+
+afterAll(() => {
+  if (previousSessionSecret === undefined) delete process.env.SESSION_SECRET
+  else process.env.SESSION_SECRET = previousSessionSecret
+
+  if (previousAdminApiToken === undefined) delete process.env.ADMIN_API_TOKEN
+  else process.env.ADMIN_API_TOKEN = previousAdminApiToken
 })
 
 function makeReq(method: string, url: string, body?: unknown, cookie?: string) {
@@ -56,14 +70,15 @@ async function getSessionCookie(
 }
 
 d('topics API routes (DB integration)', () => {
-  const adminUser = `topics_admin_${Date.now()}`
-  const editorUser = `topics_editor_${Date.now()}`
+  const adminUser = `topics_admin_${routeRunId}`
+  const editorUser = `topics_editor_${routeRunId}`
   let adminCookie = ''
   let editorCookie = ''
   let adminId = ''
   let editorId = ''
   const tagIds: string[] = []
   const docIds: string[] = []
+  const jobRunIds: string[] = []
 
   beforeAll(async () => {
     if (!AppDataSource.isInitialized) await AppDataSource.initialize()
@@ -92,10 +107,11 @@ d('topics API routes (DB integration)', () => {
 
   afterAll(async () => {
     // Delete test-owned jobs before their scoped tags can become null.
-    if (docIds.length > 0) {
+    if (docIds.length > 0 || jobRunIds.length > 0) {
       await AppDataSource.query(
-        `DELETE FROM reclassify_jobs WHERE document_id = ANY($1::uuid[])`,
-        [docIds],
+        `DELETE FROM reclassify_jobs
+         WHERE document_id = ANY($1::uuid[]) OR run_id = ANY($2::uuid[])`,
+        [docIds, jobRunIds],
       )
     }
     for (const did of docIds) {
@@ -111,11 +127,10 @@ d('topics API routes (DB integration)', () => {
       ])
       await AppDataSource.query(`DELETE FROM tags WHERE id = $1`, [tid])
     }
-    for (const tid of tagIds) {
-      await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
-        tid,
-      ])
-    }
+    await AppDataSource.query(
+      `DELETE FROM audit_log WHERE actor_user_id = ANY($1::uuid[])`,
+      [[adminId, editorId]],
+    )
     const repo = AppDataSource.getRepository(User)
     await repo.delete({ id: adminId })
     await repo.delete({ id: editorId })
@@ -165,7 +180,7 @@ d('topics API routes (DB integration)', () => {
         'POST',
         'http://localhost/api/admin/topics',
         {
-          valueId: `__route_test_${Date.now()}`,
+          valueId: `__route_test_${routeRunId}`,
           description: 'route test tag',
           aliases: ['__rt_alias__'],
         },
@@ -185,7 +200,7 @@ d('topics API routes (DB integration)', () => {
         'POST',
         'http://localhost/api/admin/topics',
         {
-          valueId: `__route_forbidden_${Date.now()}`,
+          valueId: `__route_forbidden_${routeRunId}`,
         },
         editorCookie,
       ),
@@ -194,7 +209,7 @@ d('topics API routes (DB integration)', () => {
   })
 
   it('POST /api/admin/topics returns 409 on duplicate', async () => {
-    const valueId = `__route_dup_${Date.now()}`
+    const valueId = `__route_dup_${routeRunId}`
     // first create succeeds
     const r1 = await createTopic(
       makeReq(
@@ -221,7 +236,7 @@ d('topics API routes (DB integration)', () => {
   it('GET /api/admin/topics works with bearer token (admin)', async () => {
     const res = await getTopics(
       new NextRequest('http://localhost/api/admin/topics', {
-        headers: { authorization: 'Bearer test-admin-token' },
+        headers: { authorization: `Bearer ${adminApiToken}` },
       }),
     )
     expect(res.status).toBe(200)
@@ -286,30 +301,24 @@ d('topics API routes (DB integration)', () => {
       `${label},,,,program,`,
     ].join('\n')
 
-    try {
-      const response = await importTopics(
-        makeReq(
-          'POST',
-          'http://localhost/api/admin/topics/import',
-          { csv },
-          adminCookie,
-        ),
-      )
-      expect(response.status).toBe(409)
-      await expect(response.json()).resolves.toMatchObject({
-        ok: false,
-        error: expect.stringContaining('conflict'),
-      })
-    } finally {
-      const inserted: any[] = await AppDataSource.query(
-        `DELETE FROM tags WHERE value_id = $1 RETURNING id`,
-        [label],
-      )
-      for (const tag of inserted) {
-        const index = tagIds.indexOf(tag.id)
-        if (index >= 0) tagIds.splice(index, 1)
-      }
-    }
+    const response = await importTopics(
+      makeReq(
+        'POST',
+        'http://localhost/api/admin/topics/import',
+        { csv },
+        adminCookie,
+      ),
+    )
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('conflict'),
+    })
+    const [inserted] = await AppDataSource.query(
+      `SELECT id FROM tags WHERE value_id = $1`,
+      [label],
+    )
+    expect(inserted).toBeUndefined()
   })
 
   it('POST /api/admin/topics/import maps a label ownership collision to 409', async () => {
@@ -367,27 +376,27 @@ d('topics API routes (DB integration)', () => {
     const label = `__route_import_failure_${nonce}__`
     const auditFunction = `task2_route_audit_fail_${nonce}`
     const auditTrigger = `task2_route_audit_fail_trigger_${nonce}`
-    await AppDataSource.query(
-      `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN
-         IF NEW.action = 'tag_import' AND NEW.actor_user_id = '${adminId}'::uuid THEN
-           RAISE EXCEPTION 'task2 route audit failure';
-         END IF;
-         RETURN NEW;
-       END;
-       $$`,
-    )
-    await AppDataSource.query(
-      `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
-       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
-    )
-
     const csv = [
       'label,description,aliases,parent,facet,id',
       `${label},,,,topic,`,
     ].join('\n')
     const consoleError = jest.spyOn(console, 'error').mockImplementation()
     try {
+      await AppDataSource.query(
+        `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN
+           IF NEW.action = 'tag_import'
+              AND NEW.actor_user_id = '${adminId}'::uuid THEN
+             RAISE EXCEPTION 'task2 route audit failure';
+           END IF;
+           RETURN NEW;
+         END;
+         $$`,
+      )
+      await AppDataSource.query(
+        `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+         FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+      )
       const response = await importTopics(
         makeReq(
           'POST',
@@ -402,7 +411,6 @@ d('topics API routes (DB integration)', () => {
         `DROP TRIGGER IF EXISTS ${auditTrigger} ON audit_log`,
       )
       await AppDataSource.query(`DROP FUNCTION IF EXISTS ${auditFunction}()`)
-      await AppDataSource.query(`DELETE FROM tags WHERE value_id = $1`, [label])
       consoleError.mockRestore()
     }
   })
@@ -410,11 +418,21 @@ d('topics API routes (DB integration)', () => {
   describe('/api/admin/topics/reclassify contract', () => {
     it('GET estimates an explicit all scope without enqueueing work', async () => {
       const nonce = crypto.randomUUID()
+      const beforeResponse = await estimateReclassifyRoute(
+        makeReq(
+          'GET',
+          'http://localhost/api/admin/topics/reclassify?scope=all',
+          undefined,
+          adminCookie,
+        ),
+      )
+      const before = await beforeResponse.json()
       const [document] = await AppDataSource.query(
         `INSERT INTO documents (external_id, s3_key, title, status)
          VALUES ($1, $2, 'Estimate all', 'ready') RETURNING id`,
         [`__route_estimate_all_${nonce}__`, `documents/${nonce}.pdf`],
       )
+      docIds.push(document.id)
       try {
         const response = await estimateReclassifyRoute(
           makeReq(
@@ -427,8 +445,8 @@ d('topics API routes (DB integration)', () => {
         expect(response.status).toBe(200)
         await expect(response.json()).resolves.toEqual({
           ok: true,
-          eligible: 1,
-          estCost: 0.0008,
+          eligible: before.eligible + 1,
+          estCost: +((before.eligible + 1) * 0.0008).toFixed(4),
         })
         const [job] = await AppDataSource.query(
           `SELECT id FROM reclassify_jobs WHERE document_id = $1`,
@@ -449,11 +467,13 @@ d('topics API routes (DB integration)', () => {
          VALUES ('topic', $1, 'v1') RETURNING id`,
         [`__route_estimate_tag_${nonce}__`],
       )
+      tagIds.push(tag.id)
       const [document] = await AppDataSource.query(
         `INSERT INTO documents (external_id, s3_key, title, status)
          VALUES ($1, $2, 'Estimate scoped', 'needs_review') RETURNING id`,
         [`__route_estimate_doc_${nonce}__`, `documents/${nonce}.pdf`],
       )
+      docIds.push(document.id)
       await AppDataSource.query(
         `INSERT INTO document_tags (document_id, tag_id, source, status)
          VALUES ($1, $2, 'llm', 'accepted')`,
@@ -494,8 +514,18 @@ d('topics API routes (DB integration)', () => {
          VALUES ($1, $2, 'Enqueue all', 'ready') RETURNING id`,
         [`__route_enqueue_all_${nonce}__`, `documents/${nonce}.pdf`],
       )
+      docIds.push(document.id)
       let runId: string | undefined
       try {
+        const estimateResponse = await estimateReclassifyRoute(
+          makeReq(
+            'GET',
+            'http://localhost/api/admin/topics/reclassify?scope=all',
+            undefined,
+            adminCookie,
+          ),
+        )
+        const estimate = await estimateResponse.json()
         const response = await enqueueReclassifyRoute(
           makeReq(
             'POST',
@@ -507,19 +537,22 @@ d('topics API routes (DB integration)', () => {
         expect(response.status).toBe(200)
         const body = await response.json()
         runId = body.runId
+        jobRunIds.push(body.runId)
         expect(body).toEqual({
           ok: true,
-          enqueued: 1,
-          estCost: 0.0008,
+          enqueued: estimate.eligible,
+          estCost: estimate.estCost,
           runId: expect.stringMatching(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
           ),
         })
       } finally {
-        await AppDataSource.query(
-          `DELETE FROM reclassify_jobs WHERE document_id = $1`,
-          [document.id],
-        )
+        if (runId) {
+          await AppDataSource.query(
+            `DELETE FROM reclassify_jobs WHERE run_id = $1`,
+            [runId],
+          )
+        }
         await AppDataSource.query(`DELETE FROM documents WHERE id = $1`, [
           document.id,
         ])
@@ -540,11 +573,13 @@ d('topics API routes (DB integration)', () => {
          VALUES ('topic', $1, 'v1') RETURNING id`,
         [`__route_enqueue_tag_${nonce}__`],
       )
+      tagIds.push(tag.id)
       const [document] = await AppDataSource.query(
         `INSERT INTO documents (external_id, s3_key, title, status)
          VALUES ($1, $2, 'Enqueue scoped', 'needs_review') RETURNING id`,
         [`__route_enqueue_doc_${nonce}__`, `documents/${nonce}.pdf`],
       )
+      docIds.push(document.id)
       await AppDataSource.query(
         `INSERT INTO document_tags (document_id, tag_id, source, status)
          VALUES ($1, $2, 'llm', 'accepted')`,
@@ -561,6 +596,7 @@ d('topics API routes (DB integration)', () => {
         )
         expect(response.status).toBe(200)
         const body = await response.json()
+        jobRunIds.push(body.runId)
         expect(body).toEqual({
           ok: true,
           enqueued: 1,
@@ -597,6 +633,8 @@ d('topics API routes (DB integration)', () => {
          VALUES ($1, $2, 'Retry route', 'ready') RETURNING id`,
         [`__route_retry_${nonce}__`, `documents/${nonce}.pdf`],
       )
+      docIds.push(document.id)
+      jobRunIds.push(runId)
       await AppDataSource.query(
         `INSERT INTO reclassify_jobs
            (document_id, run_id, status, attempts, error)

@@ -22,7 +22,38 @@ import type { AdminIdentity } from '@/lib/auth/identity'
 const hasDb = !!process.env.DATABASE_URL
 const d = hasDb ? describe : describe.skip
 
-const adminIdentity: AdminIdentity = { kind: 'token', role: 'admin' }
+const testRunId = crypto.randomUUID()
+let adminIdentity: AdminIdentity
+let adminActorUserId = ''
+
+beforeAll(async () => {
+  if (!hasDb) return
+  if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+  const [actor] = await AppDataSource.query(
+    `INSERT INTO users (username, password_hash, role)
+     VALUES ($1, 'not-used-by-test', 'admin') RETURNING id`,
+    [`topics-db-${testRunId}`],
+  )
+  adminActorUserId = actor.id
+  adminIdentity = {
+    kind: 'user',
+    userId: adminActorUserId,
+    username: `topics-db-${testRunId}`,
+    role: 'admin',
+  }
+})
+
+afterAll(async () => {
+  if (!hasDb) return
+  if (!AppDataSource.isInitialized) await AppDataSource.initialize()
+  await AppDataSource.query(`DELETE FROM audit_log WHERE actor_user_id = $1`, [
+    adminActorUserId,
+  ])
+  await AppDataSource.query(`DELETE FROM users WHERE id = $1`, [
+    adminActorUserId,
+  ])
+  await AppDataSource.destroy()
+})
 
 async function waitForReclassifyLockWait(timeoutMs = 5000): Promise<void> {
   const deadline = Date.now() + timeoutMs
@@ -43,10 +74,23 @@ async function waitForReclassifyLockWait(timeoutMs = 5000): Promise<void> {
 }
 
 d('topicsAdmin list/get (DB integration)', () => {
+  const runId = crypto.randomUUID()
+  const labels = {
+    root: `__test_root_${runId}__`,
+    child: `__test_child_${runId}__`,
+    program: `__test_program_${runId}__`,
+    rootAlias: `__test_alias_${runId}__`,
+    created: `__test_create_${runId}__`,
+    createdAlias1: `__c_alias1_${runId}__`,
+    createdAlias2: `__c_alias2_${runId}__`,
+    updatedAlias: `__new_alias_${runId}__`,
+  }
   let rootId: string
   let childId: string
   let nonTopicId: string
   const ids: string[] = []
+  const documentIds: string[] = []
+  const runIds: string[] = []
 
   beforeAll(async () => {
     if (!AppDataSource.isInitialized) await AppDataSource.initialize()
@@ -54,21 +98,22 @@ d('topicsAdmin list/get (DB integration)', () => {
     // Create a root topic tag with a description and an alias
     const [rootRow] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version, description)
-       VALUES ('topic', '__test_root__', 'v1', 'root desc') RETURNING id`,
+       VALUES ('topic', $1, 'v1', 'root desc') RETURNING id`,
+      [labels.root],
     )
     rootId = rootRow.id
     ids.push(rootId)
 
     await AppDataSource.query(
-      `INSERT INTO tag_aliases (tag_id, alias) VALUES ($1, '__test_alias__')`,
-      [rootId],
+      `INSERT INTO tag_aliases (tag_id, alias) VALUES ($1, $2)`,
+      [rootId, labels.rootAlias],
     )
 
     // Create a child topic tag (parent = root), no aliases
     const [childRow] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version, parent_tag_id)
-       VALUES ('topic', '__test_child__', 'v1', $1) RETURNING id`,
-      [rootId],
+       VALUES ('topic', $1, 'v1', $2) RETURNING id`,
+      [labels.child, rootId],
     )
     childId = childRow.id
     ids.push(childId)
@@ -76,14 +121,31 @@ d('topicsAdmin list/get (DB integration)', () => {
     // Create a non-topic tag (facet='program') to verify getTopic is topic-scoped
     const [nonTopicRow] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version)
-       VALUES ('program', '__test_program__', 'v1') RETURNING id`,
+       VALUES ('program', $1, 'v1') RETURNING id`,
+      [labels.program],
     )
     nonTopicId = nonTopicRow.id
     ids.push(nonTopicId)
   })
 
   afterAll(async () => {
-    // Delete aliases first (FK references tags), then tags, then audit
+    if (runIds.length > 0 || documentIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM reclassify_jobs
+         WHERE run_id = ANY($1::uuid[]) OR document_id = ANY($2::uuid[])`,
+        [runIds, documentIds],
+      )
+    }
+    if (documentIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM document_tags WHERE document_id = ANY($1::uuid[])`,
+        [documentIds],
+      )
+      await AppDataSource.query(
+        `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+        [documentIds],
+      )
+    }
     await AppDataSource.query(
       `DELETE FROM tag_aliases WHERE tag_id = ANY($1::uuid[])`,
       [ids],
@@ -102,7 +164,7 @@ d('topicsAdmin list/get (DB integration)', () => {
     expect(root).toBeDefined()
     expect(root).toMatchObject({
       facet: 'topic',
-      valueId: '__test_root__',
+      valueId: labels.root,
       taxonomyVersion: 'v1',
       description: 'root desc',
       parentTagId: null,
@@ -110,7 +172,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       suggestedCount: 0,
       needsReembed: false,
     })
-    expect(root!.aliases).toContain('__test_alias__')
+    expect(root!.aliases).toContain(labels.rootAlias)
 
     const child = rows.find((t) => t.id === childId)
     expect(child).toBeDefined()
@@ -123,7 +185,7 @@ d('topicsAdmin list/get (DB integration)', () => {
     expect(t).toBeDefined()
     expect(t).toMatchObject({
       id: childId,
-      valueId: '__test_child__',
+      valueId: labels.child,
       parentTagId: rootId,
       acceptedCount: 0,
       suggestedCount: 0,
@@ -132,7 +194,7 @@ d('topicsAdmin list/get (DB integration)', () => {
 
     // Root tag should have the alias
     const root = await getTopic(rootId)
-    expect(root!.aliases).toContain('__test_alias__')
+    expect(root!.aliases).toContain(labels.rootAlias)
     expect(root!.parentTagId).toBeNull()
     expect(root!.description).toBe('root desc')
   })
@@ -152,9 +214,9 @@ d('topicsAdmin list/get (DB integration)', () => {
   it('createTopic sets needs_reembed, writes aliases, and writes audit', async () => {
     const result = await createTopic(
       {
-        valueId: '__test_create__',
+        valueId: labels.created,
         description: 'created desc',
-        aliases: ['__c_alias1__', '__c_alias2__'],
+        aliases: [labels.createdAlias1, labels.createdAlias2],
       },
       adminIdentity,
     )
@@ -177,8 +239,8 @@ d('topicsAdmin list/get (DB integration)', () => {
       [created.id],
     )
     expect(aliases.map((a) => a.alias)).toEqual([
-      '__c_alias1__',
-      '__c_alias2__',
+      labels.createdAlias1,
+      labels.createdAlias2,
     ])
 
     // Audit row must exist
@@ -215,7 +277,7 @@ d('topicsAdmin list/get (DB integration)', () => {
 
     await updateTopic(
       rootId,
-      { description: 'changed desc', aliases: ['__new_alias__'] },
+      { description: 'changed desc', aliases: [labels.updatedAlias] },
       adminIdentity,
     )
 
@@ -230,7 +292,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       `SELECT alias FROM tag_aliases WHERE tag_id = $1`,
       [rootId],
     )
-    expect(aliases.map((a) => a.alias)).toEqual(['__new_alias__'])
+    expect(aliases.map((a) => a.alias)).toEqual([labels.updatedAlias])
 
     // Audit row must exist for the update
     const [audit] = await AppDataSource.query(
@@ -258,9 +320,10 @@ d('topicsAdmin list/get (DB integration)', () => {
     // Create a throwaway topic with no children and no docs
     const [tmp] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
-      [`__test_del_ok_${Date.now()}__`],
+      [`__test_del_ok_${runId}__`],
     )
     const tmpId = tmp.id
+    ids.push(tmpId)
 
     const res = await deleteTopicIfUnused(tmpId, adminIdentity)
     expect(res).toMatchObject({ deleted: true })
@@ -271,6 +334,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       [tmpId],
     )
     expect(gone).toBeUndefined()
+    ids.splice(ids.indexOf(tmpId), 1)
 
     // Clean up audit row
     await AppDataSource.query(`DELETE FROM audit_log WHERE entity_id = $1`, [
@@ -279,21 +343,14 @@ d('topicsAdmin list/get (DB integration)', () => {
   })
 
   it('mergeTags moves document_tags, deletes source, and re-parents children', async () => {
-    // Ensure no stale document_tags on childId from prior runs
-    await AppDataSource.query(`DELETE FROM document_tags WHERE tag_id = $1`, [
-      childId,
-    ])
-
     // Create a temporary document
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Merge Test', 'needs_review') RETURNING id`,
-      [
-        `__merge_test_${Date.now()}__`,
-        `documents/__merge_test_${Date.now()}__.pdf`,
-      ],
+      [`__merge_test_${runId}__`, `documents/__merge_test_${runId}.pdf`],
     )
     const docId = docRow.id
+    documentIds.push(docId)
 
     // Tag the doc with childId (the source tag we'll merge away)
     await AppDataSource.query(
@@ -342,11 +399,11 @@ d('topicsAdmin list/get (DB integration)', () => {
     // Create two fresh temp topic tags
     const [tagA] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
-      [`__test_pk_a_${Date.now()}__`],
+      [`__test_pk_a_${runId}__`],
     )
     const [tagB] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
-      [`__test_pk_b_${Date.now()}__`],
+      [`__test_pk_b_${runId}__`],
     )
     ids.push(tagA.id, tagB.id)
 
@@ -354,9 +411,10 @@ d('topicsAdmin list/get (DB integration)', () => {
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'PK Conflict Test', 'needs_review') RETURNING id`,
-      [`__pk_test_${Date.now()}__`, `documents/__pk_test_${Date.now()}__.pdf`],
+      [`__pk_test_${runId}__`, `documents/__pk_test_${runId}.pdf`],
     )
     const docId = docRow.id
+    documentIds.push(docId)
     await AppDataSource.query(
       `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
       [docId, tagA.id],
@@ -398,18 +456,16 @@ d('topicsAdmin list/get (DB integration)', () => {
     // Create a temp topic tag + temp doc, tag the doc
     const [tmpTag] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
-      [`__test_inuse_${Date.now()}__`],
+      [`__test_inuse_${runId}__`],
     )
     ids.push(tmpTag.id)
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'In-Use Test', 'needs_review') RETURNING id`,
-      [
-        `__inuse_test_${Date.now()}__`,
-        `documents/__inuse_test_${Date.now()}__.pdf`,
-      ],
+      [`__inuse_test_${runId}__`, `documents/__inuse_test_${runId}.pdf`],
     )
     const docId = docRow.id
+    documentIds.push(docId)
     await AppDataSource.query(
       `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
       [docId, tmpTag.id],
@@ -460,11 +516,12 @@ d('topicsAdmin list/get (DB integration)', () => {
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Reclassify Test', 'ready') RETURNING id`,
       [
-        `__recls_test_${Date.now()}__`,
-        `documents/__recls_test_${Date.now()}__.pdf`,
+        `__recls_test_${testRunId}__`,
+        `documents/__recls_test_${testRunId}.pdf`,
       ],
     )
     const docId = docRow.id
+    documentIds.push(docId)
     let runId: string | undefined
     let secondRunId: string | undefined
 
@@ -472,6 +529,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       try {
         const r1 = await enqueueReclassify('all', adminIdentity)
         runId = r1.runId
+        runIds.push(r1.runId)
         expect(r1).toHaveProperty('enqueued')
         expect(r1).toHaveProperty('estCost')
         expect(r1).toHaveProperty('runId')
@@ -486,6 +544,7 @@ d('topicsAdmin list/get (DB integration)', () => {
         )
         const r2 = await enqueueReclassify('all', adminIdentity)
         secondRunId = r2.runId
+        runIds.push(r2.runId)
         expect(r2.enqueued).toBeGreaterThanOrEqual(1)
         expect(r2.runId).not.toBe(r1.runId)
       } finally {
@@ -525,19 +584,17 @@ d('topicsAdmin list/get (DB integration)', () => {
     // Create a temp topic tag + temp doc + document_tag(source='llm')
     const [tagRow] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version) VALUES ('topic', $1, 'v1') RETURNING id`,
-      [`__recls_tag_${Date.now()}__`],
+      [`__recls_tag_${runId}__`],
     )
     const tagId = tagRow.id
     ids.push(tagId)
     const [docRow] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Scoped Reclassify Test', 'needs_review') RETURNING id`,
-      [
-        `__recls_scoped_${Date.now()}__`,
-        `documents/__recls_scoped_${Date.now()}__.pdf`,
-      ],
+      [`__recls_scoped_${runId}__`, `documents/__recls_scoped_${runId}.pdf`],
     )
     const docId = docRow.id
+    documentIds.push(docId)
     await AppDataSource.query(
       `INSERT INTO document_tags (document_id, tag_id, source, status) VALUES ($1, $2, 'llm', 'accepted')`,
       [docId, tagId],
@@ -545,6 +602,7 @@ d('topicsAdmin list/get (DB integration)', () => {
 
     try {
       const r = await enqueueReclassify({ tagId }, adminIdentity)
+      runIds.push(r.runId)
       expect(r.enqueued).toBe(1)
       expect(r.estCost).toBe(+(1 * 0.0008).toFixed(4))
       expect(typeof r.runId).toBe('string')
@@ -580,16 +638,18 @@ d('topicsAdmin list/get (DB integration)', () => {
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Status Test', 'ready') RETURNING id`,
       [
-        `__recls_status_${Date.now()}__`,
-        `documents/__recls_status_${Date.now()}__.pdf`,
+        `__recls_status_${testRunId}__`,
+        `documents/__recls_status_${testRunId}.pdf`,
       ],
     )
     const docId = docRow.id
+    documentIds.push(docId)
     let runId: string
 
     try {
       const r = await enqueueReclassify('all', adminIdentity)
       runId = r.runId
+      runIds.push(r.runId)
       expect(r.enqueued).toBeGreaterThanOrEqual(1)
 
       const s = await reclassifyStatus()
@@ -628,6 +688,7 @@ d('topicsAdmin list/get (DB integration)', () => {
 
   it('estimateReclassify counts only currently eligible rows without queue mutation', async () => {
     const nonce = crypto.randomUUID()
+    const before = await estimateReclassify('all')
     const [topic] = await AppDataSource.query(
       `INSERT INTO tags (facet, value_id, taxonomy_version)
        VALUES ('topic', $1, 'v1') RETURNING id`,
@@ -638,6 +699,7 @@ d('topicsAdmin list/get (DB integration)', () => {
        VALUES ('program', $1, 'v1') RETURNING id`,
       [`__estimate_program_${nonce}__`],
     )
+    ids.push(topic.id, outOfScope.id)
     const documents: any[] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES
@@ -654,6 +716,7 @@ d('topicsAdmin list/get (DB integration)', () => {
         `documents/estimate-human-${nonce}.pdf`,
       ],
     )
+    documentIds.push(...documents.map((document) => document.id))
     await AppDataSource.query(
       `INSERT INTO document_tags (document_id, tag_id, source, status)
        VALUES ($1, $2, 'llm', 'accepted'), ($3, $2, 'human', 'accepted')`,
@@ -667,8 +730,8 @@ d('topicsAdmin list/get (DB integration)', () => {
 
     try {
       await expect(estimateReclassify('all')).resolves.toEqual({
-        eligible: 1,
-        estCost: 0.0008,
+        eligible: before.eligible + 1,
+        estCost: +((before.eligible + 1) * 0.0008).toFixed(4),
       })
       await expect(estimateReclassify({ tagId: topic.id })).resolves.toEqual({
         eligible: 1,
@@ -711,22 +774,23 @@ d('topicsAdmin list/get (DB integration)', () => {
         `documents/atomic-enqueue-two-${nonce}.pdf`,
       ],
     )
-    await AppDataSource.query(
-      `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN
-         IF NEW.action = 'reclassify_enqueue' THEN
-           RAISE EXCEPTION 'task3 enqueue audit failure';
-         END IF;
-         RETURN NEW;
-       END;
-       $$`,
-    )
-    await AppDataSource.query(
-      `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
-       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
-    )
-
+    documentIds.push(...documents.map((document) => document.id))
     try {
+      await AppDataSource.query(
+        `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN
+           IF NEW.action = 'reclassify_enqueue'
+              AND NEW.actor_user_id = '${adminActorUserId}'::uuid THEN
+             RAISE EXCEPTION 'task3 enqueue audit failure';
+           END IF;
+           RETURN NEW;
+         END;
+         $$`,
+      )
+      await AppDataSource.query(
+        `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+         FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+      )
       await expect(enqueueReclassify('all', adminIdentity)).rejects.toThrow(
         /task3 enqueue audit failure/i,
       )
@@ -768,6 +832,8 @@ d('topicsAdmin list/get (DB integration)', () => {
         `documents/retry-other-${nonce}.pdf`,
       ],
     )
+    documentIds.push(...documents.map((document) => document.id))
+    runIds.push(requestedRunId, otherRunId)
     await AppDataSource.query(
       `INSERT INTO reclassify_jobs
          (document_id, run_id, status, attempts, error)
@@ -853,11 +919,14 @@ d('topicsAdmin list/get (DB integration)', () => {
        VALUES ('topic', $1, 'v1') RETURNING id`,
       [`__retry_race_tag_${nonce}__`],
     )
+    ids.push(tag.id)
     const [document] = await AppDataSource.query(
       `INSERT INTO documents (external_id, s3_key, title, status)
        VALUES ($1, $2, 'Retry race', 'needs_review') RETURNING id`,
       [`__retry_race_${nonce}__`, `documents/retry-race-${nonce}.pdf`],
     )
+    documentIds.push(document.id)
+    runIds.push(requestedRunId)
     await AppDataSource.query(
       `INSERT INTO document_tags (document_id, tag_id, source, status)
        VALUES ($1, $2, 'llm', 'accepted')`,
@@ -890,6 +959,7 @@ d('topicsAdmin list/get (DB integration)', () => {
         enqueueRunner.manager,
       )
       enqueueRunId = enqueueResult.runId
+      runIds.push(enqueueResult.runId)
       expect(enqueueResult.enqueued).toBe(1)
 
       retryOutcomePromise = retryReclassifyRun(
@@ -963,6 +1033,8 @@ d('topicsAdmin list/get (DB integration)', () => {
        RETURNING id, external_id`,
       [`__retry_activity_${nonce}_`],
     )
+    documentIds.push(...documents.map((document) => document.id))
+    runIds.push(requestedRunId)
     const oldDocument = documents.find((document) =>
       document.external_id.endsWith('_0'),
     )
@@ -1023,6 +1095,8 @@ d('topicsAdmin list/get (DB integration)', () => {
        RETURNING id`,
       [`__status_error_${nonce}_`],
     )
+    documentIds.push(...documents.map((document) => document.id))
+    runIds.push(runId)
     await AppDataSource.query(
       `INSERT INTO reclassify_jobs
          (document_id, run_id, status, attempts, error)
@@ -1071,22 +1145,22 @@ d('topicsAdmin list/get (DB integration)', () => {
        VALUES ('topic', $1, 'v1', false) RETURNING id`,
       [`__atomic_rebuild_${nonce}__`],
     )
-    await AppDataSource.query(
-      `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN
-         IF NEW.action = 'tag_embeddings_rebuild' THEN
-           RAISE EXCEPTION 'task3 rebuild audit failure';
-         END IF;
-         RETURN NEW;
-       END;
-       $$`,
-    )
-    await AppDataSource.query(
-      `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
-       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
-    )
-
     try {
+      await AppDataSource.query(
+        `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN
+           IF NEW.action = 'tag_embeddings_rebuild'
+              AND NEW.actor_user_id = '${adminActorUserId}'::uuid THEN
+             RAISE EXCEPTION 'task3 rebuild audit failure';
+           END IF;
+           RETURN NEW;
+         END;
+         $$`,
+      )
+      await AppDataSource.query(
+        `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+         FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+      )
       await expect(rebuildTagEmbeddings(adminIdentity)).rejects.toThrow(
         /task3 rebuild audit failure/i,
       )
@@ -1159,7 +1233,7 @@ d('topicsAdmin list/get (DB integration)', () => {
   it('importTopicsDiff reports a conflict for a bad parent reference', async () => {
     const diff = await importTopicsDiff([
       {
-        label: `__imp_bad_${Date.now()}__`,
+        label: `__imp_bad_${runId}__`,
         description: '',
         aliases: [],
         parent: 'NoSuchTopic',
@@ -1172,7 +1246,7 @@ d('topicsAdmin list/get (DB integration)', () => {
   })
 
   it('applyTopicsImport is atomic — throws on conflict and the good row was NOT inserted', async () => {
-    const goodLabel = `__imp_good_${Date.now()}__`
+    const goodLabel = `__imp_good_${runId}__`
     const rows = [
       {
         label: goodLabel,
@@ -1183,7 +1257,7 @@ d('topicsAdmin list/get (DB integration)', () => {
         id: '',
       },
       {
-        label: `__imp_conflict_${Date.now()}__`,
+        label: `__imp_conflict_${runId}__`,
         description: '',
         aliases: [],
         parent: 'NoSuchTopic',
@@ -1211,8 +1285,8 @@ d('topicsAdmin list/get (DB integration)', () => {
   })
 
   it('applyTopicsImport sets parent_tag_id for forward-referencing child (child before parent in CSV)', async () => {
-    const parentLabel = `__imp_fwd_parent_${Date.now()}__`
-    const childLabel = `__imp_fwd_child_${Date.now()}__`
+    const parentLabel = `__imp_fwd_parent_${runId}__`
+    const childLabel = `__imp_fwd_child_${runId}__`
     const rows = [
       {
         label: childLabel,
@@ -1238,22 +1312,14 @@ d('topicsAdmin list/get (DB integration)', () => {
       [parentLabel],
     )
     const [childRow] = await AppDataSource.query(
-      `SELECT parent_tag_id FROM tags WHERE value_id = $1 AND facet = 'topic'`,
+      `SELECT id, parent_tag_id FROM tags WHERE value_id = $1 AND facet = 'topic'`,
       [childLabel],
     )
+    if (parentRow) ids.push(parentRow.id)
+    if (childRow) ids.push(childRow.id)
     expect(parentRow).toBeDefined()
     expect(childRow).toBeDefined()
     expect(childRow.parent_tag_id).toBe(parentRow.id)
-
-    // cleanup
-    await AppDataSource.query(
-      `DELETE FROM tag_aliases WHERE tag_id IN (SELECT id FROM tags WHERE value_id IN ($1, $2))`,
-      [childLabel, parentLabel],
-    )
-    await AppDataSource.query(
-      `DELETE FROM tags WHERE value_id IN ($1, $2) AND facet = 'topic'`,
-      [childLabel, parentLabel],
-    )
   })
 
   it('rebuildTagEmbeddings is rollback-isolated and counts only newly queued tags', async () => {
@@ -1267,6 +1333,12 @@ d('topicsAdmin list/get (DB integration)', () => {
     let firstQueued = -1
     let secondQueued = -1
     let auditRows: { id: string; after: { queued: number } }[] = []
+    const flagsBefore: { id: string; needs_reembed: boolean }[] =
+      await AppDataSource.query(
+        `SELECT id, needs_reembed FROM tags
+         WHERE facet = 'topic' AND taxonomy_version = 'v1'
+         ORDER BY id`,
+      )
     await runner.connect()
     await runner.startTransaction()
     try {
@@ -1314,6 +1386,13 @@ d('topicsAdmin list/get (DB integration)', () => {
     expect(firstQueued).toBe(eligible)
     expect(secondQueued).toBe(0)
     expect(auditRows.map((audit) => audit.after.queued)).toEqual([eligible, 0])
+    const flagsAfter: { id: string; needs_reembed: boolean }[] =
+      await AppDataSource.query(
+        `SELECT id, needs_reembed FROM tags
+         WHERE id = ANY($1::uuid[]) ORDER BY id`,
+        [flagsBefore.map((tag) => tag.id)],
+      )
+    expect(flagsAfter).toEqual(flagsBefore)
     const persistedTags: any[] = await AppDataSource.query(
       `SELECT id FROM tags WHERE value_id = ANY($1::text[])`,
       [labels],
@@ -1327,8 +1406,8 @@ d('topicsAdmin list/get (DB integration)', () => {
   })
 
   it('applyTopicsImport rejects a cyclic parent assignment (A→B, B→A) and rolls back', async () => {
-    const labelA = `__imp_cyc_a_${Date.now()}__`
-    const labelB = `__imp_cyc_b_${Date.now()}__`
+    const labelA = `__imp_cyc_a_${runId}__`
+    const labelB = `__imp_cyc_b_${runId}__`
     const rows = [
       {
         label: labelA,
@@ -1439,8 +1518,10 @@ d(
       ).resolves.toEqual({ error: 'parent must be a v1 topic' })
 
       const created = await createTopic({ valueId: labels.create }, identity)
+      if ('error' in created)
+        throw new Error(`createTopic returned error: ${created.error}`)
+      tagIds.push(created.id)
       expect(created).toMatchObject({ valueId: labels.create })
-      if (!('error' in created)) tagIds.push(created.id)
     })
 
     it('update rejects a non-v1 parent', async () => {
@@ -1465,33 +1546,40 @@ d(
       const tagTrigger = `task1_tag_txid_trigger_${suffix}`
       const auditTrigger = `task1_audit_txid_trigger_${suffix}`
 
-      await AppDataSource.query(
-        `CREATE FUNCTION ${tagFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN
-         NEW.description := COALESCE(NEW.description, '') || '__task1_txid=' || txid_current()::text;
-         RETURN NEW;
-       END;
-       $$`,
-      )
-      await AppDataSource.query(
-        `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN
-         NEW.after := COALESCE(NEW.after, '{}'::jsonb)
-           || jsonb_build_object('__task1_txid', txid_current()::text);
-         RETURN NEW;
-       END;
-       $$`,
-      )
-      await AppDataSource.query(
-        `CREATE TRIGGER ${tagTrigger} BEFORE INSERT ON tags
-       FOR EACH ROW EXECUTE FUNCTION ${tagFunction}()`,
-      )
-      await AppDataSource.query(
-        `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
-       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
-      )
-
       try {
+        await AppDataSource.query(
+          `CREATE FUNCTION ${tagFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+           BEGIN
+             IF NEW.facet = 'topic'
+                AND NEW.taxonomy_version = 'v1'
+                AND NEW.value_id = '${labels.audited}' THEN
+               NEW.description := COALESCE(NEW.description, '') || '__task1_txid=' || txid_current()::text;
+             END IF;
+             RETURN NEW;
+           END;
+           $$`,
+        )
+        await AppDataSource.query(
+          `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+           BEGIN
+             IF NEW.action = 'tag_create'
+                AND NEW.actor_user_id = '${actorUserId}'::uuid
+                AND NEW.after->>'valueId' = '${labels.audited}' THEN
+               NEW.after := COALESCE(NEW.after, '{}'::jsonb)
+                 || jsonb_build_object('__task1_txid', txid_current()::text);
+             END IF;
+             RETURN NEW;
+           END;
+           $$`,
+        )
+        await AppDataSource.query(
+          `CREATE TRIGGER ${tagTrigger} BEFORE INSERT ON tags
+           FOR EACH ROW EXECUTE FUNCTION ${tagFunction}()`,
+        )
+        await AppDataSource.query(
+          `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+           FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+        )
         const created = await createTopic({ valueId: labels.audited }, identity)
         if ('error' in created)
           throw new Error(`createTopic returned error: ${created.error}`)
@@ -1827,23 +1915,23 @@ d('topicsAdmin guarded merge integrity (DB integration)', () => {
 
     const enqueueFunction = `task2_merge_enqueue_fail_${suffix}`
     const enqueueTrigger = `task2_merge_enqueue_fail_trigger_${suffix}`
-    await AppDataSource.query(
-      `CREATE FUNCTION ${enqueueFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN
-         IF NEW.document_id = '${documentId}'::uuid THEN
-           RAISE EXCEPTION 'task2 merge enqueue failure';
-         END IF;
-         RETURN NEW;
-       END;
-       $$`,
-    )
-    await AppDataSource.query(
-      `CREATE TRIGGER ${enqueueTrigger} BEFORE INSERT ON reclassify_jobs
-       FOR EACH ROW EXECUTE FUNCTION ${enqueueFunction}()`,
-    )
 
     let thrown: unknown
     try {
+      await AppDataSource.query(
+        `CREATE FUNCTION ${enqueueFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN
+           IF NEW.document_id = '${documentId}'::uuid THEN
+             RAISE EXCEPTION 'task2 merge enqueue failure';
+           END IF;
+           RETURN NEW;
+         END;
+         $$`,
+      )
+      await AppDataSource.query(
+        `CREATE TRIGGER ${enqueueTrigger} BEFORE INSERT ON reclassify_jobs
+         FOR EACH ROW EXECUTE FUNCTION ${enqueueFunction}()`,
+      )
       await mergeTags(targetId, sourceId, adminIdentity)
     } catch (error) {
       thrown = error
@@ -2171,32 +2259,35 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
     const auditFunction = `task2_csv_audit_fail_${suffix}`
     const auditTrigger = `task2_csv_audit_fail_trigger_${suffix}`
     const auditSequence = `task2_csv_audit_seen_queue_${suffix}`
-    await AppDataSource.query(`CREATE SEQUENCE ${auditSequence}`)
-    await AppDataSource.query(
-      `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN
-         IF NEW.action = 'tag_import' AND NEW.actor_user_id = '${actorUserId}'::uuid THEN
-           IF NOT EXISTS (
-             SELECT 1 FROM reclassify_jobs
-             WHERE document_id = '${documentId}'::uuid
-           ) THEN
-             RAISE EXCEPTION 'task2 audit ran before queue insert';
-           END IF;
-           PERFORM nextval('${auditSequence}');
-           RAISE EXCEPTION 'task2 audit failure';
-         END IF;
-         RETURN NEW;
-       END;
-       $$`,
-    )
-    await AppDataSource.query(
-      `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
-       FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
-    )
 
     let thrown: unknown
     let auditSawQueuedJob = false
+    let probeInstalled = false
     try {
+      await AppDataSource.query(`CREATE SEQUENCE ${auditSequence}`)
+      await AppDataSource.query(
+        `CREATE FUNCTION ${auditFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN
+           IF NEW.action = 'tag_import'
+              AND NEW.actor_user_id = '${actorUserId}'::uuid THEN
+             IF NOT EXISTS (
+               SELECT 1 FROM reclassify_jobs
+               WHERE document_id = '${documentId}'::uuid
+             ) THEN
+               RAISE EXCEPTION 'task2 audit ran before queue insert';
+             END IF;
+             PERFORM nextval('${auditSequence}');
+             RAISE EXCEPTION 'task2 audit failure';
+           END IF;
+           RETURN NEW;
+         END;
+         $$`,
+      )
+      await AppDataSource.query(
+        `CREATE TRIGGER ${auditTrigger} BEFORE INSERT ON audit_log
+         FOR EACH ROW EXECUTE FUNCTION ${auditFunction}()`,
+      )
+      probeInstalled = true
       await applyTopicsImport(
         [row(label, { id: tagId, description: 'after audit' })],
         true,
@@ -2209,10 +2300,12 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
         `DROP TRIGGER IF EXISTS ${auditTrigger} ON audit_log`,
       )
       await AppDataSource.query(`DROP FUNCTION IF EXISTS ${auditFunction}()`)
-      const [sequence] = await AppDataSource.query(
-        `SELECT is_called FROM ${auditSequence}`,
-      )
-      auditSawQueuedJob = sequence.is_called
+      if (probeInstalled) {
+        const [sequence] = await AppDataSource.query(
+          `SELECT is_called FROM ${auditSequence}`,
+        )
+        auditSawQueuedJob = sequence.is_called
+      }
       await AppDataSource.query(`DROP SEQUENCE IF EXISTS ${auditSequence}`)
     }
 
@@ -2248,23 +2341,23 @@ d('topicsAdmin CSV integrity and rollback (DB integration)', () => {
     )
     const enqueueFunction = `task2_csv_enqueue_fail_${suffix}`
     const enqueueTrigger = `task2_csv_enqueue_fail_trigger_${suffix}`
-    await AppDataSource.query(
-      `CREATE FUNCTION ${enqueueFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN
-         IF NEW.document_id = '${documentId}'::uuid THEN
-           RAISE EXCEPTION 'task2 enqueue failure';
-         END IF;
-         RETURN NEW;
-       END;
-       $$`,
-    )
-    await AppDataSource.query(
-      `CREATE TRIGGER ${enqueueTrigger} BEFORE INSERT ON reclassify_jobs
-       FOR EACH ROW EXECUTE FUNCTION ${enqueueFunction}()`,
-    )
 
     let thrown: unknown
     try {
+      await AppDataSource.query(
+        `CREATE FUNCTION ${enqueueFunction}() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN
+           IF NEW.document_id = '${documentId}'::uuid THEN
+             RAISE EXCEPTION 'task2 enqueue failure';
+           END IF;
+           RETURN NEW;
+         END;
+         $$`,
+      )
+      await AppDataSource.query(
+        `CREATE TRIGGER ${enqueueTrigger} BEFORE INSERT ON reclassify_jobs
+         FOR EACH ROW EXECUTE FUNCTION ${enqueueFunction}()`,
+      )
       await applyTopicsImport(
         [row(label, { id: tagId, description: 'after enqueue' })],
         true,
