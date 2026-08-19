@@ -151,7 +151,7 @@ The alias-expansion source (design §4.1 deterministic tier): match `tag_aliases
 **Interfaces:**
 - Produces: `AliasExpander(fetch_groups, max_groups, max_terms).expand(query) -> list[str]` (pure, deterministic; exceptions from `fetch_groups` propagate — the CALLER records degradation, Task 3). `db_expander() -> AliasExpander` — DB-backed via the shared psycopg pool (`app/db.py` `get_pool()`, same idiom as `spell_suggest.db_suggester`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # search-service/tests/test_alias_expand.py
@@ -252,12 +252,12 @@ def test_db_expander_reads_tag_aliases():
             conn.execute("DELETE FROM tags WHERE id = %s", (tag_id,))  # cascades
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_alias_expand.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.alias_expand'`
 
-- [ ] **Step 3: Implement `app/alias_expand.py`**
+- [x] **Step 3: Implement `app/alias_expand.py`**
 
 ```python
 # search-service/app/alias_expand.py
@@ -348,12 +348,12 @@ def db_expander() -> AliasExpander:
     )
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_alias_expand.py -v`
 Expected: 8 PASS, 1 skip without `DATABASE_URL` (the `requires_db` test passes against the local docker stack: `export DATABASE_URL=postgresql://askwri:password@localhost:5432/qa`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add search-service/app/alias_expand.py search-service/tests/test_alias_expand.py
