@@ -491,7 +491,7 @@ The §4.3 generalization: fixed {dense, sparse} becomes a lane list. Original pa
   - `self.degraded_lanes: list[str]` — extra lanes whose retrieval raised (dropped, failure-soft). Always set (empty when none).
   - `build_sparse_query(query, translate=None, languages=..., max_expansions=3, domain_expansion=True)`; `sparse_query_for(query, domain_expansion=True)` — `domain_expansion=False` skips `expand_query_conservative` (base = raw query; translation posture unchanged).
 
-- [ ] **Step 1: Write the failing tests** (append to `search-service/tests/test_lane_fusion.py`)
+- [x] **Step 1: Write the failing tests** (append to `search-service/tests/test_lane_fusion.py`)
 
 ```python
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
@@ -619,12 +619,12 @@ def test_build_sparse_query_domain_expansion_kwarg():
     assert build_sparse_query(q, domain_expansion=False) == q
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_lane_fusion.py -v`
 Expected: new tests FAIL (`TypeError: ... unexpected keyword argument 'extra_lanes'`); Task 1's three still PASS.
 
-- [ ] **Step 3: Implement `query_expansion.py` kwarg**
+- [x] **Step 3: Implement `query_expansion.py` kwarg**
 
 In `build_sparse_query` (line 319), add the parameter and change the first body line:
 
@@ -664,7 +664,7 @@ def sparse_query_for(query: str, domain_expansion: bool = True) -> str:
     )
 ```
 
-- [ ] **Step 4: Implement the retriever generalization**
+- [x] **Step 4: Implement the retriever generalization**
 
 In `HybridFusionRetriever.__init__` (line 195), add parameters (before `**kwargs`):
 
@@ -804,17 +804,17 @@ c) Replace the RRF section (lines 287-321) with the generalized loop. The 2× mu
 
 (The `logger.info` dense/sparse count lines at 284-285 stay; the final-results loop at 323-332 stays.) Add `Dict`/`Any` to the existing `typing` import in `main.py` if not already imported (check: `Dict, Any` are already imported for `QueryResponse.debug`).
 
-- [ ] **Step 5: Run the new tests + the P0 attribution tests + leak detectors**
+- [x] **Step 5: Run the new tests + the P0 attribution tests + leak detectors**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_lane_fusion.py tests/test_lane_attribution.py tests/test_diagnostic_parity.py tests/test_query_nonblocking.py -v`
 Expected: all PASS — the P0 two-lane tests must pass UNCHANGED (byte-identity), the leak detectors green.
 
-- [ ] **Step 6: Run the full python suite**
+- [x] **Step 6: Run the full python suite**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/ -v`
 Expected: no new failures (DB-marked tests skip without `DATABASE_URL`; the 3 known local-env failures listed in the P1 gate addendum are pre-existing).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add search-service/app/main.py search-service/app/query_expansion.py search-service/tests/test_lane_fusion.py
