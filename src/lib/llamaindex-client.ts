@@ -9,6 +9,10 @@ interface LlamaIndexQueryOptions {
   similarity_threshold?: number
   include_metadata?: boolean
   rerank?: boolean
+  // Query understanding (design 2026-08-19 §4.6) — forwarded verbatim via
+  // the ...options spread in route.ts. facets presence disables auto-detect.
+  facets?: { facet: string; value: string }[]
+  expansion?: boolean
 }
 
 async function callLlamaIndexService(
@@ -85,6 +89,7 @@ export async function chatCiteLlamaIndex(
       llamaindex: true,
       ...data.debug,
     },
+    queryUnderstanding: data.query_understanding ?? null,
   }
 }
 

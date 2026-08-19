@@ -69,3 +69,12 @@ def test_dense_retrieval_returns_ranked_results(monkeypatch):
     scores = [r.score for r in results]
     assert scores == sorted(scores, reverse=True)
     assert all("doc_id" in r.node.metadata for r in results)
+
+
+def test_year_int_fallback_parsing():
+    from app.pg_store import _year_int
+
+    assert _year_int(2021, {"YEAR published": "2019"}) == 2021   # column wins
+    assert _year_int(None, {"YEAR published": "2019"}) == 2019   # string fallback
+    assert _year_int(None, {"YEAR published": "n.d."}) is None
+    assert _year_int(None, {}) is None

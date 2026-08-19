@@ -42,6 +42,7 @@ export type ChatResponse = {
   docs: DocMeta[]
   usage?: any
   debug?: LlamaCloudDebug
+  queryUnderstanding?: any | null
 }
 
 /* ---------------- helpers ---------------- */
