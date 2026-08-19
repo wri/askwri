@@ -1491,6 +1491,8 @@ git commit -m "feat(eval): lane-attribution mode — per-query variant-lane disp
 - Produces: `npm run seed:tag-aliases` — idempotent (`ON CONFLICT DO NOTHING`), reports inserted/skipped counts and unmatched tags, exits 1 if any mapping entry matches no tag. Populated `tag_aliases` on local docker + qa.
 
 > Local apply (Step 3) skipped per operator ruling 2026-08-19: local docker has 19 tags, not qa's 775; qa apply (Step 4) is operator-gated, idempotency proved by running the seed twice on qa.
+>
+> Geo facet deferred: the 3 unmapped groups (`children`, `bangalore`, `brazil`) are left unmapped in P2. A `geo` facet (or `geo_aliases` table) is a post-P2 taxonomy change, deferred until Task 8 gate evidence shows geo recall loss on golden queries. Recorded 2026-08-19.
 
 - [x] **Step 1: Draft the mapping file from `DOMAIN_EXPANSIONS` × the qa taxonomy**
 
@@ -1596,7 +1598,7 @@ export DATABASE_URL=postgresql://askwri:password@localhost:5432/qa
 cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_alias_expand.py -v
 ```
 
-- [ ] **Step 4: OPERATOR-APPROVED qa apply + vocab rebuild**
+- [x] **Step 4: OPERATOR-APPROVED qa apply + vocab rebuild**
 
 Only after the operator approves the mapping file:
 
