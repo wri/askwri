@@ -66,7 +66,9 @@ const AskWriAppContent = () => {
   const [catalogSettled, setCatalogSettled] = useState(false)
   // Query understanding (design 2026-08-19 §3): userFacets=null ⇒ auto mode;
   // once the user removes a chip, switch to explicit-facets mode and re-query.
-  const [userFacets, setUserFacets] = useState<{ facet: string; value: string }[] | null>(null)
+  const [userFacets, setUserFacets] = useState<
+    { facet: string; value: string }[] | null
+  >(null)
   const [understanding, setUnderstanding] = useState<any>(null)
   const [autoSwitchedFrom, setAutoSwitchedFrom] = useState<string | null>(null)
   const router = useRouter()
@@ -84,7 +86,10 @@ const AskWriAppContent = () => {
   async function doCite(q: string, opts?: { expansion?: boolean }) {
     try {
       setRetrievalLoading(true)
-      const res = await chatCiteLlamaIndex(q, { ...(userFacets ? { facets: userFacets } : {}), ...(opts ?? {}) })
+      const res = await chatCiteLlamaIndex(q, {
+        ...(userFacets ? { facets: userFacets } : {}),
+        ...(opts ?? {}),
+      })
       const { docs, usage, debug } = res
       setUnderstanding(res.queryUnderstanding ?? null)
 
@@ -173,8 +178,8 @@ const AskWriAppContent = () => {
     if (!searchQuery) return
     if (query.trim() === searchQuery) return
     setQuery(searchQuery)
-    setUserFacets(null)  // new search = auto mode again (design §3)
-    setAutoSwitchedFrom(null)  // new search = no auto-switch carried over
+    setUserFacets(null) // new search = auto mode again (design §3)
+    setAutoSwitchedFrom(null) // new search = no auto-switch carried over
     runQuery(searchQuery)
   }, [searchQuery])
 
@@ -464,11 +469,26 @@ const AskWriAppContent = () => {
       return (
         <>
           {autoSwitchedFrom && (
-            <p style={{ fontSize: '14px', marginTop: '4px', padding: '0 2rem', maxWidth: '800px' }}>
+            <p
+              style={{
+                fontSize: '14px',
+                marginTop: '4px',
+                padding: '0 2rem',
+                maxWidth: '800px',
+              }}
+            >
               Searched for “{query}” instead ·{' '}
               <button
                 onClick={() => runAsTyped(autoSwitchedFrom)}
-                style={{ color: '#0A6CFF', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '14px' }}
+                style={{
+                  color: '#0A6CFF',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: 0,
+                  fontSize: '14px',
+                }}
               >
                 search for “{autoSwitchedFrom}” as typed
               </button>
@@ -502,7 +522,9 @@ const AskWriAppContent = () => {
           topics={(understanding?.suggestions ?? [])
             .filter((s: any) => s.type === 'nearby_topic')
             .map((s: any) => s.text)}
-          onPickTopic={(t) => router.push('/results?q=' + encodeURIComponent(t))}
+          onPickTopic={(t) =>
+            router.push('/results?q=' + encodeURIComponent(t))
+          }
         />
       )
     }

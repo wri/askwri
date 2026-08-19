@@ -87,9 +87,14 @@ const ResultsPage = ({
       <InterpretationLine
         chips={(queryUnderstanding?.facets ?? [])
           .filter((f) => f.action === 'hard')
-          .map((f) => ({ facet: f.facet, value: f.value, label: facetChipLabel(f.facet, f.value) }))}
+          .map((f) => ({
+            facet: f.facet,
+            value: f.value,
+            label: facetChipLabel(f.facet, f.value),
+          }))}
         suggestion={
-          queryUnderstanding?.suggestions?.find((s) => s.type === 'spelling')?.text ?? null
+          queryUnderstanding?.suggestions?.find((s) => s.type === 'spelling')
+            ?.text ?? null
         }
         onRemoveChip={(chip) => onRemoveFacet?.(chip)}
         onApplySuggestion={(text) => onApplySuggestion?.(text)}
