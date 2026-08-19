@@ -66,14 +66,25 @@ def load_document_texts() -> dict:
     return {ext: text for ext, text in rows}
 
 
+def _year_int(year_published, raw: dict):
+    """Facet-filter year: real column first, catalog string fallback."""
+    if year_published is not None:
+        return int(year_published)
+    try:
+        return int(str(raw.get("YEAR published", "")).strip())
+    except (ValueError, TypeError):
+        return None
+
+
 def load_documents_metadata() -> dict:
     """Mirror of the legacy documents_metadata dict (used by /stats and legacy endpoints)."""
     out = {}
     with get_pool().connection() as conn:
         rows = conn.execute(
-            "SELECT external_id, source_metadata FROM documents WHERE status = 'searchable'"
+            "SELECT external_id, source_metadata, language, article_type, year_published "
+            "FROM documents WHERE status = 'searchable'"
         ).fetchall()
-    for ext, src in rows:
+    for ext, src, language, article_type, year_published in rows:
         src = src or {}
         raw = src.get("metadata", {}) or {}
         out[ext] = {
@@ -86,6 +97,11 @@ def load_documents_metadata() -> dict:
             "program_series": raw.get("program_series", ""),
             "file_path": src.get("file_path", ""),
             "raw_metadata": raw,
+            # Query-understanding facet fields (design 2026-08-19 §4.5).
+            # Startup-hydrated: data edits need a restart to appear here.
+            "language": language,
+            "article_type": article_type,
+            "year_int": _year_int(year_published, raw),
         }
     return out
 
