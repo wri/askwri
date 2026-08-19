@@ -95,7 +95,7 @@ async def test_health_responds_while_understanding_is_running(monkeypatch):
         def retrieve(self, query_bundle):
             return []
 
-    def _slow_build_understanding(query, explicit_facets, today_year):
+    def _slow_build_understanding(query, explicit_facets, today_year, expansion_lanes=False):
         time.sleep(_SLEEP_S / 2)
         return QueryUnderstanding()
 

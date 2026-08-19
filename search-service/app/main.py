@@ -87,7 +87,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
 from app.translation_pairs import load_confirmed_pairs
-from app.understanding import build_understanding, understanding_active
+from app.understanding import build_understanding, lanes_active, understanding_active
 
 settings = get_settings()
 
@@ -956,6 +956,7 @@ def _emit_query_emf(mode: str, debug: dict) -> None:
         counts = {
             "facets_hard": debug.get("facets_hard"),
             "suggestions": debug.get("suggestions"),
+            "alias_lane_size": debug.get("alias_lane_size"),
         }
         counts = {k: v for k, v in counts.items() if v is not None}
         metrics["understanding_ms"] = debug.get("understanding_ms")
@@ -1073,8 +1074,12 @@ async def hybrid_query(request: QueryRequest):
                 request.query,
                 explicit_facets=request.facets,
                 today_year=datetime.now().year,
+                expansion_lanes=lanes_active(settings, request),
             )
             understanding.timings["deterministic_ms"] = round((time.time() - u_start) * 1000, 1)
+
+        # P2 (design §4.3): lanes_on implies understanding is not None.
+        lanes_on = lanes_active(settings, request)
 
         # Capture individual retriever results if diagnostic mode
         vector_only_results = None
@@ -1093,7 +1098,7 @@ async def hybrid_query(request: QueryRequest):
             from app.query_expansion import sparse_query_for as _sqf
             bm25_only_results = await asyncio.to_thread(
                 service_state["bm25_retriever"].retrieve,
-                QueryBundle(query_str=_sqf(request.query)),
+                QueryBundle(query_str=_sqf(request.query, domain_expansion=not lanes_on)),
             )
             if request.bm25_top_k is not None:
                 bm25_only_results = bm25_only_results[:request.bm25_top_k]
@@ -1102,6 +1107,21 @@ async def hybrid_query(request: QueryRequest):
         # Stage 1: Hybrid Fusion Retrieval
         stage1_start = time.time()
         vector_retriever = make_dense_retriever(request.vector_top_k)
+
+        # P2 alias lane (design §4.3): one extra 1x-weight sparse lane
+        # carrying original query + tag_aliases expansions. The reranker
+        # still only ever sees the original query (§4.4).
+        extra_lanes = None
+        if lanes_on and understanding is not None and understanding.alias_expansions:
+            alias_query = " OR ".join([request.query] + understanding.alias_expansions)
+            logger.info(f"Alias lane: {alias_query[:120]}")
+            extra_lanes = [{
+                "name": "alias_sparse",
+                "retriever": service_state["bm25_retriever"],
+                "query_str": alias_query,
+                "weight": None,   # 1x — resolves to the retriever's sparse_weight
+                "top_k": request.bm25_top_k,
+            }]
 
         hybrid_retriever = HybridFusionRetriever(
             vector_retriever=vector_retriever,
@@ -1112,6 +1132,8 @@ async def hybrid_query(request: QueryRequest):
             sparse_weight=request.sparse_weight,
             fusion_top_k=request.fusion_top_k,
             bm25_top_k=request.bm25_top_k,
+            extra_lanes=extra_lanes,
+            domain_expansion=not lanes_on,
         )
 
         # Retrieve with hybrid fusion (worker thread — keeps the event loop
@@ -1122,6 +1144,24 @@ async def hybrid_query(request: QueryRequest):
         stage1_elapsed = time.time() - stage1_start
 
         logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results in {stage1_elapsed:.1f}s")
+
+        if understanding is not None:
+            understanding.degraded.extend(
+                getattr(hybrid_retriever, "degraded_lanes", []) or []
+            )
+
+        # Diagnostic-only fused snapshot (P2 instrument): rank + per-lane
+        # attribution per node, captured before rerank mutates scores.
+        fused_nodes = None
+        if request.return_intermediate_results:
+            _ranks = getattr(hybrid_retriever, "lane_ranks", {}) or {}
+            fused_nodes = [{
+                "node_id": n.node.node_id,
+                "doc_id": n.node.metadata.get("doc_id"),
+                "url": n.node.metadata.get("url", ""),
+                "fused_rank": i + 1,
+                "lanes": _ranks.get(n.node.node_id),
+            } for i, n in enumerate(stage1_results)]
 
         # Topic sensing (design 2026-08-19 §4.1): attach nearby_topic
         # suggestions now — on the Bedrock path the dense lane just warmed
@@ -1175,11 +1215,21 @@ async def hybrid_query(request: QueryRequest):
         # calibrated on the 0-1 relevance scale, and unreranked results carry
         # raw RRF scores (~0.008-0.03) that would all land below the floor.
         rerank_applied = False
+        rerank_window_ids = None
         if request.rerank and stage1_results:
             base_reranker = (service_state["reranker_answer"] if request.mode == "answer"
                             else service_state["reranker_cite"])
 
             if base_reranker:
+                # P2 displacement instrument: the EXACT candidate set the
+                # reranker saw. _select_candidates is pure — recomputing it
+                # here is race-free on the shared reranker singleton.
+                if request.return_intermediate_results:
+                    rerank_window_ids = [
+                        n.node.node_id
+                        for n in base_reranker._select_candidates(
+                            stage1_results, settings.rerank_candidates)
+                    ]
                 try:
                     stage2_start = time.time()
                     # BedrockReranker (and the e2e stub): per-call top_n, no
@@ -1454,6 +1504,14 @@ async def hybrid_query(request: QueryRequest):
                                 if understanding is not None else None),
                 "suggestions": (len(understanding.suggestions)
                                 if understanding is not None else None),
+                "alias_lane_size": (len(understanding.alias_expansions)
+                                    if understanding is not None else None),
+                "lanes_degraded": (getattr(hybrid_retriever, "degraded_lanes", None)
+                                   if understanding is not None else None),
+                "fused_nodes": (fused_nodes
+                                if request.return_intermediate_results else None),
+                "rerank_window_ids": (rerank_window_ids
+                                      if request.return_intermediate_results else None),
                 "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,

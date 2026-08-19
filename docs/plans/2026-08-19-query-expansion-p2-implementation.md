@@ -834,7 +834,7 @@ git commit -m "feat(retrieval): generalize HybridFusionRetriever to a weighted l
 - Consumes: `lanes_active` (Task 1), `understanding.alias_expansions` (Task 3), `extra_lanes`/`domain_expansion`/`degraded_lanes` (Task 4), `BedrockReranker._select_candidates` (existing, `app/bedrock_rerank.py:73`).
 - Produces (all additive, `debug` only): `debug["alias_lane_size"]` (int|None — count of alias expansion terms), `debug["lanes_degraded"]` (list|None), and in diagnostic mode (`return_intermediate_results`) `debug["fused_nodes"]` (ordered `[{node_id, doc_id, url, fused_rank, lanes}]`) and `debug["rerank_window_ids"]` (the exact node ids `_select_candidates` kept — the displacement instrument Task 6 reads). EMF count metric `alias_lane_size`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # search-service/tests/test_lane_wiring.py
@@ -1018,12 +1018,12 @@ def test_diagnostic_mirrors_retirement_when_lanes_on(monkeypatch):
     assert all(q == "urban finance mechanisms" for q in stub.seen_queries)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_lane_wiring.py tests/test_diagnostic_parity.py -v`
 Expected: new tests FAIL (`lanes_active` not imported in `main`, `alias_lane_size` missing); the two existing parity tests still PASS.
 
-- [ ] **Step 3: Implement the wiring**
+- [x] **Step 3: Implement the wiring**
 
 a) `main.py:90` import:
 
@@ -1150,7 +1150,7 @@ h) `_emit_query_emf` — in the `counts` dict (line 905-908), add:
             "alias_lane_size": debug.get("alias_lane_size"),
 ```
 
-- [ ] **Step 4: Fix the nonblocking leak-detector stub signature**
+- [x] **Step 4: Fix the nonblocking leak-detector stub signature**
 
 `main.py` now calls `build_understanding(..., expansion_lanes=...)`; the stub in `tests/test_query_nonblocking.py:98` must accept it (behavior unchanged):
 
@@ -1158,17 +1158,17 @@ h) `_emit_query_emf` — in the `counts` dict (line 905-908), add:
     def _slow_build_understanding(query, explicit_facets, today_year, expansion_lanes=False):
 ```
 
-- [ ] **Step 5: Run the new tests + BOTH leak detectors**
+- [x] **Step 5: Run the new tests + BOTH leak detectors**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_lane_wiring.py tests/test_diagnostic_parity.py tests/test_query_nonblocking.py tests/test_lane_fusion.py tests/test_lane_attribution.py tests/test_understanding.py -v`
 Expected: all PASS
 
-- [ ] **Step 6: Run the full python suite**
+- [x] **Step 6: Run the full python suite**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/ -v`
 Expected: no new failures.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add search-service/app/main.py search-service/tests/test_lane_wiring.py search-service/tests/test_diagnostic_parity.py search-service/tests/test_query_nonblocking.py
