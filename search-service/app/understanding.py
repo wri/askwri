@@ -45,3 +45,41 @@ def understanding_active(settings, request) -> bool:
         getattr(settings, "query_understanding_enabled", False)
         and getattr(request, "expansion", True)
     )
+
+
+def build_understanding(query: str, explicit_facets, today_year: int) -> QueryUnderstanding:
+    """Deterministic tier (P1). Each signal isolated + failure-soft (spec §5).
+
+    Explicit facets present ⇒ the user touched the chips: auto-detection is
+    OFF for facets (spec §3 — the system stops second-guessing). Spelling
+    suggestions still run. Topic sensing is attached separately after stage 1
+    (topic_sense.attach_topic_suggestions) so the embed cache is warm.
+    """
+    u = QueryUnderstanding()
+
+    if explicit_facets is not None:
+        for spec in explicit_facets:
+            try:
+                u.facets.append(
+                    Facet(facet=spec.facet, value=spec.value,
+                          confidence=1.0, source="user", action="hard")
+                )
+            except Exception:  # noqa: BLE001 — invalid chip dropped, not fatal
+                if "explicit_facets" not in u.degraded:
+                    u.degraded.append("explicit_facets")
+    else:
+        try:
+            from app import facet_parsers
+            u.facets.extend(facet_parsers.parse_facets(query, today_year))
+        except Exception:  # noqa: BLE001
+            u.degraded.append("facet_parsers")
+
+    try:
+        from app.spell_suggest import db_suggester
+        s = db_suggester().suggest(query)
+        if s is not None:
+            u.suggestions.append(s)
+    except Exception:  # noqa: BLE001
+        u.degraded.append("spell_suggest")
+
+    return u

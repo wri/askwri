@@ -87,6 +87,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
 from app.translation_pairs import load_confirmed_pairs
+from app.understanding import build_understanding, understanding_active
 
 settings = get_settings()
 
@@ -130,6 +131,14 @@ service_state = {
     "dense_error": None,
 }
 
+class FacetSpec(BaseModel):
+    """Explicit chip state from the UI (design §4.6). Loose on purpose —
+    validation happens when it becomes an understanding.Facet; an invalid
+    chip is dropped there, never a 422 here."""
+    facet: str
+    value: str
+
+
 class QueryRequest(BaseModel):
     query: str
     mode: str = "cite"  # "answer" or "cite"
@@ -153,6 +162,9 @@ class QueryRequest(BaseModel):
     cite_doc_ids: Optional[List[str]] = None  # List of doc_ids to filter results (answer mode)
     # Diagnostic parameter
     return_intermediate_results: bool = False  # Return stage-by-stage results for debugging
+    # Query understanding (design 2026-08-19 §4.6) — additive only.
+    facets: Optional[List[FacetSpec]] = None  # explicit chip state; presence disables auto-detect
+    expansion: bool = True                    # eval control: False forces raw-query behavior
 
 class DocumentResult(BaseModel):
     doc_id: str
@@ -169,6 +181,8 @@ class QueryResponse(BaseModel):
     query: str
     mode: str
     debug: Dict[str, Any]
+    # Query understanding (design 2026-08-19 §4.6) — additive only.
+    query_understanding: Optional[Dict[str, Any]] = None
     # Optional diagnostic fields
     vector_results: Optional[List[Dict[str, Any]]] = None
     bm25_results: Optional[List[Dict[str, Any]]] = None
@@ -888,8 +902,14 @@ def _emit_query_emf(mode: str, debug: dict) -> None:
             "dense_db_ms": lanes.get("dense_db_ms"),
             "passage_ms": debug.get("passage_ms"),
         }
+        counts = {
+            "facets_hard": debug.get("facets_hard"),
+            "suggestions": debug.get("suggestions"),
+        }
+        counts = {k: v for k, v in counts.items() if v is not None}
+        metrics["understanding_ms"] = debug.get("understanding_ms")
         metrics = {k: round(v, 1) for k, v in metrics.items() if v is not None}
-        if not metrics:
+        if not metrics and not counts:
             return
         print(_json.dumps({
             "_aws": {
@@ -897,12 +917,15 @@ def _emit_query_emf(mode: str, debug: dict) -> None:
                 "CloudWatchMetrics": [{
                     "Namespace": "AskWRI/Query",
                     "Dimensions": [["mode"]],
-                    "Metrics": [{"Name": k, "Unit": "Milliseconds"}
-                                for k in metrics],
+                    "Metrics": ([{"Name": k, "Unit": "Milliseconds"}
+                                for k in metrics]
+                                + [{"Name": k, "Unit": "Count"}
+                                   for k in counts]),
                 }],
             },
             "mode": mode,
             **metrics,
+            **counts,
         }), flush=True)
     except Exception:  # noqa: BLE001 — metrics must never break /query
         logger.debug("EMF emit failed", exc_info=True)
@@ -985,6 +1008,20 @@ async def hybrid_query(request: QueryRequest):
 
         query_bundle = QueryBundle(query_str=request.query)
 
+        # Query understanding — deterministic tier (design 2026-08-19).
+        # ALL understanding code below is behind `understanding is not None`:
+        # flag off ⇒ byte-identical legacy pipeline.
+        understanding = None
+        if understanding_active(settings, request):
+            from datetime import datetime
+            u_start = time.time()
+            understanding = build_understanding(
+                request.query,
+                explicit_facets=request.facets,
+                today_year=datetime.now().year,
+            )
+            understanding.timings["deterministic_ms"] = round((time.time() - u_start) * 1000, 1)
+
         # Capture individual retriever results if diagnostic mode
         vector_only_results = None
         bm25_only_results = None
@@ -1032,6 +1069,16 @@ async def hybrid_query(request: QueryRequest):
 
         logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results in {stage1_elapsed:.1f}s")
 
+        # Topic sensing (design 2026-08-19 §4.1): attach nearby_topic
+        # suggestions now — the dense lane just warmed the embed cache, so
+        # get_query_embedding is an LRU hit (zero extra Bedrock calls).
+        # Behind `understanding is not None`: flag off ⇒ nothing happens.
+        if understanding is not None:
+            from app.topic_sense import attach_topic_suggestions
+            t_start = time.time()
+            attach_topic_suggestions(understanding, request.query, service_state.get("embed_model"))
+            understanding.timings["topic_sense_ms"] = round((time.time() - t_start) * 1000, 1)
+
         # If answer mode and cite_doc_ids provided, filter stage1_results
         if request.mode == "answer" and request.cite_doc_ids:
             before_filter = len(stage1_results)
@@ -1048,6 +1095,18 @@ async def hybrid_query(request: QueryRequest):
             stage1_results = [n for n in stage1_results
                               if n.node.metadata.get("doc_id") not in translation_pairs]
             logger.info(f"Answer mode: translation-pair filter ({before_tp} -> {len(stage1_results)})")
+
+        # Stage 1.6: THE facet application point — post-fusion, pre-rerank
+        # (design §4.5). Legacy params flow through the same path so there
+        # is exactly one filter behavior when understanding is active.
+        if understanding is not None:
+            from app.facet_filter import apply_facet_filters, legacy_request_facets
+            all_facets = understanding.facets + legacy_request_facets(request)
+            pre_facet = len(stage1_results)
+            stage1_results = apply_facet_filters(
+                stage1_results, all_facets, service_state.get("documents_metadata") or {}
+            )
+            logger.info(f"Stage 1.6 (Facet Filters): {pre_facet} → {len(stage1_results)} results")
 
         # Stage 2: Reranking (Bedrock Cohere Rerank — 0-1 relevance scores).
         # rerank_applied gates the cite floor/tiers downstream: they are
@@ -1092,7 +1151,9 @@ async def hybrid_query(request: QueryRequest):
             logger.info(f"Stage 2.1 (Page-1 Demotion): applied to answer mode")
 
         # Stage 2.5: Apply metadata filters (year, program, excluded keywords)
-        if (request.min_year or request.max_year or
+        # Skipped when understanding is active: the new Stage 1.6 facet point
+        # already applied these (design §4.5 — one application point).
+        if understanding is None and (request.min_year or request.max_year or
             request.excluded_keywords or request.required_program):
             pre_filter_count = len(stage2_results)
             stage2_results = apply_metadata_filters(
@@ -1299,6 +1360,7 @@ async def hybrid_query(request: QueryRequest):
             "query": request.query,
             "mode": request.mode,
             "cite_doc_ids": request.cite_doc_ids,
+            "query_understanding": understanding.model_dump() if understanding is not None else None,
             "debug": {
                 "service_version": "2.0.0",
                 "retrieval_method": "hybrid_fusion_rrf",
@@ -1324,6 +1386,12 @@ async def hybrid_query(request: QueryRequest):
                               if 'passage_start' in locals() else None,
                 "lane_ranks": (getattr(hybrid_retriever, "lane_ranks", None)
                                if request.return_intermediate_results else None),
+                "understanding_ms": (understanding.timings.get("deterministic_ms")
+                                     if understanding is not None else None),
+                "facets_hard": (sum(1 for f in understanding.facets if f.action == "hard")
+                                if understanding is not None else None),
+                "suggestions": (len(understanding.suggestions)
+                                if understanding is not None else None),
                 "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,
