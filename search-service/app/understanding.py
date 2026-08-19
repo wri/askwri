@@ -47,6 +47,15 @@ def understanding_active(settings, request) -> bool:
     )
 
 
+def lanes_active(settings, request) -> bool:
+    """THE P2 flag-off guard (design §4.3). Requires the P1 flag too: lanes
+    consume the deterministic tier (alias lookup) and record degradation in
+    the understanding object."""
+    return understanding_active(settings, request) and bool(
+        getattr(settings, "query_expansion_lanes_enabled", False)
+    )
+
+
 def build_understanding(query: str, explicit_facets, today_year: int) -> QueryUnderstanding:
     """Deterministic tier (P1). Each signal isolated + failure-soft (spec §5).
 

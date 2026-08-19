@@ -49,7 +49,7 @@
 **Interfaces:**
 - Produces: `Settings.query_expansion_lanes_enabled: bool = False`, `Settings.alias_expand_max_groups: int = 3`, `Settings.alias_expand_max_terms: int = 2`; `understanding.lanes_active(settings, request) -> bool` — THE P2 flag-off guard. Every later task's query-path code sits behind it.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # search-service/tests/test_lane_fusion.py
@@ -89,12 +89,12 @@ def test_p2_flag_defaults_off():
     assert Settings.model_fields["alias_expand_max_terms"].default == 2
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_lane_fusion.py -v`
 Expected: FAIL with `ImportError: cannot import name 'lanes_active'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `search-service/app/config.py`, after `topic_sense_min_cosine: float = 0.30` (line 116), add:
 
@@ -126,12 +126,12 @@ def lanes_active(settings, request) -> bool:
     )
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_lane_fusion.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add search-service/app/config.py search-service/app/understanding.py search-service/tests/test_lane_fusion.py
