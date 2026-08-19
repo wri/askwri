@@ -1,0 +1,37 @@
+{
+  "_comment": "Labeled facet-extraction set (design 2026-08-19 §7). Direction-only n. today_year is pinned so tests are stable.",
+  "today_year": 2026,
+  "queries": [
+    {"q": "what have we published on hydrogen since 2020", "facets": [{"facet": "year_min", "value": "2020"}]},
+    {"q": "bus electrification reports after 2021", "facets": [{"facet": "year_min", "value": "2021"}]},
+    {"q": "freight decarbonization since 2022 in portuguese", "facets": [{"facet": "year_min", "value": "2022"}, {"facet": "language", "value": "pt"}]},
+    {"q": "urban planning papers before 2019", "facets": [{"facet": "year_max", "value": "2019"}]},
+    {"q": "studies until 2018 on air quality", "facets": [{"facet": "year_max", "value": "2018"}]},
+    {"q": "TOD research between 2019 and 2023", "facets": [{"facet": "year_min", "value": "2019"}, {"facet": "year_max", "value": "2023"}]},
+    {"q": "coastal resilience from 2020 to 2024", "facets": [{"facet": "year_min", "value": "2020"}, {"facet": "year_max", "value": "2024"}]},
+    {"q": "electric mobility 2021-2024", "facets": [{"facet": "year_min", "value": "2021"}, {"facet": "year_max", "value": "2024"}]},
+    {"q": "anything published in 2023 about land value capture", "facets": [{"facet": "year_min", "value": "2023"}, {"facet": "year_max", "value": "2023"}]},
+    {"q": "reports from the last 3 years on charging infrastructure", "facets": [{"facet": "year_min", "value": "2023"}]},
+    {"q": "papers from the past 5 years on BRT", "facets": [{"facet": "year_min", "value": "2021"}]},
+    {"q": "documents in spanish about street safety", "facets": [{"facet": "language", "value": "es"}]},
+    {"q": "spanish-language guides on walkability", "facets": [{"facet": "language", "value": "es"}]},
+    {"q": "portuguese language publications on complete streets", "facets": [{"facet": "language", "value": "pt"}]},
+    {"q": "reports in chinese on freight", "facets": [{"facet": "language", "value": "zh"}]},
+    {"q": "materials in mandarin about street design", "facets": [{"facet": "language", "value": "zh"}]},
+    {"q": "publications in english on flooding", "facets": [{"facet": "language", "value": "en"}]},
+    {"q": "in indonesian, transport safety work", "facets": [{"facet": "language", "value": "id"}]},
+
+    {"q": "net zero by 2050 pathways", "facets": []},
+    {"q": "2030 emission reduction targets for cities", "facets": []},
+    {"q": "what must cities do before 2030 to decarbonize", "facets": []},
+    {"q": "scenarios until 2050 for freight", "facets": []},
+    {"q": "SDG 11 progress since the Paris Agreement", "facets": []},
+    {"q": "population growth after 2050 projections", "facets": []},
+    {"q": "spanish cities and cycling infrastructure", "facets": []},
+    {"q": "the portuguese experience with road pricing", "facets": []},
+    {"q": "china's electric bus fleet", "facets": []},
+    {"q": "how did covid change transit ridership in 2020 compared to 2019", "facets": []},
+    {"q": "bus rapid transit", "facets": []},
+    {"q": "cost of 100 km of bike lanes", "facets": []}
+  ]
+}
