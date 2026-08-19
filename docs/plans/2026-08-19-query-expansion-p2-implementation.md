@@ -1490,7 +1490,9 @@ git commit -m "feat(eval): lane-attribution mode — per-query variant-lane disp
 **Interfaces:**
 - Produces: `npm run seed:tag-aliases` — idempotent (`ON CONFLICT DO NOTHING`), reports inserted/skipped counts and unmatched tags, exits 1 if any mapping entry matches no tag. Populated `tag_aliases` on local docker + qa.
 
-- [ ] **Step 1: Draft the mapping file from `DOMAIN_EXPANSIONS` × the qa taxonomy**
+> Local apply (Step 3) skipped per operator ruling 2026-08-19: local docker has 19 tags, not qa's 775; qa apply (Step 4) is operator-gated, idempotency proved by running the seed twice on qa.
+
+- [x] **Step 1: Draft the mapping file from `DOMAIN_EXPANSIONS` × the qa taxonomy**
 
 For each `DOMAIN_EXPANSIONS` group (`search-service/app/query_expansion.py:19-200`), find the matching tag on qa:
 
@@ -1515,7 +1517,7 @@ Draft `scripts/tag-aliases-seed.json` in this shape — one entry per DOMAIN_EXP
 
 Record, in a `"_unmapped"` array in the same file, every DOMAIN_EXPANSIONS group with NO matching tag — those groups' recall coverage is at risk when the flag turns on, and the gate (Task 8) will show whether it matters. **STOP: show the drafted file to the operator and get approval before Step 4 (qa apply). Local apply (Step 3) may proceed for testing.**
 
-- [ ] **Step 2: Write `scripts/seed-tag-aliases.ts`**
+- [x] **Step 2: Write `scripts/seed-tag-aliases.ts`**
 
 ```typescript
 import 'reflect-metadata'
@@ -1616,7 +1618,7 @@ Verify:
 
 Expected: counts match the mapping file.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/tag-aliases-seed.json scripts/seed-tag-aliases.ts package.json
