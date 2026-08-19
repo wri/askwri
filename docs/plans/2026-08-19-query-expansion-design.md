@@ -204,7 +204,16 @@ Extend `_emit_query_emf`:
 | **P4** | Tuning + SQL facet pushdown if corpus scale demands | flagged |
 
 **Gates per phase:**
-- cite golden set macro recall may not fall;
+- cite golden set macro recall may not fall — **excluding correctly-faceted
+  queries** (2026-08-19 decision, option b): a golden query whose text carries
+  facet phrasing the parser extracts as a hard facet (today only
+  `q10_urban_finance_since_2020`, "since 2020") is excluded from the flag-on
+  macro-recall comparison, because the facet correctly removes expected docs
+  outside the window and the resulting drop is design-correct, not a
+  regression. Faceted queries get their own assertion instead: every returned
+  doc must satisfy the extracted facet (e.g. q10 returns only year >= 2020),
+  checked per-query in the flag-on run. Flag-off runs still include all
+  queries (flag-off is byte-identical, so no facet fires);
 - answer-retrieval chunk recall may not fall;
 - (multilingual document retrieval is protected via the cite golden set, whose
   EN queries already reach non-EN docs; a dedicated non-English-query smoke was

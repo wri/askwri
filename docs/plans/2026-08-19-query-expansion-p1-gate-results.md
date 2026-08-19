@@ -113,10 +113,13 @@ the exception. Probe confirmed: the `year_min=2020` facet is applied and visible
 in `query_understanding.facets` (Invariant 1 ✓) — the system is doing exactly
 what the design specifies.
 
-This is a **gate-rule nuance**, not a regression: the cite macro-recall rule
-should be "may not fall **excluding correctly-faceted queries**," or q10 should
-be removed from the flag-ON cite comparison. Either is a plan/spec edit, not a
-code change. The wiring itself is sound — no leak (Step 2 proved flag-off is
+This is a **gate-rule nuance**, not a regression. **RESOLVED 2026-08-19
+(operator decision, option b):** the cite macro-recall rule is now "may not
+fall, excluding correctly-faceted queries" — q10 stays in the golden set and
+in flag-off runs, but is excluded from the flag-on macro-recall comparison;
+in its place, flag-on runs assert per-query that every doc q10 returns
+satisfies the extracted facet (year >= 2020). Design doc §7 updated to match.
+The wiring itself is sound — no leak (Step 2 proved flag-off is
 byte-identical).
 
 ## Threshold changes derived from the labeled fixture sets
@@ -126,7 +129,17 @@ byte-identical).
   `bogata`→`bogota` (trigram sim 0.40) is below 0.45, so the suggester
   correctly stays silent. Per operator decision (A), the `bogata` fixture
   label was changed to `expect: null` (it's a trap — a real place name the
-  suggester shouldn't force-correct). Threshold unchanged.
+  suggester shouldn't force-correct). Threshold unchanged. **Review
+  confirmation 2026-08-19 (operator):** keep 0.45. `bogata` IS a plausible
+  misspelling of Bogotá, but lowering the global threshold to recover it
+  would widen the false-positive class the review found (ordinary English
+  words vs a corpus-only vocabulary); if it matters later, recover it with a
+  length-scaled threshold, not a global cut.
+- `spell_suggest_min_df`: **added 2026-08-19 (review fix), default 2.** A
+  correction target must appear at least twice across titles/tags/aliases;
+  blocks 'corrections' of ordinary English words to one-off title terms.
+  Like the other thresholds: re-derive from the labeled set before any
+  flag-on deploy.
 - `topic_sense_top_k` (3), `topic_sense_min_cosine` (0.30): unchanged; the
   spec calls these "initial conservative" and to be re-derived before any
   flag-on deploy. No flag-on deploy is happening (flag stays OFF), so the
@@ -138,7 +151,7 @@ byte-identical).
 |---|---|
 | Step 1: local suites green | **PASS** |
 | Step 2: flag-off byte-identical (spec §5) | **PASS** (cite R Δ=0.0000; answer all aggregates Δ=0.0000) |
-| Step 3a: qa-rig flag-on (cite + answer) | **BLOCKED** — `pg_trgm` not installable on qa with current role |
+| Step 3a: qa-rig flag-on (cite + answer) | **BLOCKED** at gate time — `pg_trgm` not installable on qa with current role. **Cleared 2026-08-19 (separate session):** `pg_trgm` 1.6 installed, migration run, `search_vocab` built (1392 terms) — all verified against qa RDS. Step 3a re-run still pending. |
 | Step 3b: facet probes (local evidence) | **PASS** (facets extracted per fixture labels; all visible) |
 | Step 3c: flag-on cite macro recall may not fall | **INCONCLUSIVE on qa**; local evidence shows a facet-driven drop on q10 (design-correct, not a leak) |
 | Step 3c: flag-on answer chunk recall may not fall | **INCONCLUSIVE on qa**; local evidence shows +0.018 (no fall) |
@@ -153,12 +166,20 @@ local-stack flag-ON evidence shows the deterministic tier runs correctly
 with all facets visible and no degradation.
 
 To unblock P2:
-1. An RDS master role installs `pg_trgm` on qa: `CREATE EXTENSION pg_trgm;`
-2. Task 5's migration is run against qa (the DDL after the extension exists)
-3. `search_vocab` is built on qa via `scripts/build_search_vocab.py`
-4. The qa-rig flag-ON eval is re-run (Step 3a) and the cite-recall q10 nuance
-   is resolved (plan edit to exclude faceted queries from the macro-recall
-   rule, OR accept the design-correct drop on q10)
+1. ~~An RDS master role installs `pg_trgm` on qa~~ **DONE 2026-08-19**
+   (separate session; verified: `pg_trgm` 1.6 in `pg_extension` on qa)
+2. ~~Task 5's migration is run against qa~~ **DONE 2026-08-19** (separate
+   session; verified: `search_vocab` table exists on qa)
+3. ~~`search_vocab` is built on qa~~ **DONE 2026-08-19** (separate session;
+   verified: 1392 terms on qa)
+4. The qa-rig flag-ON eval is re-run (Step 3a) under the amended gate rule
+   (q10 nuance resolved 2026-08-19, option b: faceted golden queries are
+   excluded from the flag-on macro-recall comparison and instead assert
+   that returned docs satisfy the extracted facet — see §3c and design §7).
+   **This is now the only remaining blocker.** Note: the review fixes on
+   this branch (facet-filter semantics, `_RANGE_RE`, `spell_suggest_min_df`)
+   change flag-ON behavior, so the Step 3a run must use this branch's code,
+   not the pre-review build.
 
 Until then: **flag stays OFF; P2 NOT unblocked.**
 
@@ -170,3 +191,42 @@ Until then: **flag stays OFF; P2 NOT unblocked.**
   (cite), `evaluation/results/answer-retrieval-1787167058781.json` (answer)
 - Flag-on local (Step 3c, evidence only): `eval-report-1787167323020.json`
   (cite), `answer-retrieval-1787167343077.json` (answer)
+
+## Addendum — 2026-08-19 separate-session review fixes
+
+The independent review (Tasks 4-14 had no per-task review) produced 10
+confirmed findings; all were fixed on this branch the same day, TDD
+(9 new Python tests + 7 new UI tests, `src/__tests__/results-page.test.tsx`).
+Highlights the next session should know about:
+
+- `facet_filter.py` semantics now match legacy `apply_metadata_filters`
+  exactly where they overlap: missing year metadata is KEPT (was excluded),
+  unknown language is KEPT (was excluded — this was fatal on the legacy
+  backend, where `documents_metadata` has no `language` key at all), and an
+  invalid chip value drops the facet instead of raising into a 500.
+- The pre-rerank move of legacy params (Stage 2.5 → 1.6 when the flag is on)
+  is design §4.5 and intentionally changes rerank backfill; the semantics
+  divergences around it are what got fixed.
+- `_RANGE_RE` now requires a constraint word for prose connectors
+  ("between/from ... to/and"); bare hyphen ranges ("2021-2024") still fire.
+  Two trap fixtures added (additions only; no label changed).
+- `build_understanding` + `attach_topic_suggestions` run via
+  `asyncio.to_thread` (event-loop regression test added), and topic sensing
+  probes `tag_embeddings` coverage for the configured embedding model before
+  paying the query-embedding call (rows only exist for the worker's model).
+- Results-page UX rewired: facet-aware cache keys (docs + understanding now
+  cached, so a cache hit can't blank results), chip removal threads the new
+  facet list explicitly, auto-switch updates the displayed query and is
+  loop-proof via a threaded flag, the empty state only renders after a
+  completed search and keeps chips removable at zero results.
+- Full suites re-verified after fixes: Python 440 passed (same 3 fails +
+  6 errors as clean HEAD — pre-existing local-env issues in
+  test_pg_store/test_cohere_dense_retriever/test_reembed_cohere_script);
+  Jest 391 passed / 232 skipped; lint + format clean.
+
+Two follow-up issues filed with full context (not blockers for this branch):
+[#347](https://github.com/wri/askwri/issues/347) auto-switch doesn't update
+the URL `?q=`; [#348](https://github.com/wri/askwri/issues/348) empty-state
+flag-off UX decision + missing error state.
+
+Flag remains OFF.
