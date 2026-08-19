@@ -10,6 +10,7 @@ import { chatCiteLlamaIndex } from '@/lib/llamaindex-client'
 import { estimateCostUSD } from '@/config/costs'
 import { estimateEnergyGCO2e } from '@/config/energy'
 import CitePanel from './CitePanel'
+import { EmptyStateTopics } from '@/app/components/results/EmptyStateTopics'
 import {
   buildCatalogIndex,
   matchCatalogRow,
@@ -67,6 +68,7 @@ const AskWriAppContent = () => {
   // once the user removes a chip, switch to explicit-facets mode and re-query.
   const [userFacets, setUserFacets] = useState<{ facet: string; value: string }[] | null>(null)
   const [understanding, setUnderstanding] = useState<any>(null)
+  const [autoSwitchedFrom, setAutoSwitchedFrom] = useState<string | null>(null)
   const router = useRouter()
   useEffect(() => {
     getCatalog().then(({ catalog: c, index: i }) => {
@@ -79,12 +81,31 @@ const AskWriAppContent = () => {
   const searchParams = useSearchParams()
   const searchQuery = searchParams?.get('q')?.trim() ?? ''
 
-  async function doCite(q: string) {
+  async function doCite(q: string, opts?: { expansion?: boolean }) {
     try {
       setRetrievalLoading(true)
-      const res = await chatCiteLlamaIndex(q, userFacets ? { facets: userFacets } : {})
+      const res = await chatCiteLlamaIndex(q, { ...(userFacets ? { facets: userFacets } : {}), ...(opts ?? {}) })
       const { docs, usage, debug } = res
       setUnderstanding(res.queryUnderstanding ?? null)
+
+      // Auto-switch (design §3, decidable rule): only when the original query
+      // returned <3 docs, a spelling suggestion exists, and we have not already
+      // auto-switched for this user-initiated search (loop-proof).
+      const spelling = res.queryUnderstanding?.suggestions?.find(
+        (s: any) => s.type === 'spelling',
+      )?.text
+      if (
+        docs.length < 3 &&
+        spelling &&
+        autoSwitchedFrom === null &&
+        opts?.expansion !== false &&
+        spelling !== q
+      ) {
+        setAutoSwitchedFrom(q)
+        setRetrievalLoading(false)
+        runQuery(spelling)
+        return
+      }
 
       setSupporting(docs)
       setRetrievalLoading(false)
@@ -129,11 +150,31 @@ const AskWriAppContent = () => {
     doCite(q)
   }
 
+  // Re-query the original-as-typed with expansion suppressed so the server
+  // does not re-suggest and the client does not re-switch (one auto-switch per
+  // user-initiated search, loop-proof — design §3).
+  function runAsTyped(q: string) {
+    setQuery(q)
+    setUserFacets(null)
+    setAutoSwitchedFrom(null)
+    const cacheKey = `cite:${q.trim()}:${JSON.stringify('as-typed')}`
+    const cached = queryCache[cacheKey]
+    if (cached && Date.now() - cached.timestamp > 5 * 60 * 1000) {
+      setSupporting(Array.isArray(cached.supporting) ? cached.supporting : [])
+      setAlignment(cached.alignment)
+      return
+    }
+    setAlignment(null)
+    setSupporting([])
+    doCite(q, { expansion: false })
+  }
+
   useEffect(() => {
     if (!searchQuery) return
     if (query.trim() === searchQuery) return
     setQuery(searchQuery)
     setUserFacets(null)  // new search = auto mode again (design §3)
+    setAutoSwitchedFrom(null)  // new search = no auto-switch carried over
     runQuery(searchQuery)
   }, [searchQuery])
 
@@ -421,20 +462,47 @@ const AskWriAppContent = () => {
   if (searchQuery) {
     if (pageDocs.length > 0) {
       return (
-        <CitePanel
+        <>
+          {autoSwitchedFrom && (
+            <p style={{ fontSize: '14px', marginTop: '4px', padding: '0 2rem', maxWidth: '800px' }}>
+              Searched for “{query}” instead ·{' '}
+              <button
+                onClick={() => runAsTyped(autoSwitchedFrom)}
+                style={{ color: '#0A6CFF', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '14px' }}
+              >
+                search for “{autoSwitchedFrom}” as typed
+              </button>
+            </p>
+          )}
+          <CitePanel
+            query={query}
+            docs={pageDocs}
+            index={index}
+            docSummary={docSummary}
+            docWhy={docWhy}
+            docWhyLoading={docWhyLoading}
+            docSummaryLoading={docSummaryLoading}
+            ops={ops}
+            alignment={alignment}
+            alignLoading={alignLoading}
+            queryUnderstanding={understanding}
+            onRemoveFacet={onRemoveFacet}
+            onApplySuggestion={onApplySuggestion}
+          />
+        </>
+      )
+    }
+
+    // Empty state (design §3): query completed but no docs survived the floor.
+    // A dead end becomes a door — show nearby topics from understanding.suggestions.
+    if (!retrievalLoading && pageDocs.length === 0) {
+      return (
+        <EmptyStateTopics
           query={query}
-          docs={pageDocs}
-          index={index}
-          docSummary={docSummary}
-          docWhy={docWhy}
-          docWhyLoading={docWhyLoading}
-          docSummaryLoading={docSummaryLoading}
-          ops={ops}
-          alignment={alignment}
-          alignLoading={alignLoading}
-          queryUnderstanding={understanding}
-          onRemoveFacet={onRemoveFacet}
-          onApplySuggestion={onApplySuggestion}
+          topics={(understanding?.suggestions ?? [])
+            .filter((s: any) => s.type === 'nearby_topic')
+            .map((s: any) => s.text)}
+          onPickTopic={(t) => router.push('/results?q=' + encodeURIComponent(t))}
         />
       )
     }
