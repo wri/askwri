@@ -16,6 +16,7 @@ import Navbar from './Navbar'
 import ResultsTable from './ResultsTable'
 import { formatCO2, formatCost } from '../../utils/utils'
 import { ResultsPageProps } from './types'
+import { InterpretationLine, facetChipLabel } from './InterpretationLine'
 import '../../styles.css'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
@@ -29,6 +30,9 @@ const ResultsPage = ({
   ops,
   alignment,
   alignLoading,
+  queryUnderstanding,
+  onRemoveFacet,
+  onApplySuggestion,
 }: ResultsPageProps) => {
   const tableData = data
 
@@ -80,6 +84,16 @@ const ResultsPage = ({
           )}
         </div>
       </section>
+      <InterpretationLine
+        chips={(queryUnderstanding?.facets ?? [])
+          .filter((f) => f.action === 'hard')
+          .map((f) => ({ facet: f.facet, value: f.value, label: facetChipLabel(f.facet, f.value) }))}
+        suggestion={
+          queryUnderstanding?.suggestions?.find((s) => s.type === 'spelling')?.text ?? null
+        }
+        onRemoveChip={(chip) => onRemoveFacet?.(chip)}
+        onApplySuggestion={(text) => onApplySuggestion?.(text)}
+      />
       <section style={{ padding: '0 2rem', maxWidth: '800px' }}>
         <div
           style={{

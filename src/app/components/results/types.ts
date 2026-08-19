@@ -68,6 +68,15 @@ export type ResultsPageProps = {
     _debugKeys?: string[]
   } | null
   alignLoading?: boolean
+  // Query understanding (design 2026-08-19 §3): the interpretation line +
+  // did-you-mean live above the results; chips remove a hard facet and
+  // re-query with explicit facets (auto-detect off).
+  queryUnderstanding?: {
+    facets: { facet: string; value: string; action: string; source: string }[]
+    suggestions: { type: string; text: string }[]
+  } | null
+  onRemoveFacet?: (chip: { facet: string; value: string }) => void
+  onApplySuggestion?: (text: string) => void
 }
 
 export type DocumentPreviewModalContentProps = {

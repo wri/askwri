@@ -4,7 +4,7 @@
 
 import React, { useMemo, useState, useEffect, Suspense } from 'react'
 import { Spinner } from '@chakra-ui/react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { DocMeta } from '@/lib/llamacloud'
 import { chatCiteLlamaIndex } from '@/lib/llamaindex-client'
 import { estimateCostUSD } from '@/config/costs'
@@ -63,6 +63,11 @@ const AskWriAppContent = () => {
   // the fetch fails, and the metadata-dependent effects below must still run
   // (degraded) rather than hang forever waiting for a catalog.
   const [catalogSettled, setCatalogSettled] = useState(false)
+  // Query understanding (design 2026-08-19 §3): userFacets=null ⇒ auto mode;
+  // once the user removes a chip, switch to explicit-facets mode and re-query.
+  const [userFacets, setUserFacets] = useState<{ facet: string; value: string }[] | null>(null)
+  const [understanding, setUnderstanding] = useState<any>(null)
+  const router = useRouter()
   useEffect(() => {
     getCatalog().then(({ catalog: c, index: i }) => {
       setCatalog(c)
@@ -77,7 +82,9 @@ const AskWriAppContent = () => {
   async function doCite(q: string) {
     try {
       setRetrievalLoading(true)
-      const { docs, usage, debug } = await chatCiteLlamaIndex(q)
+      const res = await chatCiteLlamaIndex(q, userFacets ? { facets: userFacets } : {})
+      const { docs, usage, debug } = res
+      setUnderstanding(res.queryUnderstanding ?? null)
 
       setSupporting(docs)
       setRetrievalLoading(false)
@@ -126,6 +133,7 @@ const AskWriAppContent = () => {
     if (!searchQuery) return
     if (query.trim() === searchQuery) return
     setQuery(searchQuery)
+    setUserFacets(null)  // new search = auto mode again (design §3)
     runQuery(searchQuery)
   }, [searchQuery])
 
@@ -133,6 +141,25 @@ const AskWriAppContent = () => {
     if (!Array.isArray(supporting)) return []
     return supporting
   }, [supporting])
+
+  // Chip removal (design §3): drop the facet, switch to explicit-facets mode,
+  // and re-query. The cache key includes userFacets so this never serves the
+  // auto-mode cached result.
+  const onRemoveFacet = (chip: { facet: string; value: string }) => {
+    const currentHard = (understanding?.facets ?? []).filter(
+      (f: any) => f.action === 'hard',
+    )
+    const remaining = currentHard
+      .filter((f: any) => !(f.facet === chip.facet && f.value === chip.value))
+      .map((f: any) => ({ facet: f.facet, value: f.value }))
+    setUserFacets(remaining.length > 0 ? remaining : [])
+    runQuery(query)
+  }
+
+  // Did-you-mean accept: re-search with the corrected text (new q = auto mode).
+  const onApplySuggestion = (text: string) => {
+    router.push('/results?q=' + encodeURIComponent(text))
+  }
 
   // Document-level WHY processing — batched into a single LLM call
   const [batchRelatesRequested, setBatchRelatesRequested] = useState(false)
@@ -405,6 +432,9 @@ const AskWriAppContent = () => {
           ops={ops}
           alignment={alignment}
           alignLoading={alignLoading}
+          queryUnderstanding={understanding}
+          onRemoveFacet={onRemoveFacet}
+          onApplySuggestion={onApplySuggestion}
         />
       )
     }

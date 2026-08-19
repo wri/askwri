@@ -28,6 +28,9 @@ const CitePanel = ({
   ops,
   alignment,
   alignLoading,
+  queryUnderstanding,
+  onRemoveFacet,
+  onApplySuggestion,
 }: {
   query: string
   docs: DocMeta[]
@@ -48,6 +51,12 @@ const CitePanel = ({
     _debugKeys?: string[]
   } | null
   alignLoading: boolean
+  queryUnderstanding?: {
+    facets: { facet: string; value: string; action: string; source: string }[]
+    suggestions: { type: string; text: string }[]
+  } | null
+  onRemoveFacet?: (chip: { facet: string; value: string }) => void
+  onApplySuggestion?: (text: string) => void
 }) => {
   const exportBibCsv = (selectedIds: string[]) => {
     exportCitationsCsv({
@@ -118,6 +127,9 @@ const CitePanel = ({
       alignment={alignment}
       alignLoading={alignLoading}
       onExportBib={exportBibCsv}
+      queryUnderstanding={queryUnderstanding}
+      onRemoveFacet={onRemoveFacet}
+      onApplySuggestion={onApplySuggestion}
     />
   )
 }
