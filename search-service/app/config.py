@@ -96,6 +96,20 @@ class Settings(BaseSettings):
     query_translation_model: str = "gpt-5-mini"
     query_translation_timeout_s: float = 3.0
 
+    # Query understanding (design 2026-08-19). Dark by default: flag-off is
+    # byte-identical to the pre-feature pipeline (guarded by
+    # tests/test_understanding.py + the P1 gate's flag-off eval run).
+    # P1 ships the deterministic tier only (facet parsers, trigram
+    # did-you-mean, tag-embedding topic sensing). Cost of enabling (P1): two
+    # small SQL lookups + one cached embed reuse per query; no LLM call.
+    query_understanding_enabled: bool = False
+    # Initial conservative thresholds — MUST be re-derived from the labeled
+    # fixture sets (tests/fixtures/didyoumean_queries.json,
+    # facet_queries.json) before any flag-on deploy; never hand-tuned.
+    spell_suggest_similarity: float = 0.45
+    topic_sense_top_k: int = 3
+    topic_sense_min_cosine: float = 0.30
+
     # Phase 1 ingestion worker
     worker_poll_seconds: int = 10
     worker_max_attempts: int = 3
