@@ -33,6 +33,7 @@ class QueryUnderstanding(BaseModel):
     intent: Literal["topical", "known_item", "catalog"] = "topical"
     facets: list[Facet] = Field(default_factory=list)
     variants: list[str] = Field(default_factory=list)
+    alias_expansions: list[str] = Field(default_factory=list)
     suggestions: list[Suggestion] = Field(default_factory=list)
     timings: dict = Field(default_factory=dict)
     degraded: list[str] = Field(default_factory=list)
@@ -56,7 +57,9 @@ def lanes_active(settings, request) -> bool:
     )
 
 
-def build_understanding(query: str, explicit_facets, today_year: int) -> QueryUnderstanding:
+def build_understanding(
+    query: str, explicit_facets, today_year: int, expansion_lanes: bool = False
+) -> QueryUnderstanding:
     """Deterministic tier (P1). Each signal isolated + failure-soft (spec §5).
 
     Explicit facets present ⇒ the user touched the chips: auto-detection is
@@ -90,5 +93,14 @@ def build_understanding(query: str, explicit_facets, today_year: int) -> QueryUn
             u.suggestions.append(s)
     except Exception:  # noqa: BLE001
         u.degraded.append("spell_suggest")
+
+    if expansion_lanes:
+        # P2 alias lane source (design §4.3). One attempt, failure-soft:
+        # no expansions means no extra lane — degrade toward P1 behavior.
+        try:
+            from app.alias_expand import db_expander
+            u.alias_expansions = db_expander().expand(query)
+        except Exception:  # noqa: BLE001
+            u.degraded.append("alias_expansion")
 
     return u

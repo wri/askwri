@@ -55,3 +55,51 @@ def test_activation_guard():
 def test_flag_defaults_off():
     from app.config import Settings
     assert Settings.model_fields["query_understanding_enabled"].default is False
+
+
+def test_alias_expansions_default_empty_and_lookup_not_run():
+    import app.alias_expand as ae
+
+    def _boom():
+        raise AssertionError("alias lookup must not run when expansion_lanes is off")
+
+    orig = ae.db_expander
+    ae.db_expander = _boom
+    try:
+        from app.understanding import build_understanding
+        u = build_understanding("urban finance", explicit_facets=None, today_year=2026)
+        assert u.alias_expansions == []
+        assert "alias_expansion" not in u.degraded
+    finally:
+        ae.db_expander = orig
+
+
+def test_alias_expansions_populated_when_lanes_on(monkeypatch):
+    import app.alias_expand as ae
+    from app.understanding import build_understanding
+
+    class _Stub:
+        def expand(self, query):
+            return ["mass transit", "BRT"]
+
+    monkeypatch.setattr(ae, "db_expander", lambda: _Stub())
+    u = build_understanding(
+        "bus systems", explicit_facets=None, today_year=2026, expansion_lanes=True
+    )
+    assert u.alias_expansions == ["mass transit", "BRT"]
+    assert "alias_expansion" not in u.degraded
+
+
+def test_alias_lookup_failure_soft(monkeypatch):
+    import app.alias_expand as ae
+    from app.understanding import build_understanding
+
+    def _raise():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(ae, "db_expander", _raise)
+    u = build_understanding(
+        "bus systems", explicit_facets=None, today_year=2026, expansion_lanes=True
+    )
+    assert u.alias_expansions == []
+    assert "alias_expansion" in u.degraded

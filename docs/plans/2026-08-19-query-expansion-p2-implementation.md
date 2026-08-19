@@ -372,7 +372,7 @@ git commit -m "feat(retrieval): deterministic tag_aliases expander (P2 alias lan
 - Consumes: `AliasExpander.expand` / `db_expander` (Task 2).
 - Produces: `QueryUnderstanding.alias_expansions: list[str]` (additive schema field, default `[]`); `build_understanding(query, explicit_facets, today_year, expansion_lanes: bool = False)` — new keyword-only-in-practice arg, default `False` so every existing caller is unchanged. When `True`, runs the alias lookup, failure-soft into `degraded: ["alias_expansion"]`.
 
-- [ ] **Step 1: Write the failing tests** (append to `search-service/tests/test_understanding.py`)
+- [x] **Step 1: Write the failing tests** (append to `search-service/tests/test_understanding.py`)
 
 ```python
 def test_alias_expansions_default_empty_and_lookup_not_run():
@@ -423,12 +423,12 @@ def test_alias_lookup_failure_soft(monkeypatch):
     assert "alias_expansion" in u.degraded
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_understanding.py -v`
 Expected: the three new tests FAIL (`TypeError: build_understanding() got an unexpected keyword argument 'expansion_lanes'` / missing attribute); the existing six still PASS.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `search-service/app/understanding.py`:
 
@@ -459,12 +459,12 @@ c) Before the `return u` (line 85), add:
             u.degraded.append("alias_expansion")
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/test_understanding.py tests/test_alias_expand.py -v`
 Expected: all PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add search-service/app/understanding.py search-service/tests/test_understanding.py
