@@ -51,35 +51,44 @@ No leak outside `understanding is not None`.
 **All aggregates byte-identical** (Δ = 0.0000 across P/R/F1 for all three grains).
 Spec §5 byte-identical guarantee: **measured and confirmed**.
 
-## Step 3: Flag-ON eval run — PARTIALLY BLOCKED
+## Step 3: Flag-ON eval run — PASS (post-review re-run 2026-08-19)
 
-### 3a: qa-rig flag-ON — BLOCKED (ops dependency)
+### 3a: qa-rig flag-ON (post-review code) — PASS
 
-`search_vocab` (Task 5) does not exist on qa RDS. Running Task 5's migration
-against qa fails:
+`pg_trgm` installed on qa (1.6), Task 5 migration applied, `search_vocab` built
+(1392 terms). Service run flag-ON against qa at post-review HEAD `f9d6374`.
 
-```
-error: permission denied to create extension "pg_trgm"
-QueryFailedError: permission denied to create extension "pg_trgm"
-```
+#### Cite (`eval:cite`, 11 golden queries)
 
-The qa task-definition DB role is not an RDS extension creator / superuser, and
-`pg_trgm` is not pre-installed on qa (only `vector` + `uuid-ossp` are). The
-trigram did-you-mean (Task 6) depends on `pg_trgm`. This is a real ops
-prerequisite: an RDS master / `rds_superuser` role must run
-`CREATE EXTENSION pg_trgm` on qa before Step 3a can proceed.
+| | total | passed | P | R (raw) | R (amended, excl q10) | F1 |
+|---|---|---|---|---|---|---|
+| baseline (Task 2) | 11 | 9 | 0.278 | 0.848 | 0.858 | 0.406 |
+| flag-on (post-review) | 11 | 8 | 0.278 | 0.803 | 0.858 | 0.401 |
+| **delta** | | | 0.000 | −0.045 | **+0.0000** | −0.005 |
 
-Per operator binding rule #4: **not substituted, not fabricated.** No qa-rig
-flag-ON numbers are reported here. The gate is blocked on this dependency, not
-on any code issue.
+**Amended macro recall (excluding q10): 0.8583 → 0.8583, Δ = +0.0000 — no
+regression on the non-faceted golden queries.** The raw −0.045 is entirely
+q10 (see §3c). Per-case: every non-faceted query byte-identical; q10
+0.750→0.250 (the facet correctly excluded pre-2020 docs from its expected
+set — design-correct, excluded from macro recall per the amended rule).
 
-### 3b: local-stack flag-ON facet probe — PASS (evidence, not a gate run)
+**Amended-rule assertion (q10): PASS.** All 12 docs q10 returns satisfy
+`year >= 2020`; the `year_min=2020` facet was applied and visible in
+`query_understanding.facets` (Invariant 1 ✓).
 
-To produce *some* flag-ON evidence, the service was run flag-ON against the
-**local docker stack** (where `pg_trgm` is installed and `search_vocab` was
-built: 713 terms). This is clearly labeled **local, not qa** — numbers from
-different harnesses are never comparable (binding rule #4), so these do NOT
-gate against the qa baselines.
+#### Answer-retrieval (`eval:answer-retrieval`, 9 queries) — byte-identical
+
+| aggregate | base P | on P | base R | on R | base F1 | on F1 |
+|---|---|---|---|---|---|---|
+| doc | 0.8127 | 0.8127 | 0.7519 | 0.7519 | 0.7246 | 0.7246 |
+| chunk | 0.4444 | 0.4444 | 0.3307 | 0.3307 | 0.3756 | 0.3756 |
+| chunk_adjacent | 0.4741 | 0.4741 | 0.3542 | 0.3542 | 0.4014 | 0.4014 |
+
+**All aggregates byte-identical** (Δ = 0.0000 across P/R/F1 for all three grains).
+Answer queries carry no facet phrasing, so the flag-on path is a no-op for
+this suite — as expected.
+
+### 3b: local-stack flag-ON facet probe — PASS (earlier evidence)
 
 Facet probe (3 queries drawn from `tests/fixtures/facet_queries.json`):
 
@@ -96,31 +105,7 @@ the facets correctly filtered — a corpus-content effect, not a bug.
 Topic sensing ran (~2ms, LRU cache hit as designed — zero extra Bedrock calls).
 No degradation signals.
 
-### 3c: local-stack flag-ON eval (evidence, not a gate run) — INVESTIGATED
-
-| suite (local stack) | flag-off R | flag-on R | delta |
-|---|---|---|---|
-| cite (macro) | 0.848 | 0.788 | **−0.060** |
-| answer (doc) | 0.752 | 0.770 | +0.018 |
-
-**The cite recall drop (−0.060) was investigated and is NOT a wiring leak.**
-Cause: golden query `q10_urban_finance_since_2020` ("Have we published anything
-to do with urban finance since 2020?") carries the facet phrasing `since 2020`,
-which the parser correctly extracts to `year_min=2020` (hard). The facet then
-correctly excludes pre-2020 urban-finance docs that are in q10's expected set.
-The plan's Step 3 rule assumes "eval queries carry no facet phrasing" — q10 is
-the exception. Probe confirmed: the `year_min=2020` facet is applied and visible
-in `query_understanding.facets` (Invariant 1 ✓) — the system is doing exactly
-what the design specifies.
-
-This is a **gate-rule nuance**, not a regression. **RESOLVED 2026-08-19
-(operator decision, option b):** the cite macro-recall rule is now "may not
-fall, excluding correctly-faceted queries" — q10 stays in the golden set and
-in flag-off runs, but is excluded from the flag-on macro-recall comparison;
-in its place, flag-on runs assert per-query that every doc q10 returns
-satisfies the extracted facet (year >= 2020). Design doc §7 updated to match.
-The wiring itself is sound — no leak (Step 2 proved flag-off is
-byte-identical).
+### 3c: q10 cite-recall nuance — RESOLVED (operator decision, option b)
 
 ## Threshold changes derived from the labeled fixture sets
 
@@ -151,37 +136,22 @@ byte-identical).
 |---|---|
 | Step 1: local suites green | **PASS** |
 | Step 2: flag-off byte-identical (spec §5) | **PASS** (cite R Δ=0.0000; answer all aggregates Δ=0.0000) |
-| Step 3a: qa-rig flag-on (cite + answer) | **BLOCKED** at gate time — `pg_trgm` not installable on qa with current role. **Cleared 2026-08-19 (separate session):** `pg_trgm` 1.6 installed, migration run, `search_vocab` built (1392 terms) — all verified against qa RDS. Step 3a re-run still pending. |
+| Step 3a: qa-rig flag-on (cite + answer) | **PASS** (post-review re-run 2026-08-19): cite amended macro recall (excl q10) Δ=+0.0000; answer all aggregates Δ=0.0000; q10 amended-rule assertion PASS (12/12 docs year >= 2020) |
 | Step 3b: facet probes (local evidence) | **PASS** (facets extracted per fixture labels; all visible) |
-| Step 3c: flag-on cite macro recall may not fall | **INCONCLUSIVE on qa**; local evidence shows a facet-driven drop on q10 (design-correct, not a leak) |
-| Step 3c: flag-on answer chunk recall may not fall | **INCONCLUSIVE on qa**; local evidence shows +0.018 (no fall) |
+| Step 3c: flag-on cite macro recall may not fall | **PASS** (amended rule, excl q10: 0.8583 → 0.8583, Δ=+0.0000; q10 amended-rule assertion PASS) |
+| Step 3c: flag-on answer chunk recall may not fall | **PASS** (byte-identical: chunk R 0.3307 → 0.3307, Δ=0.0000) |
 | Facet probes: facets match fixture labels, all visible | **PASS** (local evidence) |
 
 ## P2 unblocked?
 
-**No** — blocked on the qa-rig flag-ON run (Step 3a), which requires the
-`pg_trgm` extension on qa RDS (an ops prerequisite, not a code change). The
-code itself is sound: Step 2 proves flag-off is byte-identical, and the
-local-stack flag-ON evidence shows the deterministic tier runs correctly
-with all facets visible and no degradation.
+**Yes — P1 gate PASS.** All rules green:
+- Step 1 local suites green;
+- Step 2 flag-off byte-identical on qa (cite R Δ=0.0000; answer all aggregates Δ=0.0000);
+- Step 3a flag-on on qa with post-review code: cite amended macro recall (excl q10) Δ=+0.0000, answer byte-identical, q10 amended-rule assertion PASS (12/12 docs year >= 2020);
+- Facet probes PASS (facets match fixture labels; all visible).
 
-To unblock P2:
-1. ~~An RDS master role installs `pg_trgm` on qa~~ **DONE 2026-08-19**
-   (separate session; verified: `pg_trgm` 1.6 in `pg_extension` on qa)
-2. ~~Task 5's migration is run against qa~~ **DONE 2026-08-19** (separate
-   session; verified: `search_vocab` table exists on qa)
-3. ~~`search_vocab` is built on qa~~ **DONE 2026-08-19** (separate session;
-   verified: 1392 terms on qa)
-4. The qa-rig flag-ON eval is re-run (Step 3a) under the amended gate rule
-   (q10 nuance resolved 2026-08-19, option b: faceted golden queries are
-   excluded from the flag-on macro-recall comparison and instead assert
-   that returned docs satisfy the extracted facet — see §3c and design §7).
-   **This is now the only remaining blocker.** Note: the review fixes on
-   this branch (facet-filter semantics, `_RANGE_RE`, `spell_suggest_min_df`)
-   change flag-ON behavior, so the Step 3a run must use this branch's code,
-   not the pre-review build.
-
-Until then: **flag stays OFF; P2 NOT unblocked.**
+**The flag stays OFF in every deployed environment.** Activation is a separate,
+gated ops step. P2 may now start.
 
 ## Artifacts
 
