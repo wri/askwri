@@ -285,6 +285,12 @@ class HybridFusionRetriever(BaseRetriever):
             rrf_score = self.sparse_weight * (1.0 / (60 + i + 1))
             fused_scores[node_id] = fused_scores.get(node_id, 0) + rrf_score
 
+        # Per-lane rank attribution (design 2026-08-19 P0). These are the
+        # rankings that FED RRF — the only valid basis for lane-level claims
+        # (cross-lingual design §5.2: the diagnostic lanes are NOT this).
+        dense_rank = {n.node.node_id: i + 1 for i, n in enumerate(dense_results)}
+        sparse_rank = {n.node.node_id: i + 1 for i, n in enumerate(sparse_results)}
+
         # Combine and sort by fused score
         all_nodes = {node.node.node_id: node for node in dense_results + sparse_results}
 
@@ -294,6 +300,11 @@ class HybridFusionRetriever(BaseRetriever):
             key=lambda x: x[1],
             reverse=True
         )[:self.fusion_top_k]
+
+        self.lane_ranks = {
+            node_id: {"dense": dense_rank.get(node_id), "sparse": sparse_rank.get(node_id)}
+            for node_id, _ in sorted_nodes
+        }
 
         # Create final results
         final_results = []
@@ -1311,6 +1322,8 @@ async def hybrid_query(request: QueryRequest):
                 },
                 "passage_ms": round((time.time() - passage_start) * 1000, 1)
                               if 'passage_start' in locals() else None,
+                "lane_ranks": (getattr(hybrid_retriever, "lane_ranks", None)
+                               if request.return_intermediate_results else None),
                 "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,
