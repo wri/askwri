@@ -202,6 +202,8 @@ class HybridFusionRetriever(BaseRetriever):
         sparse_weight: Optional[float] = None,
         fusion_top_k: Optional[int] = None,
         bm25_top_k: Optional[int] = None,
+        extra_lanes: Optional[List[Dict[str, Any]]] = None,
+        domain_expansion: bool = True,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -210,6 +212,13 @@ class HybridFusionRetriever(BaseRetriever):
         self.mode = mode
         self.similarity_threshold = similarity_threshold
         self.bm25_top_k = bm25_top_k
+
+        # P2 lane list (design §4.3): additive lanes beyond the original
+        # {dense, sparse} pair. Each: {"name", "retriever", "query_str",
+        # "weight" (None -> sparse_weight), "top_k" (None -> no slice)}.
+        self.extra_lanes = list(extra_lanes) if extra_lanes else []
+        # False = the gated DOMAIN_EXPANSIONS retirement (P2 flag-on).
+        self.domain_expansion = domain_expansion
 
         # Weights default to 0.5/0.5 if not specified by caller
         self.dense_weight = dense_weight if dense_weight is not None else 0.5
@@ -234,7 +243,9 @@ class HybridFusionRetriever(BaseRetriever):
         # result lists ~40% in the 2026-07-24 probe. See query_expansion.py.
         from app.query_expansion import sparse_query_for
 
-        expanded_query = sparse_query_for(query_bundle.query_str)
+        expanded_query = sparse_query_for(
+            query_bundle.query_str, domain_expansion=self.domain_expansion
+        )
         if expanded_query != query_bundle.query_str:
             logger.info(f"Sparse query: {query_bundle.query_str[:50]}... → {expanded_query[:120]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
@@ -252,11 +263,20 @@ class HybridFusionRetriever(BaseRetriever):
                 return out
             return run
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        self.degraded_lanes = []
+        extra_results: Dict[str, List[NodeWithScore]] = {}
+        pool_size = 2 + len(self.extra_lanes)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=pool_size) as executor:
             dense_future = executor.submit(
                 _timed(self.vector_retriever.retrieve, "dense_ms", query_bundle))
             sparse_future = executor.submit(
                 _timed(self.bm25_retriever.retrieve, "sparse_ms", expanded_bundle))
+            extra_futures = {
+                lane["name"]: executor.submit(
+                    _timed(lane["retriever"].retrieve, f"{lane['name']}_ms",
+                           QueryBundle(query_str=lane["query_str"])))
+                for lane in self.extra_lanes
+            }
             # Post-cutover the dense lane is a Bedrock API call with no local
             # fallback (query embed via BedrockCohereQueryEmbedding). Degrade
             # to sparse-only rather than 500 — mirrors the rerank lane's
@@ -275,6 +295,21 @@ class HybridFusionRetriever(BaseRetriever):
                 service_state["dense_error"] = str(exc)
                 dense_results = []
             sparse_results = sparse_future.result()
+            # Extra lanes are additive recall: a failed lane is dropped, the
+            # query proceeds (spec §5 — degrade toward P1 behavior).
+            for lane in self.extra_lanes:
+                try:
+                    lane_results = extra_futures[lane["name"]].result()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        f"{lane['name']} lane failed ({exc}) — lane dropped (failure-soft)"
+                    )
+                    self.degraded_lanes.append(lane["name"])
+                    continue
+                lane_top_k = lane.get("top_k")
+                if lane_top_k is not None:
+                    lane_results = lane_results[:lane_top_k]
+                extra_results[lane["name"]] = lane_results
 
         # Slice BM25 results to requested top_k (BM25Retriever is a singleton built
         # at startup with similarity_top_k=1000; per-request limit applied here)
@@ -284,29 +319,44 @@ class HybridFusionRetriever(BaseRetriever):
         logger.info(f"Dense retrieval: {len(dense_results)} results")
         logger.info(f"Sparse retrieval: {len(sparse_results)} results")
 
-        # Apply RRF (Reciprocal Rank Fusion)
+        # Multi-lane weighted RRF (design §4.3). Original lanes at 2x ONLY
+        # when an expansion lane materialized (operator decision 2026-08-19):
+        # no lane -> weights untouched -> flag-on-no-alias == P1 behavior.
+        # k=60 and node-id dedupe unchanged.
+        if extra_results:
+            w_dense, w_sparse = self.dense_weight * 2.0, self.sparse_weight * 2.0
+        else:
+            w_dense, w_sparse = self.dense_weight, self.sparse_weight
+        lane_specs = [("dense", dense_results, w_dense),
+                      ("sparse", sparse_results, w_sparse)]
+        for lane in self.extra_lanes:
+            if lane["name"] not in extra_results:
+                continue
+            lane_weight = lane.get("weight")
+            lane_specs.append((
+                lane["name"], extra_results[lane["name"]],
+                lane_weight if lane_weight is not None else self.sparse_weight,
+            ))
+
         fused_scores = {}
-
-        # Process dense results
-        for i, node_with_score in enumerate(dense_results):
-            node_id = node_with_score.node.node_id
-            rrf_score = self.dense_weight * (1.0 / (60 + i + 1))  # k=60 is standard
-            fused_scores[node_id] = fused_scores.get(node_id, 0) + rrf_score
-
-        # Process sparse results
-        for i, node_with_score in enumerate(sparse_results):
-            node_id = node_with_score.node.node_id
-            rrf_score = self.sparse_weight * (1.0 / (60 + i + 1))
-            fused_scores[node_id] = fused_scores.get(node_id, 0) + rrf_score
-
-        # Per-lane rank attribution (design 2026-08-19 P0). These are the
-        # rankings that FED RRF — the only valid basis for lane-level claims
-        # (cross-lingual design §5.2: the diagnostic lanes are NOT this).
-        dense_rank = {n.node.node_id: i + 1 for i, n in enumerate(dense_results)}
-        sparse_rank = {n.node.node_id: i + 1 for i, n in enumerate(sparse_results)}
+        lane_rank_maps = {}
+        for lane_name, lane_results, lane_weight in lane_specs:
+            # Per-lane rank attribution (design 2026-08-19 P0). These are the
+            # rankings that FED RRF — the only valid basis for lane-level
+            # claims (cross-lingual design §5.2).
+            lane_rank_maps[lane_name] = {
+                n.node.node_id: i + 1 for i, n in enumerate(lane_results)
+            }
+            for i, node_with_score in enumerate(lane_results):
+                node_id = node_with_score.node.node_id
+                rrf_score = lane_weight * (1.0 / (60 + i + 1))  # k=60 is standard
+                fused_scores[node_id] = fused_scores.get(node_id, 0) + rrf_score
 
         # Combine and sort by fused score
-        all_nodes = {node.node.node_id: node for node in dense_results + sparse_results}
+        all_lane_results = dense_results + sparse_results
+        for lane_name, lane_results, _ in lane_specs[2:]:
+            all_lane_results = all_lane_results + lane_results
+        all_nodes = {node.node.node_id: node for node in all_lane_results}
 
         # Sort by fused score and take top k
         sorted_nodes = sorted(
@@ -316,7 +366,8 @@ class HybridFusionRetriever(BaseRetriever):
         )[:self.fusion_top_k]
 
         self.lane_ranks = {
-            node_id: {"dense": dense_rank.get(node_id), "sparse": sparse_rank.get(node_id)}
+            node_id: {name: lane_rank_maps[name].get(node_id)
+                      for name, _, _ in lane_specs}
             for node_id, _ in sorted_nodes
         }
 
