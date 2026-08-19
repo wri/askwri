@@ -36,6 +36,7 @@ interface LlamaIndexResponse {
   query: string
   mode: string
   debug: Record<string, any>
+  query_understanding?: Record<string, unknown> | null
 }
 
 export async function POST(req: NextRequest) {
@@ -218,6 +219,7 @@ export async function POST(req: NextRequest) {
       docs,
       sources: docs, // For compatibility
       usage: null, // Retrieval-only: no LLM tokens consumed
+      query_understanding: llamaIndexResponse.query_understanding ?? null,
       debug: {
         llamaindex: true,
         service_url: SEARCH_SERVICE_URL,
