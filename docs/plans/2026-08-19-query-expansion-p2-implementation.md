@@ -1191,7 +1191,7 @@ Design §7's named regression mechanism, made measurable: "variant lanes add can
 - Consumes: `debug.fused_nodes` + `debug.rerank_window_ids` (Task 5), `extractUrlSlug` (`evaluation/lib/metrics.ts:19`).
 - Produces: `classifyDisplacement(missedUrls: string[], fusedNodes: FusedNode[], rerankWindowIds: string[]): DisplacementRecord[]`; `callPythonServiceFull(query, mode, params) -> Promise<any>` (whole `/query` JSON, accepts `return_intermediate_results`); per-result `lane_attribution`, `alias_lane_size`, and `lane_contribution` (per-lane count of returned docs — spec §6) fields in the eval report (additive; absent when the env var is unset).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 // evaluation/lib/lane-attribution.test.ts
@@ -1253,12 +1253,12 @@ describe('classifyDisplacement', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- lane-attribution`
 Expected: FAIL — `Cannot find module './lane-attribution'`
 
-- [ ] **Step 3: Implement `evaluation/lib/lane-attribution.ts`**
+- [x] **Step 3: Implement `evaluation/lib/lane-attribution.ts`**
 
 ```typescript
 /**
@@ -1340,12 +1340,12 @@ export function classifyDisplacement(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- lane-attribution`
 Expected: 4 PASS
 
-- [ ] **Step 5: Add `callPythonServiceFull` to `evaluation/lib/service-client.ts`**
+- [x] **Step 5: Add `callPythonServiceFull` to `evaluation/lib/service-client.ts`**
 
 After `callPythonService` (line 110), add — same request body plus the diagnostic flag, returning the WHOLE response so callers can read `debug`:
 
@@ -1396,7 +1396,7 @@ export async function callPythonServiceFull(
 }
 ```
 
-- [ ] **Step 6: Wire attribution mode into `evaluation/run-cite-eval.ts`**
+- [x] **Step 6: Wire attribution mode into `evaluation/run-cite-eval.ts`**
 
 a) Extend the import at line 12-16 with `callPythonServiceFull`, and add near the top (after the golden-set load):
 
@@ -1465,11 +1465,11 @@ c) In the success return object (after `execution_time_ms`, line 223), add — `
 
 (If `TestResult` is a typed interface in this file, add optional fields `lane_attribution?: any[]`, `alias_lane_size?: number | null`, `lane_contribution?: Record<string, number>`.)
 
-- [ ] **Step 7: Verify the default runner is untouched**
+- [x] **Step 7: Verify the default runner is untouched**
 
 Run: `npm test -- lane-attribution` (PASS) then `npx tsc --noEmit -p tsconfig.json` if the repo typechecks eval scripts — otherwise verify with `npx tsx --env-file-if-exists=.env evaluation/run-cite-eval.ts --help 2>&1 | head -5` that the script still parses (it will fail fast on /health, which is fine — the point is no syntax/type error). Confirm `git diff evaluation/run-cite-eval.ts` shows changes ONLY inside the `LANE_ATTRIBUTION` conditionals + imports.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add evaluation/lib/lane-attribution.ts evaluation/lib/lane-attribution.test.ts evaluation/lib/service-client.ts evaluation/run-cite-eval.ts

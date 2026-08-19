@@ -11,10 +11,19 @@ import * as path from 'path'
 import type { DocMeta } from '../src/lib/llamacloud'
 import {
   callPythonService as callPythonServiceRaw,
+  callPythonServiceFull,
   transformToDocMeta,
   PYTHON_SERVICE_URL,
 } from './lib/service-client'
 import { calculateUrlMetrics, extractUrlSlug } from './lib/metrics'
+import { classifyDisplacement } from './lib/lane-attribution'
+
+// Lane-attribution mode (P2 displacement instrument). OFF by default so the
+// default runner stays byte-identical to the instrument that produced the
+// P0/P1 baselines. Attribution runs are DIAGNOSTIC — never compare their
+// P/R/F1 against a non-attribution baseline (measured-change discipline);
+// use a distinct EVAL_LABEL so checkpoints don't mix.
+const LANE_ATTRIBUTION = process.env.EVAL_LANE_ATTRIBUTION === '1'
 
 // Load golden dataset
 const goldenDataPath = path.join(__dirname, 'golden-dataset.json')
@@ -53,6 +62,9 @@ interface TestResult {
   false_negatives: string[]
   execution_time_ms: number
   error?: string
+  lane_attribution?: any[]
+  alias_lane_size?: number | null
+  lane_contribution?: Record<string, number>
 }
 
 interface ServiceHealth {
@@ -180,7 +192,20 @@ async function runTestCase(testCase: TestCase): Promise<TestResult> {
     // Combine question and task description for full context
     const fullQuery = `${testCase.question}\n\nTask: ${testCase.task_description}`
 
-    const docs = await callCiteService(fullQuery)
+    let docs: DocMeta[]
+    let fullResponse: any = null
+    if (LANE_ATTRIBUTION) {
+      fullResponse = await callPythonServiceFull(fullQuery, 'cite', {
+        vector_top_k: 800,
+        bm25_top_k: 800,
+        rerank_top_n: 500,
+        max_results: 100,
+        return_intermediate_results: true,
+      })
+      docs = (fullResponse.docs || []).map(transformToDocMeta)
+    } else {
+      docs = await callCiteService(fullQuery)
+    }
 
     console.log(`   Retrieved: ${docs.length} documents`)
 
@@ -221,6 +246,32 @@ async function runTestCase(testCase: TestCase): Promise<TestResult> {
       false_positives: metrics.false_positives,
       false_negatives: metrics.false_negatives,
       execution_time_ms: executionTime,
+      ...(LANE_ATTRIBUTION
+        ? {
+            lane_attribution: classifyDisplacement(
+              metrics.false_negatives,
+              fullResponse?.debug?.fused_nodes ?? [],
+              fullResponse?.debug?.rerank_window_ids ?? [],
+            ),
+            alias_lane_size: fullResponse?.debug?.alias_lane_size ?? null,
+            lane_contribution: (() => {
+              const lanesFor = new Map<string, Record<string, number | null>>(
+                (fullResponse?.debug?.fused_nodes ?? []).map(
+                  (n: any) => [n.node_id, n.lanes ?? {}],
+                ),
+              )
+              const contribution: Record<string, number> = {}
+              for (const raw of fullResponse?.docs ?? []) {
+                const lanes = lanesFor.get(raw.chunk_id) ?? {}
+                for (const [name, rank] of Object.entries(lanes)) {
+                  if (rank != null)
+                    contribution[name] = (contribution[name] || 0) + 1
+                }
+              }
+              return contribution
+            })(),
+          }
+        : {}),
     }
   } catch (error: any) {
     console.error(`   Error: ${error.message}`)
