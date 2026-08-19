@@ -206,8 +206,9 @@ Extend `_emit_query_emf`:
 **Gates per phase:**
 - cite golden set macro recall may not fall;
 - answer-retrieval chunk recall may not fall;
-- non-English smoke set holds 16/16 (expansion must not disturb what the cross-lingual
-  work protects);
+- (multilingual document retrieval is protected via the cite golden set, whose
+  EN queries already reach non-EN docs; a dedicated non-English-query smoke was
+  removed 2026-08-19 — non-English queries are out of scope for this design, §9);
 - new labeled sets, small and direction-only: facet-extraction (~30 queries → expected
   facets) and did-you-mean (misspellings + false-positive traps). Confidence thresholds
   for hard-vs-suggest are **derived** from the labeled set, never hand-picked.

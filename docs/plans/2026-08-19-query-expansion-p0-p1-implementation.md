@@ -166,22 +166,31 @@ Same-instrument BEFORE numbers for every later gate. Operational: needs the sear
 ./scripts/with-remote-env.sh qa bash -c 'cd search-service && ./venv/bin/python -m app.main'
 ```
 
-- [ ] **Step 2: Run the three suites** (separate shell)
+- [ ] **Step 2: Run the two suites** (separate shell)
 
 ```bash
 npm run eval:cite
 npm run eval:answer-retrieval
-npx tsx evaluation/run-non-english-smoke.ts
 ```
 
-Expected: each completes and writes/prints results. Non-EN smoke must report 16/16 present, 16/16 rank-1 (its current recorded state) — if it does not, STOP and report; the baseline is already broken and gating on it would be meaningless.
+Expected: each completes and writes results. No dedicated non-English smoke: the
+non-EN smoke (`run-non-english-smoke.ts`) tests non-English *queries*, a
+capability scoped out of this plan (design §9; operator decision 2026-08-19).
+Protection of multilingual *document* retrieval is covered by the cite golden
+set, whose EN queries already reach non-EN docs (q4→Brazil, q5→Mexico).
 
 - [ ] **Step 3: Copy result artifacts into `evaluation/results/` with the `2026-08-19-p0-baseline-` prefix, commit**
 
+`evaluation/results/` is gitignored (see `.gitignore:79`); force-add is the
+established convention (e.g. prior gate-results commit f751169).
+
 ```bash
-git add evaluation/results/2026-08-19-p0-baseline-*
+git add -f evaluation/results/2026-08-19-p0-baseline-cite.json evaluation/results/2026-08-19-p0-baseline-answer.json
 git commit -m "chore(eval): P0 baseline capture for query-understanding gates"
 ```
+
+Use `git add -f` with the explicit renamed filenames (not a glob) and verify with
+`git status` that `.env.local` and the service log are NOT staged.
 
 ---
 
@@ -2136,17 +2145,15 @@ then `npm test`, `npm run lint`, `npm run format:check`. Expected: all green.
 ```bash
 npm run eval:cite
 npm run eval:answer-retrieval
-npx tsx evaluation/run-non-english-smoke.ts
 ```
 
-Decision rule: results must be IDENTICAL to the Task 2 baselines (same recall, same ranks; the smoke set 16/16). Any delta = a leak outside the `understanding is not None` guard → STOP, find the leak, re-run. This is the spec §5 byte-identical guarantee, measured.
+Decision rule: results must be IDENTICAL to the Task 2 baselines (same recall, same ranks). Any delta = a leak outside the `understanding is not None` guard → STOP, find the leak, re-run. This is the spec §5 byte-identical guarantee, measured.
 
-- [ ] **Step 3: Flag-ON eval run** — export `QUERY_UNDERSTANDING_ENABLED=true` for the service (and ensure `search_vocab` is built on the rig DB via Task 5's script), re-run the same three suites plus a manual probe set of ~10 facet-bearing queries (draw them from `tests/fixtures/facet_queries.json`).
+- [ ] **Step 3: Flag-ON eval run** — export `QUERY_UNDERSTANDING_ENABLED=true` for the service (and ensure `search_vocab` is built on the rig DB via Task 5's script), re-run the same two suites plus a manual probe set of ~10 facet-bearing queries (draw them from `tests/fixtures/facet_queries.json`).
 
 Decision rules (spec §7):
 - cite golden macro recall: may not fall (eval queries carry no facet phrasing, so movement means the wiring itself changed ranking — investigate).
 - answer-retrieval chunk recall: may not fall.
-- non-EN smoke: 16/16 holds.
 - facet probes: extracted facets match the fixture labels; every applied facet visible in `query_understanding.facets`.
 
 - [ ] **Step 4: Write and commit the gate document** — record: baseline vs flag-off vs flag-on numbers for each suite, the probe-set observations, any threshold changes derived from the fixture sets (with before/after values), and an explicit PASS/FAIL per rule. End with either "P2 unblocked" or the failure analysis.
