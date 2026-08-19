@@ -1,8 +1,10 @@
 """Single pre-rerank facet application point (design §4.5).
 
 Semantics mirror the legacy apply_metadata_filters where they overlap
-(year-unparseable docs are EXCLUDED when a year filter is set; program is
-exact-match on node metadata; excluded_keywords substring on title+text)."""
+(missing year is KEPT, present-but-unparseable year is EXCLUDED when a year
+filter is set; program is exact-match on node metadata; excluded_keywords
+substring on title+text). Language has no legacy counterpart: unknown
+language is KEPT — exclusion requires a positive mismatch."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -47,10 +49,38 @@ def test_year_falls_back_to_node_metadata_when_doc_unknown():
     assert len(out) == 1
 
 
+def test_year_filter_keeps_docs_with_no_year_at_all():
+    # Legacy parity: apply_metadata_filters keeps docs whose year metadata is
+    # absent (main.py:361 falls through on None); only present-but-unparseable
+    # years are excluded.
+    n = MagicMock()
+    n.node.metadata = {"doc_id": "d-unknown", "program_series": "", "title": "t"}
+    n.node.text = "body"
+    out = apply_facet_filters([n], [_hard("year_min", "2000")], {})
+    assert out == [n]
+
+
+def test_invalid_year_value_facet_is_dropped_not_fatal():
+    # An invalid chip value is dropped (module contract), never a ValueError
+    # that hybrid_query's outer except would turn into a 500.
+    nodes = [_node("d-en-2023")]
+    assert apply_facet_filters(nodes, [_hard("year_min", "abc")], DOCS_META) is nodes
+
+
 def test_language_filters_on_docs_meta():
     nodes = [_node("d-en-2023"), _node("d-es-2019")]
     out = apply_facet_filters(nodes, [_hard("language", "es")], DOCS_META)
     assert [n.node.metadata["doc_id"] for n in out] == ["d-es-2019"]
+
+
+def test_language_filter_keeps_docs_without_language_metadata():
+    # The relational language column is only hydrated on the postgres backend;
+    # a doc with unknown language must be KEPT (conservative posture), not
+    # excluded — otherwise a language facet on the legacy backend filters
+    # every result to zero.
+    nodes = [_node("mystery")]
+    out = apply_facet_filters(nodes, [_hard("language", "es")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["mystery"]
 
 
 def test_program_and_excluded_keyword():

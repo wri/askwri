@@ -34,9 +34,15 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
         if f.action != "hard":
             continue
         if f.facet == "year_min":
-            year_min = int(f.value)
+            try:
+                year_min = int(f.value)
+            except (ValueError, TypeError):
+                continue  # invalid chip value: drop the facet, never a 500
         elif f.facet == "year_max":
-            year_max = int(f.value)
+            try:
+                year_max = int(f.value)
+            except (ValueError, TypeError):
+                continue  # invalid chip value: drop the facet, never a 500
         elif f.facet == "language":
             language = f.value
         elif f.facet == "program":
@@ -55,19 +61,26 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
         if year_min is not None or year_max is not None:
             year = doc.get("year_int")
             if year is None:
-                try:
-                    year = int(md.get("year"))
-                except (ValueError, TypeError):
-                    year = None
-            if year is None:
-                continue  # unparseable year is excluded under a year filter (legacy semantics)
-            if year_min is not None and year < year_min:
-                continue
-            if year_max is not None and year > year_max:
-                continue
+                raw = md.get("year")
+                if raw is not None:
+                    try:
+                        year = int(raw)
+                    except (ValueError, TypeError):
+                        continue  # present-but-unparseable year is excluded (legacy semantics)
+            # year still None ⇒ no year metadata at all: KEPT, matching
+            # apply_metadata_filters (main.py:361 falls through on None).
+            if year is not None:
+                if year_min is not None and year < year_min:
+                    continue
+                if year_max is not None and year > year_max:
+                    continue
 
-        if language is not None and doc.get("language") != language:
-            continue
+        # Language is only hydrated on the postgres backend; a doc with
+        # unknown language is KEPT (exclude only on a positive mismatch).
+        if language is not None:
+            doc_language = doc.get("language")
+            if doc_language is not None and doc_language != language:
+                continue
 
         if program is not None and md.get("program_series", "") != program:
             continue

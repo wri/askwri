@@ -27,6 +27,28 @@ _TOPIC_SQL = """
 """
 
 
+# Models confirmed to have tag_embeddings rows. Positive-only cache: a miss
+# is re-probed (one cheap indexed SELECT per query) so a later tag-embedding
+# backfill is picked up without a restart.
+_MODEL_COVERAGE: set = set()
+
+
+def model_has_tag_embeddings(model: str) -> bool:
+    from app.db import get_pool
+
+    if model in _MODEL_COVERAGE:
+        return True
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM tag_embeddings WHERE embedding_model = %s LIMIT 1",
+            (model,),
+        ).fetchone()
+    if row is not None:
+        _MODEL_COVERAGE.add(model)
+        return True
+    return False
+
+
 def filter_topics(rows, top_k: int, min_cosine: float):
     """Pure: threshold + limit. Split out so the policy is unit-testable."""
     return [(label, cos) for label, cos in rows if cos >= min_cosine][:top_k]
@@ -56,6 +78,15 @@ def attach_topic_suggestions(u: QueryUnderstanding, query: str, embed_model) -> 
         u.degraded.append("topic_sense")
         return
     try:
+        from app.config import get_settings
+
+        # tag_embeddings rows only exist for the model the worker embeds
+        # with (embed_tags.py hardcodes it) — under any other configured
+        # embedding model the cosine query can never match, so skip before
+        # paying the query-embedding call.
+        if not model_has_tag_embeddings(get_settings().embedding_model):
+            u.degraded.append("topic_sense")
+            return
         emb = embed_model.get_query_embedding(query)
         for label, _cos in nearby_topics(emb):
             u.suggestions.append(Suggestion(type="nearby_topic", text=label))

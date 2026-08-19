@@ -1015,7 +1015,10 @@ async def hybrid_query(request: QueryRequest):
         if understanding_active(settings, request):
             from datetime import datetime
             u_start = time.time()
-            understanding = build_understanding(
+            # Blocking (spell-suggest DB round trips) — worker thread, like
+            # every other blocking stage in this handler.
+            understanding = await asyncio.to_thread(
+                build_understanding,
                 request.query,
                 explicit_facets=request.facets,
                 today_year=datetime.now().year,
@@ -1070,13 +1073,21 @@ async def hybrid_query(request: QueryRequest):
         logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results in {stage1_elapsed:.1f}s")
 
         # Topic sensing (design 2026-08-19 §4.1): attach nearby_topic
-        # suggestions now — the dense lane just warmed the embed cache, so
-        # get_query_embedding is an LRU hit (zero extra Bedrock calls).
+        # suggestions now — on the Bedrock path the dense lane just warmed
+        # the embed LRU cache, so get_query_embedding is a hit (zero extra
+        # Bedrock calls). Other embed models have no such cache; the
+        # tag-embedding coverage probe inside attach_topic_suggestions
+        # skips the call entirely when the model has no rows to match.
         # Behind `understanding is not None`: flag off ⇒ nothing happens.
         if understanding is not None:
             from app.topic_sense import attach_topic_suggestions
             t_start = time.time()
-            attach_topic_suggestions(understanding, request.query, service_state.get("embed_model"))
+            # Blocking (pgvector query + a possibly-uncached embedding HTTP
+            # call) — worker thread keeps /health responsive.
+            await asyncio.to_thread(
+                attach_topic_suggestions,
+                understanding, request.query, service_state.get("embed_model"),
+            )
             understanding.timings["topic_sense_ms"] = round((time.time() - t_start) * 1000, 1)
 
         # If answer mode and cite_doc_ids provided, filter stage1_results

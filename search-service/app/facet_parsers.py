@@ -14,8 +14,14 @@ from app.understanding import Facet
 
 _Y = r"(19[5-9]\d|20\d\d)"
 
+# Prose connectors ("to"/"and") require a constraint word — bare
+# "2019 and 2021" in a sentence describes subject matter, not a publication
+# window. The compact numeric forms "2021-2024"/"2021–2024" are themselves
+# explicit range notation and fire bare.
 _RANGE_RE = re.compile(
-    rf"\b(?:between\s+|from\s+)?{_Y}\s*(?:-|–|\bto\b|\band\b)\s*{_Y}\b", re.I
+    rf"\b(?:(?:between|from)\s+{_Y}\s*(?:-|–|\bto\b|\band\b)\s*{_Y}"
+    rf"|{_Y}\s*[-–]\s*{_Y})\b",
+    re.I,
 )
 _SINCE_RE = re.compile(rf"\b(?:since|after)\s+{_Y}\b", re.I)
 _BEFORE_RE = re.compile(rf"\b(?:before|until|up to|prior to)\s+{_Y}\b", re.I)
@@ -48,7 +54,7 @@ def parse_facets(query: str, today_year: int) -> list[Facet]:
 
     m = _RANGE_RE.search(remaining)
     if m:
-        lo, hi = sorted((int(m.group(1)), int(m.group(2))))
+        lo, hi = sorted(int(g) for g in m.groups() if g is not None)
         if hi <= today_year:
             facets.append(_facet("year_min", str(lo)))
             facets.append(_facet("year_max", str(hi)))

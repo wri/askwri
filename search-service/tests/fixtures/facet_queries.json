@@ -31,6 +31,8 @@
     {"q": "the portuguese experience with road pricing", "facets": []},
     {"q": "china's electric bus fleet", "facets": []},
     {"q": "how did covid change transit ridership in 2020 compared to 2019", "facets": []},
+    {"q": "how did ridership change in 2019 and 2021", "facets": []},
+    {"q": "compare emissions 2015 to 2018 levels", "facets": []},
     {"q": "bus rapid transit", "facets": []},
     {"q": "cost of 100 km of bike lanes", "facets": []}
   ]

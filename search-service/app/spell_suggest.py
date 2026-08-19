@@ -22,10 +22,16 @@ _SKIP = {
 
 
 class TrigramSuggester:
-    def __init__(self, exact_lookup, fuzzy_lookup, similarity_threshold: float):
+    def __init__(self, exact_lookup, fuzzy_lookup, similarity_threshold: float,
+                 min_df: int = 1):
         self._exact = exact_lookup
         self._fuzzy = fuzzy_lookup
         self._threshold = similarity_threshold
+        # df floor: a correction target must be an established corpus term.
+        # The vocabulary is titles+tags+aliases, so ordinary English words are
+        # structurally OOV — without the floor, any of them can be 'corrected'
+        # to a one-off title word that happens to clear the similarity bar.
+        self._min_df = min_df
 
     def suggest(self, query: str) -> Suggestion | None:
         words = [w.lower() for w in _WORD_RE.findall(query) if w.lower() not in _SKIP]
@@ -38,8 +44,11 @@ class TrigramSuggester:
                 if w in known:
                     continue
                 hit = self._fuzzy(w)
-                if hit is not None and hit[1] >= self._threshold and hit[0] != w:
-                    corrections[w] = hit[0]
+                if hit is None:
+                    continue
+                term, sim, df = hit
+                if sim >= self._threshold and term != w and df >= self._min_df:
+                    corrections[w] = term
         except Exception as exc:  # noqa: BLE001 — never fail a search on suggestions
             logger.warning(f"spell suggest degraded: {exc}")
             return None
@@ -70,13 +79,15 @@ def db_suggester() -> TrigramSuggester:
     def fuzzy_lookup(word):
         with get_pool().connection() as conn:
             row = conn.execute(
-                """SELECT term, similarity(term, %(w)s) AS sim
+                """SELECT term, similarity(term, %(w)s) AS sim, df
                    FROM search_vocab WHERE term %% %(w)s
                    ORDER BY sim DESC LIMIT 1""",
                 {"w": word},
             ).fetchone()
-        return (row[0], float(row[1])) if row else None
+        return (row[0], float(row[1]), int(row[2])) if row else None
 
+    s = get_settings()
     return TrigramSuggester(
-        exact_lookup, fuzzy_lookup, get_settings().spell_suggest_similarity
+        exact_lookup, fuzzy_lookup, s.spell_suggest_similarity,
+        min_df=s.spell_suggest_min_df,
     )

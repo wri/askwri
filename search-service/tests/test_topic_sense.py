@@ -21,6 +21,7 @@ def test_filter_topics_applies_threshold_and_top_k():
 def test_attach_appends_suggestions_never_facets(monkeypatch):
     import app.topic_sense as ts
 
+    monkeypatch.setattr(ts, "model_has_tag_embeddings", lambda m: True)
     monkeypatch.setattr(ts, "nearby_topics", lambda emb: [("freight", 0.61)])
 
     class _Embed:
@@ -41,6 +42,7 @@ def test_attach_is_failure_soft(monkeypatch):
     def boom(emb):
         raise RuntimeError("no table")
 
+    monkeypatch.setattr(ts, "model_has_tag_embeddings", lambda m: True)
     monkeypatch.setattr(ts, "nearby_topics", boom)
 
     class _Embed:
@@ -49,6 +51,28 @@ def test_attach_is_failure_soft(monkeypatch):
 
     u = QueryUnderstanding()
     attach_topic_suggestions(u, "trucks", _Embed())
+    assert u.suggestions == []
+    assert "topic_sense" in u.degraded
+
+
+def test_attach_skips_embedding_when_model_has_no_tag_embeddings(monkeypatch):
+    # tag_embeddings rows only exist for the model the worker embeds with
+    # (embed_tags.py). Under any other embedding model the cosine query can
+    # never match — so the (paid, blocking) query-embedding call must be
+    # skipped entirely, not spent on a permanently-empty lookup.
+    import app.topic_sense as ts
+
+    monkeypatch.setattr(ts, "model_has_tag_embeddings", lambda m: False)
+    calls = []
+
+    class _Embed:
+        def get_query_embedding(self, q):
+            calls.append(q)
+            return [0.0] * 1536
+
+    u = QueryUnderstanding()
+    attach_topic_suggestions(u, "trucks", _Embed())
+    assert calls == []
     assert u.suggestions == []
     assert "topic_sense" in u.degraded
 

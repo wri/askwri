@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     # fixture sets (tests/fixtures/didyoumean_queries.json,
     # facet_queries.json) before any flag-on deploy; never hand-tuned.
     spell_suggest_similarity: float = 0.45
+    # df floor for correction targets: a suggested term must appear at least
+    # this many times across titles/tags/aliases. Blocks 'corrections' of
+    # ordinary English words to one-off title terms. Cost of raising it:
+    # misspellings of rare-but-real corpus terms stop getting suggestions.
+    spell_suggest_min_df: int = 2
     topic_sense_top_k: int = 3
     topic_sense_min_cosine: float = 0.30
 
