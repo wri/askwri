@@ -319,15 +319,14 @@ class HybridFusionRetriever(BaseRetriever):
         logger.info(f"Dense retrieval: {len(dense_results)} results")
         logger.info(f"Sparse retrieval: {len(sparse_results)} results")
 
-        # Multi-lane weighted RRF (design §4.3). Original lanes stay at
-        # their base weights even when an expansion lane materializes
-        # (2026-08-20 experiment, supersedes operator decision c): the 2x
-        # boost stacked with the query-anchored alias lane gave literal
-        # matches ~3:1 sparse mass over expansion-reached docs — the
-        # measured cause of the cite recall regression. With unscaled
-        # originals the skew is 2:1 via the alias lane's query anchor.
+        # Multi-lane weighted RRF (design §4.3). Original lanes at 2x ONLY
+        # when an expansion lane materialized (operator decision 2026-08-19):
+        # no lane -> weights untouched -> flag-on-no-alias == P1 behavior.
         # k=60 and node-id dedupe unchanged.
-        w_dense, w_sparse = self.dense_weight, self.sparse_weight
+        if extra_results:
+            w_dense, w_sparse = self.dense_weight * 2.0, self.sparse_weight * 2.0
+        else:
+            w_dense, w_sparse = self.dense_weight, self.sparse_weight
         lane_specs = [("dense", dense_results, w_dense),
                       ("sparse", sparse_results, w_sparse)]
         for lane in self.extra_lanes:
@@ -1110,15 +1109,13 @@ async def hybrid_query(request: QueryRequest):
         vector_retriever = make_dense_retriever(request.vector_top_k)
 
         # P2 alias lane (design §4.3): one extra 1x-weight sparse lane
-        # carrying original query + tag_aliases expansions. The query
-        # ANCHORS expansion-found docs' BM25 scores — an expansions-only
-        # lane couldn't push its docs into the fused-500 (2026-08-20
-        # experiment). The double-count this creates is neutralized by NOT
-        # scaling the original lanes 2x (HybridFusionRetriever). The
-        # reranker still only ever sees the original query (§4.4).
+        # carrying tag_aliases expansions ONLY. Including the original query
+        # here ran it in TWO sparse lanes and double-counted its RRF signal
+        # (literal:synonym sparse mass ~3:1 — investigation 2026-08-20 §M1).
+        # The reranker still only ever sees the original query (§4.4).
         extra_lanes = None
         if lanes_on and understanding is not None and understanding.alias_expansions:
-            alias_query = " OR ".join([request.query] + understanding.alias_expansions)
+            alias_query = " OR ".join(understanding.alias_expansions)
             logger.info(f"Alias lane: {alias_query[:120]}")
             extra_lanes = [{
                 "name": "alias_sparse",
