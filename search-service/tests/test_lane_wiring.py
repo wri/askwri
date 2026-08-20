@@ -1,8 +1,6 @@
 """P2.5 /query wiring: topic_dense lane construction, gated retirement,
 flag-off leak detection (design §4.3, §5). TestClient + stubs — no DB/network,
 same pattern as test_diagnostic_parity.py."""
-from unittest.mock import patch
-
 from fastapi.testclient import TestClient
 from llama_index.core.schema import NodeWithScore, TextNode
 

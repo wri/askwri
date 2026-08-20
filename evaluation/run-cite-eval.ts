@@ -63,7 +63,7 @@ interface TestResult {
   execution_time_ms: number
   error?: string
   lane_attribution?: any[]
-  alias_lane_size?: number | null
+  topic_tags_count?: number | null
   lane_contribution?: Record<string, number>
 }
 
@@ -253,7 +253,7 @@ async function runTestCase(testCase: TestCase): Promise<TestResult> {
               fullResponse?.debug?.fused_nodes ?? [],
               fullResponse?.debug?.rerank_window_ids ?? [],
             ),
-            alias_lane_size: fullResponse?.debug?.alias_lane_size ?? null,
+            topic_tags_count: fullResponse?.debug?.topic_tags_count ?? null,
             lane_contribution: (() => {
               const lanesFor = new Map<string, Record<string, number | null>>(
                 (fullResponse?.debug?.fused_nodes ?? []).map(

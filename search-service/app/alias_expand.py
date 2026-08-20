@@ -1,14 +1,14 @@
 # search-service/app/alias_expand.py
-"""Alias-expansion lane source (design 2026-08-19 §4.1 deterministic tier,
-§4.3 P2).
+"""Alias-expansion diagnostic source (design 2026-08-19 §4.1, §4.3 P2;
+retired as a retrieval lane by P2.5 — see app/topic_retrieval.py).
 
-tag_aliases lookup for vocabulary expansion — the correct-mechanics
-replacement for DOMAIN_EXPANSIONS OR-stuffing: expansions feed a SEPARATE
-1x-weight sparse lane (Task 5) and never touch the original ranking.
-
+tag_aliases lookup for vocabulary expansion. As of P2.5 the alias LANE is
+retired (the semantic topic_dense lane replaces it); this module now only
+populates the diagnostic `alias_expansions` field on QueryUnderstanding.
 Failure posture: expand() lets fetch errors propagate; the caller
 (build_understanding) records `alias_expansion` in understanding.degraded
-and the query proceeds without a lane (spec §5 — one attempt, no retry)."""
+and the query proceeds without the diagnostic field (spec §5 — one attempt,
+no retry)."""
 import logging
 import re
 

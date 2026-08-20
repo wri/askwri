@@ -321,7 +321,7 @@ class HybridFusionRetriever(BaseRetriever):
 
         # Multi-lane weighted RRF (design §4.3). Original lanes at 2x ONLY
         # when an expansion lane materialized (operator decision 2026-08-19):
-        # no lane -> weights untouched -> flag-on-no-alias == P1 behavior.
+        # no lane -> weights untouched -> flag-on-no-topic-tags == P1 behavior.
         # k=60 and node-id dedupe unchanged.
         if extra_results:
             w_dense, w_sparse = self.dense_weight * 2.0, self.sparse_weight * 2.0
