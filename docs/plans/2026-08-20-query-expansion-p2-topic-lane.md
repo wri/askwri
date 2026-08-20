@@ -143,14 +143,14 @@ a new pure class that returns `NodeWithScore[]` from the tag→docs lookup.
   never constructed; sparse lane byte-identical (OR-stuffed).
 - `test_p1_only_keeps_or_stuffing` — unchanged from P2 (P1-on/P2-off parity).
 
-### Task 4: Leak detectors + full suite green
+### Task 4: Leak detectors + full suite green ✅ DONE
 
 - `tests/test_diagnostic_parity.py` + `tests/test_query_nonblocking.py` green.
 - Full suite: `tests/` no new failures.
 - Leak-detector stub signatures updated if `build_understanding`'s call
   changed (it didn't — `expansion_lanes` kwarg already exists).
 
-### Task 5: Gate re-run on both cite sets (latest harness)
+### Task 5: Gate re-run on both cite sets (latest harness) ✅ DONE
 
 - Rig: local service on qa RDS, `EVAL_TARGET=http://127.0.0.1:3000`
   (Next.js gateway → :8000 search-service), `CITE_LOGIT_FLOOR=0.0`,
