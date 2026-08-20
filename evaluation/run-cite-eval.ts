@@ -256,9 +256,10 @@ async function runTestCase(testCase: TestCase): Promise<TestResult> {
             topic_tags_count: fullResponse?.debug?.topic_tags_count ?? null,
             lane_contribution: (() => {
               const lanesFor = new Map<string, Record<string, number | null>>(
-                (fullResponse?.debug?.fused_nodes ?? []).map(
-                  (n: any) => [n.node_id, n.lanes ?? {}],
-                ),
+                (fullResponse?.debug?.fused_nodes ?? []).map((n: any) => [
+                  n.node_id,
+                  n.lanes ?? {},
+                ]),
               )
               const contribution: Record<string, number> = {}
               for (const raw of fullResponse?.docs ?? []) {

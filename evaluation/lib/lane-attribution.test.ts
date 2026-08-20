@@ -45,7 +45,9 @@ describe('classifyDisplacement', () => {
   })
 
   it('in_window_not_returned when the golden doc made the window', () => {
-    const fused = [node('g1', GOLDEN, 1, { dense: 1, sparse: 1, alias_sparse: null })]
+    const fused = [
+      node('g1', GOLDEN, 1, { dense: 1, sparse: 1, alias_sparse: null }),
+    ]
     const out = classifyDisplacement([GOLDEN], fused, ['g1'])
     expect(out[0].status).toBe('in_window_not_returned')
   })
