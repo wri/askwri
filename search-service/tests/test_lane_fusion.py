@@ -84,7 +84,7 @@ def test_no_extra_lanes_reproduces_two_lane_output_exactly():
     assert r.degraded_lanes == []
 
 
-def test_extra_lane_weight_math_and_2x_originals():
+def test_extra_lane_weight_math_originals_unscaled():
     dense = [_nws("a", 0.9), _nws("b", 0.8)]
     sparse = [_nws("b", 5.0), _nws("c", 4.0)]
     alias = _StubRetriever([_nws("c", 3.0), _nws("d", 2.0)])
@@ -94,10 +94,12 @@ def test_extra_lane_weight_math_and_2x_originals():
     ])
     out = r._retrieve(QueryBundle(query_str="q"))
     scores = {n.node.node_id: n.score for n in out}
-    # originals at 2x their 0.5 default; alias at 1x sparse weight (0.5)
-    assert scores["a"] == 1.0 * (1.0 / 61)
-    assert scores["b"] == 1.0 * (1.0 / 62) + 1.0 * (1.0 / 61)
-    assert scores["c"] == 1.0 * (1.0 / 62) + 0.5 * (1.0 / 61)
+    # originals stay at their 0.5 default even with a materialized extra
+    # lane (2026-08-20 experiment: the 2x boost stacked with the anchored
+    # alias lane gave literal matches 3:1 sparse mass); alias at 1x (0.5)
+    assert scores["a"] == 0.5 * (1.0 / 61)
+    assert scores["b"] == 0.5 * (1.0 / 62) + 0.5 * (1.0 / 61)
+    assert scores["c"] == 0.5 * (1.0 / 62) + 0.5 * (1.0 / 61)
     assert scores["d"] == 0.5 * (1.0 / 62)
     assert [n.node.node_id for n in out] == ["b", "c", "a", "d"]
     # lane_ranks covers all three lanes for every fused node

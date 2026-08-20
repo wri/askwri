@@ -62,13 +62,14 @@ def test_lanes_on_alias_lane_and_raw_original_sparse(monkeypatch):
     client = TestClient(app_main.app)
     resp = _post(client)
     assert resp.status_code == 200
-    # Original sparse lane: RAW query (retirement). Alias lane: expansions
-    # ONLY — carrying the query gave original-query docs a second sparse
-    # lane and double-counted their RRF signal (2026-08-20 investigation).
+    # Original sparse lane: RAW query (retirement). Alias lane: query +
+    # expansions — the query ANCHORS expansion-found docs' BM25 scores
+    # (2026-08-20 experiment: an unanchored half-weight lane couldn't push
+    # its docs into the fused-500). The double-count is neutralized by NOT
+    # scaling the originals 2x (test_lane_fusion).
     assert "urban finance mechanisms" in stub.seen_queries
-    assert "municipal finance OR transit financing" in stub.seen_queries
     assert ("urban finance mechanisms OR municipal finance OR transit financing"
-            not in stub.seen_queries)
+            in stub.seen_queries)
     # No OR-stuffed DOMAIN_EXPANSIONS query anywhere.
     stuffed = sparse_query_for("urban finance mechanisms")
     assert stuffed not in stub.seen_queries
