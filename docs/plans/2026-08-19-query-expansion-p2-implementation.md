@@ -1644,7 +1644,7 @@ Rig: local search service pointed at qa RDS, the SAME rig as P0 Task 2 and the P
 ./scripts/with-remote-env.sh qa bash -c 'cd search-service && ./venv/bin/python -m app.main'
 ```
 
-- [ ] **Step 1: Full local suites**
+- [x] **Step 1: Full local suites**
 
 ```bash
 cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/python -m pytest tests/ -v
@@ -1652,7 +1652,7 @@ cd search-service && /Users/gutelius/dev/askwrimvp/search-service/venv/bin/pytho
 
 then `npm test`, `npm run lint`, `npm run format:check`. Expected: all green (the 3 known local-env DB failures from the P1 gate addendum are pre-existing and excluded).
 
-- [ ] **Step 2: Flag-OFF eval re-run (byte-identical proof)** — both flags at defaults (OFF):
+- [x] **Step 2: Flag-OFF eval re-run (byte-identical proof)** — both flags at defaults (OFF):
 
 ```bash
 npm run eval:cite
@@ -1661,7 +1661,7 @@ npm run eval:answer-retrieval
 
 Decision rule: recall/ranks IDENTICAL to the P0 baselines (cite R Δ = 0.0000; answer all aggregates Δ = 0.0000 — the P1 gate showed reranker score rounding can wiggle P/F1 in the 3rd decimal; recall must be exact). Any recall delta = a leak outside `lanes_active` → STOP, find the leak, re-run. This re-proves the P1 gate's flag-off guarantee for the P2 code (kickoff gate rule 4).
 
-- [ ] **Step 3: Flag-ON eval run** — export for the service process:
+- [x] **Step 3: Flag-ON eval run** — export for the service process:
 
 ```bash
 export QUERY_UNDERSTANDING_ENABLED=true
@@ -1675,7 +1675,7 @@ Decision rules (spec §7 + kickoff):
 - **answer-retrieval chunk recall may not fall**: baseline chunk R **0.3307**.
 - Per-case: list every query whose recall moved either direction, with its `alias_lane_size` — movement on a query with `alias_lane_size == 0` means the retirement (raw sparse query) changed it; that is the DOMAIN_EXPANSIONS coverage the alias seed missed → check the mapping file's `_unmapped` list before calling it a failure, and STOP for the operator if a gate rule looks wrong.
 
-- [ ] **Step 4: Displacement attribution run** (diagnostic — never numerically compared to Step 3):
+- [x] **Step 4: Displacement attribution run** (diagnostic — never numerically compared to Step 3):
 
 ```bash
 export EVAL_LANE_ATTRIBUTION=1
@@ -1685,7 +1685,7 @@ npm run eval:cite
 
 Decision rule (kickoff gate rule 3): **zero `displaced_by_variant_lane` records** across all queries' false negatives. Any `displaced_by_variant_lane` hit = the 2× original-weight bound failed to protect a golden doc → gate FAIL, diagnose with the per-lane ranks in the report. Also record per-query `alias_lane_size` and `lane_contribution` (both emitted by the attribution runner, Task 6) — spec §6's per-lane contribution.
 
-- [ ] **Step 5: Write and commit the gate document**
+- [x] **Step 5: Write and commit the gate document**
 
 Record: baseline vs flag-off vs flag-on tables for both suites (P/R/F1 + amended recall), q10 assertion result, the displacement-attribution summary (records per status), per-lane contribution, any unmatched-mapping recall effects, and explicit PASS/FAIL per rule. End with either "P3 unblocked" or the failure analysis. State: **both flags remain OFF in every deployed environment; activation (which realizes the DOMAIN_EXPANSIONS retirement) is a separate, gated ops step; physical deletion of `DOMAIN_EXPANSIONS` happens only after activation, as its own reviewed change.**
 
@@ -1701,4 +1701,4 @@ git commit -m "docs(understanding): P2 gate results"
 - Spec coverage: §4.1 alias lookup (Tasks 2, 3), §4.3 lane list + weights + alias lane + gated retirement (Tasks 4, 5), §4.4 precision guard (constraint; no task touches the rerank query), §5 failure posture (Tasks 2-5: propagate→degraded, lane-drop, leak tests), §6 per-lane contribution + EMF (Tasks 5, 6, gate Step 4), §7 P2 row + gates + named regression mechanism (Tasks 6, 8), §8 tests (two-lane reproduction Task 4, dedupe/weight math Task 4, byte-identical no-op Task 5 + gate Step 2). Kickoff "determine from the codebase" items: all three resolved in the investigation section. tag_aliases-empty prerequisite → Task 7.
 - Type consistency: `lanes_active(settings, request)`, `AliasExpander.expand -> list[str]`, `db_expander()`, `alias_expansions`, `build_understanding(..., expansion_lanes=False)`, lane dict `{name, retriever, query_str, weight, top_k}`, `degraded_lanes`, `fused_nodes`/`rerank_window_ids` debug keys, `classifyDisplacement(missedUrls, fusedNodes, rerankWindowIds)`, `callPythonServiceFull` — each defined once, consumed by exact name.
 - Deliberate scope exclusions: no UI change (alias lane only reorders — Invariant 1 permits silence); no variants content (P3); no physical deletion of `DOMAIN_EXPANSIONS` (post-activation cleanup — operator decision b); no SQL pushdown (P4).
-- The 2×-only-when-materialized rule (operator decision c) is enforced in the retriever (`if extra_results`), so a degraded alias lane also falls back to unscaled weights — failure degrades toward P1 behavior, tested in Task 4.
+> P2 gate FAIL — cite macro recall 0.6883 < 0.8583 (6/11 queries dropped). Reranker reordering, not displacement. Alias lane investigation deferred to post-P2. Flags stay OFF.
