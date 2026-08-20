@@ -7,7 +7,13 @@ import { auditActor } from '../../lib/auth/identity'
 // Canonical taxonomy v1 facets (from the Phase-0 migration script FACETS).
 // createTag accepts these by default; a new facet is allowed only via an
 // explicit allowNewFacet flag (prevents an editor minting facet:'foo').
-export const CANONICAL_FACETS = ['program', 'office', 'topic', 'doc_type', 'geography']
+export const CANONICAL_FACETS = [
+  'program',
+  'office',
+  'topic',
+  'doc_type',
+  'geography',
+]
 
 export interface TagWithCounts {
   id: string

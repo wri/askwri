@@ -236,13 +236,19 @@ const GeographyTable = ({
   const [renameValue, setRenameValue] = useState('')
   const [renameBusy, setRenameBusy] = useState(false)
 
-  const continents = tags.filter((t) => !t.parentTagId).sort((a, b) => a.valueId.localeCompare(b.valueId))
+  const continents = tags
+    .filter((t) => !t.parentTagId)
+    .sort((a, b) => a.valueId.localeCompare(b.valueId))
   const childrenOf = (parentId: string) =>
-    tags.filter((t) => t.parentTagId === parentId).sort((a, b) => a.valueId.localeCompare(b.valueId))
+    tags
+      .filter((t) => t.parentTagId === parentId)
+      .sort((a, b) => a.valueId.localeCompare(b.valueId))
 
   const deleteTag = async (id: string, valueId: string) => {
-    if (!window.confirm(`Delete tag "${valueId}"? This cannot be undone.`)) return
-    onNotice(''); onError('')
+    if (!window.confirm(`Delete tag "${valueId}"? This cannot be undone.`))
+      return
+    onNotice('')
+    onError('')
     try {
       await adminFetch(`/api/admin/tags/${id}`, { method: 'DELETE' })
       onNotice(`Tag "${valueId}" deleted.`)
@@ -253,10 +259,13 @@ const GeographyTable = ({
   }
 
   const saveRename = async (id: string) => {
-    onNotice(''); onError(''); setRenameBusy(true)
+    onNotice('')
+    onError('')
+    setRenameBusy(true)
     try {
       await adminFetch(`/api/admin/tags/${id}`, {
-        method: 'PATCH', body: JSON.stringify({ valueId: renameValue.trim() }),
+        method: 'PATCH',
+        body: JSON.stringify({ valueId: renameValue.trim() }),
       })
       setRenameId(null)
       onNotice('Tag renamed.')
@@ -275,7 +284,11 @@ const GeographyTable = ({
           <input
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
-            style={{ fontFamily: 'inherit', fontSize: 'inherit', width: '100%' }}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              width: '100%',
+            }}
           />
         ) : (
           tag.valueId
@@ -288,13 +301,29 @@ const GeographyTable = ({
         <td style={cell}>
           {renameId === tag.id ? (
             <>
-              <button onClick={() => saveRename(tag.id)} disabled={renameBusy} className='admin-btn' style={{ ...actionButton, marginRight: 8 }}>Save</button>
-              <button onClick={() => setRenameId(null)} className='admin-btn' style={actionButton}>Cancel</button>
+              <button
+                onClick={() => saveRename(tag.id)}
+                disabled={renameBusy}
+                className='admin-btn'
+                style={{ ...actionButton, marginRight: 8 }}
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setRenameId(null)}
+                className='admin-btn'
+                style={actionButton}
+              >
+                Cancel
+              </button>
             </>
           ) : (
             <>
               <button
-                onClick={() => { setRenameId(tag.id); setRenameValue(tag.valueId) }}
+                onClick={() => {
+                  setRenameId(tag.id)
+                  setRenameValue(tag.valueId)
+                }}
                 className='admin-btn'
                 style={{ ...actionButton, marginRight: 8 }}
                 title='Rename this tag value (admin only)'
@@ -302,7 +331,11 @@ const GeographyTable = ({
                 Rename
               </button>
               {tag.acceptedCount === 0 && tag.suggestedCount === 0 && (
-                <button onClick={() => deleteTag(tag.id, tag.valueId)} className='admin-btn' style={dangerButton}>
+                <button
+                  onClick={() => deleteTag(tag.id, tag.valueId)}
+                  className='admin-btn'
+                  style={dangerButton}
+                >
                   Delete
                 </button>
               )}
@@ -315,12 +348,26 @@ const GeographyTable = ({
 
   return (
     <section style={{ marginBottom: 24 }}>
-      <Heading size='md' style={{ marginBottom: 8 }}>Geography</Heading>
+      <Heading size='md' style={{ marginBottom: 8 }}>
+        Geography
+      </Heading>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
           <tr>
-            {['Value', 'Accepted', 'Suggested', 'Taxonomy version', ...(isAdmin ? [''] : [])].map((h, i) => (
-              <th key={i} scope='col' style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>{h}</th>
+            {[
+              'Value',
+              'Accepted',
+              'Suggested',
+              'Taxonomy version',
+              ...(isAdmin ? [''] : []),
+            ].map((h, i) => (
+              <th
+                key={i}
+                scope='col'
+                style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}
+              >
+                {h}
+              </th>
             ))}
           </tr>
         </thead>
@@ -333,16 +380,28 @@ const GeographyTable = ({
                 <tr>
                   <td style={{ ...cell, fontWeight: 700 }}>
                     <button
-                      onClick={() => setOpen((o) => ({ ...o, [continent.id]: !o[continent.id] }))}
+                      onClick={() =>
+                        setOpen((o) => ({
+                          ...o,
+                          [continent.id]: !o[continent.id],
+                        }))
+                      }
                       className='admin-btn'
-                      style={{ ...actionButton, marginRight: 6, padding: '0 6px' }}
+                      style={{
+                        ...actionButton,
+                        marginRight: 6,
+                        padding: '0 6px',
+                      }}
                       title={isOpen ? 'Collapse' : 'Expand'}
                     >
                       {isOpen ? '▼' : '▶'}
                     </button>
                     {continent.valueId}
-                    <span style={{ color: '#888', fontWeight: 400, marginLeft: 8 }}>
-                      ({kids.length} {kids.length === 1 ? 'country' : 'countries'})
+                    <span
+                      style={{ color: '#888', fontWeight: 400, marginLeft: 8 }}
+                    >
+                      ({kids.length}{' '}
+                      {kids.length === 1 ? 'country' : 'countries'})
                     </span>
                   </td>
                   <td style={cell}>{continent.acceptedCount}</td>
