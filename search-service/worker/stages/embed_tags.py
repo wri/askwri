@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 MODEL = "cohere-embed-v4"
 DIM = 1536
 
+# Facets that participate in retrieve-then-classify and so carry tag_embeddings.
+# program/office/doc_type use the full-enum classify path and are deliberately
+# NOT embedded — adding them here would waste Bedrock calls for no reader.
+EMBEDDED_FACETS = ("topic", "geography")
+
 
 def _compose_text(label: str, aliases: list, description: str | None) -> str:
     """Compose the text to embed for a tag.
@@ -81,9 +86,9 @@ def sweep_pending(conn, batch_size: int | None = None) -> int:
     bs = batch_size or get_settings().tag_embed_batch_size
     rows = conn.execute(
         """SELECT id FROM tags
-           WHERE needs_reembed AND facet = 'topic'
+           WHERE needs_reembed AND facet = ANY(%s)
            ORDER BY value_id LIMIT %s""",
-        (bs,),
+        (list(EMBEDDED_FACETS), bs),
     ).fetchall()
     for (tag_id,) in rows:
         embed_tag(conn, tag_id)
@@ -105,12 +110,12 @@ def build_all_embeddings(conn, batch_size: int | None = None) -> int:
     bs = batch_size or get_settings().tag_embed_batch_size
     rows = conn.execute(
         """SELECT t.id FROM tags t
-           WHERE t.facet = 'topic' AND t.taxonomy_version = 'v1'
+           WHERE t.facet = ANY(%s) AND t.taxonomy_version = 'v1'
              AND NOT EXISTS (
                SELECT 1 FROM tag_embeddings te WHERE te.tag_id = t.id
              )
            ORDER BY t.value_id LIMIT %s""",
-        (bs,),
+        (list(EMBEDDED_FACETS), bs),
     ).fetchall()
     for (tag_id,) in rows:
         embed_tag(conn, tag_id)

@@ -1,8 +1,8 @@
 """Stage: LLM classification.
 
-Topic facet: retrieve-then-classify — embed the doc basis, find the top-N
-candidate topic tags by cosine similarity, then one LLM call over the ~20
-candidates (enum-constrained) to pick the top-5 with confidence.
+Embedded facets (topic, geography): retrieve-then-classify — embed the doc
+basis, find the top-N candidate tags by cosine similarity, then one LLM call
+over the ~20 candidates (enum-constrained) to pick the top-K with confidence.
 Other facets (program/office/doc_type): existing full-enum, zero-or-more
 (small vocabs — the enum approach is cheap and accurate).
 
@@ -19,24 +19,52 @@ from app.db import get_pool
 from app.bedrock_embed import embed_one
 from worker.llm import chat_json
 from worker.stages import fetch_document, stage
-from worker.stages.embed_tags import sweep_pending
+from worker.stages.embed_tags import sweep_pending, EMBEDDED_FACETS
 
 logger = logging.getLogger(__name__)
 
+# Per-facet classify config. max_items bounds the LLM response (and the
+# delete-and-refresh below). system_prompt is the conservative instruction.
+# EMBEDDED_FACETS (imported from embed_tags) is the source of truth for which
+# facets use retrieve-then-classify vs the full-enum path in _classify_other_facets.
+_FACET_CONFIG = {
+    "topic": {
+        "max_items": 5,
+        "system": (
+            "Pick the top topic tags that clearly apply to this document. "
+            "Return 0-5 values, each with a confidence in [0,1]. Be conservative."
+        ),
+    },
+    "geography": {
+        "max_items": 10,
+        "system": (
+            "Pick the countries and/or continents this document specifically "
+            "focuses on. Return 0-10 values, each with a confidence in [0,1]. "
+            "Return an empty list if the document is global, methodological, or "
+            "conceptual and does not focus on specific countries. Prefer the most "
+            "specific geography (a country over its continent); tag a continent "
+            "only for region-wide focus. Be conservative: 'focuses on', not "
+            "'mentions.'"
+        ),
+    },
+}
 
-def _normalize_topic_picks(result: object, label_to_id: dict) -> list[tuple]:
-    """Validate the complete topic response before returning up to five picks."""
-    if not isinstance(result, dict) or set(result) != {"topic"}:
-        raise RuntimeError("malformed topic classification response")
-    picks = result["topic"]
+
+def _normalize_facet_picks(
+    result: object, facet: str, label_to_id: dict, max_items: int
+) -> list[tuple]:
+    """Validate the facet response before returning up to max_items picks."""
+    if not isinstance(result, dict) or set(result) != {facet}:
+        raise RuntimeError(f"malformed {facet} classification response")
+    picks = result[facet]
     if not isinstance(picks, list):
-        raise RuntimeError("malformed topic classification response")
+        raise RuntimeError(f"malformed {facet} classification response")
 
     selected: list[tuple] = []
     selected_ids = set()
     for pick in picks:
         if not isinstance(pick, dict) or set(pick) != {"value", "confidence"}:
-            raise RuntimeError("malformed topic classification response")
+            raise RuntimeError(f"malformed {facet} classification response")
         label = pick["value"]
         raw_confidence = pick["confidence"]
         if (
@@ -44,28 +72,28 @@ def _normalize_topic_picks(result: object, label_to_id: dict) -> list[tuple]:
             or isinstance(raw_confidence, bool)
             or not isinstance(raw_confidence, (int, float))
         ):
-            raise RuntimeError("malformed topic classification response")
+            raise RuntimeError(f"malformed {facet} classification response")
         confidence = float(raw_confidence)
         if not math.isfinite(confidence):
-            raise RuntimeError("malformed topic classification response")
+            raise RuntimeError(f"malformed {facet} classification response")
 
         tag_id = label_to_id.get(label)
-        if tag_id is None or tag_id in selected_ids or len(selected) == 5:
+        if tag_id is None or tag_id in selected_ids or len(selected) == max_items:
             continue
         selected.append((tag_id, max(0.0, min(1.0, confidence))))
         selected_ids.add(tag_id)
     return selected
 
 
-def _topic_schema(candidate_labels: list[str]) -> dict:
-    """Build the JSON schema for the topic LLM call — enum-constrained to the
-    candidate labels only."""
+def _facet_schema(facet: str, candidate_labels: list[str], max_items: int) -> dict:
+    """Build the JSON schema for an embedded-facet LLM call — enum-constrained
+    to the candidate labels only."""
     return {
         "type": "object", "additionalProperties": False,
         "properties": {
-            "topic": {
+            facet: {
                 "type": "array",
-                "maxItems": 5,
+                "maxItems": max_items,
                 "items": {
                     "type": "object", "additionalProperties": False,
                     "properties": {
@@ -76,12 +104,12 @@ def _topic_schema(candidate_labels: list[str]) -> dict:
                 },
             },
         },
-        "required": ["topic"],
+        "required": [facet],
     }
 
 
 def _other_facets_schema(vocab: dict) -> dict:
-    """Build the JSON schema for non-topic facets — full-enum per facet."""
+    """Build the JSON schema for full-enum facets — full-enum per facet."""
     props = {
         facet: {
             "type": "array",
@@ -102,17 +130,21 @@ def _other_facets_schema(vocab: dict) -> dict:
     }
 
 
-def _classify_topic(
-    conn, doc, basis: str, protected: set, *, require_candidates: bool = False
+def _classify_embedded_facet(
+    conn, doc, basis: str, protected: set, facet: str, *,
+    require_candidates: bool = False,
 ) -> None:
-    """Retrieve-then-classify for the topic facet.
+    """Retrieve-then-classify for an embedded facet (topic or geography).
 
     1. Embed the doc basis (one Bedrock call).
-    2. Find top-N candidate topic tags by cosine similarity.
-    3. One LLM call over the ~20 candidates (enum-constrained) for top-5.
+    2. Find top-N candidate tags by cosine similarity.
+    3. One LLM call over the ~20 candidates (enum-constrained) for top-K.
     4. Insert accepted/suggested rows, never overwriting protected rows.
     """
     settings = get_settings()
+    cfg = _FACET_CONFIG[facet]
+    max_items = cfg["max_items"]
+
     # Opportunistic sweep: fresh embeddings before classify
     sweep_pending(conn)
 
@@ -129,20 +161,23 @@ def _classify_topic(
                   te.embedding <=> %s::vector AS cosine_distance
            FROM tag_embeddings te
            JOIN tags t ON t.id = te.tag_id
-           WHERE t.facet = 'topic'
+           WHERE t.facet = %s
              AND t.taxonomy_version = 'v1'
              AND te.embedding_model = 'cohere-embed-v4'
            ORDER BY cosine_distance
            LIMIT %s""",
-        (vec_str, settings.tag_candidate_top_n),
+        (vec_str, facet, settings.tag_candidate_top_n),
     ).fetchall()
 
     if not candidates:
         if require_candidates:
             raise RuntimeError(
-                f"classify {doc['external_id']}: no candidate topic embeddings"
+                f"classify {doc['external_id']}: no candidate {facet} embeddings"
             )
-        logger.warning("classify %s: no candidate topic tags — skipping topic facet", doc['external_id'])
+        logger.warning(
+            "classify %s: no candidate %s tags — skipping %s facet",
+            doc['external_id'], facet, facet,
+        )
         return
 
     # Build label→id map and candidate labels for the enum schema
@@ -152,11 +187,8 @@ def _classify_topic(
         label_to_id[label] = tag_id
         candidate_labels.append(label)
         logger.info(
-            "classify %s: topic candidate tag_id=%s label=%s cosine_distance=%.6f",
-            doc["external_id"],
-            tag_id,
-            label,
-            float(distance),
+            "classify %s: %s candidate tag_id=%s label=%s cosine_distance=%.6f",
+            doc["external_id"], facet, tag_id, label, float(distance),
         )
 
     # Build candidate description for the user prompt
@@ -171,26 +203,23 @@ def _classify_topic(
         candidate_lines.append(f"- {label}{suffix}")
 
     logger.info(
-        "classify %s: topic 1 LLM call, %d candidates, model=%s",
-        doc['external_id'], len(candidate_labels), settings.worker_llm_model,
+        "classify %s: %s 1 LLM call, %d candidates, model=%s",
+        doc['external_id'], facet, len(candidate_labels), settings.worker_llm_model,
     )
 
     result = chat_json(
-        system=(
-            "Pick the top topic tags that clearly apply to this document. "
-            "Return 0–5 values, each with a confidence in [0,1]. Be conservative."
-        ),
+        system=cfg["system"],
         user=(
             f"Title: {doc['title']}\n\n"
             f"Summary/content:\n{basis[:8000]}\n\n"
-            f"Candidate topics:\n" + "\n".join(candidate_lines)
+            f"Candidate {facet}s:\n" + "\n".join(candidate_lines)
         ),
-        schema=_topic_schema(candidate_labels),
+        schema=_facet_schema(facet, candidate_labels, max_items),
         model=settings.worker_llm_model,
         max_tokens=600,
     )
 
-    selected = _normalize_topic_picks(result, label_to_id)
+    selected = _normalize_facet_picks(result, facet, label_to_id, max_items)
     selected_ids = {tag_id for tag_id, _confidence in selected}
 
     conn.execute(
@@ -199,10 +228,10 @@ def _classify_topic(
            WHERE dt.tag_id = t.id
              AND dt.document_id = %s
              AND dt.source = 'llm'
-             AND t.facet = 'topic'
+             AND t.facet = %s
              AND t.taxonomy_version = 'v1'
              AND NOT (dt.tag_id = ANY(%s::uuid[]))""",
-        (doc["id"], list(selected_ids)),
+        (doc["id"], facet, list(selected_ids)),
     )
 
     for tag_id, conf in selected:
@@ -222,7 +251,7 @@ def _classify_topic(
 
 
 def _classify_other_facets(conn, doc, basis: str, protected: set) -> None:
-    """Existing full-enum classification for non-topic facets (program/office/doc_type).
+    """Full-enum classification for non-embedded facets (program/office/doc_type).
 
     Small vocabs → one LLM call with enum over the whole vocab per facet.
     """
@@ -231,17 +260,18 @@ def _classify_other_facets(conn, doc, basis: str, protected: set) -> None:
     other_tag_ids: dict[tuple, str] = {}
     for tag_id, facet, value in conn.execute(
         """SELECT id, facet, value_id FROM tags
-           WHERE taxonomy_version = 'v1' AND facet != 'topic'
-           ORDER BY facet, value_id"""
+           WHERE taxonomy_version = 'v1' AND facet != ALL(%s)
+           ORDER BY facet, value_id""",
+        (list(EMBEDDED_FACETS),),
     ).fetchall():
         vocab.setdefault(facet, []).append(value)
         other_tag_ids[(facet, value)] = tag_id
 
     if not vocab:
-        return  # no non-topic tags — nothing to do
+        return  # no non-embedded tags — nothing to do
 
     logger.info(
-        "classify %s: %d non-topic facet(s), 1 LLM call, model=%s",
+        "classify %s: %d non-embedded facet(s), 1 LLM call, model=%s",
         doc['external_id'], len(vocab), settings.worker_llm_model,
     )
 
@@ -272,15 +302,28 @@ def _classify_other_facets(conn, doc, basis: str, protected: set) -> None:
 
 
 @stage("classify")
-def run(document_id, topic_only: bool = False):
+def run(document_id, facets: list[str] | None = None, topic_only: bool = False):
     """Classify a document against the taxonomy.
 
-    - topic_only=False (default, used by the ingest pipeline): classify all
-      facets — topic via retrieve-then-classify, others via full-enum.
-    - topic_only=True (used by reclassify jobs): classify only the topic facet,
-      skip non-topic facets (cheaper, focused re-tag).
+    - facets=None, topic_only=False (default, ingest pipeline): classify all
+      facets — embedded facets (topic, geography) via retrieve-then-classify,
+      others via full-enum.
+    - facets=['topic'] (or legacy topic_only=True, used by reclassify jobs):
+      classify only the topic facet.
+    - facets=['geography'] (used by the geography backfill script): classify
+      only the geography facet.
+
+    When `facets` is set, missing candidate embeddings raise (an explicit
+    request should fail loudly rather than silently skip). When `facets` is
+    None (ingest), a missing embedding logs and skips that facet.
+
+    `settings.classify_topic_only` (legacy deploy knob) restricts an ingest
+    run to the topic facet only; it does NOT enable geography.
     """
     settings = get_settings()
+    if topic_only:
+        facets = ["topic"]
+
     with get_pool().connection() as conn:
         doc = fetch_document(conn, document_id)
 
@@ -304,13 +347,24 @@ def run(document_id, topic_only: bool = False):
             ).fetchall()
         }
 
-        # Topic facet: always classify (retrieve-then-classify)
-        _classify_topic(
-            conn, doc, basis, protected, require_candidates=topic_only
-        )
+        # Determine which embedded facets to run
+        if facets is not None:
+            embedded = [f for f in facets if f in EMBEDDED_FACETS]
+            run_others = False
+        elif settings.classify_topic_only:
+            embedded = ["topic"]
+            run_others = False
+        else:
+            embedded = list(EMBEDDED_FACETS)
+            run_others = True
 
-        # Non-topic facets: skip when topic_only=True
-        if not topic_only and not settings.classify_topic_only:
+        for facet in embedded:
+            _classify_embedded_facet(
+                conn, doc, basis, protected, facet,
+                require_candidates=(facets is not None),
+            )
+
+        if run_others:
             _classify_other_facets(conn, doc, basis, protected)
 
     return None
