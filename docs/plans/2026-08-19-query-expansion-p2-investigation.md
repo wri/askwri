@@ -287,7 +287,54 @@ scored what it was given against the original query, honestly.
 Estimated cost: ~30 min of eval wall-clock, no deploy, both flags remain
 OFF in every deployed environment.
 
-## 8. Non-goals (restated from the brief)
+## 8. Experiment results (2026-08-20 — operator-approved run of fixes 1+2)
+
+Commit `ce9993b` (alias lane carries expansions only, curated order, no
+label emission; `db_expander` ordered by `created_at`, verified against qa
+to be seed insertion order). Rig identical to the v3.2 gate: worktree
+service on qa RDS, postgres/sparse. Answer-retrieval skipped
+(operator-ruled broken).
+
+- **Leak check PASS:** flag-off re-run (`eval-report-1787238023956.json`)
+  matches the v3.2 flag-off baseline per-case Δ=0.0000 on all 11 queries.
+- **Flag-on** (`eval-report-1787238169266.json`, attribution
+  `eval-report-p2-v32-fix12-attribution-1787238329208.json`): overall
+  0.5998 → **0.6421**; macro excl. q10: 0.6198 → **0.6667** (flag-off
+  0.7424). Zero `displaced_by_variant_lane`.
+
+| Query | off | on pre-fix | on fix1+2 | verdict |
+|---|---|---|---|---|
+| q3 | 0.8333 | 0.6667 | **0.8333** | recovered |
+| q6 | 1.0000 | 0.8571 | **1.0000** | recovered |
+| q7 | 0.7500 | 0.5000 | **0.7500** | recovered |
+| q10 | 0.3000 | 0.4000 | **0.4000** | gain held |
+| q1/q5/q8/q9 | — | — | — | flat |
+| q2 | 0.8333 | 0.5000 | 0.5000 | known geo gap (ruled) |
+| q4 | 0.6667 | 0.3333 | 0.3333 | NOT recovered — see below |
+| q11 | 0.0909 | 0.0909 | **0.0000** | new marginal loss — see below |
+
+**q4 is the q2 geo gap in disguise.** Post-fix its two failing goldens
+went from in_window/below_window to **never_retrieved**: with the query
+out of the alias lane, no lane reaches them at all. The load-bearing
+flag-off terms were `brazilian`/`brasil` — the unmapped geo group. (The
+Portuguese-language belo-horizonte doc needs "brasil"; raw "Brazil"
+doesn't stem to it.) The deferred geo facet's measured cost is now
+q2 −0.333 **and** q4 −0.333.
+
+**q11 lost its single marginal doc** (`financing-the-urban-transition…`,
+1/11 flag-off): post-fix it sits at fused rank 117, in-window,
+floor-cut — the restored finance aliases flood the sparse lanes and its
+windowed chunk pair changed (§M3). A floor-marginal query wobbling on a
+chunk-representation change, not a structural regression.
+
+**Verdict:** M1+M2 confirmed as the cause of the recoverable regression —
+every non-geo regressor recovered exactly, q10's gain survived. The
+remaining flag-on deficit (−0.0757 macro excl. q10) is q2+q4 (geo
+vocabulary, deferred by ruling; −0.067 of it) and q11 (floor-marginal;
+−0.009). Decision now with the operator: gate P2 on "flag-on ≥ flag-off
+excluding the ruled geo-gap queries," or pull the geo facet forward.
+
+## 9. Non-goals (restated from the brief)
 
 No blind retuning; no flag flips anywhere deployed; no push, no PR, no
 deploy; no modification of the v3.2 golden set or the P0/v3.2 baselines;
