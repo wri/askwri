@@ -16,12 +16,14 @@ logger = logging.getLogger(__name__)
 
 # Matches the partial HNSW index (1787160000000-TopicTaxonomy.ts): the
 # ::vector(1536) cast + embedding_model predicate are what make it usable.
-_TOPIC_SQL = """
+# Facet is parameterized (P2.6): value_id is unique PER FACET, not globally,
+# so the facet filter MUST stay (do not remove it).
+_TAG_SQL = """
     SELECT t.value_id, 1 - (te.embedding::vector(1536) <=> %(q)s) AS cosine
     FROM tag_embeddings te
     JOIN tags t ON t.id = te.tag_id
     WHERE te.embedding_model = %(model)s
-      AND t.facet = 'topic'
+      AND t.facet = %(facet)s
     ORDER BY te.embedding::vector(1536) <=> %(q)s
     LIMIT %(k)s
 """
@@ -54,7 +56,9 @@ def filter_topics(rows, top_k: int, min_cosine: float):
     return [(label, cos) for label, cos in rows if cos >= min_cosine][:top_k]
 
 
-def nearby_topics(query_embedding) -> list:
+def nearby_tags(query_embedding, facet: str) -> list:
+    """Semantic query→tag match for one facet. Returns [(label, cosine), ...]
+    filtered by threshold + top_k (failure-soft, design §4.1)."""
     from app.config import get_settings
     from app.db import get_pool
 
@@ -62,14 +66,21 @@ def nearby_topics(query_embedding) -> list:
     qvec = np.array(query_embedding, dtype=np.float32)
     with get_pool().connection() as conn:
         rows = conn.execute(
-            _TOPIC_SQL,
-            {"q": qvec, "model": s.embedding_model, "k": max(s.topic_sense_top_k * 4, 20)},
+            _TAG_SQL,
+            {"q": qvec, "model": s.embedding_model, "facet": facet,
+             "k": max(s.topic_sense_top_k * 4, 20)},
         ).fetchall()
     return filter_topics(
         [(label, float(cos)) for label, cos in rows],
         top_k=s.topic_sense_top_k,
         min_cosine=s.topic_sense_min_cosine,
     )
+
+
+def nearby_topics(query_embedding) -> list:
+    """Backward-compat wrapper: nearby_tags for the topic facet.
+    Kept for attach_topic_suggestions (P1 suggestions, topic-only)."""
+    return nearby_tags(query_embedding, "topic")
 
 
 def attach_topic_suggestions(u: QueryUnderstanding, query: str, embed_model) -> None:

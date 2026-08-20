@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 # Per-tag docs-by-tag → representative chunk (highest chunk_index).
 # document_tags.confidence exists (migration 1781280000000-Migration.ts).
 # The column is `chunk_index` (NOT `chunk_idx`); the brief used the wrong name.
+# P2.6: facet is parameterized — value_id is unique PER FACET, not globally,
+# so the facet filter MUST stay (do not remove it).
 _DOC_BY_TAG_SQL = """
     SELECT dc.legacy_chunk_id, dc.text, dc.node_metadata,
            %(cosine)s * COALESCE(dt.confidence, 1.0) AS score
@@ -25,7 +27,7 @@ _DOC_BY_TAG_SQL = """
     JOIN document_tags dt ON dt.tag_id = t.id
     JOIN documents d ON d.id = dt.document_id
     JOIN document_chunks dc ON dc.document_id = d.id
-    WHERE t.facet = 'topic' AND t.value_id = %(label)s
+    WHERE t.facet = %(facet)s AND t.value_id = %(label)s
       AND d.status = 'searchable'
       AND dc.chunk_index = (
           SELECT MAX(chunk_index) FROM document_chunks WHERE document_id = d.id
@@ -40,7 +42,7 @@ _DOC_BY_TAG_SQL_NO_CONF = """
     JOIN document_tags dt ON dt.tag_id = t.id
     JOIN documents d ON d.id = dt.document_id
     JOIN document_chunks dc ON dc.document_id = d.id
-    WHERE t.facet = 'topic' AND t.value_id = %(label)s
+    WHERE t.facet = %(facet)s AND t.value_id = %(label)s
       AND d.status = 'searchable'
       AND dc.chunk_index = (
           SELECT MAX(chunk_index) FROM document_chunks WHERE document_id = d.id
@@ -48,19 +50,22 @@ _DOC_BY_TAG_SQL_NO_CONF = """
 """
 
 
-class TopicTagRetriever(BaseRetriever):
-    """Semantic topic lane: for each matched tag (label, cosine), retrieve
+class TagRetriever(BaseRetriever):
+    """Semantic tag lane: for each matched tag (label, cosine), retrieve
     the docs tagged with it, score = cosine × tag_confidence. Dedup docs
     across tags (max score wins). Failure-soft: DB error -> [] (lane drops).
+
+    P2.6: facet parameterized — one lane per matching facet (topic, geography).
     """
 
-    def __init__(self, nearby_topics, pool, weight_by_confidence: bool = True,
-                 top_k: int | None = None, **kwargs):
+    def __init__(self, nearby_tags, pool, weight_by_confidence: bool = True,
+                 top_k: int | None = None, facet: str = "topic", **kwargs):
         super().__init__(**kwargs)
-        self._nearby = nearby_topics        # list[(label, cosine)]
+        self._nearby = nearby_tags        # list[(label, cosine)]
         self._pool = pool                   # psycopg pool (get_pool())
         self._weight_by_confidence = weight_by_confidence
         self._top_k = top_k
+        self._facet = facet
         self.db_ms = 0.0  # match PgVectorRetriever/SparseKeywordRetriever pattern
 
     def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
@@ -74,7 +79,7 @@ class TopicTagRetriever(BaseRetriever):
             with self._pool.connection() as conn:
                 for label, cosine in self._nearby:
                     rows = conn.execute(
-                        sql, {"label": label, "cosine": cosine}
+                        sql, {"label": label, "cosine": cosine, "facet": self._facet}
                     ).fetchall()
                     for legacy_id, text, meta, score in rows:
                         score_f = float(score)
@@ -84,8 +89,8 @@ class TopicTagRetriever(BaseRetriever):
                                 node=TextNode(id_=legacy_id, text=text, metadata=meta),
                                 score=score_f,
                             )
-        except Exception as exc:  # noqa: BLE001 — never fail a search on the topic lane
-            logger.warning(f"topic retrieval lane degraded: {exc}")
+        except Exception as exc:  # noqa: BLE001 — never fail a search on the tag lane
+            logger.warning(f"{self._facet} retrieval lane degraded: {exc}")
             self.db_ms = round((time.time() - t0) * 1000, 1)
             return []
         self.db_ms = round((time.time() - t0) * 1000, 1)
@@ -93,3 +98,7 @@ class TopicTagRetriever(BaseRetriever):
         if self._top_k is not None:
             results = results[: self._top_k]
         return results
+
+
+# Backward-compat alias (P2.5 name). Default facet='topic'.
+TopicTagRetriever = TagRetriever

@@ -8,7 +8,7 @@ failure-soft, recorded in `degraded`.
 """
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 UNDERSTANDING_VERSION = 1
 
@@ -34,10 +34,17 @@ class QueryUnderstanding(BaseModel):
     facets: list[Facet] = Field(default_factory=list)
     variants: list[str] = Field(default_factory=list)
     alias_expansions: list[str] = Field(default_factory=list)
-    topic_tags: list[tuple[str, float]] = Field(default_factory=list)
+    # P2.6: matched_tags keyed by facet, scales to N facets (replaces topic_tags).
+    # Flag-off byte-identical (empty dict).
+    matched_tags: dict[str, list[tuple[str, float]]] = Field(default_factory=dict)
     suggestions: list[Suggestion] = Field(default_factory=list)
     timings: dict = Field(default_factory=dict)
     degraded: list[str] = Field(default_factory=list)
+
+    @computed_field  # backward-compat: topic_tags = matched_tags['topic']
+    @property
+    def topic_tags(self) -> list[tuple[str, float]]:
+        return self.matched_tags.get("topic", [])
 
 
 def understanding_active(settings, request) -> bool:
@@ -105,16 +112,23 @@ def build_understanding(
         except Exception:  # noqa: BLE001
             u.degraded.append("alias_expansion")
 
-        # P2.5 topic_tags — semantic query→tag match (design §4.1). The query
-        # embedding is an LRU hit after stage 1 in the real path; tests stub
-        # embed_model. No embed_model ⇒ skip (flag-off-safe: no crash, no
-        # degraded entry). One attempt, failure-soft (spec §5).
+        # P2.6 matched_tags — semantic query→tag match per facet (design §4.1).
+        # The query embedding is an LRU hit after stage 1 in the real path;
+        # tests stub embed_model. No embed_model ⇒ skip (flag-off-safe: no
+        # crash, no degraded entry). One attempt per facet, failure-soft (spec §5):
+        # a failing facet degrades to [] for that facet only.
         if embed_model is not None:
             try:
                 from app import topic_sense
+                from app.config import get_settings
+                facets = get_settings().expansion_facets
                 emb = embed_model.get_query_embedding(query)
-                u.topic_tags = topic_sense.nearby_topics(emb)
-            except Exception:  # noqa: BLE001
-                u.degraded.append("topic_tags")
+                for facet in facets:
+                    try:
+                        u.matched_tags[facet] = topic_sense.nearby_tags(emb, facet)
+                    except Exception:  # noqa: BLE001
+                        u.degraded.append(f"matched_tags:{facet}")
+            except Exception:  # noqa: BLE001 — embed call itself failed
+                u.degraded.append("matched_tags")
 
     return u
