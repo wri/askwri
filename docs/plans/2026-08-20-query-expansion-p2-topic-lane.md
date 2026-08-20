@@ -77,7 +77,7 @@ a new pure class that returns `NodeWithScore[]` from the tag→docs lookup.
   local docker (19 tags — limited, but the query path works), or skipped
   cleanly without `DATABASE_URL`.
 
-### Task 2: `understanding.topic_tags` — carry the semantic matches
+### Task 2: `understanding.topic_tags` — carry the semantic matches ✅ DONE
 
 **Files:**
 - Modify: `search-service/app/understanding.py` (schema + `build_understanding`)
