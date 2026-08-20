@@ -103,7 +103,7 @@ a new pure class that returns `NodeWithScore[]` from the tag→docs lookup.
 - `test_topic_sense_failure_soft` — topic_sense raises → `degraded.append("topic_sense")`,
   `topic_tags == []`.
 
-### Task 3: `/query` wiring — add `topic_dense` lane, retire `alias_sparse`
+### Task 3: `/query` wiring — add `topic_dense` lane, retire `alias_sparse` ✅ DONE
 
 **Files:**
 - Modify: `search-service/app/main.py` (~1115-1136: the alias-lane block)

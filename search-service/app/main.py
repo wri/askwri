@@ -956,7 +956,7 @@ def _emit_query_emf(mode: str, debug: dict) -> None:
         counts = {
             "facets_hard": debug.get("facets_hard"),
             "suggestions": debug.get("suggestions"),
-            "alias_lane_size": debug.get("alias_lane_size"),
+            "topic_tags_count": debug.get("topic_tags_count"),
         }
         counts = {k: v for k, v in counts.items() if v is not None}
         metrics["understanding_ms"] = debug.get("understanding_ms")
@@ -1075,6 +1075,7 @@ async def hybrid_query(request: QueryRequest):
                 explicit_facets=request.facets,
                 today_year=datetime.now().year,
                 expansion_lanes=lanes_active(settings, request),
+                embed_model=service_state.get("embed_model"),
             )
             understanding.timings["deterministic_ms"] = round((time.time() - u_start) * 1000, 1)
 
@@ -1108,20 +1109,25 @@ async def hybrid_query(request: QueryRequest):
         stage1_start = time.time()
         vector_retriever = make_dense_retriever(request.vector_top_k)
 
-        # P2 alias lane (design §4.3): one extra 1x-weight sparse lane
-        # carrying tag_aliases expansions ONLY. Including the original query
-        # here ran it in TWO sparse lanes and double-counted its RRF signal
-        # (literal:synonym sparse mass ~3:1 — investigation 2026-08-20 §M1).
-        # The reranker still only ever sees the original query (§4.4).
+        # P2.5 topic_dense lane (design §4.1, §4.3): semantic tag→docs
+        # retrieval fed to RRF as a 1x lane. Replaces the P2 alias_sparse lane
+        # (literal-synonym workaround). The reranker still only ever sees the
+        # original query (§4.4) — TopicTagRetriever feeds RRF candidate docs;
+        # postprocess_nodes' query_bundle is untouched.
         extra_lanes = None
-        if lanes_on and understanding is not None and understanding.alias_expansions:
-            alias_query = " OR ".join(understanding.alias_expansions)
-            logger.info(f"Alias lane: {alias_query[:120]}")
+        if lanes_on and understanding is not None and understanding.topic_tags:
+            from app.topic_retrieval import TopicTagRetriever
+            from app.db import get_pool
+            topic_retriever = TopicTagRetriever(
+                understanding.topic_tags, get_pool(), top_k=request.bm25_top_k,
+            )
+            logger.info(f"Topic lane: {len(understanding.topic_tags)} tags "
+                        f"({', '.join(t for t, _ in understanding.topic_tags[:3])})")
             extra_lanes = [{
-                "name": "alias_sparse",
-                "retriever": service_state["bm25_retriever"],
-                "query_str": alias_query,
-                "weight": None,   # 1x — resolves to the retriever's sparse_weight
+                "name": "topic_dense",
+                "retriever": topic_retriever,
+                "query_str": request.query,  # unused by TopicTagRetriever (tag lookups), but required by the lane dict shape
+                "weight": None,   # 1x
                 "top_k": request.bm25_top_k,
             }]
 
@@ -1506,8 +1512,8 @@ async def hybrid_query(request: QueryRequest):
                                 if understanding is not None else None),
                 "suggestions": (len(understanding.suggestions)
                                 if understanding is not None else None),
-                "alias_lane_size": (len(understanding.alias_expansions)
-                                    if understanding is not None else None),
+                "topic_tags_count": (len(understanding.topic_tags)
+                                     if understanding is not None else None),
                 "lanes_degraded": (getattr(hybrid_retriever, "degraded_lanes", None)
                                    if understanding is not None else None),
                 "fused_nodes": (fused_nodes

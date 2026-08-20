@@ -103,7 +103,7 @@ def test_diagnostic_mirrors_retirement_when_lanes_on(monkeypatch):
     monkeypatch.setattr(app_main, "lanes_active", lambda s, r: True)
     monkeypatch.setattr(
         app_main, "build_understanding",
-        lambda query, explicit_facets, today_year, expansion_lanes=False: QueryUnderstanding(),
+        lambda query, explicit_facets, today_year, expansion_lanes=False, embed_model=None: QueryUnderstanding(),
     )
     import app.topic_sense as ts
     monkeypatch.setattr(ts, "attach_topic_suggestions", lambda u, q, m: None)
