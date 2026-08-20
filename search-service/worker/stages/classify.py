@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 _FACET_CONFIG = {
     "topic": {
         "max_items": 5,
+        "max_tokens": 600,
         "system": (
             "Pick the top topic tags that clearly apply to this document. "
             "Return 0-5 values, each with a confidence in [0,1]. Be conservative."
@@ -37,6 +38,11 @@ _FACET_CONFIG = {
     },
     "geography": {
         "max_items": 10,
+        # gpt-5.6-luna is a reasoning model: max_completion_tokens covers
+        # reasoning + output. 10-item responses need more room than topic's
+        # 5, else finish_reason=length with empty content (the retry at 2x
+        # 1200 still truncated in the qa backfill 2026-08-20).
+        "max_tokens": 3000,
         "system": (
             "Pick the countries and/or continents this document specifically "
             "focuses on. Return 0-10 values, each with a confidence in [0,1]. "
@@ -216,7 +222,7 @@ def _classify_embedded_facet(
         ),
         schema=_facet_schema(facet, candidate_labels, max_items),
         model=settings.worker_llm_model,
-        max_tokens=600,
+        max_tokens=cfg["max_tokens"],
     )
 
     selected = _normalize_facet_picks(result, facet, label_to_id, max_items)

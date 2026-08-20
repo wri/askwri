@@ -119,13 +119,16 @@ def test_topic_tags_populated_when_lanes_on(monkeypatch):
         def get_query_embedding(self, query):
             return [0.1] * 1536
 
-    monkeypatch.setattr(ts, "nearby_topics", lambda emb: [("Climate Resilience", 0.92)])
+    # P2.6: build_understanding calls nearby_tags(emb, facet); topic is the
+    # default expansion_facet, so the topic key is populated.
+    monkeypatch.setattr(ts, "nearby_tags", lambda emb, facet: [("Climate Resilience", 0.92)] if facet == "topic" else [])
     u = build_understanding(
         "heat resilience", explicit_facets=None, today_year=2026,
         expansion_lanes=True, embed_model=_Embed(),
     )
     assert u.topic_tags == [("Climate Resilience", 0.92)]
-    assert "topic_tags" not in u.degraded
+    assert u.matched_tags["topic"] == [("Climate Resilience", 0.92)]
+    assert "matched_tags:topic" not in u.degraded
 
 
 def test_topic_tags_empty_when_embed_model_none():
@@ -146,13 +149,68 @@ def test_topic_sense_failure_soft(monkeypatch):
         def get_query_embedding(self, query):
             return [0.1] * 1536
 
-    def _raise(emb):
+    def _raise(emb, facet):
         raise RuntimeError("topic_sense db down")
 
-    monkeypatch.setattr(ts, "nearby_topics", _raise)
+    monkeypatch.setattr(ts, "nearby_tags", _raise)
     u = build_understanding(
         "heat resilience", explicit_facets=None, today_year=2026,
         expansion_lanes=True, embed_model=_Embed(),
     )
     assert u.topic_tags == []
-    assert "topic_tags" in u.degraded
+    assert "matched_tags:topic" in u.degraded
+
+
+def test_matched_tags_populated_per_facet(monkeypatch):
+    """When expansion_facets includes geography, both facets are populated."""
+    import app.topic_sense as ts
+    from app.understanding import build_understanding
+
+    class _Embed:
+        def get_query_embedding(self, query):
+            return [0.1] * 1536
+
+    def _stub(emb, facet):
+        if facet == "topic":
+            return [("Climate Resilience", 0.92)]
+        if facet == "geography":
+            return [("Kenya", 0.88)]
+        return []
+
+    monkeypatch.setattr(ts, "nearby_tags", _stub)
+    from app.config import Settings
+    monkeypatch.setattr("app.config.get_settings",
+                        lambda: Settings(expansion_facets=["topic", "geography"]))
+    u = build_understanding(
+        "heat resilience in Kenya", explicit_facets=None, today_year=2026,
+        expansion_lanes=True, embed_model=_Embed(),
+    )
+    assert u.matched_tags["topic"] == [("Climate Resilience", 0.92)]
+    assert u.matched_tags["geography"] == [("Kenya", 0.88)]
+    assert u.topic_tags == [("Climate Resilience", 0.92)]  # alias still works
+
+
+def test_matched_tags_default_topic_only(monkeypatch):
+    """Default expansion_facets=['topic'] → only topic key (P2.5 byte-identical)."""
+    import app.topic_sense as ts
+    from app.understanding import build_understanding
+
+    class _Embed:
+        def get_query_embedding(self, query):
+            return [0.1] * 1536
+
+    seen_facets = []
+    monkeypatch.setattr(ts, "nearby_tags", lambda emb, facet: seen_facets.append(facet) or [])
+    u = build_understanding(
+        "heat resilience", explicit_facets=None, today_year=2026,
+        expansion_lanes=True, embed_model=_Embed(),
+    )
+    assert seen_facets == ["topic"]  # geography NOT queried under default config
+    assert "geography" not in u.matched_tags
+
+
+def test_matched_tags_empty_when_lanes_off():
+    from app.understanding import build_understanding
+    u = build_understanding("urban finance", explicit_facets=None, today_year=2026)
+    assert u.matched_tags == {}
+    assert u.topic_tags == []

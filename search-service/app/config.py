@@ -122,6 +122,10 @@ class Settings(BaseSettings):
     # DOMAIN_EXPANSIONS OR-stuffing on the original sparse lane (the gated
     # retirement, spec §4.3). Flag-off is byte-identical, OR-stuffing included.
     query_expansion_lanes_enabled: bool = False
+    # Which facets get a semantic retrieval lane (one lane per matching facet).
+    # Default topic-only = P2.5 byte-identical. Add 'geography' to enable the
+    # geo lane (gated, P2.6). No per-facet flag; the master flag above gates all.
+    expansion_facets: list[str] = ["topic"]
     # Alias-expansion caps — mirror expand_query_conservative's shape
     # (3 groups x 2 terms) so what replaces it is auditable against it.
     alias_expand_max_groups: int = 3

@@ -956,7 +956,7 @@ def _emit_query_emf(mode: str, debug: dict) -> None:
         counts = {
             "facets_hard": debug.get("facets_hard"),
             "suggestions": debug.get("suggestions"),
-            "topic_tags_count": debug.get("topic_tags_count"),
+            "matched_tags_count": debug.get("matched_tags_count"),
         }
         counts = {k: v for k, v in counts.items() if v is not None}
         metrics["understanding_ms"] = debug.get("understanding_ms")
@@ -1109,27 +1109,34 @@ async def hybrid_query(request: QueryRequest):
         stage1_start = time.time()
         vector_retriever = make_dense_retriever(request.vector_top_k)
 
-        # P2.5 topic_dense lane (design §4.1, §4.3): semantic tag→docs
-        # retrieval fed to RRF as a 1x lane. Replaces the P2 alias_sparse lane
-        # (literal-synonym workaround). The reranker still only ever sees the
-        # original query (§4.4) — TopicTagRetriever feeds RRF candidate docs;
-        # postprocess_nodes' query_bundle is untouched.
+        # P2.6 semantic tag lanes (design §4.1, §4.3): one lane per matching
+        # facet in settings.expansion_facets. P2.5 built only topic_dense; this
+        # loops over the config list so geography (and future facets) get their
+        # own lane. The reranker still only ever sees the original query (§4.4)
+        # — TagRetriever feeds RRF candidate docs; postprocess_nodes' query_bundle
+        # is untouched. A facet with no matches produces no lane (no cost).
         extra_lanes = None
-        if lanes_on and understanding is not None and understanding.topic_tags:
-            from app.topic_retrieval import TopicTagRetriever
+        if lanes_on and understanding is not None:
+            from app.topic_retrieval import TagRetriever
             from app.db import get_pool
-            topic_retriever = TopicTagRetriever(
-                understanding.topic_tags, get_pool(), top_k=request.bm25_top_k,
-            )
-            logger.info(f"Topic lane: {len(understanding.topic_tags)} tags "
-                        f"({', '.join(t for t, _ in understanding.topic_tags[:3])})")
-            extra_lanes = [{
-                "name": "topic_dense",
-                "retriever": topic_retriever,
-                "query_str": request.query,  # unused by TopicTagRetriever (tag lookups), but required by the lane dict shape
-                "weight": None,   # 1x
-                "top_k": request.bm25_top_k,
-            }]
+            for facet in settings.expansion_facets:
+                tags = understanding.matched_tags.get(facet, [])
+                if not tags:
+                    continue
+                retriever = TagRetriever(
+                    tags, get_pool(), top_k=request.bm25_top_k, facet=facet,
+                )
+                logger.info(f"{facet} lane: {len(tags)} tags "
+                            f"({', '.join(t for t, _ in tags[:3])})")
+                if extra_lanes is None:
+                    extra_lanes = []
+                extra_lanes.append({
+                    "name": f"{facet}_dense",
+                    "retriever": retriever,
+                    "query_str": request.query,  # unused by TagRetriever (tag lookups), but required by the lane dict shape
+                    "weight": None,   # 1x
+                    "top_k": request.bm25_top_k,
+                })
 
         hybrid_retriever = HybridFusionRetriever(
             vector_retriever=vector_retriever,
@@ -1512,8 +1519,8 @@ async def hybrid_query(request: QueryRequest):
                                 if understanding is not None else None),
                 "suggestions": (len(understanding.suggestions)
                                 if understanding is not None else None),
-                "topic_tags_count": (len(understanding.topic_tags)
-                                     if understanding is not None else None),
+                "matched_tags_count": ({f: len(tags) for f, tags in understanding.matched_tags.items()}
+                                    if understanding is not None else None),
                 "lanes_degraded": (getattr(hybrid_retriever, "degraded_lanes", None)
                                    if understanding is not None else None),
                 "fused_nodes": (fused_nodes
