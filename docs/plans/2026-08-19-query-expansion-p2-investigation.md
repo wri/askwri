@@ -334,7 +334,44 @@ vocabulary, deferred by ruling; −0.067 of it) and q11 (floor-marginal;
 −0.009). Decision now with the operator: gate P2 on "flag-on ≥ flag-off
 excluding the ruled geo-gap queries," or pull the geo facet forward.
 
-## 9. Non-goals (restated from the brief)
+## 9. Final verdict (2026-08-20) — gate FAIL, work stopped
+
+Three hypothesis-driven attempts, all measured on the same v3.2 rig:
+
+| State | flag-on overall (off = 0.7022) |
+|---|---|
+| P2 as merged | 0.5998 |
+| \+ fix 1+2 (expansions-only lane, curated order) | 0.6421 |
+| \+ geo alias seed (brazil/bangalore on office tags) | **0.6581 — best** |
+| anchored-lane variant (query in lane, 2× removed) | 0.5374 — refuted, reverted (`2c26a65`) |
+
+Flag-on never beats flag-off. The residual gap (q2 −0.17, q4 −0.33,
+q11 −0.09, offset by q10 +0.10) is structural: a doc reachable only
+through the expansion lane cannot both enter the fused top-500 against
+two full-weight original lanes AND survive the per-chunk 0.09 rerank
+floor under cap-2 window fill. Closing it means redesigning the
+fusion→window→floor pipeline (e.g., reserved window slots for
+expansion-lane docs) — out of P2 scope. **Operator ruling: stop.**
+
+Binding rules for any future resumption:
+1. v3.2 golden set (or later) only; the gate rule is flag-on ≥ flag-off,
+   same rig, same run.
+2. Do not re-try: alphabetical alias selection, the query-in-lane +2×
+   combination (3:1 skew), or removing the 2× while the lane carries the
+   query (0.5374 — worst measured).
+3. The alias lane's value is real where vocabulary exists (q3/q6/q7
+   recover exactly; q10 +0.10) — the blocker is window/floor mechanics,
+   not expansion content. Start there or don't start.
+4. Geo aliases live on office tags (applied to qa 2026-08-20, in
+   `tag-aliases-seed.json`); harmless while flags are off.
+
+Kickoff prompt for a future session, if ever: "Read
+docs/plans/2026-08-19-query-expansion-p2-investigation.md §9. Design a
+rerank-window change that lets expansion-lane docs compete (reserved
+slots or per-lane windows), dark behind a flag, and prove it on the
+current golden set with flag-on ≥ flag-off before anything else."
+
+## 10. Non-goals (restated from the brief)
 
 No blind retuning; no flag flips anywhere deployed; no push, no PR, no
 deploy; no modification of the v3.2 golden set or the P0/v3.2 baselines;
