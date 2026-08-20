@@ -185,9 +185,9 @@ def _insert_document(conn, *, external_id="classify-doc", title="Test Doc", text
 class TestClassifyTopicRetrieveThenClassify:
 
     def test_topic_schema_caps_llm_selection_at_five(self):
-        from worker.stages.classify import _topic_schema
+        from worker.stages.classify import _facet_schema
 
-        schema = _topic_schema(["forests", "water"])
+        schema = _facet_schema("topic", ["forests", "water"], 5)
 
         assert schema["properties"]["topic"]["maxItems"] == 5
 
@@ -579,3 +579,56 @@ class TestClassifyTopicRetrieveThenClassify:
                 (doc_id, tag_report),
             ).fetchone()
             assert report_row is None, "doc_type tag should NOT be written with topic_only=True"
+
+
+class TestClassifyGeographyFacet:
+    """Geography flows through the same retrieve-then-classify path as topic,
+    gated by EMBEDDED_FACETS, and is isolated by facet in the delete/insert."""
+
+    def test_run_facets_geography_writes_geography_only(self, clean_db, monkeypatch):
+        """run(doc_id, facets=['geography']) classifies the geography facet only —
+        geography tag written, topic untouched, exactly 1 LLM call."""
+        import worker.stages.classify as classify_mod
+
+        with psycopg.connect(clean_db) as conn:
+            tag_kenya = _make_other_facet_tag(conn, "geography", "Kenya")
+            tag_forests = _make_topic_tag(conn, "forests")
+            _insert_tag_embedding(conn, tag_kenya)
+            _insert_tag_embedding(conn, tag_forests)
+            doc_id = _insert_document(
+                conn, external_id="geo-doc", title="Kenya NDC analysis",
+                text="Content about Kenyan climate policy.",
+            )
+            conn.commit()
+
+        monkeypatch.setattr(classify_mod, "embed_one", lambda text: [0.1] * 1536)
+        monkeypatch.setattr(classify_mod, "sweep_pending", lambda conn: 0)
+
+        chat_calls = [0]
+
+        def fake_chat_json(system, user, schema, model, max_tokens=1500):
+            chat_calls[0] += 1
+            assert "geography" in schema.get("properties", {}), \
+                "schema must target the geography facet"
+            assert schema["properties"]["geography"]["maxItems"] == 10
+            return {"geography": [{"value": "Kenya", "confidence": 0.9}]}
+
+        monkeypatch.setattr(classify_mod, "chat_json", fake_chat_json)
+
+        classify_mod.run(doc_id, facets=["geography"])
+
+        assert chat_calls[0] == 1, f"expected 1 geography LLM call, got {chat_calls[0]}"
+
+        with psycopg.connect(clean_db) as conn:
+            kenya_row = conn.execute(
+                "SELECT status FROM document_tags WHERE document_id=%s AND tag_id=%s",
+                (doc_id, tag_kenya),
+            ).fetchone()
+            assert kenya_row is not None, "geography tag should be written"
+            assert kenya_row[0] == "accepted"
+
+            forests_row = conn.execute(
+                "SELECT 1 FROM document_tags WHERE document_id=%s AND tag_id=%s",
+                (doc_id, tag_forests),
+            ).fetchone()
+            assert forests_row is None, "topic tag must NOT be written with facets=['geography']"
