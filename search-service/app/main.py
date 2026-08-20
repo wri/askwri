@@ -1109,11 +1109,13 @@ async def hybrid_query(request: QueryRequest):
         vector_retriever = make_dense_retriever(request.vector_top_k)
 
         # P2 alias lane (design §4.3): one extra 1x-weight sparse lane
-        # carrying original query + tag_aliases expansions. The reranker
-        # still only ever sees the original query (§4.4).
+        # carrying tag_aliases expansions ONLY. Including the original query
+        # here ran it in TWO sparse lanes and double-counted its RRF signal
+        # (literal:synonym sparse mass ~3:1 — investigation 2026-08-20 §M1).
+        # The reranker still only ever sees the original query (§4.4).
         extra_lanes = None
         if lanes_on and understanding is not None and understanding.alias_expansions:
-            alias_query = " OR ".join([request.query] + understanding.alias_expansions)
+            alias_query = " OR ".join(understanding.alias_expansions)
             logger.info(f"Alias lane: {alias_query[:120]}")
             extra_lanes = [{
                 "name": "alias_sparse",

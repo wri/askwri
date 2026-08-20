@@ -16,10 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 class AliasExpander:
-    """Deterministic by construction: longest matched phrase first,
-    case-insensitive alphabetical order within a group, hard caps mirroring
-    expand_query_conservative (3 groups x 2 terms) so what replaces the
-    dictionary is auditable against it."""
+    """Deterministic by construction: longest matched phrase first, CURATED
+    order within a group (the stored alias order — seed arrays lead with the
+    strongest synonyms; alphabetical selection shipped "costs, economic"
+    over "financing, funding", investigation 2026-08-20 §M2), hard caps
+    mirroring expand_query_conservative (3 groups x 2 terms) so what
+    replaces the dictionary is auditable against it. The tag label
+    participates in matching but is never emitted as an expansion."""
 
     def __init__(self, fetch_groups, max_groups: int = 3, max_terms: int = 2):
         self._fetch_groups = fetch_groups  # () -> {value_id: [alias, ...]}
@@ -47,10 +50,9 @@ class AliasExpander:
                     break
             if matched is None:
                 continue
-            expansions = sorted(
-                (t for t in terms if t.lower() != matched.lower()),
-                key=str.lower,
-            )[: self._max_terms]
+            expansions = [
+                t for t in aliases if t.lower() != matched.lower()
+            ][: self._max_terms]
             if expansions:
                 matches.append((matched, expansions))
         # Longest matched phrase first (specific beats generic), then cap.
@@ -71,9 +73,13 @@ def db_expander() -> AliasExpander:
 
     def fetch_groups():
         with get_pool().connection() as conn:
+            # created_at is insertion order — the seed script inserts one
+            # row per statement in curated array order. Alias tie-break only
+            # matters if timestamps ever collide (bulk insert in one txn).
             rows = conn.execute(
                 """SELECT t.value_id, a.alias
-                   FROM tag_aliases a JOIN tags t ON t.id = a.tag_id"""
+                   FROM tag_aliases a JOIN tags t ON t.id = a.tag_id
+                   ORDER BY a.created_at, a.alias"""
             ).fetchall()
         groups: dict[str, list[str]] = {}
         for value_id, alias in rows:
