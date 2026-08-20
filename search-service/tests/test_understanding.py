@@ -55,3 +55,104 @@ def test_activation_guard():
 def test_flag_defaults_off():
     from app.config import Settings
     assert Settings.model_fields["query_understanding_enabled"].default is False
+
+
+def test_alias_expansions_default_empty_and_lookup_not_run():
+    import app.alias_expand as ae
+
+    def _boom():
+        raise AssertionError("alias lookup must not run when expansion_lanes is off")
+
+    orig = ae.db_expander
+    ae.db_expander = _boom
+    try:
+        from app.understanding import build_understanding
+        u = build_understanding("urban finance", explicit_facets=None, today_year=2026)
+        assert u.alias_expansions == []
+        assert "alias_expansion" not in u.degraded
+    finally:
+        ae.db_expander = orig
+
+
+def test_alias_expansions_populated_when_lanes_on(monkeypatch):
+    import app.alias_expand as ae
+    from app.understanding import build_understanding
+
+    class _Stub:
+        def expand(self, query):
+            return ["mass transit", "BRT"]
+
+    monkeypatch.setattr(ae, "db_expander", lambda: _Stub())
+    u = build_understanding(
+        "bus systems", explicit_facets=None, today_year=2026, expansion_lanes=True
+    )
+    assert u.alias_expansions == ["mass transit", "BRT"]
+    assert "alias_expansion" not in u.degraded
+
+
+def test_alias_lookup_failure_soft(monkeypatch):
+    import app.alias_expand as ae
+    from app.understanding import build_understanding
+
+    def _raise():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(ae, "db_expander", _raise)
+    u = build_understanding(
+        "bus systems", explicit_facets=None, today_year=2026, expansion_lanes=True
+    )
+    assert u.alias_expansions == []
+    assert "alias_expansion" in u.degraded
+
+
+def test_topic_tags_empty_when_lanes_off():
+    from app.understanding import build_understanding
+    u = build_understanding("urban finance", explicit_facets=None, today_year=2026)
+    assert u.topic_tags == []
+
+
+def test_topic_tags_populated_when_lanes_on(monkeypatch):
+    import app.topic_sense as ts
+    from app.understanding import build_understanding
+
+    class _Embed:
+        def get_query_embedding(self, query):
+            return [0.1] * 1536
+
+    monkeypatch.setattr(ts, "nearby_topics", lambda emb: [("Climate Resilience", 0.92)])
+    u = build_understanding(
+        "heat resilience", explicit_facets=None, today_year=2026,
+        expansion_lanes=True, embed_model=_Embed(),
+    )
+    assert u.topic_tags == [("Climate Resilience", 0.92)]
+    assert "topic_tags" not in u.degraded
+
+
+def test_topic_tags_empty_when_embed_model_none():
+    from app.understanding import build_understanding
+    u = build_understanding(
+        "heat resilience", explicit_facets=None, today_year=2026,
+        expansion_lanes=True, embed_model=None,
+    )
+    assert u.topic_tags == []
+    assert "topic_tags" not in u.degraded
+
+
+def test_topic_sense_failure_soft(monkeypatch):
+    import app.topic_sense as ts
+    from app.understanding import build_understanding
+
+    class _Embed:
+        def get_query_embedding(self, query):
+            return [0.1] * 1536
+
+    def _raise(emb):
+        raise RuntimeError("topic_sense db down")
+
+    monkeypatch.setattr(ts, "nearby_topics", _raise)
+    u = build_understanding(
+        "heat resilience", explicit_facets=None, today_year=2026,
+        expansion_lanes=True, embed_model=_Embed(),
+    )
+    assert u.topic_tags == []
+    assert "topic_tags" in u.degraded

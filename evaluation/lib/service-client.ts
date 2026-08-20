@@ -110,6 +110,51 @@ export async function callPythonService(
 }
 
 /**
+ * Like callPythonService but returns the FULL /query JSON (docs + debug +
+ * query_understanding). Used by the lane-attribution eval mode, which needs
+ * debug.fused_nodes and debug.rerank_window_ids.
+ */
+export async function callPythonServiceFull(
+  query: string,
+  mode: 'answer' | 'cite',
+  params?: {
+    vector_top_k?: number
+    bm25_top_k?: number
+    rerank_top_n?: number
+    max_results?: number
+    dense_weight?: number
+    sparse_weight?: number
+    return_intermediate_results?: boolean
+  },
+): Promise<any> {
+  const response = await fetch(`${PYTHON_SERVICE_URL}/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query,
+      mode,
+      max_results: params?.max_results ?? 100,
+      similarity_threshold: 0.0,
+      include_metadata: true,
+      rerank: true,
+      vector_top_k: params?.vector_top_k,
+      bm25_top_k: params?.bm25_top_k,
+      rerank_top_n: params?.rerank_top_n,
+      dense_weight: params?.dense_weight,
+      sparse_weight: params?.sparse_weight,
+      return_intermediate_results: params?.return_intermediate_results,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Python service error: ${response.status} - ${errorText}`)
+  }
+
+  return response.json()
+}
+
+/**
  * Transform a raw service doc into the DocMeta format used by the frontend.
  */
 export function transformToDocMeta(raw: RawServiceDoc): DocMeta {

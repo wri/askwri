@@ -114,6 +114,18 @@ class Settings(BaseSettings):
     spell_suggest_min_df: int = 2
     topic_sense_top_k: int = 3
     topic_sense_min_cosine: float = 0.30
+    # P2/P2.5 multi-lane fusion (design 2026-08-19 §4.3). Dark by default;
+    # active only when query_understanding_enabled is ALSO on (lanes_active()).
+    # Cost of enabling: one tag_aliases SELECT per query (diagnostic) plus,
+    # when topic_sense matches tags, one TopicTagRetriever DB query (docs-by-tag)
+    # and 2x weight on the original lanes. Flag-on ALSO retires
+    # DOMAIN_EXPANSIONS OR-stuffing on the original sparse lane (the gated
+    # retirement, spec §4.3). Flag-off is byte-identical, OR-stuffing included.
+    query_expansion_lanes_enabled: bool = False
+    # Alias-expansion caps — mirror expand_query_conservative's shape
+    # (3 groups x 2 terms) so what replaces it is auditable against it.
+    alias_expand_max_groups: int = 3
+    alias_expand_max_terms: int = 2
 
     # Phase 1 ingestion worker
     worker_poll_seconds: int = 10

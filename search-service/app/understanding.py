@@ -33,6 +33,8 @@ class QueryUnderstanding(BaseModel):
     intent: Literal["topical", "known_item", "catalog"] = "topical"
     facets: list[Facet] = Field(default_factory=list)
     variants: list[str] = Field(default_factory=list)
+    alias_expansions: list[str] = Field(default_factory=list)
+    topic_tags: list[tuple[str, float]] = Field(default_factory=list)
     suggestions: list[Suggestion] = Field(default_factory=list)
     timings: dict = Field(default_factory=dict)
     degraded: list[str] = Field(default_factory=list)
@@ -47,7 +49,19 @@ def understanding_active(settings, request) -> bool:
     )
 
 
-def build_understanding(query: str, explicit_facets, today_year: int) -> QueryUnderstanding:
+def lanes_active(settings, request) -> bool:
+    """THE P2 flag-off guard (design §4.3). Requires the P1 flag too: lanes
+    consume the deterministic tier (alias lookup) and record degradation in
+    the understanding object."""
+    return understanding_active(settings, request) and bool(
+        getattr(settings, "query_expansion_lanes_enabled", False)
+    )
+
+
+def build_understanding(
+    query: str, explicit_facets, today_year: int, expansion_lanes: bool = False,
+    embed_model=None,
+) -> QueryUnderstanding:
     """Deterministic tier (P1). Each signal isolated + failure-soft (spec §5).
 
     Explicit facets present ⇒ the user touched the chips: auto-detection is
@@ -81,5 +95,26 @@ def build_understanding(query: str, explicit_facets, today_year: int) -> QueryUn
             u.suggestions.append(s)
     except Exception:  # noqa: BLE001
         u.degraded.append("spell_suggest")
+
+    if expansion_lanes:
+        # P2 alias lane source (design §4.3). One attempt, failure-soft:
+        # no expansions means no extra lane — degrade toward P1 behavior.
+        try:
+            from app.alias_expand import db_expander
+            u.alias_expansions = db_expander().expand(query)
+        except Exception:  # noqa: BLE001
+            u.degraded.append("alias_expansion")
+
+        # P2.5 topic_tags — semantic query→tag match (design §4.1). The query
+        # embedding is an LRU hit after stage 1 in the real path; tests stub
+        # embed_model. No embed_model ⇒ skip (flag-off-safe: no crash, no
+        # degraded entry). One attempt, failure-soft (spec §5).
+        if embed_model is not None:
+            try:
+                from app import topic_sense
+                emb = embed_model.get_query_embedding(query)
+                u.topic_tags = topic_sense.nearby_topics(emb)
+            except Exception:  # noqa: BLE001
+                u.degraded.append("topic_tags")
 
     return u

@@ -1,18 +1,20 @@
 {
   "version": "2.0",
   "created": "2025-11-07",
-  "updated": "2025-11-23",
-  "description": "Golden dataset for AskWRI Cite mode evaluation - 11 Q/A pairs with expected document retrievals",
+  "updated": "2026-08-19 (v3.2 reconciliation via qa documents.url lookup)",
+  "description": "Golden dataset for AskWRI Cite mode evaluation - 11 Q/A pairs with expected document retrievals [Regenerated 2026-08-19 from evalset_cite_01.json v3.2 via external_id->url lookup against qa documents table.]",
   "test_cases": [
     {
       "id": "q1_land_value_capture",
-      "question": "What have we published on land value capture? (topic area)",
-      "task_description": "Retrieve for papers that take land value capture (a sub-topic of urban planning) as their primary focus. Do not retrieve papers that only mention thematic area \u2013 e.g. papers where those words show up in literature review, mentioned in discussion section, etc.",
+      "question": "What have we published on land value capture?",
+      "task_description": "Retrieve for papers that take land value capture (a sub-topic of urban planning) as their primary focus. Do not retrieve papers that only mention thematic area – e.g. papers where those words show up in literature review, mentioned in discussion section, etc.",
       "expected_urls": [
         "https://www.wri.org/research/synergizing-land-value-capture-tod",
         "https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty",
         "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
-        "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen"
+        "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen",
+        "https://wri.org.cn/research/rail-plus-property-development-china-pilot-case-shenzhen",
+        ""
       ],
       "expected_count": 4,
       "difficulty": "medium",
@@ -43,7 +45,8 @@
         "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
         "https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved",
         "https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022",
-        "https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/"
+        "https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
       ],
       "expected_count": 5,
       "difficulty": "hard",
@@ -57,7 +60,9 @@
         "https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities",
         "https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil",
         "https://www.wri.org/research/prepared-communities",
-        "https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/seizing-brazils-urban-opportunity/"
+        "https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/seizing-brazils-urban-opportunity/",
+        "",
+        ""
       ],
       "expected_count": 4,
       "difficulty": "hard",
@@ -69,12 +74,17 @@
       "task_description": "Retrieve papers that are about a not well-defined topic area (micromobility encompasses a range of technologies). Do not retrieve papers that clearly are about non 'micro', such as public transit, freight, and other non-mobility solutions.",
       "expected_urls": [
         "https://urbantransitions.global/en/publication/mexico-frontrunners/",
+        "https://urbantransitions.global/en/publication/mexico-frontrunners/",
+        "https://urbantransitions.global/en/publication/mexico-frontrunners/",
         "https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities",
         "https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities",
         "https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide",
         "https://www.wri.org/research/evolution-bike-sharing",
         "https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india",
-        "https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva"
+        "https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva",
+        "https://wri.org.cn/research/how-dockless-bike-sharing-changes-lives",
+        "https://es.wri.org/publicaciones/seguridad-de-motociclistas-e-infraestructura-de-vias-urbanas",
+        "https://www.wri.org/research/motorcycle-safety-and-urban-road-infrastructure"
       ],
       "expected_count": 7,
       "difficulty": "hard",
@@ -91,7 +101,8 @@
         "https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022",
         "https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved",
         "https://www.wri.org/research/roadmap-100-electrifying-full-us-school-bus-fleet",
-        "https://www.wri.org/research/needs-assessment-equitable-school-bus-electrification-us-school-districts"
+        "https://www.wri.org/research/needs-assessment-equitable-school-bus-electrification-us-school-districts",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
       ],
       "expected_count": 6,
       "note": "ImpactAr tool covers health impacts of bus fleet electrification, though not school buses specifically",
@@ -161,8 +172,14 @@
       "expected_urls": [
         "https://www.wri.org/research/fare-look-funding-urban-public-transport-operations",
         "https://www.wri.org/research/synergizing-land-value-capture-tod",
-        "https://urbantransitions.global/en/publication/global-review-of-finance-for-sustainable-urban-infrastructure/",
-        "https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/"
+        "https://wri-india.org/research/rolling-out-electric-buses",
+        "https://www.wri.org/research/access-climate-finance-low-middle-income-countries-14-case-studies-transport-sector",
+        "https://wri-india.org/research/assessing-financing-challenges-implementing-large-scale-electric-bus-program-india",
+        "https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits",
+        "https://wri-india.org/research/financial-analysis-charging-station-fact",
+        "https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico",
+        "https://es.wri.org/publicaciones/impactos-economicos-de-la-pandemia-de-covid-19-en-el-transporte-publico-urbano-en",
+        ""
       ],
       "expected_count": 4,
       "difficulty": "hard",
@@ -171,7 +188,7 @@
     },
     {
       "id": "q11_urban_finance_exclude_ebuses",
-      "question": "Have we published anything to do with urban finance \u2013 please exclude anything to do with electric buses?",
+      "question": "Have we published anything to do with urban finance – please exclude anything to do with electric buses?",
       "task_description": "Variation on the previous question, asking to remove the dominant thematic intersection and removing the temporal cut off.",
       "expected_urls": [
         "https://urbantransitions.global/en/publication/scaling-up-investment-for-sustainable-urban-infrastructure-a-guide-to-national-and-subnational-reform/",
@@ -180,7 +197,11 @@
         "https://urbantransitions.global/en/publication/financing-the-urban-transition-for-sustainable-development-better-finance-for-better-cities/",
         "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen",
         "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
-        "https://www.wri.org/research/synergizing-land-value-capture-tod"
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/",
+        "https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico",
+        "https://es.wri.org/publicaciones/impactos-economicos-de-la-pandemia-de-covid-19-en-el-transporte-publico-urbano-en",
+        ""
       ],
       "expected_count": 7,
       "difficulty": "hard",
@@ -192,7 +213,7 @@
     "total_test_cases": 11,
     "total_expected_documents": 70,
     "unique_documents": 54,
-    "note": "11 expected docs removed from original 72 (not in catalog). URL typo fixed: healthier-students-and-communities \u2192 healthier-communities. Pruned 3 more URLs missing from current corpus: improving-school-infrastructure-healthier-communities (q3, q6), Pathways-to-Decarbonize-the-Road-Transport-Sector-in-Guangdong (q8)",
+    "note": "11 expected docs removed from original 72 (not in catalog). URL typo fixed: healthier-students-and-communities → healthier-communities. Pruned 3 more URLs missing from current corpus: improving-school-infrastructure-healthier-communities (q3, q6), Pathways-to-Decarbonize-the-Road-Transport-Sector-in-Guangdong (q8)",
     "query_types": [
       "topic_area",
       "geography",

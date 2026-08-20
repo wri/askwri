@@ -321,6 +321,7 @@ def build_sparse_query(
     translate=None,
     languages=DEFAULT_TRANSLATION_LANGUAGES,
     max_expansions: int = 3,
+    domain_expansion: bool = True,
 ) -> str:
     """The query text for the SPARSE lane: domain expansion + translations.
 
@@ -331,8 +332,15 @@ def build_sparse_query(
     A translation failure degrades to the untranslated query rather than
     failing the search — same posture as the dense lane's sparse-only
     degradation (main.py:244).
+
+    domain_expansion=False is the P2 gated retirement of DOMAIN_EXPANSIONS —
+    the alias lane carries vocabulary expansion instead (design §4.3).
     """
-    base = expand_query_conservative(query, max_expansions=max_expansions)
+    base = (
+        expand_query_conservative(query, max_expansions=max_expansions)
+        if domain_expansion
+        else query
+    )
 
     if translate is None or not languages or not query or not query.strip():
         return base
@@ -357,7 +365,7 @@ def build_sparse_query(
     return " OR ".join([base] + extra)
 
 
-def sparse_query_for(query: str) -> str:
+def sparse_query_for(query: str, domain_expansion: bool = True) -> str:
     """THE sparse-lane query string — single source of truth.
 
     Both the fusion path (HybridFusionRetriever._retrieve) and the
@@ -375,7 +383,11 @@ def sparse_query_for(query: str) -> str:
         if x.strip()
     )
     return build_sparse_query(
-        query, translate=get_translator(), languages=languages, max_expansions=3
+        query,
+        translate=get_translator(),
+        languages=languages,
+        max_expansions=3,
+        domain_expansion=domain_expansion,
     )
 
 

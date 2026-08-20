@@ -71,3 +71,48 @@ def test_diagnostic_uses_expanded_query_and_top_k():
     # Diagnostic call (first) and fusion call must BOTH use the expanded query.
     assert all(q == expected for q in stub.seen_queries)
     assert len(resp.json()["bm25_results"]) == 3  # bm25_top_k applied
+
+
+def test_diagnostic_mirrors_retirement_when_lanes_on(monkeypatch):
+    """Flag-on parity: the diagnostic BM25 lane must see the SAME raw query
+    the fusion original-sparse lane sees (spec F7 extended to P2)."""
+    from fastapi.testclient import TestClient
+
+    from app import main as app_main
+    from app.understanding import QueryUnderstanding
+
+    class RecordingRetriever:
+        def __init__(self):
+            self.seen_queries = []
+
+        def retrieve(self, bundle):
+            self.seen_queries.append(bundle.query_str)
+            from llama_index.core.schema import NodeWithScore, TextNode
+            return [NodeWithScore(node=TextNode(id_="c0", text="t",
+                                                metadata={"doc_id": "d0"}), score=1.0)]
+
+    class _DenseStub:
+        def retrieve(self, bundle):
+            return []
+
+    stub = RecordingRetriever()
+    monkeypatch.setitem(app_main.service_state, "bm25_retriever", stub)
+    monkeypatch.setitem(app_main.service_state, "pg_dense_ready", True)
+    monkeypatch.setattr(app_main, "make_dense_retriever", lambda top_k: _DenseStub())
+    monkeypatch.setattr(app_main, "understanding_active", lambda s, r: True)
+    monkeypatch.setattr(app_main, "lanes_active", lambda s, r: True)
+    monkeypatch.setattr(
+        app_main, "build_understanding",
+        lambda query, explicit_facets, today_year, expansion_lanes=False, embed_model=None: QueryUnderstanding(),
+    )
+    import app.topic_sense as ts
+    monkeypatch.setattr(ts, "attach_topic_suggestions", lambda u, q, m: None)
+
+    client = TestClient(app_main.app)
+    resp = client.post("/query", json={
+        "query": "urban finance mechanisms", "mode": "cite", "rerank": False,
+        "return_intermediate_results": True,
+    })
+    assert resp.status_code == 200
+    # Diagnostic call AND fusion call both use the RAW query when lanes are on.
+    assert all(q == "urban finance mechanisms" for q in stub.seen_queries)
