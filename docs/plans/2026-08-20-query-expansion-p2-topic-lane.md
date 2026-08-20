@@ -45,7 +45,7 @@ a new pure class that returns `NodeWithScore[]` from the tag→docs lookup.
 
 ## Tasks (TDD, sequential)
 
-### Task 1: `TopicTagRetriever` — docs-by-tag retrieval, pure + tested
+### Task 1: `TopicTagRetriever` — docs-by-tag retrieval, pure + tested ✅ DONE
 
 **Files:**
 - Create: `search-service/app/topic_retrieval.py`
