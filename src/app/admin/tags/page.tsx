@@ -236,7 +236,6 @@ const GeographyTable = ({
   const [renameValue, setRenameValue] = useState('')
   const [renameBusy, setRenameBusy] = useState(false)
 
-  const byId = new Map(tags.map((t) => [t.id, t]))
   const continents = tags.filter((t) => !t.parentTagId).sort((a, b) => a.valueId.localeCompare(b.valueId))
   const childrenOf = (parentId: string) =>
     tags.filter((t) => t.parentTagId === parentId).sort((a, b) => a.valueId.localeCompare(b.valueId))
