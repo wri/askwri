@@ -85,11 +85,20 @@
       "facet": "topic",
       "value_id": "Nature-Based Solutions",
       "aliases": ["nature", "nbs", "green infrastructure", "natural infrastructure", "green space", "parks"]
+    },
+    {
+      "facet": "office",
+      "value_id": "WRI Brasil",
+      "aliases": ["brazil", "brazilian", "brasil", "são paulo", "rio"]
+    },
+    {
+      "facet": "office",
+      "value_id": "WRI India",
+      "aliases": ["bangalore", "bengaluru"]
     }
   ],
   "_unmapped": [
-    "children — no Children/Youth topic tag exists on qa (School Buses and Public Schools are too narrow)",
-    "bangalore — pure-geography entry, no matching topic place tag on qa (WRI India is facet=office, not topic)",
-    "brazil — pure-geography entry, no matching topic place tag on qa (WRI Brasil is facet=office, not topic)"
-  ]
+    "children — no Children/Youth topic tag exists on qa (School Buses and Public Schools are too narrow)"
+  ],
+  "_note_geo": "Geo groups ride the office tags (2026-08-20): the expander reads aliases from ALL tags, and since the curated-order fix the label is never emitted as an expansion. Alias order is curated — the first two after the matched term are what the lane emits."
 }
