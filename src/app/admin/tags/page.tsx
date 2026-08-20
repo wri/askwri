@@ -7,7 +7,7 @@ import { actionButton, dangerButton } from '../lib/buttonStyles'
 import { Flash } from '../components/Flash'
 import { TopicTaxonomyManager } from '../topics/components/TopicTaxonomyManager'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { Fragment, Suspense } from 'react'
 
 interface Tag {
   id: string
@@ -16,15 +16,17 @@ interface Tag {
   taxonomyVersion: string | null
   acceptedCount: number
   suggestedCount: number
+  parentTagId: string | null
 }
 
 /** The canonical taxonomy v1 facets (from the Phase-0 migration script's FACETS). */
-const CANONICAL_FACETS = ['program', 'office', 'topic', 'doc_type']
+const CANONICAL_FACETS = ['program', 'office', 'topic', 'doc_type', 'geography']
 const FACET_LABELS: Record<string, string> = {
   program: 'Program',
   office: 'Office',
   topic: 'Topic',
   doc_type: 'Doc type',
+  geography: 'Geography',
 }
 
 const facetLabel = (facet: string) =>
@@ -213,6 +215,152 @@ const FacetTable = ({
   )
 }
 
+/** Geography facet: countries grouped under their continent (parent tag),
+ * collapsible. Mirrors FacetTable's row shape but nests children. Only used for
+ * the geography facet, which has a continent→country tree via parent_tag_id. */
+const GeographyTable = ({
+  tags,
+  isAdmin,
+  onNotice,
+  onError,
+  onReload,
+}: {
+  tags: Tag[]
+  isAdmin: boolean
+  onNotice: (s: string) => void
+  onError: (s: string) => void
+  onReload: () => Promise<void>
+}) => {
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const [renameId, setRenameId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+
+  const byId = new Map(tags.map((t) => [t.id, t]))
+  const continents = tags.filter((t) => !t.parentTagId).sort((a, b) => a.valueId.localeCompare(b.valueId))
+  const childrenOf = (parentId: string) =>
+    tags.filter((t) => t.parentTagId === parentId).sort((a, b) => a.valueId.localeCompare(b.valueId))
+
+  const deleteTag = async (id: string, valueId: string) => {
+    if (!window.confirm(`Delete tag "${valueId}"? This cannot be undone.`)) return
+    onNotice(''); onError('')
+    try {
+      await adminFetch(`/api/admin/tags/${id}`, { method: 'DELETE' })
+      onNotice(`Tag "${valueId}" deleted.`)
+      await onReload()
+    } catch (err: any) {
+      onError(err.message)
+    }
+  }
+
+  const saveRename = async (id: string) => {
+    onNotice(''); onError(''); setRenameBusy(true)
+    try {
+      await adminFetch(`/api/admin/tags/${id}`, {
+        method: 'PATCH', body: JSON.stringify({ valueId: renameValue.trim() }),
+      })
+      setRenameId(null)
+      onNotice('Tag renamed.')
+      await onReload()
+    } catch (err: any) {
+      onError(err.message)
+    } finally {
+      setRenameBusy(false)
+    }
+  }
+
+  const row = (tag: Tag, depth: number) => (
+    <tr key={tag.id}>
+      <td style={{ ...cell, paddingLeft: 12 + depth * 24 }}>
+        {renameId === tag.id && isAdmin ? (
+          <input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            style={{ fontFamily: 'inherit', fontSize: 'inherit', width: '100%' }}
+          />
+        ) : (
+          tag.valueId
+        )}
+      </td>
+      <td style={cell}>{tag.acceptedCount}</td>
+      <td style={cell}>{tag.suggestedCount}</td>
+      <td style={cell}>{tag.taxonomyVersion ?? '—'}</td>
+      {isAdmin && (
+        <td style={cell}>
+          {renameId === tag.id ? (
+            <>
+              <button onClick={() => saveRename(tag.id)} disabled={renameBusy} className='admin-btn' style={{ ...actionButton, marginRight: 8 }}>Save</button>
+              <button onClick={() => setRenameId(null)} className='admin-btn' style={actionButton}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => { setRenameId(tag.id); setRenameValue(tag.valueId) }}
+                className='admin-btn'
+                style={{ ...actionButton, marginRight: 8 }}
+                title='Rename this tag value (admin only)'
+              >
+                Rename
+              </button>
+              {tag.acceptedCount === 0 && tag.suggestedCount === 0 && (
+                <button onClick={() => deleteTag(tag.id, tag.valueId)} className='admin-btn' style={dangerButton}>
+                  Delete
+                </button>
+              )}
+            </>
+          )}
+        </td>
+      )}
+    </tr>
+  )
+
+  return (
+    <section style={{ marginBottom: 24 }}>
+      <Heading size='md' style={{ marginBottom: 8 }}>Geography</Heading>
+      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr>
+            {['Value', 'Accepted', 'Suggested', 'Taxonomy version', ...(isAdmin ? [''] : [])].map((h, i) => (
+              <th key={i} scope='col' style={{ ...cell, textAlign: 'left', background: '#f7f7f7' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {continents.map((continent) => {
+            const kids = childrenOf(continent.id)
+            const isOpen = open[continent.id] ?? true
+            return (
+              <Fragment key={continent.id}>
+                <tr>
+                  <td style={{ ...cell, fontWeight: 700 }}>
+                    <button
+                      onClick={() => setOpen((o) => ({ ...o, [continent.id]: !o[continent.id] }))}
+                      className='admin-btn'
+                      style={{ ...actionButton, marginRight: 6, padding: '0 6px' }}
+                      title={isOpen ? 'Collapse' : 'Expand'}
+                    >
+                      {isOpen ? '▼' : '▶'}
+                    </button>
+                    {continent.valueId}
+                    <span style={{ color: '#888', fontWeight: 400, marginLeft: 8 }}>
+                      ({kids.length} {kids.length === 1 ? 'country' : 'countries'})
+                    </span>
+                  </td>
+                  <td style={cell}>{continent.acceptedCount}</td>
+                  <td style={cell}>{continent.suggestedCount}</td>
+                  <td style={cell}>{continent.taxonomyVersion ?? '—'}</td>
+                  {isAdmin && <td style={cell} />}
+                </tr>
+                {isOpen && kids.map((kid) => row(kid, 1))}
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
 const TagsPage = () => {
   const [tags, setTags] = useState<Tag[]>([])
   const [me, setMe] = useState<{ role?: string }>({})
@@ -372,6 +520,18 @@ const TagsPage = () => {
       <Box style={{ paddingTop: 16 }}>
         {activeFacet === 'topic' ? (
           <TopicTaxonomyManager />
+        ) : activeFacet === 'geography' ? (
+          loading ? (
+            <Text>Loading…</Text>
+          ) : (
+            <GeographyTable
+              tags={byFacet['geography'] ?? []}
+              isAdmin={isAdmin}
+              onNotice={(s) => setNotice(s)}
+              onError={(s) => setError(s)}
+              onReload={load}
+            />
+          )
         ) : loading ? (
           <Text>Loading…</Text>
         ) : tags.length === 0 ? (
@@ -393,8 +553,8 @@ const TagsPage = () => {
         )}
       </Box>
 
-      {/* Add form (only for non-topic facets; topic uses the rich UI) */}
-      {activeFacet !== 'topic' && (
+      {/* Add form (only for facets without a dedicated manager) */}
+      {activeFacet !== 'topic' && activeFacet !== 'geography' && (
         <>
           <Heading size='md' style={{ marginBottom: 12, marginTop: 16 }}>
             New tag

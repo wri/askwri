@@ -80,13 +80,14 @@ const renderPage = (role: string = 'admin') => {
 describe('TagsPage (jsdom)', () => {
   it('renders the canonical facets in the add-tag dropdown', async () => {
     renderPage()
-    // The facet dropdown should contain all 4 canonical facets
+    // The facet dropdown should contain all 5 canonical facets
     await waitFor(() => {
       expect(screen.getByText('program')).toBeInTheDocument()
     })
     expect(screen.getByText('office')).toBeInTheDocument()
     expect(screen.getByText('topic')).toBeInTheDocument()
     expect(screen.getByText('doc_type')).toBeInTheDocument()
+    expect(screen.getByText('Geography')).toBeInTheDocument()
   })
 
   it('renders a "Create new facet" option in the dropdown', async () => {
