@@ -37,8 +37,14 @@ _LANGUAGES = {
     "indonesian": "id",
 }
 # Constraint phrasings only — a bare adjective ("spanish cities") never fires.
+# "in <lang>" fires only if followed by a preposition (about/on/for/...),
+# punctuation, or end-of-string — so "in chinese cities" (geography) does
+# NOT fire, but "reports in chinese on freight" (language) does. The
+# trailing-noun case is the d2 trap: "Chinese cities" read as language=zh
+# silently filtered the EN golden docs pre-rerank.
 _LANG_RE = re.compile(
     r"(?:\bin\s+(spanish|portuguese|chinese|mandarin|english|indonesian)\b"
+    r"(?=\s+(?:about|on|for|regarding|concerning)\b|[^\w\s]|$)"
     r"|\b(spanish|portuguese|chinese|mandarin|english|indonesian)[-\s]language\b)",
     re.I,
 )
