@@ -93,8 +93,16 @@ for (const tc of cases) {
       missing.length > 0
         ? ` (ceiling ${((attainable.length / expected.length) * 100).toFixed(0)}%)`
         : ''
+    // Applied hard facets — surfaced so a facet misfire (e.g. "in Chinese cities"
+    // -> language=zh silently filtering golden docs) is visible in gate output,
+    // not just a recall drop with no clue why. Gateway passes query_understanding
+    // through (route.ts:222); the harness previously ignored it.
+    const appliedFacets = (resp.query_understanding?.facets ?? [])
+      .filter((f: any) => f.action === 'hard')
+      .map((f: any) => `${f.facet}=${f.value}`)
+    const facetStr = appliedFacets.length ? `  [facets: ${appliedFacets.join(',')}]` : ''
     console.log(
-      `  ${tc.id.padEnd(40)} AP ${pct(ap)}  aR ${pct(aRecall)}${capped}`,
+      `  ${tc.id.padEnd(40)} AP ${pct(ap)}  aR ${pct(aRecall)}${capped}${facetStr}`,
     )
 
     results.push({
