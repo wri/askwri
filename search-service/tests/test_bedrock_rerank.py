@@ -295,3 +295,87 @@ def test_per_doc_cap_missing_doc_id_treated_as_distinct(monkeypatch):
     r.postprocess_nodes(nodes, QueryBundle(query_str="q"))
 
     assert len(stub.calls[0]["sources"]) == 4
+
+
+# --- flood rerank: surface a flooding doc's rerank-best chunk (issue #353 d3) ---
+# When one doc floods the fused set (>50% of chunks), its rerank-best chunk often
+# sits deep in fused order (d3: chunk_67 is the doc's #10 by fused rank but scores
+# 0.553 at rerank, vs the top-2-by-fusion at 0.253/0.133). cap=2 admits only the
+# top-2-by-fusion and the best chunk stays in `skipped` -> AP 25. A second,
+# small rerank over the flooding doc's next-K skipped chunks surfaces the best,
+# which is then promoted into the main rerank window. Fires ONLY on floods
+# (configurable threshold, default 50%), so normal queries pay no extra cost.
+
+def test_flood_rerank_surfaces_flooding_doc_deep_best_chunk(monkeypatch):
+    """d3 shape: one doc owns >50% of the fused set. cap=2 admits its top-2-by-
+    fusion (chunks 0,1) but its rerank-best is chunk 9 (deep). The flood rerank
+    re-ranks the flooding doc's next-K skipped chunks and swaps the best into the
+    window, so the main rerank sees the doc's actual best chunk."""
+    import app.bedrock_rerank as br
+
+    # Stub scores by chunk INDEX (deterministic): chunk 9 scores highest.
+    class _FloodStub:
+        def __init__(self): self.calls = []
+        def rerank(self, queries, sources, rerankingConfiguration, **kw):
+            n = len(sources)
+            # score = (10 - index)/10 so later chunks (higher index) score higher within each call
+            self.calls.append({"n": n, "texts": [s["inlineDocumentSource"]["textDocument"]["text"] for s in sources]})
+            return {"results": [{"index": i, "relevanceScore": round((i + 1) / (n + 1), 4)} for i in range(n)]}
+
+    stub = _FloodStub()
+    monkeypatch.setattr(br, "get_client", lambda: stub)
+    monkeypatch.setenv("RERANK_CANDIDATES", "10")
+    get_settings.cache_clear()
+
+    # 1 flooding doc (dF) with 12 chunks + 8 small docs with 1 chunk each = 20 nodes.
+    # dF = 12/20 = 60% > 50% threshold -> flood rerank fires.
+    # First pass cap=2: dF(0,1) + 8 others = 10 -> window full, dF's chunks 2..11 in skipped.
+    # Flood rerank: re-rank dF's next K=8 skipped (chunks 2..9). Best = chunk 9.
+    # Swap: window now has dF's chunks 0,1,9 (best of 2+8) + 8 others? No -- swap REPLACES
+    # the 2 first-pass dF chunks with the best-2-of-10 from the flood rerank.
+    nodes = _doc_nodes([("dF", 12), ("dA", 1), ("dB", 1), ("dC", 1), ("dD", 1),
+                       ("dE", 1), ("dG", 1), ("dH", 1), ("dI", 1)])
+    r = br.BedrockReranker(top_n=1000, per_doc_cap=2)
+    r.postprocess_nodes(nodes, QueryBundle(query_str="q"))
+
+    # 2 rerank calls: flood (first, on dF's chunks) + main (the window).
+    # Flood fires BEFORE main so the main window sees dF's rerank-best.
+    assert len(stub.calls) == 2, f"expected flood + main rerank, got {len(stub.calls)}"
+    flood_texts = stub.calls[0]["texts"]
+    main_texts = stub.calls[1]["texts"]
+    # Flood call re-ranks dF's top-K=10 chunks (fused order: c0..c9 -> text 0..9).
+    flood_idxs = sorted(int(t.split()[1]) for t in flood_texts)
+    assert flood_idxs == list(range(10)), f"flood rerank sees dF's top-10, got {flood_idxs}"
+    # Main window: 8 other docs' 1 chunk each (text 12..19) + dF's flood-best 2.
+    # Stub scores (i+1)/(n+1) within each call -> flood index 9 (text 9) scores
+    # highest, index 8 next. So dF's flood-best 2 = text 8, text 9.
+    main_idxs = sorted(int(t.split()[1]) for t in main_texts)
+    assert main_idxs == [8, 9, 12, 13, 14, 15, 16, 17, 18, 19], f"main window = 8 others + dF best-2, got {main_idxs}"
+    # The deep best (text 9, dF's #10 by fused order) is now in the main window
+    # -- exactly the d3 fix (chunk_67 surfaced).
+    assert 9 in main_idxs, "dF's deep best (text 9) must be in main window"
+
+
+def test_flood_rerank_does_not_fire_below_threshold(monkeypatch):
+    """Below the flood threshold (no doc >50%), no second rerank fires -- normal
+    queries pay zero extra cost."""
+    import app.bedrock_rerank as br
+
+    class _CountStub:
+        def __init__(self): self.calls = []
+        def rerank(self, queries, sources, rerankingConfiguration, **kw):
+            n = len(sources)
+            self.calls.append(n)
+            return {"results": [{"index": i, "relevanceScore": 0.5} for i in range(n)]}
+
+    stub = _CountStub()
+    monkeypatch.setattr(br, "get_client", lambda: stub)
+    monkeypatch.setenv("RERANK_CANDIDATES", "10")
+    get_settings.cache_clear()
+
+    # 5 docs x 2 chunks = 10 nodes, max doc = 20% < 50% -> no flood.
+    nodes = _doc_nodes([("dA", 2), ("dB", 2), ("dC", 2), ("dD", 2), ("dE", 2)])
+    r = br.BedrockReranker(top_n=1000, per_doc_cap=2)
+    r.postprocess_nodes(nodes, QueryBundle(query_str="q"))
+
+    assert len(stub.calls) == 1, f"no flood rerank below threshold, got {len(stub.calls)} calls"

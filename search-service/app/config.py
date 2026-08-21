@@ -207,6 +207,21 @@ class Settings(BaseSettings):
     # answer per-doc-cap A/B; None preserves the pre-existing behaviour.
     answer_rerank_per_doc_cap: int | None = None
 
+    # Flood rerank (issue #353 d3): when one doc owns > flood_doc_share of the
+    # fused candidate set (default 0.50 — an anomaly, not normal retrieval;
+    # fires on 2/18 cite queries), its rerank-best chunk often sits deep in
+    # fused order (d3: chunk_67 is the doc's #10 by fused rank, scores 0.553
+    # at rerank vs the top-2-by-fusion at 0.253/0.133). cap=2 admits only the
+    # top-2-by-fusion and the best chunk stays in `skipped` -> AP 25. A
+    # second, small rerank over the flooding doc's chunks surfaces the best,
+    # promoted into the main window. flood_rerank_k is how many of the
+    # doc's chunks to re-rank (default 10 — reaches d3's chunk_67 at #10).
+    # Cost: +flood_rerank_k chunks ONLY when a flood fires (~0 on normal
+    # queries). Both expansion flags stay OFF in deployed envs (binding
+    # rule), so this only runs behind the same flags.
+    flood_doc_share: float = 0.50
+    flood_rerank_k: int = 10
+
     # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
     # values, e.g. floor -9.0, would pass everything on this scale).
