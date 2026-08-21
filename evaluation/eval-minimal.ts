@@ -100,7 +100,9 @@ for (const tc of cases) {
     const appliedFacets = (resp.query_understanding?.facets ?? [])
       .filter((f: any) => f.action === 'hard')
       .map((f: any) => `${f.facet}=${f.value}`)
-    const facetStr = appliedFacets.length ? `  [facets: ${appliedFacets.join(',')}]` : ''
+    const facetStr = appliedFacets.length
+      ? `  [facets: ${appliedFacets.join(',')}]`
+      : ''
     console.log(
       `  ${tc.id.padEnd(40)} AP ${pct(ap)}  aR ${pct(aRecall)}${capped}${facetStr}`,
     )
