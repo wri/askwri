@@ -222,6 +222,13 @@ class Settings(BaseSettings):
     flood_doc_share: float = 0.50
     flood_rerank_k: int = 10
 
+    # Deep rescue (issue #353 d11/q11): when the expansion lanes add diversity,
+    # the cap-2 window fills in first pass with no backfill, and docs surfaced
+    # only by a non-dense lane (sparse/topic) that sit deep in fused order never
+    # enter the window. 2nd-rerank up to deep_rescue_max such docs and merge.
+    # 0 disables. Cost: +deep_rescue_max chunks only when such docs exist.
+    deep_rescue_max: int = 0
+
     # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
     # values, e.g. floor -9.0, would pass everything on this scale).

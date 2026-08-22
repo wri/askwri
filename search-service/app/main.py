@@ -377,6 +377,13 @@ class HybridFusionRetriever(BaseRetriever):
             if node_id in all_nodes:
                 node_with_score = all_nodes[node_id]
                 node_with_score.score = score
+                # Stamp lane provenance onto metadata so downstream rerank stages
+                # (deep rescue, issue #353) can target docs a non-dense lane surfaced
+                # without re-reading self.lane_ranks. None values preserved so the
+                # presence of a lane key is meaningful.
+                meta = node_with_score.node.metadata or {}
+                meta["lane_ranks"] = self.lane_ranks.get(node_id, {})
+                node_with_score.node.metadata = meta
                 final_results.append(node_with_score)
 
         logger.info(f"Hybrid fusion: {len(final_results)} final results")

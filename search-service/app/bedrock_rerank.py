@@ -157,6 +157,57 @@ class BedrockReranker:
                 candidates = candidates[:limit]
         return candidates
 
+    def _deep_rescue(self, candidates, nodes, query_bundle, effective_top_n):
+        """Deep rescue (issue #353 d11/q11): 2nd-rerank docs surfaced by a
+        non-dense lane (sparse/topic) that sit deep in fused order and missed the
+        cap-2 window. Merge their scores into the candidate set; the reranker is
+        pointwise so scores compare across calls. Only rescues docs with a
+        non-dense lane match (bounds cost; targets the mechanism). Advisory."""
+        from collections import Counter
+        settings = get_settings()
+        max_rescue = settings.deep_rescue_max  # 0 disables
+        if max_rescue <= 0 or not nodes:
+            return candidates
+        windowed_docs = {(n.node.metadata or {}).get("doc_id") or n.node.node_id
+                        for n in candidates}
+        # find deep docs (not in window) whose node metadata has a non-dense lane
+        deep = []
+        seen = set()
+        for n in nodes:
+            did = (n.node.metadata or {}).get("doc_id") or n.node.node_id
+            if did in windowed_docs or did in seen:
+                continue
+            lanes = (n.node.metadata or {}).get("lane_ranks") or {}
+            if lanes.get("sparse") is not None or lanes.get("topic_dense") is not None:
+                seen.add(did)
+                deep.append(n)
+        if not deep:
+            return candidates
+        deep = deep[:max_rescue]
+        logger.info(f"Deep rescue: {len(deep)} lane-surfaced doc(s) past the window")
+        client = get_client()
+        model_arn = (f"arn:aws:bedrock:{settings.bedrock_rerank_region}::"
+                     f"foundation-model/{settings.bedrock_rerank_model_id}")
+        body = [{"type": "INLINE", "inlineDocumentSource": {
+            "type": "TEXT", "textDocument": {"text": n.node.get_content()}}}
+            for n in deep]
+        try:
+            resp = client.rerank(
+                queries=[{"type": "TEXT", "textQuery": {"text": query_bundle.query_str}}],
+                sources=body,
+                rerankingConfiguration={"type": "BEDROCK_RERANKING_MODEL",
+                    "bedrockRerankingConfiguration": {
+                        "modelConfiguration": {"modelArn": model_arn},
+                        "numberOfResults": len(deep)}},
+            )
+        except Exception as exc:  # noqa: BLE001 — advisory
+            logger.warning(f"Deep rescue rerank failed: {exc}")
+            return candidates
+        for r in resp["results"]:
+            deep[r["index"]].score = float(r["relevanceScore"])
+        # merge deep into candidates; re-sort + re-cut happens in the caller
+        return candidates + deep
+
     def postprocess_nodes(self, nodes, query_bundle, top_n=None):
         if not nodes:
             return []
@@ -196,6 +247,17 @@ class BedrockReranker:
 
         for result in response["results"]:
             candidates[result["index"]].score = float(result["relevanceScore"])
+
+        # Deep rescue (issue #353 d11/q11): docs surfaced by a non-dense lane
+        # (sparse/topic) can sit deep in fused order and never enter the cap-2
+        # window when the lanes add diversity (flag-on: 82+ distinct docs fill
+        # 100 in first pass, no backfill). 2nd-rerank those deep docs and merge --
+        # the reranker is pointwise so scores are comparable across calls. Only
+        # docs with a non-dense lane match are rescued (bounds cost + targets the
+        # mechanism). Fires only when such deep docs exist.
+        if query_bundle is not None and self.per_doc_cap is not None:
+            candidates = self._deep_rescue(
+                candidates, nodes, query_bundle, effective_top_n)
 
         candidates.sort(key=lambda n: n.score, reverse=True)
         return candidates[:effective_top_n]
