@@ -229,6 +229,13 @@ class Settings(BaseSettings):
     # 0 disables. Cost: +deep_rescue_max chunks only when such docs exist.
     deep_rescue_max: int = 0
 
+    # Expansion-lane RRF weight (issue #353 d7/q1): None = 1x (current behavior,
+    # expansion lane mass equals sparse_weight). Setting < 1 (e.g. 0.25) reduces
+    # expansion-lane RRF mass so fewer adjacent-topic docs enter the rerank
+    # window, cutting ranking dilution where non-goldens rerank above goldens.
+    # Original lanes stay at 2x when an expansion lane materializes (binding).
+    expansion_lane_weight: float | None = None
+
     # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
     # values, e.g. floor -9.0, would pass everything on this scale).

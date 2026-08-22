@@ -1141,7 +1141,7 @@ async def hybrid_query(request: QueryRequest):
                     "name": f"{facet}_dense",
                     "retriever": retriever,
                     "query_str": request.query,  # unused by TagRetriever (tag lookups), but required by the lane dict shape
-                    "weight": None,   # 1x
+                    "weight": settings.expansion_lane_weight,  # None = 1x (current); <1 reduces expansion-lane RRF mass to cut ranking dilution (#353 d7/q1)
                     "top_k": request.bm25_top_k,
                 })
 
