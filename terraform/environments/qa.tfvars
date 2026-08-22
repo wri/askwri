@@ -51,6 +51,28 @@ search_service_environment_variables = {
   "LOG_LEVEL"   = "debug"
   "DEBUG"       = "true"
   "WORKERS"     = "1"
+
+  # Query-expansion lanes + retrieval tunings (issue #353, merged in #357).
+  # Turn the lanes ON in qa and apply the eval-gated knobs:
+  #   - QUERY_UNDERSTANDING_ENABLED / QUERY_EXPANSION_LANES_ENABLED: the P1/P2
+  #     flags gating the expansion lanes (topic_dense, geo_dense). OFF by
+  #     default in code; ON here so the lane work ships in qa.
+  #   - EXPANSION_LANE_WEIGHT=0.25: expansion-lane RRF mass at 0.25x (vs 1x
+  #     default) to cut ranking dilution where adjacent-topic docs rerank
+  #     above goldens (d7/d11). Multi-query tradeoff: regresses d4/q8; left
+  #     at the eval-gated best-net tradeoff.
+  #   - DEEP_RESCUE_MAX=10: 2nd-rerank up to 10 docs surfaced by a non-dense
+  #     lane that sit deep in fused order and miss the cap-2 window when
+  #     the lanes add diversity (d11/q11).
+  # Eval-gated live 2026-08-22: cite_02 MAP 74.1->76.3, aR 87.5->89.6;
+  # cite_01 MAP 37.6->37.1, aR 71.1->77.9; d3 AP 25->100. q1/q3/q8/q11
+  # remain below flag-off (irreducible single-knob tradeoffs, see #357).
+  # QA ONLY. production.tfvars is unchanged. Revert = remove these vars +
+  # redeploy.
+  "QUERY_UNDERSTANDING_ENABLED"      = "true"
+  "QUERY_EXPANSION_LANES_ENABLED"   = "true"
+  "EXPANSION_LANE_WEIGHT"           = "0.25"
+  "DEEP_RESCUE_MAX"                 = "10"
 }
 
 # Ingestion Worker LLM model: pin QA to the current small/fast classifier even
