@@ -84,21 +84,25 @@ const ResultsPage = ({
           )}
         </div>
       </section>
-      <InterpretationLine
-        chips={(queryUnderstanding?.facets ?? [])
-          .filter((f) => f.action === 'hard')
-          .map((f) => ({
-            facet: f.facet,
-            value: f.value,
-            label: facetChipLabel(f.facet, f.value),
-          }))}
-        suggestion={
-          queryUnderstanding?.suggestions?.find((s) => s.type === 'spelling')
-            ?.text ?? null
-        }
-        onRemoveChip={(chip) => onRemoveFacet?.(chip)}
-        onApplySuggestion={(text) => onApplySuggestion?.(text)}
-      />
+      {/* Interpretation line sits in the content column (design §3): aligned
+        with the Overview/results below, not full-width. */}
+      <div style={{ padding: '0 2rem', maxWidth: '800px' }}>
+        <InterpretationLine
+          chips={(queryUnderstanding?.facets ?? [])
+            .filter((f) => f.action === 'hard')
+            .map((f) => ({
+              facet: f.facet,
+              value: f.value,
+              label: facetChipLabel(f.facet, f.value),
+            }))}
+          suggestion={
+            queryUnderstanding?.suggestions?.find((s) => s.type === 'spelling')
+              ?.text ?? null
+          }
+          onRemoveChip={(chip) => onRemoveFacet?.(chip)}
+          onApplySuggestion={(text) => onApplySuggestion?.(text)}
+        />
+      </div>
       <section style={{ padding: '0 2rem', maxWidth: '800px' }}>
         <div
           style={{
