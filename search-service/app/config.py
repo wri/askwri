@@ -131,6 +131,17 @@ class Settings(BaseSettings):
     alias_expand_max_groups: int = 3
     alias_expand_max_terms: int = 2
 
+    # P3 LLM understanding sidecar (design 2026-08-19 §4.1, §7). Dark by
+    # default; active only when query_understanding_enabled is ALSO on.
+    # One strict json_schema OpenAI call per query, lru_cached, short
+    # timeout, one attempt (no retry loop in the request path, design §5).
+    # Model is a small GPT-5.6-class via the existing OpenAI path (design
+    # decision #5 — NOT Bedrock/Haiku); worker_llm_model is the same class.
+    # Flag-off is byte-identical to the deterministic-only tier.
+    query_understanding_llm_enabled: bool = False
+    query_understanding_llm_model: str = "gpt-5.6-luna"
+    query_understanding_llm_timeout_s: float = 4.0
+
     # Phase 1 ingestion worker
     worker_poll_seconds: int = 10
     worker_max_attempts: int = 3

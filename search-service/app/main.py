@@ -87,7 +87,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
 from app.translation_pairs import load_confirmed_pairs
-from app.understanding import build_understanding, lanes_active, understanding_active
+from app.understanding import build_understanding, lanes_active, understanding_active, Suggestion
 
 settings = get_settings()
 
@@ -1078,6 +1078,34 @@ async def hybrid_query(request: QueryRequest):
                 embed_model=service_state.get("embed_model"),
             )
             understanding.timings["deterministic_ms"] = round((time.time() - u_start) * 1000, 1)
+
+            # P3 LLM sidecar (design §4.1, §5, §7). Dark: only when the new
+            # flag is on (and the P1 understanding flag, which gates this block).
+            # Deterministic-first: augments, never replaces. One attempt, cached,
+            # failure-soft — a miss degrades to the deterministic tier (recorded in
+            # understanding.degraded). Slice 1 is blocking within the budget; the
+            # non-blocking parallel timeline (design §4.2) is slice 2.
+            if getattr(settings, "query_understanding_llm_enabled", False):
+                from app.understanding_llm import build_understanding_llm
+                l_start = time.time()
+                llm = await asyncio.to_thread(build_understanding_llm, request.query)
+                understanding.timings["llm_ms"] = round((time.time() - l_start) * 1000, 1)
+                if llm is None:
+                    understanding.degraded.append("understanding_llm")
+                else:
+                    if llm.get("intent") is not None:
+                        understanding.intent = llm["intent"]
+                    # Dedupe variants vs the original query (design §4.1); cap 2
+                    # is already enforced by build_understanding_llm.
+                    understanding.variants = [
+                        v for v in llm.get("variants", [])
+                        if v and v.lower() != request.query.lower()
+                    ]
+                    understanding.facets.extend(llm.get("facets", []))
+                    for d in llm.get("disambiguation", []):
+                        understanding.suggestions.append(
+                            Suggestion(type="disambiguation", text=d)
+                        )
 
         # P2 (design §4.3): lanes_on implies understanding is not None.
         lanes_on = lanes_active(settings, request)
