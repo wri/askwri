@@ -76,6 +76,13 @@ search_service_environment_variables = {
   "QUERY_UNDERSTANDING_ENABLED"      = "true"
   "QUERY_EXPANSION_LANES_ENABLED"   = "true"
   "QUERY_UNDERSTANDING_LLM_ENABLED" = "true"
+  # EXPANSION_FACETS: which tag facets get a semantic retrieval lane. Code
+  # default is topic-only (P2.5 byte-identical). Adding geography enables the
+  # geo_dense lane (issue #325 / geo-facet-wiring, embeddings backfilled to qa
+  # 2026-08-20 via #351). JSON-array form because pydantic-settings parses
+  # list[str] from env as JSON. QA ONLY; production.tfvars unchanged. Revert =
+  # remove the var + redeploy.
+  "EXPANSION_FACETS"                = "[\"topic\",\"geography\"]"
   "EXPANSION_LANE_WEIGHT"           = "0.25"
   "DEEP_RESCUE_MAX"                 = "10"
 }
