@@ -68,6 +68,11 @@ const citeResponse = (docs: any[], understanding: any = null): any => ({
   queryUnderstanding: understanding,
 })
 
+const batchRelatesCalls = () =>
+  (global.fetch as jest.Mock).mock.calls.filter((c) =>
+    String(c[0]).includes('batch-relates'),
+  )
+
 const renderPage = (q: string) => {
   currentQ = q
   return render(
@@ -272,6 +277,45 @@ describe('results page — empty and error states', () => {
       await Promise.resolve()
     })
     expect(screen.queryByText(/No strong matches/)).not.toBeInTheDocument()
+  })
+})
+
+describe('results page — cache re-fires batch-relates (issue #359)', () => {
+  it('re-fetches "how is this relevant" on a cache hit so cached rows get explanations', async () => {
+    mockCite
+      .mockResolvedValueOnce(citeResponse([doc('a'), doc('b'), doc('c')], null))
+      .mockResolvedValueOnce(citeResponse([doc('x'), doc('y'), doc('z')], null))
+
+    const view = renderPage('first query')
+    await waitFor(() => expect(batchRelatesCalls()).toHaveLength(1))
+
+    currentQ = 'second query'
+    view.rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(batchRelatesCalls()).toHaveLength(2))
+
+    // Repeat the first query → retrieval is served from cache (no 3rd
+    // chatCiteLlamaIndex call), but the batch-relates effect MUST re-fire so
+    // cached rows get LLM explanations instead of falling back to snippet
+    // content in the "how is this relevant" column (issue #359).
+    currentQ = 'first query'
+    view.rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-docs',
+        '3',
+      ),
+    )
+    expect(mockCite).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(batchRelatesCalls()).toHaveLength(3))
   })
 })
 

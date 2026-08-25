@@ -185,6 +185,17 @@ const AskWriAppContent = () => {
     const isExpired = cached && Date.now() - cached.timestamp > 5 * 60 * 1000
 
     if (cached && !isExpired && Array.isArray(cached.supporting)) {
+      // Cache hit restores retrieval from memory, but the per-doc LLM "why"
+      // (batch-relates) is NOT cached with the docs. Reset its gate (and the
+      // why/summary state) so the batch-relates effect re-fires for the cached
+      // docs. Without this, `batchRelatesRequested` stays true from the prior
+      // query and every cached row falls back to snippet content in the
+      // "how is this relevant" column (issue #359).
+      setDocWhy({})
+      setDocSummary({})
+      setDocWhyLoading({})
+      setDocSummaryLoading({})
+      setBatchRelatesRequested(false)
       setSupporting(cached.supporting)
       setAlignment(cached.alignment ?? null)
       setUnderstanding(cached.understanding ?? null)
