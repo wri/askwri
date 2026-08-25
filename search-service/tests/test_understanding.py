@@ -55,6 +55,7 @@ def test_activation_guard():
 def test_flag_defaults_off():
     from app.config import Settings
     assert Settings.model_fields["query_understanding_enabled"].default is False
+    assert Settings.model_fields["query_understanding_llm_enabled"].default is False
 
 
 def test_alias_expansions_default_empty_and_lookup_not_run():
