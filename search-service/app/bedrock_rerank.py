@@ -89,125 +89,6 @@ class BedrockReranker:
             selected.extend(skipped[: limit - len(selected)])
         return selected
 
-    def _surface_flooding_best(self, candidates, nodes, query_bundle, limit):
-        """Flood rerank (issue #353 d3): when one doc owns > flood_doc_share of
-        the fused set, its rerank-best chunk often sits deep in fused order
-        (d3: chunk_67 is the doc's #10 by fused rank, scores 0.553, while the
-        top-2-by-fusion score 0.253/0.133). cap=2 admits only the top-2-by-fusion
-        and the best chunk stays in `skipped` -> AP 25. Re-rank the flooding
-        doc's top-K chunks and swap its rerank-best 2 into the window.
-
-        Fires ONLY when a flood is detected (> threshold share of `nodes`),
-        so normal queries pay no extra cost. Returns the (possibly modified)
-        candidate list."""
-        from collections import Counter
-        settings = get_settings()
-        share = settings.flood_doc_share
-        k = settings.flood_rerank_k
-        if not nodes or share <= 0 or k <= self.per_doc_cap:
-            return candidates
-        # doc_id -> chunk count over the FULL fused set (nodes), not the window
-        counts = Counter((n.node.metadata or {}).get("doc_id") or n.node.node_id
-                        for n in nodes)
-        flooding = [d for d, c in counts.items() if c / len(nodes) > share]
-        if not flooding:
-            return candidates
-        logger.info(f"Flood rerank: {len(flooding)} doc(s) >{share*100:.0f}% of fused set -> "
-                    f"surfaceing rerank-best (k={k})")
-        client = get_client()
-        model_arn = (f"arn:aws:bedrock:{settings.bedrock_rerank_region}::"
-                     f"foundation-model/{settings.bedrock_rerank_model_id}")
-        for doc_id in flooding:
-            # collect the doc's chunks from the full fused set, in fused order
-            doc_chunks = [n for n in nodes
-                          if ((n.node.metadata or {}).get("doc_id") or n.node.node_id) == doc_id]
-            pool = doc_chunks[:k]  # top-K by fused order (admits the deep best chunk)
-            if len(pool) <= self.per_doc_cap:
-                continue  # nothing deep to surface
-            body = [{"type": "INLINE", "inlineDocumentSource": {
-                "type": "TEXT", "textDocument": {"text": n.node.get_content()}}}
-                for n in pool]
-            try:
-                resp = client.rerank(
-                    queries=[{"type": "TEXT", "textQuery": {"text": query_bundle.query_str}}],
-                    sources=body,
-                    rerankingConfiguration={"type": "BEDROCK_RERANKING_MODEL",
-                        "bedrockRerankingConfiguration": {
-                            "modelConfiguration": {"modelArn": model_arn},
-                            "numberOfResults": len(pool)}},
-                )
-            except Exception as exc:  # noqa: BLE001 — flood rerank is advisory
-                logger.warning(f"Flood rerank failed for {doc_id}: {exc}")
-                continue
-            # best-2 of the flood rerank
-            ranked = sorted(resp["results"], key=lambda r: r["relevanceScore"], reverse=True)
-            best_ids = {pool[r["index"]].node.node_id for r in ranked[:self.per_doc_cap]}
-            # replace the flooding doc's windowed chunks with its flood-best
-            new_candidates = [n for n in candidates
-                              if ((n.node.metadata or {}).get("doc_id") or n.node.node_id) != doc_id
-                              or n.node.node_id in best_ids]
-            # ensure best_ids present (add any not already in window)
-            in_best = {n.node.node_id for n in new_candidates}
-            for n in pool:
-                if n.node.node_id in best_ids and n.node.node_id not in in_best:
-                    new_candidates.append(n)
-            candidates = new_candidates
-            # keep window size bounded (re-cap per-doc in case best_ids overshot)
-            if len(candidates) > limit:
-                candidates = candidates[:limit]
-        return candidates
-
-    def _deep_rescue(self, candidates, nodes, query_bundle, effective_top_n):
-        """Deep rescue (issue #353 d11/q11): 2nd-rerank docs surfaced by a
-        non-dense lane (sparse/topic) that sit deep in fused order and missed the
-        cap-2 window. Merge their scores into the candidate set; the reranker is
-        pointwise so scores compare across calls. Only rescues docs with a
-        non-dense lane match (bounds cost; targets the mechanism). Advisory."""
-        from collections import Counter
-        settings = get_settings()
-        max_rescue = settings.deep_rescue_max  # 0 disables
-        if max_rescue <= 0 or not nodes:
-            return candidates
-        windowed_docs = {(n.node.metadata or {}).get("doc_id") or n.node.node_id
-                        for n in candidates}
-        # find deep docs (not in window) whose node metadata has a non-dense lane
-        deep = []
-        seen = set()
-        for n in nodes:
-            did = (n.node.metadata or {}).get("doc_id") or n.node.node_id
-            if did in windowed_docs or did in seen:
-                continue
-            lanes = (n.node.metadata or {}).get("lane_ranks") or {}
-            if lanes.get("sparse") is not None or lanes.get("topic_dense") is not None:
-                seen.add(did)
-                deep.append(n)
-        if not deep:
-            return candidates
-        deep = deep[:max_rescue]
-        logger.info(f"Deep rescue: {len(deep)} lane-surfaced doc(s) past the window")
-        client = get_client()
-        model_arn = (f"arn:aws:bedrock:{settings.bedrock_rerank_region}::"
-                     f"foundation-model/{settings.bedrock_rerank_model_id}")
-        body = [{"type": "INLINE", "inlineDocumentSource": {
-            "type": "TEXT", "textDocument": {"text": n.node.get_content()}}}
-            for n in deep]
-        try:
-            resp = client.rerank(
-                queries=[{"type": "TEXT", "textQuery": {"text": query_bundle.query_str}}],
-                sources=body,
-                rerankingConfiguration={"type": "BEDROCK_RERANKING_MODEL",
-                    "bedrockRerankingConfiguration": {
-                        "modelConfiguration": {"modelArn": model_arn},
-                        "numberOfResults": len(deep)}},
-            )
-        except Exception as exc:  # noqa: BLE001 — advisory
-            logger.warning(f"Deep rescue rerank failed: {exc}")
-            return candidates
-        for r in resp["results"]:
-            deep[r["index"]].score = float(r["relevanceScore"])
-        # merge deep into candidates; re-sort + re-cut happens in the caller
-        return candidates + deep
-
     def postprocess_nodes(self, nodes, query_bundle, top_n=None):
         if not nodes:
             return []
@@ -217,11 +98,6 @@ class BedrockReranker:
         settings = get_settings()
         effective_top_n = top_n if top_n is not None else self.top_n
         candidates = self._select_candidates(nodes, settings.rerank_candidates)
-        # Flood rerank: surface a flooding doc's rerank-best chunk (issue #353 d3).
-        # Advisory + fires only on floods; no-op when no doc exceeds the share.
-        if query_bundle is not None and self.per_doc_cap is not None:
-            candidates = self._surface_flooding_best(
-                candidates, nodes, query_bundle, settings.rerank_candidates)
 
         model_arn = (f"arn:aws:bedrock:{settings.bedrock_rerank_region}::"
                      f"foundation-model/{settings.bedrock_rerank_model_id}")
@@ -247,17 +123,6 @@ class BedrockReranker:
 
         for result in response["results"]:
             candidates[result["index"]].score = float(result["relevanceScore"])
-
-        # Deep rescue (issue #353 d11/q11): docs surfaced by a non-dense lane
-        # (sparse/topic) can sit deep in fused order and never enter the cap-2
-        # window when the lanes add diversity (flag-on: 82+ distinct docs fill
-        # 100 in first pass, no backfill). 2nd-rerank those deep docs and merge --
-        # the reranker is pointwise so scores are comparable across calls. Only
-        # docs with a non-dense lane match are rescued (bounds cost + targets the
-        # mechanism). Fires only when such deep docs exist.
-        if query_bundle is not None and self.per_doc_cap is not None:
-            candidates = self._deep_rescue(
-                candidates, nodes, query_bundle, effective_top_n)
 
         candidates.sort(key=lambda n: n.score, reverse=True)
         return candidates[:effective_top_n]

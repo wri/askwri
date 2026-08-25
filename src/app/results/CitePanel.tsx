@@ -105,7 +105,9 @@ const CitePanel = ({
           // one and never a passage fallback when a summary exists (#306).
           short_summary: row?.shortSummary || row?.summary || summary,
           relevance: relevanceLabel,
-          how_relevant: whyMeta?.why || firstSentence(best?.snippet ?? ''),
+          // The LLM "why" from batch-relates; a passage sentence is not an
+          // explanation, so never fall back to the snippet (issue #359).
+          how_relevant: whyMeta?.why || 'Relevant supporting evidence.',
           download_url: url,
           relevance_score: docRel,
           row_number: idx + 1,

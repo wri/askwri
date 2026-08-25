@@ -377,13 +377,6 @@ class HybridFusionRetriever(BaseRetriever):
             if node_id in all_nodes:
                 node_with_score = all_nodes[node_id]
                 node_with_score.score = score
-                # Stamp lane provenance onto metadata so downstream rerank stages
-                # (deep rescue, issue #353) can target docs a non-dense lane surfaced
-                # without re-reading self.lane_ranks. None values preserved so the
-                # presence of a lane key is meaningful.
-                meta = node_with_score.node.metadata or {}
-                meta["lane_ranks"] = self.lane_ranks.get(node_id, {})
-                node_with_score.node.metadata = meta
                 final_results.append(node_with_score)
 
         logger.info(f"Hybrid fusion: {len(final_results)} final results")
@@ -1141,7 +1134,7 @@ async def hybrid_query(request: QueryRequest):
                     "name": f"{facet}_dense",
                     "retriever": retriever,
                     "query_str": request.query,  # unused by TagRetriever (tag lookups), but required by the lane dict shape
-                    "weight": settings.expansion_lane_weight,  # None = 1x (current); <1 reduces expansion-lane RRF mass to cut ranking dilution (#353 d7/q1)
+                    "weight": None,   # 1x
                     "top_k": request.bm25_top_k,
                 })
 

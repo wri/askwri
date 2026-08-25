@@ -207,35 +207,6 @@ class Settings(BaseSettings):
     # answer per-doc-cap A/B; None preserves the pre-existing behaviour.
     answer_rerank_per_doc_cap: int | None = None
 
-    # Flood rerank (issue #353 d3): when one doc owns > flood_doc_share of the
-    # fused candidate set (default 0.50 — an anomaly, not normal retrieval;
-    # fires on 2/18 cite queries), its rerank-best chunk often sits deep in
-    # fused order (d3: chunk_67 is the doc's #10 by fused rank, scores 0.553
-    # at rerank vs the top-2-by-fusion at 0.253/0.133). cap=2 admits only the
-    # top-2-by-fusion and the best chunk stays in `skipped` -> AP 25. A
-    # second, small rerank over the flooding doc's chunks surfaces the best,
-    # promoted into the main window. flood_rerank_k is how many of the
-    # doc's chunks to re-rank (default 10 — reaches d3's chunk_67 at #10).
-    # Cost: +flood_rerank_k chunks ONLY when a flood fires (~0 on normal
-    # queries). Both expansion flags stay OFF in deployed envs (binding
-    # rule), so this only runs behind the same flags.
-    flood_doc_share: float = 0.50
-    flood_rerank_k: int = 10
-
-    # Deep rescue (issue #353 d11/q11): when the expansion lanes add diversity,
-    # the cap-2 window fills in first pass with no backfill, and docs surfaced
-    # only by a non-dense lane (sparse/topic) that sit deep in fused order never
-    # enter the window. 2nd-rerank up to deep_rescue_max such docs and merge.
-    # 0 disables. Cost: +deep_rescue_max chunks only when such docs exist.
-    deep_rescue_max: int = 0
-
-    # Expansion-lane RRF weight (issue #353 d7/q1): None = 1x (current behavior,
-    # expansion lane mass equals sparse_weight). Setting < 1 (e.g. 0.25) reduces
-    # expansion-lane RRF mass so fewer adjacent-topic docs enter the rerank
-    # window, cutting ranking dilution where non-goldens rerank above goldens.
-    # Original lanes stay at 2x when an expansion lane materializes (binding).
-    expansion_lane_weight: float | None = None
-
     # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
     # values, e.g. floor -9.0, would pass everything on this scale).
