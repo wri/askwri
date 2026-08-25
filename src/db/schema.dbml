@@ -1,0 +1,41 @@
+Table cite_mode_feedback {
+  id int [pk, increment]
+  query text
+  doc_id varchar(64)
+  relevance_score varchar(10)
+  publication_name varchar(256)
+  row_number int
+  summary text
+  how_relevant text
+  feedback varchar(8)
+  timestamp timestamptz
+}
+
+Table answer_mode_feedback {
+  id int [pk, increment]
+  answer text
+  query text
+  consulted_doc_ids text [null]
+  supporting_doc_ids text
+  first_relevance_score varchar(10)
+  first_publication_name varchar(256)
+  first_doc_summary text
+  first_doc_how_relevant text
+  feedback varchar(8)
+  timestamp timestamptz
+}
+
+Table cite_mode_query_logs {
+  id int [pk, increment]
+  query text [not null]
+  top_ten_results text [not null]
+  timestamp timestamptz [default: `now()`]
+}
+
+Table answer_mode_query_logs {
+  id int [pk, increment]
+  query text [not null]
+  answer text [not null]
+  top_ten_results text [not null]
+  timestamp timestamptz [default: `now()`]
+}

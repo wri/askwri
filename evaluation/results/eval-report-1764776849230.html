@@ -1,0 +1,1396 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AskWRI Cite Mode Evaluation Report</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .header {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 10px 0;
+      color: #333;
+    }
+    .timestamp {
+      color: #666;
+      font-size: 14px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .metric-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .metric-value {
+      font-size: 32px;
+      font-weight: bold;
+      margin-top: 5px;
+    }
+    .metric-value.good { color: #22c55e; }
+    .metric-value.medium { color: #f59e0b; }
+    .metric-value.bad { color: #ef4444; }
+
+    .test-case {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 15px;
+    }
+    .test-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 15px;
+    }
+    .test-question {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      flex: 1;
+    }
+    .test-id {
+      font-size: 12px;
+      color: #666;
+      font-family: monospace;
+    }
+    .test-metrics {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+    }
+    .test-metric {
+      font-size: 14px;
+    }
+    .test-metric strong {
+      color: #333;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge.pass { background: #dcfce7; color: #166534; }
+    .badge.fail { background: #fee2e2; color: #991b1b; }
+
+    .url-section {
+      margin-top: 15px;
+    }
+    .url-section h4 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: #666;
+    }
+    .url-list {
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .url-item {
+      padding: 4px 0;
+      word-break: break-all;
+    }
+    .url-item.matched { color: #22c55e; }
+    .url-item.missed { color: #ef4444; }
+    .url-item.extra { color: #f59e0b; }
+
+    .summary-table {
+      width: 100%;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .summary-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .summary-table th {
+      background: #f9fafb;
+      padding: 12px;
+      text-align: left;
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .summary-table td {
+      padding: 12px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎯 AskWRI Cite Mode Evaluation Report</h1>
+    <div class="timestamp">Generated: 12/3/2025, 7:47:29 AM</div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Pass Rate</div>
+      <div class="metric-value medium">27.3%</div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: 27.3%"></div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Precision</div>
+      <div class="metric-value medium">11.6%</div>
+      <div style="font-size: 12px; color: #666; margin-top: 5px;">Retrieved docs that are correct</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Recall</div>
+      <div class="metric-value good">86.3%</div>
+      <div style="font-size: 12px; color: #666; margin-top: 5px;">Expected docs that were found</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">F1 Score</div>
+      <div class="metric-value medium">19.7%</div>
+      <div style="font-size: 12px; color: #666; margin-top: 5px;">Harmonic mean of P & R</div>
+    </div>
+  </div>
+
+  <div class="summary-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Query Type</th>
+          <th>Test Cases</th>
+          <th>Avg Precision</th>
+          <th>Avg Recall</th>
+          <th>Avg F1</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td><strong>topic area</strong></td>
+          <td>1</td>
+          <td>11.8%</td>
+          <td>100.0%</td>
+          <td>21.1%</td>
+        </tr>
+
+        <tr>
+          <td><strong>geography</strong></td>
+          <td>1</td>
+          <td>8.8%</td>
+          <td>100.0%</td>
+          <td>16.2%</td>
+        </tr>
+
+        <tr>
+          <td><strong>thematic intersection</strong></td>
+          <td>1</td>
+          <td>3.8%</td>
+          <td>100.0%</td>
+          <td>7.2%</td>
+        </tr>
+
+        <tr>
+          <td><strong>thematic geographic intersection</strong></td>
+          <td>1</td>
+          <td>4.8%</td>
+          <td>100.0%</td>
+          <td>9.1%</td>
+        </tr>
+
+        <tr>
+          <td><strong>fuzzy topic</strong></td>
+          <td>1</td>
+          <td>16.2%</td>
+          <td>75.0%</td>
+          <td>26.7%</td>
+        </tr>
+
+        <tr>
+          <td><strong>intervention impact</strong></td>
+          <td>1</td>
+          <td>23.5%</td>
+          <td>100.0%</td>
+          <td>38.1%</td>
+        </tr>
+
+        <tr>
+          <td><strong>solution focused</strong></td>
+          <td>1</td>
+          <td>7.3%</td>
+          <td>100.0%</td>
+          <td>13.6%</td>
+        </tr>
+
+        <tr>
+          <td><strong>niche technology</strong></td>
+          <td>1</td>
+          <td>3.8%</td>
+          <td>60.0%</td>
+          <td>7.1%</td>
+        </tr>
+
+        <tr>
+          <td><strong>umbrella program</strong></td>
+          <td>1</td>
+          <td>20.0%</td>
+          <td>100.0%</td>
+          <td>33.3%</td>
+        </tr>
+
+        <tr>
+          <td><strong>amorphous temporal</strong></td>
+          <td>1</td>
+          <td>10.3%</td>
+          <td>44.4%</td>
+          <td>16.7%</td>
+        </tr>
+
+        <tr>
+          <td><strong>amorphous exclusion</strong></td>
+          <td>1</td>
+          <td>17.5%</td>
+          <td>70.0%</td>
+          <td>28.0%</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="margin-top: 30px; margin-bottom: 15px;">Test Case Results</h2>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What have we published on land value capture? (topic area)</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve for papers that take land value capture (a sub-topic of urban planning) as their primary focus. Do not retrieve papers that only mention thematic area – e.g. papers where those words show up in literature review, mentioned in discussion section, etc.</div>
+        <div class="test-id" style="margin-top: 8px;">q1_land_value_capture</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 11.8%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 100.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 21.1%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 34/4
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 2.45s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (4)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations</div>
+        <div class="url-item matched">• https://www.wri.org/research/synergizing-land-value-capture-tod</div>
+        <div class="url-item matched">• https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen</div>
+        <div class="url-item matched">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (30)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/global-review-of-finance-for-sustainable-urban-infrastructure/</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/scaling-up-investment-for-sustainable-urban-infrastructure-a-guide-to-national-and-subnational-reform/</div>
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-water-resilience-africa</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/housing-policies-for-sustainable-and-inclusive-cities/</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/financing-the-urban-transition-for-sustainable-development-better-finance-for-better-cities/</div>
+        <div class="url-item extra">• https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/developing-prosperous-and-inclusive-cities-in-africa-national-urban-policies-to-the-rescue/</div>
+        <div class="url-item extra">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/</div>
+        <div class="url-item extra">• https://www.wri.org/research/green-recovery-transportation</div>
+        <div class="url-item extra">• doc_000153.pdf</div>
+        <div class="url-item extra">• doc_000161.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/johannesburg-confronting-spatial-inequality</div>
+        <div class="url-item extra">• doc_000141.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/calculating-indicators-global-geospatial-datasets-urban-environment</div>
+        <div class="url-item extra">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item extra">• https://publications.iadb.org/en/informal-and-semiformal-services-latin-america-overview-public-transportation-reforms</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/unlocking-potential-transformative-climate-adaptation-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/costs-and-benefits-appraisal-tool-transit-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/nature-based-solutions-sub-saharan-africa-climate-and-water-resilience</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item extra">• https://wri-india.org/research/toward-framework-support-better-decision-making-indias-mobility-planning-supply-demand-and</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What have we published on Bangalore?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about a specific geography as their primary focus. Do not retrieve papers that only mention geography tangentially.</div>
+        <div class="test-id" style="margin-top: 8px;">q2_bangalore_geography</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 8.8%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 100.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 16.2%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 68/6
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 2.62s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (6)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru</div>
+        <div class="url-item matched">• https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india</div>
+        <div class="url-item matched">• https://www.wri.org/research/synergizing-land-value-capture-tod</div>
+        <div class="url-item matched">• https://wri-india.org/research/improving-metro-access-india</div>
+        <div class="url-item matched">• https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban</div>
+        <div class="url-item matched">• https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (62)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/morphology-delhi-national-capital-regions-economic-geography-and-its-implications-planning</div>
+        <div class="url-item extra">• https://www.wri.org/research/how-enable-electric-bus-adoption-cities-worldwide</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item extra">• doc_000162.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/unaffordable-and-undrinkable-rethinking-urban-water-access-global-south</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://wri-india.org/research/just-transition-downstream-automotive-segment-evidence-delhi</div>
+        <div class="url-item extra">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item extra">• https://www.wri.org/research/dataset-us-school-bus-depots</div>
+        <div class="url-item extra">• doc_000150.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• doc_000165.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-mobility-roadmap-vietnam-case-studies</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy</div>
+        <div class="url-item extra">• https://www.wri.org/research/assessing-supply-chain-barriers-and-opportunities-advancing-road-transport-electrification</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://despacio.org/portfolio/las-mujeres-y-el-transporte-en-bogota-las-cuentas/</div>
+        <div class="url-item extra">• doc_000141.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing</div>
+        <div class="url-item extra">• https://wri-india.org/research/projected-ev-transition-indian-automotive-manufacturing-industry-perceptions-and</div>
+        <div class="url-item extra">• https://www.wri.org/research/calculating-indicators-global-geospatial-datasets-urban-environment</div>
+        <div class="url-item extra">• https://wri-india.org/research/fare-free-bus-travel-scheme-women-lessons-delhi</div>
+        <div class="url-item extra">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+        <div class="url-item extra">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/impact-driven-investing-new-mobility-enterprises-perspectives</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H</div>
+        <div class="url-item extra">• https://www.wri.org/research/johannesburg-confronting-spatial-inequality</div>
+        <div class="url-item extra">• https://wri-india.org/research/safer-streets-mumbai-reflecting-decade-processes-solutions-road-safety</div>
+        <div class="url-item extra">• https://wri-india.org/research/toward-framework-support-better-decision-making-indias-mobility-planning-supply-demand-and</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item extra">• https://wri.org.cn/en/study/Toward-Credible-Transport-CO2-Emissions-Accounting-in-China</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations</div>
+        <div class="url-item extra">• doc_000161.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/including-excluded-supporting-informal-workers-more-equal-and-productive-cities-global</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl</div>
+        <div class="url-item extra">• https://www.wri.org/research/sustainable-urban-mobility-ndcs-essential-role-public-transport</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/just-transition-core-climate-documents-80-paris-agreement</div>
+        <div class="url-item extra">• https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi</div>
+        <div class="url-item extra">• https://wri-india.org/research/real-world-electric-bus-operation-trend-technology-performance-degradation-and-lifespan</div>
+        <div class="url-item extra">• https://www.wri.org/research/green-recovery-transportation</div>
+        <div class="url-item extra">• https://www.wri.org/research/kampala-rebuilding-public-sector-legitimacy-new-approach-sanitation-services</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P</div>
+        <div class="url-item extra">• https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil</div>
+        <div class="url-item extra">• https://www.wri.org/research/powering-cities-global-south-how-energy-access-all-benefits-economy-and-environment</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV</div>
+        <div class="url-item extra">• https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-ride-hailing-united-states-europe-canada</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/scaling-up-investment-for-sustainable-urban-infrastructure-a-guide-to-national-and-subnational-reform/</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://www.wri.org/research/towards-more-equal-city-framing-challenges-and-opportunities</div>
+        <div class="url-item extra">• https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/pole-mounted-electric-vehicle-charging-preliminary-guidance</div>
+        <div class="url-item extra">• https://www.wri.org/research/trillion-dollar-question</div>
+        <div class="url-item extra">• https://wri-india.org/research/financial-impact-assessment-zero-emission-trucks-fi-zet</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What have we published on children and pollution?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about a thematic intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.</div>
+        <div class="test-id" style="margin-top: 8px;">q3_children_pollution</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 3.8%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 100.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 7.2%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 80/3
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 2.15s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (3)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/driving-forward-clean-ride-kids</div>
+        <div class="url-item matched">• https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses</div>
+        <div class="url-item matched">• https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (77)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc</div>
+        <div class="url-item extra">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/dataset-us-school-bus-depots</div>
+        <div class="url-item extra">• https://www.wri.org/research/calculating-indicators-global-geospatial-datasets-urban-environment</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-mobility-roadmap-vietnam-case-studies</div>
+        <div class="url-item extra">• https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities</div>
+        <div class="url-item extra">• https://wri-india.org/research/fare-free-bus-travel-scheme-women-lessons-delhi</div>
+        <div class="url-item extra">• doc_000150.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/developing-electric-mobility-roadmap-international-experiences-subnational-case-studies</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://es.wri.org/publicaciones/ciencia-participativa-accion-para-un-aire-limpio</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/the-economic-case-for-greening-the-global-recovery-through-cities/</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-school-bus-us-market-study-and-buyers-guide-resource-school-bus-operators</div>
+        <div class="url-item extra">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/improving-school-infrastructure-healthier-communities.pdf?VersionId=bs5CICF.GFd0Rn7VL317IcJMaDhUsayv</div>
+        <div class="url-item extra">• https://www.wri.org/research/assessing-supply-chain-barriers-and-opportunities-advancing-road-transport-electrification</div>
+        <div class="url-item extra">• https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india</div>
+        <div class="url-item extra">• doc_000161.pdf</div>
+        <div class="url-item extra">• doc_000162.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item extra">• https://wri.org.cn/en/study/Toward-Credible-Transport-CO2-Emissions-Accounting-in-China</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-08/developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities.pdf?VersionId=U2XPE7PXtXLWhOl9d7USTPdv0By.naDW</div>
+        <div class="url-item extra">• https://www.wri.org/research/zero-emission-delivery-zones-us-cities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electric-school-bus-us-market-study.pdf?VersionId=duRTJFb5G7D7zZnLUfEu_zet5yueS04t</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO</div>
+        <div class="url-item extra">• https://www.wri.org/research/how-enable-electric-bus-adoption-cities-worldwide</div>
+        <div class="url-item extra">• https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil</div>
+        <div class="url-item extra">• https://www.wri.org/research/financing-electric-and-hybrid-electric-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/kampala-rebuilding-public-sector-legitimacy-new-approach-sanitation-services</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-water-resilience-africa</div>
+        <div class="url-item extra">• https://wri-india.org/research/just-transition-downstream-automotive-segment-evidence-delhi</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/ASSESSING-LOW-CARBON-STRATEGIES-OF-LOCAL-GOVERNMENTS-THROUGH-THE-LENS-OF-CLIMATE-POLICY-COVERAGE</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi</div>
+        <div class="url-item extra">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+        <div class="url-item extra">• https://www.wri.org/research/green-recovery-transportation</div>
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india</div>
+        <div class="url-item extra">• https://www.wri.org/research/untreated-and-unsafe-solving-urban-sanitation-crisis-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/decarbonising-hong-kongs-roads</div>
+        <div class="url-item extra">• https://www.wri.org/research/impact-driven-investing-new-mobility-enterprises-perspectives</div>
+        <div class="url-item extra">• https://www.wri.org/research/powering-cities-global-south-how-energy-access-all-benefits-economy-and-environment</div>
+        <div class="url-item extra">• https://www.wri.org/research/pune-civil-society-coalitions-policy-contradictions-and-unsteady-transformation</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/integrating-national-policies-to-deliver-compact-connected-cities-an-overview-of-transport-and-housing/</div>
+        <div class="url-item extra">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-05/decarbonizing-china-road-transport-sector.pdf?VersionId=n92NYycEWUXubH7VSYTwpSeiJ2k8D1UB</div>
+        <div class="url-item extra">• https://www.wri.org/research/costs-and-benefits-appraisal-tool-transit-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/decarbonizing-chinas-road-transport-sector-strategies-toward-carbon-neutrality</div>
+        <div class="url-item extra">• doc_000165.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/prepared-communities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/how-to-enable-electric-bus-adoption-cities-worldwide-executive-summary.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva</div>
+        <div class="url-item extra">• https://es.wri.org/publicaciones/aire-limpio-en-barrios-vitales</div>
+        <div class="url-item extra">• https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban</div>
+        <div class="url-item extra">• https://www.wri.org/research/understanding-impact-bus-aggregators-urban-mobility-indias-national-capital-region</div>
+        <div class="url-item extra">• https://www.wri.org/research/including-excluded-supporting-informal-workers-more-equal-and-productive-cities-global</div>
+        <div class="url-item extra">• https://wri-india.org/research/financial-impact-assessment-zero-emission-trucks-fi-zet</div>
+        <div class="url-item extra">• https://www.wri.org/research/unaffordable-and-undrinkable-rethinking-urban-water-access-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/low-speed-zone-guide</div>
+        <div class="url-item extra">• https://despacio.org/portfolio/las-mujeres-y-el-transporte-en-bogota-las-cuentas/</div>
+        <div class="url-item extra">• doc_000154.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/porto-alegre-participatory-budgeting-and-challenge-sustaining-transformative-change</div>
+        <div class="url-item extra">• doc_000141.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/research/safer-streets-mumbai-reflecting-decade-processes-solutions-road-safety</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/connected-urban-growth-public-private-collaborations-for-transforming-urban-mobility/</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What have we published on climate adaptation in Brazil?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about a thematic and geographical intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.</div>
+        <div class="test-id" style="margin-top: 8px;">q4_climate_brazil</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 4.8%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 100.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 9.1%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 63/3
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 1.42s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (3)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities</div>
+        <div class="url-item matched">• https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil</div>
+        <div class="url-item matched">• https://www.wri.org/research/prepared-communities</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (60)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/</div>
+        <div class="url-item extra">• https://www.wri.org/research/unlocking-potential-transformative-climate-adaptation-cities</div>
+        <div class="url-item extra">• doc_000165.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item extra">• doc_000162.pdf</div>
+        <div class="url-item extra">• doc_000166.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-city-climate-hazards-warming-scenarios</div>
+        <div class="url-item extra">• https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-mobility-roadmap-vietnam-case-studies</div>
+        <div class="url-item extra">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item extra">• https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/kampala-rebuilding-public-sector-legitimacy-new-approach-sanitation-services</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H</div>
+        <div class="url-item extra">• https://www.wri.org/research/access-climate-finance-low-middle-income-countries-14-case-studies-transport-sector</div>
+        <div class="url-item extra">• doc_000163.pdf</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-02/access-climate-finance-low-middle-income-countries.pdf?VersionId=BzzrTqBGKfjFkDh4ipLXkuxeR8PCFhHd</div>
+        <div class="url-item extra">• https://www.wri.org/research/porto-alegre-participatory-budgeting-and-challenge-sustaining-transformative-change</div>
+        <div class="url-item extra">• https://www.wri.org/research/calculating-indicators-global-geospatial-datasets-urban-environment</div>
+        <div class="url-item extra">• https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india</div>
+        <div class="url-item extra">• https://www.wri.org/research/impact-driven-investing-new-mobility-enterprises-perspectives</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• doc_000164.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/research/just-transition-downstream-automotive-segment-evidence-delhi</div>
+        <div class="url-item extra">• doc_000151.pdf</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/just-transition-core-climate-documents-80-paris-agreement</div>
+        <div class="url-item extra">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+        <div class="url-item extra">• https://www.wribrasil.org.br/publicacoes/trinta-anos-expansao-vertical-horizontal-cidades-brasileiras</div>
+        <div class="url-item extra">• https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item extra">• doc_000150.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/mexico-frontrunners/</div>
+        <div class="url-item extra">• https://www.wri.org/research/sustainable-urban-mobility-ndcs-essential-role-public-transport</div>
+        <div class="url-item extra">• https://www.wri.org/research/assessing-supply-chain-barriers-and-opportunities-advancing-road-transport-electrification</div>
+        <div class="url-item extra">• doc_000159.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/pune-civil-society-coalitions-policy-contradictions-and-unsteady-transformation</div>
+        <div class="url-item extra">• doc_000161.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/dataset-us-school-bus-depots</div>
+        <div class="url-item extra">• https://www.wri.org/research/green-recovery-transportation</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/ASSESSING-LOW-CARBON-STRATEGIES-OF-LOCAL-GOVERNMENTS-THROUGH-THE-LENS-OF-CLIMATE-POLICY-COVERAGE</div>
+        <div class="url-item extra">• https://www.wri.org/research/powering-cities-global-south-how-energy-access-all-benefits-economy-and-environment</div>
+        <div class="url-item extra">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva</div>
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://wri-india.org/research/fare-free-bus-travel-scheme-women-lessons-delhi</div>
+        <div class="url-item extra">• https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P</div>
+        <div class="url-item extra">• https://wri-india.org/research/projected-ev-transition-indian-automotive-manufacturing-industry-perceptions-and</div>
+        <div class="url-item extra">• https://www.wri.org/research/unaffordable-and-undrinkable-rethinking-urban-water-access-global-south</div>
+        <div class="url-item extra">• doc_000141.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/nature-based-solutions-sub-saharan-africa-climate-and-water-resilience</div>
+        <div class="url-item extra">• https://wri-india.org/research/real-world-electric-bus-operation-trend-technology-performance-degradation-and-lifespan</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-water-resilience-africa</div>
+        <div class="url-item extra">• doc_000153.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/integrating-national-policies-to-deliver-compact-connected-cities-an-overview-of-transport-and-housing/</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">How can cities implement micromobility solutions?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about a not well-defined topic area (micromobility encompasses a range of technologies). Do not retrieve papers that clearly are about non 'micro', such as public transit, freight, and other non-mobility solutions.</div>
+        <div class="test-id" style="margin-top: 8px;">q5_micromobility</div>
+      </div>
+      <span class="badge pass">✓ PASS</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 16.2%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 75.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 26.7%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 37/8
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 2.13s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (6)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide</div>
+        <div class="url-item matched">• https://www.wri.org/research/evolution-bike-sharing</div>
+        <div class="url-item matched">• https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities</div>
+        <div class="url-item matched">• https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india</div>
+        <div class="url-item matched">• https://urbantransitions.global/en/publication/mexico-frontrunners/</div>
+        <div class="url-item matched">• https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (2)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://wri-india.org/research/enabling-shift-electric-auto-rickshaws-guidebook-electrification-auto-rickshaw-fleets</div>
+        <div class="url-item missed">• https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (31)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/impact-driven-investing-new-mobility-enterprises-perspectives</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/connected-urban-growth-public-private-collaborations-for-transforming-urban-mobility/</div>
+        <div class="url-item extra">• doc_000152.pdf</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-08/developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities.pdf?VersionId=U2XPE7PXtXLWhOl9d7USTPdv0By.naDW</div>
+        <div class="url-item extra">• https://es.wri.org/publicaciones/demand-responsive-transit</div>
+        <div class="url-item extra">• https://www.wri.org/research/developing-electric-mobility-roadmap-international-experiences-subnational-case-studies</div>
+        <div class="url-item extra">• https://www.wri.org/research/green-recovery-transportation</div>
+        <div class="url-item extra">• https://www.globalroadsafetyfacility.org/publications/guide-safe-speeds-managing-traffic-speeds-save-lives-and-improve-livability</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/zero-emission-delivery-zones-us-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/financing-electric-and-hybrid-electric-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/sustainable-urban-mobility-ndcs-essential-role-public-transport</div>
+        <div class="url-item extra">• https://www.wri.org/research/powering-cities-global-south-how-energy-access-all-benefits-economy-and-environment</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO</div>
+        <div class="url-item extra">• https://www.wri.org/research/low-speed-zone-guide</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-ride-hailing-united-states-europe-canada</div>
+        <div class="url-item extra">• https://www.wri.org/research/motorcycle-safety-and-urban-road-infrastructure</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-mobility-roadmap-vietnam-case-studies</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H</div>
+        <div class="url-item extra">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/the-economic-case-for-greening-the-global-recovery-through-cities/</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/ASSESSING-LOW-CARBON-STRATEGIES-OF-LOCAL-GOVERNMENTS-THROUGH-THE-LENS-OF-CLIMATE-POLICY-COVERAGE</div>
+        <div class="url-item extra">• https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2021-11/electrifying-ride-hailing-vehicles-unites-states-europe-canada.pdf?VersionId=e6PhTmmNWbavTauieNfz4chQG74UsJw0</div>
+        <div class="url-item extra">• doc_000154.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://wri-india.org/research/safer-streets-mumbai-reflecting-decade-processes-solutions-road-safety</div>
+        <div class="url-item extra">• https://wri-india.org/research/just-transition-downstream-automotive-segment-evidence-delhi</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">Will electrifying school buses be beneficial for children's health outcomes?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about the impact of an intervention on a population? Do not retrieve papers that are about the intervention (school bus electrification) without talking about the specific impact of interest.</div>
+        <div class="test-id" style="margin-top: 8px;">q6_school_bus_health</div>
+      </div>
+      <span class="badge pass">✓ PASS</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 23.5%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 100.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 38.1%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 17/4
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 1.46s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (4)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses</div>
+        <div class="url-item matched">• https://www.wri.org/research/driving-forward-clean-ride-kids</div>
+        <div class="url-item matched">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item matched">• https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (13)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electric-school-bus-us-market-study.pdf?VersionId=duRTJFb5G7D7zZnLUfEu_zet5yueS04t</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-school-bus-us-market-study-and-buyers-guide-resource-school-bus-operators</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy</div>
+        <div class="url-item extra">• https://www.wri.org/research/dataset-us-school-bus-depots</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/improving-school-infrastructure-healthier-communities.pdf?VersionId=bs5CICF.GFd0Rn7VL317IcJMaDhUsayv</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-us-school-bus-fleets</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">What can be done to solve the housing crisis in Jakarta?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers that are about solutions to a general thematic problem area within a determined geography. Do not retrieve papers that only cover theme or geography, and only retrieve papers that talk about solutions.</div>
+        <div class="test-id" style="margin-top: 8px;">q7_jakarta_housing</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 7.3%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 100.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 13.6%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 55/4
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 2.13s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (4)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing</div>
+        <div class="url-item matched">• https://www.wri.org/research/surabaya-legacy-participatory-upgrading-informal-settlements</div>
+        <div class="url-item matched">• https://urbantransitions.global/en/publication/housing-policies-for-sustainable-and-inclusive-cities/</div>
+        <div class="url-item matched">• https://urbantransitions.global/en/publication/integrating-national-policies-to-deliver-compact-connected-cities-an-overview-of-transport-and-housing/</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (51)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/untreated-and-unsafe-solving-urban-sanitation-crisis-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/resilient-and-affordable-housing-for-all-lessons-on-house-building-from-kochi-and-trivandrum-india/</div>
+        <div class="url-item extra">• https://www.wri.org/research/calculating-indicators-global-geospatial-datasets-urban-environment</div>
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+        <div class="url-item extra">• https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/</div>
+        <div class="url-item extra">• https://www.wri.org/research/porto-alegre-participatory-budgeting-and-challenge-sustaining-transformative-change</div>
+        <div class="url-item extra">• https://www.wri.org/research/unaffordable-and-undrinkable-rethinking-urban-water-access-global-south</div>
+        <div class="url-item extra">• https://despacio.org/portfolio/las-mujeres-y-el-transporte-en-bogota-las-cuentas/</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/morphology-delhi-national-capital-regions-economic-geography-and-its-implications-planning</div>
+        <div class="url-item extra">• https://www.wri.org/research/including-excluded-supporting-informal-workers-more-equal-and-productive-cities-global</div>
+        <div class="url-item extra">• https://www.wri.org/research/johannesburg-confronting-spatial-inequality</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf</div>
+        <div class="url-item extra">• doc_000165.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/powering-cities-global-south-how-energy-access-all-benefits-economy-and-environment</div>
+        <div class="url-item extra">• doc_000144.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-mobility-roadmap-vietnam-case-studies</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/pune-civil-society-coalitions-policy-contradictions-and-unsteady-transformation</div>
+        <div class="url-item extra">• https://wri-india.org/research/safer-streets-mumbai-reflecting-decade-processes-solutions-road-safety</div>
+        <div class="url-item extra">• https://urbantransitions.global/es/publication/acciones-federales-para-la-planeacion-urbana/</div>
+        <div class="url-item extra">• https://www.wri.org/research/kampala-rebuilding-public-sector-legitimacy-new-approach-sanitation-services</div>
+        <div class="url-item extra">• https://www.wri.org/research/zero-emission-delivery-zones-us-cities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H</div>
+        <div class="url-item extra">• https://www.wri.org/research/dataset-us-school-bus-depots</div>
+        <div class="url-item extra">• https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-water-resilience-africa</div>
+        <div class="url-item extra">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item extra">• doc_000161.pdf</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO</div>
+        <div class="url-item extra">• doc_000162.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/unlocking-potential-transformative-climate-adaptation-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item extra">• https://wri-india.org/research/financial-impact-assessment-zero-emission-trucks-fi-zet</div>
+        <div class="url-item extra">• https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india</div>
+        <div class="url-item extra">• https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item extra">• https://www.wri.org/research/towards-more-equal-city-framing-challenges-and-opportunities</div>
+        <div class="url-item extra">• https://www.wri.org/research/prepared-communities</div>
+        <div class="url-item extra">• https://wri-india.org/research/just-transition-downstream-automotive-segment-evidence-delhi</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy</div>
+        <div class="url-item extra">• https://www.wri.org/research/developing-electric-mobility-roadmap-international-experiences-subnational-case-studies</div>
+        <div class="url-item extra">• https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/mexico-frontrunners/</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">Have we published any papers or reports on hydrogen?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve papers about a niche topic. Do not retrieve papers that talk about broader energy/mobility topics and just tangentially mention the technology.</div>
+        <div class="test-id" style="margin-top: 8px;">q8_hydrogen</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 3.8%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 60.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 7.1%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 80/5
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 2.28s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (3)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://wri-india.org/research/accelerating-production-and-use-green-hydrogen</div>
+        <div class="url-item matched">• https://wri-india.org/research/supporting-energy-transition-addressing-technology-gaps-electrolyzers</div>
+        <div class="url-item matched">• https://wri-india.org/research/pathways-decarbonize-indias-transport-sector-scenario-analysis-using-energy-policy</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (2)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://www.wri.org/research/completing-trip-establishing-global-quantified-climate-goal-transport-sector</div>
+        <div class="url-item missed">• https://wri.org.cn/en/report/Pathways-to-Decarbonize-the-Road-Transport-Sector-in-Guangdong</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (77)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/electric-mobility-roadmap-vietnam-case-studies</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H</div>
+        <div class="url-item extra">• https://www.wri.org/research/techno-economic-feasibility-analysis-zero-emission-trucks-urban-and-regional-delivery-use</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-06/zet-promotion-in-china-en.pdf?VersionId=QkcEhnUfwTS1zdMtn.XDEf9NE0Lp.zph</div>
+        <div class="url-item extra">• https://www.wri.org/research/financing-electric-and-hybrid-electric-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://urbantransitions.global/wp-content/uploads/2021/03/Future-Mobility-Calculator_An-electric-mobility-infrastructure-assessment-tool-technical-note.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/developing-electric-mobility-roadmap-international-experiences-subnational-case-studies</div>
+        <div class="url-item extra">• https://www.wri.org/research/towards-more-equal-city-framing-challenges-and-opportunities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/research/just-transition-downstream-automotive-segment-evidence-delhi</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-ride-hailing-united-states-europe-canada</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/future-mobility-calculator-an-electric-mobility-infrastructure-tool/</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-08/developing-electric-mobility-roadmap-subnational-case-studies-vietnamese-cities.pdf?VersionId=U2XPE7PXtXLWhOl9d7USTPdv0By.naDW</div>
+        <div class="url-item extra">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/green-recovery-transportation</div>
+        <div class="url-item extra">• doc_000141.pdf</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/just-transition-core-climate-documents-80-paris-agreement</div>
+        <div class="url-item extra">• https://www.wri.org/research/dataset-us-school-bus-depots</div>
+        <div class="url-item extra">• https://www.wri.org/research/kampala-rebuilding-public-sector-legitimacy-new-approach-sanitation-services</div>
+        <div class="url-item extra">• https://wri.org.cn/en/study/Toward-Credible-Transport-CO2-Emissions-Accounting-in-China</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2021-11/electrifying-ride-hailing-vehicles-unites-states-europe-canada.pdf?VersionId=e6PhTmmNWbavTauieNfz4chQG74UsJw0</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/decarbonising-hong-kongs-roads</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-01/toward-credible-transport-co2-emissions-accounting-china.pdf?VersionId=9MUbUJTjT7f3HfeYIDPGgmOt32b_qMEi</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy</div>
+        <div class="url-item extra">• https://www.wri.org/research/powering-cities-global-south-how-energy-access-all-benefits-economy-and-environment</div>
+        <div class="url-item extra">• https://www.wri.org/research/decarbonizing-chinas-road-transport-sector-strategies-toward-carbon-neutrality</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/including-excluded-supporting-informal-workers-more-equal-and-productive-cities-global</div>
+        <div class="url-item extra">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/barriers-to-adopting-electric-buses-executive-summary.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/johannesburg-confronting-spatial-inequality</div>
+        <div class="url-item extra">• https://wri-india.org/research/real-world-electric-bus-operation-trend-technology-performance-degradation-and-lifespan</div>
+        <div class="url-item extra">• https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india</div>
+        <div class="url-item extra">• https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen</div>
+        <div class="url-item extra">• https://www.wri.org/research/assessing-supply-chain-barriers-and-opportunities-advancing-road-transport-electrification</div>
+        <div class="url-item extra">• https://www.wri.org/research/costs-and-benefits-appraisal-tool-transit-buses</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/connected-urban-growth-public-private-collaborations-for-transforming-urban-mobility/</div>
+        <div class="url-item extra">• https://www.wri.org/research/morphology-delhi-national-capital-regions-economic-geography-and-its-implications-planning</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-05/decarbonizing-china-road-transport-sector.pdf?VersionId=n92NYycEWUXubH7VSYTwpSeiJ2k8D1UB</div>
+        <div class="url-item extra">• https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india</div>
+        <div class="url-item extra">• doc_000161.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing</div>
+        <div class="url-item extra">• https://www.globalroadsafetyfacility.org/publications/guide-safe-speeds-managing-traffic-speeds-save-lives-and-improve-livability</div>
+        <div class="url-item extra">• doc_000159.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/charging-toward-2035-policies-accelerate-zero-emission-heavy-duty-trucks-chinas-regional-long-haul-freight</div>
+        <div class="url-item extra">• https://www.wri.org/research/porto-alegre-participatory-budgeting-and-challenge-sustaining-transformative-change</div>
+        <div class="url-item extra">• doc_000150.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/barriers-adopting-electric-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/simulator-quantify-and-manage-electric-vehicle-load-impacts-low-voltage-distribution-grids</div>
+        <div class="url-item extra">• https://www.wri.org/research/motorcycle-safety-and-urban-road-infrastructure</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/evolution-bike-sharing</div>
+        <div class="url-item extra">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/technical-note-ev-grid.pdf</div>
+        <div class="url-item extra">• doc_000165.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/Real-world%20Electric%20Bus%20Operation_Working%20Paper%20final%20_revised.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/housing-policies-for-sustainable-and-inclusive-cities/</div>
+        <div class="url-item extra">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india</div>
+        <div class="url-item extra">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item extra">• https://www.wri.org/research/pune-civil-society-coalitions-policy-contradictions-and-unsteady-transformation</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/Open%20E-bus%20blueprint_working%20paper_web.pdf</div>
+        <div class="url-item extra">• https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item extra">• https://www.wri.org/research/untreated-and-unsafe-solving-urban-sanitation-crisis-global-south</div>
+        <div class="url-item extra">• https://es.wri.org/publicaciones/demand-responsive-transit</div>
+        <div class="url-item extra">• https://www.wri.org/research/access-climate-finance-low-middle-income-countries-14-case-studies-transport-sector</div>
+        <div class="url-item extra">• https://www.wri.org/research/unaffordable-and-undrinkable-rethinking-urban-water-access-global-south</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">Give me all the papers that were published as part of the cities World Resources Report?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve all papers that were published within a specific, well-defined research program, our WRI Ross Center's flagship research initiative that ran roughly 2015-2021. Do not retrieve papers that cite the WRR or have similar topics but were not part of the official corpus.</div>
+        <div class="test-id" style="margin-top: 8px;">q9_world_resources_report</div>
+      </div>
+      <span class="badge pass">✓ PASS</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 20.0%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 100.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 33.3%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 80/16
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 1.51s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (16)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item matched">• https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south</div>
+        <div class="url-item matched">• https://www.wri.org/research/unaffordable-and-undrinkable-rethinking-urban-water-access-global-south</div>
+        <div class="url-item matched">• https://www.wri.org/research/powering-cities-global-south-how-energy-access-all-benefits-economy-and-environment</div>
+        <div class="url-item matched">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item matched">• https://www.wri.org/research/pune-civil-society-coalitions-policy-contradictions-and-unsteady-transformation</div>
+        <div class="url-item matched">• https://www.wri.org/research/johannesburg-confronting-spatial-inequality</div>
+        <div class="url-item matched">• https://www.wri.org/research/including-excluded-supporting-informal-workers-more-equal-and-productive-cities-global</div>
+        <div class="url-item matched">• https://www.wri.org/research/porto-alegre-participatory-budgeting-and-challenge-sustaining-transformative-change</div>
+        <div class="url-item matched">• https://www.wri.org/research/untreated-and-unsafe-solving-urban-sanitation-crisis-global-south</div>
+        <div class="url-item matched">• https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing</div>
+        <div class="url-item matched">• https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty</div>
+        <div class="url-item matched">• https://www.wri.org/research/towards-more-equal-city-framing-challenges-and-opportunities</div>
+        <div class="url-item matched">• https://www.wri.org/research/surabaya-legacy-participatory-upgrading-informal-settlements</div>
+        <div class="url-item matched">• https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva</div>
+        <div class="url-item matched">• https://www.wri.org/research/kampala-rebuilding-public-sector-legitimacy-new-approach-sanitation-services</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (64)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru</div>
+        <div class="url-item extra">• doc_000141.pdf</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/synergizing-land-value-capture-tod</div>
+        <div class="url-item extra">• https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-ride-hailing-united-states-europe-canada</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/connected-urban-growth-public-private-collaborations-for-transforming-urban-mobility/</div>
+        <div class="url-item extra">• https://www.wri.org/research/financing-electric-and-hybrid-electric-buses</div>
+        <div class="url-item extra">• doc_000154.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/low-speed-zone-guide</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://wri-india.org/research/safer-streets-mumbai-reflecting-decade-processes-solutions-road-safety</div>
+        <div class="url-item extra">• doc_000150.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-city-climate-hazards-warming-scenarios</div>
+        <div class="url-item extra">• https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen</div>
+        <div class="url-item extra">• https://www.wri.org/research/unlocking-potential-transformative-climate-adaptation-cities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-06/technical-note-dataset-us-school-bus-fleets-2.pdf?VersionId=Y8UHY9Vfkb5myrpEtMRKFRI1O1LCZofV</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-school-bus-us-market-study-and-buyers-guide-resource-school-bus-operators</div>
+        <div class="url-item extra">• https://www.wri.org/research/electric-mobility-roadmap-vietnam-case-studies</div>
+        <div class="url-item extra">• https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban</div>
+        <div class="url-item extra">• https://es.wri.org/publicaciones/demand-responsive-transit</div>
+        <div class="url-item extra">• https://www.wri.org/research/motorcycle-safety-and-urban-road-infrastructure</div>
+        <div class="url-item extra">• https://www.wri.org/research/morphology-delhi-national-capital-regions-economic-geography-and-its-implications-planning</div>
+        <div class="url-item extra">• https://publications.iadb.org/en/informal-and-semiformal-services-latin-america-overview-public-transportation-reforms</div>
+        <div class="url-item extra">• https://www.wri.org/research/evolution-bike-sharing</div>
+        <div class="url-item extra">• https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022</div>
+        <div class="url-item extra">• https://www.wri.org/research/impact-driven-investing-new-mobility-enterprises-perspectives</div>
+        <div class="url-item extra">• https://www.wri.org/research/nature-based-solutions-sub-saharan-africa-climate-and-water-resilience</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/barriers-to-adopting-electric-buses-executive-summary.pdf</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-05/developing-electric-mobility-roadmap-vietnam.pdf?VersionId=JRV9mdHmQTdw0qIeux7TJt4JUP5zp1.H</div>
+        <div class="url-item extra">• https://www.wri.org/research/prepared-communities</div>
+        <div class="url-item extra">• doc_000161.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/green-recovery-transportation</div>
+        <div class="url-item extra">• https://www.wri.org/research/dataset-us-school-bus-depots</div>
+        <div class="url-item extra">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-water-resilience-africa</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states</div>
+        <div class="url-item extra">• https://www.wri.org/research/calculating-indicators-global-geospatial-datasets-urban-environment</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/financing-the-urban-transition-for-sustainable-development-better-finance-for-better-cities/</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/global-review-of-finance-for-sustainable-urban-infrastructure/</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-us-school-bus-fleets</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-11/zero-emission-delivery-zones.pdf?VersionId=ULdVbUJL_Alz4tTB4v.8vNEuyK9aaTdO</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/integrating-national-policies-to-deliver-compact-connected-cities-an-overview-of-transport-and-housing/</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electric-school-bus-us-market-study.pdf?VersionId=duRTJFb5G7D7zZnLUfEu_zet5yueS04t</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2021-11/electrifying-ride-hailing-vehicles-unites-states-europe-canada.pdf?VersionId=e6PhTmmNWbavTauieNfz4chQG74UsJw0</div>
+        <div class="url-item extra">• https://www.wri.org/research/stronger-ndcs-cities-states-regions-recommendations-national-governments</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/housing-policies-for-sustainable-and-inclusive-cities/</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations</div>
+        <div class="url-item extra">• https://www.wri.org/research/developing-electric-mobility-roadmap-international-experiences-subnational-case-studies</div>
+        <div class="url-item extra">• https://wri-india.org/research/just-transition-downstream-automotive-segment-evidence-delhi</div>
+        <div class="url-item extra">• https://wri.org.cn/en/research/ASSESSING-LOW-CARBON-STRATEGIES-OF-LOCAL-GOVERNMENTS-THROUGH-THE-LENS-OF-CLIMATE-POLICY-COVERAGE</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl</div>
+        <div class="url-item extra">• doc_000165.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/research/financial-impact-assessment-zero-emission-trucks-fi-zet</div>
+        <div class="url-item extra">• https://www.globalroadsafetyfacility.org/publications/guide-safe-speeds-managing-traffic-speeds-save-lives-and-improve-livability</div>
+        <div class="url-item extra">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/the-future-of-urban-mobility-the-case-for-electric-bus-deployment-in-bogota-colombia/</div>
+        <div class="url-item extra">• https://www.wri.org/research/zero-emission-delivery-zones-us-cities</div>
+        <div class="url-item extra">• https://www.wribrasil.org.br/publicacoes/ruas-completas-no-brasil</div>
+        <div class="url-item extra">• https://www.wri.org/research/trillion-dollar-question</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">Have we published anything to do with urban finance since 2020?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Retrieve all papers that were published after a specific date on an amorphous intersection. 'Urban finance' is a concatenation of two amorphous terms and not thing as such, so expecting to return all things in our corpus to do with finance, which is mostly electric buses and transportation.</div>
+        <div class="test-id" style="margin-top: 8px;">q10_urban_finance_since_2020</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 10.3%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 44.4%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 16.7%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 39/9
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 2.33s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (4)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://www.wri.org/research/access-climate-finance-low-middle-income-countries-14-case-studies-transport-sector</div>
+        <div class="url-item matched">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item matched">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item matched">• https://wri-india.org/research/rolling-out-electric-buses</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (5)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico</div>
+        <div class="url-item missed">• https://wri-india.org/research/assessing-financing-challenges-implementing-large-scale-electric-bus-program-india</div>
+        <div class="url-item missed">• https://wri.org.cn/en/research/feasibility-of-zero-emission-freight-zones-in-Beijing-Scenario-analysis-and-risk-assessment</div>
+        <div class="url-item missed">• https://wri-india.org/research/financial-analysis-charging-station-fact</div>
+        <div class="url-item missed">• https://www.wri.org/research/synergizing-land-value-capture-tod</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (35)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/global-review-of-finance-for-sustainable-urban-infrastructure/</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/financing-the-urban-transition-for-sustainable-development-better-finance-for-better-cities/</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/scaling-up-investment-for-sustainable-urban-infrastructure-a-guide-to-national-and-subnational-reform/</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf</div>
+        <div class="url-item extra">• doc_000161.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/financing-electric-and-hybrid-electric-buses</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-02/access-climate-finance-low-middle-income-countries.pdf?VersionId=BzzrTqBGKfjFkDh4ipLXkuxeR8PCFhHd</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/unaffordable-and-undrinkable-rethinking-urban-water-access-global-south</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/barriers-adopting-electric-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/costs-and-benefits-appraisal-tool-transit-buses</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/barriers-to-adopting-electric-buses-executive-summary.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/developing-prosperous-and-inclusive-cities-in-africa-national-urban-policies-to-the-rescue/</div>
+        <div class="url-item extra">• https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/</div>
+        <div class="url-item extra">• doc_000156.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/connected-urban-growth-public-private-collaborations-for-transforming-urban-mobility/</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru</div>
+        <div class="url-item extra">• https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states</div>
+        <div class="url-item extra">• https://www.wri.org/research/urban-water-resilience-africa</div>
+        <div class="url-item extra">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen</div>
+        <div class="url-item extra">• https://www.wri.org/research/nature-based-solutions-sub-saharan-africa-climate-and-water-resilience</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/how-enable-electric-bus-adoption-cities-worldwide</div>
+        <div class="url-item extra">• doc_000152.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/developing-electric-mobility-roadmap-international-experiences-subnational-case-studies</div>
+        <div class="url-item extra">• https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="test-case">
+    <div class="test-header">
+      <div style="flex: 1;">
+        <div class="test-question">Have we published anything to do with urban finance – please exclude anything to do with electric buses?</div>
+        <div style="font-size: 13px; color: #666; margin-top: 8px; font-style: italic;">Variation on the previous question, asking to remove the dominant thematic intersection and removing the temporal cut off.</div>
+        <div class="test-id" style="margin-top: 8px;">q11_urban_finance_exclude_ebuses</div>
+      </div>
+      <span class="badge fail">✗ FAIL</span>
+    </div>
+
+    <div class="test-metrics">
+      <div class="test-metric">
+        <strong>Precision:</strong> 17.5%
+      </div>
+      <div class="test-metric">
+        <strong>Recall:</strong> 70.0%
+      </div>
+      <div class="test-metric">
+        <strong>F1:</strong> 28.0%
+      </div>
+      <div class="test-metric">
+        <strong>Retrieved:</strong> 40/10
+      </div>
+      <div class="test-metric">
+        <strong>Time:</strong> 1.48s
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>✅ Correctly Retrieved (7)</h4>
+      <div class="url-list">
+        <div class="url-item matched">• https://urbantransitions.global/en/publication/financing-the-urban-transition-for-sustainable-development-better-finance-for-better-cities/</div>
+        <div class="url-item matched">• https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/</div>
+        <div class="url-item matched">• https://urbantransitions.global/en/publication/scaling-up-investment-for-sustainable-urban-infrastructure-a-guide-to-national-and-subnational-reform/</div>
+        <div class="url-item matched">• https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations</div>
+        <div class="url-item matched">• https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/</div>
+        <div class="url-item matched">• https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen</div>
+        <div class="url-item matched">• https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>❌ Missed (Should have retrieved) (3)</h4>
+      <div class="url-list">
+        <div class="url-item missed">• https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities</div>
+        <div class="url-item missed">• https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico</div>
+        <div class="url-item missed">• https://www.wri.org/research/synergizing-land-value-capture-tod</div>
+      </div>
+    </div>
+
+    <div class="url-section">
+      <h4>⚠️ Extra Retrievals (Not in golden set) (33)</h4>
+      <div class="url-list">
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/financing-electric-hybrid-electric-buses_0.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/global-review-of-finance-for-sustainable-urban-infrastructure/</div>
+        <div class="url-item extra">• https://www.wri.org/research/financing-electric-and-hybrid-electric-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/stronger-ndcs-cities-states-regions-recommendations-national-governments</div>
+        <div class="url-item extra">• https://www.wri.org/research/fare-look-funding-urban-public-transport-operations</div>
+        <div class="url-item extra">• https://urbantransitions.global/wp-content/uploads/2021/03/Seizing_the_Urban_Opportunity_WEB-1.pdf</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/barriers-to-adopting-electric-buses-executive-summary.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/barriers-adopting-electric-buses</div>
+        <div class="url-item extra">• https://www.wri.org/research/costs-and-benefits-appraisal-tool-transit-buses</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/connected-urban-growth-public-private-collaborations-for-transforming-urban-mobility/</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC</div>
+        <div class="url-item extra">• https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved</div>
+        <div class="url-item extra">• https://wri-india.org/research/rolling-out-electric-buses</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/e-Bus_Guidebook_22nd%20March.pdf</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/developing-prosperous-and-inclusive-cities-in-africa-national-urban-policies-to-the-rescue/</div>
+        <div class="url-item extra">• https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf</div>
+        <div class="url-item extra">• doc_000152.pdf</div>
+        <div class="url-item extra">• https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities</div>
+        <div class="url-item extra">• https://www.wri.org/research/changing-demand-preference-electric-vehicles-ho-chi-minh-city-costs-and-benefits</div>
+        <div class="url-item extra">• https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2022-09/sustainable-urban-mobility-ndcs-essential-role-public-transport_0.pdf?VersionId=aDJstKWe_3s9k298sFxskKlqEeuskM4P</div>
+        <div class="url-item extra">• https://urbantransitions.global/en/publication/mexico-frontrunners/</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-02/access-climate-finance-low-middle-income-countries.pdf?VersionId=BzzrTqBGKfjFkDh4ipLXkuxeR8PCFhHd</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2025-03/improving-school-infrastructure-healthier-communities.pdf?VersionId=bs5CICF.GFd0Rn7VL317IcJMaDhUsayv</div>
+        <div class="url-item extra">• https://www.wri.org/research/access-climate-finance-low-middle-income-countries-14-case-studies-transport-sector</div>
+        <div class="url-item extra">• https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban</div>
+        <div class="url-item extra">• https://www.wri.org/research/mobility-access-all-expanding-urban-transportation-choices-global-south</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/costs-emissions-appraisal-tool-transit-buses.pdf</div>
+        <div class="url-item extra">• https://files.wri.org/d8/s3fs-public/2023-02/changing-demand-electric-vehicles-ho-chi-minh-city.pdf?VersionId=2DUl6RwHbULBUNonMN2nyUaVlzsooxzl</div>
+        <div class="url-item extra">• https://www.wri.org/research/how-enable-electric-bus-adoption-cities-worldwide</div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

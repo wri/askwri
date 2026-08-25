@@ -1,0 +1,530 @@
+[
+  {
+    "queryId": "q1",
+    "query": "land value capture transport infrastructure",
+    "expectedDocs": [
+      "Financing Sustainable Urban Transport",
+      "Business Models for Sustainable Mobility",
+      "Ahmedabad Town Planning Schemes",
+      "Rail+Property Development China"
+    ],
+    "stageRecall": {
+      "vector": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Financing Sustainable Urban Transport",
+          "Business Models for Sustainable Mobility",
+          "Ahmedabad Town Planning Schemes",
+          "Rail+Property Development China"
+        ]
+      },
+      "bm25": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Financing Sustainable Urban Transport",
+          "Business Models for Sustainable Mobility",
+          "Ahmedabad Town Planning Schemes",
+          "Rail+Property Development China"
+        ]
+      },
+      "fusion": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Financing Sustainable Urban Transport",
+          "Business Models for Sustainable Mobility",
+          "Ahmedabad Town Planning Schemes",
+          "Rail+Property Development China"
+        ]
+      },
+      "rerank": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Financing Sustainable Urban Transport",
+          "Business Models for Sustainable Mobility",
+          "Ahmedabad Town Planning Schemes",
+          "Rail+Property Development China"
+        ]
+      }
+    },
+    "documentAnalysis": [
+      {
+        "docTitle": "Financing Sustainable Urban Transport",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Business Models for Sustainable Mobility",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Ahmedabad Town Planning Schemes",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Rail+Property Development China",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      }
+    ]
+  },
+  {
+    "queryId": "q2",
+    "query": "Bangalore transportation urban mobility",
+    "expectedDocs": [
+      "Bangalore Cycling Action Plan",
+      "Bangalore Metro System Report",
+      "Karnataka Urban Transport Study",
+      "Bangalore Traffic Management",
+      "Bangalore Bus Rapid Transit",
+      "Bangalore Road Safety Assessment"
+    ],
+    "stageRecall": {
+      "vector": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Bangalore Cycling Action Plan",
+          "Bangalore Metro System Report",
+          "Karnataka Urban Transport Study",
+          "Bangalore Traffic Management",
+          "Bangalore Bus Rapid Transit",
+          "Bangalore Road Safety Assessment"
+        ]
+      },
+      "bm25": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Bangalore Cycling Action Plan",
+          "Bangalore Metro System Report",
+          "Karnataka Urban Transport Study",
+          "Bangalore Traffic Management",
+          "Bangalore Bus Rapid Transit",
+          "Bangalore Road Safety Assessment"
+        ]
+      },
+      "fusion": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Bangalore Cycling Action Plan",
+          "Bangalore Metro System Report",
+          "Karnataka Urban Transport Study",
+          "Bangalore Traffic Management",
+          "Bangalore Bus Rapid Transit",
+          "Bangalore Road Safety Assessment"
+        ]
+      },
+      "rerank": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Bangalore Cycling Action Plan",
+          "Bangalore Metro System Report",
+          "Karnataka Urban Transport Study",
+          "Bangalore Traffic Management",
+          "Bangalore Bus Rapid Transit",
+          "Bangalore Road Safety Assessment"
+        ]
+      }
+    },
+    "documentAnalysis": [
+      {
+        "docTitle": "Bangalore Cycling Action Plan",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Bangalore Metro System Report",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Karnataka Urban Transport Study",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Bangalore Traffic Management",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Bangalore Bus Rapid Transit",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Bangalore Road Safety Assessment",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      }
+    ]
+  },
+  {
+    "queryId": "q3",
+    "query": "children air pollution health impacts school",
+    "expectedDocs": [
+      "Children Air Quality School Study",
+      "Driving Forward: Clean Ride for Kids",
+      "Improving School Infrastructure"
+    ],
+    "stageRecall": {
+      "vector": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Children Air Quality School Study",
+          "Driving Forward: Clean Ride for Kids",
+          "Improving School Infrastructure"
+        ]
+      },
+      "bm25": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Children Air Quality School Study",
+          "Driving Forward: Clean Ride for Kids",
+          "Improving School Infrastructure"
+        ]
+      },
+      "fusion": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Children Air Quality School Study",
+          "Driving Forward: Clean Ride for Kids",
+          "Improving School Infrastructure"
+        ]
+      },
+      "rerank": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Children Air Quality School Study",
+          "Driving Forward: Clean Ride for Kids",
+          "Improving School Infrastructure"
+        ]
+      }
+    },
+    "documentAnalysis": [
+      {
+        "docTitle": "Children Air Quality School Study",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Driving Forward: Clean Ride for Kids",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Improving School Infrastructure",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      }
+    ]
+  },
+  {
+    "queryId": "q4",
+    "query": "climate change adaptation Brazil urban transport",
+    "expectedDocs": [
+      "Brazil Climate Action Transport",
+      "Rio de Janeiro Resilience Strategy",
+      "São Paulo Low Carbon Transport"
+    ],
+    "stageRecall": {
+      "vector": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Brazil Climate Action Transport",
+          "Rio de Janeiro Resilience Strategy",
+          "São Paulo Low Carbon Transport"
+        ]
+      },
+      "bm25": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Brazil Climate Action Transport",
+          "Rio de Janeiro Resilience Strategy",
+          "São Paulo Low Carbon Transport"
+        ]
+      },
+      "fusion": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Brazil Climate Action Transport",
+          "Rio de Janeiro Resilience Strategy",
+          "São Paulo Low Carbon Transport"
+        ]
+      },
+      "rerank": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Brazil Climate Action Transport",
+          "Rio de Janeiro Resilience Strategy",
+          "São Paulo Low Carbon Transport"
+        ]
+      }
+    },
+    "documentAnalysis": [
+      {
+        "docTitle": "Brazil Climate Action Transport",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Rio de Janeiro Resilience Strategy",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "São Paulo Low Carbon Transport",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      }
+    ]
+  },
+  {
+    "queryId": "q5",
+    "query": "micromobility e-scooters bike-sharing dockless",
+    "expectedDocs": [
+      "Shared Micromobility Policy Toolkit",
+      "E-Scooter Safety Guidelines",
+      "Bike-Sharing System Design",
+      "Dockless Mobility Regulation",
+      "Micromobility Urban Integration",
+      "E-Bike Infrastructure Planning",
+      "Shared Mobility Market Analysis",
+      "Micromobility Environmental Impact"
+    ],
+    "stageRecall": {
+      "vector": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Shared Micromobility Policy Toolkit",
+          "E-Scooter Safety Guidelines",
+          "Bike-Sharing System Design",
+          "Dockless Mobility Regulation",
+          "Micromobility Urban Integration",
+          "E-Bike Infrastructure Planning",
+          "Shared Mobility Market Analysis",
+          "Micromobility Environmental Impact"
+        ]
+      },
+      "bm25": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Shared Micromobility Policy Toolkit",
+          "E-Scooter Safety Guidelines",
+          "Bike-Sharing System Design",
+          "Dockless Mobility Regulation",
+          "Micromobility Urban Integration",
+          "E-Bike Infrastructure Planning",
+          "Shared Mobility Market Analysis",
+          "Micromobility Environmental Impact"
+        ]
+      },
+      "fusion": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Shared Micromobility Policy Toolkit",
+          "E-Scooter Safety Guidelines",
+          "Bike-Sharing System Design",
+          "Dockless Mobility Regulation",
+          "Micromobility Urban Integration",
+          "E-Bike Infrastructure Planning",
+          "Shared Mobility Market Analysis",
+          "Micromobility Environmental Impact"
+        ]
+      },
+      "rerank": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "Shared Micromobility Policy Toolkit",
+          "E-Scooter Safety Guidelines",
+          "Bike-Sharing System Design",
+          "Dockless Mobility Regulation",
+          "Micromobility Urban Integration",
+          "E-Bike Infrastructure Planning",
+          "Shared Mobility Market Analysis",
+          "Micromobility Environmental Impact"
+        ]
+      }
+    },
+    "documentAnalysis": [
+      {
+        "docTitle": "Shared Micromobility Policy Toolkit",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "E-Scooter Safety Guidelines",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Bike-Sharing System Design",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Dockless Mobility Regulation",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Micromobility Urban Integration",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "E-Bike Infrastructure Planning",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Shared Mobility Market Analysis",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Micromobility Environmental Impact",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      }
+    ]
+  },
+  {
+    "queryId": "q6",
+    "query": "school bus health benefits air quality children",
+    "expectedDocs": [
+      "School Bus Electrification Study",
+      "Driving Forward: Clean Ride for Kids",
+      "Improving School Infrastructure"
+    ],
+    "stageRecall": {
+      "vector": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "School Bus Electrification Study",
+          "Driving Forward: Clean Ride for Kids",
+          "Improving School Infrastructure"
+        ]
+      },
+      "bm25": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "School Bus Electrification Study",
+          "Driving Forward: Clean Ride for Kids",
+          "Improving School Infrastructure"
+        ]
+      },
+      "fusion": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "School Bus Electrification Study",
+          "Driving Forward: Clean Ride for Kids",
+          "Improving School Infrastructure"
+        ]
+      },
+      "rerank": {
+        "recall": 0,
+        "found": [],
+        "missing": [
+          "School Bus Electrification Study",
+          "Driving Forward: Clean Ride for Kids",
+          "Improving School Infrastructure"
+        ]
+      }
+    },
+    "documentAnalysis": [
+      {
+        "docTitle": "School Bus Electrification Study",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Driving Forward: Clean Ride for Kids",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      },
+      {
+        "docTitle": "Improving School Infrastructure",
+        "foundInVector": false,
+        "foundInBM25": false,
+        "foundInFusion": false,
+        "foundInRerank": false
+      }
+    ]
+  }
+]

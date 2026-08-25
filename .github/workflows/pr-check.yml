@@ -1,0 +1,236 @@
+# =============================================================================
+# Pull Request Workflow
+# Runs tests and validates Terraform on all pull requests
+# =============================================================================
+
+name: Pull Request Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - production
+      - qa
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ==========================================================================
+  # Build and Test
+  # ==========================================================================
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    # The *.db.test.ts gate on DATABASE_URL; without it they self-skip and the
+    # entire app-tier DB query layer goes untested in CI. The postgres service
+    # + migration:run step below give them a schema to test against.
+    env:
+      DATABASE_URL: postgresql://askwri:password@localhost:5432/postgres
+      DATABASE_SSL: 'false'
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: askwri
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Gating: Next 16 no longer lints during `next build`, so this is the
+      # only thing enforcing eslint.config.mjs (issue #234).
+      - name: Lint
+        run: npm run lint
+
+      # Prettier owns code formatting (eslint-config-prettier stands ESLint down
+      # from it), so it has to be enforced somewhere. Scope is .prettierignore.
+      - name: Format check
+        run: npm run format:check
+
+      - name: Run database migrations
+        run: npm run migration:run
+
+      - name: Run tests
+        run: npm run test:ci
+
+      - name: Build application
+        run: npm run build
+
+  # ==========================================================================
+  # Python Tests (Search Service + Worker)
+  # ==========================================================================
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+
+    # DB-backed worker tests create scratch databases (askwri_worker_test etc.)
+    # against localhost:5432 as user askwri — POSTGRES_USER makes askwri the
+    # container superuser, so CREATE DATABASE works. REQUIRE_DB_TESTS=1 makes
+    # the conftest guard fail loudly instead of silently skipping.
+    env:
+      DATABASE_URL: postgresql://askwri:password@localhost:5432/postgres
+      REQUIRE_DB_TESTS: '1'
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: askwri
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          # Without this the job re-downloads the whole dependency tree every
+          # run — ~600 wheels including torch, pulled in by sentence-transformers.
+          cache: 'pip'
+          cache-dependency-path: |
+            search-service/requirements.txt
+            search-service/requirements-dev.txt
+
+      # The scratch-DB fixtures apply the TypeORM schema via `npm run migration:run`
+      # (subprocess from the repo root), so Node + npm deps are required here too.
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install dependencies
+        working-directory: search-service
+        run: pip install -r requirements.txt
+
+      - name: Install dev dependencies
+        working-directory: search-service
+        run: pip install -r requirements-dev.txt
+
+      # Ghostscript: worker/stages/parse.py shells out to `gs` to shrink PDFs
+      # over Mistral OCR's 50MB limit. Without it the shrink tests in
+      # test_parse_backend.py skip, which would hide a broken shrink path.
+      - name: Install ghostscript
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ghostscript
+
+      # Selection: hermetic tests (test_sparse_keyword, test_cite_doc_ids_filter)
+      # plus scratch-DB tests that self-provision against DATABASE_URL
+      # (test_migration_script, test_build_sparse_script, test_sparse_retriever,
+      # test_worker_pipeline, test_worker_stages, test_worker_queue, test_indexing).
+      #
+      # Added 2026-07-07 (Task G1): the keyword-lane contract (test_sparse_retriever),
+      # the full pipeline + upload e2e (test_worker_pipeline), the R1 regression
+      # (test_startsh_sync), and the B3 config regression (test_config,
+      # test_config_env_local, test_env_loading). All are hermetic / self-
+      # provisioning scratch DBs or pure config tests. test_pg_store and
+      # test_query_e2e remain local-only (they need the real 169-doc qa corpus).
+      #
+      # Added 2026-08-05 (#310 follow-up): test_parse_backend (parse-backend
+      # dispatch + the oversized-PDF Ghostscript shrink; fully hermetic, no DB,
+      # no network) and test_dockerfile_worker (the Docker BUILD test is opt-in
+      # behind REQUIRE_DOCKER_TESTS and stays skipped here; the two text
+      # assertions that run guard `worker/` and `ghostscript` staying in the
+      # image — deploy-only failures nothing else catches).
+      - name: Run tests
+        working-directory: search-service
+        run: pytest tests/test_indexing.py tests/test_worker_queue.py tests/test_worker_stages.py tests/test_sparse_keyword.py tests/test_cite_doc_ids_filter.py tests/test_migration_script.py tests/test_build_sparse_script.py tests/test_sparse_retriever.py tests/test_worker_pipeline.py tests/test_startsh_sync.py tests/test_config.py tests/test_config_env_local.py tests/test_env_loading.py tests/test_parse_backend.py tests/test_dockerfile_worker.py tests/test_batch_ocr_script.py -v
+
+  # ==========================================================================
+  # Docker Build Test
+  # ==========================================================================
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Both builds run in this one job, so without an explicit scope they share
+      # a single gha cache entry and overwrite each other's manifest — each run
+      # imported the other image's cache and missed. That made the search-service
+      # build re-run `pip install` and re-export both ONNX rerankers from
+      # scratch (7m15s of an 8m46s job) even when requirements.txt was untouched.
+      # The deploy workflow does not hit this because it builds the two images in
+      # separate jobs.
+      - name: Build Docker image (Next.js)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha,scope=nextjs
+          cache-to: type=gha,mode=max,scope=nextjs
+
+      - name: Build Docker image (Search Service)
+        uses: docker/build-push-action@v7
+        with:
+          context: ./search-service
+          push: false
+          cache-from: type=gha,scope=search-service
+          cache-to: type=gha,mode=max,scope=search-service
+
+  # ==========================================================================
+  # Terraform Validation
+  # ==========================================================================
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.13.1
+
+      - name: Terraform Format Check
+        working-directory: terraform/infrastructure
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init (QA)
+        working-directory: terraform/infrastructure
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: terraform/infrastructure
+        run: terraform validate

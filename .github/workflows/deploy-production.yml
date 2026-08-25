@@ -1,0 +1,250 @@
+# =============================================================================
+# Production Deployment Workflow
+# Triggered on push to 'main' or 'production' branch
+# =============================================================================
+
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+      - production
+    # Documentation-only pushes do not change the images or the infrastructure,
+    # so skip the ~15 minute build/apply/redeploy cycle. Use workflow_dispatch to
+    # force a deploy regardless.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'LICENSE'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-2
+  PROJECT_NAME: askwri-app
+  ENVIRONMENT: production
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # ==========================================================================
+  # Build and Test
+  # ==========================================================================
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:ci
+
+      - name: Build application
+        run: npm run build
+
+  # ==========================================================================
+  # Build and Push Docker Image
+  # ==========================================================================
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.OIDC_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}
+          tags: |
+            # format=long so the tag IS github.sha exactly — the Terraform
+            # image_tag var is passed that same value, with no reconstruction.
+            type=sha,format=long,prefix=
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=nextjs
+          cache-to: type=gha,mode=max,scope=nextjs
+          build-args: |
+            NEXT_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
+
+  # ==========================================================================
+  # Build and Push Search Service Docker Image
+  # ==========================================================================
+  build-and-push-search-service:
+    name: Build and Push Search Service
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.OIDC_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service
+          tags: |
+            # format=long so the tag IS github.sha exactly — the Terraform
+            # image_tag var is passed that same value, with no reconstruction.
+            type=sha,format=long,prefix=
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./search-service
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=search-service
+          cache-to: type=gha,mode=max,scope=search-service
+
+  # ==========================================================================
+  # Deploy Infrastructure with Terraform
+  # ==========================================================================
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [build-and-push, build-and-push-search-service]
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.OIDC_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.13.1
+
+      - name: Terraform Init
+        working-directory: terraform/infrastructure
+        run: |
+          terraform init \
+            -backend-config="../environments/${{ env.ENVIRONMENT }}.backend.hcl"
+
+      - name: Terraform Validate
+        working-directory: terraform/infrastructure
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: terraform/infrastructure
+        env:
+          TF_VAR_search_service_secret_env: ${{ secrets.SEARCH_SERVICE_ENV }}
+          TF_VAR_askwri_app_secret_env: ${{ secrets.ASKWRI_APP_ENV }}
+          TF_VAR_ingestion_worker_secret_env: ${{ secrets.INGESTION_WORKER_ENV }}
+        run: |
+          terraform plan \
+            -var-file="../environments/${{ env.ENVIRONMENT }}.tfvars" \
+            -var="image_tag=${{ github.sha }}" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform/infrastructure
+        env:
+          TF_VAR_search_service_secret_env: ${{ secrets.SEARCH_SERVICE_ENV }}
+          TF_VAR_askwri_app_secret_env: ${{ secrets.ASKWRI_APP_ENV }}
+          TF_VAR_ingestion_worker_secret_env: ${{ secrets.INGESTION_WORKER_ENV }}
+        run: terraform apply -auto-approve tfplan
+
+  # ==========================================================================
+  # Update ECS Service
+  # ==========================================================================
+  deploy-service:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    environment: production
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.OIDC_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Force new deployment
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
+            --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service \
+            --force-new-deployment
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
+            --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service \
+            --force-new-deployment
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
+            --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-ingestion-worker \
+            --force-new-deployment
+
+      - name: Wait for service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
+            --services ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-ingestion-worker
+
+      - name: Get Application URL
+        run: |
+          echo "🚀 Application deployed successfully to PRODUCTION!"
+          echo "📍 URL: https://www.askwri-app.org"

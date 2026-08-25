@@ -1,0 +1,26 @@
+{
+  "description": "Non-English keyword-lane smoke set (zh/es/pt). Hand-built 2026-06-11 from documents metadata/titles with term occurrence verified against document_chunks.text via ILIKE. This is a SMOKE TEST for lane-replacement parity, not a golden set: queries are keyword-shaped, targets are the docs whose chunks verifiably contain the terms, and there is no relevance labeling beyond that.",
+  "usage": "npx tsx evaluation/run-non-english-smoke.ts (search-service must be running)",
+  "queries": [
+    { "id": "nq-zh-01", "language": "zh", "query": "株洲完整街道设计指南", "target_doc_ids": ["2019_zhuzhou-complete-street-design-manual_2976"], "note": "株洲 in 114 target chunks; 2 docs corpus-wide" },
+    { "id": "nq-zh-02", "language": "zh", "query": "电动公交车运营挑战", "target_doc_ids": ["2019_overcoming-the-operational-challenges-of-electric_2317"], "note": "电动公交 in 144 target chunks; 3 docs" },
+    { "id": "nq-zh-03", "language": "zh", "query": "北京零排放货运", "target_doc_ids": ["2021_zero-emission-logistic-vehicles-promotion_1319", "2024_accelerating-zero-emission-truck-adoption-in_6287", "2024_feasibility-of-zero-emission-freight-zones_1267"], "note": "three Beijing ZE-freight docs accepted; 零排放货运 in 3 docs" },
+    { "id": "nq-zh-04", "language": "zh", "query": "出行即服务平台商业模式", "target_doc_ids": ["2022_introduction-and-case-studies-of-mobility-as-a_9845"], "note": "出行即服务 in 66 target chunks; 2 docs" },
+    { "id": "nq-zh-05", "language": "zh", "query": "深圳港集装箱运输脱碳", "target_doc_ids": ["2024_optimizing-container-ports-transportation-and_9894"], "note": "深圳 in 176 target chunks; 14 docs (discriminator is 港/集装箱)" },
+    { "id": "nq-zh-06", "language": "zh", "query": "轨道交通站点安全可达性设计", "target_doc_ids": ["2020_design-manual-on-safe-access-to-public_5869"], "note": "安全可达 in 59 target chunks; unique to target" },
+    { "id": "nq-zh-07", "language": "zh", "query": "广东道路交通深度减排路径", "target_doc_ids": ["2022_research-on-medium-and-long-term-in-depth_4687"], "note": "广东 in 278 target chunks; 9 docs" },
+    { "id": "nq-es-01", "language": "es", "query": "el costo de la expansión urbana en México", "target_doc_ids": ["2021_el-costo-de-la-expansion-urbana-en-mexico_2705", "2021_el-costo-de-la-expansion-urbana-en-mexico_9471"], "note": "duplicate doc pair, both accepted", "defect": "target _2705 is language='en' on qa (English-edition PDF, non-English title) — findings 2026-07-24 §6; authored in the pypdf era. run-non-english-smoke.ts removes the defective target and keeps the query via its valid target _9471.", "defect_target_doc_ids": ["2021_el-costo-de-la-expansion-urbana-en-mexico_2705"] },
+    { "id": "nq-es-02", "language": "es", "query": "las mujeres y el transporte en Bogotá", "target_doc_ids": ["2020_las-mujeres-y-el-transporte-en-bogota-las-cuentas_3254"], "note": "mujeres in 193 target chunks; 6 docs" },
+    { "id": "nq-es-03", "language": "es", "query": "entornos caminables seguros", "target_doc_ids": ["2022_guia-de-entornos-caminables-seguros_2940"], "note": "phrase unique to target (111 chunks)" },
+    { "id": "nq-es-04", "language": "es", "query": "ciencia participativa para un aire limpio", "target_doc_ids": ["2023_ciencia-participativa-accion-para-un-aire-limpio_6722"], "note": "phrase unique to target (27 chunks)" },
+    { "id": "nq-es-05", "language": "es", "query": "índice de desigualdad urbana", "target_doc_ids": ["2020_indice-de-desigualdad-urbana_3387"], "note": "desigualdad urbana in 44 target chunks; 5 docs" },
+    { "id": "nq-pt-01", "language": "pt", "query": "ruas completas no Brasil", "target_doc_ids": ["2021_ruas-completas-no-brasil-promovendo-uma-mudanca_5028"], "note": "phrase unique to target (154 chunks)" },
+    { "id": "nq-pt-02", "language": "pt", "query": "medindo PM2.5 com sensores de baixo custo", "target_doc_ids": ["2021_medindo-mp25-com-sensores-de-baixo-custo_6821"], "note": "sensores de baixo custo unique to target", "defect": "sole target _6821 is language='en' on qa (English-edition PDF, non-English title) — findings 2026-07-24 §6; authored in the pypdf era. run-non-english-smoke.ts skips this query entirely (no valid target remains); kept for history.", "defect_target_doc_ids": ["2021_medindo-mp25-com-sensores-de-baixo-custo_6821"] },
+    { "id": "nq-pt-03", "language": "pt", "query": "pesquisa de satisfação QualiÔnibus", "target_doc_ids": ["2024_manual-da-pesquisa-de-satisfacao-qualionibus_7600"], "note": "QualiÔnibus unique to target (184 chunks)" },
+    { "id": "nq-pt-04", "language": "pt", "query": "expansão vertical e horizontal em cidades brasileiras", "target_doc_ids": ["2025_trinta-anos-de-expansao-vertical-e-horizontal-em_9049"], "note": "expansão vertical unique to target (35 chunks)" }
+  ],
+  "known_corpus_caveats": [
+    "2022_toward-credible-transport-carbon-dioxide_3778 / _5852 and 2023_assessing-low-carbon-strategies-of-local_2130 are labeled zh but their extracted text is English — excluded from targets.",
+    "zh chunk text is Simplified Chinese (OpenCC t2s at ingest); queries here are Simplified."
+  ]
+}

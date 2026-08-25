@@ -1,0 +1,42 @@
+node_modules
+.next
+out
+coverage
+build
+*.lock
+
+# Prettier owns CODE formatting only. Everything below is either prose we edit
+# by hand, a data artifact whose diffs we read, or a tree that is not this
+# project's surface — the same boundary eslint.config.mjs draws.
+#
+# Scope matters: unignored, `prettier --write .` rewrites 226 files / ~21.6k
+# lines, and 88% of that churn is docs/ and evaluation JSON. Scoped as below it
+# is application code only.
+
+# Prose. docs/ is the project's decision record (designs, plans, runbooks) —
+# reformatting it buys nothing and makes `git log -p docs/` unreadable.
+*.md
+
+# Python service: not linted here either (eslint.config.mjs ignores it).
+search-service
+
+# Data artifacts, not source. Golden sets and captured eval output are diffed
+# run-to-run; reflowing them destroys those diffs.
+evaluation/results
+evaluation/**/*.json
+
+# Static assets and generated files.
+public
+next-env.d.ts
+
+# Dependabot re-runs every ecosystem the moment this file changes on the
+# default branch. A cosmetic requote of it on 2026-07-27 opened 19 PRs in two
+# minutes. Formatting it is worth nothing; re-triggering Dependabot is worth
+# less than nothing.
+.github/dependabot.yml
+
+# Git worktrees for isolated feature work (.gitignore:92) and agent worktrees —
+# these are other checkouts. Writing into them from here would edit another
+# branch's working tree.
+.worktrees
+.claude

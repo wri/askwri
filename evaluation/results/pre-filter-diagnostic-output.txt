@@ -1,0 +1,139 @@
+🚀 PRE-FILTER RECALL DIAGNOSTIC
+Goal: Check if expected documents are retrieved BEFORE LLM filter
+Using rerankTopN: 120 (production setting)
+
+
+================================================================================
+🔍 q1_land_value_capture
+Question: What have we published on land value capture? (topic area)
+Expected: 4 documents
+
+📊 Retrieved (pre-filter): 33 documents
+✅ Found: 4/4 (100.0% recall)
+❌ Missing: 0/4
+
+================================================================================
+🔍 q2_bangalore_geography
+Question: What have we published on Bangalore?
+Expected: 6 documents
+
+📊 Retrieved (pre-filter): 71 documents
+✅ Found: 6/6 (100.0% recall)
+❌ Missing: 0/6
+
+================================================================================
+🔍 q3_children_pollution
+Question: What have we published on children and pollution?
+Expected: 3 documents
+
+📊 Retrieved (pre-filter): 80 documents
+✅ Found: 3/3 (100.0% recall)
+❌ Missing: 0/3
+
+================================================================================
+🔍 q4_climate_brazil
+Question: What have we published on climate adaptation in Brazil?
+Expected: 3 documents
+
+📊 Retrieved (pre-filter): 63 documents
+✅ Found: 3/3 (100.0% recall)
+❌ Missing: 0/3
+
+================================================================================
+🔍 q5_micromobility
+Question: How can cities implement micromobility solutions?
+Expected: 8 documents
+
+📊 Retrieved (pre-filter): 38 documents
+✅ Found: 6/8 (75.0% recall)
+❌ Missing: 2/8
+
+❌ Missing documents (UPSTREAM PROBLEM):
+   - https://wri-india.org/research/enabling-shift-electric-auto-rickshaws-guidebook-electrification-auto-rickshaw-fleets
+   - https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva
+
+================================================================================
+🔍 q6_school_bus_health
+Question: Will electrifying school buses be beneficial for children's health outcomes?
+Expected: 4 documents
+
+📊 Retrieved (pre-filter): 19 documents
+✅ Found: 4/4 (100.0% recall)
+❌ Missing: 0/4
+
+================================================================================
+🔍 q7_jakarta_housing
+Question: What can be done to solve the housing crisis in Jakarta?
+Expected: 4 documents
+
+📊 Retrieved (pre-filter): 59 documents
+✅ Found: 4/4 (100.0% recall)
+❌ Missing: 0/4
+
+================================================================================
+🔍 q8_hydrogen
+Question: Have we published any papers or reports on hydrogen?
+Expected: 5 documents
+
+📊 Retrieved (pre-filter): 80 documents
+✅ Found: 3/5 (60.0% recall)
+❌ Missing: 2/5
+
+❌ Missing documents (UPSTREAM PROBLEM):
+   - https://www.wri.org/research/completing-trip-establishing-global-quantified-climate-goal-transport-sector
+   - https://wri.org.cn/en/report/Pathways-to-Decarbonize-the-Road-Transport-Sector-in-Guangdong
+
+================================================================================
+🔍 q9_world_resources_report
+Question: Give me all the papers that were published as part of the cities World Resources Report?
+Expected: 16 documents
+
+📊 Retrieved (pre-filter): 80 documents
+✅ Found: 16/16 (100.0% recall)
+❌ Missing: 0/16
+
+================================================================================
+🔍 q10_urban_finance_since_2020
+Question: Have we published anything to do with urban finance since 2020?
+Expected: 9 documents
+
+📊 Retrieved (pre-filter): 47 documents
+✅ Found: 3/9 (33.3% recall)
+❌ Missing: 6/9
+
+❌ Missing documents (UPSTREAM PROBLEM):
+   - https://wri-india.org/research/rolling-out-electric-buses
+   - https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico
+   - https://wri-india.org/research/assessing-financing-challenges-implementing-large-scale-electric-bus-program-india
+   - https://wri.org.cn/en/research/feasibility-of-zero-emission-freight-zones-in-Beijing-Scenario-analysis-and-risk-assessment
+   - https://wri-india.org/research/financial-analysis-charging-station-fact
+   - https://www.wri.org/research/synergizing-land-value-capture-tod
+
+================================================================================
+🔍 q11_urban_finance_exclude_ebuses
+Question: Have we published anything to do with urban finance – please exclude anything to do with electric buses?
+Expected: 10 documents
+
+📊 Retrieved (pre-filter): 50 documents
+✅ Found: 7/10 (70.0% recall)
+❌ Missing: 3/10
+
+❌ Missing documents (UPSTREAM PROBLEM):
+   - https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities
+   - https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico
+   - https://www.wri.org/research/synergizing-land-value-capture-tod
+
+================================================================================
+📊 SUMMARY
+================================================================================
+Total expected documents: 72
+Found pre-filter: 59 (81.9%)
+Missing pre-filter: 13 (18.1%)
+Average recall: 85.3%
+
+💡 DIAGNOSIS:
+✅ Retrieval is working: 82% recall pre-filter
+   → Problem is likely the LLM filter removing good documents
+   → RECOMMENDATION: Fix or remove LLM filter
+
+📁 Report saved: /Users/gutelius/Documents/GitHub/askwri/mockups/askwri/evaluation/results/pre-filter-diagnostic-1764031981182.json

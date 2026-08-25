@@ -1,0 +1,126 @@
+{
+  "results": [
+    {
+      "test_case_id": "q1_land_value_capture",
+      "expected_count": 4,
+      "retrieved_count": 33,
+      "found_count": 4,
+      "missing_count": 0,
+      "pre_filter_recall": 1,
+      "missing_urls": []
+    },
+    {
+      "test_case_id": "q2_bangalore_geography",
+      "expected_count": 6,
+      "retrieved_count": 71,
+      "found_count": 6,
+      "missing_count": 0,
+      "pre_filter_recall": 1,
+      "missing_urls": []
+    },
+    {
+      "test_case_id": "q3_children_pollution",
+      "expected_count": 3,
+      "retrieved_count": 80,
+      "found_count": 3,
+      "missing_count": 0,
+      "pre_filter_recall": 1,
+      "missing_urls": []
+    },
+    {
+      "test_case_id": "q4_climate_brazil",
+      "expected_count": 3,
+      "retrieved_count": 63,
+      "found_count": 3,
+      "missing_count": 0,
+      "pre_filter_recall": 1,
+      "missing_urls": []
+    },
+    {
+      "test_case_id": "q5_micromobility",
+      "expected_count": 8,
+      "retrieved_count": 38,
+      "found_count": 6,
+      "missing_count": 2,
+      "pre_filter_recall": 0.75,
+      "missing_urls": [
+        "https://wri-india.org/research/enabling-shift-electric-auto-rickshaws-guidebook-electrification-auto-rickshaw-fleets",
+        "https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva"
+      ]
+    },
+    {
+      "test_case_id": "q6_school_bus_health",
+      "expected_count": 4,
+      "retrieved_count": 19,
+      "found_count": 4,
+      "missing_count": 0,
+      "pre_filter_recall": 1,
+      "missing_urls": []
+    },
+    {
+      "test_case_id": "q7_jakarta_housing",
+      "expected_count": 4,
+      "retrieved_count": 59,
+      "found_count": 4,
+      "missing_count": 0,
+      "pre_filter_recall": 1,
+      "missing_urls": []
+    },
+    {
+      "test_case_id": "q8_hydrogen",
+      "expected_count": 5,
+      "retrieved_count": 80,
+      "found_count": 3,
+      "missing_count": 2,
+      "pre_filter_recall": 0.6,
+      "missing_urls": [
+        "https://www.wri.org/research/completing-trip-establishing-global-quantified-climate-goal-transport-sector",
+        "https://wri.org.cn/en/report/Pathways-to-Decarbonize-the-Road-Transport-Sector-in-Guangdong"
+      ]
+    },
+    {
+      "test_case_id": "q9_world_resources_report",
+      "expected_count": 16,
+      "retrieved_count": 80,
+      "found_count": 16,
+      "missing_count": 0,
+      "pre_filter_recall": 1,
+      "missing_urls": []
+    },
+    {
+      "test_case_id": "q10_urban_finance_since_2020",
+      "expected_count": 9,
+      "retrieved_count": 47,
+      "found_count": 3,
+      "missing_count": 6,
+      "pre_filter_recall": 0.3333333333333333,
+      "missing_urls": [
+        "https://wri-india.org/research/rolling-out-electric-buses",
+        "https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico",
+        "https://wri-india.org/research/assessing-financing-challenges-implementing-large-scale-electric-bus-program-india",
+        "https://wri.org.cn/en/research/feasibility-of-zero-emission-freight-zones-in-Beijing-Scenario-analysis-and-risk-assessment",
+        "https://wri-india.org/research/financial-analysis-charging-station-fact",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod"
+      ]
+    },
+    {
+      "test_case_id": "q11_urban_finance_exclude_ebuses",
+      "expected_count": 10,
+      "retrieved_count": 50,
+      "found_count": 7,
+      "missing_count": 3,
+      "pre_filter_recall": 0.7,
+      "missing_urls": [
+        "https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities",
+        "https://es.wri.org/publicaciones/analisis-de-los-mecanismos-financieros-para-la-sostenibilidad-del-transporte-publico",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod"
+      ]
+    }
+  ],
+  "summary": {
+    "totalExpected": 72,
+    "totalFound": 59,
+    "totalMissing": 13,
+    "avgRecall": 0.853030303030303
+  }
+}

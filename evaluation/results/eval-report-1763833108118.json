@@ -1,0 +1,360 @@
+{
+  "timestamp": "2025-11-22T17:38:28.117Z",
+  "test_cases_total": 7,
+  "test_cases_passed": 0,
+  "test_cases_failed": 7,
+  "overall_precision": 0.3292620078334364,
+  "overall_recall": 0.6428571428571429,
+  "overall_f1": 0.4214435424519459,
+  "results": [
+    {
+      "test_case_id": "q1_land_value_capture",
+      "question": "What have we published on land value capture? (topic area)",
+      "task_description": "Retrieve for papers that take land value capture (a sub-topic of urban planning) as their primary focus. Do not retrieve papers that only mention thematic area – e.g. papers where those words show up in literature review, mentioned in discussion section, etc.",
+      "expected_count": 4,
+      "retrieved_count": 9,
+      "expected_urls": [
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty",
+        "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
+        "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen"
+      ],
+      "retrieved_urls": [
+        "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south",
+        "https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities",
+        "https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/",
+        "https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru",
+        "https://www.wri.org/research/urban-water-resilience-africa",
+        "https://urbantransitions.global/en/publication/developing-prosperous-and-inclusive-cities-in-africa-national-urban-policies-to-the-rescue/",
+        "https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty"
+      ],
+      "matched_urls": [
+        "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty"
+      ],
+      "precision": 0.3333333333333333,
+      "recall": 0.75,
+      "f1": 0.46153846153846156,
+      "false_positives": [
+        "https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south",
+        "https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities",
+        "https://urbantransitions.global/en/publication/climate-emergency-urban-opportunity/",
+        "https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru",
+        "https://www.wri.org/research/urban-water-resilience-africa",
+        "https://urbantransitions.global/en/publication/developing-prosperous-and-inclusive-cities-in-africa-national-urban-policies-to-the-rescue/"
+      ],
+      "false_negatives": [
+        "https://www.wri.org/rail-plus-property-development-china-pilot-case-shenzhen"
+      ],
+      "execution_time_ms": 62824
+    },
+    {
+      "test_case_id": "q2_bangalore_geography",
+      "question": "What have we published on Bangalore?",
+      "task_description": "Retrieve papers that are about a specific geography as their primary focus. Do not retrieve papers that only mention geography tangentially.",
+      "expected_count": 6,
+      "retrieved_count": 9,
+      "expected_urls": [
+        "https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru",
+        "https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india",
+        "https://wri-india.org/research/improving-metro-access-india",
+        "https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban"
+      ],
+      "retrieved_urls": [
+        "https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities",
+        "https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south",
+        "https://wri-india.org/research/improving-metro-access-india",
+        "https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban",
+        "https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf"
+      ],
+      "matched_urls": [
+        "https://www.wri.org/research/our-journey-city-deciphering-wri-india-ross-centers-influence-bengaluru",
+        "https://www.wri.org/research/synergizing-land-value-capture-tod",
+        "https://wri-india.org/research/improving-metro-access-india",
+        "https://wri-india.org/publication/climate-resilient-cities-assessing-differential-vulnerability-climate-hazards-urban"
+      ],
+      "precision": 0.4444444444444444,
+      "recall": 0.6666666666666666,
+      "f1": 0.5333333333333333,
+      "false_positives": [
+        "https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities",
+        "https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south",
+        "https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf",
+        "https://wri-india.org/sites/default/files/WP_Ebus%20Financing%2010th%20Sep%20V2%201.pdf"
+      ],
+      "false_negatives": [
+        "https://www.wri.org/research/accelerating-innovation-urban-service-delivery-indian-cities-lessons-thecityfix-labs-india",
+        "https://www.wri.org/research/urban-blue-green-conundrum-10-city-study-impacts-urbanization-natural-infrastructure-india"
+      ],
+      "execution_time_ms": 67548
+    },
+    {
+      "test_case_id": "q3_children_pollution",
+      "question": "What have we published on children and pollution?",
+      "task_description": "Retrieve papers that are about a thematic intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.",
+      "expected_count": 3,
+      "retrieved_count": 11,
+      "expected_urls": [
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "retrieved_urls": [
+        "https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states",
+        "https://www.wri.org/research/dataset-us-school-bus-depots",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://files.wri.org/d8/s3fs-public/2025-03/improving-school-infrastructure-healthier-communities.pdf?VersionId=bs5CICF.GFd0Rn7VL317IcJMaDhUsayv",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "matched_urls": [
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "precision": 0.18181818181818182,
+      "recall": 0.6666666666666666,
+      "f1": 0.28571428571428575,
+      "false_positives": [
+        "https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy",
+        "https://files.wri.org/d8/s3fs-public/2025-03/needs-assessment-equitable-school-bus-electrification-united-states-school-districts-2023.pdf?VersionId=R47a.PsWI8cpH.gYsMRnuzgBpzgipOJC",
+        "https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states",
+        "https://www.wri.org/research/dataset-us-school-bus-depots",
+        "https://files.wri.org/d8/s3fs-public/2024-01/dataset-us-school-bus-depots-technical-note.pdf?VersionId=G.EOXUFPu13c_8_cmW75lLxAuAmU2bIy",
+        "https://files.wri.org/d8/s3fs-public/2025-03/improving-school-infrastructure-healthier-communities.pdf?VersionId=bs5CICF.GFd0Rn7VL317IcJMaDhUsayv"
+      ],
+      "false_negatives": [
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses"
+      ],
+      "execution_time_ms": 88248
+    },
+    {
+      "test_case_id": "q4_climate_brazil",
+      "question": "What have we published on climate adaptation in Brazil?",
+      "task_description": "Retrieve papers that are about a thematic and geographical intersection as their primary focus. Do not retrieve papers that only mention one or the other tangentially.",
+      "expected_count": 3,
+      "retrieved_count": 7,
+      "expected_urls": [
+        "https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities",
+        "https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil",
+        "https://www.wri.org/research/prepared-communities"
+      ],
+      "retrieved_urls": [
+        "https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022",
+        "https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities",
+        "https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil",
+        "doc_000163.pdf",
+        "doc_000164.pdf",
+        "https://www.wri.org/research/prepared-communities",
+        "doc_000159.pdf"
+      ],
+      "matched_urls": [
+        "https://www.shiftcities.org/publication/accelerating-nature-based-solutions-brazilian-cities",
+        "https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil",
+        "https://www.wri.org/research/prepared-communities"
+      ],
+      "precision": 0.42857142857142855,
+      "recall": 1,
+      "f1": 0.6,
+      "false_positives": [
+        "https://www.wri.org/research/impactar-tool-air-quality-health-impacts-urban-bus-fleet-brazil-2022",
+        "doc_000163.pdf",
+        "doc_000164.pdf",
+        "doc_000159.pdf"
+      ],
+      "false_negatives": [],
+      "execution_time_ms": 92864
+    },
+    {
+      "test_case_id": "q5_micromobility",
+      "question": "How can cities implement micromobility solutions?",
+      "task_description": "Retrieve papers that are about a not well-defined topic area (micromobility encompasses a range of technologies). Do not retrieve papers that clearly are about non 'micro', such as public transit, freight, and other non-mobility solutions.",
+      "expected_count": 8,
+      "retrieved_count": 9,
+      "expected_urls": [
+        "https://urbantransitions.global/en/publication/mexico-frontrunners/",
+        "https://wri-india.org/research/enabling-shift-electric-auto-rickshaws-guidebook-electrification-auto-rickshaw-fleets",
+        "https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities",
+        "https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities",
+        "https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide",
+        "https://www.wri.org/research/evolution-bike-sharing",
+        "https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india",
+        "https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva"
+      ],
+      "retrieved_urls": [
+        "https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide",
+        "https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india",
+        "https://www.wri.org/research/evolution-bike-sharing",
+        "doc_000152.pdf",
+        "https://wri-india.org/research/safer-streets-mumbai-reflecting-decade-processes-solutions-road-safety",
+        "https://urbantransitions.global/en/publication/mexico-frontrunners/",
+        "https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities",
+        "https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities",
+        "https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities"
+      ],
+      "matched_urls": [
+        "https://www.numo.global/resources/micromobility-emissions-life-cycle-assessment-guide",
+        "https://wri-india.org/research/assessing-viability-using-autorickshaws-urban-freight-delivery-india",
+        "https://www.wri.org/research/evolution-bike-sharing",
+        "https://urbantransitions.global/en/publication/mexico-frontrunners/",
+        "https://www.wri.org/research/public-bicycle-sharing-india-lessons-learned-implementation-three-cities",
+        "https://www.wri.org/research/how-dockless-bike-sharing-changes-lives-analysis-chinese-cities"
+      ],
+      "precision": 0.6666666666666666,
+      "recall": 0.75,
+      "f1": 0.7058823529411765,
+      "false_positives": [
+        "doc_000152.pdf",
+        "https://wri-india.org/research/safer-streets-mumbai-reflecting-decade-processes-solutions-road-safety",
+        "https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities"
+      ],
+      "false_negatives": [
+        "https://wri-india.org/research/enabling-shift-electric-auto-rickshaws-guidebook-electrification-auto-rickshaw-fleets",
+        "https://www.wri.org/research/guadalajara-revisiting-public-space-interventions-through-recreactiva"
+      ],
+      "execution_time_ms": 76875
+    },
+    {
+      "test_case_id": "q6_school_bus_health",
+      "question": "Will electrifying school buses be beneficial for children's health outcomes?",
+      "task_description": "Retrieve papers that are about the impact of an intervention on a population? Do not retrieve papers that are about the intervention (school bus electrification) without talking about the specific impact of interest.",
+      "expected_count": 4,
+      "retrieved_count": 8,
+      "expected_urls": [
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "retrieved_urls": [
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electric-school-bus-us-market-study.pdf?VersionId=duRTJFb5G7D7zZnLUfEu_zet5yueS04t",
+        "https://www.wri.org/research/electric-school-bus-us-market-study-and-buyers-guide-resource-school-bus-operators",
+        "https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://www.wri.org/research/driving-forward-clean-ride-kids",
+        "https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states",
+        "https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy"
+      ],
+      "matched_urls": [
+        "https://www.wri.org/research/technical-note-dataset-modeling-societal-health-and-climate-benefits-electric-school-buses",
+        "https://www.wri.org/research/driving-forward-clean-ride-kids"
+      ],
+      "precision": 0.25,
+      "recall": 0.6666666666666666,
+      "f1": 0.36363636363636365,
+      "false_positives": [
+        "https://files.wri.org/d8/s3fs-public/2024-08/electric-school-bus-us-market-study.pdf?VersionId=duRTJFb5G7D7zZnLUfEu_zet5yueS04t",
+        "https://www.wri.org/research/electric-school-bus-us-market-study-and-buyers-guide-resource-school-bus-operators",
+        "https://www.wri.org/research/electrifying-us-school-bus-fleets-equitably-reduce-air-pollution-exposure-underserved",
+        "https://files.wri.org/d8/s3fs-public/2024-08/electrifying-us-school-bus-fleets-equitably.pdf?VersionId=yOsXYP91ferM3_Hnxrq2YdAs8ZM5Ksgc",
+        "https://www.wri.org/research/technical-note-dataset-electric-school-bus-adoption-united-states",
+        "https://files.wri.org/d8/s3fs-public/2025-07/dataset-esb-adoption-tech-note-july-2025.pdf?VersionId=s9LFL_tKdyBg6pT.opmRDmaiD9QHByoy"
+      ],
+      "false_negatives": [
+        "https://www.wri.org/research/improving-school-infrastructure-healthier-students-and-communities"
+      ],
+      "execution_time_ms": 26050
+    },
+    {
+      "test_case_id": "q7_jakarta_housing",
+      "question": "What can be done to solve the housing crisis in Jakarta?",
+      "task_description": "Retrieve papers that are about solutions to a general thematic problem area within a determined geography. Do not retrieve papers that only cover theme or geography, and only retrieve papers that talk about solutions.",
+      "expected_count": 0,
+      "retrieved_count": 11,
+      "expected_urls": [],
+      "retrieved_urls": [
+        "https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing",
+        "https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities",
+        "https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty",
+        "https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/",
+        "https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south",
+        "https://www.wri.org/research/surabaya-legacy-participatory-upgrading-informal-settlements",
+        "https://urbantransitions.global/en/publication/housing-policies-for-sustainable-and-inclusive-cities/",
+        "https://urbantransitions.global/en/publication/integrating-national-policies-to-deliver-compact-connected-cities-an-overview-of-transport-and-housing/",
+        "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
+        "https://urbantransitions.global/en/publication/resilient-and-affordable-housing-for-all-lessons-on-house-building-from-kochi-and-trivandrum-india/",
+        "https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil"
+      ],
+      "matched_urls": [],
+      "precision": 0,
+      "recall": 0,
+      "f1": 0,
+      "false_positives": [
+        "https://www.wri.org/research/confronting-urban-housing-crisis-global-south-adequate-secure-and-affordable-housing",
+        "https://www.wri.org/research/7-transformations-more-equitable-sustainable-cities",
+        "https://www.wri.org/research/ahmedabad-town-planning-schemes-equitable-development-glass-half-full-or-half-empty",
+        "https://urbantransitions.global/en/publication/seizing-the-urban-opportunity/",
+        "https://www.wri.org/research/upward-and-outward-growth-managing-urban-expansion-more-equitable-cities-global-south",
+        "https://www.wri.org/research/surabaya-legacy-participatory-upgrading-informal-settlements",
+        "https://urbantransitions.global/en/publication/housing-policies-for-sustainable-and-inclusive-cities/",
+        "https://urbantransitions.global/en/publication/integrating-national-policies-to-deliver-compact-connected-cities-an-overview-of-transport-and-housing/",
+        "https://www.wri.org/research/urban-land-value-capture-sao-paulo-addis-ababa-and-hyderabad-differing-interpretations",
+        "https://urbantransitions.global/en/publication/resilient-and-affordable-housing-for-all-lessons-on-house-building-from-kochi-and-trivandrum-india/",
+        "https://www.wribrasil.org.br/publicacoes/accessibility-public-green-areas-case-study-belo-horizonte-brazil"
+      ],
+      "false_negatives": [],
+      "execution_time_ms": 69841
+    }
+  ],
+  "summary_by_query_type": {
+    "topic_area": {
+      "count": 1,
+      "avg_precision": 0.3333333333333333,
+      "avg_recall": 0.75,
+      "avg_f1": 0.46153846153846156
+    },
+    "geography": {
+      "count": 1,
+      "avg_precision": 0.4444444444444444,
+      "avg_recall": 0.6666666666666666,
+      "avg_f1": 0.5333333333333333
+    },
+    "thematic_intersection": {
+      "count": 1,
+      "avg_precision": 0.18181818181818182,
+      "avg_recall": 0.6666666666666666,
+      "avg_f1": 0.28571428571428575
+    },
+    "thematic_geographic_intersection": {
+      "count": 1,
+      "avg_precision": 0.42857142857142855,
+      "avg_recall": 1,
+      "avg_f1": 0.6
+    },
+    "fuzzy_topic": {
+      "count": 1,
+      "avg_precision": 0.6666666666666666,
+      "avg_recall": 0.75,
+      "avg_f1": 0.7058823529411765
+    },
+    "intervention_impact": {
+      "count": 1,
+      "avg_precision": 0.25,
+      "avg_recall": 0.6666666666666666,
+      "avg_f1": 0.36363636363636365
+    },
+    "solution_focused": {
+      "count": 1,
+      "avg_precision": 0,
+      "avg_recall": 0,
+      "avg_f1": 0
+    }
+  }
+}

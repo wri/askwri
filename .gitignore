@@ -1,0 +1,95 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Next.js
+.next/
+out/
+
+# Production
+build/
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.idea/
+.vscode/
+
+# Agent worktrees (local, not for commit)
+.claude/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.backup
+*.tfplan
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+# A worktree usually reaches the interpreter by symlinking search-service/venv
+# to the primary checkout. The patterns above end in / and match directories
+# only, so a symlink slips past them and gets committed with an absolute path.
+search-service/venv
+env/
+.env/
+ENV/
+*.egg-info/
+*.egg
+dist/
+.eggs/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Local document data (search service)
+search-service/data/
+
+# Evaluation intermediates
+evaluation/answer-retrieval-raw.json
+evaluation/results/
+
+# OS
+.DS_Store
+Thumbs.db
+.gstack/
+
+# Agent runtime artifacts (pi-subagents sessions; superpowers SDD scratch:
+# task briefs, review packages, progress ledger). Never committed.
+.pi-subagents/
+.superpowers/
+
+# Git worktrees for isolated feature/bugfix work
+.worktrees/
+
+# Microsoft Office lock/owner files (created while a .docx in docs/ is open)
+~$*

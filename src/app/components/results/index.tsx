@@ -1,0 +1,162 @@
+'use client'
+
+import { FC } from 'react'
+import { Heading, Box, List, Text, Spinner } from '@chakra-ui/react'
+import {
+  Button,
+  Tag,
+  Tooltip as DS_Tooltip,
+  getThemedColor,
+} from '@worldresources/wri-design-systems'
+import { FaInfoCircle } from 'react-icons/fa'
+import { HiCurrencyDollar } from 'react-icons/hi2'
+import { AiFillThunderbolt } from 'react-icons/ai'
+import { AiIcon } from '../icons/AiIcon'
+import Navbar from './Navbar'
+import ResultsTable from './ResultsTable'
+import { formatCO2, formatCost } from '../../utils/utils'
+import { ResultsPageProps } from './types'
+import { InterpretationLine, facetChipLabel } from './InterpretationLine'
+import '../../styles.css'
+
+const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
+
+const ResultsPage = ({
+  data = [],
+  query,
+  docSummaryLoading,
+  docWhyLoading,
+  onExportBib,
+  ops,
+  alignment,
+  alignLoading,
+  queryUnderstanding,
+  onRemoveFacet,
+  onApplySuggestion,
+}: ResultsPageProps) => {
+  const tableData = data
+
+  return (
+    <main className='gradient-background' style={{ paddingBottom: '57px' }}>
+      <Navbar query={query} />
+      <section
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px',
+          background: getThemedColor('neutral', 100),
+          border: `1px solid ${getThemedColor('neutral', 300)}`,
+        }}
+      >
+        <div>
+          <Text textStyle='sm'>
+            Returned results for publications WRI has published on:
+            <b>{` "${query}"`}</b>
+          </Text>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {!alignLoading && (
+            <>
+              <Tooltip content='Carbon equivalent of search'>
+                <Button
+                  leftIcon={<AiFillThunderbolt />}
+                  variant='borderless'
+                  as='div'
+                  size='small'
+                  label={formatCO2(ops?.energy_gco2e)}
+                  aria-label='Carbon equivalent of search'
+                  onClick={() => {}}
+                />
+              </Tooltip>
+              <Tooltip content='Cost of credits used in search'>
+                <Button
+                  as='div'
+                  leftIcon={<HiCurrencyDollar />}
+                  variant='borderless'
+                  size='small'
+                  label={formatCost(ops?.cost_usd)}
+                  aria-label='Cost of credits used in search'
+                  onClick={() => {}}
+                />
+              </Tooltip>
+            </>
+          )}
+        </div>
+      </section>
+      <InterpretationLine
+        chips={(queryUnderstanding?.facets ?? [])
+          .filter((f) => f.action === 'hard')
+          .map((f) => ({
+            facet: f.facet,
+            value: f.value,
+            label: facetChipLabel(f.facet, f.value),
+          }))}
+        suggestion={
+          queryUnderstanding?.suggestions?.find((s) => s.type === 'spelling')
+            ?.text ?? null
+        }
+        onRemoveChip={(chip) => onRemoveFacet?.(chip)}
+        onApplySuggestion={(text) => onApplySuggestion?.(text)}
+      />
+      <section style={{ padding: '0 2rem', maxWidth: '800px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            margin: '20px 0px',
+          }}
+        >
+          <AiIcon />
+          <Heading size='2xl'>Overview</Heading>
+        </div>
+        <Box style={{ paddingBottom: '1rem' }}>
+          {alignLoading || !alignment || !alignment.insights?.length ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '20px',
+              }}
+            >
+              <Spinner size='md' color={getThemedColor('primary', 500)} />
+            </div>
+          ) : (
+            <List.Root>
+              {alignment.insights.map((insight, idx) => (
+                <List.Item key={`insight-${idx}`}>{insight}</List.Item>
+              ))}
+            </List.Root>
+          )}
+        </Box>
+        {!alignLoading && alignment?.alignment && (
+          <div
+            style={{
+              width: '280px',
+              marginBottom: '16px',
+            }}
+          >
+            <Tooltip content='AI assessment of how well the retrieved sources address the query and whether important gaps or risks remain.'>
+              <Tag
+                icon={<FaInfoCircle />}
+                label={`Alignment: ${alignment.alignment}`}
+                variant='info-white'
+              />
+            </Tooltip>
+          </div>
+        )}
+      </section>
+      <ResultsTable
+        query={query}
+        data={tableData}
+        docSummaryLoading={docSummaryLoading}
+        docWhyLoading={docWhyLoading}
+        onExportBib={onExportBib}
+      />
+    </main>
+  )
+}
+
+export default ResultsPage

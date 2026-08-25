@@ -1,0 +1,17 @@
+# SOURCE file — edit this, never requirements-dev.txt.
+# Regenerate with ./scripts/compile-requirements.sh (see requirements.in).
+pytest>=9.1.1
+pytest-cov>=7.1.0
+pytest-asyncio>=1.4.0
+
+# Builds the raster-PDF fixture for the oversized-PDF shrink tests
+# (test_parse_backend.py). Present today only as a transitive dep of
+# llama-index-core in requirements.txt; declared here so a llama-index bump
+# that drops it turns into a resolver change, not a test collection error.
+pillow
+
+# Local-dev only: lets boto3 resolve the AWS CLI `aws login` session
+# credentials (provider=login, auto-refreshing) so long-running Bedrock
+# scripts (reembed_cohere) survive the ~1h token expiry. The deployed
+# services use the ECS task role and never need this.
+botocore[crt]
