@@ -72,21 +72,33 @@ passes, exactly as #358 followed #357.
 - **Slice 1 is blocking within a budget** (simpler, correct, flag-dark). The
   non-blocking parallel timeline (design §4.2) is slice 2.
 
-### Slice 2 — non-blocking timeline (design §4.2)
-Fire the sidecar in parallel with original dense/sparse; fuse if it lands
-within the remaining budget, else skip (late ⇒ doesn't participate in this
-response). Cache survives across requests so a slow first call warms later
-ones.
+### Slice 2 — variant lanes (design §4.3) — THIS SLICE
+Each LLM variant gets a dense+sparse retrieval lane at 1× weight (vs 2× for
+the original lanes), fed into `extra_lanes`. This is the real P3 retrieval
+value: variants widen the candidate pool pre-rerank; the reranker still only
+sees the original query (design §4.4 — the precision guard). `extra_lanes`
+currently holds one retriever per lane (tag lanes); a variant lane needs a
+dense retriever on the variant query (+ optionally sparse). Gate: cite sets must
+not regress (2× original weight bounds displacement; the cite gate catches it).
 
-### Slice 3 — catalog-mode presentation (design §3)
+### Slice 3 — non-blocking timeline (design §4.2) — moved here
+Fire the sidecar in parallel with original dense/sparse; fuse if it lands
+within the remaining budget, else skip. Worth building only AFTER variant
+lanes exist (slice 2): on qa the LLM is ~2-3s and stage 1 ~0.3-1s, so a
+parallel fire would mostly timeout-degrade the LLM (losing variants/intent)
+until either the LLM is faster or variants drive lanes. Reordered from the
+plan's original slice 2 because slice 1's blocking call is correct while
+variants are decorative.
+
+### Slice 4 — catalog-mode presentation (design §3)
 Intent=catalog queries get the same cite results ordered by date with year
 facets applied + chips shown. New results surface, not a new page.
 
-### Slice 4 — per-query adaptation
+### Slice 5 — per-query adaptation
 The intent signal drives `expansion_lane_weight` per query type (the #353
 remaining tradeoffs d4/q1/q3/q8/q11 need per-query adaptation — P3-adjacent).
 
-### Slice 5 — abstention input (#356)
+### Slice 6 — abstention input (#356)
 The intent classifier ("is this a binary_presence query?") is a candidate
 abstention signal for the negatives (d8/d9/d10 at floor 0.09).
 
