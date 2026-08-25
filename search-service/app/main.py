@@ -932,6 +932,57 @@ def make_dense_retriever(top_k: int):
     )
 
 
+def build_variant_lanes(
+    variants: list[str],
+    query: str,
+    dense_retriever_factory,
+    bm25_retriever,
+    lanes_on: bool,
+    top_k: int,
+) -> list[dict]:
+    """P3 slice 2 (design §4.3): one dense + one sparse lane per LLM variant,
+    at 1× weight, fed into `extra_lanes`. Pure + factory-injected so it's
+    unit-testable without a DB.
+
+    - `lanes_on=False` ⇒ no lanes (variant lanes are expansion lanes; gated
+      by lanes_active exactly like the tag lanes; flag-off byte-identical).
+    - A variant equal to the original query (case-insensitive) is skipped
+      (dedupe, design §4.1): re-querying the original adds no candidates and
+      would inflate its RRF weight.
+    - Dense lanes carry the raw variant query; sparse lanes carry the
+      expanded variant query (sparse_query_for) so the sparse lane sees the
+      same expansion discipline as the original sparse lane.
+    - Each lane is one entry in the list (the fusion core runs each lane's
+      retriever in its existing parallel pool; one retriever per lane).
+    """
+    if not lanes_on or not variants:
+        return []
+    from app.query_expansion import sparse_query_for
+    lanes: list[dict] = []
+    i = 0
+    for v in variants:
+        if not v or v.lower() == query.lower():
+            continue
+        dense_name = f"variant{i}_dense"
+        sparse_name = f"variant{i}_sparse"
+        lanes.append({
+            "name": dense_name,
+            "retriever": dense_retriever_factory(top_k),
+            "query_str": v,
+            "weight": None,   # 1x
+            "top_k": top_k,
+        })
+        lanes.append({
+            "name": sparse_name,
+            "retriever": bm25_retriever,
+            "query_str": sparse_query_for(v),
+            "weight": None,   # 1x
+            "top_k": top_k,
+        })
+        i += 1
+    return lanes
+
+
 def _emit_query_emf(mode: str, debug: dict) -> None:
     """CloudWatch EMF metric line for per-stage /query latency histograms
     (L0 instrumentation). Pure-JSON stdout line — the ECS awslogs driver
@@ -1165,6 +1216,25 @@ async def hybrid_query(request: QueryRequest):
                     "weight": None,   # 1x
                     "top_k": request.bm25_top_k,
                 })
+
+            # P3 slice 2 (design §4.3): one dense + one sparse lane per LLM
+            # variant, at 1× weight. The reranker still only sees the original
+            # query (§4.4): variants widen the candidate pool pre-rerank, never
+            # redefine it. Gated by lanes_on + the LLM flag; variants come from
+            # the LLM sidecar merge above. Dedupe vs the original query is done
+            # inside build_variant_lanes (§4.1).
+            if getattr(settings, "query_understanding_llm_enabled", False) \
+                    and understanding.variants:
+                if extra_lanes is None:
+                    extra_lanes = []
+                extra_lanes.extend(build_variant_lanes(
+                    variants=understanding.variants,
+                    query=request.query,
+                    dense_retriever_factory=make_dense_retriever,
+                    bm25_retriever=service_state["bm25_retriever"],
+                    lanes_on=True,
+                    top_k=request.bm25_top_k,
+                ))
 
         hybrid_retriever = HybridFusionRetriever(
             vector_retriever=vector_retriever,
