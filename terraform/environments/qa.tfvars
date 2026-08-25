@@ -57,6 +57,10 @@ search_service_environment_variables = {
   #   - QUERY_UNDERSTANDING_ENABLED / QUERY_EXPANSION_LANES_ENABLED: the P1/P2
   #     flags gating the expansion lanes (topic_dense, geo_dense). OFF by
   #     default in code; ON here so the lane work ships in qa.
+  #   - QUERY_UNDERSTANDING_LLM_ENABLED: P3 LLM sidecar (issue #362). Augments
+  #     the deterministic tier with query variants, LLM-grade facets (suggest
+  #     only in slice 1), intent, disambiguation. Dark by default; ON in qa for
+  #     the gate. Deterministic-first; failure-soft; one cached call per query.
   #   - EXPANSION_LANE_WEIGHT=0.25: expansion-lane RRF mass at 0.25x (vs 1x
   #     default) to cut ranking dilution where adjacent-topic docs rerank
   #     above goldens (d7/d11). Multi-query tradeoff: regresses d4/q8; left
@@ -71,6 +75,7 @@ search_service_environment_variables = {
   # redeploy.
   "QUERY_UNDERSTANDING_ENABLED"      = "true"
   "QUERY_EXPANSION_LANES_ENABLED"   = "true"
+  "QUERY_UNDERSTANDING_LLM_ENABLED" = "true"
   "EXPANSION_LANE_WEIGHT"           = "0.25"
   "DEEP_RESCUE_MAX"                 = "10"
 }
