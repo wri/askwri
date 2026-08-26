@@ -35,9 +35,14 @@ _SYSTEM = (
     "confidence is 0.0-1.0), variants (0-2 alternative phrasings of the query), "
     "disambiguation (alternative readings if the query is ambiguous, else "
     "empty), and core_topic (the single core noun phrase of the query's "
-    "subject — e.g. \"surveillance technologies\", \"vertical farming\", "
-    "\"nuclear microreactors\", \"hydrogen\"; used for a corpus-coverage "
-    "abstain check). Return only JSON, no commentary."
+    "SUBJECT only - not the framing. Strip generic framing like 'WRI "
+    "publications', 'has WRI written about', 'research on', 'published on' "
+    "- the core_topic is the specific subject the query is about (e.g. for "
+    "'What has WRI published authored by Pawan Mulukutla' -> 'Pawan Mulukutla'; "
+    "'surveillance technologies' -> 'surveillance technologies'; 'vertical "
+    "farming' -> 'vertical farming'; 'hydrogen' -> 'hydrogen'; 'container "
+    "port decarbonization' -> 'container port decarbonization'). Used for a "
+    "corpus-coverage abstain check). Return only JSON, no commentary."
 )
 
 _INTENT_VALUES = ("topical", "known_item", "catalog", "binary_presence")
