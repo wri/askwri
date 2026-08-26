@@ -89,6 +89,13 @@ interface CaseResult {
    * null when the gateway didn't report it, or the query failed.
    */
   service_time_ms: number | null
+  /**
+   * Dollars the search service spent answering this query (its usage.total_usd,
+   * passed through by the gateway). $0 is real — the service caches
+   * translations and query embeddings, so repeat questions cost nothing.
+   * null when the target predates usage metering, or the query failed.
+   */
+  cost_usd: number | null
   error?: string
 }
 
@@ -132,7 +139,11 @@ interface RetrievedDoc {
 async function queryTarget(
   question: string,
   mode: 'cite' | 'answer',
-): Promise<{ docs: RetrievedDoc[]; serviceMs: number | null }> {
+): Promise<{
+  docs: RetrievedDoc[]
+  serviceMs: number | null
+  costUsd: number | null
+}> {
   const response = await fetch(`${TARGET}/api/llamaindex`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -152,7 +163,11 @@ async function queryTarget(
     seen.add(d.doc_id)
     docs.push({ doc_id: d.doc_id, url: d.url ?? '' })
   }
-  return { docs, serviceMs: data.debug?.total_ms ?? null }
+  return {
+    docs,
+    serviceMs: data.debug?.total_ms ?? null,
+    costUsd: data.usage?.total_usd ?? null,
+  }
 }
 
 async function runCase(
@@ -191,7 +206,7 @@ async function runCase(
   }
 
   try {
-    const { docs, serviceMs } = await queryTarget(tc.question, mode)
+    const { docs, serviceMs, costUsd } = await queryTarget(tc.question, mode)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
     const retrieved = byUrl ? docs.map((d) => d.url) : docs.map((d) => d.doc_id)
@@ -212,6 +227,7 @@ async function runCase(
         abstained,
         execution_time_ms: Date.now() - start,
         service_time_ms: serviceMs,
+        cost_usd: costUsd,
       }
     }
 
@@ -253,6 +269,7 @@ async function runCase(
       attainable_retrieved: attainable.length > 0 ? hits : null,
       execution_time_ms: Date.now() - start,
       service_time_ms: serviceMs,
+      cost_usd: costUsd,
     }
   } catch (error: any) {
     console.log(`  ${tc.id.padEnd(40)} ERROR: ${error.message}`)
@@ -275,6 +292,7 @@ async function runCase(
       ...failure,
       execution_time_ms: Date.now() - start,
       service_time_ms: null,
+      cost_usd: null,
       error: error.message,
     }
   }
@@ -358,6 +376,22 @@ async function runEvalset(
   // Latency covers successful queries only: a failed case's wall clock
   // measures the timeout setting, not the system.
   const succeeded = results.filter((r) => !r.error)
+  // Dollars the target spent on this run, summed over queries that reported
+  // usage. null when the target reports none (predates usage metering).
+  // In-service caches make repeat questions $0, so mean_usd is what THIS run
+  // cost per query, not what a cold query costs.
+  const caseCosts = succeeded
+    .map((r) => r.cost_usd)
+    .filter((v): v is number => v != null)
+  const totalUsd = caseCosts.reduce((sum, v) => sum + v, 0)
+  const cost =
+    caseCosts.length > 0
+      ? {
+          total_usd: Number(totalUsd.toFixed(6)),
+          mean_usd: Number((totalUsd / caseCosts.length).toFixed(6)),
+          cases_reported: caseCosts.length,
+        }
+      : null
   const latency = {
     wall: latencySummary(succeeded.map((r) => r.execution_time_ms)),
     service: latencySummary(
@@ -396,6 +430,7 @@ async function runEvalset(
     expected_docs_retrieved: coverage.retrieved,
     negatives_abstained: abstained.length,
     latency,
+    cost,
     by_query_type: byQueryType(results),
     results,
   }
@@ -423,6 +458,13 @@ async function runEvalset(
         (latency.service
           ? `   (service p50 ${s(latency.service.p50_ms)})`
           : ''),
+    )
+  }
+  if (cost) {
+    console.log(
+      `Cost         $${cost.total_usd.toFixed(4)} total   ` +
+        `$${cost.mean_usd.toFixed(4)}/query   ` +
+        `(${cost.cases_reported}/${succeeded.length} queries reported usage)`,
     )
   }
   if (negatives.length) {
