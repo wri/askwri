@@ -130,3 +130,64 @@ abstention signal for the negatives (d8/d9/d10 at floor 0.09).
 
 Non-EN sparse-lane retrieval, threshold/tier re-derivation, reranker swaps,
 answer synthesis, facet-management UI beyond chips.
+
+## Per-mode strategy (cite = recall-first, answer = precision-first) — slice 5 design
+
+User direction 2026-08-25: cite-type queries privilege recall over precision;
+answer-type queries favor precision. The sidecar's `intent` field
+(topical/known_item/catalog) is the per-query axis on top of mode.
+
+### Current state (gaps this closes)
+- `EXPANSION_LANE_WEIGHT` in qa.tfvars is a **dead knob** — not read anywhere
+  in code. The original-lanes 2× multiplier is hardcoded in
+  `HybridFusionRetriever._retrieve` (main.py:327). qa.tfvars sets 0.25 but it
+  has no effect.
+- `dense_weight`/`sparse_weight` are request-level (0.5 default, same for both
+  modes); the only mode-specific tuning today is `fusion_top_k` (500 cite /
+  100 answer) and the reranker (per-doc caps + top_n).
+- The `intent` field flows to the UI but drives nothing in retrieval.
+
+### The lever: per-mode expansion-lane weight
+Wire the dead `EXPANSION_LANE_WEIGHT` knob (or a per-mode pair) so the
+expansion lanes' RRF weight is config-driven, and default it per mode:
+
+- **Cite (recall-first)**: expansion lanes at **1×** (originals at 2×). More
+  variant/tag candidates survive fusion → wider recall pool for the
+  100-slot rerank window. This is the current effective behavior (lanes at
+  1×, originals at 2× when any lane materializes) — the +10.6 MAP win.
+- **Answer (precision-first)**: expansion lanes at **0.25×** (or off). Fewer
+  candidates → the reranker sees a tighter, more-precise pool; variants don't
+  dilute a known-item or targeted answer.
+
+Minimal change:
+1. `config.py`: replace the dead `EXPANSION_LANE_WEIGHT` with
+   `cite_expansion_lane_weight: float = 1.0` and
+   `answer_expansion_lane_weight: float = 0.25` (or a single knob applied per
+   mode). Keep the env var name `EXPANSION_LANE_WEIGHT` as an override for
+   both (back-compat with qa.tfvars).
+2. `HybridFusionRetriever`: take the expansion-lane weight as a constructor
+   arg (from `request.mode`-selected config); apply it to all `extra_lanes`
+   (the `weight` field, currently `None` → sparse_weight). The 2× original
+   multiplier stays (it's the recall-vs-precision asymmetry that bounds
+   displacement).
+3. `main.py`: pass the mode-selected weight into `HybridFusionRetriever`.
+
+### The per-query axis: `intent`
+On top of mode, `intent` (from the LLM sidecar) is the per-query discriminator:
+- `catalog` (cite): results ordered by date with year facets applied (slice 4).
+- `known_item` (answer): minimize expansion (the user wants one doc);
+  expansion lanes off regardless of mode.
+- `topical`: the mode default applies.
+
+This makes slice 5 two parts:
+- **5a**: wire the per-mode expansion-lane weight (the dead knob) + gate.
+- **5b**: `intent`-driven overrides (known_item → expansion off; catalog →
+  date-order + facets). 5b depends on the catalog-mode presentation (slice 4).
+
+### Gate (5a)
+eval-minimal cite_01 + cite_02 (cite mode, recall-first) must hold the +10.6
+MAP win (lanes at 1×). A new answer-mode eval set (or the answer-retrieval
+eval) must not regress with lanes at 0.25× — answer precision should improve
+or hold, not drop. The dead-knob fix is a prerequisite: today's 0.25 in
+qa.tfvars is doing nothing, so flipping it real is a behavior change that
+needs the gate.
