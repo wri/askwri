@@ -21,8 +21,14 @@ import contextvars
 import math
 from typing import Any, Dict, List, Optional
 
-# USD per 1M tokens (input, output). Verified against published pricing
-# 2026-08-26 — update when a model in config.py changes.
+# USD per 1M tokens (input, output). Verified 2026-08-26 against:
+#   https://pricepertoken.com/pricing-page/model/openai-gpt-5-mini
+#   https://pricepertoken.com/pricing-page/model/openai-gpt-5.4-mini
+#   https://caylent.com/blog/amazon-bedrock-pricing-explained (Cohere on Bedrock)
+# Update this table when a priced model in config.py changes, re-verifying
+# against those pages. A model missing here still works — its calls report
+# "unpriced": true in usage.calls, so a missed update is visible in the next
+# eval report rather than a silent $0.
 _TOKEN_PRICES = {
     "gpt-5-mini": (0.25, 2.00),        # query_translation_model
     "gpt-5.4-mini": (0.75, 4.50),      # query_understanding_llm_model
