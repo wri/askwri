@@ -3,6 +3,7 @@ import {
   calculateChunkMetrics,
   assertChunkMetricsValid,
   docCoverage,
+  latencySummary,
 } from './metrics'
 
 describe('averagePrecision', () => {
@@ -133,6 +134,34 @@ describe('calculateChunkMetrics adjacent-tolerance credit', () => {
     expect(m.adjacent_matches).toEqual(['doc_chunk_5'])
     expect(m.recall_with_adjacent).toBe(0.5)
     expect(m.precision_with_adjacent).toBe(0.5)
+  })
+})
+
+// Latency is summarized over successful cases only (the caller filters): a
+// timed-out case measures the timeout setting, not the system.
+
+describe('latencySummary', () => {
+  test('no values yields null — nothing was measurable', () => {
+    expect(latencySummary([])).toBeNull()
+  })
+
+  test('a single value is its own mean, p50, and p95', () => {
+    expect(latencySummary([1200])).toEqual({
+      mean_ms: 1200,
+      p50_ms: 1200,
+      p95_ms: 1200,
+    })
+  })
+
+  test('nearest-rank percentiles over an unsorted list', () => {
+    // Sorted: 100..1000. Nearest rank: p50 → ceil(0.5*10)=5th → 500,
+    // p95 → ceil(0.95*10)=10th → 1000.
+    const values = [300, 100, 900, 500, 700, 200, 1000, 400, 800, 600]
+    expect(latencySummary(values)).toEqual({
+      mean_ms: 550,
+      p50_ms: 500,
+      p95_ms: 1000,
+    })
   })
 })
 
