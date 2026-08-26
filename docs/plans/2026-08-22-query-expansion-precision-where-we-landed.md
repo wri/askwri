@@ -1,5 +1,13 @@
 # Query-Expansion Precision Work — Where We Landed
 
+> **Update 2026-08-26:** `EXPANSION_LANE_WEIGHT` in qa.tfvars was a dead knob
+> (not read by code); it was wired for real and made per-mode in P3 (#369/#372).
+> The numbers below were captured pre-determinism (the LLM sidecar was
+> nondeterministic + lru_cached — a per-deploy lottery; fixed by #374 with
+> `temperature=0`). For the current, reproducible state and the full P3 +
+> per-mode tuning story, see
+> `2026-08-26-p3-llm-sidecar-where-we-landed.md`.
+
 **Date:** 2026-08-22
 **Status:** Merged to `qa` (#357). Lanes + knobs enabled in qa via #358. Production unchanged (both flags OFF).
 **Scope:** `search-service/app/bedrock_rerank.py`, `search-service/app/main.py`, `search-service/app/config.py`, `evaluation/eval-minimal.ts`, `terraform/environments/qa.tfvars`.
