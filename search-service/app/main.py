@@ -1956,3 +1956,5 @@ if __name__ == "__main__":
         reload=settings.debug,
         workers=settings.workers if not settings.debug else 1,
     )
+
+# cache-bust: force COPY app/ layer invalidation (2026-08-26)
