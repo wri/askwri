@@ -14,6 +14,10 @@ const mode = process.env.EVAL_MODE || 'cite' // cite (recall-first) | answer (pr
 const expansionLaneWeight = process.env.EVAL_EXPANSION_LANE_WEIGHT
   ? Number(process.env.EVAL_EXPANSION_LANE_WEIGHT)
   : undefined
+// expansion=false: the request-level eval control that disables the
+// understanding tier + expansion lanes (flag-off-equivalent). Used for the
+// true flag-off baseline (understanding_active returns False when expansion is False).
+const expansion = process.env.EVAL_EXPANSION === 'false' ? false : undefined
 
 if (!evalsetPath) {
   console.error('Usage: npx tsx eval-minimal.ts <evalset.json>')
@@ -64,6 +68,7 @@ for (const tc of cases) {
         ...(expansionLaneWeight !== undefined && {
           expansion_lane_weight: expansionLaneWeight,
         }),
+        ...(expansion !== undefined && { expansion }),
       }),
     })
 
