@@ -1,0 +1,64 @@
+# =============================================================================
+# QA Evalset Run
+# Manually dispatched. Scores the gen-2 evalsets against deployed QA through
+# its public gateway — no secrets, no database, no AWS credentials.
+# =============================================================================
+
+name: QA Evalset
+
+on:
+  workflow_dispatch:
+  # TEMPORARY: workflow_dispatch only becomes available once this file is on
+  # the default branch, so this trigger is how the workflow gets exercised
+  # beforehand. Remove it before merging.
+  push:
+    branches:
+      - feat/eval-qa-workflow
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: Run evalsets against QA
+    runs-on: ubuntu-latest
+    # The sets run sequentially with a 120s per-query ceiling. 30 minutes is
+    # headroom for a slow gateway without burning an hour on a hung one.
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      # The pinned submodule commit is what makes a report traceable to its
+      # ground truth; a manual run wants the newest fixtures instead. Move to
+      # the tip of main for this run only and record which commit that was —
+      # the pointer committed in the repo is left untouched.
+      - name: Use latest eval fixtures
+        run: |
+          git -C evaluation/eval-review fetch --depth 1 origin main
+          git -C evaluation/eval-review checkout FETCH_HEAD
+          echo "Fixtures: $(git -C evaluation/eval-review rev-parse HEAD)"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run evalsets
+        run: npm run eval:qa
+
+      # The JSON reports are the run's only durable output — keep them even
+      # when a set fails partway through.
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evalset-results
+          path: evaluation/results/
