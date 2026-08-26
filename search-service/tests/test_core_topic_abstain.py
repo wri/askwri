@@ -57,3 +57,44 @@ def test_core_topic_in_corpus_absent_returns_false(monkeypatch):
     assert _main.core_topic_in_corpus("nuclear microreactors") is False
 
 # ci: force retrigger
+
+
+def test_core_topic_long_phrase_matches_via_2gram(monkeypatch):
+    """A long core_topic whose full phrase misses titles but a contiguous
+    2-gram hits -> not off-topic. Catches the false abstention on d1
+    ('zero-emission heavy-duty truck adoption' full-misses, but
+    'zero-emission heavy-duty' hits). Proves the 2-gram split is what finds
+    the hit: the full phrase and single words all return False; only the
+    'zero-emission heavy-duty' 2-gram returns True."""
+    seen = []
+    class _Conn:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def execute(self, sql, params):
+            seen.append(params[0])
+            class _R:
+                def fetchone(self): return (True,) if params[0] == "%zero-emission heavy-duty%" else (False,)
+            return _R()
+    class _Pool:
+        def connection(self): return _Conn()
+    monkeypatch.setattr("app.db.get_pool", lambda: _Pool())
+    assert _main.core_topic_in_corpus("zero-emission heavy-duty truck adoption") is True
+    # the full phrase was tried first (and missed)
+    assert any(t == "%zero-emission heavy-duty truck adoption%" for t in seen)
+    # a single-word-only query would have missed (sanity: the split is load-bearing)
+    assert not all(t in ("zero-emission", "heavy-duty", "truck", "adoption") for t in seen)
+
+
+def test_core_topic_single_word_matches_whole_word(monkeypatch):
+    """A single-word core_topic falls back to the whole-word match."""
+    class _Conn:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def execute(self, sql, params):
+            class _R:
+                def fetchone(self): return (True,)
+            return _R()
+    class _Pool:
+        def connection(self): return _Conn()
+    monkeypatch.setattr("app.db.get_pool", lambda: _Pool())
+    assert _main.core_topic_in_corpus("hydrogen") is True
