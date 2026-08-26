@@ -9,6 +9,11 @@ import * as path from 'path'
 const TARGET = process.env.EVAL_TARGET || 'http://127.0.0.1:3000'
 const evalsetPath = process.argv[2]
 const mode = process.env.EVAL_MODE || 'cite' // cite (recall-first) | answer (precision-first)
+// 5a sweep knob: override the per-mode expansion-lane weight for data-driven
+// tuning. Undefined -> per-mode config default (cite 1.0 / answer 0.25).
+const expansionLaneWeight = process.env.EVAL_EXPANSION_LANE_WEIGHT
+  ? Number(process.env.EVAL_EXPANSION_LANE_WEIGHT)
+  : undefined
 
 if (!evalsetPath) {
   console.error('Usage: npx tsx eval-minimal.ts <evalset.json>')
@@ -53,7 +58,13 @@ for (const tc of cases) {
   try {
     const resp = curlJson(`${TARGET}/api/llamaindex`, {
       method: 'POST',
-      body: JSON.stringify({ query: tc.question, mode }),
+      body: JSON.stringify({
+        query: tc.question,
+        mode,
+        ...(expansionLaneWeight !== undefined && {
+          expansion_lane_weight: expansionLaneWeight,
+        }),
+      }),
     })
 
     if (!resp.ok) throw new Error(resp.error || 'gateway ok:false')
