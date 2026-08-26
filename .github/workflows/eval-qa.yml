@@ -19,12 +19,6 @@ on:
     workflows: ['Deploy to QA']
     types:
       - completed
-  # TEMPORARY: workflow_dispatch and workflow_run only become available once
-  # this file is on the default branch, so this trigger is how the workflow
-  # gets exercised beforehand. Remove it before merging.
-  push:
-    branches:
-      - feat/eval-qa-workflow
 
 permissions:
   contents: read
