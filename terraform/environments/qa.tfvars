@@ -61,10 +61,6 @@ search_service_environment_variables = {
   #     the deterministic tier with query variants, LLM-grade facets (suggest
   #     only in slice 1), intent, disambiguation. Dark by default; ON in qa for
   #     the gate. Deterministic-first; failure-soft; one cached call per query.
-  #   - EXPANSION_LANE_WEIGHT=0.25: expansion-lane RRF mass at 0.25x (vs 1x
-  #     default) to cut ranking dilution where adjacent-topic docs rerank
-  #     above goldens (d7/d11). Multi-query tradeoff: regresses d4/q8; left
-  #     at the eval-gated best-net tradeoff.
   #   - DEEP_RESCUE_MAX=10: 2nd-rerank up to 10 docs surfaced by a non-dense
   #     lane that sit deep in fused order and miss the cap-2 window when
   #     the lanes add diversity (d11/q11).
@@ -83,7 +79,10 @@ search_service_environment_variables = {
   # list[str] from env as JSON. QA ONLY; production.tfvars unchanged. Revert =
   # remove the var + redeploy.
   "EXPANSION_FACETS"                = "[\"topic\",\"geography\"]"
-  "EXPANSION_LANE_WEIGHT"           = "0.25"
+  # EXPANSION_LANE_WEIGHT removed 5a: it was a dead knob (not read by code).
+  # Now wired as per-mode: cite_expansion_lane_weight=1.0 (recall-first) /
+  # answer_expansion_lane_weight=0.25 (precision-first), via config defaults.
+  # The EXPANSION_LANE_WEIGHT env var remains as an override for both if set.
   "DEEP_RESCUE_MAX"                 = "10"
 }
 
