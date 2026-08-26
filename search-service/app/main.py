@@ -959,33 +959,53 @@ def make_dense_retriever(top_k: int):
     )
 
 
+def _corpus_match(conn, term: str) -> bool:
+    """True if `term` appears as a substring in any title/title_en/authors or
+    tag value_id/alias. One query per term."""
+    row = conn.execute(
+        """SELECT EXISTS (
+             SELECT 1 FROM documents
+             WHERE title ILIKE %s OR title_en ILIKE %s
+                OR authors::text ILIKE %s
+             UNION ALL
+             SELECT 1 FROM tags t JOIN tag_aliases a ON a.tag_id = t.id
+             WHERE t.value_id ILIKE %s OR a.alias ILIKE %s
+           ) AS present""",
+        (f"%{term}%", f"%{term}%", f"%{term}%", f"%{term}%", f"%{term}%"),
+    ).fetchone()
+    return bool(row and row[0])
+
+
 def core_topic_in_corpus(core_topic: str) -> bool:
     """Slice 6 (#356): is the query's core noun phrase present in the WRI
     corpus vocabulary? The abstain gate uses this: a core topic absent from
     titles/tags/aliases means WRI hasn't published on it (the negatives d8/d9/d10
     all have 0 hits; every positive has >=1). One attempt, failure-soft (returns
-    True on any error so a DB outage never abstains — degrades to today)."""
+    True on any error so a DB outage never abstains - degrades to today).
+
+    The LLM's core_topic is often a long clause ('zero-emission heavy-duty truck
+    adoption') whose full phrase misses titles even when the topic is real
+    (the title has 'zero-emission heavy-duty'). So: try the full phrase first,
+    then each contiguous 2-gram, then single words. A hit on any -> present.
+    Negatives' 2-grams ('surveillance technologies', 'vertical farming',
+    'nuclear microreactor') all miss (verified 2026-08-26)."""
     if not core_topic or not core_topic.strip():
         return True  # no core topic extracted -> can't abstain -> today's behavior
+    words = core_topic.strip().split()
+    cands = [core_topic.strip()]
+    cands += [" ".join(words[i:i + 2]) for i in range(len(words) - 1)]
+    cands += words
     try:
         from app.db import get_pool
         with get_pool().connection() as conn:
-            row = conn.execute(
-                """SELECT EXISTS (
-                     SELECT 1 FROM documents
-                     WHERE title ILIKE %s OR title_en ILIKE %s
-                        OR authors::text ILIKE %s
-                     UNION ALL
-                     SELECT 1 FROM tags t JOIN tag_aliases a ON a.tag_id = t.id
-                     WHERE t.value_id ILIKE %s OR a.alias ILIKE %s
-                   ) AS present""",
-                (f"%{core_topic}%", f"%{core_topic}%", f"%{core_topic}%",
-                 f"%{core_topic}%", f"%{core_topic}%"),
-            ).fetchone()
-        return bool(row and row[0])
-    except Exception:  # noqa: BLE001 — DB failure never abstains
+            for term in cands:
+                if _corpus_match(conn, term):
+                    return True
+        return False
+    except Exception:  # noqa: BLE001 - DB failure never abstains
         logger.warning("core_topic_in_corpus: check failed for %r", core_topic, exc_info=True)
         return True
+
 
 
 def _expansion_lane_weight_for(settings, mode: str, request_override: Optional[float] = None) -> Optional[float]:
