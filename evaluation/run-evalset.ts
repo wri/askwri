@@ -56,6 +56,14 @@ interface EvalCase {
 type Polarity = 'positive' | 'negative'
 
 interface CaseResult {
+  /**
+   * Every key of the fixture case is passed through verbatim (difficulty,
+   * source_language, notes, whatever the set authors add), so report consumers
+   * can pivot on any fixture dimension without joining back to the evalset.
+   * Computed fields below are written after the pass-through and win on
+   * collision.
+   */
+  [fixtureKey: string]: unknown
   test_case_id: string
   question: string
   query_type?: string
@@ -172,10 +180,8 @@ async function runCase(
   const start = Date.now()
 
   const base = {
+    ...tc,
     test_case_id: tc.id,
-    question: tc.question,
-    query_type: tc.query_type,
-    source_language: tc.source_language,
     polarity,
     expected_ids: expected,
     missing_from_corpus: missing,
