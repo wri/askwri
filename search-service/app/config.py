@@ -135,11 +135,15 @@ class Settings(BaseSettings):
     # default; active only when query_understanding_enabled is ALSO on.
     # One strict json_schema OpenAI call per query, lru_cached, short
     # timeout, one attempt (no retry loop in the request path, design §5).
-    # Model is a small GPT-5.6-class via the existing OpenAI path (design
-    # decision #5 — NOT Bedrock/Haiku); worker_llm_model is the same class.
+    # Model is a small fast current-gen model via the existing OpenAI path
+    # (design decision #5 — NOT Bedrock/Haiku). gpt-5.4-mini: OpenAI's fast
+    # mini (2x faster than gpt-5-mini), clean variants, valid structured JSON.
+    # LLM facets are suggest-only (slice 1) so facet noise is invisible;
+    # variants (the retrieval win) are clean. Measured ~0.8-1.0s vs
+    # gpt-5.6-luna ~2-3s. Swap is an env/code change, not a contract change.
     # Flag-off is byte-identical to the deterministic-only tier.
     query_understanding_llm_enabled: bool = False
-    query_understanding_llm_model: str = "gpt-5.6-luna"
+    query_understanding_llm_model: str = "gpt-5.4-mini"
     query_understanding_llm_timeout_s: float = 4.0
 
     # Phase 1 ingestion worker
