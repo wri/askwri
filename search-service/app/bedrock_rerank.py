@@ -22,6 +22,7 @@ to Bedrock too.
 import logging
 import threading
 
+from app import usage_meter
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,12 @@ class BedrockReranker:
                     "numberOfResults": len(candidates),
                 },
             },
+        )
+
+        # One billed query covers <=100 documents; rerank_candidates=100 keeps
+        # this at one, but the meter derives it from the actual batch size.
+        usage_meter.record_rerank(
+            "rerank", settings.bedrock_rerank_model_id, documents=len(candidates)
         )
 
         for result in response["results"]:

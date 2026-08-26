@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import logging
 from datetime import datetime, timezone
 import os
@@ -84,6 +85,7 @@ from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.embeddings.openai import OpenAIEmbedding
 
+from app import usage_meter
 from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
 from app.translation_pairs import load_confirmed_pairs
@@ -184,6 +186,9 @@ class QueryResponse(BaseModel):
     query: str
     mode: str
     debug: Dict[str, Any]
+    # Dollar cost of this request's paid API calls (app/usage_meter.py):
+    # {"calls": [...], "total_usd": float}. Additive — was always null before.
+    usage: Optional[Dict[str, Any]] = None
     # Query understanding (design 2026-08-19 §4.6) — additive only.
     query_understanding: Optional[Dict[str, Any]] = None
     # Optional diagnostic fields
@@ -263,9 +268,14 @@ class HybridFusionRetriever(BaseRetriever):
         self.timings = {}
 
         def _timed(fn, key, arg):
+            # Pool threads don't inherit contextvars, so run each lane in a
+            # copy of the request context — usage_meter records made inside
+            # (query embed, translation) land in the request's ledger.
+            ctx = contextvars.copy_context()
+
             def run():
                 t0 = time.time()
-                out = fn(arg)
+                out = ctx.run(fn, arg)
                 self.timings[key] = round((time.time() - t0) * 1000, 1)
                 return out
             return run
@@ -1136,6 +1146,9 @@ async def hybrid_query(request: QueryRequest):
     if not dense_ready or not service_state["bm25_retriever"]:
         raise HTTPException(status_code=500, detail="Service not properly initialized")
 
+    # Per-request dollar ledger — every paid call site below records into it
+    # (see app/usage_meter.py); the summary ships in the response's `usage`.
+    usage_meter.start()
     request_start = time.time()
     try:
         logger.info(f"Processing hybrid query: '{request.query}' (mode: {request.mode})")
@@ -1617,6 +1630,7 @@ async def hybrid_query(request: QueryRequest):
             "query": request.query,
             "mode": request.mode,
             "cite_doc_ids": request.cite_doc_ids,
+            "usage": usage_meter.summary(),
             "query_understanding": understanding.model_dump() if understanding is not None else None,
             "debug": {
                 "service_version": "2.0.0",

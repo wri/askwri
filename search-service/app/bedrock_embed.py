@@ -15,6 +15,7 @@ import threading
 from functools import lru_cache
 from typing import List
 
+from app import usage_meter
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,14 @@ def _invoke(texts: List[str], input_type: str) -> List[List[float]]:
     })
     response = get_client().invoke_model(
         modelId=settings.bedrock_embed_model_id, body=body,
+    )
+    # Billed tokens come back in a Bedrock response header, not the Cohere
+    # payload. A missing header records 0 tokens — visible in usage.calls
+    # rather than silently absent.
+    headers = response.get("ResponseMetadata", {}).get("HTTPHeaders", {})
+    usage_meter.record_tokens(
+        f"embed:{input_type}", settings.bedrock_embed_model_id,
+        input_tokens=int(headers.get("x-amzn-bedrock-input-token-count") or 0),
     )
     payload = json.loads(response["body"].read())
     return payload["embeddings"]["float"]
