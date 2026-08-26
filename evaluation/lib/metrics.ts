@@ -348,6 +348,26 @@ export function calculateDocMetrics(
   return calculateSetMetrics(expected, retrieved)
 }
 
+// --- Latency ---
+
+/**
+ * Mean and nearest-rank p50/p95 of a set of latency samples, in ms. Callers
+ * pass successful cases only — a timed-out case measures the timeout setting,
+ * not the system. Returns null when there is nothing to summarize.
+ */
+export function latencySummary(
+  values: number[],
+): { mean_ms: number; p50_ms: number; p95_ms: number } | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const nearestRank = (p: number) => sorted[Math.ceil(p * sorted.length) - 1]
+  return {
+    mean_ms: values.reduce((s, v) => s + v, 0) / values.length,
+    p50_ms: nearestRank(0.5),
+    p95_ms: nearestRank(0.95),
+  }
+}
+
 // --- Aggregation ---
 
 /**

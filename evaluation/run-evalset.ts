@@ -28,6 +28,7 @@ import {
   calculateUrlMetrics,
   docCoverage,
   extractUrlSlug,
+  latencySummary,
 } from './lib/metrics'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
@@ -80,7 +81,14 @@ interface CaseResult {
   attainable_retrieved?: number | null
   /** Negative cases only: did the target correctly return nothing? */
   abstained?: boolean
+  /** Wall clock for the whole query round-trip, as a user would feel it. */
   execution_time_ms: number
+  /**
+   * The search service's own processing time (its debug.total_ms, passed
+   * through by the gateway). Wall minus this is network + gateway overhead.
+   * null when the gateway didn't report it, or the query failed.
+   */
+  service_time_ms: number | null
   error?: string
 }
 
@@ -124,7 +132,7 @@ interface RetrievedDoc {
 async function queryTarget(
   question: string,
   mode: 'cite' | 'answer',
-): Promise<RetrievedDoc[]> {
+): Promise<{ docs: RetrievedDoc[]; serviceMs: number | null }> {
   const response = await fetch(`${TARGET}/api/llamaindex`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -144,7 +152,7 @@ async function queryTarget(
     seen.add(d.doc_id)
     docs.push({ doc_id: d.doc_id, url: d.url ?? '' })
   }
-  return docs
+  return { docs, serviceMs: data.debug?.total_ms ?? null }
 }
 
 async function runCase(
@@ -183,7 +191,7 @@ async function runCase(
   }
 
   try {
-    const docs = await queryTarget(tc.question, mode)
+    const { docs, serviceMs } = await queryTarget(tc.question, mode)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
     const retrieved = byUrl ? docs.map((d) => d.url) : docs.map((d) => d.doc_id)
@@ -203,6 +211,7 @@ async function runCase(
         retrieved_ids: retrieved,
         abstained,
         execution_time_ms: Date.now() - start,
+        service_time_ms: serviceMs,
       }
     }
 
@@ -243,6 +252,7 @@ async function runCase(
       attainable_recall: aRecall,
       attainable_retrieved: attainable.length > 0 ? hits : null,
       execution_time_ms: Date.now() - start,
+      service_time_ms: serviceMs,
     }
   } catch (error: any) {
     console.log(`  ${tc.id.padEnd(40)} ERROR: ${error.message}`)
@@ -264,6 +274,7 @@ async function runCase(
       retrieved_ids: [],
       ...failure,
       execution_time_ms: Date.now() - start,
+      service_time_ms: null,
       error: error.message,
     }
   }
@@ -344,6 +355,18 @@ async function runEvalset(
   const abstained = negatives.filter((r) => r.abstained)
   const coverage = docCoverage(positives)
 
+  // Latency covers successful queries only: a failed case's wall clock
+  // measures the timeout setting, not the system.
+  const succeeded = results.filter((r) => !r.error)
+  const latency = {
+    wall: latencySummary(succeeded.map((r) => r.execution_time_ms)),
+    service: latencySummary(
+      succeeded
+        .map((r) => r.service_time_ms)
+        .filter((v): v is number => v != null),
+    ),
+  }
+
   const report = {
     timestamp: new Date().toISOString(),
     evalset: path.basename(evalsetPath),
@@ -372,6 +395,7 @@ async function runEvalset(
     expected_docs_in_corpus: coverage.in_corpus,
     expected_docs_retrieved: coverage.retrieved,
     negatives_abstained: abstained.length,
+    latency,
     by_query_type: byQueryType(results),
     results,
   }
@@ -392,6 +416,15 @@ async function runEvalset(
       `(${coverage.in_corpus}/${coverage.expected} expected docs in corpus, ` +
       `${coverage.retrieved}/${coverage.in_corpus} retrieved)`,
   )
+  if (latency.wall) {
+    const s = (ms: number) => `${(ms / 1000).toFixed(1)}s`
+    console.log(
+      `Latency      p50 ${s(latency.wall.p50_ms)}   p95 ${s(latency.wall.p95_ms)}` +
+        (latency.service
+          ? `   (service p50 ${s(latency.service.p50_ms)})`
+          : ''),
+    )
+  }
   if (negatives.length) {
     console.log(
       `${negatives.length} negative   ` +
