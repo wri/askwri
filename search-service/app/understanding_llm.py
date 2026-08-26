@@ -29,15 +29,18 @@ logger = logging.getLogger(__name__)
 _SYSTEM = (
     "You analyze a search query for a document retrieval system over WRI's "
     "published corpus. Return JSON with: intent (one of \"topical\", "
-    "\"known_item\", \"catalog\"), facets (a list of {facet, value, "
-    "confidence} where facet is one of \"year_min\", \"year_max\", "
-    "\"language\", \"program\", \"excluded_keyword\" and confidence is 0.0-1.0), "
-    "variants (0-2 alternative phrasings of the query), and disambiguation "
-    "(alternative readings if the query is ambiguous, else empty). Return "
-    "only JSON, no commentary."
+    "\"known_item\", \"catalog\", \"binary_presence\"), facets (a list of "
+    "{facet, value, confidence} where facet is one of \"year_min\", "
+    "\"year_max\", \"language\", \"program\", \"excluded_keyword\" and "
+    "confidence is 0.0-1.0), variants (0-2 alternative phrasings of the query), "
+    "disambiguation (alternative readings if the query is ambiguous, else "
+    "empty), and core_topic (the single core noun phrase of the query's "
+    "subject — e.g. \"surveillance technologies\", \"vertical farming\", "
+    "\"nuclear microreactors\", \"hydrogen\"; used for a corpus-coverage "
+    "abstain check). Return only JSON, no commentary."
 )
 
-_INTENT_VALUES = ("topical", "known_item", "catalog")
+_INTENT_VALUES = ("topical", "known_item", "catalog", "binary_presence")
 
 
 @lru_cache(maxsize=512)
@@ -116,6 +119,9 @@ def build_understanding_llm(query: str) -> dict | None:
     disambiguation = [
         d for d in (data.get("disambiguation") or []) if isinstance(d, str)
     ]
+    core_topic = data.get("core_topic")
+    if not isinstance(core_topic, str) or not core_topic.strip():
+        core_topic = None
 
     return {"intent": intent, "facets": facets, "variants": variants,
-            "disambiguation": disambiguation}
+            "disambiguation": disambiguation, "core_topic": core_topic}

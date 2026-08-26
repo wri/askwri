@@ -89,6 +89,7 @@ const AskWriAppContent = () => {
     { facet: string; value: string }[] | null
   >(null)
   const [understanding, setUnderstanding] = useState<any>(null)
+  const [likelyOffTopic, setLikelyOffTopic] = useState(false)
   const [autoSwitchedFrom, setAutoSwitchedFrom] = useState<string | null>(null)
   const router = useRouter()
   useEffect(() => {
@@ -119,6 +120,7 @@ const AskWriAppContent = () => {
       })
       const { docs, usage, debug } = res
       setUnderstanding(res.queryUnderstanding ?? null)
+      setLikelyOffTopic(res.likely_off_topic ?? false)
 
       // Auto-switch (design §3, decidable rule): only when the original query
       // returned <3 docs, a spelling suggestion exists, and this request is
@@ -153,6 +155,7 @@ const AskWriAppContent = () => {
           ...prev[opts.cacheKey],
           supporting: docs,
           understanding: res.queryUnderstanding ?? null,
+          likelyOffTopic: res.likely_off_topic ?? false,
           timestamp: Date.now(),
         },
       }))
@@ -199,6 +202,7 @@ const AskWriAppContent = () => {
       setSupporting(cached.supporting)
       setAlignment(cached.alignment ?? null)
       setUnderstanding(cached.understanding ?? null)
+      setLikelyOffTopic(cached.likelyOffTopic ?? false)
       setSearchCompleted(true)
       return
     }
@@ -563,6 +567,23 @@ const AskWriAppContent = () => {
               >
                 search for “{autoSwitchedFrom}” as typed
               </button>
+            </p>
+          )}
+          {likelyOffTopic && (
+            <p
+              style={{
+                fontSize: '14px',
+                marginTop: '4px',
+                padding: '0 2rem',
+                maxWidth: '800px',
+                color: '#8a6d3b',
+                background: '#fcf8e3',
+                border: '1px solid #faebcc',
+                borderRadius: '4px',
+              }}
+            >
+              No strong matches for “{query}” — WRI hasn’t published on this
+              topic; the results below are likely off-topic.
             </p>
           )}
           <CitePanel

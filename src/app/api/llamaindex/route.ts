@@ -39,6 +39,8 @@ interface LlamaIndexResponse {
   /** Dollar cost of the request's paid API calls: {calls, total_usd}. */
   usage?: Record<string, any> | null
   query_understanding?: Record<string, unknown> | null
+  /** Slice 6 (#356): abstain flag — core topic absent from corpus. */
+  likely_off_topic?: boolean
 }
 
 export async function POST(req: NextRequest) {
@@ -222,6 +224,9 @@ export async function POST(req: NextRequest) {
       sources: docs, // For compatibility
       usage: llamaIndexResponse.usage ?? null,
       query_understanding: llamaIndexResponse.query_understanding ?? null,
+      // Slice 6 (#356): abstain flag — core topic absent from corpus; results
+      // likely off-topic. UI renders the banner + still shows the docs.
+      likely_off_topic: llamaIndexResponse.likely_off_topic ?? false,
       debug: {
         llamaindex: true,
         service_url: SEARCH_SERVICE_URL,
