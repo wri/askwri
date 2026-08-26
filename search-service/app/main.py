@@ -204,6 +204,7 @@ class HybridFusionRetriever(BaseRetriever):
         bm25_top_k: Optional[int] = None,
         extra_lanes: Optional[List[Dict[str, Any]]] = None,
         domain_expansion: bool = True,
+        expansion_lane_weight: Optional[float] = None,  # 5a: per-mode; None -> sparse_weight (back-compat)
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -219,6 +220,9 @@ class HybridFusionRetriever(BaseRetriever):
         self.extra_lanes = list(extra_lanes) if extra_lanes else []
         # False = the gated DOMAIN_EXPANSIONS retirement (P2 flag-on).
         self.domain_expansion = domain_expansion
+        # 5a: per-mode expansion-lane RRF weight (cite 1.0 recall-first / answer
+        # 0.25 precision-first). None -> sparse_weight (pre-5a back-compat).
+        self.expansion_lane_weight = expansion_lane_weight
 
         # Weights default to 0.5/0.5 if not specified by caller
         self.dense_weight = dense_weight if dense_weight is not None else 0.5
@@ -333,9 +337,13 @@ class HybridFusionRetriever(BaseRetriever):
             if lane["name"] not in extra_results:
                 continue
             lane_weight = lane.get("weight")
+            if lane_weight is None:
+                # 5a: per-mode expansion-lane weight (cite 1.0 / answer 0.25);
+                # fall back to sparse_weight when not set (pre-5a back-compat).
+                lane_weight = self.expansion_lane_weight if self.expansion_lane_weight is not None else self.sparse_weight
             lane_specs.append((
                 lane["name"], extra_results[lane["name"]],
-                lane_weight if lane_weight is not None else self.sparse_weight,
+                lane_weight,
             ))
 
         fused_scores = {}
@@ -932,6 +940,23 @@ def make_dense_retriever(top_k: int):
     )
 
 
+def _expansion_lane_weight_for(settings, mode: str) -> Optional[float]:
+    """5a: per-mode expansion-lane RRF weight (cite 1.0 recall-first / answer
+    0.25 precision-first). EXPANSION_LANE_WEIGHT env overrides both (back-compat
+    with qa.tfvars, where it's a dead knob). Returns None when lanes are off
+    (no expansion lanes → weight is inert; keeps the fusion call simple)."""
+    import os
+    override = os.getenv("EXPANSION_LANE_WEIGHT")
+    if override not in (None, ""):
+        try:
+            return float(override)
+        except ValueError:
+            pass
+    if mode == "answer":
+        return settings.answer_expansion_lane_weight
+    return settings.cite_expansion_lane_weight
+
+
 def build_variant_lanes(
     variants: list[str],
     query: str,
@@ -1247,6 +1272,7 @@ async def hybrid_query(request: QueryRequest):
             bm25_top_k=request.bm25_top_k,
             extra_lanes=extra_lanes,
             domain_expansion=not lanes_on,
+            expansion_lane_weight=_expansion_lane_weight_for(settings, request.mode),
         )
 
         # Retrieve with hybrid fusion (worker thread — keeps the event loop

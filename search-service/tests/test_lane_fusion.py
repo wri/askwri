@@ -157,3 +157,98 @@ def test_build_sparse_query_domain_expansion_kwarg():
     q = "What have we published on urban finance since 2020?"
     assert build_sparse_query(q) == expand_query_conservative(q, max_expansions=3)
     assert build_sparse_query(q, domain_expansion=False) == q
+
+
+def test_expansion_lane_weight_applied_when_lane_weight_none():
+    """5a: a lane with weight=None gets the expansion_lane_weight (per-mode
+    config), not sparse_weight. This is the dead-knob fix: today weight=None
+    falls back to sparse_weight (0.5) regardless of mode; the config knob is
+    not read. cite (recall-first) = 1.0, answer (precision-first) = 0.25."""
+    dense = [_nws("a", 0.9), _nws("b", 0.8)]
+    sparse = [_nws("b", 5.0), _nws("c", 4.0)]
+    alias = _StubRetriever([_nws("c", 3.0), _nws("d", 2.0)])
+    # cite mode, expansion_lane_weight=1.0 (recall-first)
+    r = _retriever(dense, sparse, extra_lanes=[
+        {"name": "alias_sparse", "retriever": alias,
+         "query_str": "q OR syn", "weight": None, "top_k": None},
+    ], expansion_lane_weight=1.0)
+    out = r._retrieve(QueryBundle(query_str="q"))
+    scores = {n.node.node_id: n.score for n in out}
+    # originals at 2x (0.5*2=1.0); alias at 1.0 (expansion_lane_weight, not 0.5)
+    assert scores["a"] == 1.0 * (1.0 / 61)
+    assert scores["d"] == 1.0 * (1.0 / 62)
+
+
+def test_expansion_lane_weight_answer_mode_lower_weight():
+    """answer (precision-first): expansion_lane_weight=0.25 → the alias lane
+    contributes less than under cite (1.0), so a doc only the alias found ranks
+    lower. Originals still at 2x (the recall-vs-precision asymmetry stays)."""
+    dense = [_nws("a", 0.9), _nws("b", 0.8)]
+    sparse = [_nws("b", 5.0), _nws("c", 4.0)]
+    alias = _StubRetriever([_nws("c", 3.0), _nws("d", 2.0)])
+    r = _retriever(dense, sparse, extra_lanes=[
+        {"name": "alias_sparse", "retriever": alias,
+         "query_str": "q OR syn", "weight": None, "top_k": None},
+    ], expansion_lane_weight=0.25)
+    out = r._retrieve(QueryBundle(query_str="q"))
+    scores = {n.node.node_id: n.score for n in out}
+    # originals at 2x; alias at 0.25
+    assert scores["a"] == 1.0 * (1.0 / 61)
+    assert scores["d"] == 0.25 * (1.0 / 62)
+
+
+def test_expansion_lane_weight_explicit_lane_weight_wins():
+    """A lane that sets its own weight (not None) is NOT overridden by
+    expansion_lane_weight — the lane dict's weight is the source of truth;
+    expansion_lane_weight is the default for lanes that don't specify."""
+    dense = [_nws("a", 0.9)]
+    sparse = [_nws("b", 5.0)]
+    alias = _StubRetriever([_nws("c", 3.0)])
+    r = _retriever(dense, sparse, extra_lanes=[
+        {"name": "alias_sparse", "retriever": alias,
+         "query_str": "q", "weight": 0.7, "top_k": None},
+    ], expansion_lane_weight=0.25)
+    out = r._retrieve(QueryBundle(query_str="q"))
+    scores = {n.node.node_id: n.score for n in out}
+    # alias at its own 0.7, not 0.25
+    assert scores["c"] == 0.7 * (1.0 / 61)
+
+
+def test_expansion_lane_weight_defaults_to_sparse_weight_when_not_passed():
+    """Back-compat: when expansion_lane_weight is not passed (e.g. tests that
+    don't care), lanes with weight=None fall back to sparse_weight (the
+    pre-5a behavior) — so existing tests stay byte-identical."""
+    dense = [_nws("a", 0.9)]
+    sparse = [_nws("b", 5.0)]
+    alias = _StubRetriever([_nws("c", 3.0)])
+    r = _retriever(dense, sparse, extra_lanes=[
+        {"name": "alias_sparse", "retriever": alias,
+         "query_str": "q", "weight": None, "top_k": None},
+    ])
+    out = r._retrieve(QueryBundle(query_str="q"))
+    scores = {n.node.node_id: n.score for n in out}
+    # alias at sparse_weight (0.5), the pre-5a default
+    assert scores["c"] == 0.5 * (1.0 / 61)
+
+
+def test_expansion_lane_weight_defaults_per_mode():
+    """5a config: cite 1.0 (recall-first), answer 0.25 (precision-first)."""
+    from app.config import Settings
+    assert Settings.model_fields["cite_expansion_lane_weight"].default == 1.0
+    assert Settings.model_fields["answer_expansion_lane_weight"].default == 0.25
+
+
+def test_expansion_lane_weight_env_override_back_compat(monkeypatch):
+    """EXPANSION_LANE_WEIGHT env overrides both per-mode defaults (back-compat
+    with qa.tfvars, where it's set to 0.25 but currently a dead knob)."""
+    import app.main as _main
+    monkeypatch.setattr(_main, "settings", type("S", (), {
+        "cite_expansion_lane_weight": 1.0,
+        "answer_expansion_lane_weight": 0.25,
+    })())
+    monkeypatch.setenv("EXPANSION_LANE_WEIGHT", "0.5")
+    assert _main._expansion_lane_weight_for(_main.settings, "cite") == 0.5
+    assert _main._expansion_lane_weight_for(_main.settings, "answer") == 0.5
+    monkeypatch.delenv("EXPANSION_LANE_WEIGHT")
+    assert _main._expansion_lane_weight_for(_main.settings, "cite") == 1.0
+    assert _main._expansion_lane_weight_for(_main.settings, "answer") == 0.25
