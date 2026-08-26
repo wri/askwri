@@ -51,8 +51,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # pipefail matters: the default shell is `bash -e {0}` without it, so a
+      # failing eval would be masked by tee's exit code and report green.
       - name: Run evalsets
-        run: npm run eval:qa
+        run: |
+          set -o pipefail
+          npm run --silent eval:qa 2>&1 | tee "$RUNNER_TEMP/eval.log"
+
+      # The console report is what a human actually reads. Mirror it onto the
+      # run summary so the numbers are visible without opening the log. The
+      # fence preserves the report's column alignment, which Markdown would
+      # otherwise collapse.
+      - name: Publish report to job summary
+        if: always()
+        run: |
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/eval.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # The JSON reports are the run's only durable output — keep them even
       # when a set fails partway through.
