@@ -994,7 +994,9 @@ def core_topic_in_corpus(core_topic: str) -> bool:
     words = core_topic.strip().split()
     cands = [core_topic.strip()]
     cands += [" ".join(words[i:i + 2]) for i in range(len(words) - 1)]
-    cands += words
+    # single-word core topics (e.g. "hydrogen") match as themselves; multi-word
+    # topics do NOT fall back to individual words (single words like "urban" /
+    # "vertical" / "technologies" are generic noise that rescue negatives d8/d9).
     try:
         from app.db import get_pool
         with get_pool().connection() as conn:

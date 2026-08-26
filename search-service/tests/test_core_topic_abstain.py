@@ -86,15 +86,41 @@ def test_core_topic_long_phrase_matches_via_2gram(monkeypatch):
 
 
 def test_core_topic_single_word_matches_whole_word(monkeypatch):
-    """A single-word core_topic falls back to the whole-word match."""
+    """A single-word core_topic (e.g. "hydrogen") matches as itself."""
+    seen = []
     class _Conn:
         def __enter__(self): return self
         def __exit__(self, *a): pass
         def execute(self, sql, params):
+            seen.append(params[0])
             class _R:
-                def fetchone(self): return (True,)
+                def fetchone(self): return (True,) if params[0] == "%hydrogen%" else (False,)
             return _R()
     class _Pool:
         def connection(self): return _Conn()
     monkeypatch.setattr("app.db.get_pool", lambda: _Pool())
     assert _main.core_topic_in_corpus("hydrogen") is True
+    assert seen == ["%hydrogen%"]  # single word -> only itself, no 2-grams
+
+
+def test_multi_word_negative_not_rescued_by_single_words(monkeypatch):
+    """A multi-word negative's single words (e.g. "urban" in "urban vertical
+    farming") are generic corpus noise and must NOT rescue the abstain. Only
+    the full phrase + 2-grams are checked; single words are not."""
+    seen = []
+    class _Conn:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def execute(self, sql, params):
+            seen.append(params[0])
+            class _R:
+                def fetchone(self): return (False,)  # nothing hits (the negative)
+            return _R()
+    class _Pool:
+        def connection(self): return _Conn()
+    monkeypatch.setattr("app.db.get_pool", lambda: _Pool())
+    assert _main.core_topic_in_corpus("urban vertical farming") is False
+    # the candidates are the full phrase + 2-grams only, NOT the single words
+    assert "%urban%" not in seen
+    assert "%vertical%" not in seen
+    assert "%farming%" not in seen
