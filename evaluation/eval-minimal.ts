@@ -8,6 +8,7 @@ import * as path from 'path'
 
 const TARGET = process.env.EVAL_TARGET || 'http://127.0.0.1:3000'
 const evalsetPath = process.argv[2]
+const mode = process.env.EVAL_MODE || 'cite'  // cite (recall-first) | answer (precision-first)
 
 if (!evalsetPath) {
   console.error('Usage: npx tsx eval-minimal.ts <evalset.json>')
@@ -33,7 +34,6 @@ console.log(`Corpus: ${corpusIds.size} documents`)
 
 const evalset = JSON.parse(fs.readFileSync(evalsetPath, 'utf-8'))
 const cases = evalset.test_cases ?? []
-const mode = 'cite'
 
 console.log(
   `\n${path.basename(evalsetPath)} — ${cases.length} cases [mode: ${mode}]\n`,
@@ -42,7 +42,9 @@ console.log(
 const results: any[] = []
 
 for (const tc of cases) {
-  const expected = tc.expected_external_ids ?? []
+  const expected = tc.expected_external_ids
+    ?? tc.retrieval_ground_truth?.expected_external_ids
+    ?? []
   const polarity = expected.length === 0 ? 'negative' : 'positive'
   const missing = expected.filter((id: string) => !corpusIds.has(id))
   const attainable = expected.filter((id: string) => !missing.includes(id))
