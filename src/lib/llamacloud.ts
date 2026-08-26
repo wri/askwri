@@ -43,6 +43,8 @@ export type ChatResponse = {
   usage?: any
   debug?: LlamaCloudDebug
   queryUnderstanding?: any | null
+  /** Slice 6 (#356): abstain flag — core topic absent from corpus. */
+  likely_off_topic?: boolean
 }
 
 /* ---------------- helpers ---------------- */

@@ -90,6 +90,7 @@ export async function chatCiteLlamaIndex(
       ...data.debug,
     },
     queryUnderstanding: data.query_understanding ?? null,
+    likely_off_topic: data.likely_off_topic ?? false,
   }
 }
 
