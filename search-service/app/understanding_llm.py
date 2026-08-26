@@ -60,6 +60,10 @@ def build_understanding_llm(query: str) -> dict | None:
         )
         resp = client.chat.completions.create(
             model=settings.query_understanding_llm_model,
+            temperature=0,  # deterministic: same query -> same variants/facets
+            # (the lru_cache then freezes a stable result; nondeterministic
+            # output + cache made retrieval quality a per-deploy lottery,
+            # 2026-08-26).
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": _SYSTEM},

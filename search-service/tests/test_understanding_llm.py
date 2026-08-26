@@ -128,3 +128,26 @@ def test_invalid_intent_coerced_to_none(monkeypatch):
     out = ullm.build_understanding_llm("anything")
     assert out is not None
     assert out["intent"] is None
+
+
+def test_llm_call_uses_temperature_zero_for_determinism(monkeypatch):
+    """Determinism: the sidecar must call the model with temperature=0 so the
+    same query yields the same variants/facets/intent every call (the lru_cache
+    then freezes a stable result). Nondeterministic output + cache made
+    retrieval quality a per-deploy lottery (2026-08-26)."""
+    body = json.dumps({"intent": "topical", "facets": [], "variants": [], "disambiguation": []})
+    state = _patch_openai(monkeypatch, content=body)
+    ullm.build_understanding_llm.cache_clear()
+    ullm.build_understanding_llm("deterministic probe")
+    assert state["calls"] == 1
+    # capture the kwargs the create call received — we can't from the current
+    # _patch_openai shape, so assert via the module-level call by re-patching
+    # to record kwargs.
+    seen = {}
+    def _create_recording(**kw):
+        seen.update(kw)
+        return _Resp(body)
+    monkeypatch.setattr("openai.OpenAI", lambda **kw: _FakeClient(_create_recording))
+    ullm.build_understanding_llm.cache_clear()
+    ullm.build_understanding_llm("deterministic probe 2")
+    assert seen.get("temperature") == 0, f"expected temperature=0, got {seen.get('temperature')}"
