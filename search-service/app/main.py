@@ -153,6 +153,9 @@ class QueryRequest(BaseModel):
     dense_weight: float = 0.5
     sparse_weight: float = 0.5
     fusion_top_k: Optional[int] = None  # RRF fusion limit (None = mode default: 500 cite, 100 answer)
+    # 5a sweep knob: override the per-mode expansion-lane weight for data-driven
+    # tuning without a redeploy. None -> per-mode config default (cite 1.0 / answer 0.25).
+    expansion_lane_weight: Optional[float] = None
     # Metadata filtering
     min_year: Optional[int] = None  # Filter documents by minimum publication year
     max_year: Optional[int] = None  # Filter documents by maximum publication year
@@ -940,11 +943,14 @@ def make_dense_retriever(top_k: int):
     )
 
 
-def _expansion_lane_weight_for(settings, mode: str) -> Optional[float]:
+def _expansion_lane_weight_for(settings, mode: str, request_override: Optional[float] = None) -> Optional[float]:
     """5a: per-mode expansion-lane RRF weight (cite 1.0 recall-first / answer
-    0.25 precision-first). EXPANSION_LANE_WEIGHT env overrides both (back-compat
-    with qa.tfvars, where it's a dead knob). Returns None when lanes are off
+    0.25 precision-first). Request-level override wins (sweep knob — data-driven
+    tuning without a redeploy), then EXPANSION_LANE_WEIGHT env (back-compat with
+    qa.tfvars), then per-mode config default. Returns None when lanes are off
     (no expansion lanes → weight is inert; keeps the fusion call simple)."""
+    if request_override is not None:
+        return request_override
     import os
     override = os.getenv("EXPANSION_LANE_WEIGHT")
     if override not in (None, ""):
@@ -1272,7 +1278,7 @@ async def hybrid_query(request: QueryRequest):
             bm25_top_k=request.bm25_top_k,
             extra_lanes=extra_lanes,
             domain_expansion=not lanes_on,
-            expansion_lane_weight=_expansion_lane_weight_for(settings, request.mode),
+            expansion_lane_weight=_expansion_lane_weight_for(settings, request.mode, request.expansion_lane_weight),
         )
 
         # Retrieve with hybrid fusion (worker thread — keeps the event loop

@@ -252,3 +252,22 @@ def test_expansion_lane_weight_env_override_back_compat(monkeypatch):
     monkeypatch.delenv("EXPANSION_LANE_WEIGHT")
     assert _main._expansion_lane_weight_for(_main.settings, "cite") == 1.0
     assert _main._expansion_lane_weight_for(_main.settings, "answer") == 0.25
+
+
+def test_request_expansion_lane_weight_override_wins(monkeypatch):
+    """5a sweep knob: a request-level expansion_lane_weight override wins over
+    per-mode defaults AND the EXPANSION_LANE_WEIGHT env — this is what lets us
+    sweep answer/cite weight via curl against live qa without a redeploy."""
+    import app.main as _main
+    monkeypatch.setattr(_main, "settings", type("S", (), {
+        "cite_expansion_lane_weight": 1.0,
+        "answer_expansion_lane_weight": 0.25,
+    })())
+    monkeypatch.setenv("EXPANSION_LANE_WEIGHT", "0.5")
+    # request override wins for both modes
+    assert _main._expansion_lane_weight_for(_main.settings, "cite", 0.9) == 0.9
+    assert _main._expansion_lane_weight_for(_main.settings, "answer", 0.9) == 0.9
+    # None override -> env wins -> per-mode default
+    monkeypatch.delenv("EXPANSION_LANE_WEIGHT")
+    assert _main._expansion_lane_weight_for(_main.settings, "cite", None) == 1.0
+    assert _main._expansion_lane_weight_for(_main.settings, "answer", None) == 0.25
