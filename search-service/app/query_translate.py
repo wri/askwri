@@ -18,6 +18,7 @@ import json
 import logging
 from functools import lru_cache
 
+from app import usage_meter
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,13 @@ def _translate_cached(query: str, languages: tuple) -> str:
              "content": f"Languages: {wanted}\nQuery: {query}"},
         ],
     )
+    usage = getattr(resp, "usage", None)
+    if usage:
+        usage_meter.record_tokens(
+            "query_translation", settings.query_translation_model,
+            input_tokens=usage.prompt_tokens,
+            output_tokens=usage.completion_tokens,
+        )
     return resp.choices[0].message.content or "{}"
 
 

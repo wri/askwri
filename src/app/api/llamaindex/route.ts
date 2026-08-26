@@ -36,6 +36,8 @@ interface LlamaIndexResponse {
   query: string
   mode: string
   debug: Record<string, any>
+  /** Dollar cost of the request's paid API calls: {calls, total_usd}. */
+  usage?: Record<string, any> | null
   query_understanding?: Record<string, unknown> | null
 }
 
@@ -218,7 +220,7 @@ export async function POST(req: NextRequest) {
       message: '',
       docs,
       sources: docs, // For compatibility
-      usage: null, // Retrieval-only: no LLM tokens consumed
+      usage: llamaIndexResponse.usage ?? null,
       query_understanding: llamaIndexResponse.query_understanding ?? null,
       debug: {
         llamaindex: true,

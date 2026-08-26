@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     # every first-hit translation times out and degrades to the untranslated
     # query. Kept as the failure-soft reference config; a real enablement
     # needs a faster model or a precomputed dictionary.
+    # Priced in app/usage_meter.py — update its table when changing this.
     query_translation_model: str = "gpt-5-mini"
     query_translation_timeout_s: float = 3.0
 
@@ -143,6 +144,7 @@ class Settings(BaseSettings):
     # gpt-5.6-luna ~2-3s. Swap is an env/code change, not a contract change.
     # Flag-off is byte-identical to the deterministic-only tier.
     query_understanding_llm_enabled: bool = False
+    # Priced in app/usage_meter.py — update its table when changing this.
     query_understanding_llm_model: str = "gpt-5.4-mini"
     query_understanding_llm_timeout_s: float = 4.0
 
@@ -209,6 +211,7 @@ class Settings(BaseSettings):
     # embed-v4 is not natively there — call the nearest hosting region
     # (cross-region, still in-AWS/IAM).
     bedrock_embed_region: str = "us-east-1"
+    # Priced in app/usage_meter.py — update its table when changing this.
     bedrock_embed_model_id: str = "cohere.embed-v4:0"
     # Per-call text batch for bulk document embeds (Cohere API cap 96 is the
     # ceiling). Large docs at 96 blow the tokens/min bucket and error whole
@@ -219,6 +222,7 @@ class Settings(BaseSettings):
     # Bedrock placement for Cohere Rerank 3.5 (spec v3 §5): not hosted in
     # us-east-2 — call the nearest hosting region.
     bedrock_rerank_region: str = "us-east-1"
+    # Priced in app/usage_meter.py — update its table when changing this.
     bedrock_rerank_model_id: str = "cohere.rerank-v3-5:0"
 
     # Candidate-set size sent to the Rerank API. Cost/latency scale with doc

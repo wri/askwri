@@ -20,6 +20,7 @@ import logging
 import os
 from functools import lru_cache
 
+from app import usage_meter
 from app.config import get_settings
 from app.understanding import Facet
 
@@ -71,6 +72,13 @@ def build_understanding_llm(query: str) -> dict | None:
             ],
             max_completion_tokens=600,
         )
+        usage = getattr(resp, "usage", None)
+        if usage:
+            usage_meter.record_tokens(
+                "query_understanding", settings.query_understanding_llm_model,
+                input_tokens=usage.prompt_tokens,
+                output_tokens=usage.completion_tokens,
+            )
         content = resp.choices[0].message.content
         if not content:
             return None
