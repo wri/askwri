@@ -1,16 +1,27 @@
 # =============================================================================
 # QA Evalset Run
-# Manually dispatched. Scores the gen-2 evalsets against deployed QA through
-# its public gateway — no secrets, no database, no AWS credentials.
+# Scores the gen-2 evalsets against deployed QA through its public gateway —
+# no secrets, no database, no AWS credentials. Runs after every QA deploy, and
+# on demand.
 # =============================================================================
 
 name: QA Evalset
 
 on:
   workflow_dispatch:
-  # TEMPORARY: workflow_dispatch only becomes available once this file is on
-  # the default branch, so this trigger is how the workflow gets exercised
-  # beforehand. Remove it before merging.
+  # The evalset scores what is *live* on QA, so it has to follow the rollout
+  # rather than the merge: a push trigger on `qa` would race the deploy and
+  # score the previous build. `Deploy to QA` only completes once ECS reports
+  # service stability, so its completion is the signal that the new code is
+  # serving. This also inherits the deploy's paths-ignore — docs-only pushes
+  # deploy nothing and so score nothing.
+  workflow_run:
+    workflows: ['Deploy to QA']
+    types:
+      - completed
+  # TEMPORARY: workflow_dispatch and workflow_run only become available once
+  # this file is on the default branch, so this trigger is how the workflow
+  # gets exercised beforehand. Remove it before merging.
   push:
     branches:
       - feat/eval-qa-workflow
@@ -22,6 +33,9 @@ jobs:
   eval:
     name: Run evalsets against QA
     runs-on: ubuntu-latest
+    # A failed or cancelled deploy leaves QA serving the old build; scoring it
+    # would attribute the old numbers to the new commit.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     # The sets run sequentially with a 120s per-query ceiling. 30 minutes is
     # headroom for a slow gateway without burning an hour on a hung one.
     timeout-minutes: 30
@@ -33,13 +47,15 @@ jobs:
           submodules: true
 
       # The pinned submodule commit is what makes a report traceable to its
-      # ground truth; a manual run wants the newest fixtures instead. Move to
-      # the tip of main for this run only and record which commit that was —
-      # the pointer committed in the repo is left untouched.
+      # ground truth; these runs want the newest fixtures instead. Move to the
+      # tip of main for this run only and record which commit that was, both in
+      # the log and on the summary — the pointer committed in the repo is left
+      # untouched.
       - name: Use latest eval fixtures
         run: |
           git -C evaluation/eval-review fetch --depth 1 origin main
           git -C evaluation/eval-review checkout FETCH_HEAD
+          echo "FIXTURES_SHA=$(git -C evaluation/eval-review rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "Fixtures: $(git -C evaluation/eval-review rev-parse HEAD)"
 
       - name: Setup Node.js
@@ -64,8 +80,18 @@ jobs:
       # otherwise collapse.
       - name: Publish report to job summary
         if: always()
+        env:
+          # On a workflow_run the checkout is the default-branch tip, which is
+          # not necessarily the commit that was deployed — head_sha is what QA
+          # is actually serving. The fallback covers the dispatch and push
+          # triggers, where the checked-out commit is the subject.
+          QA_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           {
+            echo "QA commit under test: \`$QA_SHA\`"
+            echo ""
+            echo "Fixtures: \`${FIXTURES_SHA:-unresolved}\`"
+            echo ""
             echo '```'
             cat "$RUNNER_TEMP/eval.log"
             echo '```'
