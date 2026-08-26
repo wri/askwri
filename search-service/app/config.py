@@ -147,15 +147,22 @@ class Settings(BaseSettings):
     query_understanding_llm_timeout_s: float = 4.0
 
     # Slice 5a (design §4.3 + user direction 2026-08-25): per-mode
-    # expansion-lane RRF weight. Cite (recall-first) = 1.0 — the current
-    # effective behavior (lanes at 1x, originals at 2x) that produced the
-    # +10.6 MAP win. Answer (precision-first) = 0.25 — fewer candidates, a
-    # tighter rerank pool for known-item/quantitative answers. The 2x
-    # original multiplier stays (the recall-vs-precision asymmetry that bounds
-    # displacement). EXPANSION_LANE_WEIGHT env overrides both (back-compat
-    # with qa.tfvars, where it's currently a dead knob — not read by code).
-    cite_expansion_lane_weight: float = 1.0
-    answer_expansion_lane_weight: float = 0.25
+    # expansion-lane RRF weight. Values DERIVED from a live-qa sweep
+    # (eval-minimal EVAL_EXPANSION_LANE_WEIGHT, 2026-08-26), not guessed:
+    #   cite 0.5: best on cite_02 (MAP 80.1 / aR 88.8 vs 72.4 / 86.7 at 1.0) —
+    #     the 2x original multiplier + 0.5 expansion is the sweet spot; 1.0
+    #     dilutes direct-match goldens (d3 20->100 at 0.5). Regresses cite_01
+    #     q8 (67->47) — an irreducible cite_01/cite_02 tradeoff (slice 5b:
+    #     per-query intent adaptation, not a single mode default).
+    #   answer 1.0: best on answer_02 (MAP 80.2 / aR 87.5); 0.25 HURTS
+    #     (73.9 / 81.3). Answer retrieves the specific source doc — expansion
+    #     lanes help find it, so high weight helps. Precision-first here means
+    #     "find the one right doc", not "narrow the pool".
+    # The 2x original multiplier stays (the recall-vs-precision asymmetry).
+    # EXPANSION_LANE_WEIGHT env overrides both (back-compat with qa.tfvars).
+    # Re-gate at production corpus scale before any production flag-on.
+    cite_expansion_lane_weight: float = 0.5
+    answer_expansion_lane_weight: float = 1.0
 
     # Phase 1 ingestion worker
     worker_poll_seconds: int = 10

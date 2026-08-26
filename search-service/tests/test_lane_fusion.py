@@ -234,8 +234,8 @@ def test_expansion_lane_weight_defaults_to_sparse_weight_when_not_passed():
 def test_expansion_lane_weight_defaults_per_mode():
     """5a config: cite 1.0 (recall-first), answer 0.25 (precision-first)."""
     from app.config import Settings
-    assert Settings.model_fields["cite_expansion_lane_weight"].default == 1.0
-    assert Settings.model_fields["answer_expansion_lane_weight"].default == 0.25
+    assert Settings.model_fields["cite_expansion_lane_weight"].default == 0.5
+    assert Settings.model_fields["answer_expansion_lane_weight"].default == 1.0
 
 
 def test_expansion_lane_weight_env_override_back_compat(monkeypatch):
@@ -243,15 +243,15 @@ def test_expansion_lane_weight_env_override_back_compat(monkeypatch):
     with qa.tfvars, where it's set to 0.25 but currently a dead knob)."""
     import app.main as _main
     monkeypatch.setattr(_main, "settings", type("S", (), {
-        "cite_expansion_lane_weight": 1.0,
-        "answer_expansion_lane_weight": 0.25,
+        "cite_expansion_lane_weight": 0.5,
+        "answer_expansion_lane_weight": 1.0,
     })())
     monkeypatch.setenv("EXPANSION_LANE_WEIGHT", "0.5")
     assert _main._expansion_lane_weight_for(_main.settings, "cite") == 0.5
     assert _main._expansion_lane_weight_for(_main.settings, "answer") == 0.5
     monkeypatch.delenv("EXPANSION_LANE_WEIGHT")
-    assert _main._expansion_lane_weight_for(_main.settings, "cite") == 1.0
-    assert _main._expansion_lane_weight_for(_main.settings, "answer") == 0.25
+    assert _main._expansion_lane_weight_for(_main.settings, "cite") == 0.5
+    assert _main._expansion_lane_weight_for(_main.settings, "answer") == 1.0
 
 
 def test_request_expansion_lane_weight_override_wins(monkeypatch):
@@ -260,8 +260,8 @@ def test_request_expansion_lane_weight_override_wins(monkeypatch):
     sweep answer/cite weight via curl against live qa without a redeploy."""
     import app.main as _main
     monkeypatch.setattr(_main, "settings", type("S", (), {
-        "cite_expansion_lane_weight": 1.0,
-        "answer_expansion_lane_weight": 0.25,
+        "cite_expansion_lane_weight": 0.5,
+        "answer_expansion_lane_weight": 1.0,
     })())
     monkeypatch.setenv("EXPANSION_LANE_WEIGHT", "0.5")
     # request override wins for both modes
@@ -269,5 +269,5 @@ def test_request_expansion_lane_weight_override_wins(monkeypatch):
     assert _main._expansion_lane_weight_for(_main.settings, "answer", 0.9) == 0.9
     # None override -> env wins -> per-mode default
     monkeypatch.delenv("EXPANSION_LANE_WEIGHT")
-    assert _main._expansion_lane_weight_for(_main.settings, "cite", None) == 1.0
-    assert _main._expansion_lane_weight_for(_main.settings, "answer", None) == 0.25
+    assert _main._expansion_lane_weight_for(_main.settings, "cite", None) == 0.5
+    assert _main._expansion_lane_weight_for(_main.settings, "answer", None) == 1.0
