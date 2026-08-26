@@ -151,3 +151,30 @@ def test_llm_call_uses_temperature_zero_for_determinism(monkeypatch):
     ullm.build_understanding_llm.cache_clear()
     ullm.build_understanding_llm("deterministic probe 2")
     assert seen.get("temperature") == 0, f"expected temperature=0, got {seen.get('temperature')}"
+
+
+def test_llm_core_topic_extracted(monkeypatch):
+    """Slice 6: the LLM sidecar extracts core_topic (the query's core noun
+    phrase) for the corpus-coverage abstain check. Reuses the same call — no
+    extra latency."""
+    body = json.dumps({
+        "intent": "binary_presence",
+        "facets": [], "variants": [], "disambiguation": [],
+        "core_topic": "nuclear microreactors",
+    })
+    state = _patch_openai(monkeypatch, content=body)
+    out = ullm.build_understanding_llm("Has WRI published research on nuclear microreactors")
+    assert out is not None
+    assert out["core_topic"] == "nuclear microreactors"
+
+
+def test_llm_core_topic_none_when_missing_or_blank(monkeypatch):
+    """core_topic is None when the LLM omits it or returns blank — the abstain
+    gate can't fire (failure-soft → today's behavior)."""
+    for c in ["{}", json.dumps({"intent": "topical", "core_topic": "  "}),
+              json.dumps({"intent": "topical", "core_topic": 5})]:
+        state = _patch_openai(monkeypatch, content=c)
+        ullm.build_understanding_llm.cache_clear()
+        out = ullm.build_understanding_llm("anything")
+        assert out is not None
+        assert out["core_topic"] is None

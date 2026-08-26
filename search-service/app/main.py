@@ -191,6 +191,12 @@ class QueryResponse(BaseModel):
     usage: Optional[Dict[str, Any]] = None
     # Query understanding (design 2026-08-19 §4.6) — additive only.
     query_understanding: Optional[Dict[str, Any]] = None
+    # Slice 6 (#356): abstain flag — the core topic is absent from the corpus
+    # vocabulary; the results below are likely off-topic. The UI renders the
+    # empty-state banner ("No strong matches for X — WRI hasn't published on
+    # this topic; the results below are likely off-topic") and still shows the
+    # partial-tier docs. Additive; False by default (flag-off byte-identical).
+    likely_off_topic: bool = False
     # Optional diagnostic fields
     vector_results: Optional[List[Dict[str, Any]]] = None
     bm25_results: Optional[List[Dict[str, Any]]] = None
@@ -953,6 +959,35 @@ def make_dense_retriever(top_k: int):
     )
 
 
+def core_topic_in_corpus(core_topic: str) -> bool:
+    """Slice 6 (#356): is the query's core noun phrase present in the WRI
+    corpus vocabulary? The abstain gate uses this: a core topic absent from
+    titles/tags/aliases means WRI hasn't published on it (the negatives d8/d9/d10
+    all have 0 hits; every positive has >=1). One attempt, failure-soft (returns
+    True on any error so a DB outage never abstains — degrades to today)."""
+    if not core_topic or not core_topic.strip():
+        return True  # no core topic extracted -> can't abstain -> today's behavior
+    try:
+        from app.db import get_pool
+        with get_pool().connection() as conn:
+            row = conn.execute(
+                """SELECT EXISTS (
+                     SELECT 1 FROM documents
+                     WHERE title ILIKE %s OR title_en ILIKE %s
+                        OR authors::text ILIKE %s
+                     UNION ALL
+                     SELECT 1 FROM tags t JOIN tag_aliases a ON a.tag_id = t.id
+                     WHERE t.value_id ILIKE %s OR a.alias ILIKE %s
+                   ) AS present""",
+                (f"%{core_topic}%", f"%{core_topic}%", f"%{core_topic}%",
+                 f"%{core_topic}%", f"%{core_topic}%"),
+            ).fetchone()
+        return bool(row and row[0])
+    except Exception:  # noqa: BLE001 — DB failure never abstains
+        logger.warning("core_topic_in_corpus: check failed for %r", core_topic, exc_info=True)
+        return True
+
+
 def _expansion_lane_weight_for(settings, mode: str, request_override: Optional[float] = None) -> Optional[float]:
     """5a: per-mode expansion-lane RRF weight (cite 1.0 recall-first / answer
     0.25 precision-first). Request-level override wins (sweep knob — data-driven
@@ -1201,6 +1236,8 @@ async def hybrid_query(request: QueryRequest):
                         understanding.suggestions.append(
                             Suggestion(type="disambiguation", text=d)
                         )
+                    if llm.get("core_topic") is not None:
+                        understanding.core_topic = llm["core_topic"]
 
         # P2 (design §4.3): lanes_on implies understanding is not None.
         lanes_on = lanes_active(settings, request)
@@ -1688,6 +1725,19 @@ async def hybrid_query(request: QueryRequest):
             response_data["bm25_results"] = format_intermediate_results(bm25_only_results) if bm25_only_results else []
             response_data["fusion_results"] = format_intermediate_results(stage1_results)
             response_data["reranked_results"] = format_intermediate_results(stage2_results) if 'stage2_results' in locals() else []
+
+        # Slice 6 (#356): corpus-coverage abstain gate. If the LLM sidecar
+        # extracted a core_topic and it's absent from the corpus vocabulary
+        # (titles/tags/aliases), WRI hasn't published on it — the partial-tier
+        # results are likely off-topic. Flag it; the UI renders the banner and
+        # still shows the docs (user stays in control). Failure-soft: no
+        # core_topic (LLM off/degraded) or DB error -> no flag (today's behavior).
+        likely_off_topic = False
+        if understanding is not None and understanding.core_topic:
+            likely_off_topic = not await asyncio.to_thread(
+                core_topic_in_corpus, understanding.core_topic
+            )
+        response_data["likely_off_topic"] = likely_off_topic
 
         return QueryResponse(**response_data)
 

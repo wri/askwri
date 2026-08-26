@@ -30,7 +30,7 @@ class Suggestion(BaseModel):
 
 class QueryUnderstanding(BaseModel):
     version: int = UNDERSTANDING_VERSION
-    intent: Literal["topical", "known_item", "catalog"] = "topical"
+    intent: Literal["topical", "known_item", "catalog", "binary_presence"] = "topical"
     facets: list[Facet] = Field(default_factory=list)
     variants: list[str] = Field(default_factory=list)
     alias_expansions: list[str] = Field(default_factory=list)
@@ -38,6 +38,10 @@ class QueryUnderstanding(BaseModel):
     # Flag-off byte-identical (empty dict).
     matched_tags: dict[str, list[tuple[str, float]]] = Field(default_factory=dict)
     suggestions: list[Suggestion] = Field(default_factory=list)
+    # Slice 6 (#356): the query's core noun phrase, for a corpus-coverage
+    # abstain check. None when not extracted (LLM off/degraded). Flag-off
+    # byte-identical (None).
+    core_topic: str | None = None
     timings: dict = Field(default_factory=dict)
     degraded: list[str] = Field(default_factory=list)
 

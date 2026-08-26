@@ -61,11 +61,16 @@ const mockCite = chatCiteLlamaIndex as jest.Mock
 
 const doc = (id: string) => ({ doc_id: id, kps: [] })
 
-const citeResponse = (docs: any[], understanding: any = null): any => ({
+const citeResponse = (
+  docs: any[],
+  understanding: any = null,
+  likelyOffTopic = false,
+): any => ({
   docs,
   usage: {},
   debug: {},
   queryUnderstanding: understanding,
+  likely_off_topic: likelyOffTopic,
 })
 
 const batchRelatesCalls = () =>
@@ -357,5 +362,36 @@ describe('results page — cache', () => {
     )
     expect(mockCite).toHaveBeenCalledTimes(2)
     expect(screen.queryByText(/No strong matches/)).not.toBeInTheDocument()
+  })
+})
+
+describe('results page — likely-off-topic banner (slice 6, #356)', () => {
+  it('renders the abstain banner when likely_off_topic is true, with docs still shown', async () => {
+    mockCite.mockResolvedValueOnce(
+      citeResponse([doc('a'), doc('b'), doc('c')], null, true),
+    )
+
+    renderPage('nuclear microreactors for city power grids')
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toBeInTheDocument(),
+    )
+    // Banner present and names the query
+    expect(screen.getByText(/No strong matches for/u)).toBeInTheDocument()
+    expect(
+      screen.getByText(/nuclear microreactors for city power grids/u),
+    ).toBeInTheDocument()
+    // Docs still shown (user stays in control)
+    expect(screen.getByTestId('cite-panel')).toHaveAttribute('data-docs', '3')
+  })
+
+  it('renders no banner when likely_off_topic is false', async () => {
+    mockCite.mockResolvedValueOnce(
+      citeResponse([doc('a'), doc('b'), doc('c')], null, false),
+    )
+    renderPage('hydrogen fuel cells')
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText(/No strong matches for/u)).not.toBeInTheDocument()
   })
 })
