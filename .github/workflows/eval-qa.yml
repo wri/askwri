@@ -58,7 +58,7 @@ jobs:
       # when a set fails partway through.
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: evalset-results
           path: evaluation/results/
