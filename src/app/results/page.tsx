@@ -53,6 +53,7 @@ const AskWriAppContent = () => {
         supporting?: DocMeta[]
         alignment?: any
         understanding?: any
+        likelyOffTopic?: boolean
         timestamp: number
       }
     >
