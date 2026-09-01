@@ -2,6 +2,7 @@ import {
   averagePrecision,
   calculateChunkMetrics,
   assertChunkMetricsValid,
+  chunkCoverage,
   docCoverage,
   latencySummary,
 } from './metrics'
@@ -41,6 +42,40 @@ describe('averagePrecision', () => {
 // docCoverage exists so attainable recall can never be read alone: a document
 // dropped from the corpus raises attainable recall while lowering in_corpus,
 // and reporting both side by side makes that trade visible.
+
+describe('chunkCoverage', () => {
+  test('counts only the cases that carry passage ground truth', () => {
+    const cases = [
+      // migrated: 3 expected chunks, 1 in a document the corpus lacks, 2 found
+      {
+        expected_chunk_ids: ['a_chunk_1', 'a_chunk_2', 'b_chunk_9'],
+        chunks_missing_from_corpus: ['b_chunk_9'],
+        chunk_attainable_retrieved: 2,
+      },
+      // not yet migrated: contributes nothing at all, rather than a zero
+      {
+        expected_chunk_ids: [],
+        chunks_missing_from_corpus: [],
+        chunk_attainable_retrieved: null,
+      },
+    ]
+    expect(chunkCoverage(cases)).toEqual({
+      cases_scored: 1,
+      expected: 3,
+      in_corpus: 2,
+      retrieved: 2,
+    })
+  })
+
+  test('no cases yields all zeros', () => {
+    expect(chunkCoverage([])).toEqual({
+      cases_scored: 0,
+      expected: 0,
+      in_corpus: 0,
+      retrieved: 0,
+    })
+  })
+})
 
 describe('docCoverage', () => {
   test('sums expected, in-corpus, and retrieved doc counts across cases', () => {

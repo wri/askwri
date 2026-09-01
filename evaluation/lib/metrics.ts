@@ -102,6 +102,41 @@ export function docCoverage(
   return { expected, in_corpus, retrieved }
 }
 
+/**
+ * Chunk-level coverage across eval cases, the passage-grain twin of
+ * docCoverage: how many chunks are expected in total, how many sit in
+ * documents the target's corpus holds, and how many of those were retrieved.
+ * A case with no passage ground truth (the answer sets are being migrated to
+ * it cluster by cluster) contributes nothing rather than a zero, so
+ * cases_scored says how much of the set these numbers actually cover.
+ */
+export function chunkCoverage(
+  cases: {
+    expected_chunk_ids: string[]
+    chunks_missing_from_corpus: string[]
+    chunk_attainable_retrieved?: number | null
+  }[],
+): {
+  cases_scored: number
+  expected: number
+  in_corpus: number
+  retrieved: number
+} {
+  let cases_scored = 0
+  let expected = 0
+  let in_corpus = 0
+  let retrieved = 0
+  for (const c of cases) {
+    if (c.expected_chunk_ids.length === 0) continue
+    cases_scored += 1
+    expected += c.expected_chunk_ids.length
+    in_corpus +=
+      c.expected_chunk_ids.length - c.chunks_missing_from_corpus.length
+    retrieved += c.chunk_attainable_retrieved ?? 0
+  }
+  return { cases_scored, expected, in_corpus, retrieved }
+}
+
 // --- Generic Set Metrics ---
 
 /**

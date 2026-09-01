@@ -96,9 +96,9 @@ git submodule update --remote evaluation/eval-review
 git commit evaluation/eval-review -m "chore(eval): bump evalset fixtures"
 ```
 
-**Reading the output.** These sets key on `external_id`, so scoring is
-document-level only — Aman's process does not yet capture passage-level ground
-truth. Positive cases report two numbers:
+**Reading the output.** These sets key on `external_id`, which is exactly the
+`doc_id` the gateway returns, so every case is scored at document grain.
+Positive cases report two numbers:
 
 - **MAP (mean average precision)** measures ranking quality: where the expected
   documents sit in the returned list. 100% means every expected doc is at the
@@ -114,6 +114,25 @@ truth. Positive cases report two numbers:
 Negative cases ("Has WRI written about X?" where it hasn't) are scored as
 abstentions — did the target correctly return nothing — and reported apart from
 the positive means.
+
+**Chunk grain.** Where a case carries `retrieval_ground_truth.expected_passages`
+(the answer sets are being migrated to it cluster by cluster upstream), the same
+two numbers are also computed over `chunk_id`s — `cAP`/`cR` per case, `Chunk
+MAP`/`Chunk recall` for the set — and reported apart from the doc-grain means. A
+case without passage ground truth is unscored at this grain, never a zero, and
+`cases_chunk_scored` in the report says how much of the set the chunk numbers
+cover. Three things to hold when reading them:
+
+- **Chunk recall is capped by list length.** Answer mode returns 15 chunks
+  total; a case labelling 12 passages needs almost the whole list to score 100%.
+- **A chunk miss can be a document miss.** The passages come from the reviewed
+  source document only, so when retrieval returns that document's cross-lingual
+  twin instead, chunk recall is 0 by construction. Read `cR` against `aR`.
+- **`Chunk recall … allowing an adjacent chunk`** credits a neighbouring chunk
+  at half weight. A gap between it and plain chunk recall is chunk-boundary
+  drift; a set scoring near zero on both while doc grain stays healthy means the
+  fixture's chunk ids no longer match the target's index (re-ingestion), which
+  is a fixture refresh, not a retrieval regression.
 
 Retrieval params are deliberately not sent, so the target applies its own
 presets and the numbers reflect what users actually get.

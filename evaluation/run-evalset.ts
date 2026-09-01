@@ -2,9 +2,11 @@
  * Runs a generation-2 evalset (askwri-eval-review/evalsets/*.json) against a
  * deployed AskWRI instance via its public retrieval gateway.
  *
- * Scores document-level retrieval only: the gen-2 sets key on `external_id`,
- * which is exactly the `doc_id` the gateway returns. No local search service,
- * no corpus, no AWS credentials.
+ * Scores retrieval at two grains, both keyed on ids the gateway returns
+ * verbatim: documents (the sets' `external_id` is exactly the gateway's
+ * `doc_id`) and, for cases whose fixture carries `expected_passages`, the
+ * chunks inside them (`chunk_id`). No local search service, no corpus, no AWS
+ * credentials.
  *
  * Retrieval params are deliberately NOT sent — the gateway applies its own
  * deployed presets, so this measures the system as users experience it.
@@ -13,6 +15,11 @@
  * list) and coverage (recall over the expected docs present in the target's
  * corpus). Cases expecting no documents ("Has WRI written about X?" where it
  * hasn't) are scored as abstentions and reported separately.
+ *
+ * Chunk grain is scored the same way and reported apart, over the subset of
+ * cases that have passage ground truth — the answer sets are being migrated to
+ * it cluster by cluster, so a case without it is unscored at that grain rather
+ * than zero.
  *
  * Usage:
  *   npm run eval:qa                                   every set in EVALSET_DIR
@@ -23,9 +30,12 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import {
+  assertChunkMetricsValid,
   averagePrecision,
+  calculateChunkMetrics,
   calculateSetMetrics,
   calculateUrlMetrics,
+  chunkCoverage,
   docCoverage,
   extractUrlSlug,
   latencySummary,
@@ -38,13 +48,26 @@ const QUERY_TIMEOUT_MS = 120_000
 // always be traced back to the exact ground truth that produced it.
 const EVALSET_DIR = path.join(__dirname, 'eval-review', 'evalsets')
 
+/**
+ * One chunk of a source document, named by the `chunk_id` the fixture resolved
+ * against the target's own index. The fixtures carry the verbatim text and its
+ * translation too; scoring needs only the id.
+ */
+interface ExpectedPassage {
+  doc_id: string
+  chunk_id: string
+}
+
 interface EvalCase {
   id: string
   question: string
   query_type?: string
   source_language?: string
   expected_external_ids?: string[]
-  retrieval_ground_truth?: { expected_external_ids?: string[] }
+  retrieval_ground_truth?: {
+    expected_external_ids?: string[]
+    expected_passages?: ExpectedPassage[]
+  }
   /** Gen-1 golden set only — see the URL branch in runCase. */
   expected_urls?: string[]
 }
@@ -89,6 +112,26 @@ interface CaseResult {
   attainable_retrieved?: number | null
   /** Negative cases only: did the target correctly return nothing? */
   abstained?: boolean
+  /**
+   * Chunk grain. Empty when the fixture case carries no `expected_passages` —
+   * the answer sets are being migrated to passage ground truth cluster by
+   * cluster, and an un-migrated case is unscored here, not zero.
+   */
+  expected_chunk_ids: string[]
+  /** Expected chunks whose document is absent from the corpus — these cap chunk recall. */
+  chunks_missing_from_corpus: string[]
+  /** Every returned chunk in rank order, undeduped — the list chunk AP scores. */
+  retrieved_chunk_ids: string[]
+  chunk_average_precision?: number | null
+  chunk_attainable_recall?: number | null
+  /** How many attainable expected chunks were retrieved — chunk_attainable_recall's numerator. */
+  chunk_attainable_retrieved?: number | null
+  /**
+   * Recall crediting a neighbouring chunk at half weight. Read against
+   * chunk_attainable_recall: a gap between them is chunk-boundary drift
+   * (the passage was found, one chunk over), not a retrieval miss.
+   */
+  chunk_recall_with_adjacent?: number | null
   /** Wall clock for the whole query round-trip, as a user would feel it. */
   execution_time_ms: number
   /**
@@ -116,6 +159,21 @@ function expectedIdsOf(tc: EvalCase): string[] {
   )
 }
 
+/**
+ * The chunks a case expects, deduped. Only the answer sets carry these, and
+ * only for the clusters migrated so far; everything else scores doc grain
+ * alone.
+ */
+function expectedChunksOf(tc: EvalCase): ExpectedPassage[] {
+  const passages = tc.retrieval_ground_truth?.expected_passages ?? []
+  const seen = new Set<string>()
+  return passages.filter((p) => {
+    if (!p.chunk_id || seen.has(p.chunk_id)) return false
+    seen.add(p.chunk_id)
+    return true
+  })
+}
+
 async function getJson(url: string): Promise<any> {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
@@ -139,8 +197,15 @@ async function fetchCorpusIds(): Promise<Set<string>> {
   return ids
 }
 
-interface RetrievedDoc {
+/**
+ * One entry of the gateway's ranked list. The gateway returns chunks, several
+ * of which can belong to one document — doc-grain scoring collapses them (see
+ * bestPerDoc), chunk-grain scoring keeps them.
+ */
+interface RetrievedChunk {
   doc_id: string
+  /** null when the target returned no chunk id — then only doc grain is scorable. */
+  chunk_id: string | null
   url: string
 }
 
@@ -148,7 +213,7 @@ async function queryTarget(
   question: string,
   mode: 'cite' | 'answer',
 ): Promise<{
-  docs: RetrievedDoc[]
+  hits: RetrievedChunk[]
   serviceMs: number | null
   costUsd: number | null
 }> {
@@ -163,19 +228,29 @@ async function queryTarget(
   }
   const data = await response.json()
   if (!data.ok) throw new Error(data.error ?? 'gateway returned ok:false')
-  // Rank order is preserved; dedupe keeps the best-ranked hit per document.
-  const docs: RetrievedDoc[] = []
-  const seen = new Set<string>()
-  for (const d of data.docs ?? []) {
-    if (seen.has(d.doc_id)) continue
-    seen.add(d.doc_id)
-    docs.push({ doc_id: d.doc_id, url: d.url ?? '' })
-  }
+  // Rank order is preserved. The gateway echoes the retrieved chunk's id in
+  // meta.raw.chunk_id; kps[].passage_id falls back to the doc_id when there is
+  // none, so it is not a substitute — an absent chunk id must stay absent.
+  const hits: RetrievedChunk[] = (data.docs ?? []).map((d: any) => ({
+    doc_id: d.doc_id,
+    chunk_id: d.meta?.raw?.chunk_id ?? null,
+    url: d.url ?? '',
+  }))
   return {
-    docs,
+    hits,
     serviceMs: data.debug?.total_ms ?? null,
     costUsd: data.usage?.total_usd ?? null,
   }
+}
+
+/** The best-ranked hit per document — the list doc-grain scoring measures. */
+function bestPerDoc(hits: RetrievedChunk[]): RetrievedChunk[] {
+  const seen = new Set<string>()
+  return hits.filter((h) => {
+    if (seen.has(h.doc_id)) return false
+    seen.add(h.doc_id)
+    return true
+  })
 }
 
 async function runCase(
@@ -200,6 +275,18 @@ async function runCase(
     byUrl || polarity === 'negative'
       ? 1
       : (expected.length - missing.length) / expected.length
+  // A chunk is attainable only if its document is in the corpus. Chunk ids
+  // resolved against an index that has since been re-ingested would also be
+  // unattainable, and the catalog can't reveal that — it would show up as a
+  // whole set scoring zero at chunk grain while doc grain stays healthy.
+  const expectedChunks = byUrl ? [] : expectedChunksOf(tc)
+  const expectedChunkIds = expectedChunks.map((p) => p.chunk_id)
+  const missingChunks = expectedChunks
+    .filter((p) => !corpusIds.has(p.doc_id))
+    .map((p) => p.chunk_id)
+  const attainableChunks = expectedChunks.filter(
+    (p) => !missingChunks.includes(p.chunk_id),
+  )
   const start = Date.now()
 
   const base = {
@@ -209,13 +296,21 @@ async function runCase(
     expected_ids: expected,
     missing_from_corpus: missing,
     recall_ceiling: ceiling,
+    expected_chunk_ids: expectedChunkIds,
+    chunks_missing_from_corpus: missingChunks,
   }
 
   try {
-    const { docs, serviceMs, costUsd } = await queryTarget(tc.question, mode)
+    const { hits, serviceMs, costUsd } = await queryTarget(tc.question, mode)
+    const docs = bestPerDoc(hits)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
     const retrieved = byUrl ? docs.map((d) => d.url) : docs.map((d) => d.doc_id)
+    // Undeduped and in rank order: two chunks of one document are two results
+    // at this grain, and their ranks are exactly what chunk AP scores.
+    const retrievedChunkIds = hits
+      .map((h) => h.chunk_id)
+      .filter((id): id is string => id != null)
 
     // Cite mode drops results below a calibrated score floor, so returning
     // nothing is a reachable outcome — that, not ranking quality, is what a
@@ -230,6 +325,7 @@ async function runCase(
       return {
         ...base,
         retrieved_ids: retrieved,
+        retrieved_chunk_ids: retrievedChunkIds,
         abstained,
         execution_time_ms: Date.now() - start,
         service_time_ms: serviceMs,
@@ -248,12 +344,34 @@ async function runCase(
     const expectedKeys = byUrl ? attainable.map(extractUrlSlug) : attainable
     const retrievedKeys = byUrl ? retrieved.map(extractUrlSlug) : retrieved
     const retrievedKeySet = new Set(retrievedKeys)
-    const hits = expectedKeys.filter((k) => retrievedKeySet.has(k)).length
+    const docHits = expectedKeys.filter((k) => retrievedKeySet.has(k)).length
     const ap =
       attainable.length > 0
         ? averagePrecision(expectedKeys, retrievedKeys)
         : null
-    const aRecall = attainable.length > 0 ? hits / expectedKeys.length : null
+    const aRecall = attainable.length > 0 ? docHits / expectedKeys.length : null
+
+    // Chunk grain, scored exactly like doc grain: AP for where the expected
+    // passages sit in the returned list, recall over the attainable ones.
+    // Precision is left out for the same reason it is at doc grain — the
+    // fixtures label the passages backing each key fact, not every relevant
+    // chunk, so an unlabeled result is unlabeled, not wrong.
+    const chunkMetrics = calculateChunkMetrics(
+      attainableChunks,
+      hits
+        .filter((h) => h.chunk_id != null)
+        .map((h) => ({ chunk_id: h.chunk_id as string, doc_id: h.doc_id })),
+    )
+    assertChunkMetricsValid(chunkMetrics, tc.id)
+    const attainableChunkIds = attainableChunks.map((p) => p.chunk_id)
+    const chunkHits = chunkMetrics.exact_matches.length
+    const scoredChunks = attainableChunks.length > 0
+    const chunkAp = scoredChunks
+      ? averagePrecision(attainableChunkIds, retrievedChunkIds)
+      : null
+    const chunkRecall = scoredChunks
+      ? chunkHits / attainableChunkIds.length
+      : null
 
     const capped =
       attainable.length === 0
@@ -263,16 +381,29 @@ async function runCase(
           : ''
     const pct = (v: number | null) =>
       v === null ? '  —' : `${(v * 100).toFixed(0).padStart(3)}%`
+    // Chunk numbers only appear for cases that have passage ground truth; a
+    // dash column for the un-migrated ones would read as a zero.
+    const chunkCols = scoredChunks
+      ? `  cAP ${pct(chunkAp)}  cR ${pct(chunkRecall)} ` +
+        `(${chunkHits}/${attainableChunkIds.length})`
+      : ''
     console.log(
-      `  ${tc.id.padEnd(40)} AP ${pct(ap)}  aR ${pct(aRecall)}${capped}`,
+      `  ${tc.id.padEnd(40)} AP ${pct(ap)}  aR ${pct(aRecall)}${chunkCols}${capped}`,
     )
     return {
       ...base,
       retrieved_ids: retrieved,
+      retrieved_chunk_ids: retrievedChunkIds,
       matched: m.matched,
       average_precision: ap,
       attainable_recall: aRecall,
-      attainable_retrieved: attainable.length > 0 ? hits : null,
+      attainable_retrieved: attainable.length > 0 ? docHits : null,
+      chunk_average_precision: chunkAp,
+      chunk_attainable_recall: chunkRecall,
+      chunk_attainable_retrieved: scoredChunks ? chunkHits : null,
+      chunk_recall_with_adjacent: scoredChunks
+        ? chunkMetrics.recall_with_adjacent
+        : null,
       execution_time_ms: Date.now() - start,
       service_time_ms: serviceMs,
       cost_usd: costUsd,
@@ -283,6 +414,7 @@ async function runCase(
     // errors can't quietly improve a score. A case with nothing attainable
     // stays null — there was nothing to score even before the error.
     const scorable = expected.length - missing.length > 0
+    const scorableChunks = attainableChunks.length > 0
     const failure =
       polarity === 'negative'
         ? { abstained: false }
@@ -291,10 +423,15 @@ async function runCase(
             average_precision: scorable ? 0 : null,
             attainable_recall: scorable ? 0 : null,
             attainable_retrieved: scorable ? 0 : null,
+            chunk_average_precision: scorableChunks ? 0 : null,
+            chunk_attainable_recall: scorableChunks ? 0 : null,
+            chunk_attainable_retrieved: scorableChunks ? 0 : null,
+            chunk_recall_with_adjacent: scorableChunks ? 0 : null,
           }
     return {
       ...base,
       retrieved_ids: [],
+      retrieved_chunk_ids: [],
       ...failure,
       execution_time_ms: Date.now() - start,
       service_time_ms: null,
@@ -332,6 +469,7 @@ function byQueryType(results: CaseResult[]) {
     )
     const positives = group.filter((r) => r.polarity === 'positive')
     const negatives = group.filter((r) => r.polarity === 'negative')
+    const chunked = positives.filter((r) => r.expected_chunk_ids.length > 0)
     return {
       query_type,
       cases_positive: positives.length,
@@ -339,6 +477,13 @@ function byQueryType(results: CaseResult[]) {
       map: meanMeasurable(positives, (r) => r.average_precision),
       attainable_recall: meanMeasurable(positives, (r) => r.attainable_recall),
       negatives_abstained: negatives.filter((r) => r.abstained).length,
+      cases_chunk_scored: chunked.length,
+      chunk_map: chunked.length
+        ? meanMeasurable(chunked, (r) => r.chunk_average_precision)
+        : null,
+      chunk_attainable_recall: chunked.length
+        ? meanMeasurable(chunked, (r) => r.chunk_attainable_recall)
+        : null,
     }
   })
 }
@@ -378,6 +523,10 @@ async function runEvalset(
   const ceilinged = results.filter((r) => r.missing_from_corpus.length > 0)
   const abstained = negatives.filter((r) => r.abstained)
   const coverage = docCoverage(positives)
+  // Chunk grain covers only the cases migrated to passage ground truth, so its
+  // means are taken over those cases alone — never over the whole set.
+  const chunkScored = positives.filter((r) => r.expected_chunk_ids.length > 0)
+  const chunks = chunkCoverage(positives)
 
   // Latency covers successful queries only: a failed case's wall clock
   // measures the timeout setting, not the system.
@@ -434,6 +583,22 @@ async function runEvalset(
     expected_docs: coverage.expected,
     expected_docs_in_corpus: coverage.in_corpus,
     expected_docs_retrieved: coverage.retrieved,
+    // Chunk grain. null across the board for a set with no passage ground
+    // truth (every cite set, and the answer cases not yet migrated) — an
+    // unscored grain reads as null, not as a zero score.
+    cases_chunk_scored: chunkScored.length,
+    overall_chunk_map: chunkScored.length
+      ? meanMeasurable(chunkScored, (r) => r.chunk_average_precision)
+      : null,
+    overall_chunk_attainable_recall: chunkScored.length
+      ? meanMeasurable(chunkScored, (r) => r.chunk_attainable_recall)
+      : null,
+    overall_chunk_recall_with_adjacent: chunkScored.length
+      ? meanMeasurable(chunkScored, (r) => r.chunk_recall_with_adjacent)
+      : null,
+    expected_chunks: chunks.expected,
+    expected_chunks_in_corpus: chunks.in_corpus,
+    expected_chunks_retrieved: chunks.retrieved,
     negatives_abstained: abstained.length,
     latency,
     cost,
@@ -457,6 +622,15 @@ async function runEvalset(
       `(${coverage.in_corpus}/${coverage.expected} expected docs in corpus, ` +
       `${coverage.retrieved}/${coverage.in_corpus} retrieved)`,
   )
+  if (chunkScored.length) {
+    console.log(
+      `${chunkScored.length}/${positives.length} with passage truth   ` +
+        `Chunk MAP ${(report.overall_chunk_map! * 100).toFixed(1)}%   ` +
+        `Chunk recall ${(report.overall_chunk_attainable_recall! * 100).toFixed(1)}% ` +
+        `(${chunks.retrieved}/${chunks.in_corpus} expected chunks retrieved, ` +
+        `${(report.overall_chunk_recall_with_adjacent! * 100).toFixed(1)}% allowing an adjacent chunk)`,
+    )
+  }
   if (latency.wall) {
     const s = (ms: number) => `${(ms / 1000).toFixed(1)}s`
     console.log(
@@ -492,7 +666,11 @@ async function runEvalset(
         parts.push(
           `${String(t.cases_positive).padStart(2)} pos  ` +
             `MAP ${(t.map * 100).toFixed(0).padStart(3)}%  ` +
-            `aR ${(t.attainable_recall * 100).toFixed(0).padStart(3)}%`,
+            `aR ${(t.attainable_recall * 100).toFixed(0).padStart(3)}%` +
+            (t.cases_chunk_scored
+              ? `  cMAP ${(t.chunk_map! * 100).toFixed(0).padStart(3)}%  ` +
+                `cR ${(t.chunk_attainable_recall! * 100).toFixed(0).padStart(3)}%`
+              : ''),
         )
       }
       if (t.cases_negative) {
