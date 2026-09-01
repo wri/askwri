@@ -30,9 +30,9 @@ beautifulsoup4==4.15.0
     # via llama-index-readers-file
 bm25s==0.3.10
     # via llama-index-retrievers-bm25
-boto3==1.43.59
+boto3==1.43.83
     # via -r requirements.in
-botocore==1.43.59
+botocore==1.43.83
     # via
     #   boto3
     #   s3transfer
@@ -118,9 +118,9 @@ joblib==1.5.3
     # via nltk
 langdetect==1.0.9
     # via -r requirements.in
-llama-index==0.14.23
+llama-index==0.14.24
     # via -r requirements.in
-llama-index-core==0.14.23
+llama-index-core==0.14.24
     # via
     #   llama-index
     #   llama-index-embeddings-openai
@@ -157,7 +157,7 @@ nltk==3.10.0
     # via
     #   llama-index
     #   llama-index-core
-numpy==2.5.1
+numpy==2.5.2
     # via
     #   -r requirements.in
     #   bm25s
@@ -165,7 +165,7 @@ numpy==2.5.1
     #   pandas
     #   rank-bm25
     #   scipy
-openai==2.50.0
+openai==2.54.0
     # via
     #   -r requirements.in
     #   llama-index-embeddings-openai
@@ -196,7 +196,7 @@ psycopg-binary==3.3.4
     # via psycopg
 psycopg-pool==3.3.1
     # via psycopg
-pydantic==2.13.4
+pydantic==2.13.5
     # via
     #   -r requirements.in
     #   banks
@@ -206,9 +206,9 @@ pydantic==2.13.4
     #   llama-index-workflows
     #   openai
     #   pydantic-settings
-pydantic-core==2.46.4
+pydantic-core==2.46.5
     # via pydantic
-pydantic-settings==2.14.2
+pydantic-settings==2.15.0
     # via -r requirements.in
 pypdf==6.14.2
     # via llama-index-readers-file
@@ -218,7 +218,7 @@ python-dateutil==2.9.0.post0
     # via
     #   botocore
     #   pandas
-python-dotenv==1.2.2
+python-dotenv==1.2.3
     # via
     #   -r requirements.in
     #   pydantic-settings
@@ -244,7 +244,7 @@ requests==2.34.2
     #   tiktoken
 s3transfer==0.19.2
     # via boto3
-scipy==1.18.0
+scipy==1.18.1
     # via -r requirements.in
 six==1.17.0
     # via
@@ -304,7 +304,7 @@ urllib3==2.7.0
     # via
     #   botocore
     #   requests
-uvicorn==0.52.0
+uvicorn==0.52.4
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
