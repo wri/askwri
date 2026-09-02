@@ -69,6 +69,7 @@
     "@eslint/eslintrc": "^3",
     "@eslint/js": "^9.0.0",
     "@next/eslint-plugin-next": "^16.2.4",
+    "@types/jest": "^29.5.14",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^2.4.6",
