@@ -9,16 +9,16 @@
 #
 # Core FastAPI and dependencies
 fastapi>=0.141.1,<1.0.0
-uvicorn[standard]>=0.52.0,<1.0.0
-pydantic>=2.13.4,<3.0.0
-pydantic-settings>=2.14.2,<3.0.0
+uvicorn[standard]>=0.52.4,<1.0.0
+pydantic>=2.13.5,<3.0.0
+pydantic-settings>=2.15.0,<3.0.0
 python-multipart>=0.0.32,<0.1.0
-python-dotenv>=1.2.2
+python-dotenv>=1.2.3
 
 # Core LlamaIndex - using latest versions
-llama-index>=0.14.23
+llama-index>=0.14.24
 llama-index-readers-file>=0.6.0
-openai>=2.50.0
+openai>=2.54.0
 
 # Hybrid retrieval (dense encode + rerank are Bedrock API calls — spec v3;
 # no in-process models, so no sentence-transformers/onnxruntime/optimum)
@@ -28,8 +28,8 @@ rank-bm25>=0.2.2
 # Data processing (scipy is a direct dep of the sparse-lane scripts —
 # scripts/build_sparse_keyword.py — not just a transitive of removed models)
 pandas>=2.3.3
-numpy>=1.26.4
-scipy>=1.18.0
+numpy>=2.5.2
+scipy>=1.18.1
 
 # HTTP client
 httpx>=0.28.1,<1.0.0
@@ -41,6 +41,6 @@ psycopg[binary,pool]>=3.3.4
 pgvector>=0.5.0
 
 # Phase 1 ingestion worker
-boto3>=1.43.59
+boto3>=1.43.83
 langdetect>=1.0.9
 opencc-python-reimplemented>=0.1.7
