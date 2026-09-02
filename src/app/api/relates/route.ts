@@ -1,6 +1,7 @@
 /* eslint-disable */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { isEnglishText } from '@/lib/ensure-english'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -173,8 +174,12 @@ export async function POST(req: NextRequest) {
       content = String(msg.tool_calls[0].function.arguments)
 
     const parsed = safeParse(content)
+    // Issue #387: the model sometimes mirrors Chinese passages despite the
+    // prompt rule — fall back to the snippet-derived English sentence.
     const relates =
-      typeof parsed?.relates === 'string' && parsed.relates.trim()
+      typeof parsed?.relates === 'string' &&
+      parsed.relates.trim() &&
+      isEnglishText(parsed.relates)
         ? parsed.relates.trim()
         : snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
     const relation =
