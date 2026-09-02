@@ -27,4 +27,10 @@ describe('isEnglishText (issue #387 guards)', () => {
     ).toBe(true)
     expect(isEnglishText(42)).toBe(true)
   })
+
+  it('flags other non-English scripts (Hebrew, Greek, Cyrillic)', () => {
+    expect(isEnglishText('שלום')).toBe(false)
+    expect(isEnglishText('Η συνάντηση ξεκίνησε')).toBe(false)
+    expect(isEnglishText('модель углеродного рынка')).toBe(false)
+  })
 })
