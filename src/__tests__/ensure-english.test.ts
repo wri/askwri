@@ -33,4 +33,13 @@ describe('isEnglishText (issue #387 guards)', () => {
     expect(isEnglishText('Η συνάντηση ξεκίνησε')).toBe(false)
     expect(isEnglishText('модель углеродного рынка')).toBe(false)
   })
+
+  it('pins the accepted tradeoffs: mixed-script is nuked, empty string passes', () => {
+    // English sentence quoting a CJK title — intended false (documented ceiling).
+    expect(
+      isEnglishText('The passage cites 《深圳低碳政策》 on transport.'),
+    ).toBe(false)
+    // Empty string passes through; consumer-side || fallback covers it.
+    expect(isEnglishText('')).toBe(true)
+  })
 })
