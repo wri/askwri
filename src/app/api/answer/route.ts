@@ -183,15 +183,15 @@ function synthFallback(query: string, docs: any[]) {
   // Only used when API key is missing or there's a critical error
   // This should rarely be seen by users
   if (!docs?.length) {
-    return { sentences: ['No relevant documents found to answer this query.'] }
+    const sentences = ['No relevant documents found to answer this query.']
+    return { sentences, cites: sentences.map(() => []) }
   }
 
-  return {
-    sentences: [
-      'Answer synthesis is temporarily unavailable.',
-      'Please review the source documents below for information on this topic.',
-    ],
-  }
+  const sentences = [
+    'Answer synthesis is temporarily unavailable.',
+    'Please review the source documents below for information on this topic.',
+  ]
+  return { sentences, cites: sentences.map(() => []) }
 }
 
 function safeParse(text: string, allowPartial: boolean = false) {
@@ -471,6 +471,7 @@ export async function POST(req: NextRequest) {
             sentences: [
               'The available sources do not contain sufficient information to answer this question.',
             ],
+            cites: [[]],
             source_relevance: sourceRelevanceFromNano,
             warning: 'low_coverage',
             warningMessage:
@@ -735,6 +736,7 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
         sentences: [
           'Could not synthesize a full answer from the provided context.',
         ],
+        cites: [[]],
       },
       passages_sent: [],
       debug: debugInfo,

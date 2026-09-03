@@ -235,5 +235,14 @@ describe('POST /api/answer — knobs', () => {
     const out = await post({ query: 'q', docs: docs(3) })
     expect(fetchMock).not.toHaveBeenCalled()
     expect(out.debug.fallbackReason).toBe('no_api_key')
+    expect(out.synthesis.cites).toEqual([[], []])
+  })
+
+  it('exception and fallback paths carry parallel empty cites', async () => {
+    fetchMock.mockRejectedValue(new Error('boom'))
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.ok).toBe(true)
+    expect(out.synthesis.sentences).toHaveLength(1)
+    expect(out.synthesis.cites).toEqual([[]])
   })
 })
