@@ -5,6 +5,7 @@
  * so every test asserts on exactly what would have been sent to the model.
  */
 import { NextRequest } from 'next/server'
+import { createHash } from 'node:crypto'
 
 const ENV = { ...process.env }
 let fetchMock: jest.SpyInstance
@@ -47,6 +48,18 @@ async function post(body: Record<string, unknown>) {
   return res.json()
 }
 
+async function postWithStatus(body: Record<string, unknown>) {
+  const { POST } = await import('@/app/api/answer/route')
+  const res = await POST(
+    new NextRequest('http://localhost/api/answer', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    }),
+  )
+  return { status: res.status, json: await res.json() }
+}
+
 function sentBody(): any {
   const call = fetchMock.mock.calls[fetchMock.mock.calls.length - 1]
   return JSON.parse(call[1].body)
@@ -72,7 +85,7 @@ afterEach(() => {
 
 describe('POST /api/answer — defaults reproduce current behaviour', () => {
   it('gpt-5 default: 8 passages, 400 chars, max_completion_tokens, no temperature', async () => {
-    const out = await post({ query: 'q', docs: docs(15), prompt_version: 'v1' })
+    const out = await post({ query: 'q', docs: docs(15) })
     expect(out.ok).toBe(true)
     expect(out.passages_sent).toHaveLength(8)
     for (const p of out.passages_sent)
@@ -97,18 +110,50 @@ describe('POST /api/answer — defaults reproduce current behaviour', () => {
     expect(body.temperature).toBe(0.3)
   })
 
-  it('v1 prompt is the legacy system prompt and the legacy user layout', async () => {
-    const { SYS_V1 } = await import('@/app/api/answer/route')
-    await post({ query: 'What?', docs: docs(2), prompt_version: 'v1' })
+  it('pins the exact legacy v1 provider request independently of route constants', async () => {
+    const fixedDoc = {
+      doc_id: 'fixed-doc',
+      title: 'Fixed title',
+      year: 2024,
+      kps: [
+        {
+          kp_relevance: 0.9,
+          snippet: 'Fixed evidence.',
+          page: 3,
+          passage_id: 'fixed-passage',
+          citation_targets: [],
+        },
+      ],
+    }
+    await post({ query: 'What?', docs: [fixedDoc], prompt_version: 'v1' })
     const body = sentBody()
-    expect(body.messages[0]).toEqual({ role: 'system', content: SYS_V1 })
-    expect(body.messages[1].content).toContain('Question: What?')
-    expect(body.messages[1].content).toContain(
-      '[1] "Title 1" (2020)\n   Key finding: ',
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://api.openai.com/v1/chat/completions',
     )
-    expect(body.messages[1].content).toContain(
-      "Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences",
-    )
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({
+      authorization: 'Bearer sk-test',
+      'content-type': 'application/json',
+    })
+    expect(body).toEqual({
+      model: 'gpt-5.4',
+      messages: [
+        { role: 'system', content: expect.any(String) },
+        {
+          role: 'user',
+          content: `Question: What?
+
+Source documents with key findings:
+[1] "Fixed title" (2024)
+   Key finding: Fixed evidence.
+
+Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences synthesizing the most important information from the relevant sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.`,
+        },
+      ],
+      max_completion_tokens: 2000,
+    })
+    expect(
+      createHash('sha256').update(body.messages[0].content).digest('hex'),
+    ).toBe('3d9f95184ac5fea90fd0c9f767f4405922c7926084c2a33965c84e9503f48aa0')
   })
 
   it('passages_sent carries id, doc_id, chunk_id, page and the exact text sent', async () => {
@@ -188,6 +233,41 @@ describe('POST /api/answer — v2 cited sentences', () => {
     expect(out.synthesis.warning).toBe('low_coverage')
     expect(sentBody().messages[1].content).toContain('Coverage check:')
   })
+
+  it('renumbers nano-filtered passages so cite ids are positional', async () => {
+    process.env.USE_NANO_FILTER = 'true'
+    fetchMock
+      .mockResolvedValueOnce(
+        modelReply(
+          JSON.stringify({
+            relevance: [
+              { id: 1, tier: 'weak' },
+              { id: 2, tier: 'strong' },
+              { id: 3, tier: 'weak' },
+              { id: 4, tier: 'partial' },
+            ],
+            coverage: 'good',
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        modelReply(
+          JSON.stringify({
+            sentences: [{ text: 'Answer.', cites: [1, 2] }],
+          }),
+        ),
+      )
+
+    const out = await post({ query: 'q', docs: docs(4) })
+
+    expect(out.passages_sent).toEqual([
+      expect.objectContaining({ id: 1, doc_id: 'doc_2' }),
+      expect.objectContaining({ id: 2, doc_id: 'doc_4' }),
+    ])
+    expect(out.synthesis.cites).toEqual([[1, 2]])
+    expect(sentBody().messages[1].content).toContain('[1] "Title 2"')
+    expect(sentBody().messages[1].content).toContain('[2] "Title 4"')
+  })
 })
 
 describe('POST /api/answer — knobs', () => {
@@ -230,19 +310,51 @@ describe('POST /api/answer — knobs', () => {
     expect(body.max_tokens).toBeDefined() // non-gpt-5 branch
   })
 
+  it('rejects an unconfigured base_url without exposing a provider key', async () => {
+    const { status, json } = await postWithStatus({
+      query: 'q',
+      docs: docs(3),
+      base_url: 'https://attacker.example/v1',
+    })
+    expect(status).toBe(400)
+    expect(json).toEqual({ ok: false, error: 'Unsupported provider base_url' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('a missing key for the resolved provider returns the fallback, no call', async () => {
     delete process.env.OPENAI_API_KEY
-    const out = await post({ query: 'q', docs: docs(3) })
+    const out = await post({
+      query: 'q',
+      docs: docs(3),
+      likely_off_topic: true,
+    })
     expect(fetchMock).not.toHaveBeenCalled()
     expect(out.debug.fallbackReason).toBe('no_api_key')
     expect(out.synthesis.cites).toEqual([[], []])
+    expect(out.synthesis.warning).toBe('low_coverage')
   })
 
-  it('exception and fallback paths carry parallel empty cites', async () => {
+  it('an upstream API error preserves the off-topic warning', async () => {
+    fetchMock.mockResolvedValue(modelReply('upstream error', 500))
+    const out = await post({
+      query: 'q',
+      docs: docs(3),
+      likely_off_topic: true,
+    })
+    expect(out.debug.fallbackReason).toBe('api_error')
+    expect(out.synthesis.warning).toBe('low_coverage')
+  })
+
+  it('exception and fallback paths carry parallel empty cites and the off-topic warning', async () => {
     fetchMock.mockRejectedValue(new Error('boom'))
-    const out = await post({ query: 'q', docs: docs(3) })
+    const out = await post({
+      query: 'q',
+      docs: docs(3),
+      likely_off_topic: true,
+    })
     expect(out.ok).toBe(true)
     expect(out.synthesis.sentences).toHaveLength(1)
     expect(out.synthesis.cites).toEqual([[]])
+    expect(out.synthesis.warning).toBe('low_coverage')
   })
 })

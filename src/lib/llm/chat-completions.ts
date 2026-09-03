@@ -23,28 +23,43 @@ export interface ResolvedProvider {
   isGpt5: boolean
 }
 
+export class UnsupportedProviderBaseUrlError extends Error {
+  constructor() {
+    super('Unsupported provider base_url')
+    this.name = 'UnsupportedProviderBaseUrlError'
+  }
+}
+
 function stripSlash(url: string): string {
   return url.replace(/\/+$/, '')
 }
 
 /**
- * Pick model, base URL and key. The key follows the base URL: a base URL
- * equal to LUNAROUTE_BASE_URL uses LUNAROUTE_API_KEY; anything else uses
- * OPENAI_API_KEY (proxies that front OpenAI keep the OpenAI key).
+ * Pick model, base URL and key. A request override must match one of the two
+ * configured provider URLs; the matching URL selects its corresponding key.
+ * This prevents a caller-controlled URL from receiving a provider credential.
  */
 export function resolveProvider(
   defaultModel: string,
   override: ProviderOverride = {},
 ): ResolvedProvider {
   const model = (override.model ?? defaultModel).trim()
-  const baseUrl = stripSlash(
-    override.base_url?.trim() ||
-      process.env.OPENAI_BASE_URL?.trim() ||
-      OPENAI_DEFAULT_BASE_URL,
+  const openaiBaseUrl = stripSlash(
+    process.env.OPENAI_BASE_URL?.trim() || OPENAI_DEFAULT_BASE_URL,
   )
   const lunaroute = process.env.LUNAROUTE_BASE_URL?.trim()
+  const lunarouteBaseUrl = lunaroute ? stripSlash(lunaroute) : undefined
+  const requestedBaseUrl = override.base_url?.trim()
+  const baseUrl = stripSlash(requestedBaseUrl || openaiBaseUrl)
+  if (
+    requestedBaseUrl &&
+    baseUrl !== openaiBaseUrl &&
+    baseUrl !== lunarouteBaseUrl
+  ) {
+    throw new UnsupportedProviderBaseUrlError()
+  }
   const apiKey =
-    lunaroute && stripSlash(lunaroute) === baseUrl
+    lunarouteBaseUrl === baseUrl
       ? process.env.LUNAROUTE_API_KEY?.trim()
       : process.env.OPENAI_API_KEY?.trim()
   return { model, baseUrl, apiKey, isGpt5: /^gpt-5/i.test(model) }

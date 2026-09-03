@@ -44,15 +44,15 @@ describe('resolveProvider', () => {
     })
   })
 
-  it('an override base_url that is not lunaroute keeps the OpenAI key', () => {
+  it('rejects an override base_url that is not a configured provider', () => {
     process.env.OPENAI_API_KEY = 'sk-openai'
     process.env.LUNAROUTE_BASE_URL = 'https://gw.lunaroute.com/v1'
     process.env.LUNAROUTE_API_KEY = 'lr-key'
-    const p = resolveProvider('gpt-5.4', {
-      base_url: 'https://other.example/v1',
-    })
-    expect(p.apiKey).toBe('sk-openai')
-    expect(p.baseUrl).toBe('https://other.example/v1')
+    expect(() =>
+      resolveProvider('gpt-5.4', {
+        base_url: 'https://attacker.example/v1',
+      }),
+    ).toThrow('Unsupported provider base_url')
   })
 })
 

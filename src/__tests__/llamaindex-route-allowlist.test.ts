@@ -91,18 +91,31 @@ describe('POST /api/llamaindex allowlist', () => {
       facets: [{ facet: 'geography', value: 'Brazil' }],
       expansion: true,
     })
-    expect(forwarded()).toMatchObject({
-      max_results: 40,
-      facets: [{ facet: 'geography', value: 'Brazil' }],
+    expect(fetchMock.mock.calls[0][0]).toBe('http://search.test/query')
+    expect(fetchMock.mock.calls[0][1]).toEqual({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: 'q',
+        mode: 'cite',
+        similarity_threshold: 0,
+        include_metadata: true,
+        rerank: true,
+        max_results: 40,
+        vector_top_k: 500,
+        bm25_top_k: 500,
+        rerank_top_n: 500,
+        fusion_top_k: 500,
+        facets: [{ facet: 'geography', value: 'Brazil' }],
+        expansion: true,
+      }),
     })
   })
 
   it('still maps the legacy camelCase overrides', async () => {
     await post({ query: 'q', mode: 'answer', alpha: 0.8, rerankTopK: 5 })
     expect(forwarded()).toMatchObject({ dense_weight: 0.8, rerank_top_n: 5 })
-    // Float-safe per controller ruling: 1 - 0.8 === 0.19999999999999996 in JS,
-    // so toMatchObject's strict equality can't assert sparse_weight: 0.2.
-    expect(forwarded().sparse_weight).toBeCloseTo(0.2, 10)
+    expect(forwarded().sparse_weight).toBe(0.19999999999999996)
   })
 
   it('rejects unknown fields with 400 and does not call the service', async () => {

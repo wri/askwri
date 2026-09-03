@@ -158,6 +158,13 @@ export const AIResearchModal = ({
             'Unable to synthesize answer: no documents with content found.',
           ],
           inline: [],
+          ...(likelyOffTopic
+            ? {
+                warning: 'low_coverage',
+                warningMessage:
+                  'Limited relevant sources found for this query. The answer may not fully address your question.',
+              }
+            : {}),
         })
         return
       }

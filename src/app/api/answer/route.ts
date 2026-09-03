@@ -2,7 +2,11 @@
 // Crisp 3–5 sentence synthesis, model-aware (gpt-5*: max_completion_tokens & omit temperature).
 import { NextRequest, NextResponse } from 'next/server'
 
-import { chatCompletion, resolveProvider } from '@/lib/llm/chat-completions'
+import {
+  chatCompletion,
+  resolveProvider,
+  UnsupportedProviderBaseUrlError,
+} from '@/lib/llm/chat-completions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -194,6 +198,19 @@ function synthFallback(query: string, docs: any[]) {
   return { sentences, cites: sentences.map(() => []) }
 }
 
+const LOW_COVERAGE_WARNING = {
+  warning: 'low_coverage',
+  warningMessage:
+    'Limited relevant sources found for this query. The answer may not fully address your question.',
+} as const
+
+function withLikelyOffTopicWarning<T extends Record<string, unknown>>(
+  synthesis: T,
+  likelyOffTopic: boolean,
+): T & Partial<typeof LOW_COVERAGE_WARNING> {
+  return likelyOffTopic ? { ...synthesis, ...LOW_COVERAGE_WARNING } : synthesis
+}
+
 function safeParse(text: string, allowPartial: boolean = false) {
   try {
     return JSON.parse(text)
@@ -353,6 +370,7 @@ async function runNanoFilter(
 
 export async function POST(req: NextRequest) {
   const debugInfo: any = { timestamp: new Date().toISOString() }
+  let likelyOffTopic = false
 
   try {
     const reqBody = await req.json()
@@ -379,6 +397,7 @@ export async function POST(req: NextRequest) {
     )
 
     const cfg = resolveSynthesisConfig(reqBody)
+    likelyOffTopic = cfg.likelyOffTopic
     debugInfo.knobs = {
       model: cfg.model,
       base_url: cfg.baseUrl,
@@ -394,7 +413,10 @@ export async function POST(req: NextRequest) {
       debugInfo.fallbackReason = 'no_api_key'
       return NextResponse.json({
         ok: true,
-        synthesis: synthFallback(query, docs),
+        synthesis: withLikelyOffTopicWarning(
+          synthFallback(query, docs),
+          likelyOffTopic,
+        ),
         passages_sent: [],
         debug: debugInfo,
       })
@@ -492,6 +514,10 @@ export async function POST(req: NextRequest) {
       filteredDocs = docList.slice(0, maxDocs)
     }
 
+    // Cite ids are the 1-based positions in passages_sent, not the original
+    // pre-filter document ids. Renumber after the nano filter can create gaps.
+    filteredDocs = filteredDocs.map((d, idx) => ({ ...d, id: idx + 1 }))
+
     const passagesSent = filteredDocs.map((d) => ({
       id: d.id,
       doc_id: d.doc_id,
@@ -585,7 +611,10 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
       debugInfo.apiError = json
       return NextResponse.json({
         ok: true,
-        synthesis: synthFallback(query, docs),
+        synthesis: withLikelyOffTopicWarning(
+          synthFallback(query, docs),
+          likelyOffTopic,
+        ),
         passages_sent: passagesSent,
         debug: { ...debugInfo, used, status: r.status, upstream: json },
       })
@@ -685,9 +714,7 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
     const sourcesUsed = filteredDocs.length
 
     if (isLowCoverage) {
-      synthesis.warning = 'low_coverage'
-      synthesis.warningMessage =
-        'Limited relevant sources found for this query. The answer may not fully address your question.'
+      Object.assign(synthesis, LOW_COVERAGE_WARNING)
       console.warn(
         `[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`,
       )
@@ -727,17 +754,26 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
       debug: debugInfo,
     })
   } catch (error: any) {
+    if (error instanceof UnsupportedProviderBaseUrlError) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 400 },
+      )
+    }
     console.error('[Answer Route] Exception:', error)
     debugInfo.exception = error?.message || String(error)
     debugInfo.fallbackReason = 'exception'
     return NextResponse.json({
       ok: true,
-      synthesis: {
-        sentences: [
-          'Could not synthesize a full answer from the provided context.',
-        ],
-        cites: [[]],
-      },
+      synthesis: withLikelyOffTopicWarning(
+        {
+          sentences: [
+            'Could not synthesize a full answer from the provided context.',
+          ],
+          cites: [[]],
+        },
+        likelyOffTopic,
+      ),
       passages_sent: [],
       debug: debugInfo,
     })

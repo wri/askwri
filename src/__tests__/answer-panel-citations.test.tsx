@@ -70,4 +70,39 @@ describe('AnswerPanel citations', () => {
     expect(screen.queryByTitle('Citation 1.1')).not.toBeInTheDocument()
     expect(screen.getByTitle('Citation 2.1')).toBeInTheDocument()
   })
+
+  it('a multi-passage document scrolls to the exact passage sent for synthesis', () => {
+    const multiPassageDocs = [
+      {
+        ...doc('A', 'A_1', 0.1),
+        kps: [doc('A', 'A_1', 0.1).kps[0], doc('A', 'A_2', 0.99).kps[0]],
+      },
+      doc('B', 'B_1', 0.8),
+    ]
+    const passagesSent = [
+      { id: 1, doc_id: 'A', chunk_id: 'A_1', page: 1, text: 't' },
+    ]
+    const setPage = jest.fn()
+    const inline = buildInline([[1]], passagesSent, multiPassageDocs)
+
+    render(
+      <ChakraProvider>
+        <AnswerPanel
+          query='q'
+          answer={{ sentences: ['One.'], inline, cites: [[1]] }}
+          firstDocHowRelevant=''
+          supportingDocs={multiPassageDocs}
+          setAnswer={jest.fn()}
+          setQuery={jest.fn()}
+          ops={null}
+          setSupportingCitationsPage={setPage}
+          supportingCitationsPage={1}
+        />
+      </ChakraProvider>,
+    )
+
+    fireEvent.click(screen.getByTitle('Citation 1.1'))
+    expect(inline[0][0].passage_id).toBe('A:A_1')
+    expect(setPage).toHaveBeenCalledWith(1)
+  })
 })
