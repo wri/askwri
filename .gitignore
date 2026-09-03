@@ -32,6 +32,7 @@ yarn-error.log*
 # IDE
 .idea/
 .vscode/
+.jspace/
 
 # Agent worktrees (local, not for commit)
 .claude/
@@ -77,6 +78,9 @@ search-service/data/
 # Evaluation intermediates
 evaluation/answer-retrieval-raw.json
 evaluation/results/
+
+# One-off corpus exports (DB dumps / listings for eval colleagues). Not for commit.
+corpus-exports/
 
 # OS
 .DS_Store
