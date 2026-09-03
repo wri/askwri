@@ -108,6 +108,77 @@ If no sources adequately answer the question:
 {"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
 `.trim()
 
+export const SYS_V2 = `
+Synthesize a concise answer from the provided documents. Write exactly 2-3 clear sentences.
+
+Rules:
+- ENGLISH ONLY: Always write every sentence in English, whatever language the
+  question or the passages are in. Never mirror the language of the question or
+  of a passage — translate what you need instead.
+- TRUST SOURCES: The provided sources have been pre-filtered for relevance. Focus on synthesizing their key findings.
+- SYNTHESIZE: Combine key information across relevant sources — do NOT copy phrases verbatim
+- PRIORITIZE: Focus on the most relevant and important findings
+- GROUND: Every claim must be traceable to the provided documents
+- CITE: For every sentence, list the ids of the sources it draws on in "cites". Cite only ids that appear in the source list. A sentence with no supporting source must not be written.
+- ACCURACY: Preserve the meaning and facts from the original sources
+- LIMITATIONS: If sources highlight significant risks, trade-offs, or caveats, include the most important one
+- FAITHFULNESS: Only state causal relationships explicitly supported in the sources; use hedging language (e.g., "is associated with", "may contribute to") for correlations or inferences
+
+Return JSON with your answer AND a relevance assessment for every source:
+{"sentences":[{"text":"s1","cites":[1,3]},{"text":"s2","cites":[2]}],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
+
+Tier definitions (match these exactly):
+- "strong": Information from this source appears in your synthesis. You directly used it.
+- "partial": Source is on-topic and could support the answer, but you did not directly use it.
+- "weak": Source does not meaningfully address the question.
+
+If no sources adequately answer the question:
+{"sentences":[{"text":"The available sources do not contain sufficient information to answer this question.","cites":[]}],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
+`.trim()
+
+/**
+ * Accept either the v2 shape ({text, cites}) or the legacy string shape, and
+ * return parallel arrays. Cites are validated against the passages actually
+ * sent: an id the model invented is dropped and counted, never rendered.
+ */
+export function normalizeSentences(
+  parsed: any,
+  validIds: Set<number>,
+): { sentences: string[]; cites: number[][]; invalid: number } {
+  const raw: any[] = Array.isArray(parsed?.paragraphs)
+    ? parsed.paragraphs.flat()
+    : Array.isArray(parsed?.sentences)
+      ? parsed.sentences
+      : []
+  const sentences: string[] = []
+  const cites: number[][] = []
+  let invalid = 0
+  for (const item of raw) {
+    if (typeof item === 'string') {
+      sentences.push(item)
+      cites.push([])
+      continue
+    }
+    if (item && typeof item.text === 'string') {
+      sentences.push(item.text)
+      const seen = new Set<number>()
+      const ok: number[] = []
+      for (const c of Array.isArray(item.cites) ? item.cites : []) {
+        if (Number.isInteger(c) && validIds.has(c)) {
+          if (!seen.has(c)) {
+            seen.add(c)
+            ok.push(c)
+          }
+        } else {
+          invalid++
+        }
+      }
+      cites.push(ok)
+    }
+  }
+  return { sentences, cites, invalid }
+}
+
 function synthFallback(query: string, docs: any[]) {
   // Only used when API key is missing or there's a critical error
   // This should rarely be seen by users
@@ -438,6 +509,9 @@ export async function POST(req: NextRequest) {
     console.log('[Answer Route] DocList created:', debugInfo.docListCreated)
 
     // Create a structured prompt that frames the task clearly
+    const coverageNote = cfg.likelyOffTopic
+      ? `\n\nCoverage check: the question's core topic appears to be absent from this corpus. If the sources do not actually answer it, return the low_coverage response.`
+      : ''
     const userContent = `Question: ${query}
 
 Source documents with key findings:
@@ -449,10 +523,13 @@ ${filteredDocs
   )
   .join('\n\n')}
 
-Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences synthesizing the most important information from the relevant sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.`
+Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences synthesizing the most important information from the relevant sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.${coverageNote}`
 
     const messages = [
-      { role: 'system', content: SYS_V1 },
+      {
+        role: 'system',
+        content: cfg.promptVersion === 'v1' ? SYS_V1 : SYS_V2,
+      },
       { role: 'user', content: userContent },
     ]
 
@@ -552,40 +629,24 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
         : 'none',
     )
 
-    // Handle both old format (sentences) and new format (paragraphs)
-    let sentences: string[] = []
-
-    if (Array.isArray(parsed.paragraphs)) {
-      console.log('[Answer Route] Processing paragraphs format')
-      // New format: flatten paragraphs into sentences
-      sentences = parsed.paragraphs.flat()
-      console.log('[Answer Route] After flattening paragraphs:', {
-        sentencesCount: sentences.length,
-        firstSentenceType:
-          sentences.length > 0 ? typeof sentences[0] : undefined,
-        firstSentencePreview:
-          sentences.length > 0 ? sentences[0].slice(0, 100) : undefined,
-      })
-    } else if (Array.isArray(parsed.sentences)) {
-      console.log('[Answer Route] Processing sentences format')
-      // Old format: use sentences directly
-      sentences = parsed.sentences
-    } else {
-      console.log('[Answer Route] No valid format found, using fallback')
-      sentences = synthFallback(query, docs).sentences
-    }
+    const validIds = new Set(passagesSent.map((p) => p.id))
+    const norm = normalizeSentences(parsed, validIds)
+    let sentences = norm.sentences
+    let cites = norm.cites
+    debugInfo.invalid_cites = norm.invalid
 
     if (sentences.length === 0) {
       console.log('[Answer Route] No valid sentences parsed, using fallback')
       debugInfo.fallbackReason = 'no_valid_sentences'
       sentences = synthFallback(query, docs).sentences
+      cites = sentences.map(() => [])
     }
 
     // Check for verbatim copying but don't override the response
     const hasQuotes = detectVerbatimCopying(sentences, docs)
 
     // Build synthesis response with appropriate warnings
-    const synthesis: any = { sentences }
+    const synthesis: any = { sentences, cites }
 
     // Source relevance: prefer nano filter tiers (absolute), fall back to synthesis LLM tiers
     let sourceRelevance: Array<{ doc_id: string; tier: string }> = []
@@ -616,6 +677,7 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
 
     // Low coverage: from nano filter or synthesis LLM
     const isLowCoverage =
+      cfg.likelyOffTopic ||
       coverageRating === 'poor' ||
       coverageRating === 'limited' ||
       parsed.low_coverage === true

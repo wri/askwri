@@ -128,6 +128,68 @@ describe('POST /api/answer — defaults reproduce current behaviour', () => {
   })
 })
 
+describe('POST /api/answer — v2 cited sentences', () => {
+  it('v2 is the default prompt and asks for cites', async () => {
+    const { SYS_V2 } = await import('@/app/api/answer/route')
+    await post({ query: 'q', docs: docs(3) })
+    expect(sentBody().messages[0]).toEqual({ role: 'system', content: SYS_V2 })
+    expect(SYS_V2).toContain('"cites"')
+  })
+
+  it('returns sentences as strings plus a parallel cites array', async () => {
+    fetchMock.mockResolvedValue(
+      modelReply(
+        JSON.stringify({
+          sentences: [
+            { text: 'First.', cites: [1, 3] },
+            { text: 'Second.', cites: [2] },
+          ],
+          source_relevance: [{ id: 1, tier: 'strong' }],
+        }),
+      ),
+    )
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.synthesis.sentences).toEqual(['First.', 'Second.'])
+    expect(out.synthesis.cites).toEqual([[1, 3], [2]])
+    expect(out.debug.invalid_cites).toBe(0)
+  })
+
+  it('drops cites that are not in passages_sent and counts them', async () => {
+    fetchMock.mockResolvedValue(
+      modelReply(
+        JSON.stringify({
+          sentences: [
+            { text: 'First.', cites: [1, 9, 1, 0, 'x'] },
+            { text: 'Second.', cites: [] },
+          ],
+        }),
+      ),
+    )
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.synthesis.cites).toEqual([[1], []])
+    expect(out.debug.invalid_cites).toBe(3) // 9, 0, 'x' (duplicate 1 is deduped, not counted)
+  })
+
+  it('accepts legacy string sentences with empty cites', async () => {
+    fetchMock.mockResolvedValue(
+      modelReply(JSON.stringify({ sentences: ['A.', 'B.'] })),
+    )
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.synthesis.sentences).toEqual(['A.', 'B.'])
+    expect(out.synthesis.cites).toEqual([[], []])
+  })
+
+  it('likely_off_topic forces the low_coverage warning and tells the model', async () => {
+    const out = await post({
+      query: 'q',
+      docs: docs(3),
+      likely_off_topic: true,
+    })
+    expect(out.synthesis.warning).toBe('low_coverage')
+    expect(sentBody().messages[1].content).toContain('Coverage check:')
+  })
+})
+
 describe('POST /api/answer — knobs', () => {
   it('max_passages and passage_chars override the defaults', async () => {
     const out = await post({
