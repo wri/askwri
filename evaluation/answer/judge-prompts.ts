@@ -42,10 +42,22 @@ Reply with JSON only, exactly this schema:
 
 List every 0-based sentence index whose meaning no passage supports. Give one short reason per listed sentence, in the same order.`
 
+export const PAIRWISE_SYSTEM = `You are a strict judge comparing two answers to the same question. Both answers are English, but the evidence passages may be in Chinese or Spanish — judge meaning quality across languages, not wording or language of the passages.
+
+Prefer the answer that is more accurate and complete against the evidence passages, cites its claims correctly, and does not add unsupported detail. Penalize hallucination and missed key facts more than phrasing.
+
+Reply with JSON only, exactly this schema:
+{"preferred":"one|two|tie","reason":"<short>"}
+
+- "one" — Answer one is better.
+- "two" — Answer two is better.
+- "tie" — equally good (or equally bad).`
+
 export const PROMPT_HASHES: Record<string, string> = {
   fact_recall: sha256(FACT_RECALL_SYSTEM),
   sentence_support: sha256(SENTENCE_SUPPORT_SYSTEM),
   unsupported_claims: sha256(UNSUPPORTED_CLAIMS_SYSTEM),
+  pairwise: sha256(PAIRWISE_SYSTEM),
 }
 
 /** Numbered key facts + the answer text to judge them against. */
@@ -75,6 +87,19 @@ export function unsupportedClaimsUser(
     .map((p, i) => `[${i}] (${langOf(p.text)}): ${p.text}`)
     .join('\n')
   return `Answer sentences:\n${ss}\n\nRetrieved passages:\n${ps}`
+}
+
+/** Question + shared passages + both answers, order stated in the labels. */
+export function pairwiseUser(
+  question: string,
+  passages: Array<{ text: string }>,
+  answerOne: string,
+  answerTwo: string,
+): string {
+  const ps = passages
+    .map((p, i) => `[${i}] (${langOf(p.text)}): ${p.text}`)
+    .join('\n')
+  return `Question:\n${question}\n\nEvidence passages:\n${ps}\n\nAnswer one:\n${answerOne}\n\nAnswer two:\n${answerTwo}`
 }
 
 export function validateFactRecall(
@@ -158,4 +183,21 @@ export function validateUnsupportedClaims(
     unsupported_sentence_indices: json.unsupported_sentence_indices,
     reasons: json.reasons,
   }
+}
+
+export interface PairwiseReply {
+  preferred: 'one' | 'two' | 'tie'
+  reason: string
+}
+
+export function validatePairwise(json: any): PairwiseReply | Error {
+  if (typeof json !== 'object' || json === null)
+    return new Error('reply must be an object')
+  if (!['one', 'two', 'tie'].includes(json.preferred))
+    return new Error(
+      `preferred must be one|two|tie, got ${JSON.stringify(json.preferred)}`,
+    )
+  if (typeof json.reason !== 'string' || json.reason.length === 0)
+    return new Error('reason must be a non-empty string')
+  return { preferred: json.preferred, reason: json.reason }
 }

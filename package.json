@@ -28,6 +28,7 @@
     "eval:answer-capture": "npx tsx --env-file-if-exists=.env evaluation/answer/run-capture.ts",
     "eval:answer-judge": "npx tsx --env-file-if-exists=.env evaluation/answer/run-judge.ts",
     "eval:answer-score": "npx tsx --env-file-if-exists=.env evaluation/answer/run-score.ts",
+    "eval:answer-compare": "npx tsx --env-file-if-exists=.env evaluation/answer/run-compare.ts",
     "eval:answer-report": "npx tsx --env-file-if-exists=.env evaluation/generate-answer-report.ts",
     "eval:golden-retrieve": "npx tsx --env-file-if-exists=.env evaluation/generate-answer-golden-set.ts --phase retrieve",
     "eval:golden-label": "npx tsx --env-file-if-exists=.env evaluation/generate-answer-golden-set.ts --phase label",

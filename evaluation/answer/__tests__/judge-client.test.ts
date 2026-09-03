@@ -9,6 +9,7 @@ import {
 } from '../judge-client'
 import {
   FACT_RECALL_SYSTEM,
+  PAIRWISE_SYSTEM,
   PROMPT_HASHES,
   SENTENCE_SUPPORT_SYSTEM,
   UNSUPPORTED_CLAIMS_SYSTEM,
@@ -292,6 +293,7 @@ describe('PROMPT_HASHES', () => {
       fact_recall: sha256(FACT_RECALL_SYSTEM),
       sentence_support: sha256(SENTENCE_SUPPORT_SYSTEM),
       unsupported_claims: sha256(UNSUPPORTED_CLAIMS_SYSTEM),
+      pairwise: sha256(PAIRWISE_SYSTEM),
     })
   })
 })
