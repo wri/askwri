@@ -25,6 +25,7 @@
     "eval:cite": "npx tsx --env-file-if-exists=.env evaluation/run-cite-eval.ts",
     "eval:report": "npx tsx --env-file-if-exists=.env evaluation/generate-report.ts",
     "eval:answer-retrieval": "npx tsx --env-file-if-exists=.env evaluation/run-answer-retrieval-eval.ts",
+    "eval:answer-capture": "npx tsx --env-file-if-exists=.env evaluation/answer/run-capture.ts",
     "eval:answer-report": "npx tsx --env-file-if-exists=.env evaluation/generate-answer-report.ts",
     "eval:golden-retrieve": "npx tsx --env-file-if-exists=.env evaluation/generate-answer-golden-set.ts --phase retrieve",
     "eval:golden-label": "npx tsx --env-file-if-exists=.env evaluation/generate-answer-golden-set.ts --phase label",

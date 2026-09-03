@@ -15,6 +15,7 @@
  * search-service QueryResponse DocumentResult (content, chunk_id).
  */
 import * as path from 'path'
+import { extractPassage } from '@/app/utils/passage'
 import { fetchJson } from './http'
 import { PassageSent, RetrievedChunk } from './types'
 
@@ -23,12 +24,21 @@ export interface RetrievalOutcome {
   likely_off_topic: boolean
   service_ms: number | null
   cost_usd: number | null
+  /** The docs to pass VERBATIM to answer() — gateway mode: the gateway's
+   * response docs unchanged; direct mode: DocumentResults mapped to the
+   * same shape the gateway produces (what /api/answer consumes). */
+  docs: unknown[]
 }
 
 export interface AnswerOutcome {
   ok: boolean
   status: number
-  synthesis?: { sentences: string[]; cites: number[][]; warning?: string }
+  synthesis?: {
+    sentences: string[]
+    cites: number[][]
+    source_relevance?: Array<{ doc_id: string; tier: string }>
+    warning?: string
+  }
   passages_sent: PassageSent[]
   debug?: any
   error?: string
@@ -103,6 +113,7 @@ async function answerAt(
       sentences,
       // Fallback paths (no_api_key, api_error) omit cites — never assume it.
       cites: j.synthesis?.cites ?? sentences.map(() => []),
+      source_relevance: j.synthesis?.source_relevance,
       warning: j.synthesis?.warning,
     },
     passages_sent: j.passages_sent ?? [],
@@ -156,6 +167,9 @@ export function gatewayTarget(
           text: d.kps?.[0]?.snippet ?? '',
           score: d.score,
         })),
+        // Verbatim — the capture stage hands these to /api/answer unchanged
+        // (the AIResearchModal mirror).
+        docs,
         likely_off_topic: r.json.likely_off_topic ?? false,
         service_ms: r.json.debug?.total_ms ?? null,
         cost_usd: r.json.usage?.total_usd ?? null,
@@ -207,6 +221,21 @@ export function directTarget(
           chunk_id: d.chunk_id ?? null,
           text: d.content ?? '',
           score: d.score,
+        })),
+        // /api/answer consumes the gateway's doc shape (doc_id, title,
+        // kps[0].snippet/passage_id/page) — mirror the gateway's own mapping
+        // so direct mode synthesizes over the same passages it would.
+        docs: docs.map((d) => ({
+          doc_id: d.doc_id,
+          title: d.title,
+          score: d.score,
+          kps: [
+            {
+              snippet: extractPassage(d.content),
+              passage_id: d.chunk_id || d.doc_id,
+              page: d.page || 1,
+            },
+          ],
         })),
         likely_off_topic: r.json.likely_off_topic ?? false,
         service_ms: r.json.debug?.total_ms ?? null,

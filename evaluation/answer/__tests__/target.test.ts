@@ -65,6 +65,22 @@ describe('gatewayTarget', () => {
     expect(out.likely_off_topic).toBe(true)
     expect(out.service_ms).toBe(123)
     expect(out.cost_usd).toBe(0.02)
+    // The gateway's response docs pass through VERBATIM — capture hands them
+    // to /api/answer unchanged.
+    expect(out.docs).toEqual([
+      {
+        doc_id: 'doc_a',
+        score: 0.9,
+        kps: [{ snippet: 'chunk one text' }],
+        meta: { raw: { chunk_id: 'doc_a_chunk_1' } },
+      },
+      {
+        doc_id: 'doc_b',
+        score: 0.5,
+        kps: [{ snippet: 'chunk two text' }],
+        meta: { raw: {} },
+      },
+    ])
     await close(server)
   })
 
@@ -89,7 +105,11 @@ describe('gatewayTarget', () => {
         body = b
         respondJson(res, 200, {
           ok: true,
-          synthesis: { sentences: ['s one', 's two'], cites: [[1], [2]] },
+          synthesis: {
+            sentences: ['s one', 's two'],
+            cites: [[1], [2]],
+            source_relevance: [{ doc_id: 'doc_a', tier: 'strong' }],
+          },
           passages_sent: [
             {
               id: 1,
@@ -118,6 +138,7 @@ describe('gatewayTarget', () => {
     expect(out.synthesis).toEqual({
       sentences: ['s one', 's two'],
       cites: [[1], [2]],
+      source_relevance: [{ doc_id: 'doc_a', tier: 'strong' }],
     })
     expect(out.passages_sent).toEqual([
       {
@@ -338,6 +359,34 @@ describe('directTarget', () => {
     expect(out.service_ms).toBe(55)
     expect(out.cost_usd).toBe(0.01)
     expect(out.likely_off_topic).toBe(false)
+    // Direct mode maps DocumentResults onto the gateway doc shape so
+    // /api/answer consumes the same passages the gateway would send.
+    expect(out.docs).toEqual([
+      {
+        doc_id: 'doc_a',
+        title: 'A',
+        score: 0.7,
+        kps: [
+          {
+            snippet: 'chunk text one',
+            passage_id: 'doc_a_chunk_2',
+            page: 2,
+          },
+        ],
+      },
+      {
+        doc_id: 'doc_b',
+        title: 'B',
+        score: 0.4,
+        kps: [
+          {
+            snippet: 'chunk text two',
+            passage_id: 'doc_b',
+            page: 1,
+          },
+        ],
+      },
+    ])
 
     const ans = await target.answer('q', [{ doc_id: 'doc_a' }], {})
     expect(ans.ok).toBe(true)

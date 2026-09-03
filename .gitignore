@@ -77,6 +77,8 @@ search-service/data/
 # Evaluation intermediates
 evaluation/answer-retrieval-raw.json
 evaluation/results/
+# Answer-eval harness stage artifacts (capture/judged/report JSON)
+evaluation/answer/artifacts/
 
 # OS
 .DS_Store
