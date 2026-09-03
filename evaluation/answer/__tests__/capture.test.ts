@@ -60,6 +60,8 @@ interface FakeGateway {
   answerCalls: any[]
   answerStatusFor: (query: string) => number
   retrievalStatusFor: (query: string) => number
+  /** Transport-level failure: destroy the socket instead of replying. */
+  destroyAnswerFor: (query: string) => boolean
   catalog: string[]
 }
 
@@ -74,6 +76,7 @@ async function startFakeGateway(catalog: string[]): Promise<FakeGateway> {
     answerCalls: [],
     answerStatusFor: () => 200,
     retrievalStatusFor: () => 200,
+    destroyAnswerFor: () => false,
     catalog,
   }
   gw.server = http.createServer((req, res) => {
@@ -110,6 +113,11 @@ async function startFakeGateway(catalog: string[]): Promise<FakeGateway> {
     } else if (req.method === 'POST' && req.url === '/api/answer') {
       readJsonBody(req, (b) => {
         gw.answerCalls.push(b)
+        if (gw.destroyAnswerFor(b.query)) {
+          // Transport failure, not an HTTP error: kill the socket mid-run.
+          req.socket.destroy()
+          return
+        }
         const status = gw.answerStatusFor(b.query)
         if (status === 200) {
           respondJson(res, 200, {
@@ -372,6 +380,33 @@ describe('runCapture', () => {
     const q1 = artifact.cases.find((c) => c.case_id === 'q1')!
     expect(q1.passes[0].answer.error).toBeUndefined()
     expect(q1.passes[0].answer.sentences).toEqual(['s one', 's two'])
+    await close(gw.server)
+  })
+
+  it('survives a transport-level answer failure: the pass carries answer.error, the other cases complete, and the artifact is written', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    // Destroy the socket on q2's answer — a transport throw (post-retry),
+    // not a 500. fetchJson burns its one retry on the reset connection.
+    gw.destroyAnswerFor = (q) => q === 'Anything on hydrogen?'
+    const esPath = writeEvalsetTo(makeEvalset())
+    const artifact = await runCapture(controlsFor(gw.url, esPath), {
+      http: fetchJson,
+      git: stubGit,
+      now: stubNow,
+    })
+    const q2 = artifact.cases.find((c) => c.case_id === 'q2')!
+    expect(q2.passes[0].answer.error).toContain('answer call failed')
+    expect(q2.passes[0].answer.sentences).toEqual([])
+    // The successful retrieval is preserved alongside the failed answer.
+    expect(q2.passes[0].retrieval.error).toBeUndefined()
+    expect(q2.passes[0].retrieval.chunks).toHaveLength(1)
+    const q1 = artifact.cases.find((c) => c.case_id === 'q1')!
+    expect(q1.passes[0].answer.error).toBeUndefined()
+    expect(q1.passes[0].answer.sentences).toEqual(['s one', 's two'])
+    // The run completed — the artifact writes instead of exiting 1.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capture-transport-'))
+    const file = writeCaptureArtifact(dir, 'transport', artifact)
+    expect(fs.existsSync(file)).toBe(true)
     await close(gw.server)
   })
 

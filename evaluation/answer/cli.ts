@@ -186,5 +186,10 @@ export function parseControls(
       '--direct-search requires --direct-answer (the app serving /api/answer)',
     )
   }
+  if (ctl.directAnswerUrl && !ctl.directSearchUrl) {
+    fail(
+      '--direct-answer requires --direct-search (without it the run silently falls back to gateway mode)',
+    )
+  }
   return ctl
 }

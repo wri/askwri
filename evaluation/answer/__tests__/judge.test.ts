@@ -273,6 +273,14 @@ describe('runJudge', () => {
     // The file on disk matches the returned artifact.
     expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual(artifact)
 
+    // Usage totals are persisted on the judged artifact, not just printed
+    // (8 calls × 10 prompt / 4 completion tokens).
+    expect(artifact.usage).toEqual({
+      prompt_tokens: 80,
+      completion_tokens: 32,
+      calls: 8,
+    })
+
     // Usage totals printed (8 calls × 10 prompt / 4 completion tokens).
     expect(
       c.logs.some(
@@ -306,12 +314,36 @@ describe('runJudge', () => {
     ).rejects.toThrow(/nope/)
   })
 
+  it('spends no judge calls on answer-error passes (the scorer excludes them from every mean)', async () => {
+    const s = await startJudgeServer()
+    const file = judgedPathIn()
+    const c = makeCase('q1', ['f1'])
+    c.passes[1].answer.error = 'answer call failed: fetch failed'
+    const c2 = silenceConsole()
+    let artifact
+    try {
+      artifact = await runOn(s, file, makeCapture([c]))
+    } finally {
+      c2.restore()
+    }
+    // Only pass 0's items exist — pass 1 emitted no fact_recall,
+    // sentence_support, or unsupported_claims job.
+    expect(Object.keys(artifact.items).sort()).toEqual([
+      'q1|0|fact_recall:',
+      'q1|0|sentence_support:0',
+      'q1|0|sentence_support:2',
+      'q1|0|unsupported_claims:',
+    ])
+    expect(s.requests).toHaveLength(4)
+  })
+
   it('resumes: pre-judged items are skipped, only missing items hit the server', async () => {
     const s = await startJudgeServer()
     const file = judgedPathIn()
     const prior: JudgedArtifact = {
       schema: 'answer-eval/judged@1',
       provenance: makeProvenance(),
+      usage: { prompt_tokens: 10, completion_tokens: 4, calls: 1 },
       items: {
         'q1|0|fact_recall:': {
           kind: 'fact_recall',
@@ -347,6 +379,12 @@ describe('runJudge', () => {
       (artifact.items['q1|0|fact_recall:'] as FactRecallVerdicts).verdicts[0]
         .evidence,
     ).toBe('prior evidence')
+    // Usage accumulates across the resume: prior 1 call + this run's 6.
+    expect(artifact.usage).toEqual({
+      prompt_tokens: 70,
+      completion_tokens: 28,
+      calls: 7,
+    })
   })
 
   it('retries an unjudged item left by an aborted run', async () => {

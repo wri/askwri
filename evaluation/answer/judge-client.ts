@@ -2,7 +2,8 @@
  * Reliability wrapper around the app tier's single provider client (plan
  * §4.1/§4.3). The judge reuses `chatCompletion` — never its own fetch — so a
  * provider swap is a base-URL change. Policy: temperature 0, one
- * validation-repair retry, 429 backoff (max 5 attempts), one retry on
+ * validation-repair retry, 429 backoff (initial request + up to 5
+ * retries), one retry on
  * timeout/network/5xx, 401 aborts the run, everything else degrades to an
  * `unjudged` result so one bad case never kills the pass.
  */

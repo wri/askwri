@@ -30,7 +30,7 @@ npm run eval:report                         # Generate HTML report from latest r
 **Answer Mode (gen-2 harness):**
 ```bash
 npm run eval:answer-capture -- <evalset.json>
-npm run eval:answer-judge   -- --capture artifacts/capture-<label>.json
+npm run eval:answer-judge   -- --capture evaluation/answer/artifacts/capture-<label>.json
 npm run eval:answer-score   -- --capture ... --judged ...
 npm run eval:answer-compare -- <reportA.json> <reportB.json>
 ```
@@ -153,16 +153,16 @@ human-in-the-loop synthesis pipeline, and the review UIs), which was deleted.
 ### Stages and artifacts
 
 ```
-capture  →  artifacts/capture-<label>.json   (API calls: retrieval + synthesis)
-judge    →  artifacts/judged-<label>.json    (API calls: judge only; resumable)
-score    →  artifacts/report-<label>.json    (no API calls; pure)
+capture  →  evaluation/answer/artifacts/capture-<label>.json   (API calls: retrieval + synthesis)
+judge    →  evaluation/answer/artifacts/judged-<label>.json    (API calls: judge only; resumable)
+score    →  evaluation/answer/artifacts/report-<label>.json    (no API calls; pure)
 compare  →  stdout                           (two reports, same fixture + passes)
 ```
 
 ```bash
 npm run eval:answer-capture -- <evalset.json> [--passes N --knob k=v ...]
-npm run eval:answer-judge   -- --capture artifacts/capture-<label>.json
-npm run eval:answer-score   -- --capture artifacts/capture-<label>.json --judged artifacts/judged-<label>.json
+npm run eval:answer-judge   -- --capture evaluation/answer/artifacts/capture-<label>.json
+npm run eval:answer-score   -- --capture evaluation/answer/artifacts/capture-<label>.json --judged evaluation/answer/artifacts/judged-<label>.json
 npm run eval:answer-compare -- <reportA.json> <reportB.json>
 ```
 
@@ -186,13 +186,19 @@ are keyed `(case, pass, item)` and carry the prompt hash and judge model.
 
 ### Controls
 
-Shared across the stage CLIs: `--only <case-id>` (repeatable), `--limit N`,
-`--passes N` (default 1), `--label` (default: evalset basename sans `.json`),
-`--concurrency` (default 1), `--target URL` (default `EVAL_TARGET` or
-`https://qa.askwri-app.org`), `--knob key=value` (repeatable),
-`--direct-search URL` / `--direct-answer URL` (switch to local services instead
-of the deployed gateway), `--judge-model` (default `glm-5.2-vision`),
-`--judge-base-url` (default `LUNAROUTE_BASE_URL`).
+Only `run-capture` uses the full flag set: `--only <case-id>` (repeatable),
+`--limit N`, `--passes N` (default 1), `--label` (default: evalset basename
+sans `.json`), `--concurrency` (default 1), `--target URL` (default
+`EVAL_TARGET` or `https://qa.askwri-app.org`), `--knob key=value`
+(repeatable), `--direct-search URL` / `--direct-answer URL` (switch to local
+services instead of the deployed gateway), `--judge-model` (default
+`glm-5.2-vision`), `--judge-base-url` (default `LUNAROUTE_BASE_URL`).
+The other stage CLIs each have their own parser:
+- `run-judge` — `--capture`, `--label`, `--judge-model`, `--judge-base-url`,
+  `--only`, `--concurrency`
+- `run-score` — `--capture`, `--judged`, `--label`
+- `run-compare` — two positional paths plus `--judged`/`--pairwise` mode,
+  `--label-a`/`--label-b`, `--judge-model`, `--judge-base-url`
 
 ### Judge-only runs are composition, not a flag
 
@@ -208,8 +214,9 @@ order-swap check).
 Capture sums the gateway's `usage.total_usd` (the answer route reports no
 usage). Judge cost is tracked in provider token counts, **not dollars** —
 lunaroute pricing per token is unmeasured, so tokens are recorded and never
-converted. Budget estimates therefore lack judge dollars; every report header
-flags this.
+converted. The judged artifact persists the accumulated totals (`usage`:
+prompt/completion tokens + judge call count), and the report header carries
+them as `cost.judge`; budget estimates still lack judge dollars.
 
 ---
 

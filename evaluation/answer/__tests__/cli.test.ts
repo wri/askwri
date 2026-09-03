@@ -163,12 +163,6 @@ describe('parseControls', () => {
     )
     expect(c.directSearchUrl).toBe('http://localhost:8000')
     expect(c.directAnswerUrl).toBe('http://localhost:3000')
-    // --direct-answer alone does not switch modes.
-    const c2 = parseControls(
-      [EVALSET, '--direct-answer', 'http://localhost:3000'],
-      'capture',
-    )
-    expect(c2.directSearchUrl).toBeUndefined()
   })
 
   it('rejects a non-positive or non-integer count flag', () => {
@@ -180,12 +174,20 @@ describe('parseControls', () => {
     ).toThrow(/--passes/)
   })
 
-  it('rejects --direct-search without --direct-answer', () => {
+  it('rejects --direct-search without --direct-answer, and --direct-answer without --direct-search', () => {
     expect(() =>
       parseControls(
         [EVALSET, '--direct-search', 'http://localhost:8000'],
         'capture',
       ),
     ).toThrow(/--direct-answer/)
+    // Symmetric: --direct-answer alone must not silently fall back to
+    // gateway mode.
+    expect(() =>
+      parseControls(
+        [EVALSET, '--direct-answer', 'http://localhost:3000'],
+        'capture',
+      ),
+    ).toThrow(/--direct-search/)
   })
 })

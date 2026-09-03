@@ -308,7 +308,8 @@ disagreements uses the system-output notebook mode.
 
 ### 5.2 UI
 
-- `AIResearchModal.tsx`: build `inline` from `sentences[].cites` mapped through
+- `AIResearchModal.tsx`: build `inline` from `synthesis.cites` (the parallel
+  array indexed by sentence) mapped through
   `passages_sent`; delete the slice-by-position block (`:212–248`).
 - `AnswerPanel.tsx` / `SupportingCitations.tsx`: a citation marker scrolls to
   the passage it cites; "Directly cited" lists cited passages; the rest go

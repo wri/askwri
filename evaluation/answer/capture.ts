@@ -176,7 +176,30 @@ async function runPass(
     knobs.likely_off_topic = ret.likely_off_topic
 
   const ansStart = Date.now()
-  const ans = await target.answer(c.question, ret.docs, knobs)
+  // Transport-level throw (timeout after retry, network error) mirrors the
+  // retrieval guard: record `answer.error`, keep the run alive — a dead
+  // socket mid-run must not discard the paid capture data around it.
+  let ans: Awaited<ReturnType<TargetClient['answer']>>
+  try {
+    ans = await target.answer(c.question, ret.docs, knobs)
+  } catch (e) {
+    return {
+      capture: {
+        pass,
+        retrieval: {
+          chunks: ret.chunks,
+          likely_off_topic: ret.likely_off_topic,
+          service_ms: ret.service_ms,
+          cost_usd: ret.cost_usd,
+          wall_ms: retWall,
+        },
+        answer: {
+          ...failedAnswer(`answer call failed: ${(e as Error).message}`),
+          wall_ms: Date.now() - ansStart,
+        },
+      },
+    }
+  }
   const answer: PassCapture['answer'] = {
     knobs,
     passages_sent: ans.passages_sent,

@@ -540,6 +540,9 @@ export function score(
     cost: {
       retrieval_usd_total: costCalls > 0 ? costTotal : null,
       retrieval_calls_reported: costCalls,
+      // Judge spend is token counts (never dollars — lunaroute pricing per
+      // token is unmeasured), persisted by the judge stage.
+      judge: judged.usage ?? null,
     },
   }
 

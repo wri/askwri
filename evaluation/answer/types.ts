@@ -173,6 +173,15 @@ export interface JudgedArtifact {
   schema: 'answer-eval/judged@1'
   provenance: Provenance
   items: Record<string, JudgedItem>
+  /** Accumulated judge token usage across runs (a resume adds to it);
+   * optional so pre-existing artifacts without it stay valid. */
+  usage?: JudgeUsageTotal
+}
+
+export interface JudgeUsageTotal {
+  prompt_tokens: number
+  completion_tokens: number
+  calls: number
 }
 
 export interface Report {

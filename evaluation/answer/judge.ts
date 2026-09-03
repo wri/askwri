@@ -30,6 +30,7 @@ import {
   CaseCapture,
   JudgedArtifact,
   JudgedItem,
+  JudgeUsageTotal,
   PassageSent,
 } from './types'
 
@@ -87,6 +88,10 @@ function enumerateJobs(
   for (const c of cases) {
     const keyFacts = c.fixture_case.synthesis_ground_truth?.key_facts ?? []
     for (const p of c.passes) {
+      // Answer-error passes are excluded from every mean the scorer computes
+      // — spend no judge calls on them (their empty sentences would still
+      // bill a fact_recall + unsupported_claims pair).
+      if (p.answer.error) continue
       const a = p.answer
       const key = (kind: Kind, index?: number) =>
         `${c.case_id}|${p.pass}|${kind}:${index ?? ''}`
@@ -192,13 +197,20 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
       : capture.cases
 
   // Resume: an existing artifact seeds the items map; keys that exist and
-  // are not `unjudged` are skipped below.
+  // are not `unjudged` are skipped below. Its accumulated judge usage
+  // carries forward so a resumed run's total spans both runs.
   const items: Record<string, JudgedItem> = {}
+  let usageTotal: JudgeUsageTotal = {
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    calls: 0,
+  }
   if (fs.existsSync(judgedPath)) {
     const existing = JSON.parse(
       fs.readFileSync(judgedPath, 'utf8'),
     ) as JudgedArtifact
     Object.assign(items, existing.items)
+    if (existing.usage) usageTotal = { ...existing.usage }
   }
 
   const artifact: JudgedArtifact = {
@@ -217,9 +229,6 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
   const jobs = enumerateJobs(cases, judgeModel, judgeBaseUrl, apiKey)
   const pending = jobs.filter((j) => !items[j.key] || items[j.key].unjudged)
 
-  let promptTokens = 0
-  let completionTokens = 0
-  let usageCalls = 0
   let authError: JudgeAuthError | undefined
 
   // Sequential when concurrency is 1 (the default); otherwise a simple
@@ -241,9 +250,9 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
             throw e
           }
           if (r.ok && r.usage) {
-            promptTokens += r.usage.prompt_tokens ?? 0
-            completionTokens += r.usage.completion_tokens ?? 0
-            usageCalls++
+            usageTotal.prompt_tokens += r.usage.prompt_tokens ?? 0
+            usageTotal.completion_tokens += r.usage.completion_tokens ?? 0
+            usageTotal.calls++
           }
           items[j.key] = r.ok ? j.item(r) : tombstone(j, r)
           writeJudgedArtifact(judgedPath, artifact)
@@ -255,19 +264,23 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
     ),
   )
 
+  // Persist the accumulated usage (also on the 401-abort write below) —
+  // printing it to the console alone loses it the moment the run ends.
+  artifact.usage = usageTotal
+  writeJudgedArtifact(judgedPath, artifact)
+
   if (authError) {
-    // Every completed item is already persisted; write once more so the
-    // file exists even when the 401 hit the first item.
-    writeJudgedArtifact(judgedPath, artifact)
+    // The usage write above guarantees the file exists even when the 401 hit
+    // the first item; every completed item is already persisted.
     console.error(
       `[judge] ${authError.message} — partial artifact written to ${judgedPath}`,
     )
     throw authError
   }
 
-  if (usageCalls > 0) {
+  if (usageTotal.calls > 0) {
     console.log(
-      `[judge] usage: ${promptTokens} prompt + ${completionTokens} completion tokens across ${usageCalls} call(s)`,
+      `[judge] usage: ${usageTotal.prompt_tokens} prompt + ${usageTotal.completion_tokens} completion tokens across ${usageTotal.calls} call(s)`,
     )
   }
   return artifact

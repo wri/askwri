@@ -434,6 +434,7 @@ const q2Items: Record<string, JudgedItem> = {
 
 const judged: JudgedArtifact = {
   schema: 'answer-eval/judged@1',
+  usage: { prompt_tokens: 4321, completion_tokens: 876, calls: 9 },
   provenance: {
     ...provenance,
     judge: {
@@ -482,7 +483,17 @@ describe('score — report shape and header', () => {
     expect(h.cost).toEqual({
       retrieval_usd_total: 0.02,
       retrieval_calls_reported: 2,
+      // Judge spend surfaced as token counts + call count, not dollars.
+      judge: { prompt_tokens: 4321, completion_tokens: 876, calls: 9 },
     })
+  })
+
+  it('header: cost.judge is null for a judged artifact without usage (backward compat)', () => {
+    const legacy = score(evalset, capture, {
+      ...judged,
+      usage: undefined,
+    })
+    expect((legacy.header as Record<string, any>).cost.judge).toBeNull()
   })
 })
 
