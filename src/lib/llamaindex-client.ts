@@ -42,31 +42,6 @@ async function callLlamaIndexService(
   return response.json()
 }
 
-export async function chatAnswerLlamaIndex(
-  query: string,
-  overrides?: Record<string, any>,
-): Promise<ChatResponse> {
-  const options: LlamaIndexQueryOptions = {
-    max_results: 100, // Increased for 203-doc corpus (answer mode: precision)
-    similarity_threshold: 0.05, // Slightly more selective for answers
-    include_metadata: true,
-    rerank: true,
-    ...overrides,
-  }
-
-  const data = await callLlamaIndexService(query, 'answer', options)
-
-  return {
-    message: '',
-    docs: data.docs,
-    usage: data.usage,
-    debug: {
-      llamaindex: true,
-      ...data.debug,
-    },
-  }
-}
-
 export async function chatCiteLlamaIndex(
   query: string,
   overrides?: Record<string, any>,

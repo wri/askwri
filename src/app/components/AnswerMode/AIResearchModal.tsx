@@ -22,6 +22,7 @@ import {
   buildAlignmentSummary,
   calculateEmbeddingCost,
 } from '../../utils/utils'
+import { buildInline } from './citations'
 
 export const AIResearchModal = ({
   consultedDocs,
@@ -116,6 +117,7 @@ export const AIResearchModal = ({
       })
       const data = await response.json()
       const { docs, usage, debug } = data
+      const likelyOffTopic = data.likely_off_topic === true
 
       const embeddingCost = calculateEmbeddingCost(
         query,
@@ -156,6 +158,13 @@ export const AIResearchModal = ({
             'Unable to synthesize answer: no documents with content found.',
           ],
           inline: [],
+          ...(likelyOffTopic
+            ? {
+                warning: 'low_coverage',
+                warningMessage:
+                  'Limited relevant sources found for this query. The answer may not fully address your question.',
+              }
+            : {}),
         })
         return
       }
@@ -164,7 +173,11 @@ export const AIResearchModal = ({
       const synthesisResponse = await fetch('/api/answer', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), docs: validDocs }),
+        body: JSON.stringify({
+          query: query.trim(),
+          docs: validDocs,
+          likely_off_topic: likelyOffTopic,
+        }),
       })
 
       runAlignment(query.trim(), validDocs)
@@ -195,57 +208,13 @@ export const AIResearchModal = ({
           return
         }
 
-        // Collect ALL available chunks/passages from ALL documents
-        const allChunks: { doc: any; kp: any }[] = []
-        validDocs.forEach((doc: any) => {
-          ;(doc.kps || []).forEach((kp: any) => {
-            if (kp.snippet && kp.snippet.length > 10) {
-              allChunks.push({ doc, kp })
-            }
-          })
-        })
-
-        if (allChunks.length === 0) {
-          console.warn('[Citations] No valid chunks available for citations!')
-        }
-
-        // Generate inline citations by distributing chunks across sentences
-        const inline = sentences.map((sent: string, sentIdx: number) => {
-          const refs: { ref: string; page: number }[] = []
-
-          // Distribute chunks across sentences (2-3 citations per sentence)
-          const chunksPerSentence = Math.max(
-            1,
-            Math.min(3, Math.ceil(allChunks.length / sentences.length)),
-          )
-          const startIdx = sentIdx * chunksPerSentence
-          const endIdx = Math.min(
-            startIdx + chunksPerSentence,
-            allChunks.length,
-          )
-
-          for (let i = startIdx; i < endIdx; i++) {
-            const chunk = allChunks[i]
-            if (chunk && chunk.kp) {
-              refs.push({
-                ref: chunk.doc.ref,
-                page: chunk.kp.page ?? 1,
-              })
-            }
-          }
-
-          // Fallback: ensure every sentence has at least one citation
-          if (refs.length === 0 && allChunks.length > 0) {
-            const fallbackChunk = allChunks[sentIdx % allChunks.length]
-
-            refs.push({
-              ref: fallbackChunk.doc.ref,
-              page: fallbackChunk.kp.page ?? 1,
-            })
-          }
-
-          return refs
-        })
+        const cites: number[][] = Array.isArray(synthesisResult.synthesis.cites)
+          ? synthesisResult.synthesis.cites
+          : sentences.map(() => [])
+        const passagesSent = Array.isArray(synthesisResult.passages_sent)
+          ? synthesisResult.passages_sent
+          : []
+        const inline = buildInline(cites, passagesSent, validDocs)
 
         // Store source relevance tiers from synthesis LLM
         if (Array.isArray(source_relevance)) {
@@ -263,6 +232,7 @@ export const AIResearchModal = ({
           sentences,
           paragraphs,
           inline,
+          cites,
           warning,
           warningMessage,
         }
@@ -342,27 +312,6 @@ export const AIResearchModal = ({
     }
 
     if (answer) {
-      const citationLabels: string[] = []
-      let globalCitIdx = 0
-      if (answer.paragraphs) {
-        answer.paragraphs.forEach((paragraph, pIdx) => {
-          let sentenceOffset = 0
-          for (let p = 0; p < pIdx; p++)
-            sentenceOffset += answer.paragraphs![p].length
-          paragraph.forEach((_sent, sIdx) => {
-            const globalSentIdx = sentenceOffset + sIdx
-            answer.inline?.[globalSentIdx]?.forEach((_c: any, j: number) => {
-              citationLabels[globalCitIdx++] = `${globalSentIdx + 1}.${j + 1}`
-            })
-          })
-        })
-      } else {
-        answer.sentences.forEach((_sent, i) => {
-          answer.inline?.[i]?.forEach((_c: any, j: number) => {
-            citationLabels[globalCitIdx++] = `${i + 1}.${j + 1}`
-          })
-        })
-      }
       return (
         <Box style={{ display: 'flex' }}>
           <AnswerPanel
@@ -400,10 +349,7 @@ export const AIResearchModal = ({
               sourceRelevance={sourceRelevance}
               coverageRating={coverageRating}
               coverageExplanation={coverageExplanation}
-              directlyCitedCount={
-                answer.inline?.reduce((sum, arr) => sum + arr.length, 0) ?? 0
-              }
-              citationLabels={citationLabels}
+              inline={answer.inline}
               passageWhy={passageWhy}
               setPassageWhy={setPassageWhy}
               passageWhyLoading={passageWhyLoading}

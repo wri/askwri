@@ -1,24 +1,73 @@
 // Route: POST /api/answer
 // Crisp 3–5 sentence synthesis, model-aware (gpt-5*: max_completion_tokens & omit temperature).
-/* eslint-disable */
-
 import { NextRequest, NextResponse } from 'next/server'
+
+import {
+  chatCompletion,
+  resolveProvider,
+  UnsupportedProviderBaseUrlError,
+} from '@/lib/llm/chat-completions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.4').trim()
-const IS_GPT5 = /^gpt-5/i.test(MODEL)
-// Optimized for concise 2-3 sentence answers
-const DEFAULT_MAX = IS_GPT5 ? 2000 : 1500
-const ENV_MAX = Number(process.env.OPENAI_MAX_TOKENS || DEFAULT_MAX)
-const MAX = IS_GPT5 ? Math.max(2000, ENV_MAX) : ENV_MAX
-const TEMP = Number(process.env.OPENAI_TEMPERATURE ?? 0.3) // Moderate temperature for concise synthesis
-
+const DEFAULT_MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.4').trim()
 const NANO_MODEL = (process.env.OPENAI_MODEL_NANO ?? 'gpt-5.4-nano').trim()
 const USE_NANO_FILTER =
   (process.env.USE_NANO_FILTER ?? 'false').toLowerCase() === 'true'
+const MAX_PASSAGES_CAP = 15
+
+export type PromptVersion = 'v1' | 'v2'
+
+export interface SynthesisConfig {
+  model: string
+  baseUrl: string
+  apiKey: string | undefined
+  isGpt5: boolean
+  maxTokens: number
+  temperature: number
+  maxPassages: number
+  passageChars: number
+  promptVersion: PromptVersion
+  likelyOffTopic: boolean
+}
+
+/**
+ * Everything that shapes one synthesis call, from env defaults plus optional
+ * request knobs. With no knobs this reproduces the pre-2026-09 behaviour
+ * exactly (gpt-5*: 8 passages × 400 chars; else 6 × 350). The knobs exist for
+ * the eval harness's sweeps; production callers never send them.
+ */
+export function resolveSynthesisConfig(body: any): SynthesisConfig {
+  const str = (v: unknown) =>
+    typeof v === 'string' && v.trim() !== '' ? v : undefined
+  const provider = resolveProvider(DEFAULT_MODEL, {
+    model: str(body?.model),
+    base_url: str(body?.base_url),
+  })
+  const defaultMax = provider.isGpt5 ? 2000 : 1500
+  const envMax = Number(process.env.OPENAI_MAX_TOKENS || defaultMax)
+  const maxTokens = provider.isGpt5 ? Math.max(2000, envMax) : envMax
+  const temperature = Number(process.env.OPENAI_TEMPERATURE ?? 0.3)
+  const int = (v: unknown, fallback: number, cap: number) =>
+    Number.isInteger(v) && (v as number) > 0
+      ? Math.min(v as number, cap)
+      : fallback
+  return {
+    ...provider,
+    maxTokens,
+    temperature,
+    maxPassages: int(
+      body?.max_passages,
+      provider.isGpt5 ? 8 : 6,
+      MAX_PASSAGES_CAP,
+    ),
+    passageChars: int(body?.passage_chars, provider.isGpt5 ? 400 : 350, 20_000),
+    promptVersion: body?.prompt_version === 'v1' ? 'v1' : 'v2',
+    likelyOffTopic: body?.likely_off_topic === true,
+  }
+}
 
 const NANO_SYSTEM_PROMPT = `Given a research question and a set of passages, classify each passage's relevance to the question.
 
@@ -35,23 +84,8 @@ Also rate overall corpus coverage for this question:
 Return JSON only:
 {"relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"partial"}],"coverage":"good"}`
 
-// Log config at module load time to diagnose env var issues
-console.log(
-  '[Answer Route INIT] MODEL:',
-  MODEL,
-  'IS_GPT5:',
-  IS_GPT5,
-  'ENV_MAX:',
-  ENV_MAX,
-  'FINAL MAX:',
-  MAX,
-  'RAW_ENV:',
-  process.env.OPENAI_MAX_TOKENS,
-)
-
 // Concise prompt for 2-3 sentence answers
-const SYS = IS_GPT5
-  ? `
+export const SYS_V1 = `
 Synthesize a concise answer from the provided documents. Write exactly 2-3 clear sentences.
 
 Rules:
@@ -77,22 +111,25 @@ Tier definitions (match these exactly):
 If no sources adequately answer the question:
 {"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
 `.trim()
-  : `
-You are a careful research assistant. Write a clear, concise answer that synthesizes the most important information from the provided documents.
 
-CRITICAL RULES:
+export const SYS_V2 = `
+Synthesize a concise answer from the provided documents. Write exactly 2-3 clear sentences.
+
+Rules:
 - ENGLISH ONLY: Always write every sentence in English, whatever language the
   question or the passages are in. Never mirror the language of the question or
   of a passage — translate what you need instead.
 - TRUST SOURCES: The provided sources have been pre-filtered for relevance. Focus on synthesizing their key findings.
-- CONCISE: Write exactly 2-3 sentences total (not paragraphs)
-- SYNTHESIZE: Combine key information from relevant sources - do NOT copy phrases verbatim
+- SYNTHESIZE: Combine key information across relevant sources — do NOT copy phrases verbatim
 - PRIORITIZE: Focus on the most relevant and important findings
 - GROUND: Every claim must be traceable to the provided documents
+- CITE: For every sentence, list the ids of the sources it draws on in "cites". Cite only ids that appear in the source list. A sentence with no supporting source must not be written.
 - ACCURACY: Preserve the meaning and facts from the original sources
+- LIMITATIONS: If sources highlight significant risks, trade-offs, or caveats, include the most important one
+- FAITHFULNESS: Only state causal relationships explicitly supported in the sources; use hedging language (e.g., "is associated with", "may contribute to") for correlations or inferences
 
 Return JSON with your answer AND a relevance assessment for every source:
-{"sentences":["s1","s2","s3"],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
+{"sentences":[{"text":"s1","cites":[1,3]},{"text":"s2","cites":[2]}],"source_relevance":[{"id":1,"tier":"strong"},{"id":2,"tier":"weak"}]}
 
 Tier definitions (match these exactly):
 - "strong": Information from this source appears in your synthesis. You directly used it.
@@ -100,22 +137,78 @@ Tier definitions (match these exactly):
 - "weak": Source does not meaningfully address the question.
 
 If no sources adequately answer the question:
-{"sentences":["The available sources do not contain sufficient information to answer this question."],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
+{"sentences":[{"text":"The available sources do not contain sufficient information to answer this question.","cites":[]}],"source_relevance":[{"id":1,"tier":"weak"},{"id":2,"tier":"weak"}],"low_coverage":true}
 `.trim()
+
+/**
+ * Accept either the v2 shape ({text, cites}) or the legacy string shape, and
+ * return parallel arrays. Cites are validated against the passages actually
+ * sent: an id the model invented is dropped and counted, never rendered.
+ */
+export function normalizeSentences(
+  parsed: any,
+  validIds: Set<number>,
+): { sentences: string[]; cites: number[][]; invalid: number } {
+  const raw: any[] = Array.isArray(parsed?.paragraphs)
+    ? parsed.paragraphs.flat()
+    : Array.isArray(parsed?.sentences)
+      ? parsed.sentences
+      : []
+  const sentences: string[] = []
+  const cites: number[][] = []
+  let invalid = 0
+  for (const item of raw) {
+    if (typeof item === 'string') {
+      sentences.push(item)
+      cites.push([])
+      continue
+    }
+    if (item && typeof item.text === 'string') {
+      sentences.push(item.text)
+      const seen = new Set<number>()
+      const ok: number[] = []
+      for (const c of Array.isArray(item.cites) ? item.cites : []) {
+        if (Number.isInteger(c) && validIds.has(c)) {
+          if (!seen.has(c)) {
+            seen.add(c)
+            ok.push(c)
+          }
+        } else {
+          invalid++
+        }
+      }
+      cites.push(ok)
+    }
+  }
+  return { sentences, cites, invalid }
+}
 
 function synthFallback(query: string, docs: any[]) {
   // Only used when API key is missing or there's a critical error
   // This should rarely be seen by users
   if (!docs?.length) {
-    return { sentences: ['No relevant documents found to answer this query.'] }
+    const sentences = ['No relevant documents found to answer this query.']
+    return { sentences, cites: sentences.map(() => []) }
   }
 
-  return {
-    sentences: [
-      'Answer synthesis is temporarily unavailable.',
-      'Please review the source documents below for information on this topic.',
-    ],
-  }
+  const sentences = [
+    'Answer synthesis is temporarily unavailable.',
+    'Please review the source documents below for information on this topic.',
+  ]
+  return { sentences, cites: sentences.map(() => []) }
+}
+
+const LOW_COVERAGE_WARNING = {
+  warning: 'low_coverage',
+  warningMessage:
+    'Limited relevant sources found for this query. The answer may not fully address your question.',
+} as const
+
+function withLikelyOffTopicWarning<T extends Record<string, unknown>>(
+  synthesis: T,
+  likelyOffTopic: boolean,
+): T & Partial<typeof LOW_COVERAGE_WARNING> {
+  return likelyOffTopic ? { ...synthesis, ...LOW_COVERAGE_WARNING } : synthesis
 }
 
 function safeParse(text: string, allowPartial: boolean = false) {
@@ -211,7 +304,7 @@ function detectVerbatimCopying(sentences: string[], docs: any[]): boolean {
 async function runNanoFilter(
   query: string,
   docs: Array<{ id: number; title: string; key_finding: string }>,
-  apiKey: string,
+  provider: { baseUrl: string; apiKey: string },
 ): Promise<{
   relevance: Array<{ id: number; tier: string }>
   coverage: string
@@ -245,13 +338,10 @@ async function runNanoFilter(
       body.temperature = 0.1
     }
 
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(body),
+    const r = await chatCompletion({
+      baseUrl: provider.baseUrl,
+      apiKey: provider.apiKey,
+      body,
     })
 
     if (!r.ok) {
@@ -259,8 +349,7 @@ async function runNanoFilter(
       return null
     }
 
-    const data = await r.json()
-    const content = data.choices?.[0]?.message?.content || ''
+    const content = r.json.choices?.[0]?.message?.content || ''
     const parsed = safeParse(content, false)
 
     if (!Array.isArray(parsed.relevance)) {
@@ -281,6 +370,7 @@ async function runNanoFilter(
 
 export async function POST(req: NextRequest) {
   const debugInfo: any = { timestamp: new Date().toISOString() }
+  let likelyOffTopic = false
 
   try {
     const reqBody = await req.json()
@@ -306,20 +396,34 @@ export async function POST(req: NextRequest) {
       JSON.stringify(debugInfo.received, null, 2),
     )
 
-    const key = process.env.OPENAI_API_KEY?.trim()
+    const cfg = resolveSynthesisConfig(reqBody)
+    likelyOffTopic = cfg.likelyOffTopic
+    debugInfo.knobs = {
+      model: cfg.model,
+      base_url: cfg.baseUrl,
+      max_passages: cfg.maxPassages,
+      passage_chars: cfg.passageChars,
+      prompt_version: cfg.promptVersion,
+      likely_off_topic: cfg.likelyOffTopic,
+    }
+
+    const key = cfg.apiKey
     if (!key) {
       console.log('[Answer Route] No API key, using fallback')
       debugInfo.fallbackReason = 'no_api_key'
       return NextResponse.json({
         ok: true,
-        synthesis: synthFallback(query, docs),
+        synthesis: withLikelyOffTopicWarning(
+          synthFallback(query, docs),
+          likelyOffTopic,
+        ),
+        passages_sent: [],
         debug: debugInfo,
       })
     }
 
-    // Build doc list from all incoming docs (cap at 15 from search service)
-    const maxSnippetLen = IS_GPT5 ? 400 : 350
-    const allDocs = (Array.isArray(docs) ? docs : []).slice(0, 15)
+    // Build doc list from all incoming docs (the gateway returns at most 15)
+    const allDocs = (Array.isArray(docs) ? docs : []).slice(0, MAX_PASSAGES_CAP)
 
     const docList = allDocs.map((d: any, idx: number) => ({
       id: idx + 1,
@@ -327,9 +431,11 @@ export async function POST(req: NextRequest) {
       authors: d.authors,
       year: d.year,
       doc_id: d.doc_id || '',
+      chunk_id: String(d.kps?.[0]?.passage_id ?? ''),
+      page: Number(d.kps?.[0]?.page ?? 1),
       key_finding: String(d.kps?.[0]?.snippet ?? d.content ?? '').slice(
         0,
-        maxSnippetLen,
+        cfg.passageChars,
       ),
       relevance: d.kps?.[0]?.kp_relevance || d.score || 0,
     }))
@@ -343,7 +449,7 @@ export async function POST(req: NextRequest) {
             title: d.title,
             key_finding: d.key_finding,
           })),
-          key,
+          { baseUrl: cfg.baseUrl, apiKey: key },
         )
       : null
 
@@ -372,7 +478,7 @@ export async function POST(req: NextRequest) {
         .filter((sr) => sr.doc_id)
 
       coverageRating = nanoResult.coverage
-      const maxDocs = IS_GPT5 ? 8 : 6
+      const maxDocs = cfg.maxPassages
       filteredDocs = filteredDocs.slice(0, maxDocs)
 
       console.log(
@@ -387,12 +493,14 @@ export async function POST(req: NextRequest) {
             sentences: [
               'The available sources do not contain sufficient information to answer this question.',
             ],
+            cites: [[]],
             source_relevance: sourceRelevanceFromNano,
             warning: 'low_coverage',
             warningMessage:
               'The available sources do not adequately cover this topic.',
             coverage: coverageRating,
           },
+          passages_sent: [],
           debug: {
             ...debugInfo,
             nanoFilter: 'all_weak',
@@ -402,9 +510,21 @@ export async function POST(req: NextRequest) {
       }
     } else {
       // Nano filter off or failed — use all docs capped at maxDocs
-      const maxDocs = IS_GPT5 ? 8 : 6
+      const maxDocs = cfg.maxPassages
       filteredDocs = docList.slice(0, maxDocs)
     }
+
+    // Cite ids are the 1-based positions in passages_sent, not the original
+    // pre-filter document ids. Renumber after the nano filter can create gaps.
+    filteredDocs = filteredDocs.map((d, idx) => ({ ...d, id: idx + 1 }))
+
+    const passagesSent = filteredDocs.map((d) => ({
+      id: d.id,
+      doc_id: d.doc_id,
+      chunk_id: d.chunk_id,
+      page: d.page,
+      text: d.key_finding,
+    }))
 
     debugInfo.docListCreated = {
       count: filteredDocs.length,
@@ -416,6 +536,9 @@ export async function POST(req: NextRequest) {
     console.log('[Answer Route] DocList created:', debugInfo.docListCreated)
 
     // Create a structured prompt that frames the task clearly
+    const coverageNote = cfg.likelyOffTopic
+      ? `\n\nCoverage check: the question's core topic appears to be absent from this corpus. If the sources do not actually answer it, return the low_coverage response.`
+      : ''
     const userContent = `Question: ${query}
 
 Source documents with key findings:
@@ -427,57 +550,43 @@ ${filteredDocs
   )
   .join('\n\n')}
 
-Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences synthesizing the most important information from the relevant sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.`
+Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences synthesizing the most important information from the relevant sources. Focus on breadth - touch on multiple key findings rather than elaborating on one.${coverageNote}`
 
     const messages = [
-      { role: 'system', content: SYS },
+      {
+        role: 'system',
+        content: cfg.promptVersion === 'v1' ? SYS_V1 : SYS_V2,
+      },
       { role: 'user', content: userContent },
     ]
 
-    // Build model-aware chat body
-    let used = IS_GPT5
+    const used = cfg.isGpt5
       ? 'chat.max_completion_tokens.no_temp'
       : 'chat.max_tokens.with_temp'
-    let apiBody: any = {
-      model: MODEL,
+    const apiBody: any = {
+      model: cfg.model,
       messages,
-      ...(IS_GPT5
-        ? { max_completion_tokens: MAX }
-        : { max_tokens: MAX, temperature: TEMP }),
+      ...(cfg.isGpt5
+        ? { max_completion_tokens: cfg.maxTokens }
+        : { max_tokens: cfg.maxTokens, temperature: cfg.temperature }),
     }
 
     debugInfo.apiCall = {
-      model: MODEL,
-      maxTokens: MAX,
-      actualMaxTokens: IS_GPT5
-        ? apiBody.max_completion_tokens
-        : apiBody.max_tokens,
-      temperature: IS_GPT5 ? 'omitted' : TEMP,
+      model: cfg.model,
+      maxTokens: cfg.maxTokens,
+      temperature: cfg.isGpt5 ? 'omitted' : cfg.temperature,
       messageCount: messages.length,
       userContentLength: userContent.length,
-      envMaxTokens: process.env.OPENAI_MAX_TOKENS,
     }
 
     console.log('[Answer Route] Calling OpenAI:', debugInfo.apiCall)
-    console.log(
-      `[Answer Route] Token config: ENV=${process.env.OPENAI_MAX_TOKENS}, DEFAULT=${DEFAULT_MAX}, FINAL=${MAX}`,
-    )
 
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${key}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(apiBody),
+    const r = await chatCompletion({
+      baseUrl: cfg.baseUrl,
+      apiKey: key,
+      body: apiBody,
     })
-    const text = await r.text()
-    let json: any
-    try {
-      json = JSON.parse(text)
-    } catch {
-      json = { raw: text }
-    }
+    const json: any = r.json
 
     const finishReason = json?.choices?.[0]?.finish_reason
     const content = json?.choices?.[0]?.message?.content ?? ''
@@ -502,7 +611,11 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
       debugInfo.apiError = json
       return NextResponse.json({
         ok: true,
-        synthesis: synthFallback(query, docs),
+        synthesis: withLikelyOffTopicWarning(
+          synthFallback(query, docs),
+          likelyOffTopic,
+        ),
+        passages_sent: passagesSent,
         debug: { ...debugInfo, used, status: r.status, upstream: json },
       })
     }
@@ -546,40 +659,24 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
         : 'none',
     )
 
-    // Handle both old format (sentences) and new format (paragraphs)
-    let sentences: string[] = []
-
-    if (Array.isArray(parsed.paragraphs)) {
-      console.log('[Answer Route] Processing paragraphs format')
-      // New format: flatten paragraphs into sentences
-      sentences = parsed.paragraphs.flat()
-      console.log('[Answer Route] After flattening paragraphs:', {
-        sentencesCount: sentences.length,
-        firstSentenceType:
-          sentences.length > 0 ? typeof sentences[0] : undefined,
-        firstSentencePreview:
-          sentences.length > 0 ? sentences[0].slice(0, 100) : undefined,
-      })
-    } else if (Array.isArray(parsed.sentences)) {
-      console.log('[Answer Route] Processing sentences format')
-      // Old format: use sentences directly
-      sentences = parsed.sentences
-    } else {
-      console.log('[Answer Route] No valid format found, using fallback')
-      sentences = synthFallback(query, docs).sentences
-    }
+    const validIds = new Set(passagesSent.map((p) => p.id))
+    const norm = normalizeSentences(parsed, validIds)
+    let sentences = norm.sentences
+    let cites = norm.cites
+    debugInfo.invalid_cites = norm.invalid
 
     if (sentences.length === 0) {
       console.log('[Answer Route] No valid sentences parsed, using fallback')
       debugInfo.fallbackReason = 'no_valid_sentences'
       sentences = synthFallback(query, docs).sentences
+      cites = sentences.map(() => [])
     }
 
     // Check for verbatim copying but don't override the response
     const hasQuotes = detectVerbatimCopying(sentences, docs)
 
     // Build synthesis response with appropriate warnings
-    const synthesis: any = { sentences }
+    const synthesis: any = { sentences, cites }
 
     // Source relevance: prefer nano filter tiers (absolute), fall back to synthesis LLM tiers
     let sourceRelevance: Array<{ doc_id: string; tier: string }> = []
@@ -610,15 +707,14 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
 
     // Low coverage: from nano filter or synthesis LLM
     const isLowCoverage =
+      cfg.likelyOffTopic ||
       coverageRating === 'poor' ||
       coverageRating === 'limited' ||
       parsed.low_coverage === true
     const sourcesUsed = filteredDocs.length
 
     if (isLowCoverage) {
-      synthesis.warning = 'low_coverage'
-      synthesis.warningMessage =
-        'Limited relevant sources found for this query. The answer may not fully address your question.'
+      Object.assign(synthesis, LOW_COVERAGE_WARNING)
       console.warn(
         `[Answer Route] Low coverage: sources_used=${sourcesUsed}/${docList.length}`,
       )
@@ -654,19 +750,31 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
     return NextResponse.json({
       ok: true,
       synthesis,
+      passages_sent: passagesSent,
       debug: debugInfo,
     })
   } catch (error: any) {
+    if (error instanceof UnsupportedProviderBaseUrlError) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 400 },
+      )
+    }
     console.error('[Answer Route] Exception:', error)
     debugInfo.exception = error?.message || String(error)
     debugInfo.fallbackReason = 'exception'
     return NextResponse.json({
       ok: true,
-      synthesis: {
-        sentences: [
-          'Could not synthesize a full answer from the provided context.',
-        ],
-      },
+      synthesis: withLikelyOffTopicWarning(
+        {
+          sentences: [
+            'Could not synthesize a full answer from the provided context.',
+          ],
+          cites: [[]],
+        },
+        likelyOffTopic,
+      ),
+      passages_sent: [],
       debug: debugInfo,
     })
   }

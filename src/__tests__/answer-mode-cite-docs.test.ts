@@ -26,10 +26,7 @@ function buildPayload(
   return {
     query,
     mode: 'answer',
-    max_results: 100,
-    similarity_threshold: 0.05,
     include_metadata: true,
-    rerank: true,
     ...(citeDocIds ? { cite_doc_ids: citeDocIds } : {}),
   }
 }
@@ -109,20 +106,18 @@ describe('API route passthrough', () => {
     }
     ;(global.fetch as jest.Mock).mockResolvedValue(mockSearchResponse)
 
-    // Simulate what the API route does: spread options into the request
+    // Mirrors AIResearchModal's actual gateway payload (query, mode, optional
+    // cite_doc_ids) routed through the gateway's allowlisted spread.
     const body = {
       query: 'forest restoration',
       mode: 'answer',
       cite_doc_ids: ['doc_a', 'doc_b'],
-      max_results: 100,
-      rerank: true,
     }
 
     const { query: rawQuery, mode, ...options } = body
     const llamaIndexRequest = {
       query: rawQuery,
       mode,
-      max_results: 100,
       similarity_threshold: 0.0,
       include_metadata: true,
       rerank: true,
@@ -157,15 +152,12 @@ describe('API route passthrough', () => {
     const body = {
       query: 'forest restoration',
       mode: 'answer',
-      max_results: 100,
-      rerank: true,
     }
 
     const { query: rawQuery, mode, ...options } = body
     const llamaIndexRequest = {
       query: rawQuery,
       mode,
-      max_results: 100,
       similarity_threshold: 0.0,
       include_metadata: true,
       rerank: true,

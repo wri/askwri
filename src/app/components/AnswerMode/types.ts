@@ -9,10 +9,26 @@ export type Assessment = {
   _debugKeys?: string[]
 }
 
+export interface PassageSent {
+  id: number
+  doc_id: string
+  chunk_id: string
+  page: number
+  text: string
+}
+
+export interface InlineRef {
+  ref: string
+  page: number
+  passage_id: string
+  doc_id: string
+}
+
 export interface AnswerResult {
   sentences: string[]
   paragraphs?: string[][]
-  inline?: { ref: string; page: number }[][]
+  inline?: InlineRef[][]
+  cites?: number[][]
   warning?: string
   warningMessage?: string
 }
@@ -75,8 +91,7 @@ export interface SupportingCitationsProps {
   setPage?: (p: number) => void
   scrollVersion?: number
   sourceRelevance?: Record<string, string>
-  directlyCitedCount?: number
-  citationLabels?: string[]
+  inline?: InlineRef[][]
   coverageRating?: string
   coverageExplanation?: string
   passageWhy: Record<string, WhyMeta>
