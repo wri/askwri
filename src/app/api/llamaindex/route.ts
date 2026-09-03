@@ -68,7 +68,6 @@ export const FORWARDABLE_FIELDS: ReadonlySet<string> = new Set([
   'excluded_keywords',
   'required_program',
   'cite_doc_ids',
-  'retrieval_mode',
   'return_intermediate_results',
 ])
 
