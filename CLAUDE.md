@@ -24,7 +24,7 @@ Terraform); S3 for PDFs and derived artifacts.
   `search-service/scripts/compile-requirements.sh` to regenerate the `.txt`
   (compiles inside `python:3.12-slim` so pins match the deploy image). Never
   hand-edit `requirements.txt`.
-- `npm run eval:cite` / `npm run eval:answer-retrieval` — retrieval evals (search-service must be running)
+- `npm run eval:cite` — cite-mode retrieval eval (search-service must be running)
 - `npm run eval:qa` — gen-2 evalsets against deployed QA via its public gateway;
   no local service, DB, or AWS creds. Fixtures come from the
   `evaluation/eval-review` submodule (`git submodule update --init` on first checkout).

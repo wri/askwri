@@ -7,7 +7,10 @@ export async function GET() {
   const data = await readEvalFile('cite-report-latest.json')
   if (!data) {
     return NextResponse.json(
-      { error: 'No cite report found. Run eval:cite then eval:upload.' },
+      {
+        error:
+          'No cite report found. Run eval:cite, then place cite-report-latest.json in eval storage.',
+      },
       { status: 404 },
     )
   }

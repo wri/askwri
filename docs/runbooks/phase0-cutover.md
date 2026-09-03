@@ -282,8 +282,9 @@ Then run the full evals against the postgres backend (switch to port 8000):
 
 ```bash
 npm run eval:cite
-npm run eval:answer-retrieval
 ```
+(`eval:answer-retrieval` was deleted with the gen-1 answer eval; the gen-2
+answer harness is `evaluation/answer/`.)
 
 Acceptance criteria (design §14.5):
 
