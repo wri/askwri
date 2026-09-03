@@ -283,10 +283,13 @@ disagreements uses the system-output notebook mode.
 
 ### 5.1 Answer route (`src/app/api/answer/route.ts`)
 
-- Output schema:
-  `{"sentences":[{"text":"...","cites":[1,3]}], "source_relevance":[...], "low_coverage"?:true}`.
-  Passage ids are the 1-based indices of `passages_sent`. Invalid ids are
-  dropped server-side and counted in `debug.invalid_cites`.
+- Output schema (route response):
+  `{"ok":true,"synthesis":{"sentences":["s1","s2"],"cites":[[1,3],[2]],"source_relevance":[…],"warning?":"low_coverage"},"passages_sent":[{"id":1,"doc_id":"…","chunk_id":"…","page":7,"text":"… as sent"}],"debug":{"knobs":{…},"invalid_cites":0,…}}`.
+  `synthesis.sentences` is `string[]`; `synthesis.cites` is the parallel
+  `number[][]` (same length, present on every path including fallbacks and
+  exceptions). Passage ids are the 1-based indices of `passages_sent`
+  (renumbered after the nano filter). Invalid ids are dropped server-side and
+  counted in `debug.invalid_cites`.
 - Request accepts optional `model`, `base_url`, `max_passages`,
   `passage_chars`, `prompt_version`, `likely_off_topic`. Defaults reproduce
   today's behaviour (gpt-5 branch: 8 passages, 400 chars). Production callers
