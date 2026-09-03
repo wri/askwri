@@ -434,6 +434,31 @@ describe('runCapture', () => {
     await close(gw.server)
   })
 
+  it('applies --limit before preflight: a missing doc in a LATER case neither aborts nor inflates the estimate', async () => {
+    const gw = await startFakeGateway(['doc_a']) // doc_b (q2) missing
+    const esPath = writeEvalsetTo(makeEvalset())
+    const artifact = await runCapture(
+      controlsFor(gw.url, esPath, '--limit', '1'),
+      {
+        http: fetchJson,
+        git: stubGit,
+        now: stubNow,
+      },
+    )
+    // Preflight saw exactly the selected case (q1): gate passed, capture ran.
+    expect(artifact.cases.map((c) => c.case_id)).toEqual(['q1'])
+    expect(artifact.preflight.corpus_ok).toBe(true)
+    expect(artifact.preflight.estimated_calls).toEqual({
+      retrieval: 1,
+      synthesis: 1,
+      judge: 0,
+    })
+    const realAnswers = gw.answerCalls.filter((b) => b.query !== 'ping')
+    expect(realAnswers).toHaveLength(1)
+    expect(realAnswers[0].query).toBe('What about trucks?')
+    await close(gw.server)
+  })
+
   it('the abort message names the missing docs and the failing cases', async () => {
     const gw = await startFakeGateway(['doc_a']) // doc_b missing
     const esPath = writeEvalsetTo(makeEvalset())

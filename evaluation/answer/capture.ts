@@ -229,8 +229,16 @@ export async function runCapture(
   }
 
   const target = buildTarget(ctl, deps.http)
-  const only = ctl.only.length > 0 ? ctl.only : undefined
-  const report = await preflight({ evalset, target, passes: ctl.passes, only })
+  // Select BEFORE preflight (--only filter, --limit slice): the abort gate
+  // and the call estimate must cover exactly the cases this run will
+  // capture — a missing doc in a later, unselected case must neither abort
+  // a --limit partial run nor inflate the estimate.
+  const selected = selectCases(evalset, ctl)
+  const report = await preflight({
+    evalset: { ...evalset, test_cases: selected },
+    target,
+    passes: ctl.passes,
+  })
 
   // Abort gate (binding, Task 4 review): a run preflight already knows is
   // unmeasurable must not spend capture-pass calls. `judging` is false here —
@@ -248,7 +256,6 @@ export async function runCapture(
   }
 
   const health = await target.health()
-  const selected = selectCases(evalset, ctl)
   const caseCaptures: CaseCapture[] = new Array(selected.length)
   // EFFECTIVE synthesis config: the first successful answer's debug.knobs.
   let effective: { model?: string; base_url?: string } | undefined
