@@ -50,8 +50,9 @@ export interface JudgeCallParams<T> {
 }
 
 const DEFAULT_TIMEOUT_MS = 300_000
-/** 429 backoff: 1, 2, 4, 8 seconds between the 5 allowed attempts. */
-const MAX_429_ATTEMPTS = 5
+/** 429 backoff: 1, 2, 4, 8, 16 seconds between the initial request and its
+ * 5 retries (spec §4.3: "max 5" counts retries, not total requests). */
+const MAX_429_RETRIES = 5
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 
@@ -136,7 +137,7 @@ async function transport(p: {
     if (res.status === 401) return { kind: 'auth' }
     if (res.status === 429) {
       rateLimited++
-      if (rateLimited >= MAX_429_ATTEMPTS)
+      if (rateLimited > MAX_429_RETRIES)
         return { kind: 'failed', reason: 'rate_limited', raw: res.text }
       await p.sleep(2 ** (rateLimited - 1) * 1000)
       continue

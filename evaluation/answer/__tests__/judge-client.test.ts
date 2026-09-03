@@ -209,14 +209,14 @@ describe('judgeCall', () => {
     expect(r.sleepCalls).toEqual([1000, 2000])
   })
 
-  it('gives up after 5 rate-limited attempts', async () => {
+  it('gives up after the initial request + 5 rate-limited retries', async () => {
     const r = await runJudge([{ status: 429 }])
     expect(r.result!.ok).toBe(false)
     if (!r.result!.ok) {
       expect(r.result!.unjudged.reason).toBe('rate_limited')
     }
-    expect(r.requests).toHaveLength(5)
-    expect(r.sleepCalls).toEqual([1000, 2000, 4000, 8000])
+    expect(r.requests).toHaveLength(6)
+    expect(r.sleepCalls).toEqual([1000, 2000, 4000, 8000, 16000])
   })
 
   it('retries once after a timeout, then succeeds', async () => {
