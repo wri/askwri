@@ -214,7 +214,8 @@ synthesis is slow), `--knob key=value` (repeatable), `--direct-search URL` /
 gateway). The other stage CLIs each have their own parser:
 - `run-judge` — `--capture`, `--label`, `--judge-model`, `--judge-base-url`,
   `--only`, `--concurrency`
-- `run-score` — `--capture`, `--judged`, `--label`
+- `run-score` — `--capture`, `--judged`, `--label`, `--labels` (see
+  [Judge calibration against human labels](#judge-calibration-against-human-labels) below)
 - `run-compare` — two positional paths plus `--judged`/`--pairwise` mode,
   `--label-a`/`--label-b`, `--judge-model`, `--judge-base-url`
 
@@ -226,6 +227,36 @@ is just `run-judge --capture <file>`, and agreement between two judge models is
 comparison there is also `run-compare --pairwise <captureA.json> <captureB.json>`
 (judge sees both answers in randomized order; reported as win rate with the
 order-swap check).
+
+### Judge calibration against human labels
+
+`run-score --labels <path>` (repeatable; each path is a label file or a
+directory of them) attaches human review labels to the score report. Labels
+are produced by the eval-review repo's system-output notebook: a reviewer
+works through a stored capture and saves one
+`labels-<capture>-<case>-pass<N>-by-<reviewer>.json` file per case, pass, and
+reviewer (schema `answer-eval/human-labels@1`). Every label is validated
+against the capture — its recorded checksum must match — so a label made from
+a different capture run is refused (exit 2, naming every rejected file)
+rather than silently mixed into the report.
+
+With labels, the report header changes: `judge: uncalibrated` becomes a
+calibration object (`calibrated`, label count, reviewers) and a
+`judge_agreement` block is added, while the console prints judge-vs-human
+agreement per verdict type — fact stated/partial/absent, sentence
+supported/unsupported, and the unsupported-claims count. The agreement
+measure mirrors the two-judge agreement mode: for each verdict type it is
+counted only where both the judge and the human produced a verdict
+(symmetric either-denominator); labeled items with no judged counterpart are
+counted as excluded, never scored. Reviewers are independent — all of them
+for the same case+pass join, each compared against the same judged verdicts —
+and the same reviewer's later file for the same case+pass wins (a corrected
+file supersedes their earlier one).
+
+Without `--labels` nothing changes: the report is byte-identical to a plain
+run. The fixture data enabling this (answer twins, negative cases,
+`review_status` fields) arrives with the eval-review submodule pin bump,
+separately.
 
 ### Cost caveats
 
