@@ -161,6 +161,13 @@ New directory `evaluation/answer/`. Deleted in the same change:
 `upload-eval-to-s3.ts`, `download-eval-from-s3.ts`, and the matching sections
 of `evaluation/README.md`. `run-evalset.ts` and `run-cite-eval.ts` stay.
 
+*Amendment (2026-09-04, PR 2 review):* `upload-eval-to-s3.ts` was also the
+only publisher of the cite report that `/api/eval/review-cite` serves to QA
+reviewers, and cite mode is out of scope here. PR 2 therefore ships a
+cite-only replacement, `evaluation/upload-cite-report.ts` (`eval:upload-cite`),
+that uploads the newest `evaluation/results/eval-report-*.json` as
+`cite-report-latest.json`. Nothing else from the deletion list is kept.
+
 ### 3.1 Targets
 
 - `gateway`: `POST <target>/api/llamaindex` then `POST <target>/api/answer`
@@ -283,10 +290,13 @@ disagreements uses the system-output notebook mode.
 
 ### 5.1 Answer route (`src/app/api/answer/route.ts`)
 
-- Output schema:
-  `{"sentences":[{"text":"...","cites":[1,3]}], "source_relevance":[...], "low_coverage"?:true}`.
-  Passage ids are the 1-based indices of `passages_sent`. Invalid ids are
-  dropped server-side and counted in `debug.invalid_cites`.
+- Output schema (route response):
+  `{"ok":true,"synthesis":{"sentences":["s1","s2"],"cites":[[1,3],[2]],"source_relevance":[…],"warning?":"low_coverage"},"passages_sent":[{"id":1,"doc_id":"…","chunk_id":"…","page":7,"text":"… as sent"}],"debug":{"knobs":{…},"invalid_cites":0,…}}`.
+  `synthesis.sentences` is `string[]`; `synthesis.cites` is the parallel
+  `number[][]` (same length, present on every path including fallbacks and
+  exceptions). Passage ids are the 1-based indices of `passages_sent`
+  (renumbered after the nano filter). Invalid ids are dropped server-side and
+  counted in `debug.invalid_cites`.
 - Request accepts optional `model`, `base_url`, `max_passages`,
   `passage_chars`, `prompt_version`, `likely_off_topic`. Defaults reproduce
   today's behaviour (gpt-5 branch: 8 passages, 400 chars). Production callers
@@ -305,7 +315,8 @@ disagreements uses the system-output notebook mode.
 
 ### 5.2 UI
 
-- `AIResearchModal.tsx`: build `inline` from `sentences[].cites` mapped through
+- `AIResearchModal.tsx`: build `inline` from `synthesis.cites` (the parallel
+  array indexed by sentence) mapped through
   `passages_sent`; delete the slice-by-position block (`:212–248`).
 - `AnswerPanel.tsx` / `SupportingCitations.tsx`: a citation marker scrolls to
   the passage it cites; "Directly cited" lists cited passages; the rest go

@@ -565,8 +565,9 @@ effect on the next query with no reindex. Gated on `translation_pairs_enabled`
   (`has_english_translation`, `excerpt_from_translation`) are inside the existing
   `metadata` dict.
 
-Activation is eval-gated (#333): run `eval:cite` and `eval:answer-retrieval` flag-off
-then flag-on on the same harness; enable only on acceptable deltas.
+Activation is eval-gated (#333): run `eval:cite` flag-off
+then flag-on on the same harness; enable only on acceptable deltas. (The
+gen-1 `eval:answer-retrieval` gate was deleted with the gen-1 answer eval.)
 
 ### 12.5 DMS surfaces
 

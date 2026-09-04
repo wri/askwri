@@ -458,12 +458,13 @@ filtering is a separate, eval-gated ops step:
    her stamps are reviewed by her, not overwritten. Confirmed edges still change
    nothing in retrieval while the flag is off.
 
-4. **Eval gate (the activation decision).** With the flag still off, run both
-   retrieval evals on the same harness:
+4. **Eval gate (the activation decision).** With the flag still off, run the
+   retrieval eval on the same harness:
    ```bash
    npm run eval:cite
-   npm run eval:answer-retrieval
    ```
+   (The gen-1 `eval:answer-retrieval` script was deleted in the answer-eval
+   overhaul; the gen-2 answer harness lives in `evaluation/answer/`.)
    Then re-run with `TRANSLATION_PAIRS_ENABLED=true` (export it for the eval
    process) and compare. Enable the flag in the search-service task definition only
    on acceptable deltas; #333 records the measured before/after.

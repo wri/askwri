@@ -81,7 +81,7 @@ The response includes `raw_score` (logit) and `relevance_tier` ("strong"/"partia
 
 Answer mode does **not** use reranker logit thresholds to assign relevance tiers.
 
-Calibration (see `evaluation/calibrate-answer-thresholds.ts`) showed that cross-encoder scores cannot separate relevant from irrelevant chunks for answer-mode queries: the relevant and irrelevant score distributions overlap almost completely (relevant median 2.25, irrelevant median 2.07). The reranker is a ranking tool, not a classifier — it coarsely selects the top candidates but cannot discriminate within them.
+Calibration showed that cross-encoder scores cannot separate relevant from irrelevant chunks for answer-mode queries: the relevant and irrelevant score distributions overlap almost completely (relevant median 2.25, irrelevant median 2.07). The reranker is a ranking tool, not a classifier — it coarsely selects the top candidates but cannot discriminate within them.
 
 **Relevance filtering for answer mode happens in the Next.js answer route**, not the search service. After the search service returns up to 15 chunks, the answer route calls `gpt-5.4-nano` to score each chunk for relevance to the query. Only chunks passing the nano filter are passed to the synthesis LLM (GPT-5.4).
 

@@ -318,8 +318,7 @@ promote then require a manual `POST /reindex` again — that staleness is the
 legacy behavior, not a bug.
 
 **Clear eval checkpoints** (forcing a from-scratch eval run): delete
-`evaluation/results/cite-eval-checkpoint.json`,
-`answer-retrieval-checkpoint.json`, and the relevant
+`evaluation/results/cite-eval-checkpoint.json` and the relevant
 `baseline-suite-<label>.state`.
 
 ---

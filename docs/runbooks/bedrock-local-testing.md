@@ -172,8 +172,8 @@ English regression baselines:
 
 ```bash
 npm run eval:cite
-npm run eval:answer-retrieval
 ```
+(`eval:answer-retrieval` was deleted with the gen-1 answer eval.)
 
 ## Step 5 — Canary re-embed (500 chunks), then STOP
 
