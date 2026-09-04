@@ -216,7 +216,7 @@ describe('preflight', () => {
     await close(judge.server)
   })
 
-  it('synthesis probe carries the run\'s provider knobs (model, base_url, prompt_version) but keeps its own size caps', async () => {
+  it("synthesis probe carries the run's provider knobs (model, base_url, prompt_version) but keeps its own size caps", async () => {
     const app = await startFakeApp(['doc_a', 'doc_twin', 'doc_c'])
     const target = gatewayTarget(app.url, fetchJson)
     const report = await preflight({

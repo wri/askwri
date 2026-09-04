@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json(
       {
         error:
-          'No cite report found. Run eval:cite, then place cite-report-latest.json in eval storage.',
+          'No cite report found. Run eval:cite, then eval:upload-cite to publish it.',
       },
       { status: 404 },
     )

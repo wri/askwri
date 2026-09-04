@@ -73,7 +73,7 @@ export const CITE_REPORT_HTML = `<!DOCTYPE html>
       document.getElementById('app').innerHTML = h;
     })
     .catch(function(err) {
-      document.getElementById('app').innerHTML = '<div class="empty-state">No cite report data available. Run eval:cite, then place cite-report-latest.json in eval storage.</div>';
+      document.getElementById('app').innerHTML = '<div class="empty-state">No cite report data available. Run eval:cite, then eval:upload-cite to publish it.</div>';
     });
 })();
 </script>

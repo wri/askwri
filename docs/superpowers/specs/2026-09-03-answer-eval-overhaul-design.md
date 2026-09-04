@@ -161,6 +161,13 @@ New directory `evaluation/answer/`. Deleted in the same change:
 `upload-eval-to-s3.ts`, `download-eval-from-s3.ts`, and the matching sections
 of `evaluation/README.md`. `run-evalset.ts` and `run-cite-eval.ts` stay.
 
+*Amendment (2026-09-04, PR 2 review):* `upload-eval-to-s3.ts` was also the
+only publisher of the cite report that `/api/eval/review-cite` serves to QA
+reviewers, and cite mode is out of scope here. PR 2 therefore ships a
+cite-only replacement, `evaluation/upload-cite-report.ts` (`eval:upload-cite`),
+that uploads the newest `evaluation/results/eval-report-*.json` as
+`cite-report-latest.json`. Nothing else from the deletion list is kept.
+
 ### 3.1 Targets
 
 - `gateway`: `POST <target>/api/llamaindex` then `POST <target>/api/answer`

@@ -362,7 +362,7 @@ describe('runCapture', () => {
     await close(gw.server)
   })
 
-  it('forwards the run\'s synthesis knobs to the preflight probe', async () => {
+  it("forwards the run's synthesis knobs to the preflight probe", async () => {
     const gw = await startFakeGateway(['doc_a', 'doc_b'])
     const esPath = writeEvalsetTo(makeEvalset())
     await runCapture(

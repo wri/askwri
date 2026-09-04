@@ -317,7 +317,9 @@ describe('judgedAgreement', () => {
     expect(out).toContain('absent 0/1 (0.0%)')
     expect(out).toContain('supported 1/1 (100.0%)')
     // en-source (q2 via latin-snippet fallback)
-    expect(out).toContain('english-source cases')
+    // Bucket label is 'non-zh' (an es-source case lands here too, not
+    // under an 'english' label).
+    expect(out).toContain('non-zh-source cases')
     expect(out).toContain('unsupported 1/1 (100.0%)')
     // excluded: present-in-one / unjudged items, counted per language bucket
     expect(out).toContain('excluded items: 1')

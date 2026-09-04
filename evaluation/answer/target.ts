@@ -194,14 +194,7 @@ export function gatewayTarget(
       }
     },
     answer: (query, docs, knobs) =>
-      answerAt(
-        `${base}/api/answer`,
-        http,
-        query,
-        docs,
-        knobs,
-        answerTimeoutMs,
-      ),
+      answerAt(`${base}/api/answer`, http, query, docs, knobs, answerTimeoutMs),
     async health() {
       try {
         const r = await http(`${base}/api/llamaindex`)

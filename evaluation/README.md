@@ -25,6 +25,7 @@ uvicorn app.main:app --port 8000            # starts Python service on :8000
 ```bash
 npm run eval:cite                           # Full eval (11 queries, ~8 min)
 npm run eval:report                         # Generate HTML report from latest results
+npm run eval:upload-cite                    # Publish the latest report for QA reviewers (/api/eval/review-cite)
 ```
 
 **Answer Mode (gen-2 harness):**
@@ -171,29 +172,46 @@ target URL or local config snapshot, every injected knob, synthesis and judge
 models with base URLs, prompt hashes, pass count, and timestamp. Judge verdicts
 are keyed `(case, pass, item)` and carry the prompt hash and judge model.
 
+Run every stage CLI from the repo root (the npm scripts do): `tsx` resolves
+the `@/` alias from the cwd's `tsconfig.json`, so from another directory the
+route imports silently load a different tree.
+
 - **capture** records, per case per pass: retrieved chunk list with scores,
-  `chunk_id`, `doc_id`, `likely_off_topic`; `passages_sent`; raw model JSON;
-  parsed sentences with cites; latency; cost from usage fields.
+  `chunk_id`, `doc_id`, `likely_off_topic`; `passages_sent`; the route's
+  debug block (`raw_model_json`); parsed sentences with cites; latency; cost
+  from usage fields. The artifact is checkpointed after every case. Preflight
+  aborts before any paid call when a doc or snippet is missing or the
+  synthesis probe (which carries the run's `model`/`base_url` knobs) falls
+  back; drop a blocking case with `--skip`. A pass whose route reply was an
+  infrastructure fallback (`no_api_key`, `api_error`, `exception`) is recorded
+  as an answer error and never judged or scored.
 - **judge** reads a capture and writes verdicts. A partial `judged-*.json` is
   resumed; only missing items run (an `unjudged` item from an aborted run is
-  retried). Progress is written after every item, so Ctrl-C or a 401 abort
-  preserves it.
+  retried, and so is any item judged by another model or prompt version).
+  The judged file is fingerprinted to its capture — re-capturing under the
+  same label and re-judging is refused rather than silently reusing stale
+  verdicts. Progress is written after every item, so Ctrl-C or a 401 abort
+  preserves it. Exits 1 when every attempted item came back unjudged (a
+  misconfigured judge, e.g. a 4xx on every call).
 - **score** is a pure function `(fixture, capture, judged) → report` — no API
-  calls, byte-identical on re-run. `unjudged` items and retrieval errors are
-  excluded from means and counted separately, never scored as zero.
-- **compare** refuses runs with different fixture commits, pass counts, or case
-  sets, and prints per-case deltas.
+  calls, byte-identical on re-run. `unjudged` items and retrieval/answer
+  errors are excluded from means and counted separately, never scored as
+  zero; the unsupported-claims count is always shown with the number of
+  judged passes it covers.
+- **compare** refuses runs with different fixture commits, pass counts, case
+  sets, or target modes (gateway vs direct chunk text differ), and prints
+  headline/draft block deltas followed by per-case deltas.
 
 ### Controls
 
-Only `run-capture` uses the full flag set: `--only <case-id>` (repeatable),
-`--limit N`, `--passes N` (default 1), `--label` (default: evalset basename
-sans `.json`), `--concurrency` (default 1), `--target URL` (default
-`EVAL_TARGET` or `https://qa.askwri-app.org`), `--knob key=value`
-(repeatable), `--direct-search URL` / `--direct-answer URL` (switch to local
-services instead of the deployed gateway), `--judge-model` (default
-`glm-5.2-vision`), `--judge-base-url` (default `LUNAROUTE_BASE_URL`).
-The other stage CLIs each have their own parser:
+Only `run-capture` uses the full flag set: `--only <case-id>` / `--skip
+<case-id>` (repeatable), `--limit N`, `--passes N` (default 1), `--label`
+(default: evalset basename sans `.json`), `--concurrency` (default 1),
+`--target URL` (default `EVAL_TARGET` or `https://qa.askwri-app.org`),
+`--timeout MS` (per `/api/answer` call; default 300000 — lunaroute-hosted
+synthesis is slow), `--knob key=value` (repeatable), `--direct-search URL` /
+`--direct-answer URL` (switch to local services instead of the deployed
+gateway). The other stage CLIs each have their own parser:
 - `run-judge` — `--capture`, `--label`, `--judge-model`, `--judge-base-url`,
   `--only`, `--concurrency`
 - `run-score` — `--capture`, `--judged`, `--label`
@@ -257,7 +275,8 @@ ls -lt evaluation/answer/artifacts/
 ## QA Reviewer Access
 
 External reviewers access the cite report via the QA server — no local setup
-required.
+required. Publish it with `npm run eval:upload-cite` after `eval:cite`
+(needs `DOCUMENTS_S3_BUCKET` and AWS creds in `.env`).
 
 **Review URLs (QA):**
 - Cite report: `http://<qa-alb>/api/eval/review-cite`
@@ -280,6 +299,7 @@ evaluation/
 ├── golden-dataset.json                    # Cite mode: 11 queries, 64 expected docs
 ├── run-cite-eval.ts                       # Full evaluation runner (11 queries)
 ├── generate-report.ts                      # HTML report generator for cite results
+├── upload-cite-report.ts                   # Publish latest cite report to S3 for QA reviewers
 │
 ├── # Answer Mode — gen-2 harness
 ├── answer/

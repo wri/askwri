@@ -24,6 +24,7 @@
     "eval:qa": "npx tsx evaluation/run-evalset.ts",
     "eval:cite": "npx tsx --env-file-if-exists=.env evaluation/run-cite-eval.ts",
     "eval:report": "npx tsx --env-file-if-exists=.env evaluation/generate-report.ts",
+    "eval:upload-cite": "npx tsx --env-file-if-exists=.env evaluation/upload-cite-report.ts",
     "eval:answer-capture": "npx tsx --env-file-if-exists=.env evaluation/answer/run-capture.ts",
     "eval:answer-judge": "npx tsx --env-file-if-exists=.env evaluation/answer/run-judge.ts",
     "eval:answer-score": "npx tsx --env-file-if-exists=.env evaluation/answer/run-score.ts",

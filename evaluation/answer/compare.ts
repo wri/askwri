@@ -307,7 +307,7 @@ export function judgedAgreement(a: JudgedArtifact, b: JudgedArtifact): string {
   ]
   for (const [label, t] of [
     ['zh-source cases', buckets.zh],
-    ['english-source cases', buckets.en],
+    ['non-zh-source cases', buckets.en],
   ] as Array<[string, VerdictTally]>) {
     lines.push(`${label}:`)
     lines.push(
