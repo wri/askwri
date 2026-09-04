@@ -120,7 +120,9 @@ function printJudgeAgreement(ag: JudgeAgreement): void {
 }
 
 /** Load --labels paths (files or dirs) and validate every label against the
- * capture — exit 2 listing every rejected file + reason, never skip. */
+ * capture — exit 2 listing every rejection (identified by the labels'
+ * self-declared `capture_file`, which is identical across a capture's label
+ * set) + reason, never skip. */
 function loadAndValidateLabels(
   paths: string[],
   capturePath: string,
@@ -128,6 +130,9 @@ function loadAndValidateLabels(
 ): HumanLabels[] | undefined {
   if (paths.length === 0) return undefined
   const labels = loadLabelsFrom(paths)
+  if (labels.length === 0) {
+    fail(`no label files found under: ${paths.join(', ')}`)
+  }
   const rejected = labels
     .map((l) => ({
       file: l.capture_file,

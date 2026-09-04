@@ -237,8 +237,8 @@ works through a stored capture and saves one
 `labels-<capture>-<case>-pass<N>-by-<reviewer>.json` file per case, pass, and
 reviewer (schema `answer-eval/human-labels@1`). Every label is validated
 against the capture — its recorded checksum must match — so a label made from
-a different capture run is refused (exit 2, naming every rejected file)
-rather than silently mixed into the report.
+a different capture run is refused (exit 2, listing every rejection with its
+reason) rather than silently mixed into the report.
 
 With labels, the report header changes: `judge: uncalibrated` becomes a
 calibration object (`calibrated`, label count, reviewers) and a
@@ -248,7 +248,11 @@ supported/unsupported, and the unsupported-claims count. The agreement
 measure mirrors the two-judge agreement mode: for each verdict type it is
 counted only where both the judge and the human produced a verdict
 (symmetric either-denominator); labeled items with no judged counterpart are
-counted as excluded, never scored. Reviewers are independent — all of them
+counted as excluded, never scored. One carve-out: a sentence with no
+resolvable citation produces no judged `sentence_support` item at all (the
+judge covers it only through `unsupported_claims`), so a human verdict on
+such a sentence is never counted excluded — it joins only through the
+unsupported-claims tally. Reviewers are independent — all of them
 for the same case+pass join, each compared against the same judged verdicts —
 and the same reviewer's later file for the same case+pass wins (a corrected
 file supersedes their earlier one).
