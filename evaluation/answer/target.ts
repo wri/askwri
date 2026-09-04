@@ -80,21 +80,37 @@ const ANSWER_MODE_QUERY_DEFAULTS = {
 
 const trimTrailingSlash = (url: string) => url.replace(/\/+$/, '')
 
+/** Synthesis budget per call. Matches the judge client: lunaroute-hosted
+ * models are ~7x slower than GPT, and the 120s http default would time out
+ * every candidate-model synthesis (spec §7 sweep 3). */
+export const ANSWER_TIMEOUT_MS = 300_000
+
+export interface TargetOptions {
+  /** Override for ANSWER_TIMEOUT_MS (the --timeout control). */
+  answerTimeoutMs?: number
+}
+
 function errorText(json: any, text: string): string {
   return json?.error ?? text.slice(0, 200)
 }
 
-/** Shared /api/answer call (identical contract for both transports). */
+/** Shared /api/answer call (identical contract for both transports).
+ * retries: 0 — a timed-out synthesis has already been billed server-side
+ * (the route's provider fetch carries no abort signal), so a retry doubles
+ * the spend; the pass records an error instead. */
 async function answerAt(
   url: string,
   http: typeof fetchJson,
   query: string,
   docs: unknown[],
   knobs: Record<string, unknown>,
+  timeoutMs: number,
 ): Promise<AnswerOutcome> {
   const r = await http(url, {
     method: 'POST',
     body: { query, docs, ...knobs },
+    timeoutMs,
+    retries: 0,
   })
   const j = r.json ?? {}
   if (!r.ok || j.ok === false) {
@@ -142,8 +158,10 @@ async function fetchCatalogIds(
 export function gatewayTarget(
   baseUrl: string,
   http: typeof fetchJson,
+  opts: TargetOptions = {},
 ): TargetClient {
   const base = trimTrailingSlash(baseUrl)
+  const answerTimeoutMs = opts.answerTimeoutMs ?? ANSWER_TIMEOUT_MS
   return {
     mode: 'gateway',
     async retrieve(query, knobs) {
@@ -176,7 +194,14 @@ export function gatewayTarget(
       }
     },
     answer: (query, docs, knobs) =>
-      answerAt(`${base}/api/answer`, http, query, docs, knobs),
+      answerAt(
+        `${base}/api/answer`,
+        http,
+        query,
+        docs,
+        knobs,
+        answerTimeoutMs,
+      ),
     async health() {
       try {
         const r = await http(`${base}/api/llamaindex`)
@@ -193,9 +218,11 @@ export function directTarget(
   searchUrl: string,
   answerUrl: string,
   http: typeof fetchJson,
+  opts: TargetOptions = {},
 ): TargetClient {
   const search = trimTrailingSlash(searchUrl)
   const app = trimTrailingSlash(answerUrl)
+  const answerTimeoutMs = opts.answerTimeoutMs ?? ANSWER_TIMEOUT_MS
   return {
     mode: 'direct',
     async retrieve(query, knobs) {
@@ -243,7 +270,7 @@ export function directTarget(
       }
     },
     answer: (query, docs, knobs) =>
-      answerAt(`${app}/api/answer`, http, query, docs, knobs),
+      answerAt(`${app}/api/answer`, http, query, docs, knobs, answerTimeoutMs),
     async health() {
       try {
         const r = await http(`${search}/health`)

@@ -17,6 +17,9 @@ export function listen(server: http.Server): Promise<string> {
 /** closeAllConnections() BEFORE close(): deliberately-stalled keep-alive
  * sockets otherwise wedge Jest's exit after the suite. */
 export function close(server: http.Server): Promise<void> {
+  // Idempotent: a suite's afterEach registry may close a server the test
+  // already closed on its happy path.
+  if (!server.listening) return Promise.resolve()
   server.closeAllConnections()
   return new Promise((resolve) => server.close(() => resolve()))
 }

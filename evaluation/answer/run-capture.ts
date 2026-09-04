@@ -5,8 +5,10 @@
  *   npm run eval:answer-capture -- <evalset.json> [--passes 2 --knob k=v ...]
  *
  * The artifact lands in evaluation/answer/artifacts/capture-<label>.json
- * (never committed). Aborts non-zero when preflight fails, before any
- * capture-pass call.
+ * (never committed) and is checkpointed there after every case, so a crash
+ * mid-run leaves the completed cases on disk. Aborts non-zero when preflight
+ * fails, before any capture-pass call. Run from the repo root (tsx resolves
+ * the `@/` alias from the cwd's tsconfig).
  */
 import * as path from 'path'
 import { parseControls } from './cli'
@@ -19,9 +21,14 @@ import { fetchJson } from './http'
 
 async function main(): Promise<void> {
   const ctl = parseControls(process.argv.slice(2), 'capture')
+  const artifactsDir = path.join(__dirname, 'artifacts')
   let artifact
   try {
-    artifact = await runCapture(ctl, { http: fetchJson })
+    artifact = await runCapture(ctl, {
+      http: fetchJson,
+      checkpoint: (partial) =>
+        writeCaptureArtifact(artifactsDir, ctl.label, partial),
+    })
   } catch (e) {
     if (e instanceof PreflightAbortError) {
       console.error(e.message)
@@ -30,11 +37,7 @@ async function main(): Promise<void> {
     throw e
   }
 
-  const file = writeCaptureArtifact(
-    path.join(__dirname, 'artifacts'),
-    ctl.label,
-    artifact,
-  )
+  const file = writeCaptureArtifact(artifactsDir, ctl.label, artifact)
 
   // Per-case one-liners, run-evalset's tone.
   for (const c of artifact.cases) {

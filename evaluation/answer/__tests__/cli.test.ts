@@ -25,18 +25,34 @@ describe('parseControls', () => {
       directAnswerUrl: undefined,
       retrievalKnobs: {},
       synthesisKnobs: {},
-      judgeModel: 'glm-5.2-vision',
-      judgeBaseUrl: undefined,
+      skip: [],
+      timeoutMs: undefined,
       evalsetPath: EVALSET,
     })
   })
 
-  it('honors EVAL_TARGET and LUNAROUTE_BASE_URL env defaults', () => {
+  it('honors the EVAL_TARGET env default', () => {
     process.env.EVAL_TARGET = 'https://prod.example'
-    process.env.LUNAROUTE_BASE_URL = 'https://judge.example/v1'
     const c = parseControls([EVALSET], 'capture')
     expect(c.targetUrl).toBe('https://prod.example')
-    expect(c.judgeBaseUrl).toBe('https://judge.example/v1')
+  })
+
+  it('parses repeatable --skip and --timeout (ms)', () => {
+    const c = parseControls(
+      [EVALSET, '--skip', 'q3', '--skip', 'q7', '--timeout', '600000'],
+      'capture',
+    )
+    expect(c.skip).toEqual(['q3', 'q7'])
+    expect(c.timeoutMs).toBe(600000)
+  })
+
+  it('rejects the judge-stage flags: they belong to run-judge / run-compare', () => {
+    expect(() =>
+      parseControls([EVALSET, '--judge-model', 'm'], 'capture'),
+    ).toThrow(/unknown flag --judge-model/)
+    expect(() =>
+      parseControls([EVALSET, '--judge-base-url', 'u'], 'capture'),
+    ).toThrow(/unknown flag --judge-base-url/)
   })
 
   it('parses repeatable --only, --limit, --passes, --label, --concurrency, --target', () => {
@@ -57,10 +73,6 @@ describe('parseControls', () => {
         '3',
         '--target',
         'https://t.example',
-        '--judge-model',
-        'other-model',
-        '--judge-base-url',
-        'https://j.example/v1',
       ],
       'capture',
     )
@@ -70,8 +82,6 @@ describe('parseControls', () => {
     expect(c.label).toBe('sweep-a')
     expect(c.concurrency).toBe(3)
     expect(c.targetUrl).toBe('https://t.example')
-    expect(c.judgeModel).toBe('other-model')
-    expect(c.judgeBaseUrl).toBe('https://j.example/v1')
   })
 
   it('supports --flag=value syntax', () => {

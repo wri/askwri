@@ -1,6 +1,8 @@
 /**
- * Shared control parsing for the answer-eval stage CLIs (§3.5). One parser,
- * four stages — judge/score/compare reuse the same flags when they land.
+ * Control parsing for the capture stage CLI (§3.5). The judge, score, and
+ * compare CLIs each carry their own small parser (their inputs are artifact
+ * paths, not an evalset), so the judge flags do NOT live here — a capture
+ * never judges, and accepting them silently would only mislead.
  *
  * Knob routing is the safety rail: only the six synthesis knobs reach
  * /api/answer; everything else must be a forwardable /query field. The
@@ -11,12 +13,17 @@
  * nothing silently: fail loudly and record the route file's blob SHA in
  * provenance instead). An unknown knob is a hard error at parse time — a
  * typo must never silently change what a capture measured.
+ *
+ * Run the stage CLIs from the repo root: tsx resolves the `@/` alias from the
+ * cwd's tsconfig, so from any other directory the route import silently
+ * loads a different tree (or nothing).
  */
 import * as path from 'path'
 import { FORWARDABLE_FIELDS } from '@/app/api/llamaindex/route'
 
 export interface Controls {
   only: string[]
+  skip: string[]
   limit?: number
   passes: number
   label: string
@@ -26,8 +33,8 @@ export interface Controls {
   directAnswerUrl?: string
   retrievalKnobs: Record<string, unknown>
   synthesisKnobs: Record<string, unknown>
-  judgeModel?: string
-  judgeBaseUrl?: string
+  /** Per-call budget for /api/answer (ms); undefined = the target's default. */
+  timeoutMs?: number
   evalsetPath: string
 }
 
@@ -40,10 +47,9 @@ const SYNTHESIS_KNOB_KEYS = new Set([
   'likely_off_topic',
 ])
 
-const USAGE = `usage: <evalset.json> [--only id]... [--limit N] [--passes N] [--label name]
-       [--concurrency N] [--target URL] [--knob key=value]...
-       [--direct-search URL --direct-answer URL]
-       [--judge-model M] [--judge-base-url URL]
+const USAGE = `usage: <evalset.json> [--only id]... [--skip id]... [--limit N] [--passes N]
+       [--label name] [--concurrency N] [--target URL] [--timeout MS]
+       [--knob key=value]... [--direct-search URL --direct-answer URL]
 synthesis knobs: ${[...SYNTHESIS_KNOB_KEYS].join(', ')}
 retrieval knobs: any forwardable /query field (FORWARDABLE_FIELDS in
                  src/app/api/llamaindex/route.ts)`
@@ -86,9 +92,11 @@ export function parseControls(
 
   let evalsetPath: string | undefined
   const only: string[] = []
+  const skip: string[] = []
   const knobs: Array<[string, unknown]> = []
   const ctl: Controls = {
     only,
+    skip,
     limit: undefined,
     passes: 1,
     label: '',
@@ -98,8 +106,7 @@ export function parseControls(
     directAnswerUrl: undefined,
     retrievalKnobs: {},
     synthesisKnobs: {},
-    judgeModel: 'glm-5.2-vision',
-    judgeBaseUrl: process.env.LUNAROUTE_BASE_URL,
+    timeoutMs: undefined,
     evalsetPath: '',
   }
 
@@ -123,6 +130,9 @@ export function parseControls(
       case 'only':
         only.push(value())
         break
+      case 'skip':
+        skip.push(value())
+        break
       case 'limit':
         ctl.limit = intFlag('limit', value())
         break
@@ -138,6 +148,9 @@ export function parseControls(
       case 'target':
         ctl.targetUrl = value()
         break
+      case 'timeout':
+        ctl.timeoutMs = intFlag('timeout', value())
+        break
       case 'knob': {
         const kv = value()
         const eq = kv.indexOf('=')
@@ -150,12 +163,6 @@ export function parseControls(
         break
       case 'direct-answer':
         ctl.directAnswerUrl = value()
-        break
-      case 'judge-model':
-        ctl.judgeModel = value()
-        break
-      case 'judge-base-url':
-        ctl.judgeBaseUrl = value()
         break
       default:
         fail(`unknown flag --${flag} (stage: ${stage})`)

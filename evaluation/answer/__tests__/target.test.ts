@@ -153,6 +153,36 @@ describe('gatewayTarget', () => {
     await close(server)
   })
 
+  it('answer runs under the 300s synthesis budget with NO retry (a timed-out synthesis is already billed)', async () => {
+    const opts: any[] = []
+    const http = (async (_url: string, o: any) => {
+      opts.push(o)
+      return {
+        status: 200,
+        ok: true,
+        text: '{}',
+        json: { ok: true, synthesis: { sentences: [], cites: [] } },
+        wallMs: 1,
+      }
+    }) as unknown as typeof fetchJson
+    await gatewayTarget('http://gw', http).answer('q', [], {})
+    await directTarget('http://s', 'http://app', http).answer('q', [], {})
+    expect(opts.map((o) => [o.timeoutMs, o.retries])).toEqual([
+      [300_000, 0],
+      [300_000, 0],
+    ])
+    // --timeout override reaches both transports.
+    await gatewayTarget('http://gw', http, { answerTimeoutMs: 5 }).answer(
+      'q',
+      [],
+      {},
+    )
+    await directTarget('http://s', 'http://app', http, {
+      answerTimeoutMs: 7,
+    }).answer('q', [], {})
+    expect(opts.slice(2).map((o) => o.timeoutMs)).toEqual([5, 7])
+  })
+
   it('answer defaults cites to empty arrays on a fallback response with no cites', async () => {
     const server = http.createServer((_req, res) => {
       respondJson(res, 200, {

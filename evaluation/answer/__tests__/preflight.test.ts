@@ -51,7 +51,18 @@ interface FakeApp {
   answerCalls: any[]
   chunkTexts: string[]
   answerStatus: number
+  /** When set, /api/answer replies ok:true with the route's fallback shape. */
+  answerFallback?: string
+  /** usage.total_usd reported on every retrieval call (null = none). */
+  retrievalUsd: number | null
 }
+
+// Registry teardown: a failed assertion skips the test's own close(), and a
+// still-listening server with idle keep-alive sockets wedges jest's exit.
+const openServers: http.Server[] = []
+afterEach(async () => {
+  while (openServers.length > 0) await close(openServers.pop()!)
+})
 
 /** Fake deployed app: /api/catalog, /api/llamaindex, /api/answer on 127.0.0.1. */
 async function startFakeApp(catalog: string[]): Promise<FakeApp> {
@@ -62,6 +73,7 @@ async function startFakeApp(catalog: string[]): Promise<FakeApp> {
     answerCalls: [],
     chunkTexts: [CHUNK_TEXT],
     answerStatus: 200,
+    retrievalUsd: null,
   }
   app.server = http.createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/api/catalog') {
@@ -83,13 +95,25 @@ async function startFakeApp(catalog: string[]): Promise<FakeApp> {
           })),
           likely_off_topic: false,
           debug: { total_ms: 1 },
-          usage: null,
+          usage:
+            app.retrievalUsd === null ? null : { total_usd: app.retrievalUsd },
         })
       })
     } else if (req.method === 'POST' && req.url === '/api/answer') {
       readJsonBody(req, (b) => {
         app.answerCalls.push(b)
-        if (app.answerStatus === 200) {
+        if (app.answerFallback) {
+          // route.ts fallback: HTTP 200, ok:true, canned text, no cites.
+          respondJson(res, 200, {
+            ok: true,
+            synthesis: {
+              sentences: ['Answer synthesis is temporarily unavailable.'],
+              cites: [[]],
+            },
+            passages_sent: [],
+            debug: { fallbackReason: app.answerFallback },
+          })
+        } else if (app.answerStatus === 200) {
           respondJson(res, 200, {
             ok: true,
             synthesis: { sentences: ['probe ok'], cites: [[]] },
@@ -108,6 +132,7 @@ async function startFakeApp(catalog: string[]): Promise<FakeApp> {
     }
   })
   app.url = await listen(app.server)
+  openServers.push(app.server)
   return app
 }
 
@@ -127,7 +152,9 @@ async function startFakeJudge(
       }
     })
   })
-  return { url: await listen(server), server, calls }
+  const url = await listen(server)
+  openServers.push(server)
+  return { url, server, calls }
 }
 
 describe('preflight', () => {
@@ -155,13 +182,19 @@ describe('preflight', () => {
       estimated_calls: { retrieval: 4, synthesis: 4, judge: 18 },
     })
     // Snippet validation: one cite_doc_ids retrieval for case1's doc_a, with
-    // max_results raised past the preset so all chunks of the doc return.
+    // the reranker OFF (its top_n and per-doc cap would truncate the doc's
+    // chunk list — and they are the knobs the sweeps flip) and every pool
+    // widened so the doc's chunks all return.
     expect(app.retrievalCalls).toEqual([
       {
         query: 'What is the projected market penetration rate?',
         mode: 'answer',
         cite_doc_ids: ['doc_a'],
-        max_results: 150,
+        rerank: false,
+        vector_top_k: 300,
+        bm25_top_k: 300,
+        fusion_top_k: 300,
+        max_results: 300,
       },
     ])
     // Synthesis probe: minimal ping with capped knobs.
@@ -181,6 +214,75 @@ describe('preflight', () => {
     ])
     await close(app.server)
     await close(judge.server)
+  })
+
+  it('synthesis probe carries the run\'s provider knobs (model, base_url, prompt_version) but keeps its own size caps', async () => {
+    const app = await startFakeApp(['doc_a', 'doc_twin', 'doc_c'])
+    const target = gatewayTarget(app.url, fetchJson)
+    const report = await preflight({
+      evalset,
+      target,
+      passes: 1,
+      synthesisKnobs: {
+        model: 'candidate-model',
+        base_url: 'http://candidate/v1',
+        prompt_version: 'v1',
+        max_passages: 12,
+        passage_chars: 800,
+      },
+    })
+    expect(report.synthesis_probe_ok).toBe(true)
+    expect(app.answerCalls).toEqual([
+      expect.objectContaining({
+        query: 'ping',
+        model: 'candidate-model',
+        base_url: 'http://candidate/v1',
+        prompt_version: 'v1',
+        max_passages: 1,
+        passage_chars: 50,
+      }),
+    ])
+    await close(app.server)
+  })
+
+  it('synthesis probe FAILS when the route answers with a fallback (ok:true + debug.fallbackReason)', async () => {
+    const app = await startFakeApp(['doc_a', 'doc_twin', 'doc_c'])
+    app.answerFallback = 'no_api_key'
+    const judge = await startFakeJudge(200)
+    const target = gatewayTarget(app.url, fetchJson)
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    let report
+    try {
+      report = await preflight({
+        evalset,
+        target,
+        judgeCfg: { model: 'm', baseUrl: judge.url },
+        passes: 1,
+      })
+    } finally {
+      errSpy.mockRestore()
+    }
+    expect(report.synthesis_probe_ok).toBe(false)
+    expect(report.judge_probe_ok).toBe(false)
+    expect(judge.calls).toEqual([])
+    await close(app.server)
+    await close(judge.server)
+  })
+
+  it('prints the retrieval spend of the snippet lookups', async () => {
+    const app = await startFakeApp(['doc_a', 'doc_twin', 'doc_c'])
+    app.retrievalUsd = 0.02
+    const target = gatewayTarget(app.url, fetchJson)
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    let logged = ''
+    try {
+      await preflight({ evalset, target, passes: 1 })
+      logged = logSpy.mock.calls.map((c) => c.join(' ')).join('\n')
+    } finally {
+      logSpy.mockRestore()
+    }
+    expect(logged).toContain('retrieval spend $0.0200')
+    await close(app.server)
   })
 
   it('lists a missing expected doc and aborts before any synthesis or judge call', async () => {

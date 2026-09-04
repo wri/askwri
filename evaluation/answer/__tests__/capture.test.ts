@@ -62,6 +62,8 @@ interface FakeGateway {
   retrievalStatusFor: (query: string) => number
   /** Transport-level failure: destroy the socket instead of replying. */
   destroyAnswerFor: (query: string) => boolean
+  /** route.ts fallback shape (HTTP 200, ok:true, debug.fallbackReason). */
+  answerFallbackFor: (query: string) => string | undefined
   catalog: string[]
 }
 
@@ -77,6 +79,7 @@ async function startFakeGateway(catalog: string[]): Promise<FakeGateway> {
     answerStatusFor: () => 200,
     retrievalStatusFor: () => 200,
     destroyAnswerFor: () => false,
+    answerFallbackFor: () => undefined,
     catalog,
   }
   gw.server = http.createServer((req, res) => {
@@ -118,8 +121,22 @@ async function startFakeGateway(catalog: string[]): Promise<FakeGateway> {
           req.socket.destroy()
           return
         }
+        const fallback = gw.answerFallbackFor(b.query)
         const status = gw.answerStatusFor(b.query)
-        if (status === 200) {
+        if (fallback) {
+          respondJson(res, 200, {
+            ok: true,
+            synthesis: {
+              sentences: ['Answer synthesis is temporarily unavailable.'],
+              cites: [[]],
+            },
+            passages_sent: [],
+            debug: {
+              knobs: { model: 'fake-model', base_url: 'http://fake/v1' },
+              fallbackReason: fallback,
+            },
+          })
+        } else if (status === 200) {
           respondJson(res, 200, {
             ok: true,
             synthesis: {
@@ -164,8 +181,16 @@ afterEach(async () => {
   }
 })
 
+/** Clean tree: `status --porcelain` is empty. */
 const stubGit = (args: string[]) =>
-  args.join(' ').includes('eval-review') ? 'fixturesha0000' : 'harnesssha0000'
+  args[0] === 'status'
+    ? ''
+    : args.join(' ').includes('eval-review')
+      ? 'fixturesha0000'
+      : 'harnesssha0000'
+/** Dirty tree: one modified file. */
+const dirtyGit = (args: string[]) =>
+  args[0] === 'status' ? ' M evaluation/answer/score.ts\n' : stubGit(args)
 
 const stubNow = () => new Date('2026-09-05T12:00:00Z')
 
@@ -319,6 +344,109 @@ describe('runCapture', () => {
     expect(artifact.provenance.passes).toBe(2)
     expect(artifact.provenance.timestamp).toBe('2026-09-05T12:00:00.000Z')
     expect(artifact.provenance.node_version).toBe(process.version)
+    await close(gw.server)
+  })
+
+  it('records the evalset path absolute (a cwd-relative path would not survive run-score from elsewhere) and marks a dirty tree', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    const esPath = writeEvalsetTo(makeEvalset())
+    const relative = path.relative(process.cwd(), esPath)
+    expect(path.isAbsolute(relative)).toBe(false)
+    const artifact = await runCapture(controlsFor(gw.url, relative), {
+      http: fetchJson,
+      git: dirtyGit,
+      now: stubNow,
+    })
+    expect(artifact.provenance.fixture.path).toBe(esPath)
+    expect(artifact.provenance.harness_sha).toBe('harnesssha0000-dirty')
+    await close(gw.server)
+  })
+
+  it('forwards the run\'s synthesis knobs to the preflight probe', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    const esPath = writeEvalsetTo(makeEvalset())
+    await runCapture(
+      controlsFor(
+        gw.url,
+        esPath,
+        '--knob',
+        'model=candidate',
+        '--knob',
+        'base_url=http://cand/v1',
+      ),
+      { http: fetchJson, git: stubGit, now: stubNow },
+    )
+    const probe = gw.answerCalls.find((b) => b.query === 'ping')
+    expect(probe).toMatchObject({
+      model: 'candidate',
+      base_url: 'http://cand/v1',
+      max_passages: 1,
+    })
+    await close(gw.server)
+  })
+
+  it('marks route infrastructure fallbacks (no_api_key/api_error/exception) as answer errors; no_valid_sentences stays scored', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    gw.answerFallbackFor = (q) =>
+      q === 'What about trucks?'
+        ? 'api_error'
+        : q === 'Anything on hydrogen?'
+          ? 'no_valid_sentences'
+          : undefined
+    const esPath = writeEvalsetTo(makeEvalset())
+    const artifact = await runCapture(controlsFor(gw.url, esPath), {
+      http: fetchJson,
+      git: stubGit,
+      now: stubNow,
+    })
+    const q1 = artifact.cases.find((c) => c.case_id === 'q1')!
+    expect(q1.passes[0].answer.error).toBe('synthesis fallback: api_error')
+    expect(q1.passes[0].answer.fallback_reason).toBe('api_error')
+    // The canned text is kept for the record but never judged/scored.
+    expect(q1.passes[0].answer.sentences).toEqual([
+      'Answer synthesis is temporarily unavailable.',
+    ])
+    const q2 = artifact.cases.find((c) => c.case_id === 'q2')!
+    expect(q2.passes[0].answer.error).toBeUndefined()
+    expect(q2.passes[0].answer.fallback_reason).toBe('no_valid_sentences')
+    // q2's provider DID answer, so its debug.knobs define the effective
+    // config; an infrastructure fallback alone (q1 only) never does.
+    expect(artifact.provenance.synthesis.model).toBe('fake-model')
+    const onlyQ1 = await runCapture(
+      controlsFor(gw.url, esPath, '--only', 'q1'),
+      { http: fetchJson, git: stubGit, now: stubNow },
+    )
+    expect(onlyQ1.provenance.synthesis.model).toBe('')
+    await close(gw.server)
+  })
+
+  it('--skip drops the named cases before preflight and capture', async () => {
+    const gw = await startFakeGateway(['doc_a']) // doc_b missing → q2 would abort
+    const esPath = writeEvalsetTo(makeEvalset())
+    const artifact = await runCapture(
+      controlsFor(gw.url, esPath, '--skip', 'q2'),
+      { http: fetchJson, git: stubGit, now: stubNow },
+    )
+    expect(artifact.cases.map((c) => c.case_id)).toEqual(['q1'])
+    expect(artifact.preflight.corpus_ok).toBe(true)
+    await close(gw.server)
+  })
+
+  it('checkpoints the partial artifact after every case', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    const esPath = writeEvalsetTo(makeEvalset())
+    const checkpoints: string[][] = []
+    await runCapture(controlsFor(gw.url, esPath), {
+      http: fetchJson,
+      git: stubGit,
+      now: stubNow,
+      checkpoint: (partial) => {
+        expect(partial.schema).toBe('answer-eval/capture@1')
+        expect(partial.provenance.harness_sha).toBe('harnesssha0000')
+        checkpoints.push(partial.cases.map((c) => c.case_id))
+      },
+    })
+    expect(checkpoints).toEqual([['q1'], ['q1', 'q2']])
     await close(gw.server)
   })
 

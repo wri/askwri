@@ -3,7 +3,9 @@
  * record everything the judge/score stages consume. Preflight runs first and
  * its report is embedded in the artifact (the pure scorer's only source of
  * corpus attainability); when it fails, the run aborts BEFORE any
- * capture-pass retrieve/answer call.
+ * capture-pass retrieve/answer call. The partial artifact is checkpointed
+ * after every case so an unexpected throw mid-run cannot discard the paid
+ * captures around it.
  */
 import { execFileSync } from 'child_process'
 import * as crypto from 'crypto'
@@ -40,6 +42,14 @@ const PROMPT_HASHES: Record<string, string> = {
   v2: sha256(SYS_V2),
 }
 
+/** Route fallbacks that mean the provider never produced an answer. The pass
+ * is recorded with its canned text but marked as an error so the judge
+ * spends nothing on it and the scorer excludes it — a provider outage must
+ * read as excluded passes, not as a synthesis regression. `no_valid_sentences`
+ * is deliberately absent: the model answered and its answer was unusable,
+ * which IS synthesis quality. */
+const INFRA_FALLBACKS = new Set(['no_api_key', 'api_error', 'exception'])
+
 const REPO_ROOT = path.resolve(__dirname, '..', '..')
 
 /** Default git shim: run git in the harness's worktree. */
@@ -51,6 +61,8 @@ export interface CaptureDeps {
   /** Test seam for provenance; default runs `git` in the harness worktree. */
   git?: (args: string[]) => string
   now?: () => Date
+  /** Called with the partial artifact after every completed case. */
+  checkpoint?: (partial: CaptureArtifact) => void
 }
 
 /** Preflight failed — the run must not spend any capture-pass call. Carries
@@ -75,16 +87,28 @@ function fixtureCommit(git: (args: string[]) => string): string {
   }
 }
 
+/** HEAD sha, suffixed `-dirty` when the tree has uncommitted changes — a
+ * capture from a dirty tree is not reproducible from its recorded sha. */
+function harnessSha(git: (args: string[]) => string): string {
+  const sha = git(['rev-parse', 'HEAD']).trim()
+  const dirty = git(['status', '--porcelain']).trim().length > 0
+  return dirty ? `${sha}-dirty` : sha
+}
+
 function buildTarget(ctl: Controls, http: typeof fetchJson): TargetClient {
+  const opts = { answerTimeoutMs: ctl.timeoutMs }
   return ctl.directSearchUrl
-    ? directTarget(ctl.directSearchUrl, ctl.directAnswerUrl!, http)
-    : gatewayTarget(ctl.targetUrl, http)
+    ? directTarget(ctl.directSearchUrl, ctl.directAnswerUrl!, http, opts)
+    : gatewayTarget(ctl.targetUrl, http, opts)
 }
 
 function selectCases(evalset: Evalset, ctl: Controls): FixtureCase[] {
   let cases = evalset.test_cases
   if (ctl.only.length > 0) {
     cases = cases.filter((c) => ctl.only.includes(c.id))
+  }
+  if (ctl.skip.length > 0) {
+    cases = cases.filter((c) => !ctl.skip.includes(c.id))
   }
   if (ctl.limit !== undefined) {
     cases = cases.slice(0, ctl.limit)
@@ -102,7 +126,7 @@ function abortMessage(evalset: Evalset, report: PreflightReport): string {
       .map((c) => c.id)
     lines.push(
       `  corpus: docs missing from the target's catalog: ${report.missing_docs.join(', ')} ` +
-        `(cases: ${cases.join(', ')})`,
+        `(cases: ${cases.join(', ')}) — drop them for this run with --skip <case>`,
     )
   }
   if (!report.twins_ok) {
@@ -176,9 +200,9 @@ async function runPass(
     knobs.likely_off_topic = ret.likely_off_topic
 
   const ansStart = Date.now()
-  // Transport-level throw (timeout after retry, network error) mirrors the
-  // retrieval guard: record `answer.error`, keep the run alive — a dead
-  // socket mid-run must not discard the paid capture data around it.
+  // Transport-level throw (timeout, network error) mirrors the retrieval
+  // guard: record `answer.error`, keep the run alive — a dead socket mid-run
+  // must not discard the paid capture data around it.
   let ans: Awaited<ReturnType<TargetClient['answer']>>
   try {
     ans = await target.answer(c.question, ret.docs, knobs)
@@ -200,6 +224,12 @@ async function runPass(
       },
     }
   }
+  const fallback: string | undefined = ans.debug?.fallbackReason
+  const error = !ans.ok
+    ? (ans.error ?? `status ${ans.status}`)
+    : INFRA_FALLBACKS.has(fallback ?? '')
+      ? `synthesis fallback: ${fallback}`
+      : undefined
   const answer: PassCapture['answer'] = {
     knobs,
     passages_sent: ans.passages_sent,
@@ -213,9 +243,9 @@ async function runPass(
     warning: ans.synthesis?.warning,
     low_coverage: ans.synthesis?.warning === 'low_coverage',
     invalid_cites: ans.debug?.invalid_cites ?? 0,
-    fallback_reason: ans.debug?.fallbackReason,
+    fallback_reason: fallback,
     wall_ms: Date.now() - ansStart,
-    ...(ans.ok ? {} : { error: ans.error ?? `status ${ans.status}` }),
+    ...(error ? { error } : {}),
   }
   return {
     capture: {
@@ -229,9 +259,14 @@ async function runPass(
       },
       answer,
     },
-    debugKnobs: ans.ok
-      ? { model: ans.debug?.knobs?.model, base_url: ans.debug?.knobs?.base_url }
-      : undefined,
+    // A fallback pass never defines the EFFECTIVE synthesis config.
+    debugKnobs:
+      ans.ok && !error
+        ? {
+            model: ans.debug?.knobs?.model,
+            base_url: ans.debug?.knobs?.base_url,
+          }
+        : undefined,
   }
 }
 
@@ -243,17 +278,22 @@ export async function runCapture(
   const now = deps.now ?? (() => new Date())
   const evalset = loadEvalset(ctl.evalsetPath)
 
-  // A --only id that matches nothing would silently capture zero cases.
-  const unknown = ctl.only.filter(
-    (id) => !evalset.test_cases.some((c) => c.id === id),
-  )
-  if (unknown.length > 0) {
-    throw new Error(`--only names unknown case id(s): ${unknown.join(', ')}`)
+  // A --only/--skip id that matches nothing would silently do nothing.
+  for (const [flag, ids] of [
+    ['--only', ctl.only],
+    ['--skip', ctl.skip],
+  ] as const) {
+    const unknown = ids.filter(
+      (id) => !evalset.test_cases.some((c) => c.id === id),
+    )
+    if (unknown.length > 0) {
+      throw new Error(`${flag} names unknown case id(s): ${unknown.join(', ')}`)
+    }
   }
 
   const target = buildTarget(ctl, deps.http)
-  // Select BEFORE preflight (--only filter, --limit slice): the abort gate
-  // and the call estimate must cover exactly the cases this run will
+  // Select BEFORE preflight (--only/--skip filter, --limit slice): the abort
+  // gate and the call estimate must cover exactly the cases this run will
   // capture — a missing doc in a later, unselected case must neither abort
   // a --limit partial run nor inflate the estimate.
   const selected = selectCases(evalset, ctl)
@@ -261,6 +301,7 @@ export async function runCapture(
     evalset: { ...evalset, test_cases: selected },
     target,
     passes: ctl.passes,
+    synthesisKnobs: ctl.synthesisKnobs,
   })
 
   // Abort gate (binding, Task 4 review): a run preflight already knows is
@@ -279,8 +320,49 @@ export async function runCapture(
   }
 
   const health = await target.health()
-  const caseCaptures: CaseCapture[] = new Array(selected.length)
-  // EFFECTIVE synthesis config: the first successful answer's debug.knobs.
+  // Provenance is assembled up front so every checkpoint carries it; the
+  // EFFECTIVE synthesis model/base_url (the first successful answer's
+  // debug.knobs) is patched in as soon as it is known.
+  const provenance: Provenance = {
+    fixture: {
+      // Absolute: a cwd-relative path would not survive run-score/compare
+      // being invoked from another directory.
+      path: path.resolve(ctl.evalsetPath),
+      name: evalset.name,
+      commit: fixtureCommit(git),
+    },
+    target: {
+      mode: target.mode,
+      urls: ctl.directSearchUrl
+        ? [ctl.directSearchUrl, ctl.directAnswerUrl!]
+        : [ctl.targetUrl],
+      config: health,
+    },
+    knobs: {
+      retrieval: ctl.retrievalKnobs,
+      synthesis: ctl.synthesisKnobs,
+    },
+    synthesis: {
+      model: (ctl.synthesisKnobs.model as string) ?? '',
+      base_url: (ctl.synthesisKnobs.base_url as string) ?? '',
+      prompt_hashes: PROMPT_HASHES,
+    },
+    passes: ctl.passes,
+    harness_sha: harnessSha(git),
+    timestamp: now().toISOString(),
+    node_version: process.version,
+  }
+
+  const caseCaptures: Array<CaseCapture | undefined> = new Array(
+    selected.length,
+  )
+  const artifact = (): CaptureArtifact => ({
+    schema: 'answer-eval/capture@1',
+    provenance,
+    preflight: report,
+    cases: caseCaptures.filter((c): c is CaseCapture => c !== undefined),
+  })
+
   let effective: { model?: string; base_url?: string } | undefined
   let costTotal = 0
   let costReported = 0
@@ -294,9 +376,15 @@ export async function runCapture(
         costTotal += capture.retrieval.cost_usd
         costReported++
       }
-      if (!effective && debugKnobs) effective = debugKnobs
+      if (!effective && debugKnobs) {
+        effective = debugKnobs
+        if (effective.model) provenance.synthesis.model = effective.model
+        if (effective.base_url)
+          provenance.synthesis.base_url = effective.base_url
+      }
     }
     caseCaptures[index] = { case_id: c.id, fixture_case: c, passes }
+    deps.checkpoint?.(artifact())
   }
 
   // Sequential when concurrency is 1 (the default); otherwise a simple
@@ -313,35 +401,6 @@ export async function runCapture(
     ),
   )
 
-  const provenance: Provenance = {
-    fixture: {
-      path: ctl.evalsetPath,
-      name: evalset.name,
-      commit: fixtureCommit(git),
-    },
-    target: {
-      mode: target.mode,
-      urls: ctl.directSearchUrl
-        ? [ctl.directSearchUrl, ctl.directAnswerUrl!]
-        : [ctl.targetUrl],
-      config: health,
-    },
-    knobs: {
-      retrieval: ctl.retrievalKnobs,
-      synthesis: ctl.synthesisKnobs,
-    },
-    synthesis: {
-      model: effective?.model ?? (ctl.synthesisKnobs.model as string) ?? '',
-      base_url:
-        effective?.base_url ?? (ctl.synthesisKnobs.base_url as string) ?? '',
-      prompt_hashes: PROMPT_HASHES,
-    },
-    passes: ctl.passes,
-    harness_sha: git(['rev-parse', 'HEAD']).trim(),
-    timestamp: now().toISOString(),
-    node_version: process.version,
-  }
-
   if (costReported > 0) {
     console.log(
       `[capture] cost $${costTotal.toFixed(4)} total  ` +
@@ -350,15 +409,12 @@ export async function runCapture(
     )
   }
 
-  return {
-    schema: 'answer-eval/capture@1',
-    provenance,
-    preflight: report,
-    cases: caseCaptures,
-  }
+  return artifact()
 }
 
-/** Pretty-printed, stable key order. Returns the written file path. */
+/** Pretty-printed, stable key order, temp-file + rename so a reader (or a
+ * checkpoint interrupted mid-write) never sees a torn file. Returns the
+ * written file path. */
 export function writeCaptureArtifact(
   artifactsDir: string,
   label: string,
@@ -366,6 +422,8 @@ export function writeCaptureArtifact(
 ): string {
   fs.mkdirSync(artifactsDir, { recursive: true })
   const file = path.join(artifactsDir, `capture-${label}.json`)
-  fs.writeFileSync(file, JSON.stringify(artifact, null, 2) + '\n')
+  const tmp = `${file}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(artifact, null, 2) + '\n')
+  fs.renameSync(tmp, file)
   return file
 }
