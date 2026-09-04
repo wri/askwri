@@ -26,6 +26,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { averagePrecision } from '../lib/metrics'
+import { judgeHumanAgreement, validateLabelsAgainstCapture } from './labels'
 import { expectedIdsOf, isNegative, keyFactsOf, twinOf } from './fixture'
 import { langOf, snippetContained } from './normalize'
 import {
@@ -33,8 +34,10 @@ import {
   CaseCapture,
   Evalset,
   ExpectedPassage,
+  HumanLabels,
   JudgedArtifact,
   JudgedItem,
+  JudgeAgreement,
   PassCapture,
   Report,
   RetrievedChunk,
@@ -486,7 +489,34 @@ export function score(
   evalset: Evalset,
   capture: CaptureArtifact,
   judged: JudgedArtifact,
+  labels?: HumanLabels[],
 ): Report {
+  // §4.5 judge calibration: with labels, compute the judge-vs-human view ONCE
+  // and merge it into the header. Labels are pure inputs (replay stays
+  // byte-identical), and a label referencing a case/pass this capture does
+  // not contain is a hard error — every rejection reason is listed, never
+  // silently skipped.
+  let agreement: JudgeAgreement | undefined
+  if (labels) {
+    const rejected = labels
+      .map((l) => ({
+        file: l.capture_file,
+        v: validateLabelsAgainstCapture(l, capture),
+      }))
+      .filter((x) => !x.v.ok)
+    if (rejected.length > 0) {
+      const reasons = rejected
+        .map(
+          (x) => `${x.file}: ${(x.v as { ok: false; reason: string }).reason}`,
+        )
+        .join('; ')
+      throw new Error(
+        `labels invalid: ${rejected.length} of ${labels.length} label file(s) do not match this capture — ${reasons}`,
+      )
+    }
+    agreement = judgeHumanAgreement(judged, labels, capture)
+  }
+
   const ctx: ScoreCtx = {
     items: judged.items,
     missing: new Set(capture.preflight.missing_docs),
@@ -538,7 +568,14 @@ export function score(
   }
 
   const header = {
-    judge: 'uncalibrated', // §4.5 — no human labels exist yet
+    judge: agreement
+      ? {
+          calibrated: true,
+          labels: agreement.labels,
+          reviewers: agreement.reviewers,
+        }
+      : 'uncalibrated', // §4.5 — no human labels exist yet
+    ...(agreement ? { judge_agreement: agreement } : {}),
     judge_model: judged.provenance.judge?.model ?? '',
     fixture: capture.provenance.fixture,
     target: capture.provenance.target,

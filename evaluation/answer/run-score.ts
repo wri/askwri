@@ -4,6 +4,7 @@
  *
  *   npm run eval:answer-score -- --capture artifacts/capture-X.json
  *                              --judged artifacts/judged-X.json [--label name]
+ *                              [--labels <file-or-dir>]...  (§4.5 judge calibration)
  *
  * The evalset is re-loaded from the capture's recorded fixture path (twin
  * pairs live only there). The report lands in
@@ -14,10 +15,19 @@
  */
 import * as fs from 'fs'
 import * as path from 'path'
+import {
+  HumanLabels,
+  JudgeAgreement,
+  VerdictTally,
+  loadLabelsFrom,
+  validateLabelsAgainstCapture,
+} from './labels'
 import { loadEvalset } from './fixture'
 import { BlockReport, MetricMean, score, writeReportArtifact } from './score'
+import { CaptureArtifact } from './types'
 
-const USAGE = `usage: run-score --capture <capture-X.json> --judged <judged-X.json> [--label name]`
+const USAGE = `usage: run-score --capture <capture-X.json> --judged <judged-X.json>
+                 [--label name] [--labels <labels-file-or-dir>]...`
 
 function fail(msg: string): never {
   console.error(`run-score: ${msg}\n${USAGE}`)
@@ -38,6 +48,7 @@ function parseArgs(argv: string[]) {
   let capturePath: string | undefined
   let judgedPath: string | undefined
   let label: string | undefined
+  const labels: string[] = []
   for (let i = 0; i < args.length; i++) {
     if (!args[i].startsWith('--')) fail(`unexpected argument: ${args[i]}`)
     const flag = args[i].slice(2)
@@ -58,6 +69,9 @@ function parseArgs(argv: string[]) {
       case 'label':
         label = value()
         break
+      case 'labels':
+        labels.push(value())
+        break
       default:
         fail(`unknown flag --${flag}`)
     }
@@ -69,11 +83,67 @@ function parseArgs(argv: string[]) {
     label =
       base.match(/^capture-(.+)\.json$/)?.[1] ?? path.parse(capturePath).name
   }
-  return { capturePath, judgedPath, label }
+  return { capturePath, judgedPath, label, labels }
 }
 
 const fmtMean = (m: MetricMean): string =>
   m.mean === null ? 'n/a' : m.mean.toFixed(3)
+
+/** `agree/either (p%)` — `n/a` when the symmetric denominator is 0. */
+const fmtTally = (t: VerdictTally, verdict: string): string => {
+  const agree = t.agree[verdict] ?? 0
+  const either = t.either[verdict] ?? 0
+  const pct = either > 0 ? ((agree / either) * 100).toFixed(1) : 'n/a'
+  return `${agree}/${either} (${pct}%)`
+}
+
+/** §4.5 judge-calibration lines, printed only when labels were supplied. */
+function printJudgeAgreement(ag: JudgeAgreement): void {
+  console.log(
+    `[score] judge: calibrated against ${ag.labels} label file(s) ` +
+      `by reviewer(s): ${ag.reviewers.join(', ')}`,
+  )
+  const f = ag.fact_recall
+  const s = ag.sentence_support
+  const uc = ag.unsupported_claims
+  const ucPct =
+    uc.compared > 0 ? ((uc.agree / uc.compared) * 100).toFixed(1) : 'n/a'
+  console.log(
+    `[score] judge-vs-human: ` +
+      `fact stated ${fmtTally(f.stated, 'stated')}, ` +
+      `partial ${fmtTally(f.partial, 'partial')}, ` +
+      `absent ${fmtTally(f.absent, 'absent')}; ` +
+      `sentence supported ${fmtTally(s.supported, 'supported')}, ` +
+      `unsupported ${fmtTally(s.unsupported, 'unsupported')}; ` +
+      `unsupported_claims ${uc.agree}/${uc.compared} (${ucPct}%)`,
+  )
+}
+
+/** Load --labels paths (files or dirs) and validate every label against the
+ * capture — exit 2 listing every rejected file + reason, never skip. */
+function loadAndValidateLabels(
+  paths: string[],
+  capturePath: string,
+  capture: CaptureArtifact,
+): HumanLabels[] | undefined {
+  if (paths.length === 0) return undefined
+  const labels = loadLabelsFrom(paths)
+  const rejected = labels
+    .map((l) => ({
+      file: l.capture_file,
+      v: validateLabelsAgainstCapture(l, capture),
+    }))
+    .filter((x) => !x.v.ok)
+  if (rejected.length > 0) {
+    const reasons = rejected
+      .map((x) => `${x.file}: ${(x.v as { ok: false; reason: string }).reason}`)
+      .join('; ')
+    fail(
+      `${rejected.length} of ${labels.length} label file(s) do not match capture ${capturePath} — ${reasons}`,
+    )
+  }
+  return labels
+}
 
 function printBlock(name: string, b: BlockReport): void {
   console.log(`${name} — ${b.cases} case(s):`)
@@ -111,18 +181,25 @@ function main(): void {
   const capture = JSON.parse(fs.readFileSync(a.capturePath, 'utf8'))
   const judged = JSON.parse(fs.readFileSync(a.judgedPath, 'utf8'))
   const evalset = loadEvalset(capture.provenance.fixture.path)
+  const labels = loadAndValidateLabels(a.labels, a.capturePath, capture)
 
-  const report = score(evalset, capture, judged)
+  const report = score(evalset, capture, judged, labels)
   const file = writeReportArtifact(
     path.join(__dirname, 'artifacts'),
     a.label,
     report,
   )
 
-  console.log('[score] judge: uncalibrated (no human labels yet)')
+  const header = report.header as Record<string, any>
+  const agreement = header.judge_agreement as JudgeAgreement | undefined
+  if (agreement) {
+    printJudgeAgreement(agreement)
+  } else {
+    console.log('[score] judge: uncalibrated (no human labels yet)')
+  }
   printBlock('headline', report.headline as unknown as BlockReport)
   printBlock('draft', report.draft_block as unknown as BlockReport)
-  const h = report.header as Record<string, any>
+  const h = header
   const u = h.unjudged
   console.log(
     `[score] unjudged: ${u.total} (fact_recall ${u.fact_recall}, ` +
