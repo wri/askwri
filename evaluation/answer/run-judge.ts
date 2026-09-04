@@ -8,7 +8,9 @@
  * judged. The judge base URL defaults to $LUNAROUTE_BASE_URL and the API key
  * follows resolveProvider's rule (LUNAROUTE_API_KEY when the base URL matches
  * $LUNAROUTE_BASE_URL, else OPENAI_API_KEY). Exits 1 on judge 401 — the core
- * has already printed and persisted the partial artifact.
+ * has already printed and persisted the partial artifact — and when every
+ * item this run attempted came back unjudged (a misconfigured judge must not
+ * look like a clean run with an empty report).
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -100,8 +102,9 @@ async function main(): Promise<void> {
     path.dirname(a.capturePath),
     `judged-${a.label}.json`,
   )
+  let run
   try {
-    await runJudge({
+    run = await runJudge({
       capture,
       judgedPath,
       judgeModel: a.judgeModel,
@@ -114,6 +117,14 @@ async function main(): Promise<void> {
     throw e
   }
   console.log(`\nwrote ${judgedPath}`)
+  if (run.judged === 0 && run.unjudged > 0) {
+    console.error(
+      `run-judge: every item came back unjudged (${Object.entries(run.reasons)
+        .map(([k, v]) => `${k}×${v}`)
+        .join(', ')}) — check --judge-model / --judge-base-url before scoring`,
+    )
+    process.exit(1)
+  }
 }
 
 main().catch((e) => {

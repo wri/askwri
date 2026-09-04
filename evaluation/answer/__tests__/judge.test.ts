@@ -3,7 +3,7 @@ import * as fs from 'fs'
 import * as http from 'http'
 import * as os from 'os'
 import * as path from 'path'
-import { runJudge } from '../judge'
+import { captureFingerprint, runJudge } from '../judge'
 import { JudgeAuthError } from '../judge-client'
 import { FACT_RECALL_SYSTEM, PROMPT_HASHES } from '../judge-prompts'
 import {
@@ -201,11 +201,11 @@ const judgedPathIn = (): string => {
   return path.join(dir, 'judged-test.json')
 }
 
-const runOn = async (
+const runFull = async (
   s: JudgeServer,
   file: string,
   capture: CaptureArtifact,
-  extra: { only?: string[] } = {},
+  extra: { only?: string[]; judgeModel?: string } = {},
 ) =>
   runJudge({
     capture,
@@ -214,6 +214,13 @@ const runOn = async (
     judgeBaseUrl: s.url,
     ...extra,
   })
+
+const runOn = async (
+  s: JudgeServer,
+  file: string,
+  capture: CaptureArtifact,
+  extra: { only?: string[]; judgeModel?: string } = {},
+) => (await runFull(s, file, capture, extra)).artifact
 
 describe('runJudge', () => {
   it('judges the full item set per case × pass (zero-cite sentence excluded), with prompt_hash + judge_model on every verdict', async () => {
@@ -337,18 +344,20 @@ describe('runJudge', () => {
     expect(s.requests).toHaveLength(4)
   })
 
-  it('resumes: pre-judged items are skipped, only missing items hit the server', async () => {
+  it('resumes: pre-judged items (same capture, same judge, same prompt) are skipped, only missing items hit the server', async () => {
     const s = await startJudgeServer()
     const file = judgedPathIn()
+    const capture = makeCapture([makeCase('q1', ['f1'])])
     const prior: JudgedArtifact = {
       schema: 'answer-eval/judged@1',
       provenance: makeProvenance(),
+      capture_fingerprint: captureFingerprint(capture),
       usage: { prompt_tokens: 10, completion_tokens: 4, calls: 1 },
       items: {
         'q1|0|fact_recall:': {
           kind: 'fact_recall',
-          prompt_hash: 'prior',
-          judge_model: 'prior-model',
+          prompt_hash: PROMPT_HASHES.fact_recall,
+          judge_model: JUDGE_MODEL,
           verdicts: [
             { fact_index: 0, verdict: 'absent', evidence: 'prior evidence' },
           ],
@@ -358,8 +367,8 @@ describe('runJudge', () => {
           sentence_index: 0,
           verdict: 'unsupported',
           span: '',
-          prompt_hash: 'prior',
-          judge_model: 'prior-model',
+          prompt_hash: PROMPT_HASHES.sentence_support,
+          judge_model: JUDGE_MODEL,
         },
       },
     }
@@ -367,14 +376,14 @@ describe('runJudge', () => {
     const c = silenceConsole()
     let artifact
     try {
-      artifact = await runOn(s, file, makeCapture([makeCase('q1', ['f1'])]))
+      artifact = await runOn(s, file, capture)
     } finally {
       c.restore()
     }
     expect(s.requests).toHaveLength(6)
     expect(Object.keys(artifact.items)).toHaveLength(8)
+    expect(artifact.capture_fingerprint).toBe(captureFingerprint(capture))
     // Prior verdicts preserved verbatim.
-    expect(artifact.items['q1|0|fact_recall:'].judge_model).toBe('prior-model')
     expect(
       (artifact.items['q1|0|fact_recall:'] as FactRecallVerdicts).verdicts[0]
         .evidence,
@@ -387,12 +396,90 @@ describe('runJudge', () => {
     })
   })
 
-  it('retries an unjudged item left by an aborted run', async () => {
+  it('refuses to resume a judged artifact that judged a DIFFERENT capture (same label, re-captured)', async () => {
     const s = await startJudgeServer()
     const file = judgedPathIn()
+    const oldCapture = makeCapture([makeCase('q1', ['f1'])])
+    oldCapture.cases[0].passes[0].answer.sentences = ['old answer']
     const prior: JudgedArtifact = {
       schema: 'answer-eval/judged@1',
       provenance: makeProvenance(),
+      capture_fingerprint: captureFingerprint(oldCapture),
+      items: {},
+    }
+    fs.writeFileSync(file, JSON.stringify(prior))
+    await expect(
+      runOn(s, file, makeCapture([makeCase('q1', ['f1'])])),
+    ).rejects.toThrow(/different capture/)
+    expect(s.requests).toHaveLength(0)
+  })
+
+  it('re-judges items whose judge model or prompt hash differ from this run (never mixes judges in one artifact)', async () => {
+    const s = await startJudgeServer()
+    const file = judgedPathIn()
+    const capture = makeCapture([makeCase('q1', ['f1'])])
+    const prior: JudgedArtifact = {
+      schema: 'answer-eval/judged@1',
+      provenance: makeProvenance(),
+      capture_fingerprint: captureFingerprint(capture),
+      items: {
+        'q1|0|fact_recall:': {
+          kind: 'fact_recall',
+          prompt_hash: PROMPT_HASHES.fact_recall,
+          judge_model: 'other-judge',
+          verdicts: [{ fact_index: 0, verdict: 'absent', evidence: 'old' }],
+        },
+        'q1|0|sentence_support:0': {
+          kind: 'sentence_support',
+          sentence_index: 0,
+          verdict: 'unsupported',
+          span: '',
+          prompt_hash: 'stale-prompt-hash',
+          judge_model: JUDGE_MODEL,
+        },
+      },
+    }
+    fs.writeFileSync(file, JSON.stringify(prior))
+    const c = silenceConsole()
+    let artifact
+    try {
+      artifact = await runOn(s, file, capture)
+    } finally {
+      c.restore()
+    }
+    // Both stale items were re-judged: all 8 jobs hit the server.
+    expect(s.requests).toHaveLength(8)
+    expect(artifact.items['q1|0|fact_recall:'].judge_model).toBe(JUDGE_MODEL)
+    expect(artifact.items['q1|0|sentence_support:0'].prompt_hash).toBe(
+      PROMPT_HASHES.sentence_support,
+    )
+  })
+
+  it('reports the run: pending count up front, ok/unjudged totals with reasons at the end', async () => {
+    const s = await startJudgeServer()
+    const file = judgedPathIn()
+    const c = silenceConsole()
+    let run
+    try {
+      run = await runFull(s, file, makeCapture([makeCase('q1', ['f1'])]))
+    } finally {
+      c.restore()
+    }
+    expect(run.judged).toBe(8)
+    expect(run.unjudged).toBe(0)
+    expect(run.reasons).toEqual({})
+    expect(c.logs.some((l) => l.includes('8 item(s) to judge'))).toBe(true)
+    expect(c.logs.some((l) => l.includes('8 ok, 0 unjudged'))).toBe(true)
+  })
+
+  it('retries an unjudged item left by an aborted run', async () => {
+    const s = await startJudgeServer()
+    const file = judgedPathIn()
+    const capture = makeCapture([makeCase('q1', ['f1'])])
+    const prior: JudgedArtifact = {
+      schema: 'answer-eval/judged@1',
+      provenance: makeProvenance(),
+      capture_fingerprint: captureFingerprint(capture),
       items: {
         // Tombstone from an aborted run — must be retried.
         'q1|0|fact_recall:': {
@@ -407,7 +494,7 @@ describe('runJudge', () => {
     const c = silenceConsole()
     let artifact
     try {
-      artifact = await runOn(s, file, makeCapture([makeCase('q1', ['f1'])]))
+      artifact = await runOn(s, file, capture)
     } finally {
       c.restore()
     }

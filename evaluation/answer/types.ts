@@ -172,6 +172,10 @@ export type JudgedItem =
 export interface JudgedArtifact {
   schema: 'answer-eval/judged@1'
   provenance: Provenance
+  /** sha256 over the capture's cases. A resume against a different capture
+   * (same label, re-captured) is refused so stale keys never stand in for
+   * new answers. */
+  capture_fingerprint?: string
   items: Record<string, JudgedItem>
   /** Accumulated judge token usage across runs (a resume adds to it);
    * optional so pre-existing artifacts without it stay valid. */

@@ -84,6 +84,23 @@ describe('chatCompletion', () => {
     expect(r.json.choices[0].message.content).toBe('hi')
   })
 
+  it('forwards an abort signal to fetch so a caller timeout cancels the request', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200 }))
+    const signal = AbortSignal.timeout(10_000)
+    await chatCompletion({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-x',
+      body: {},
+      signal,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal }),
+    )
+  })
+
   it('returns {raw} json when the body is not JSON', async () => {
     jest
       .spyOn(global, 'fetch')

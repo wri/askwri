@@ -76,6 +76,9 @@ export async function chatCompletion(p: {
   baseUrl: string
   apiKey: string
   body: Record<string, unknown>
+  /** Optional abort signal (e.g. AbortSignal.timeout) — a caller-side
+   * timeout then cancels the request instead of leaving it in flight. */
+  signal?: AbortSignal
 }): Promise<ChatResult> {
   const r = await fetch(`${p.baseUrl}/chat/completions`, {
     method: 'POST',
@@ -84,6 +87,7 @@ export async function chatCompletion(p: {
       'content-type': 'application/json',
     },
     body: JSON.stringify(p.body),
+    ...(p.signal ? { signal: p.signal } : {}),
   })
   const text = await r.text()
   let json: any

@@ -1,11 +1,14 @@
 /**
  * Reliability wrapper around the app tier's single provider client (plan
  * §4.1/§4.3). The judge reuses `chatCompletion` — never its own fetch — so a
- * provider swap is a base-URL change. Policy: temperature 0, one
- * validation-repair retry, 429 backoff (initial request + up to 5
- * retries), one retry on
- * timeout/network/5xx, 401 aborts the run, everything else degrades to an
- * `unjudged` result so one bad case never kills the pass.
+ * provider swap is a base-URL change. Policy: temperature 0 (omitted for
+ * gpt-5* models, which reject it — route.ts parity), one validation-repair
+ * retry, 429 backoff (initial request + up to 5 retries), one retry on
+ * timeout/network/5xx, 401 aborts the run, any other 4xx is a config error
+ * and tombstones without a retry, everything else degrades to an `unjudged`
+ * result so one bad case never kills the pass. A timed-out request is
+ * ABORTED (AbortSignal.timeout threaded into the fetch), never left in
+ * flight and billing behind the retry.
  */
 import { createHash } from 'node:crypto'
 import { chatCompletion } from '../../src/lib/llm/chat-completions'
@@ -54,11 +57,12 @@ const DEFAULT_TIMEOUT_MS = 300_000
 /** 429 backoff: 1, 2, 4, 8, 16 seconds between the initial request and its
  * 5 retries (spec §4.3: "max 5" counts retries, not total requests). */
 const MAX_429_RETRIES = 5
+const MAX_TOKENS = 2000
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 
 interface ChatMessage {
-  role: 'system' | 'user'
+  role: 'system' | 'user' | 'assistant'
   content: string
 }
 
@@ -67,27 +71,22 @@ type TransportResult =
   | { kind: 'content'; content: string; usage?: JudgeUsage }
   | { kind: 'failed'; reason: string; raw: string }
 
-/**
- * Promise.race a call against its timeout. The losing promise keeps a
- * handler from the race, so a late rejection (e.g. socket reset when the
- * test server closes) can never surface as an unhandled rejection.
- */
-function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-): Promise<{ timedOut: boolean; value?: T }> {
-  let timer: ReturnType<typeof setTimeout>
-  const timeoutP = new Promise<{ timedOut: boolean }>((resolve) => {
-    timer = setTimeout(() => resolve({ timedOut: true }), ms)
-    ;(timer as unknown as { unref?: () => void }).unref?.()
-  })
-  return Promise.race([
-    promise.then((value) => {
-      clearTimeout(timer)
-      return { timedOut: false, value }
-    }),
-    timeoutP,
-  ])
+/** Abort fired (AbortSignal.timeout) — classified by name, not instanceof
+ * (undici wraps some aborts as TypeError with the DOMException in .cause). */
+function isAbortError(e: unknown): boolean {
+  let cur: any = e
+  for (let i = 0; i < 3 && cur; i++) {
+    if (cur.name === 'TimeoutError' || cur.name === 'AbortError') return true
+    cur = cur.cause
+  }
+  return false
+}
+
+/** Mirror of route.ts: gpt-5* takes max_completion_tokens and no temperature. */
+function completionParams(model: string): Record<string, unknown> {
+  return /^gpt-5/i.test(model)
+    ? { max_completion_tokens: MAX_TOKENS }
+    : { temperature: 0, max_tokens: MAX_TOKENS }
 }
 
 /** One logical judge call with all transport-level retries applied. */
@@ -105,20 +104,18 @@ async function transport(p: {
   for (;;) {
     let res
     try {
-      const raced = await withTimeout(
-        chatCompletion({
-          baseUrl: p.baseUrl,
-          apiKey: p.apiKey,
-          body: {
-            model: p.judgeModel,
-            messages: p.messages,
-            temperature: 0,
-            max_tokens: 2000,
-          },
-        }),
-        p.timeoutMs,
-      )
-      if (raced.timedOut) {
+      res = await chatCompletion({
+        baseUrl: p.baseUrl,
+        apiKey: p.apiKey,
+        body: {
+          model: p.judgeModel,
+          messages: p.messages,
+          ...completionParams(p.judgeModel),
+        },
+        signal: AbortSignal.timeout(p.timeoutMs),
+      })
+    } catch (e) {
+      if (isAbortError(e)) {
         timeouts++
         if (timeouts > 1)
           return {
@@ -128,8 +125,6 @@ async function transport(p: {
           }
         continue
       }
-      res = raced.value
-    } catch (e) {
       network++
       if (network > 1)
         return { kind: 'failed', reason: 'network', raw: String(e) }
@@ -142,6 +137,12 @@ async function transport(p: {
         return { kind: 'failed', reason: 'rate_limited', raw: res.text }
       await p.sleep(2 ** (rateLimited - 1) * 1000)
       continue
+    }
+    if (res.status >= 400 && res.status < 500) {
+      // A request the provider rejected (bad model, bad parameter) will be
+      // rejected again — no retry; the status in the reason makes a config
+      // error distinguishable from an outage in the run summary.
+      return { kind: 'failed', reason: `http_${res.status}`, raw: res.text }
     }
     if (!res.ok) {
       network++
@@ -197,10 +198,14 @@ export async function judgeCall<T>(
     if (!(verdict instanceof Error)) {
       return { ok: true, verdict, prompt_hash, judge_model, usage: res.usage }
     }
-    messages.push({
-      role: 'user',
-      content: `${raw}\n\nThat reply failed validation: ${verdict.message}. Reply with JSON only, matching the schema.`,
-    })
+    // The failed reply goes back as the model's own turn, the error as ours.
+    messages.push(
+      { role: 'assistant', content: raw },
+      {
+        role: 'user',
+        content: `That reply failed validation: ${verdict.message}. Reply with JSON only, matching the schema.`,
+      },
+    )
   }
   return unjudged('validation', raw)
 }

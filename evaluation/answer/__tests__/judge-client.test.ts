@@ -44,13 +44,19 @@ interface ScriptedReply {
 interface ScriptedServer {
   requests: any[]
   server: http.Server
+  /** Requests whose connection the CLIENT closed before a reply was sent. */
+  aborted: { n: number }
 }
 
 /** Fake judge provider on 127.0.0.1 with a scripted reply sequence. */
 function startJudgeServer(script: ScriptedReply[]): ScriptedServer {
   const requests: any[] = []
+  const aborted = { n: 0 }
   let n = 0
   const server = http.createServer((req, res) => {
+    res.on('close', () => {
+      if (!res.writableFinished) aborted.n++
+    })
     readJsonBody(req, (body) => {
       requests.push(body)
       const reply = script[Math.min(n, script.length - 1)]
@@ -71,7 +77,7 @@ function startJudgeServer(script: ScriptedReply[]): ScriptedServer {
       else respond()
     })
   })
-  return { requests, server }
+  return { requests, server, aborted }
 }
 
 interface RunResult {
@@ -80,15 +86,16 @@ interface RunResult {
   requests: any[]
   sleepCalls: number[]
   elapsedMs: number
+  aborted: number
 }
 
 /** Start the fake server, run one judgeCall against it, close it. */
 async function runJudge(
   script: ScriptedReply[],
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; judgeModel?: string } = {},
 ): Promise<RunResult> {
   const sleepCalls: number[] = []
-  const { requests, server } = startJudgeServer(script)
+  const { requests, server, aborted } = startJudgeServer(script)
   const url = await listen(server)
   const t0 = Date.now()
   let result: JudgeOk<unknown> | JudgeUnjudged | undefined
@@ -98,7 +105,7 @@ async function runJudge(
       system: SYSTEM,
       user: USER,
       validate,
-      judgeModel: JUDGE_MODEL,
+      judgeModel: opts.judgeModel ?? JUDGE_MODEL,
       baseUrl: url,
       apiKey: 'test-key',
       timeoutMs: opts.timeoutMs,
@@ -117,6 +124,7 @@ async function runJudge(
     requests,
     sleepCalls,
     elapsedMs: Date.now() - t0,
+    aborted: aborted.n,
   }
 }
 
@@ -147,7 +155,18 @@ describe('judgeCall', () => {
     ])
   })
 
-  it('retries once on invalid JSON, appending the validation error', async () => {
+  it('gpt-5* judge models get max_completion_tokens and no temperature (route.ts parity)', async () => {
+    const r = await runJudge([{ content: VALID_REPLY }], {
+      judgeModel: 'gpt-5.6',
+    })
+    expect(r.result!.ok).toBe(true)
+    expect(r.requests[0].model).toBe('gpt-5.6')
+    expect(r.requests[0].max_completion_tokens).toBe(2000)
+    expect(r.requests[0]).not.toHaveProperty('temperature')
+    expect(r.requests[0]).not.toHaveProperty('max_tokens')
+  })
+
+  it('retries once on invalid JSON: the failed reply goes back as an assistant turn, the error as a user turn', async () => {
     const r = await runJudge([
       { content: 'not json {' },
       { content: VALID_REPLY },
@@ -155,11 +174,11 @@ describe('judgeCall', () => {
     expect(r.result!.ok).toBe(true)
     expect(r.requests).toHaveLength(2)
     const msgs = r.requests[1].messages
-    expect(msgs).toHaveLength(3)
-    expect(msgs[2].role).toBe('user')
-    expect(msgs[2].content).toContain('not json {')
-    expect(msgs[2].content).toContain('That reply failed validation')
-    expect(msgs[2].content).toContain('Reply with JSON only')
+    expect(msgs).toHaveLength(4)
+    expect(msgs[2]).toEqual({ role: 'assistant', content: 'not json {' })
+    expect(msgs[3].role).toBe('user')
+    expect(msgs[3].content).toContain('That reply failed validation')
+    expect(msgs[3].content).toContain('Reply with JSON only')
   })
 
   it('retries once on a validator failure (wrong enum)', async () => {
@@ -171,7 +190,7 @@ describe('judgeCall', () => {
     })
     const r = await runJudge([{ content: bad }, { content: VALID_REPLY }])
     expect(r.result!.ok).toBe(true)
-    expect(r.requests[1].messages[2].content).toContain(
+    expect(r.requests[1].messages[3].content).toContain(
       'That reply failed validation',
     )
   })
@@ -220,7 +239,7 @@ describe('judgeCall', () => {
     expect(r.sleepCalls).toEqual([1000, 2000, 4000, 8000, 16000])
   })
 
-  it('retries once after a timeout, then succeeds', async () => {
+  it('retries once after a timeout, then succeeds — and the timed-out request is ABORTED, not left in flight', async () => {
     const r = await runJudge(
       [{ content: VALID_REPLY, delayMs: 200 }, { content: VALID_REPLY }],
       { timeoutMs: 50 },
@@ -230,6 +249,19 @@ describe('judgeCall', () => {
     // the first attempt timed out (>= 50ms) but we never waited out the 200ms server delay
     expect(r.elapsedMs).toBeGreaterThanOrEqual(50)
     expect(r.elapsedMs).toBeLessThan(200)
+    // The server saw the first connection close before it could reply: the
+    // timeout aborted the fetch instead of racing past it.
+    expect(r.aborted).toBe(1)
+  })
+
+  it('does not retry a 4xx other than 401/429 — one request, tombstoned with the status', async () => {
+    const r = await runJudge([{ status: 400 }, { content: VALID_REPLY }])
+    expect(r.result!.ok).toBe(false)
+    if (!r.result!.ok) {
+      expect(r.result!.unjudged.reason).toBe('http_400')
+      expect(r.result!.unjudged.raw).toContain('scripted failure')
+    }
+    expect(r.requests).toHaveLength(1)
   })
 
   it('returns unjudged timeout after two timeouts', async () => {

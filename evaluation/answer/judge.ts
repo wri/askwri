@@ -4,7 +4,14 @@
  * rewritten (temp file + rename) after EVERY item so an abort — judge 401,
  * Ctrl-C — preserves progress, and `unjudged` tombstones from an aborted run
  * are retried on the next run.
+ *
+ * Resume safety: the judged artifact carries a fingerprint of the capture it
+ * judged. A resume against a different capture (the same label re-captured)
+ * is refused — verdict keys line up by (case, pass, item) and would otherwise
+ * silently stand in for the new answers. Items judged by another model or
+ * prompt version are re-judged, so one artifact never mixes judges.
  */
+import { createHash } from 'node:crypto'
 import * as fs from 'fs'
 import { resolveProvider } from '../../src/lib/llm/chat-completions'
 import {
@@ -45,6 +52,16 @@ export interface JudgeArgs {
   concurrency?: number
 }
 
+export interface JudgeRunResult {
+  artifact: JudgedArtifact
+  /** Items judged OK in THIS run (resumed items are not counted). */
+  judged: number
+  /** Items tombstoned in this run. */
+  unjudged: number
+  /** Tombstone reasons → counts (e.g. {rate_limited: 2, http_400: 3}). */
+  reasons: Record<string, number>
+}
+
 type Kind = 'fact_recall' | 'sentence_support' | 'unsupported_claims'
 
 interface Job {
@@ -53,6 +70,11 @@ interface Job {
   call: () => Promise<JudgeOk<any> | JudgeUnjudged>
   item: (r: JudgeOk<any>) => JudgedItem
 }
+
+/** Identity of a capture for resume safety: the cases, not the provenance
+ * (a re-capture with identical answers is legitimately the same work). */
+export const captureFingerprint = (capture: CaptureArtifact): string =>
+  createHash('sha256').update(JSON.stringify(capture.cases)).digest('hex')
 
 /** Atomic-ish write: temp file + rename, so a reader never sees a torn file. */
 function writeJudgedArtifact(
@@ -174,7 +196,7 @@ function enumerateJobs(
   return jobs
 }
 
-export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
+export async function runJudge(args: JudgeArgs): Promise<JudgeRunResult> {
   const { capture, judgedPath, judgeModel, judgeBaseUrl } = args
   const only = args.only ?? []
   const concurrency = args.concurrency ?? 1
@@ -196,9 +218,10 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
       ? capture.cases.filter((c) => only.includes(c.case_id))
       : capture.cases
 
-  // Resume: an existing artifact seeds the items map; keys that exist and
-  // are not `unjudged` are skipped below. Its accumulated judge usage
-  // carries forward so a resumed run's total spans both runs.
+  // Resume: an existing artifact seeds the items map — but ONLY if it judged
+  // this very capture. Its accumulated judge usage carries forward so a
+  // resumed run's total spans both runs.
+  const fingerprint = captureFingerprint(capture)
   const items: Record<string, JudgedItem> = {}
   let usageTotal: JudgeUsageTotal = {
     prompt_tokens: 0,
@@ -209,6 +232,13 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
     const existing = JSON.parse(
       fs.readFileSync(judgedPath, 'utf8'),
     ) as JudgedArtifact
+    if (existing.capture_fingerprint !== fingerprint) {
+      throw new Error(
+        `refusing to resume ${judgedPath}: it judged a different capture ` +
+          `(fingerprint ${existing.capture_fingerprint ?? 'absent'} vs ` +
+          `${fingerprint}). Delete it, or judge under another --label.`,
+      )
+    }
     Object.assign(items, existing.items)
     if (existing.usage) usageTotal = { ...existing.usage }
   }
@@ -223,13 +253,31 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
         prompt_hashes: PROMPT_HASHES,
       },
     },
+    capture_fingerprint: fingerprint,
     items,
   }
 
   const jobs = enumerateJobs(cases, judgeModel, judgeBaseUrl, apiKey)
-  const pending = jobs.filter((j) => !items[j.key] || items[j.key].unjudged)
+  // Pending = missing, tombstoned, or judged by another model / prompt
+  // version (re-judged so the artifact never mixes judges).
+  const pending = jobs.filter((j) => {
+    const it = items[j.key]
+    return (
+      !it ||
+      it.unjudged ||
+      it.judge_model !== judgeModel ||
+      it.prompt_hash !== PROMPT_HASHES[j.kind]
+    )
+  })
+  console.log(
+    `[judge] ${pending.length} item(s) to judge, ` +
+      `${jobs.length - pending.length} already judged`,
+  )
 
   let authError: JudgeAuthError | undefined
+  let judged = 0
+  let unjudgedCount = 0
+  const reasons: Record<string, number> = {}
 
   // Sequential when concurrency is 1 (the default); otherwise a simple
   // item-level worker pool.
@@ -249,12 +297,20 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
             }
             throw e
           }
-          if (r.ok && r.usage) {
-            usageTotal.prompt_tokens += r.usage.prompt_tokens ?? 0
-            usageTotal.completion_tokens += r.usage.completion_tokens ?? 0
-            usageTotal.calls++
+          if (r.ok) {
+            judged++
+            if (r.usage) {
+              usageTotal.prompt_tokens += r.usage.prompt_tokens ?? 0
+              usageTotal.completion_tokens += r.usage.completion_tokens ?? 0
+              usageTotal.calls++
+            }
+          } else {
+            unjudgedCount++
+            reasons[r.unjudged.reason] = (reasons[r.unjudged.reason] ?? 0) + 1
           }
           items[j.key] = r.ok ? j.item(r) : tombstone(j, r)
+          // Usage rides along on every write so a hard interrupt keeps it.
+          artifact.usage = usageTotal
           writeJudgedArtifact(judgedPath, artifact)
           console.log(
             `${j.key} … ${r.ok ? 'ok' : `unjudged (${r.unjudged.reason})`}`,
@@ -264,24 +320,29 @@ export async function runJudge(args: JudgeArgs): Promise<JudgedArtifact> {
     ),
   )
 
-  // Persist the accumulated usage (also on the 401-abort write below) —
-  // printing it to the console alone loses it the moment the run ends.
   artifact.usage = usageTotal
   writeJudgedArtifact(judgedPath, artifact)
 
   if (authError) {
-    // The usage write above guarantees the file exists even when the 401 hit
-    // the first item; every completed item is already persisted.
+    // The write above guarantees the file exists even when the 401 hit the
+    // first item; every completed item is already persisted.
     console.error(
       `[judge] ${authError.message} — partial artifact written to ${judgedPath}`,
     )
     throw authError
   }
 
+  const reasonText = Object.entries(reasons)
+    .map(([k, v]) => `${k}×${v}`)
+    .join(', ')
+  console.log(
+    `[judge] ${judged} ok, ${unjudgedCount} unjudged` +
+      (reasonText ? ` (${reasonText})` : ''),
+  )
   if (usageTotal.calls > 0) {
     console.log(
       `[judge] usage: ${usageTotal.prompt_tokens} prompt + ${usageTotal.completion_tokens} completion tokens across ${usageTotal.calls} call(s)`,
     )
   }
-  return artifact
+  return { artifact, judged, unjudged: unjudgedCount, reasons }
 }
