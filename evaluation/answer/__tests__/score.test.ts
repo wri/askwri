@@ -269,9 +269,11 @@ const q3Pass = (pass: number): PassCapture => ({
 })
 
 /**
- * q4: the route's few-sources branch sets warning 'low_coverage' (and the
- * capture mirrors it into answer.low_coverage) WITHOUT the strict signal —
+ * q4 pass 0: the route's few-sources branch sets warning 'low_coverage' (and
+ * the capture mirrors it into answer.low_coverage) WITHOUT the strict signal —
  * ruling: that alone is NOT an abstention.
+ * q4 pass 1: the nano filter's all_weak early return — a genuine abstention
+ * whose debug block carries `nanoFilter: 'all_weak'` and NO `warnings` key.
  */
 const q4Pass = (pass: number): PassCapture => ({
   pass,
@@ -295,10 +297,14 @@ const q4Pass = (pass: number): PassCapture => ({
     ],
     sentences: ['A hedged sentence.'],
     cites: [],
-    raw_model_json: JSON.stringify({
-      parsing: { parsedSuccessfully: true },
-      warnings: { isLowCoverage: false },
-    }),
+    raw_model_json: JSON.stringify(
+      pass === 1
+        ? { nanoFilter: 'all_weak', coverage: 'poor' }
+        : {
+            parsing: { parsedSuccessfully: true },
+            warnings: { isLowCoverage: false },
+          },
+    ),
     warning: 'low_coverage',
     low_coverage: true,
     invalid_cites: 0,
@@ -531,12 +537,38 @@ describe('score — headline block (expert_approved only)', () => {
     expect(h.synthesis.citation_precision).toEqual({ mean: 0.5, cases: 1 })
   })
 
-  it('unsupported claims: count and rate', () => {
+  it('unsupported claims: count, the judged-pass count it covers, and rate', () => {
     expect(h.synthesis.unsupported_claims_count).toBe(2) // 1 per pass × 2 passes
+    expect(h.synthesis.unsupported_claims_judged_passes).toBe(2)
     expect(h.synthesis.unsupported_claims_rate).toEqual({
       mean: 1 / 3,
       cases: 1,
     })
+  })
+
+  it('an unjudged unsupported_claims item contributes nothing to the count AND drops out of its judged-pass denominator', () => {
+    const items = { ...judged.items }
+    delete items['q1|1|unsupported_claims:']
+    const r = score(evalset, capture, { ...judged, items })
+    const hh = r.headline as Record<string, any>
+    expect(hh.synthesis.unsupported_claims_count).toBe(1)
+    expect(hh.synthesis.unsupported_claims_judged_passes).toBe(1)
+    expect((r.header as Record<string, any>).unjudged.unsupported_claims).toBe(
+      1,
+    )
+    const q1 = (r.per_case as Array<Record<string, any>>)[0]
+    expect(q1.unsupported_claims_count).toBe(1)
+    expect(q1.unsupported_claims_judged_passes).toBe(1)
+  })
+
+  it('parsed_clean is false when the route repaired a truncated reply (warnings.isPartial)', () => {
+    const partial = structuredClone(capture)
+    partial.cases[0].passes[1].answer.raw_model_json = JSON.stringify({
+      parsing: { parsedSuccessfully: true },
+      warnings: { isLowCoverage: false, isPartial: true },
+    })
+    const r = score(evalset, partial, judged)
+    expect((r.headline as Record<string, any>).compliance.parsed_clean).toBe(1)
   })
 
   it('computed contract compliance and sentence-count distribution', () => {
@@ -606,12 +638,12 @@ describe('score — draft block (draft cases, never mixed with headline)', () =>
     })
   })
 
-  it('abstention (negative cases, reported apart): strict signal only', () => {
+  it('abstention (negative cases, reported apart): strict signal or nano all_weak', () => {
     expect(d.abstention).toEqual({
       negative_cases: 2,
       passes: 4,
-      abstained: 2,
-      rate: 0.5,
+      abstained: 3,
+      rate: 0.75,
     })
   })
 })
@@ -671,10 +703,11 @@ describe('score — per_case', () => {
     expect(q3.abstention_rate).toBe(1)
   })
 
-  it('q4: warning string alone is NOT an abstention', () => {
+  it('q4: warning string alone is NOT an abstention; the nano all_weak return IS', () => {
     const q4 = cases[3]
     expect(q4.per_pass[0].abstained).toBe(false)
-    expect(q4.abstention_rate).toBe(0)
+    expect(q4.per_pass[1].abstained).toBe(true)
+    expect(q4.abstention_rate).toBe(0.5)
   })
 })
 

@@ -2,20 +2,27 @@
  * Compare stage (§3.2 compare, §4.5 agreement, §4.6 pairwise): three
  * read-only views over stored artifacts.
  *
- * - `compareReports` — guarded side-by-side of two score reports (per-case
- *   deltas with the per-pass spread). The §6 guard is binding: a differing
- *   fixture commit, pass count, or case set refuses the comparison outright
- *   (throw) — never a delta over a mismatched pair.
+ * - `compareReports` — guarded side-by-side of two score reports (headline
+ *   and draft block deltas, then per-case deltas with the per-pass spread).
+ *   The §6 guard is binding: a differing fixture commit, pass count, case
+ *   set, or target mode refuses the comparison outright (throw) — never a
+ *   delta over a mismatched pair. Target mode is guarded because gateway
+ *   chunk text (the tidied marked span) and direct chunk text (the raw
+ *   context window) differ, so a cross-mode retrieval delta would measure
+ *   the transport.
  * - `judgedAgreement` — per-verdict-type agreement between two judged
  *   artifacts over the same capture, split by source language.
  * - `runPairwise` — order-swapped preference runs of capture A vs capture B
  *   answers over their SHARED passages, resumable by (case, pass) key like
- *   the judged artifact. A win counts only when it survives the order swap;
- *   split verdicts surface as position bias.
+ *   the judged artifact — and, like it, fingerprinted to both captures and
+ *   the judge so a resume never mixes pairs or judges. A win counts only
+ *   when it survives the order swap; split verdicts surface as position
+ *   bias.
  */
 import * as fs from 'fs'
 import { resolveProvider } from '../../src/lib/llm/chat-completions'
 import { loadEvalset } from './fixture'
+import { captureFingerprint } from './judge'
 import { judgeCall } from './judge-client'
 import {
   PAIRWISE_SYSTEM,
@@ -40,6 +47,7 @@ interface Comparable {
   commit: string
   passes: number
   caseIds: string[]
+  mode: string
 }
 
 /** Throws (never prints deltas) on any comparability mismatch. */
@@ -47,6 +55,12 @@ function guardPair(a: Comparable, b: Comparable, what: string): void {
   if (a.commit !== b.commit) {
     throw new Error(
       `refusing to ${what}: fixture commits differ (${a.commit} vs ${b.commit})`,
+    )
+  }
+  if (a.mode !== b.mode) {
+    throw new Error(
+      `refusing to ${what}: target modes differ (${a.mode} vs ${b.mode}) — ` +
+        `gateway and direct chunk text are not comparable`,
     )
   }
   if (a.passes !== b.passes) {
@@ -91,12 +105,13 @@ const METRICS: Array<{ field: string; passField: string }> = [
 const fmtV = (v: unknown): string =>
   typeof v === 'number' ? v.toFixed(3) : 'n/a'
 
-/** min–max across the case's per_pass values for one metric. */
+/** min–max across the case's non-excluded per_pass values for one metric. */
 function spread(
   passes: Array<Record<string, unknown>>,
   passField: string,
 ): string {
   const xs = passes
+    .filter((p) => !p.excluded)
     .map((p) =>
       passField === 'abstained' ? (p.abstained ? 1 : 0) : p[passField],
     )
@@ -111,6 +126,41 @@ const fmtDelta = (va: unknown, vb: unknown): string => {
   return va <= vb ? `+${d === '-0.000' ? '0.000' : d}` : d
 }
 
+const isMean = (v: unknown): v is { mean: number | null; cases: number } =>
+  typeof v === 'object' && v !== null && 'mean' in v && 'cases' in v
+
+/** Block-level (headline / draft) deltas: every MetricMean and every plain
+ * count in the retrieval and synthesis sections. */
+function blockDeltaLines(
+  name: string,
+  a: Record<string, any>,
+  b: Record<string, any>,
+): string[] {
+  const lines: string[] = []
+  for (const section of ['retrieval', 'synthesis'] as const) {
+    const sa = a?.[section] ?? {}
+    const sb = b?.[section] ?? {}
+    for (const field of Object.keys(sa)) {
+      const va = sa[field]
+      const vb = sb[field]
+      if (isMean(va)) {
+        lines.push(
+          `  ${field.padEnd(32)} A ${fmtV(va.mean)}  B ${fmtV(vb?.mean)}  ` +
+            `Δ ${fmtDelta(va.mean, vb?.mean)}`,
+        )
+      } else if (typeof va === 'number') {
+        const d = typeof vb === 'number' ? vb - va : undefined
+        lines.push(
+          `  ${field.padEnd(32)} A ${va}  B ${typeof vb === 'number' ? vb : 'n/a'}  ` +
+            `Δ ${d === undefined ? 'n/a' : `${d >= 0 ? '+' : ''}${d}`}`,
+        )
+      }
+    }
+  }
+  if (lines.length === 0) return []
+  return [`${name} (${a?.cases ?? '?'} case(s)):`, ...lines]
+}
+
 export function compareReports(a: Report, b: Report): string {
   const rowsOf = (r: Report) => r.per_case as Array<Record<string, any>>
   guardPair(
@@ -118,17 +168,21 @@ export function compareReports(a: Report, b: Report): string {
       commit: a.provenance.fixture.commit,
       passes: a.provenance.passes,
       caseIds: rowsOf(a).map((c) => c.id),
+      mode: a.provenance.target.mode,
     },
     {
       commit: b.provenance.fixture.commit,
       passes: b.provenance.passes,
       caseIds: rowsOf(b).map((c) => c.id),
+      mode: b.provenance.target.mode,
     },
     'compare reports',
   )
   const lines: string[] = [
     `compare — fixture ${a.provenance.fixture.name}@${a.provenance.fixture.commit}, ` +
       `${a.provenance.passes} pass(es), ${rowsOf(a).length} case(s)`,
+    ...blockDeltaLines('headline', a.headline, b.headline),
+    ...blockDeltaLines('draft', a.draft_block, b.draft_block),
   ]
   const mapB = new Map(rowsOf(b).map((c) => [c.id as string, c]))
   for (const ca of rowsOf(a)) {
@@ -294,6 +348,10 @@ export interface PairwiseArtifact {
   labelB: string
   judge_model: string
   prompt_hash: string
+  /** captureFingerprint() of A and B — a resume over other captures (or
+   * the same pair with the labels flipped) is refused. */
+  fingerprint_a?: string
+  fingerprint_b?: string
   items: Record<string, PairwiseVerdict>
 }
 
@@ -414,11 +472,13 @@ export async function runPairwise(
       commit: captureA.provenance.fixture.commit,
       passes: captureA.provenance.passes,
       caseIds: captureA.cases.map((c) => c.case_id),
+      mode: captureA.provenance.target.mode,
     },
     {
       commit: captureB.provenance.fixture.commit,
       passes: captureB.provenance.passes,
       caseIds: captureB.cases.map((c) => c.case_id),
+      mode: captureB.provenance.target.mode,
     },
     'run pairwise',
   )
@@ -428,12 +488,36 @@ export async function runPairwise(
   }).apiKey
   const rng = args.rng ?? Math.random
 
-  // Resume: existing non-tombstone (case,pass) entries are skipped.
+  // Resume: existing non-tombstone (case,pass) entries are skipped — but
+  // only when the file judged THESE captures, in this order, with this judge.
+  const fingerprint_a = captureFingerprint(captureA)
+  const fingerprint_b = captureFingerprint(captureB)
   const items: Record<string, PairwiseVerdict> = {}
   if (fs.existsSync(pairwisePath)) {
     const existing = JSON.parse(
       fs.readFileSync(pairwisePath, 'utf8'),
     ) as PairwiseArtifact
+    if (
+      existing.fingerprint_a !== fingerprint_a ||
+      existing.fingerprint_b !== fingerprint_b
+    ) {
+      throw new Error(
+        `refusing to resume ${pairwisePath}: it judged a different capture ` +
+          `pair (or the same pair with the labels flipped). Delete it, or ` +
+          `pass --label-a/--label-b to write a new artifact.`,
+      )
+    }
+    if (
+      existing.judge_model !== judgeModel ||
+      existing.prompt_hash !== PROMPT_HASHES.pairwise
+    ) {
+      throw new Error(
+        `refusing to resume ${pairwisePath}: it was judged by another judge ` +
+          `model or prompt version (${existing.judge_model} / ` +
+          `${existing.prompt_hash.slice(0, 12)}…). Delete it, or use ` +
+          `--label-a/--label-b to write a new artifact.`,
+      )
+    }
     Object.assign(items, existing.items)
   }
   const artifact: PairwiseArtifact = {
@@ -442,6 +526,8 @@ export async function runPairwise(
     labelB,
     judge_model: judgeModel,
     prompt_hash: PROMPT_HASHES.pairwise,
+    fingerprint_a,
+    fingerprint_b,
     items,
   }
 
@@ -457,14 +543,21 @@ export async function runPairwise(
           `pass ${pA.pass} missing for case ${cA.case_id} in capture B`,
         )
       }
+      const passages = sharedPassages(
+        pA.answer.passages_sent,
+        pB.answer.passages_sent,
+      )
+      if (passages.length === 0) {
+        console.warn(
+          `[pairwise] ${key}: no shared passages — the judge compares the ` +
+            `answers without evidence (expected when retrieval knobs differ)`,
+        )
+      }
       const result = await judgePair({
         caseId: cA.case_id,
         pass: pA.pass,
         question: cA.fixture_case.question,
-        passages: sharedPassages(
-          pA.answer.passages_sent,
-          pB.answer.passages_sent,
-        ),
+        passages,
         answerA: pA.answer.sentences.join(' '),
         answerB: pB.answer.sentences.join(' '),
         judge,

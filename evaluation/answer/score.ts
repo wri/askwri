@@ -16,8 +16,12 @@
  *   snippets are skipped and counted (facts_no_snippet): an empty snippet
  *   is contained in every chunk, so scoring it covered would lie;
  * - abstention uses the STRICT signal (debug.warnings.isLowCoverage inside
- *   raw_model_json, or the gateway's likely_off_topic) — the route's
- *   few-sources `warning: 'low_coverage'` string would over-count.
+ *   raw_model_json, the nano filter's all_weak early return, or the
+ *   gateway's likely_off_topic) — the route's few-sources
+ *   `warning: 'low_coverage'` string would over-count.
+ * - unsupported_claims_count is a sum over JUDGED passes only, and is always
+ *   reported next to that pass count (unsupported_claims_judged_passes) so
+ *   an unjudged item can never read as "zero claims".
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -59,6 +63,8 @@ export interface BlockReport {
     fact_recall_lenient: MetricMean
     citation_precision: MetricMean
     unsupported_claims_count: number
+    /** Passes the count was summed over (unjudged passes are absent). */
+    unsupported_claims_judged_passes: number
     unsupported_claims_rate: MetricMean
   }
   compliance: {
@@ -118,7 +124,10 @@ interface ScoredCase {
  * raw_model_json (the SERIALIZED DEBUG BLOCK, never raw model content). */
 interface RouteDebug {
   parsing?: { parsedSuccessfully?: boolean }
-  warnings?: { isLowCoverage?: boolean }
+  warnings?: { isLowCoverage?: boolean; isPartial?: boolean }
+  /** 'all_weak' on the nano filter's early return — that path never sets
+   * `warnings`, so it is an abstention signal in its own right. */
+  nanoFilter?: string
 }
 
 function parseDebug(raw: string): RouteDebug | undefined {
@@ -174,6 +183,7 @@ function scorePass(c: CaseCapture, p: PassCapture, ctx: ScoreCtx): PassMetrics {
       pass: p.pass,
       abstained:
         debug?.warnings?.isLowCoverage === true ||
+        debug?.nanoFilter === 'all_weak' ||
         p.retrieval.likely_off_topic === true,
     }
   }
@@ -321,8 +331,14 @@ function scorePass(c: CaseCapture, p: PassCapture, ctx: ScoreCtx): PassMetrics {
 
   // --- computed contract compliance ---
   const cites_valid = a.invalid_cites === 0
+  // "Parsed without repair": the route's partial-extraction path (a
+  // truncated reply salvaged by regex) is a repair even though
+  // parsedSuccessfully reads true. Brace-extraction repair leaves no debug
+  // trace today — a `parsing.repaired` flag is a route-side follow-up.
   const parsed_clean =
-    debug?.parsing?.parsedSuccessfully === true && !a.fallback_reason
+    debug?.parsing?.parsedSuccessfully === true &&
+    debug?.warnings?.isPartial !== true &&
+    !a.fallback_reason
   const all_english = a.sentences.every((s) => langOf(s) !== 'zh')
 
   return {
@@ -386,6 +402,9 @@ function caseMetrics(s: ScoredCase): Record<string, number | null> {
       (t, p) => t + (p.unsupported_claims_count ?? 0),
       0,
     ),
+    unsupported_claims_judged_passes: valid.filter(
+      (p) => p.unsupported_claims_count !== undefined,
+    ).length,
     unsupported_claims_rate: m('unsupported_claims_rate'),
   }
 }
@@ -433,6 +452,9 @@ function blockFrom(scored: ScoredCase[]): BlockReport {
         (t, p) => t + (p.unsupported_claims_count ?? 0),
         0,
       ),
+      unsupported_claims_judged_passes: posPasses.filter(
+        (p) => p.unsupported_claims_count !== undefined,
+      ).length,
       unsupported_claims_rate: mm('unsupported_claims_rate'),
     },
     compliance: {

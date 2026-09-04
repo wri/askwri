@@ -89,7 +89,7 @@ function printBlock(name: string, b: BlockReport): void {
     `  synthesis: fact_recall_strict=${fmtMean(s.fact_recall_strict)} ` +
       `fact_recall_lenient=${fmtMean(s.fact_recall_lenient)} ` +
       `citation_precision=${fmtMean(s.citation_precision)} ` +
-      `unsupported_claims=${s.unsupported_claims_count} ` +
+      `unsupported_claims=${s.unsupported_claims_count} over ${s.unsupported_claims_judged_passes} judged pass(es) ` +
       `unsupported_rate=${fmtMean(s.unsupported_claims_rate)}`,
   )
   const c = b.compliance

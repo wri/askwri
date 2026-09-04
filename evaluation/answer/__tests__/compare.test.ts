@@ -10,6 +10,7 @@ import {
   pairwiseSummary,
   runPairwise,
 } from '../compare'
+import { captureFingerprint } from '../judge'
 import { judgeCall } from '../judge-client'
 import {
   PAIRWISE_SYSTEM,
@@ -114,6 +115,59 @@ describe('compareReports — guard', () => {
       posRow('q9', 1, [1, 1]),
     ])
     expect(() => compareReports(reportA, other)).toThrow(/case set/)
+  })
+
+  it('refuses differing target modes (gateway chunk text ≠ direct chunk text)', () => {
+    const prov = provenance('sha0000', 2)
+    const other = makeReport(
+      { ...prov, target: { ...prov.target, mode: 'direct' } },
+      reportB.per_case,
+    )
+    expect(() => compareReports(reportA, other)).toThrow(/target mode/)
+  })
+})
+
+describe('compareReports — block deltas', () => {
+  const block = (ec: number, count: number) => ({
+    cases: 1,
+    retrieval: { evidence_coverage: { mean: ec, cases: 1 } },
+    synthesis: {
+      fact_recall_strict: { mean: null, cases: 0 },
+      unsupported_claims_count: count,
+    },
+  })
+  it('prints headline and draft block deltas ahead of the per-case rows', () => {
+    const a = { ...reportA, headline: block(0.5, 3), draft_block: block(1, 0) }
+    const b = { ...reportB, headline: block(0.75, 1), draft_block: block(1, 0) }
+    const out = compareReports(a, b)
+    const headlineAt = out.indexOf('headline')
+    expect(headlineAt).toBeGreaterThan(-1)
+    expect(headlineAt).toBeLessThan(out.indexOf('q1 ('))
+    const headline = out.slice(headlineAt, out.indexOf('draft'))
+    expect(headline).toContain('evidence_coverage')
+    expect(headline).toContain('A 0.500')
+    expect(headline).toContain('B 0.750')
+    expect(headline).toContain('Δ +0.250')
+    expect(headline).toContain('fact_recall_strict')
+    expect(headline).toContain('n/a')
+    expect(headline).toContain('unsupported_claims_count')
+    expect(headline).toContain('Δ -2')
+  })
+
+  it('spread ignores excluded passes (an excluded pass is not a non-abstention)', () => {
+    const row = {
+      id: 'q1',
+      review_status: 'draft',
+      abstention_rate: 1,
+      per_pass: [
+        { pass: 0, abstained: true },
+        { pass: 1, excluded: 'retrieval_error' },
+      ],
+    }
+    const a = makeReport(provenance('sha0000', 2), [row])
+    const out = compareReports(a, a)
+    expect(out).toContain('[1.000–1.000]')
+    expect(out).not.toContain('0.000–1.000')
   })
 })
 
@@ -596,6 +650,62 @@ describe('runPairwise', () => {
     })
   })
 
+  it('warns when a pair has no shared passages (the judge would compare answers without evidence)', async () => {
+    const disjoint = makeCapture(
+      'sha0000',
+      [makeCase('q1', [makePass(0, ['cB'], [B_TEXT])])],
+      1,
+    )
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const s = silenceConsole()
+    try {
+      await runOn(preferJudge('a', [], { n: 0 }), capA, disjoint)
+    } finally {
+      s.restore()
+    }
+    const warned = warn.mock.calls.map((c) => c.join(' ')).join('\n')
+    warn.mockRestore()
+    expect(warned).toContain('q1|0')
+    expect(warned).toContain('no shared passages')
+  })
+
+  it('refuses to resume a pairwise artifact whose captures differ (e.g. labels flipped onto the same file)', async () => {
+    const file = pairwiseFile()
+    const prior: PairwiseArtifact = {
+      schema: 'answer-eval/pairwise@1',
+      labelA: 'A',
+      labelB: 'B',
+      judge_model: 'glm-test',
+      prompt_hash: PROMPT_HASHES.pairwise,
+      // Fingerprints swapped: this file judged B-vs-A.
+      fingerprint_a: captureFingerprint(capB2),
+      fingerprint_b: captureFingerprint(capA2),
+      items: {},
+    }
+    fs.writeFileSync(file, JSON.stringify(prior))
+    await expect(
+      runOn(preferJudge('a', [], { n: 0 }), capA2, capB2, () => 0.4, file),
+    ).rejects.toThrow(/different capture/)
+  })
+
+  it('refuses to resume a pairwise artifact judged by another model or prompt', async () => {
+    const file = pairwiseFile()
+    const prior: PairwiseArtifact = {
+      schema: 'answer-eval/pairwise@1',
+      labelA: 'A',
+      labelB: 'B',
+      judge_model: 'other-judge',
+      prompt_hash: PROMPT_HASHES.pairwise,
+      fingerprint_a: captureFingerprint(capA2),
+      fingerprint_b: captureFingerprint(capB2),
+      items: {},
+    }
+    fs.writeFileSync(file, JSON.stringify(prior))
+    await expect(
+      runOn(preferJudge('a', [], { n: 0 }), capA2, capB2, () => 0.4, file),
+    ).rejects.toThrow(/judge model/)
+  })
+
   it('resumes: pre-written entries are skipped, tombstones retried', async () => {
     const file = pairwiseFile()
     const prior: PairwiseArtifact = {
@@ -603,7 +713,9 @@ describe('runPairwise', () => {
       labelA: 'A',
       labelB: 'B',
       judge_model: 'glm-test',
-      prompt_hash: 'prior',
+      prompt_hash: PROMPT_HASHES.pairwise,
+      fingerprint_a: captureFingerprint(capA2),
+      fingerprint_b: captureFingerprint(capB2),
       items: {
         'q1|0': {
           case: 'q1',
