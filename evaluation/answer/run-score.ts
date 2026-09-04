@@ -19,8 +19,8 @@ import {
   HumanLabels,
   JudgeAgreement,
   VerdictTally,
+  labelRejections,
   loadLabelsFrom,
-  validateLabelsAgainstCapture,
 } from './labels'
 import { loadEvalset } from './fixture'
 import { BlockReport, MetricMean, score, writeReportArtifact } from './score'
@@ -133,18 +133,10 @@ function loadAndValidateLabels(
   if (labels.length === 0) {
     fail(`no label files found under: ${paths.join(', ')}`)
   }
-  const rejected = labels
-    .map((l) => ({
-      file: l.capture_file,
-      v: validateLabelsAgainstCapture(l, capture),
-    }))
-    .filter((x) => !x.v.ok)
+  const rejected = labelRejections(labels, capture)
   if (rejected.length > 0) {
-    const reasons = rejected
-      .map((x) => `${x.file}: ${(x.v as { ok: false; reason: string }).reason}`)
-      .join('; ')
     fail(
-      `${rejected.length} of ${labels.length} label file(s) do not match capture ${capturePath} — ${reasons}`,
+      `${rejected.length} of ${labels.length} label file(s) do not match capture ${capturePath} — ${rejected.join('; ')}`,
     )
   }
   return labels

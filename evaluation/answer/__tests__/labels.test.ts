@@ -258,17 +258,22 @@ describe('parseLabels', () => {
 })
 
 describe('loadLabelsFrom', () => {
-  it('reads a dir sorted, *.json only', () => {
+  it('reads a dir sorted, labels-*.json only (mode-1 annot files share review-output/)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'labels-test-'))
     fs.writeFileSync(
-      path.join(dir, 'b.json'),
+      path.join(dir, 'labels-b.json'),
       JSON.stringify(makeLabels({ case_id: 'case-b', reviewer: 'rb' })),
     )
     fs.writeFileSync(
-      path.join(dir, 'a.json'),
+      path.join(dir, 'labels-a.json'),
       JSON.stringify(makeLabels({ case_id: 'case-a2', reviewer: 'ra' })),
     )
     fs.writeFileSync(path.join(dir, 'skip.txt'), 'not json')
+    // The evalset-review notebook writes annot-*.json into the same dir.
+    fs.writeFileSync(
+      path.join(dir, 'annot-evalset_answer_02-q1-by-r.json'),
+      JSON.stringify({ query_id: 'q1', reviewer: 'r', reviewed_passages: [] }),
+    )
     try {
       const loaded = loadLabelsFrom([dir])
       expect(loaded.map((l) => l.case_id)).toEqual(['case-a2', 'case-b'])
@@ -323,6 +328,28 @@ describe('validateLabelsAgainstCapture', () => {
     )
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toMatch(/pass/)
+  })
+
+  it('reports a fact_index beyond the case key_facts', () => {
+    // case-a has 3 key facts (indices 0..2)
+    const r = validateLabelsAgainstCapture(
+      makeLabels({ fact_verdicts: [{ fact_index: 3, verdict: 'stated' }] }),
+      makeCapture(),
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.reason).toMatch(/fact_index 3/)
+  })
+
+  it('reports a sentence_index beyond the pass sentences', () => {
+    // case-a|0 has 3 sentences (indices 0..2)
+    const r = validateLabelsAgainstCapture(
+      makeLabels({
+        sentence_verdicts: [{ sentence_index: 3, verdict: 'supported' }],
+      }),
+      makeCapture(),
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.reason).toMatch(/sentence_index 3/)
   })
 })
 
@@ -420,6 +447,28 @@ describe('judgeHumanAgreement', () => {
     )
     expect(agreement.fact_recall.stated.excluded).toBe(1)
     expect(agreement.fact_recall.stated.either).toEqual({})
+  })
+
+  it('counts a judged verdict outside the enum as excluded instead of throwing', () => {
+    const judged = makeJudged()
+    const fr = judged.items['case-a|0|fact_recall:'] as any
+    fr.verdicts[0].verdict = 'maybe' // hand-edited artifact
+    const ss = judged.items['case-a|0|sentence_support:0'] as any
+    ss.verdict = 'kinda'
+    const agreement = judgeHumanAgreement(
+      judged,
+      [
+        makeLabels({
+          fact_verdicts: [{ fact_index: 0, verdict: 'stated' }],
+          sentence_verdicts: [{ sentence_index: 0, verdict: 'supported' }],
+        }),
+      ],
+      makeCapture(),
+    )
+    expect(agreement.fact_recall.stated.excluded).toBe(1)
+    expect(agreement.fact_recall.stated.either).toEqual({})
+    expect(agreement.sentence_support.supported.excluded).toBe(1)
+    expect(agreement.sentence_support.supported.either).toEqual({})
   })
 
   it('joins multiple reviewers independently and dedupes same-reviewer last-wins', () => {

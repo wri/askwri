@@ -814,6 +814,11 @@ describe('score — human labels (§4.5 judge calibration)', () => {
     expect('judge_agreement' in h).toBe(false)
   })
 
+  it('an empty labels array is the same as no labels (never "calibrated: 0")', () => {
+    const empty = score(evalset, capture, judged, [])
+    expect(JSON.stringify(empty)).toBe(JSON.stringify(report))
+  })
+
   it('replay determinism WITH labels: two calls stringify identically', () => {
     const again = score(evalset, capture, judged, labels)
     expect(JSON.stringify(again)).toBe(JSON.stringify(withLabels))

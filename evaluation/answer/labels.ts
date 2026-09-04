@@ -113,14 +113,16 @@ export function parseLabels(text: string, origin: string): HumanLabels {
   return raw as HumanLabels
 }
 
-/** Files and/or directories (dirs glob *.json, sorted for determinism). */
+/** Files and/or directories. A directory globs `labels-*.json` (sorted for
+ * determinism) — the notebook's naming, and the evalset-review notebook's
+ * `annot-*.json` files share the same `review-output/` directory. */
 export function loadLabelsFrom(paths: string[]): HumanLabels[] {
   const out: HumanLabels[] = []
   for (const p of paths) {
     if (fs.statSync(p).isDirectory()) {
       const files = fs
         .readdirSync(p)
-        .filter((f) => f.endsWith('.json'))
+        .filter((f) => f.startsWith('labels-') && f.endsWith('.json'))
         .sort()
       for (const f of files) {
         const full = path.join(p, f)
@@ -151,13 +153,51 @@ export function validateLabelsAgainstCapture(
   if (!c) {
     return { ok: false, reason: `unknown case_id ${labels.case_id}` }
   }
-  if (!c.passes.some((p) => p.pass === labels.pass)) {
+  const pass = c.passes.find((p) => p.pass === labels.pass)
+  if (!pass) {
     return {
       ok: false,
       reason: `case ${labels.case_id} has no pass ${labels.pass}`,
     }
   }
+  const nFacts = c.fixture_case.synthesis_ground_truth?.key_facts?.length ?? 0
+  const badFact = labels.fact_verdicts.find((v) => v.fact_index >= nFacts)
+  if (badFact) {
+    return {
+      ok: false,
+      reason:
+        `case ${labels.case_id} has ${nFacts} key fact(s) but labels carry ` +
+        `fact_index ${badFact.fact_index}`,
+    }
+  }
+  const nSentences = pass.answer.sentences.length
+  const badSentence = labels.sentence_verdicts.find(
+    (v) => v.sentence_index >= nSentences,
+  )
+  if (badSentence) {
+    return {
+      ok: false,
+      reason:
+        `case ${labels.case_id} pass ${labels.pass} has ${nSentences} ` +
+        `sentence(s) but labels carry sentence_index ${badSentence.sentence_index}`,
+    }
+  }
   return { ok: true }
+}
+
+/** Every label that does not match THIS capture, as `<capture_file>: <reason>`
+ * lines (empty when all match). Labels are identified by their self-declared
+ * `capture_file` — the loader keeps no disk origin. */
+export function labelRejections(
+  labels: HumanLabels[],
+  capture: CaptureArtifact,
+): string[] {
+  const out: string[] = []
+  for (const l of labels) {
+    const v = validateLabelsAgainstCapture(l, capture)
+    if (!v.ok) out.push(`${l.capture_file}: ${v.reason}`)
+  }
+  return out
 }
 
 const newTally = (): VerdictTally => ({ agree: {}, either: {}, excluded: 0 })
@@ -257,7 +297,8 @@ export function judgeHumanAgreement(
         j && !j.unjudged && j.kind === 'fact_recall'
           ? j.verdicts.find((v) => v.fact_index === fv.fact_index)?.verdict
           : undefined
-      if (jv === undefined) {
+      // A verdict outside the enum (hand-edited artifact) is no verdict.
+      if (jv === undefined || !(jv in factTally)) {
         t.excluded++
         continue
       }
@@ -280,7 +321,7 @@ export function judgeHumanAgreement(
           j && !j.unjudged && j.kind === 'sentence_support'
             ? j.verdict
             : undefined
-        if (jv === undefined) {
+        if (jv === undefined || !(jv in sentTally)) {
           t.excluded++
         } else {
           compare(sentTally, sv.verdict, jv)

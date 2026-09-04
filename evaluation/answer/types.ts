@@ -135,6 +135,10 @@ export interface CaptureArtifact {
   /** The pure scorer's only source of corpus-attainability. */
   preflight: PreflightReport
   cases: CaseCapture[]
+  /** sha256 over `cases` (fingerprint.ts), written by the capture stage so
+   * label producers copy it rather than re-hash. Optional: captures from
+   * before this field lack it. */
+  capture_fingerprint?: string
 }
 
 export interface JudgedItemBase {

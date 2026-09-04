@@ -12,6 +12,7 @@ import {
   writeCaptureArtifact,
 } from '../capture'
 import { fetchJson } from '../http'
+import { captureFingerprint } from '../judge'
 import { Evalset } from '../types'
 import { close, listen, readJsonBody, respondJson } from '../test-server'
 
@@ -214,6 +215,9 @@ describe('runCapture', () => {
       { http: fetchJson, git: stubGit, now: stubNow },
     )
     expect(artifact.schema).toBe('answer-eval/capture@1')
+    // The artifact carries its own fingerprint so cross-language consumers
+    // (the eval-review labels notebook) read it instead of re-hashing.
+    expect(artifact.capture_fingerprint).toBe(captureFingerprint(artifact))
     expect(artifact.preflight.corpus_ok).toBe(true)
     expect(artifact.cases.map((c) => c.case_id)).toEqual(['q1', 'q2'])
 

@@ -231,14 +231,20 @@ order-swap check).
 ### Judge calibration against human labels
 
 `run-score --labels <path>` (repeatable; each path is a label file or a
-directory of them) attaches human review labels to the score report. Labels
-are produced by the eval-review repo's system-output notebook: a reviewer
-works through a stored capture and saves one
-`labels-<capture>-<case>-pass<N>-by-<reviewer>.json` file per case, pass, and
-reviewer (schema `answer-eval/human-labels@1`). Every label is validated
-against the capture — its recorded checksum must match — so a label made from
-a different capture run is refused (exit 2, listing every rejection with its
-reason) rather than silently mixed into the report.
+directory, from which only `labels-*.json` files are read — the evalset-review
+notebook's `annot-*.json` files share the same `review-output/` folder)
+attaches human review labels to the score report. Labels are produced by the
+eval-review repo's system-output notebook: a reviewer works through a stored
+capture and saves one `labels-<capture>-<case>-pass<N>-by-<reviewer>.json`
+file per case, pass, and reviewer (schema `answer-eval/human-labels@1`).
+Every label is validated against the capture — its recorded checksum must
+match, and every fact and sentence index must exist in that case and pass —
+so a label made from a different capture run is refused (exit 2, listing
+every rejection with its reason) rather than silently mixed into the report.
+The checksum is a sha256 over the capture's `cases`; the capture stage writes
+it into the artifact as `capture_fingerprint` so the notebook copies it
+rather than re-hashing (Python and Node format small floats differently, so
+a re-hash is not portable).
 
 With labels, the report header changes: `judge: uncalibrated` becomes a
 calibration object (`calibrated`, label count, reviewers) and a

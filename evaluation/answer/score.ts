@@ -26,7 +26,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { averagePrecision } from '../lib/metrics'
-import { judgeHumanAgreement, validateLabelsAgainstCapture } from './labels'
+import { judgeHumanAgreement, labelRejections } from './labels'
 import { expectedIdsOf, isNegative, keyFactsOf, twinOf } from './fixture'
 import { langOf, snippetContained } from './normalize'
 import {
@@ -497,21 +497,11 @@ export function score(
   // not contain is a hard error — every rejection reason is listed, never
   // silently skipped.
   let agreement: JudgeAgreement | undefined
-  if (labels) {
-    const rejected = labels
-      .map((l) => ({
-        file: l.capture_file,
-        v: validateLabelsAgainstCapture(l, capture),
-      }))
-      .filter((x) => !x.v.ok)
+  if (labels && labels.length > 0) {
+    const rejected = labelRejections(labels, capture)
     if (rejected.length > 0) {
-      const reasons = rejected
-        .map(
-          (x) => `${x.file}: ${(x.v as { ok: false; reason: string }).reason}`,
-        )
-        .join('; ')
       throw new Error(
-        `labels invalid: ${rejected.length} of ${labels.length} label file(s) do not match this capture — ${reasons}`,
+        `labels invalid: ${rejected.length} of ${labels.length} label file(s) do not match this capture — ${rejected.join('; ')}`,
       )
     }
     agreement = judgeHumanAgreement(judged, labels, capture)

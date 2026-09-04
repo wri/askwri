@@ -11,8 +11,8 @@
  * silently stand in for the new answers. Items judged by another model or
  * prompt version are re-judged, so one artifact never mixes judges.
  */
-import { createHash } from 'node:crypto'
 import * as fs from 'fs'
+import { captureFingerprint } from './fingerprint'
 import { resolveProvider } from '../../src/lib/llm/chat-completions'
 import {
   JudgeAuthError,
@@ -71,10 +71,7 @@ interface Job {
   item: (r: JudgeOk<any>) => JudgedItem
 }
 
-/** Identity of a capture for resume safety: the cases, not the provenance
- * (a re-capture with identical answers is legitimately the same work). */
-export const captureFingerprint = (capture: CaptureArtifact): string =>
-  createHash('sha256').update(JSON.stringify(capture.cases)).digest('hex')
+export { captureFingerprint } from './fingerprint'
 
 /** Atomic-ish write: temp file + rename, so a reader never sees a torn file. */
 function writeJudgedArtifact(
