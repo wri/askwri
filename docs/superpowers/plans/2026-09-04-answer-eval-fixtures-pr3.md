@@ -16,7 +16,7 @@
 - **No Co-Authored-By trailers** in commits. Targeted edits, not rewrites; read a file before editing it. No features beyond this plan.
 - **No live model/service calls from tests** — mock fetch / local fake `http.Server`s everywhere. The notebooks POST to the Apps Script endpoint only on a human's Save click (never from tests); the ingest script and label loader are pure-file code.
 - **Nothing new runs in CI.** pr-check.yml (app repo) untouched; the eval-review repo has no CI at all.
-- **Out of scope:** clusters 4–5 data (already done on eval-review `origin/main`), Apps Script/Drive plumbing (colleague's, operational), retrieval tuning, answer synthesis prompts, the `/query` contract, `run-evalset.ts` / `run-cite-eval.ts` / cite-mode evals, pairwise adjudication label types (§4.6 — future; schema leaves room). Twin-passage DATA for the two twinned clusters (q1–q7) IS in scope (Tasks A2–A3) — DB access verified 2026-09-04.
+- **Out of scope:** clusters 4–5 data (already done on eval-review `origin/main`), Apps Script/Drive plumbing (colleague's, operational), retrieval tuning, answer synthesis prompts, the `/query` contract, `run-evalset.ts` / `run-cite-eval.ts` / cite-mode evals, pairwise adjudication label types (§4.6 — future; schema leaves room). Twin-passage DATA for the two twinned clusters (q1–q7) IS in scope (Tasks 2–3) — DB access verified 2026-09-04.
 - **Harness contract preservation:** `score()` gains only an optional 4th parameter; existing capture/judged/report artifacts and tests stay valid; `run-score` without `--labels` behaves byte-identically to today.
 - **Eval-review data conventions:** `expected_document_ids` stays `[]`; every field the harness treats as optional stays optional; the evalset file keeps its exact JSON style (2-space indent, `ensure_ascii=False`).
 - **Worktrees:** app repo `.claude/worktrees/answer-eval-pr3` (branch `worktree-answer-eval-pr3` from `origin/qa` @ `82c32ac`) — never `cd` the main checkout; eval-review submodule inside it on branch `answer-eval-pr3` off `baf0b14`. Bash cwd does not persist between calls.
@@ -34,7 +34,7 @@
 4. **The ingest script never writes `rejected`.** Spec §2.4 defines only draft/expert-approved transitions; `rejected` stays a manual maintainer edit. *Cost if wrong:* a rejected-flow rule added later — small, contained change.
 5. **Ingest is idempotent over the full annot directory.** Review markers in `note` are lines starting `[review ` — stripped and regenerated deterministically from every annot file present, so re-running over the same directory produces identical output. Passage drops are re-derived the same way (a no-labeled chunk absent from `expected_passages` is a no-op drop, still blocking approval). Usage: always pass the whole `review-output/` dir. *Cost if wrong:* a maintainer ingests a partial subset and a previously-dropped passage's no-vote goes unseen — documented in the script's help text.
 6. **`twins` data = the 2 confirmed pairs** from `documents-list_20260817.txt` (`translation_of`/`has_translations`, both `confirmed`, mirroring DB `document_relations`): trucks↔charging-toward-2035, dockless-bike↔how-dockless. Clusters 3–5 (container ports zh, both Mexico es) have no twin in the corpus. *Cost if wrong:* a pair is wrong versus the live DB — the documents list is the DB's own refresh artifact and marks both pairs confirmed; re-check on first DB access.
-7. **Twin-passage DATA for clusters 1–2 is IN scope (user-approved 2026-09-04)** — DB access verified via `scripts/with-remote-env.sh qa` + `--sslmode require` (self-test passed against qa RDS). Only those two clusters have twins in the corpus. Resolution follows the migration plan's "Refined workflow" (Tasks A2–A3): fact → locate the EN passage in the twin's markdown (guided by `text_snippet_translation_en`) → unique 15–40 char anchor → batch lookup → append an `expected_passages` entry with the same `supports_key_fact`, `text_snippet` = the DB's `chunk_text`, no translation field. *Cost if wrong:* a mis-resolved twin passage is an additive, optional entry that surfaces as a reviewable passage card in the mode-1 notebook — the review loop catches it; the scorer treats it as another expected passage.
+7. **Twin-passage DATA for clusters 1–2 is IN scope (user-approved 2026-09-04)** — DB access verified via `scripts/with-remote-env.sh qa` + `--sslmode require` (self-test passed against qa RDS). Only those two clusters have twins in the corpus. Resolution follows the migration plan's "Refined workflow" (Tasks 2–3): fact → locate the EN passage in the twin's markdown (guided by `text_snippet_translation_en`) → unique 15–40 char anchor → batch lookup → append an `expected_passages` entry with the same `supports_key_fact`, `text_snippet` = the DB's `chunk_text`, no translation field. *Cost if wrong:* a mis-resolved twin passage is an additive, optional entry that surfaces as a reviewable passage card in the mode-1 notebook — the review loop catches it; the scorer treats it as another expected passage.
 8. **§4.5 label consumption is INCLUDED** (tasking default: include, small): `score()` optional `labels` param + `run-score --labels`; `header.judge` flips from `'uncalibrated'` to a calibration object and a `judge_agreement` block is added. Agreement reuses `judgedAgreement`'s symmetric per-verdict-type tally (agree/either denominators). *Cost if wrong:* cut later — deleting one module + one optional param reverts it.
 9. **`updated` only, never `version`, from ingest.** The evalset's version-bump convention (once, after deliberate content milestones, by hand) is preserved; the script refreshes the top-level `updated` date. *Cost if wrong:* version numbering drifts from maintainer convention — trivially fixed.
 10. **Language split of agreement is not implemented** (§4.4's zh/en split): all 16 current cases are zh/es-source, so the split is one empty bucket today. *Cost if wrong:* an English-source evalset arrives — add the grouping then, data is already per-case in the report.
@@ -92,7 +92,7 @@ Flow: notebook (local or molab/WASM) → `review-output/` + Drive → maintainer
 | File | Responsibility |
 |---|---|
 | Modify `evalsets/evalset_answer_02.json` | Add `twins` (2 confirmed pairs); add 3 negative cases (q17–q19). |
-| Modify `evalsets/evalset_answer_02.json` (Tasks A2–A3) | Append EN twin-passage entries to q1–q4 and q5–q7 `expected_passages`. |
+| Modify `evalsets/evalset_answer_02.json` (Tasks 2–3) | Append EN twin-passage entries to q1–q4 and q5–q7 `expected_passages`. |
 | Create `scripts/ingest_review_status.py` | §2.4 ingest: annot dir → `review_status` + passage drops + note markers; idempotent; `--dry-run`. |
 | Create `tests/test_ingest_review_status.py` | Rules table over synthetic annot sets. |
 | Create `tests/test_capture_fingerprint.py` | Python mirror of `captureFingerprint()` pinned against a committed fixture. |
@@ -121,7 +121,7 @@ Flow: notebook (local or molab/WASM) → `review-output/` + Drive → maintainer
 
 ## Part A — eval-review repo
 
-### Task A1: `twins` + negative cases (fixture data)
+### Task 1: `twins` + negative cases (fixture data)
 
 **Files:** Modify `evalsets/evalset_answer_02.json`.
 
@@ -196,7 +196,7 @@ Flow: notebook (local or molab/WASM) → `review-output/` + Drive → maintainer
 - [ ] **Step 3: Validate.** First `npm --prefix .claude/worktrees/answer-eval-pr3 install` (the fresh worktree has no node_modules; jest cold-cache runs take a couple of minutes — normal). Then, from the app worktree root, one command: `npx tsx -e "import {loadEvalset, isNegative} from './evaluation/answer/fixture'; const es = loadEvalset('evaluation/eval-review/evalsets/evalset_answer_02.json'); console.log(es.twins, es.test_cases.length, es.test_cases.filter(isNegative).map(c => c.id));"`. Expected output: the 2 pairs, 19, and the three q17–q19 ids. Also bump the top-level `updated` to `2026-09-04`; leave `version` and `description` untouched (ruling 9).
 - [ ] **Step 4:** Commit (in the submodule): `feat(evalset): add twins pairs and 3 negative cases (spec §2.1)`.
 
-### Task A2: Twin passages — cluster 1 (q1–q4, EN twin `charging-toward-2035`)
+### Task 2: Twin passages — cluster 1 (q1–q4, EN twin `charging-toward-2035`)
 
 **Files:** Modify `evalsets/evalset_answer_02.json` (q1–q4 `expected_passages` only); scratch batch files under `/tmp` (not committed).
 
@@ -218,11 +218,11 @@ Flow: notebook (local or molab/WASM) → `review-output/` + Drive → maintainer
 
 **Review note (reviewer subagent):** re-check a sample of anchors against the twin's markdown — each anchor must appear (normalized) exactly once AND its surrounding text must actually state the fact it is attached to.
 
-### Task A3: Twin passages — cluster 2 (q5–q7, EN twin `how-dockless-bike-sharing`)
+### Task 3: Twin passages — cluster 2 (q5–q7, EN twin `how-dockless-bike-sharing`)
 
-Same workflow as Task A2 for the 10 facts of q5–q7, twin doc `kp-docs/markdown/2020_how-dockless-bike-sharing-changes-lives-an_2277.md`, batch files `/tmp/twin-cluster2-quotes.json` / `/tmp/twin-cluster2-resolved.json`, entry `doc_id` `2020_how-dockless-bike-sharing-changes-lives-an_2277`. Commit: `feat(evalset): resolve EN twin passages for q5-q7 (spec §2.1, §8 item 1)`.
+Same workflow as Task 2 for the 10 facts of q5–q7, twin doc `kp-docs/markdown/2020_how-dockless-bike-sharing-changes-lives-an_2277.md`, batch files `/tmp/twin-cluster2-quotes.json` / `/tmp/twin-cluster2-resolved.json`, entry `doc_id` `2020_how-dockless-bike-sharing-changes-lives-an_2277`. Commit: `feat(evalset): resolve EN twin passages for q5-q7 (spec §2.1, §8 item 1)`.
 
-### Task A4: Ingest script (§2.4, TDD)
+### Task 4: Ingest script (§2.4, TDD)
 
 **Files:** Create `scripts/ingest_review_status.py`, `tests/test_ingest_review_status.py`; Modify `pyproject.toml`, `uv.lock`.
 
@@ -242,7 +242,7 @@ Same workflow as Task A2 for the 10 facts of q5–q7, twin doc `kp-docs/markdown
 }
 ```
 
-  (`negative_case_review` only on negative cases — Task A5 adds it; `synthesis_review` may be `null`.) Labels are `"yes" | "no" | "skip"` (molabel `SimpleLabel`).
+  (`negative_case_review` only on negative cases — Task 5 adds it; `synthesis_review` may be `null`.) Labels are `"yes" | "no" | "skip"` (molabel `SimpleLabel`).
 - Produces: `ingest(evalset_dict, annot_files) -> (new_evalset_dict, report_lines)` as a pure function; CLI wrapper writes the evalset in place.
 
 - [ ] **Step 1:** `uv --directory <submodule> add --dev pytest` (updates pyproject + uv.lock; no app-repo effect).
@@ -304,21 +304,21 @@ Pure core: ingest(evalset: dict, annots: list[dict]) -> (dict, list[str]).
 - [ ] **Step 5:** Run pytest — all green. Run the CLI against the real evalset with an empty tmp annot dir → expect "no annot files found" exit, evalset untouched.
 - [ ] **Step 6:** Commit: `feat(review): ingest annot files into review_status per spec §2.4`.
 
-### Task A5: Negative-case branch in the mode-1 notebook
+### Task 5: Negative-case branch in the mode-1 notebook
 
 **Files:** Modify `notebooks/review-evalset-answer.py`.
 
 **Interfaces:**
-- Consumes: the payload shape from Task A4 (adds `negative_case_review`).
+- Consumes: the payload shape from Task 4 (adds `negative_case_review`).
 - Produces: negative cases reviewable end-to-end (validity card → save → ingest).
 
 - [ ] **Step 1:** Read the notebook in full. Add a negative-case predicate cell (mirroring the harness's `isNegative`): `is_negative_case = (not selected_query["retrieval_ground_truth"].get("expected_external_ids")) and (not selected_query["synthesis_ground_truth"].get("key_facts"))`.
-- [ ] **Step 2:** In the passage-review section: when `is_negative_case`, replace the (empty) passage widget with a single-item `SimpleLabel` card showing question + `note` + the prompt "Is this a valid negative case (AskWRI should NOT produce an answer)?" — reuse `render_synthesis_card`'s styling pattern with a new `render_negative_case_card`. Hide the synthesis-review section (nothing to review). Passage cards render the "English translation:" block only when `text_snippet_translation_en` is non-empty (twin passages from Tasks A2–A3 are already English). When not negative: behavior byte-identical to today.
+- [ ] **Step 2:** In the passage-review section: when `is_negative_case`, replace the (empty) passage widget with a single-item `SimpleLabel` card showing question + `note` + the prompt "Is this a valid negative case (AskWRI should NOT produce an answer)?" — reuse `render_synthesis_card`'s styling pattern with a new `render_negative_case_card`. Hide the synthesis-review section (nothing to review). Passage cards render the "English translation:" block only when `text_snippet_translation_en` is non-empty (twin passages from Tasks 2–3 are already English). When not negative: behavior byte-identical to today.
 - [ ] **Step 3:** In the save cell: payload gains `"negative_case_review": {label, notes, timestamp}` for negative cases (and `reviewed_passages: []`, `synthesis_review: null`); positive cases' payload unchanged. The dirty-tracking cell adds the validity widget as a dependency. The progress-chip "done" logic treats a negative case as done when its validity was saved.
 - [ ] **Step 4:** Verify: `python3 -m py_compile notebooks/review-evalset-answer.py` (from the submodule dir); manual smoke per the notebook's own header (`uv run marimo edit notebooks/review-evalset-answer.py`, select the evalset, confirm q17 shows the validity card and q1 shows passages+synthesis; Save writes `review-output/annot-evalset_answer_02-q17_...-by-<name>.json` with `negative_case_review` — delete the smoke file after).
 - [ ] **Step 5:** Commit: `feat(notebook): review negative cases via a case-validity card`.
 
-### Task A6: System-output review notebook (mode 2)
+### Task 6: System-output review notebook (mode 2)
 
 **Files:** Create `notebooks/review-system-output-answer.py`, `tests/test_capture_fingerprint.py`, `tests/fixtures/capture-fingerprint-pin.json`.
 
@@ -360,7 +360,7 @@ def test_mirror_matches_harness_fingerprint():
 - [ ] **Step 5:** Verify: `python3 -m py_compile notebooks/review-system-output-answer.py`; manual smoke: `uv run marimo edit`, upload the pin fixture (or any capture), label one case, save, confirm `review-output/labels-…-pass0-by-me.json` matches the schema and its fingerprint matches the notebook's computed value; delete the smoke file.
 - [ ] **Step 6:** Commit: `feat(notebook): system-output review — human labels on stored captures (§2.4 mode 2)`.
 
-### Task A7: Docs
+### Task 7: Docs
 
 **Files:** Create `eval-generation-notes/twin-passages-workflow_20260904.md`; Modify `README.md`.
 
@@ -368,21 +368,21 @@ def test_mirror_matches_harness_fingerprint():
 - [ ] **Step 2:** README: add the molab badge link for `notebooks/review-system-output-answer.py` (same pattern as the existing two); add a "Review workflow (Answer mode)" section — notebook 1 reviews the evalset (annot files) → `scripts/ingest_review_status.py` writes `review_status` (usage line + the always-pass-the-whole-dir caveat) → notebook 2 labels stored captures for judge calibration (`labels-*.json`, consumed by the harness's `run-score --labels`).
 - [ ] **Step 3:** Commit: `docs: twin-passage workflow + answer review workflow sections`.
 
-### Task A8: PR A verification + PR
+### Task 8: PR A verification + PR
 
-- [ ] **Step 1:** Full gates in the submodule: `uv --directory <submodule> run pytest tests/ -v` (all test files green — ingest, fingerprint pin); `python3 -m py_compile` on both notebooks; the Task A1 harness-loader validation still passes (19 cases, 2 twins, 3 negatives); twin-passage counts from Tasks A2–A3 reported (resolved/total); `git -C <submodule> diff --stat` review — no stray files (`review-output/` stays untracked/ignored).
+- [ ] **Step 1:** Full gates in the submodule: `uv --directory <submodule> run pytest tests/ -v` (all test files green — ingest, fingerprint pin); `python3 -m py_compile` on both notebooks; the Task 1 harness-loader validation still passes (19 cases, 2 twins, 3 negatives); twin-passage counts from Tasks 2–3 reported (resolved/total); `git -C <submodule> diff --stat` review — no stray files (`review-output/` stays untracked/ignored).
 - [ ] **Step 2:** Push + open PR against `gofenris/askwri-eval-review` main: title `feat: answer-eval PR 3 — twins, negative cases, review-status ingest, system-output review notebook`. Body: spec §2.1/§2.4 mapping, the label schema (full JSON), the rulings that touch data (twins source, negative-case questions, idempotent ingest), the DB-blocked twin-passage DATA scope, and a note that the app-repo pin bump follows in the app repo's PR. Report the PR URL to the user. **Do not merge without authorization.**
 
 ---
 
 ## Part B — app repo (after PR A merges)
 
-### Task B1: Submodule pin bump
+### Task 9: Submodule pin bump
 
 - [ ] **Step 1:** `git -C <submodule> fetch origin` then `git -C <submodule> switch --detach <PR A merge commit>` (user supplies/confirms the SHA after authorizing the merge).
 - [ ] **Step 2:** From the app worktree: `git add evaluation/eval-review` + commit `chore(eval): pin eval-review to answer-eval PR 3 merge` — include the shortlog of what the bump brings in (notebook, clusters 4–5, ingest, twins/negatives data).
 
-### Task B2: `labels.ts` + types (TDD)
+### Task 10: `labels.ts` + types (TDD)
 
 **Files:** Create `evaluation/answer/labels.ts`, `evaluation/answer/__tests__/labels.test.ts`, `evaluation/answer/__tests__/fixtures/capture-fingerprint-pin.json`; Modify `evaluation/answer/types.ts`.
 
@@ -427,15 +427,15 @@ export function judgeHumanAgreement(judged: JudgedArtifact, labels: HumanLabels[
 - [ ] **Step 1: Write the failing tests** (`labels.test.ts`, node docblock): a hand-built minimal capture (reuse the pin fixture + a fuller 2-case synthetic) + judged artifact + labels — (1) parse accepts the schema (all fields) and rejects: wrong `schema` string, non-hex/short fingerprint, empty reviewer, `fact_verdicts` with out-of-range index or bad enum, `sentence_verdicts` same — each error names the origin; (2) `loadLabelsFrom` over a dir: sorted, `*.json` only; (3) `validateLabelsAgainstCapture`: fingerprint mismatch → reason; unknown case/pass → reason; (4) **fingerprint pin**: `captureFingerprint(pinFixture)` equals the same hex constant PR A's pytest asserts (copy the fixture + hex); (5) `judgeHumanAgreement` exact tallies: 3 facts (judge stated/stated/absent vs human stated/partial/absent → stated 1/2, partial 0/1, absent 1/1, excluded 0), 2 cited sentences (one disagreement → supported 1/2, unsupported 1/1... adjust to concrete numbers in the test), zero-cite sentence agreement vs `unsupported_sentence_indices` (agree/compared exact), labels whose (case,pass) has no judged item → `excluded` counts, reviewers deduped, deterministic key order.
 - [ ] **Step 2:** Run to verify fail. **Step 3:** Implement `labels.ts` (pure; no fs beyond `loadLabelsFrom`; mirror `judgedAgreement`'s tally logic from `compare.ts` — same symmetric either-denominator). **Step 4:** Verify pass + lint. **Step 5:** Commit: `feat(eval): human-label loader + judge-vs-human agreement tallies (§4.5)`.
 
-### Task B3: `score()` labels param + `run-score --labels` (TDD)
+### Task 11: `score()` labels param + `run-score --labels` (TDD)
 
 **Files:** Modify `evaluation/answer/score.ts`, `evaluation/answer/run-score.ts`, `evaluation/answer/__tests__/score.test.ts`.
 
 **Interfaces:**
-- Consumes: `HumanLabels`, `JudgeAgreement`, `judgeHumanAgreement` from B2.
+- Consumes: `HumanLabels`, `JudgeAgreement`, `judgeHumanAgreement` from Task 10.
 - Produces: `score(evalset, capture, judged, labels?: HumanLabels[]): Report` — with labels: `header.judge = { calibrated: true, labels: N, reviewers: [...] }` and `header.judge_agreement = JudgeAgreement`; without: byte-identical to today.
 
-- [ ] **Step 1: Failing tests** (extend `score.test.ts`): (1) score with labels → header flips from `'uncalibrated'` to the calibration object, `judge_agreement` present with exact tallies from a hand-built pair; (2) score without labels → `header.judge === 'uncalibrated'`, no `judge_agreement` key; (3) **replay determinism with labels**: two calls over the same 4 inputs → identical `JSON.stringify`; (4) labels referencing a case the capture lacks → throws (validation surfaced from B2, not silently skipped).
+- [ ] **Step 1: Failing tests** (extend `score.test.ts`): (1) score with labels → header flips from `'uncalibrated'` to the calibration object, `judge_agreement` present with exact tallies from a hand-built pair; (2) score without labels → `header.judge === 'uncalibrated'`, no `judge_agreement` key; (3) **replay determinism with labels**: two calls over the same 4 inputs → identical `JSON.stringify`; (4) labels referencing a case the capture lacks → throws (validation surfaced from Task 10, not silently skipped).
 - [ ] **Step 2:** Verify fail. **Step 3:** Implement: `score()` gains the optional param; compute `judgeHumanAgreement` once when labels are present and merge into `header` (after `judge: 'uncalibrated'`'s current position — replace the literal with the calibration object; keep every other header field and its order untouched). `run-score.ts`: parse `--labels <path>` (repeatable) after `--capture`/`--judged`/`--label` (same parser loop); when present: `loadLabelsFrom`, validate each against the capture (hard error listing every rejected file + reason), pass to `score`, and print after the current `judge:` line:
 
 ```
@@ -445,7 +445,7 @@ export function judgeHumanAgreement(judged: JudgedArtifact, labels: HumanLabels[
 
   **Step 4:** Verify pass + lint. **Step 5:** Commit: `feat(eval): score consumes human labels — judge-vs-human agreement per verdict type (§4.5)`.
 
-### Task B4: README + gates + PR B
+### Task 12: README + gates + PR B
 
 **Files:** Modify `evaluation/README.md`.
 
@@ -453,7 +453,7 @@ export function judgeHumanAgreement(judged: JudgedArtifact, labels: HumanLabels[
 - [ ] **Step 2:** Full gates in the app worktree: `npm test` (expect the known-clean baseline + new suites green — count and report), `npm run lint` (warnings pre-existing only), `npm run format:check`, `npx --prefix <worktree> tsc --project <worktree>/tsconfig.json --noEmit` (zero new errors).
 - [ ] **Step 3:** Push + PR against `qa`: title `feat(eval): answer-eval PR 3 — submodule pin bump + judge calibration from human labels`. Body: pin-bump shortlog, §4.5 consumption summary, schema reference (link to PR A), rulings 8/10/11, out-of-scope list. Report PR URL + CI (poll `gh run view <id> --json status,conclusion`). **Do not merge without authorization.**
 
-### Task B5: Cross-cutting review + report
+### Task 13: Cross-cutting review + report
 
 - [ ] **Step 1:** Whole-branch review of both diffs against the spec (§2.1, §2.4, §4.5, §8 items 1/3/4/5/9): walk the Self-review checklist below; fix gaps as a final commit each repo.
 - [ ] **Step 2:** Report to the user: PR URLs, test counts, every ruling with its cost-if-wrong, the DB-blocked items (twin-passage DATA, any corpus validation), and anything left out with the reason.
@@ -463,18 +463,18 @@ export function judgeHumanAgreement(judged: JudgedArtifact, labels: HumanLabels[
 ## Self-review (fill at the final task; walk against the spec)
 
 **Spec coverage:**
-- §2.1 `twins` at evalset top level → Task A1 (data; harness support shipped in PR 2).
-- §2.1 twin passages → Tasks A2–A3 (data, both twinned clusters) + Task A7 (workflow note for future clusters); harness support shipped in PR 2.
-- §2.1 `review_status` written by ingest → Task A4.
-- §2.1 negative cases → Task A1 (data) + A5 (review branch) + A4 (ingest rules) + PR 2 (scoring).
-- §2.4 ingest rules (passage no → dropped + fact flagged; answer no → draft + note; all-yes → expert_approved; conflicts → draft listing both) → Task A4 rules table, tests 1–9.
-- §2.4 second notebook mode (per-fact stated/absent, per-sentence supported/unsupported on a stored capture) → Task A6.
-- §4.5 label consumption (score prints judge vs human agreement per verdict type; header uncalibrated until labels) → Tasks B2/B3.
-- §8 item 9 submodule pin bump → Task B1 (to PR A's merge commit).
-- §8 items 1/3/4/5 — item 1 (twin passages) executed in Tasks A2–A3 per user approval 2026-09-04; items 3/4/5 tooling in-repo, operation with the colleague.
+- §2.1 `twins` at evalset top level → Task 1 (data; harness support shipped in PR 2).
+- §2.1 twin passages → Tasks 2–3 (data, both twinned clusters) + Task 7 (workflow note for future clusters); harness support shipped in PR 2.
+- §2.1 `review_status` written by ingest → Task 4.
+- §2.1 negative cases → Task 1 (data) + 5 (review branch) + 4 (ingest rules) + PR 2 (scoring).
+- §2.4 ingest rules (passage no → dropped + fact flagged; answer no → draft + note; all-yes → expert_approved; conflicts → draft listing both) → Task 4 rules table, tests 1–9.
+- §2.4 second notebook mode (per-fact stated/absent, per-sentence supported/unsupported on a stored capture) → Task 6.
+- §4.5 label consumption (score prints judge vs human agreement per verdict type; header uncalibrated until labels) → Tasks 10/11.
+- §8 item 9 submodule pin bump → Task 9 (to PR A's merge commit).
+- §8 items 1/3/4/5 — item 1 (twin passages) executed in Tasks 2–3 per user approval 2026-09-04; items 3/4/5 tooling in-repo, operation with the colleague.
 
 **Placeholder scan:** every task's steps contain the actual JSON/code/commands; no TBDs.
 
-**Type consistency:** `HumanLabels` fields match the notebook's payload exactly (Task A4 Step 4 cell 7 vs B2 interface); the fingerprint pin hex + fixture are shared byte-identically between repos; `JudgeAgreement`'s tally shape mirrors `compare.ts`'s `VerdictTally`.
+**Type consistency:** `HumanLabels` fields match the notebook's payload exactly (Task 6 Step 4 cell 7 vs Task 10 interface); the fingerprint pin hex + fixture are shared byte-identically between repos; `JudgeAgreement`'s tally shape mirrors `compare.ts`'s `VerdictTally`.
 
 **Process:** every dispatch is `context: "fresh"`; reviewer prompts open with "Review only — return findings only."; tests run by the orchestrator before the reviewer dispatch; fix rounds resume the implementer; minor findings park in the ledger with rulings.
