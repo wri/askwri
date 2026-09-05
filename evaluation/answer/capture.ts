@@ -13,6 +13,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { SYS_V1, SYS_V2 } from '@/app/api/answer/route'
 import { Controls } from './cli'
+import { captureFingerprint } from './fingerprint'
 import { expectedIdsOf, loadEvalset } from './fixture'
 import { fetchJson } from './http'
 import { preflight } from './preflight'
@@ -356,12 +357,16 @@ export async function runCapture(
   const caseCaptures: Array<CaseCapture | undefined> = new Array(
     selected.length,
   )
-  const artifact = (): CaptureArtifact => ({
-    schema: 'answer-eval/capture@1',
-    provenance,
-    preflight: report,
-    cases: caseCaptures.filter((c): c is CaseCapture => c !== undefined),
-  })
+  const artifact = (): CaptureArtifact => {
+    const cases = caseCaptures.filter((c): c is CaseCapture => c !== undefined)
+    return {
+      schema: 'answer-eval/capture@1',
+      provenance,
+      preflight: report,
+      cases,
+      capture_fingerprint: captureFingerprint({ cases }),
+    }
+  }
 
   let effective: { model?: string; base_url?: string } | undefined
   let costTotal = 0

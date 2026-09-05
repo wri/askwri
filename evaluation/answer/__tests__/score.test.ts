@@ -2,10 +2,12 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
+import { captureFingerprint } from '../judge'
 import { score, writeReportArtifact } from '../score'
 import {
   CaptureArtifact,
   Evalset,
+  HumanLabels,
   JudgedArtifact,
   JudgedItem,
   PassCapture,
@@ -727,5 +729,113 @@ describe('score — determinism (§6)', () => {
     )
     expect(path.basename(f1)).toBe('report-replay.json')
     expect(fs.readFileSync(f1, 'utf8')).toBe(fs.readFileSync(f2, 'utf8'))
+  })
+})
+
+describe('score — human labels (§4.5 judge calibration)', () => {
+  /** Labels over q1 (both passes have identical judged items): fact 0
+   * stated, fact 1 partial; sentences 0/1 cited with matching verdicts,
+   * sentence 2 zero-cite (unsupported_claims lane only). */
+  const makeLabels = (over: Partial<HumanLabels> = {}): HumanLabels => ({
+    schema: 'answer-eval/human-labels@1',
+    capture_file: 'labels/q1.json',
+    capture_fingerprint: captureFingerprint(capture),
+    case_id: 'q1',
+    pass: 0,
+    reviewer: 'fenris',
+    fact_verdicts: [
+      { fact_index: 0, verdict: 'stated' },
+      { fact_index: 1, verdict: 'partial' },
+    ],
+    sentence_verdicts: [
+      { sentence_index: 0, verdict: 'supported' },
+      { sentence_index: 1, verdict: 'unsupported' },
+      { sentence_index: 2, verdict: 'unsupported' },
+    ],
+    ...over,
+  })
+
+  // Two reviewers over q1's two passes — all judged verdicts agree.
+  const labels: HumanLabels[] = [
+    makeLabels(),
+    makeLabels({ pass: 1, reviewer: 'ada', capture_file: 'labels/q1-b.json' }),
+  ]
+
+  const withLabels = score(evalset, capture, judged, labels)
+
+  it('header.judge flips from uncalibrated to the exact calibration object', () => {
+    const h = withLabels.header as Record<string, any>
+    expect(h.judge).toEqual({
+      calibrated: true,
+      labels: 2,
+      reviewers: ['ada', 'fenris'],
+    })
+  })
+
+  it('header.judge_agreement carries the exact per-verdict-type tallies', () => {
+    const ag = (withLabels.header as Record<string, any>).judge_agreement
+    // fact 0: judge stated = human stated; fact 1: judge partial = human partial
+    expect(ag.fact_recall.stated).toEqual({
+      agree: { stated: 2 },
+      either: { stated: 2 },
+      excluded: 0,
+    })
+    expect(ag.fact_recall.partial).toEqual({
+      agree: { partial: 2 },
+      either: { partial: 2 },
+      excluded: 0,
+    })
+    expect(ag.fact_recall.absent).toEqual({
+      agree: {},
+      either: {},
+      excluded: 0,
+    })
+    // sentence 0 supported/supported, sentence 1 unsupported/unsupported;
+    // sentence 2 is zero-cite → joins unsupported_claims only.
+    expect(ag.sentence_support.supported).toEqual({
+      agree: { supported: 2 },
+      either: { supported: 2 },
+      excluded: 0,
+    })
+    expect(ag.sentence_support.unsupported).toEqual({
+      agree: { unsupported: 2 },
+      either: { unsupported: 2 },
+      excluded: 0,
+    })
+    // 3 labeled sentences × 2 labels; s0 ✓, s2 ✓, s1 ✗ per label.
+    expect(ag.unsupported_claims).toEqual({ agree: 4, compared: 6 })
+    expect(ag.labels).toBe(2)
+    expect(ag.reviewers).toEqual(['ada', 'fenris'])
+  })
+
+  it('without labels: header.judge stays uncalibrated and judge_agreement is absent', () => {
+    const h = report.header as Record<string, any>
+    expect(h.judge).toBe('uncalibrated')
+    expect('judge_agreement' in h).toBe(false)
+  })
+
+  it('an empty labels array is the same as no labels (never "calibrated: 0")', () => {
+    const empty = score(evalset, capture, judged, [])
+    expect(JSON.stringify(empty)).toBe(JSON.stringify(report))
+  })
+
+  it('replay determinism WITH labels: two calls stringify identically', () => {
+    const again = score(evalset, capture, judged, labels)
+    expect(JSON.stringify(again)).toBe(JSON.stringify(withLabels))
+  })
+
+  it('labels referencing a case the capture lacks → hard error naming the case', () => {
+    expect(() =>
+      score(evalset, capture, judged, [makeLabels({ case_id: 'nope' })]),
+    ).toThrow(/nope/)
+    expect(() =>
+      score(evalset, capture, judged, [makeLabels({ case_id: 'nope' })]),
+    ).toThrow(/unknown case_id/)
+  })
+
+  it('labels for an unknown pass of a known case → hard error naming case and pass', () => {
+    expect(() =>
+      score(evalset, capture, judged, [makeLabels({ pass: 7 })]),
+    ).toThrow(/q1.*pass 7|pass 7.*q1/)
   })
 })

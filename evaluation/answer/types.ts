@@ -135,6 +135,10 @@ export interface CaptureArtifact {
   /** The pure scorer's only source of corpus-attainability. */
   preflight: PreflightReport
   cases: CaseCapture[]
+  /** sha256 over `cases` (fingerprint.ts), written by the capture stage so
+   * label producers copy it rather than re-hash. Optional: captures from
+   * before this field lack it. */
+  capture_fingerprint?: string
 }
 
 export interface JudgedItemBase {
@@ -195,4 +199,53 @@ export interface Report {
   headline: Record<string, unknown>
   draft_block: Record<string, unknown>
   per_case: Array<Record<string, unknown>>
+}
+
+// -------------------------------------------------------------------------
+// Human labels (§4.5) — produced by the eval-review notebook, consumed by
+// evaluation/answer/labels.ts. Schema `answer-eval/human-labels@1`.
+// -------------------------------------------------------------------------
+
+export interface HumanFactVerdict {
+  fact_index: number
+  verdict: 'stated' | 'partial' | 'absent'
+  evidence?: string
+}
+
+export interface HumanSentenceVerdict {
+  sentence_index: number
+  verdict: 'supported' | 'unsupported'
+  span?: string
+  note?: string
+}
+
+export interface HumanLabels {
+  schema: 'answer-eval/human-labels@1'
+  capture_file: string
+  capture_fingerprint: string
+  case_id: string
+  pass: number
+  reviewer: string
+  question?: string
+  key_facts?: string[]
+  fact_verdicts: HumanFactVerdict[]
+  sentence_verdicts: HumanSentenceVerdict[]
+  overall_note?: string
+}
+
+/** One verdict type's judge-vs-human tally. `either` is the symmetric
+ * denominator (positions where at least one side said v); `excluded` counts
+ * human verdicts whose judged counterpart is missing or unjudged. */
+export interface VerdictTally {
+  agree: Record<string, number>
+  either: Record<string, number>
+  excluded: number
+}
+
+export interface JudgeAgreement {
+  fact_recall: Record<'stated' | 'partial' | 'absent', VerdictTally>
+  sentence_support: Record<'supported' | 'unsupported', VerdictTally>
+  unsupported_claims: { agree: number; compared: number }
+  labels: number
+  reviewers: string[]
 }

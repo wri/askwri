@@ -1,0 +1,56 @@
+{
+  "schema": "answer-eval/capture@1",
+  "provenance": {
+    "fixture": { "path": "evalsets/evalset_answer_02.json", "name": "evalset_answer_02.json", "commit": "abc1234" },
+    "target": { "mode": "gateway", "urls": ["https://qa.example.org/api/query"], "config": null },
+    "knobs": { "retrieval": {}, "synthesis": {} },
+    "synthesis": { "model": "gpt-5-mini", "base_url": "https://api.openai.com/v1", "prompt_hashes": {} },
+    "passes": 1, "harness_sha": "def5678", "timestamp": "2026-09-04T00:00:00Z", "node_version": "v22.0.0"
+  },
+  "preflight": {
+    "corpus_ok": true, "missing_docs": [], "snippet_failures": [], "twins_ok": true,
+    "synthesis_probe_ok": true, "judge_probe_ok": true, "approved": 1, "draft": 0, "rejected": 0,
+    "estimated_calls": { "retrieval": 1, "synthesis": 1, "judge": 1 }
+  },
+  "cases": [
+    {
+      "case_id": "q1_pin",
+      "fixture_case": {
+        "id": "q1_pin", "question": "中国森林覆盖率是多少？",
+        "retrieval_ground_truth": {
+          "expected_passages": [
+            { "doc_id": "doc_zh", "chunk_id": "zh_chunk_1", "text_snippet": "全球森林覆盖率约为31%，其中热带森林占最大比例。" }
+          ]
+        },
+        "synthesis_ground_truth": { "key_facts": ["全球森林覆盖率约31%"] }
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "retrieval": {            "chunks": [
+              { "rank": 0, "doc_id": "doc_zh", "chunk_id": "zh_chunk_1", "text": "全球森林覆盖率约为31%。", "score": 0.87 },
+              { "rank": 1, "doc_id": "doc_en", "chunk_id": null, "text": "Forests cover roughly 31% of the land area.", "score": 0.72 }
+            ],
+            "likely_off_topic": false,
+            "service_ms": 42,
+            "cost_usd": null,
+            "wall_ms": 51
+          },
+          "answer": {
+            "knobs": {},
+            "passages_sent": [
+              { "id": 1, "doc_id": "doc_zh", "chunk_id": "zh_chunk_1", "page": 3, "text": "全球森林覆盖率约为31%。" },
+              { "id": 2, "doc_id": "doc_en", "chunk_id": "en_chunk_2", "page": 1, "text": "Forests cover roughly 31% of the land area." }
+            ],
+            "sentences": ["全球森林覆盖率约为31%。", "Forests cover roughly 31% of the land area."],
+            "cites": [[1], []],
+            "raw_model_json": "{\"sentences\":[],\"cites\":[]}",
+            "low_coverage": false,
+            "invalid_cites": 0,
+            "wall_ms": 812
+          }
+        }
+      ]
+    }
+  ]
+}
