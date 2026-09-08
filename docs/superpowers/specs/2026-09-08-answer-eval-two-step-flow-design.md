@@ -311,10 +311,14 @@ Steps 1 and 2 can proceed in parallel; 2 blocks 3.
   model** — a self-judging hazard for interpreting the smoke-era verdicts
   (the prior spec's judge-must-differ principle). Decide (and differ)
   before baselines.
-- **Deployed env values unverified:** `USE_NANO_FILTER` (the nano filter is
-  env-gated; if off on QA, "part of what we measure" is vacuous) and
-  `translation_pairs_enabled`. Both are read-only checks against the QA
-  task definition once AWS access is back.
+- **Deployed env values verified 2026-09-08 (AWS, qa task defs):**
+  `USE_NANO_FILTER` is **unset** → the nano filter is **off** on QA (code
+  default `'false'`); `translation_pairs_enabled` is unset → **off**
+  (code default `False`); `OPENAI_MODEL=gpt-5.4-mini`, no
+  `LUNAROUTE_BASE_URL` (QA synthesis calls api.openai.com directly —
+  consistent with the smoke capture's debug knobs). Consequence: today's QA
+  answers are synthesized without the nano relevance filter; if the eval
+  should measure it, it must be enabled on QA first.
 - Submodule pin bump follow-up from PR #398 is still pending.
 
 ## 12. Out of scope
