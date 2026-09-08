@@ -1,6 +1,7 @@
 /* eslint-disable */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { isEnglishText } from '@/lib/ensure-english'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -221,6 +222,17 @@ Rules:
         })
       }
 
+      // Issue #387: the model sometimes mirrors Chinese passages despite the
+      // prompt rule — replace mirrored output with the English fallback.
+      const sanitized = explanations.map((exp: any) =>
+        isEnglishText(exp?.why)
+          ? exp
+          : {
+              why: 'This passage provides relevant context for the query.',
+              relation: 'indirect',
+            },
+      )
+
       console.log('[batch-why] Successfully parsed explanations:', {
         count: explanations.length,
         explanations: explanations.map((exp, i) => ({
@@ -234,7 +246,7 @@ Rules:
 
       return NextResponse.json({
         ok: true,
-        explanations: explanations.slice(0, passages.length), // Ensure exact match
+        explanations: sanitized.slice(0, passages.length), // Ensure exact match
         usage: data.usage,
         debug: { rawContent: content.slice(0, 200) },
       })
