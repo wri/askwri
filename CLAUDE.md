@@ -11,6 +11,25 @@ Research interface over WRI's published corpus. Three services:
 Deployed on AWS ECS Fargate via `terraform/`; RDS Postgres (provisioned OUTSIDE this repo's
 Terraform); S3 for PDFs and derived artifacts.
 
+## Branches & deploys — read this before pushing anything
+
+The default branch is **`qa`**: all work lands there via PR, and pushes to `qa`
+auto-deploy the QA environment (tests gate the deploy; docs-only pushes deploy nothing).
+
+**Pushing to `main` or `production` deploys PRODUCTION immediately — no promotion
+step, no approval gate.** Merging a PR whose base is `main` *is* a production
+deploy (GitHub fires `deploy-production.yml` on any non-docs push within seconds).
+Never target `main` with a PR, and never push or sync it, unless releasing to
+production is the explicit intent — releases go through the `production` branch
+per the runbook. Trap edge to know: docs-only pushes (`.md`, `docs/**`) deploy
+*nothing* on either branch, so a "safe-looking" main push can hide the fact that
+the next code push there ships straight to prod.
+
+This has bitten twice (PR #360 on 2026-08-25 and PR #395 on 2026-09-02 — both
+merged to `main` believing it was inert code-landing, both deployed production
+unintentionally). The README's "Deploy to Production: `git push origin main`"
+section is leftover template text and does not describe this repo's release flow.
+
 ## Commands
 - `npm run dev` / `npm run build` — Next.js. Local prod builds: `npx next build --webpack`
   (Turbopack panics on the `search-service/venv` symlink).
