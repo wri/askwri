@@ -143,11 +143,24 @@ export interface PreflightReport {
   estimated_calls: { retrieval: number; synthesis: number; judge: number }
 }
 
+/** The selection a run was answered within (spec §4/§5): either the
+ * fixture's curated doc set (fixture-set mode) or the top-20 of a cite
+ * query (no-selection mode, the UI's default path). Recorded top-level
+ * and copied per pass; hashed into the capture fingerprint. */
+export interface SelectionBlock {
+  mode: 'fixture-set' | 'no-selection'
+  by_case: Array<{ case_id: string; selected_doc_ids: string[] }>
+}
+
 export interface CaptureArtifact {
-  schema: 'answer-eval/capture@1'
+  /** Writers emit `answer-eval/capture@2`; `@1` artifacts (no selection
+   * block, pre-selection-mode captures) remain valid on read. */
+  schema: 'answer-eval/capture@1' | 'answer-eval/capture@2'
   provenance: Provenance
   /** The pure scorer's only source of corpus-attainability. */
   preflight: PreflightReport
+  /** Present on every @2 capture — the run's selections. */
+  selection?: SelectionBlock
   cases: CaseCapture[]
   /** sha256 over `cases` (fingerprint.ts), written by the capture stage so
    * label producers copy it rather than re-hash. Optional: captures from
