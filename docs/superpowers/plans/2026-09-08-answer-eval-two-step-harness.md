@@ -42,20 +42,34 @@ one-liner rides with the evalset PR, not this one.
    moment this PR lands.
 3. **Selection is derived once per run** (pass 0 semantics) and reused
    across passes; pass spreads measure synthesis variance only.
-4. **Fingerprint:** sha over cases **plus** the selection block — a
-   re-capture under the same label with a different mode or doc set must
-   refuse stale judge verdicts/labels.
+4. **Fingerprint:** sha over `cases` when the selection block is absent —
+   byte-identical to @1, so the committed pin
+   (`__tests__/fixtures/capture-fingerprint-pin.json` + `PIN_HEX`) and all
+   @1 judged-resume/label binding stay untouched — and sha over `cases`
+   **plus** the selection block when present. A re-capture under the same
+   label with a different mode or doc set therefore refuses stale judge
+   verdicts/labels; @1 captures keep their historical fingerprints. Never
+   re-pin PIN_HEX.
 5. **Zero-doc cite result** → outcome `unreachable`: no answer call, no
-   error. Negative case → counts as abstention (pass); positive case →
-   cite-stage failure, synthesis lanes excluded, counted in a new
-   `unreachable` header bucket.
+   error, represented in the @2 artifact as an explicit per-pass
+   `unreachable: true` marker. Negative case → counts as abstention (pass);
+   positive case → cite-stage failure, synthesis lanes excluded, counted in
+   a new `unreachable` header bucket. `judge.ts`'s job enumeration skips
+   such passes (same exclusion class as answer errors), and `score.ts` keys
+   the bucket on the marker. A cite-call **transport failure** in
+   no-selection mode is a per-case retrieval error (all passes excluded),
+   never `unreachable`.
 6. **Rank-gap diagnostic, not gate:** preflight's existence check uses a
-   snippet-derived query (leading ~48 source-language chars of the
-   snippet — `langOf` picks the script; never the case question). The
-   question-based lookup still runs and its misses are recorded per case as
-   `rank_gaps` in the preflight report (informative, never fatal).
-7. **validDocs mirror:** before `/api/answer`, drop docs with empty kps or
-   snippet ≤ 10 chars (the UI's filter).
+   snippet-derived query — **the first 48 code points of the trimmed
+   `text_snippet`** (deterministic; no language detection — wide-pool,
+   doc-scoped lookups make rank irrelevant, only determinism matters; never
+   the case question). The question-based lookup still runs and its misses
+   are recorded per case as `rank_gaps` in the preflight report AND lifted
+   into the score report header (per-case count) beside the `unreachable`
+   bucket — informative, never fatal.
+7. **validDocs mirror:** before `/api/answer`, apply the UI's exact
+   predicate (`AIResearchModal.tsx:138–147`): keep a doc iff
+   `kps.length > 0 && kps.some(kp => kp.snippet?.length > 10)`.
 
 ## Tasks
 
@@ -64,32 +78,47 @@ one-liner rides with the evalset PR, not this one.
   optional `doc_set_id`. Helper `docSetOf(evalset, case)`. Validation: a
   `doc_set_id` that names no set is a load error; negative cases carry one
   too (checked at capture, not load — the evalset PR may still be in flight).
+  fixture-set capture **hard-errors** on any selected case lacking a
+  resolvable doc set. Cheap capture-time check: every expected doc (+ twin)
+  is ⊆ the case's doc set (q16's union must hold).
 - Tests: synthetic evalset JSON (doc sets, missing-set error, case without
-  `doc_set_id` in no-selection-tolerant path).
+  `doc_set_id` in no-selection-tolerant path, subset violation).
 
 **Task 2 — cite queries** (`evaluation/answer/target.ts`)
-- Gateway: `cite(query)` → `POST /api/llamaindex` with
-  `{ query, mode: 'cite', max_results: 40 }` — the UI client's exact shape
-  (`llamaindex-client.ts:75`), no other fields. Returns ranked doc ids.
-- Direct: cite-mode mirror with the same `max_results: 40` and **no
-  dense/sparse weights** (the gateway sets none for cite mode; do not invent
+- Gateway: `cite(query)` → `POST /api/llamaindex` with the UI client's full
+  body (`llamaindex-client.ts:49–57`):
+  `{ query, mode: 'cite', max_results: 40, similarity_threshold: 0.0,
+  include_metadata: true, rerank: true }`. (The route hardcodes the same
+  values, so behavior is identical — but send the full shape for fidelity.)
+  Returns ranked doc ids.
+- Direct: `CITE_MODE_QUERY_DEFAULTS` mirrors the route's cite-mode request
+  **field-for-field**: `max_results: 40, vector_top_k: 500, bm25_top_k: 500,
+  rerank_top_n: 500, fusion_top_k: 500, similarity_threshold: 0.0,
+  include_metadata: true, rerank: true` — and **no dense/sparse weights**
+  (the gateway sets none for cite mode; do not invent
   them).
 - Tests: fake servers assert the request bodies byte-exactly (esp.
   `max_results: 40` and the absence of extra fields).
 
 **Task 3 — capture selection modes** (`evaluation/answer/capture.ts`,
-`cli.ts`, `types.ts`)
+`cli.ts`, `types.ts`, plus `judge.ts` for the unreachable skip)
 - `--selection-mode` wiring (ruling 2). fixture-set: selection = the doc
   set's ids. no-selection: cite query per case → top-20 (cap
   `MAXIMUM_CONSULTED_DOCS = 20`) → selection; zero docs → `unreachable`
-  (ruling 5).
+  (ruling 5, incl. the per-pass marker and the transport-failure ≠
+  unreachable distinction).
 - Selection recorded top-level (`{ mode, per-case selected_doc_ids }`) plus
-  a per-pass copy; schema `@2`; fingerprint per ruling 4.
+  a per-pass copy; schema `@2`; fingerprint per ruling 4 (absent-selection
+  hash unchanged — the pin test and @1 fixtures must not move).
 - Answer retrieval gains `cite_doc_ids` = selection; `validDocs` filter per
-  ruling 7.
-- Tests: mode dispatch, zero-doc edge, fingerprint changes with mode,
+  ruling 7. `judge.ts` job enumeration skips `unreachable` passes (same
+  class as the answer-error skip).
+- Tests: mode dispatch, zero-doc edge, fingerprint changes with mode but
+  is byte-identical for selection-less captures (pin fixture),
   `cite_doc_ids` present in the answer retrieval request, validDocs filter,
-  @1 captures still load.
+  @1 captures still load, judge skips unreachable passes. In-task
+  fallout: update the write-path schema assertions to @2 in `capture.test.ts`
+  (read-path @1 tests stay) and the USAGE string in `cli.ts`.
 
 **Task 4 — preflight** (`evaluation/answer/preflight.ts`)
 - Existence gate per ruling 6 (snippet-derived, doc-scoped, wide pools,
@@ -105,7 +134,8 @@ one-liner rides with the evalset PR, not this one.
   the header; unreachable negatives count as abstained. Mode in the header.
   Report the structural ceiling note (≤ `max_passages`) in README, not code.
 - Tests: hand-computed numbers incl. the unreachable and zero-utilization
-  edges.
+  edges; rank_gaps lifted from `capture.preflight` into the score report
+  header beside the `unreachable` bucket (ruling 6).
 
 **Task 6 — compare/pairwise guards** (`evaluation/answer/compare.ts`)
 - `guardPair`/`compareReports` refuse differing selection modes with the
@@ -118,10 +148,21 @@ one-liner rides with the evalset PR, not this one.
   `unreachable`, `rank_gaps`, the parallel-safe no-selection-on-current-
   evalset note (ruling 2).
 - Full gate run; fix fallout; conventional commits per task throughout.
+- README notes the labeling window: `@2` captures cannot be labeled until
+  the notebook's `@2` acceptance lands with the evalset PR (spec §8;
+  §10 ordering keeps label production after that PR).
 
 ## Execution
 
-Three sequential worker stages + one review pass, gates green after each:
-- Stage A: Tasks 1–3. Stage B: Tasks 4–6. Stage C: Task 7 + full gates.
-- Review: diff vs spec §5–§9 and this plan; findings fixed before PR.
-- PR base `qa`, stacked on #399.
+Superpowers SDD, one task at a time:
+- Per task: an implementer child executes the task brief at
+  `.pi-subagents/answer-eval-twostep/task-N-brief.md` (TDD: failing tests
+  first), commits (conventional, no Co-Authored-By), saves the review
+  package diff, and writes `task-N-report.md`.
+- Then a reviewer child reviews that task's diff against the brief and the
+  spec; blocker findings loop back to a fixer before the next task.
+- The orchestrator keeps `progress.md`, runs the final gates, and opens the
+  PR (base `qa`, stacked on #399).
+- Reviewer-dispatch note (known false negative): the `reviewer` builtin is
+  read-only; the harness may report its no-edits completion as failed —
+  always read the returned review text regardless of the status signal.
