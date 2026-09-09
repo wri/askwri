@@ -959,54 +959,64 @@ def make_dense_retriever(top_k: int):
     )
 
 
-def _corpus_match(conn, term: str) -> bool:
-    """True if `term` appears as a substring in any title/title_en/authors or
-    tag value_id/alias. One query per term."""
+def _corpus_match(conn, term: str) -> str | None:
+    """The first corpus surface where `term` appears as a substring —
+    title / title_en / authors / tag / alias — or None. One query per term.
+    The surface label is what debug.abstention reports; the match semantics
+    are unchanged from the bool version this replaces (workbench design,
+    docs/superpowers/specs/2026-09-09-abstention-workbench-design.md)."""
     row = conn.execute(
-        """SELECT EXISTS (
-             SELECT 1 FROM documents
-             WHERE title ILIKE %s OR title_en ILIKE %s
-                OR authors::text ILIKE %s
+        """SELECT s.surface FROM (
+             (SELECT 'title' AS surface FROM documents WHERE title ILIKE %s LIMIT 1)
              UNION ALL
-             SELECT 1 FROM tags t JOIN tag_aliases a ON a.tag_id = t.id
-             WHERE t.value_id ILIKE %s OR a.alias ILIKE %s
-           ) AS present""",
+             (SELECT 'title_en' AS surface FROM documents WHERE title_en ILIKE %s LIMIT 1)
+             UNION ALL
+             (SELECT 'authors' AS surface FROM documents WHERE authors::text ILIKE %s LIMIT 1)
+             UNION ALL
+             (SELECT 'tag' AS surface FROM tags WHERE value_id ILIKE %s LIMIT 1)
+             UNION ALL
+             (SELECT 'alias' AS surface FROM tag_aliases a
+                JOIN tags t ON a.tag_id = t.id
+                WHERE a.alias ILIKE %s LIMIT 1)
+           ) AS s LIMIT 1""",
         (f"%{term}%", f"%{term}%", f"%{term}%", f"%{term}%", f"%{term}%"),
     ).fetchone()
-    return bool(row and row[0])
+    return row[0] if row else None
 
 
-def core_topic_in_corpus(core_topic: str) -> bool:
+def core_topic_in_corpus(core_topic: str) -> dict:
     """Slice 6 (#356): is the query's core noun phrase present in the WRI
     corpus vocabulary? The abstain gate uses this: a core topic absent from
     titles/tags/aliases means WRI hasn't published on it (the negatives d8/d9/d10
     all have 0 hits; every positive has >=1). One attempt, failure-soft (returns
-    True on any error so a DB outage never abstains - degrades to today).
+    present=True on any error so a DB outage never abstains - degrades to today).
 
     The LLM's core_topic is often a long clause ('zero-emission heavy-duty truck
     adoption') whose full phrase misses titles even when the topic is real
     (the title has 'zero-emission heavy-duty'). So: try the full phrase first,
-    then each contiguous 2-gram, then single words. A hit on any -> present.
-    Negatives' 2-grams ('surveillance technologies', 'vertical farming',
-    'nuclear microreactor') all miss (verified 2026-08-26)."""
+    then each contiguous 2-gram. A hit on any -> present. Single words are NOT
+    candidates for multi-word topics (generic noise that rescues negatives d8/d9).
+
+    Returns the decision plus its details — {present, matched_term,
+    matched_surface} — so the query response's debug.abstention explains
+    exactly why a flag fired (or didn't): the one-call repro for false flags."""
     if not core_topic or not core_topic.strip():
-        return True  # no core topic extracted -> can't abstain -> today's behavior
+        # no core topic extracted -> can't abstain -> today's behavior
+        return {"present": True, "matched_term": None, "matched_surface": None}
     words = core_topic.strip().split()
     cands = [core_topic.strip()]
     cands += [" ".join(words[i:i + 2]) for i in range(len(words) - 1)]
-    # single-word core topics (e.g. "hydrogen") match as themselves; multi-word
-    # topics do NOT fall back to individual words (single words like "urban" /
-    # "vertical" / "technologies" are generic noise that rescue negatives d8/d9).
     try:
         from app.db import get_pool
         with get_pool().connection() as conn:
             for term in cands:
-                if _corpus_match(conn, term):
-                    return True
-        return False
+                surface = _corpus_match(conn, term)
+                if surface:
+                    return {"present": True, "matched_term": term, "matched_surface": surface}
+        return {"present": False, "matched_term": None, "matched_surface": None}
     except Exception:  # noqa: BLE001 - DB failure never abstains
         logger.warning("core_topic_in_corpus: check failed for %r", core_topic, exc_info=True)
-        return True
+        return {"present": True, "matched_term": None, "matched_surface": None}
 
 
 
@@ -1754,12 +1764,29 @@ async def hybrid_query(request: QueryRequest):
         # results are likely off-topic. Flag it; the UI renders the banner and
         # still shows the docs (user stays in control). Failure-soft: no
         # core_topic (LLM off/degraded) or DB error -> no flag (today's behavior).
-        likely_off_topic = False
+        # Workbench (2026-09-09): the decision details ride in debug.abstention
+        # so a false flag is a one-call repro.
+        abstention = {
+            "core_topic": None,
+            "present": True,
+            "matched_term": None,
+            "matched_surface": None,
+            "likely_off_topic": False,
+        }
         if understanding is not None and understanding.core_topic:
-            likely_off_topic = not await asyncio.to_thread(
+            decision = await asyncio.to_thread(
                 core_topic_in_corpus, understanding.core_topic
             )
+            likely_off_topic = not decision["present"]
+            abstention = {
+                "core_topic": understanding.core_topic,
+                **decision,
+                "likely_off_topic": likely_off_topic,
+            }
+        else:
+            likely_off_topic = False
         response_data["likely_off_topic"] = likely_off_topic
+        response_data["debug"]["abstention"] = abstention
 
         return QueryResponse(**response_data)
 

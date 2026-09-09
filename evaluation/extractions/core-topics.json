@@ -1,0 +1,438 @@
+{
+ "updated": "2026-09-09T02:30:28.751Z",
+ "model": "gpt-5.4-mini",
+ "samples_per_case": 3,
+ "note": "core_topic extraction samples per eval case, same model/prompt/temperature as the service sidecar. modal is the majority sample; disagreeing samples mark the per-deploy extraction lottery (#402).",
+ "cases": {
+  "q1_zero-emission-heavy-duty-trucks": {
+   "question": "What is the projected market penetration rate of new energy heavy-duty trucks in China through 2035?",
+   "polarity": "positive",
+   "samples": [
+    "new energy heavy-duty trucks",
+    "new energy heavy-duty trucks in China",
+    "new energy heavy-duty trucks"
+   ],
+   "modal": "new energy heavy-duty trucks"
+  },
+  "q2_bev-diesel-truck-tco-china": {
+   "question": "How does total cost of ownership compare between battery electric and diesel heavy-duty trucks in China?",
+   "polarity": "positive",
+   "samples": [
+    "total cost of ownership comparison between battery electric and diesel heavy-duty trucks in China",
+    "total cost of ownership comparison between battery electric and diesel heavy-duty trucks in China",
+    "total cost of ownership comparison between battery electric and diesel heavy-duty trucks in China"
+   ],
+   "modal": "total cost of ownership comparison between battery electric and diesel heavy-duty trucks in China"
+  },
+  "q3_regional-vs-longhaul-adoption": {
+   "question": "What is the difference in zero-emission truck adoption potential between regional transport and long-haul transport scenarios?",
+   "polarity": "positive",
+   "samples": [
+    "zero-emission truck adoption potential",
+    "zero-emission truck adoption potential",
+    "zero-emission truck adoption potential"
+   ],
+   "modal": "zero-emission truck adoption potential"
+  },
+  "q4_bev-payback-periods": {
+   "question": "What are the payback periods for battery electric semi-trucks compared to diesel trucks in China?",
+   "polarity": "positive",
+   "samples": [
+    "payback periods for battery electric semi-trucks compared to diesel trucks in China",
+    "payback periods for battery electric semi-trucks compared to diesel trucks in China",
+    "payback periods for battery electric semi-trucks compared to diesel trucks in China"
+   ],
+   "modal": "payback periods for battery electric semi-trucks compared to diesel trucks in China"
+  },
+  "q5_bikeshare-trip-substitution": {
+   "question": "What share of bike-share trips replace private car, taxi, or ride-hailing trips in China?",
+   "polarity": "positive",
+   "samples": [
+    "bike-share trips",
+    "bike-share trips replacing private car, taxi, or ride-hailing trips in China",
+    "bike-share trips"
+   ],
+   "modal": "bike-share trips"
+  },
+  "q6_bikeshare-co2-reduction": {
+   "question": "How much CO2 emissions reduction is attributed to bike-sharing in China?",
+   "polarity": "positive",
+   "samples": [
+    "bike-sharing in China",
+    "bike-sharing in China",
+    "bike-sharing in China"
+   ],
+   "modal": "bike-sharing in China"
+  },
+  "q7_bikeshare-travel-behavior": {
+   "question": "How does dockless bike-sharing affect travel behavior in Chinese cities?",
+   "polarity": "positive",
+   "samples": [
+    "dockless bike-sharing",
+    "dockless bike-sharing",
+    "dockless bike-sharing"
+   ],
+   "modal": "dockless bike-sharing"
+  },
+  "q8_yantian-port-mode-shift-targets": {
+   "question": "Can Yantian Port realistically meet the mode-shift targets set in Shenzhen's Master Plan (2035), or would it require more aggressive measures than a \"stated policy\" trajectory?",
+   "polarity": "positive",
+   "samples": [
+    "Yantian Port mode shift targets",
+    "Yantian Port",
+    "Yantian Port mode shift"
+   ],
+   "modal": "Yantian Port mode shift targets"
+  },
+  "q9_yantian-port-rail-water-barriers": {
+   "question": "What are the barriers to expanding rail-water intermodal transport (road-to-rail) at Yantian Port?",
+   "polarity": "positive",
+   "samples": [
+    "rail-water intermodal transport",
+    "rail-water intermodal transport",
+    "rail-water intermodal transport"
+   ],
+   "modal": "rail-water intermodal transport"
+  },
+  "q10_yantian-port-drayage-electrification-co2": {
+   "question": "How much would well-to-wheel CO2 emissions decline if drayage truck electrification reached 95% by 2035 at Yantian Port, and how does that compare to rail and water mode-shift measures?",
+   "polarity": "positive",
+   "samples": [
+    "drayage truck electrification at Yantian Port",
+    "drayage truck electrification at Yantian Port",
+    "drayage truck electrification at Yantian Port"
+   ],
+   "modal": "drayage truck electrification at Yantian Port"
+  },
+  "q11_mexico-transport-covid-methodology": {
+   "question": "What methodology was used to estimate COVID-19 financial impacts on Mexican urban public transport operators?",
+   "polarity": "positive",
+   "samples": [
+    "COVID-19 financial impacts on Mexican urban public transport operators",
+    "COVID-19 financial impacts on Mexican urban public transport operators",
+    "COVID-19 financial impacts on Mexican urban public transport operators"
+   ],
+   "modal": "COVID-19 financial impacts on Mexican urban public transport operators"
+  },
+  "q12_mexico-transport-jobs-dependency": {
+   "question": "How many jobs depend on the public transport sector in Mexico?",
+   "polarity": "positive",
+   "samples": [
+    "public transport sector",
+    "public transport sector in Mexico",
+    "public transport sector in Mexico"
+   ],
+   "modal": "public transport sector in Mexico"
+  },
+  "q13_mexico-transport-financing-barriers": {
+   "question": "What barriers limit fondeo and financiamiento for urban public transport in Mexico?",
+   "polarity": "positive",
+   "samples": [
+    "urban public transport in Mexico",
+    "urban public transport financing barriers in Mexico",
+    "urban public transport financing barriers in Mexico"
+   ],
+   "modal": "urban public transport financing barriers in Mexico"
+  },
+  "q14_mexico-carbon-tax-transport-financing": {
+   "question": "Why is revenue from Mexico's carbon tax not currently available for public transport, and how could that change?",
+   "polarity": "positive",
+   "samples": [
+    "Mexico's carbon tax revenue",
+    "Mexico's carbon tax revenue and public transport",
+    "Mexico's carbon tax revenue for public transport"
+   ],
+   "modal": "Mexico's carbon tax revenue"
+  },
+  "q15_mexico-parking-meter-revenue": {
+   "question": "How much revenue do parking meters generate in Mexican cities, and where does that money go?",
+   "polarity": "positive",
+   "samples": [
+    "parking meters",
+    "parking meters",
+    "parking meters"
+   ],
+   "modal": "parking meters"
+  },
+  "q16_mexico-transport-covid-demand-change": {
+   "question": "How did public transport demand in Mexican cities change during the COVID-19 pandemic?",
+   "polarity": "positive",
+   "samples": [
+    "public transport demand in Mexican cities",
+    "public transport demand in Mexican cities",
+    "public transport demand in Mexican cities"
+   ],
+   "modal": "public transport demand in Mexican cities"
+  },
+  "q1_land_value_capture": {
+   "question": "What have we published on land value capture?",
+   "polarity": "positive",
+   "samples": [
+    "land value capture",
+    "land value capture",
+    "land value capture"
+   ],
+   "modal": "land value capture"
+  },
+  "q2_bangalore_geography": {
+   "question": "What have we published on Bangalore?",
+   "polarity": "positive",
+   "samples": [
+    "Bangalore",
+    "Bangalore",
+    "Bangalore"
+   ],
+   "modal": "Bangalore"
+  },
+  "q3_children_pollution": {
+   "question": "What have we published on children and pollution?",
+   "polarity": "positive",
+   "samples": [
+    "children and pollution",
+    "children and pollution",
+    "children and pollution"
+   ],
+   "modal": "children and pollution"
+  },
+  "q4_climate_brazil": {
+   "question": "What have we published on climate adaptation in Brazil?",
+   "polarity": "positive",
+   "samples": [
+    "climate adaptation",
+    "climate adaptation",
+    "climate adaptation"
+   ],
+   "modal": "climate adaptation"
+  },
+  "q5_micromobility": {
+   "question": "How can cities implement micromobility solutions?",
+   "polarity": "positive",
+   "samples": [
+    "micromobility solutions",
+    "micromobility solutions",
+    "micromobility solutions"
+   ],
+   "modal": "micromobility solutions"
+  },
+  "q6_school_bus_health": {
+   "question": "Will electrifying school buses be beneficial for children's health outcomes?",
+   "polarity": "positive",
+   "samples": [
+    "electrifying school buses",
+    "electrifying school buses",
+    "electrifying school buses"
+   ],
+   "modal": "electrifying school buses"
+  },
+  "q7_jakarta_housing": {
+   "question": "What can be done to solve the housing crisis in Jakarta?",
+   "polarity": "positive",
+   "samples": [
+    "housing crisis in Jakarta",
+    "housing crisis in Jakarta",
+    "housing crisis in Jakarta"
+   ],
+   "modal": "housing crisis in Jakarta"
+  },
+  "q8_hydrogen": {
+   "question": "Have we published any papers or reports on hydrogen?",
+   "polarity": "positive",
+   "samples": [
+    "hydrogen",
+    "hydrogen",
+    "hydrogen"
+   ],
+   "modal": "hydrogen"
+  },
+  "q9_world_resources_report": {
+   "question": "Give me all the papers that were published as part of the cities World Resources Report?",
+   "polarity": "positive",
+   "samples": [
+    "Cities World Resources Report",
+    "cities World Resources Report",
+    "Cities World Resources Report"
+   ],
+   "modal": "Cities World Resources Report"
+  },
+  "q10_urban_finance_since_2020": {
+   "question": "Have we published anything to do with urban finance since 2020?",
+   "polarity": "positive",
+   "samples": [
+    "urban finance",
+    "urban finance",
+    "urban finance"
+   ],
+   "modal": "urban finance"
+  },
+  "q11_urban_finance_exclude_ebuses": {
+   "question": "Have we published anything to do with urban finance – please exclude anything to do with electric buses?",
+   "polarity": "positive",
+   "samples": [
+    "urban finance",
+    "urban finance",
+    "urban finance"
+   ],
+   "modal": "urban finance"
+  },
+  "d1_zero-emission-heavy-duty-trucks-discovery": {
+   "question": "What has WRI published on zero-emission heavy-duty truck adoption in China?",
+   "polarity": "positive",
+   "samples": [
+    "zero-emission heavy-duty truck adoption in China",
+    "zero-emission heavy-duty truck adoption in China",
+    "zero-emission heavy-duty truck adoption"
+   ],
+   "modal": "zero-emission heavy-duty truck adoption in China"
+  },
+  "d2_dockless-bike-sharing-discovery": {
+   "question": "What research has WRI done on dockless bike-sharing in Chinese cities?",
+   "polarity": "positive",
+   "samples": [
+    "dockless bike-sharing in Chinese cities",
+    "dockless bike-sharing in Chinese cities",
+    "dockless bike-sharing in Chinese cities"
+   ],
+   "modal": "dockless bike-sharing in Chinese cities"
+  },
+  "d3_container-port-decarbonization-discovery": {
+   "question": "What has WRI written about decarbonizing container port and drayage operations?",
+   "polarity": "positive",
+   "samples": [
+    "decarbonizing container port and drayage operations",
+    "decarbonizing container port and drayage operations",
+    "decarbonizing container port and drayage operations"
+   ],
+   "modal": "decarbonizing container port and drayage operations"
+  },
+  "d4_public-transport-financing-discovery": {
+   "question": "What has WRI published on financing mechanisms for public transport?",
+   "polarity": "positive",
+   "samples": [
+    "financing mechanisms for public transport",
+    "financing mechanisms for public transport",
+    "financing mechanisms for public transport"
+   ],
+   "modal": "financing mechanisms for public transport"
+  },
+  "d5_public-transport-financing-since-2022": {
+   "question": "What has WRI published on financing mechanisms for public transport since 2022?",
+   "polarity": "positive",
+   "samples": [
+    "financing mechanisms for public transport",
+    "financing mechanisms for public transport",
+    "financing mechanisms for public transport"
+   ],
+   "modal": "financing mechanisms for public transport"
+  },
+  "d6_seizing-urban-opportunity-series": {
+   "question": "Give me all the papers WRI published as part of the 'Seizing the Urban Opportunity' report series.",
+   "polarity": "positive",
+   "samples": [
+    "Seizing the Urban Opportunity report series",
+    "Seizing the Urban Opportunity report series",
+    "Seizing the Urban Opportunity report series"
+   ],
+   "modal": "Seizing the Urban Opportunity report series"
+  },
+  "d7_electric-buses-excluding-school-buses": {
+   "question": "What has WRI published on electric bus adoption and operations, excluding anything specific to school buses?",
+   "polarity": "positive",
+   "samples": [
+    "electric bus adoption and operations",
+    "electric bus adoption and operations",
+    "electric bus adoption and operations"
+   ],
+   "modal": "electric bus adoption and operations"
+  },
+  "d8_surveillance-tech-climate-resilience-negative": {
+   "question": "Has WRI written about using surveillance technologies to increase climate resilience in cities?",
+   "polarity": "negative",
+   "samples": [
+    "surveillance technologies",
+    "using surveillance technologies to increase climate resilience in cities",
+    "using surveillance technologies to increase climate resilience in cities"
+   ],
+   "modal": "using surveillance technologies to increase climate resilience in cities"
+  },
+  "d9_vertical-farming-negative": {
+   "question": "Has WRI written about urban vertical farming or rooftop agriculture in cities?",
+   "polarity": "negative",
+   "samples": [
+    "urban vertical farming or rooftop agriculture",
+    "urban vertical farming or rooftop agriculture",
+    "urban vertical farming or rooftop agriculture"
+   ],
+   "modal": "urban vertical farming or rooftop agriculture"
+  },
+  "d10_nuclear-microreactors-negative": {
+   "question": "Has WRI published research on nuclear microreactors for city-level power grids?",
+   "polarity": "negative",
+   "samples": [
+    "nuclear microreactors for city-level power grids",
+    "nuclear microreactors for city-level power grids",
+    "nuclear microreactors for city-level power grids"
+   ],
+   "modal": "nuclear microreactors for city-level power grids"
+  },
+  "d11_coalition-for-urban-transitions-partnership": {
+   "question": "What has WRI written with the Coalition for Urban Transitions?",
+   "polarity": "positive",
+   "samples": [
+    "Coalition for Urban Transitions",
+    "Coalition for Urban Transitions",
+    "Coalition for Urban Transitions"
+   ],
+   "modal": "Coalition for Urban Transitions"
+  },
+  "d12_climate-hazards-heat-resilience-discovery": {
+   "question": "What has WRI published on climate hazards and heat resilience in cities?",
+   "polarity": "positive",
+   "samples": [
+    "climate hazards and heat resilience in cities",
+    "climate hazards and heat resilience in cities",
+    "climate hazards and heat resilience in cities"
+   ],
+   "modal": "climate hazards and heat resilience in cities"
+  },
+  "d13_low-cost-air-quality-monitoring-discovery": {
+   "question": "What has WRI published on low-cost air quality sensors and monitoring in cities?",
+   "polarity": "positive",
+   "samples": [
+    "low-cost air quality sensors and monitoring in cities",
+    "low-cost air quality sensors and monitoring in cities",
+    "low-cost air quality sensors and monitoring in cities"
+   ],
+   "modal": "low-cost air quality sensors and monitoring in cities"
+  },
+  "d14_pawan-mulukutla-authorship": {
+   "question": "What has WRI published that was authored or co-authored by Pawan Mulukutla?",
+   "polarity": "positive",
+   "samples": [
+    "Pawan Mulukutla",
+    "Pawan Mulukutla",
+    "Pawan Mulukutla"
+   ],
+   "modal": "Pawan Mulukutla"
+  },
+  "d15_flooding-risk-informal-settlements-intersection": {
+   "question": "What has WRI published on flooding risk in informal settlements?",
+   "polarity": "positive",
+   "samples": [
+    "flooding risk in informal settlements",
+    "flooding risk in informal settlements",
+    "flooding risk in informal settlements"
+   ],
+   "modal": "flooding risk in informal settlements"
+  },
+  "d16_urban-tree-inventory-discovery": {
+   "question": "What has WRI published on urban tree inventory methods?",
+   "polarity": "positive",
+   "samples": [
+    "urban tree inventory methods",
+    "urban tree inventory methods",
+    "urban tree inventory methods"
+   ],
+   "modal": "urban tree inventory methods"
+  }
+ }
+}
