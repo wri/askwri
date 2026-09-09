@@ -5,9 +5,11 @@ from datetime import datetime, timezone
 import os
 import time
 import pickle
+import re
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 from app.env import load_env
+from app.core_topic import core_topic_candidates
 import certifi
 import httpx
 
@@ -961,35 +963,64 @@ def make_dense_retriever(top_k: int):
 
 def _corpus_match(conn, term: str) -> str | None:
     """The first corpus surface where `term` appears as a substring —
-    title / title_en / authors / tag / alias — or None. One query per term.
-    The surface label is what debug.abstention reports; the match semantics
-    are unchanged from the bool version this replaces (workbench design,
-    docs/superpowers/specs/2026-09-09-abstention-workbench-design.md)."""
+    title / title_en / authors / tag / alias / summary — or None.
+
+    Author tokens may appear in any order within ONE semicolon-delimited
+    author, never across people. Summaries follow the catalog's authoritative
+    English-long-summary then legacy-import fallback. One query per term.
+    """
+    pattern = "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    author_tokens = re.findall(r"[^\W_]+", term.lower())
     row = conn.execute(
         """SELECT s.surface FROM (
              (SELECT 'title' AS surface FROM documents WHERE title ILIKE %s LIMIT 1)
              UNION ALL
              (SELECT 'title_en' AS surface FROM documents WHERE title_en ILIKE %s LIMIT 1)
              UNION ALL
-             (SELECT 'authors' AS surface FROM documents WHERE authors::text ILIKE %s LIMIT 1)
-             UNION ALL
              (SELECT 'tag' AS surface FROM tags WHERE value_id ILIKE %s LIMIT 1)
              UNION ALL
              (SELECT 'alias' AS surface FROM tag_aliases a
                 JOIN tags t ON a.tag_id = t.id
                 WHERE a.alias ILIKE %s LIMIT 1)
+             UNION ALL
+             (SELECT 'authors' AS surface FROM documents d
+                CROSS JOIN LATERAL regexp_split_to_table(d.authors, ';') AS a(name)
+                WHERE cardinality(%s::text[]) >= 1
+                  AND regexp_split_to_array(
+                    trim(regexp_replace(lower(a.name), '[^[:alnum:]]+', ' ', 'g')), ' +'
+                  ) @> %s::text[] LIMIT 1)
+             UNION ALL
+             (SELECT 'summary' AS surface FROM documents d
+                LEFT JOIN document_summaries s ON s.document_id = d.id
+                  AND s.language = 'en' AND s.kind = 'long'
+                WHERE COALESCE(NULLIF(s.text, ''), d.source_metadata->>'summary')
+                  ILIKE %s LIMIT 1)
            ) AS s LIMIT 1""",
-        (f"%{term}%", f"%{term}%", f"%{term}%", f"%{term}%", f"%{term}%"),
+        (pattern, pattern, pattern, pattern, author_tokens, author_tokens, pattern),
     ).fetchone()
     return row[0] if row else None
 
 
+def match_core_topic(conn, core_topic: str) -> dict:
+    """Exact check on a supplied connection; DB errors propagate to callers.
+
+    The service wraps this failure-soft; offline evaluation must fail loudly.
+    """
+    cands = core_topic_candidates(core_topic or "")
+    if not cands:
+        return {"present": True, "matched_term": None, "matched_surface": None}
+    for term in cands:
+        surface = _corpus_match(conn, term)
+        if surface:
+            return {"present": True, "matched_term": term, "matched_surface": surface}
+    return {"present": False, "matched_term": None, "matched_surface": None}
+
+
 def core_topic_in_corpus(core_topic: str) -> dict:
-    """Slice 6 (#356): is the query's core noun phrase present in the WRI
-    corpus vocabulary? The abstain gate uses this: a core topic absent from
-    titles/tags/aliases means WRI hasn't published on it (the negatives d8/d9/d10
-    all have 0 hits; every positive has >=1). One attempt, failure-soft (returns
-    present=True on any error so a DB outage never abstains - degrades to today).
+    """Is the normalized core topic present in titles/authors/tags/summaries?
+
+    Vocabulary membership is a coverage heuristic, not proof of absence from
+    the full corpus. One attempt, failure-soft (present=True on DB errors).
 
     The LLM's core_topic is often a long clause ('zero-emission heavy-duty truck
     adoption') whose full phrase misses titles even when the topic is real
@@ -1003,17 +1034,10 @@ def core_topic_in_corpus(core_topic: str) -> dict:
     if not core_topic or not core_topic.strip():
         # no core topic extracted -> can't abstain -> today's behavior
         return {"present": True, "matched_term": None, "matched_surface": None}
-    words = core_topic.strip().split()
-    cands = [core_topic.strip()]
-    cands += [" ".join(words[i:i + 2]) for i in range(len(words) - 1)]
     try:
         from app.db import get_pool
         with get_pool().connection() as conn:
-            for term in cands:
-                surface = _corpus_match(conn, term)
-                if surface:
-                    return {"present": True, "matched_term": term, "matched_surface": surface}
-        return {"present": False, "matched_term": None, "matched_surface": None}
+            return match_core_topic(conn, core_topic)
     except Exception:  # noqa: BLE001 - DB failure never abstains
         logger.warning("core_topic_in_corpus: check failed for %r", core_topic, exc_info=True)
         return {"present": True, "matched_term": None, "matched_surface": None}

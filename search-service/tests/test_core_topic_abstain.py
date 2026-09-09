@@ -121,8 +121,8 @@ def test_alias_surface_reported(monkeypatch):
     """A match on the alias arm is reported as surface='alias' — the surface
     label distinguishes tag-taxonomy rescues from title hits."""
     def matcher(params):
-        # params[4] is the alias arm of the probe SQL
-        return ("alias",) if params[4] == "%vertical farming%" else None
+        # params[3] is the alias arm of the probe SQL
+        return ("alias",) if params[3] == "%vertical farming%" else None
     monkeypatch.setattr("app.db.get_pool", lambda: _pool_for(matcher))
     r = _main.core_topic_in_corpus("vertical farming")
     assert r == {"present": True, "matched_term": "vertical farming", "matched_surface": "alias"}

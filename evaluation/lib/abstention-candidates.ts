@@ -1,7 +1,8 @@
 /**
  * TS mirror of the search service's core-topic candidate policy
  * (search-service/app/main.py, core_topic_in_corpus): the full core_topic,
- * then each contiguous 2-gram. Single words are NOT candidates for
+ * then each contiguous 2-gram, after conservative framing normalization.
+ * Single words are NOT candidates for
  * multi-word topics — they are generic corpus noise that rescues negatives
  * (d8/d9). The full clause is tried first so an exact title hit wins.
  *
@@ -52,7 +53,20 @@ export function candidatesFor(
   coreTopic: string,
   policy: CandidatePolicy = 'current',
 ): string[] {
-  const core = coreTopic.trim().toLowerCase()
+  let core = coreTopic.trim().toLowerCase().replace(/\s+/g, ' ')
+  // Keep aligned with app/core_topic.py. Normalize purpose clauses only
+  // inside "using X to <purpose verb>"; named geography remains substantive.
+  if (core.startsWith('using ')) {
+    core = core
+      .replace(/^using\s+/, '')
+      .split(
+        /\s+to\s+(?:increase|decrease|reduce|improve|enhance|support|promote|address|mitigate|achieve|enable|prevent)\b/,
+        1,
+      )[0]
+  }
+  core = core
+    .replace(/\s+in\s+(?:cities|urban areas|urban settings)\s*[.!?]?$/, '')
+    .trim()
   if (!core) return []
   const words = core.split(/\s+/)
   const candidates = [core]

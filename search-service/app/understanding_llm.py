@@ -22,6 +22,7 @@ from functools import lru_cache
 
 from app import usage_meter
 from app.config import get_settings
+from app.core_topic import normalize_core_topic
 from app.understanding import Facet
 
 logger = logging.getLogger(__name__)
@@ -69,10 +70,7 @@ def build_understanding_llm(query: str) -> dict | None:
         )
         resp = client.chat.completions.create(
             model=settings.query_understanding_llm_model,
-            temperature=0,  # deterministic: same query -> same variants/facets
-            # (the lru_cache then freezes a stable result; nondeterministic
-            # output + cache made retrieval quality a per-deploy lottery,
-            # 2026-08-26).
+            temperature=0,  # Reduces variation; does not guarantee determinism.
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": _SYSTEM},
@@ -127,6 +125,8 @@ def build_understanding_llm(query: str) -> dict | None:
     core_topic = data.get("core_topic")
     if not isinstance(core_topic, str) or not core_topic.strip():
         core_topic = None
+    else:
+        core_topic = normalize_core_topic(core_topic) or None
 
     return {"intent": intent, "facets": facets, "variants": variants,
             "disambiguation": disambiguation, "core_topic": core_topic}

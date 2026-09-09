@@ -178,3 +178,17 @@ def test_llm_core_topic_none_when_missing_or_blank(monkeypatch):
         out = ullm.build_understanding_llm("anything")
         assert out is not None
         assert out["core_topic"] is None
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("surveillance technologies", "surveillance technologies"),
+    ("using surveillance technologies to increase climate resilience in cities", "surveillance technologies"),
+    ("urban vertical farming or rooftop agriculture in cities", "urban vertical farming or rooftop agriculture"),
+    ("bike-sharing in China", "bike-sharing in China"),
+    ("Coalition for Urban Transitions", "Coalition for Urban Transitions"),
+    ("using access to transport to improve health", "access to transport"),
+])
+def test_normalizes_purpose_and_generic_location_before_caching(monkeypatch, raw, expected):
+    _patch_openai(monkeypatch, content=json.dumps({"core_topic": raw}))
+    out = ullm.build_understanding_llm("query")
+    assert out["core_topic"] == expected
