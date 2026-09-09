@@ -445,6 +445,7 @@ export async function runCapture(
     target,
     passes: ctl.passes,
     synthesisKnobs: ctl.synthesisKnobs,
+    selectionMode: ctl.selectionMode,
   })
 
   // Abort gate (binding, Task 4 review): a run preflight already knows is

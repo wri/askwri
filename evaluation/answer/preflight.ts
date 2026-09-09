@@ -5,11 +5,23 @@
  *
  * 1. Catalog check — every expected_external_ids id (and both members of
  *    each twin pair) must exist in the target's corpus.
- * 2. Snippet validation — per unique expected doc, one retrieval call with
- *    cite_doc_ids (forwardable QueryRequest field), the reranker OFF, and
- *    every pool widened (SNIPPET_LOOKUP_KNOBS); every expected_passages
- *    text_snippet must be snippetContained in some returned chunk. Only
- *    retrieval is spent here (its usage is summed and printed).
+ * 2. Snippet validation — EXISTENCE, not retrievability (plan ruling 6).
+ *    Per unique expected doc, one question-based retrieval call with
+ *    cite_doc_ids and the reranker OFF / pools widened
+ *    (SNIPPET_LOOKUP_KNOBS); a snippet contained in any returned chunk is
+ *    existence-proven. A snippet the question lookup MISSES gets its own
+ *    doc-scoped lookup whose query is derived from the snippet itself
+ *    (first 48 code points of its trimmed text) — if THAT contains it, the
+ *    snippet exists and the miss is recorded as a rank gap (informative,
+ *    never fatal); only a miss on both lookups is a snippet failure.
+ *
+ *    Why the derived query must never be the case question: a
+ *    question-based gate conflates "the fixture is broken" with "retrieval
+ *    does not rank this chunk for this question". Measured 2026-09-08 on
+ *    the trucks doc: an English question surfaced only ~134 of the doc's
+ *    406 chunks (the zh ES-summary chunk did not make the cut; a query
+ *    built from the snippet's own text ranked it #1) — 36 false
+ *    "failures" from cross-lingual ranking alone.
  *
  *    Why rerank:false — the reranker's top_n (20 in the answer preset) and
  *    the search-service's answer_rerank_per_doc_cap both truncate the doc's
@@ -60,6 +72,21 @@ const SNIPPET_LOOKUP_KNOBS = {
   fusion_top_k: 300,
   max_results: 300,
 } as const
+
+/** The existence lookup's query: the first 48 code points of the trimmed
+ * text_snippet — deterministic, no language detection (the wide-pool
+ * doc-scoped lookup makes rank irrelevant; only determinism matters).
+ * Never the case question — see the header. 48, not more, because a short
+ * verbatim prefix maximizes bm25/dense hit on the exact chunk while staying
+ * long enough to be distinctive; Array.from iterates code points, so
+ * astral-plane snippets (emoji) cannot split a surrogate pair. */
+const EXISTENCE_QUERY_CODEPOINTS = 48
+
+function existenceQueryFor(textSnippet: string): string {
+  return Array.from(textSnippet.trim())
+    .slice(0, EXISTENCE_QUERY_CODEPOINTS)
+    .join('')
+}
 
 /** The synthesis knobs that select a provider/prompt — forwarded to the
  * probe so it exercises what the run will use. Size knobs are NOT
@@ -124,6 +151,9 @@ export async function preflight(args: {
   only?: string[]
   /** The run's --knob synthesis values; provider-selecting ones reach the probe. */
   synthesisKnobs?: Record<string, unknown>
+  /** Only the call estimate depends on this: no-selection derives each
+   * case's selection with one extra cite retrieval (once per run). */
+  selectionMode?: 'fixture-set' | 'no-selection'
 }): Promise<PreflightReport> {
   const { evalset, target, judgeCfg, passes } = args
   const cases = args.only
@@ -150,10 +180,14 @@ export async function preflight(args: {
   }
   const missing_docs = [...missing].sort()
 
-  // (2) Snippet validation — retrieval only. One call per unique expected doc
-  // per case; cite_doc_ids restricts the search to that doc's chunks and
-  // SNIPPET_LOOKUP_KNOBS keeps the reranker (and its caps) out of the way.
+  // (2) Snippet validation — existence, not retrievability. Per unique
+  // expected doc: one question-based lookup (the rank-gap probe), then a
+  // snippet-derived lookup for each snippet the question missed (the
+  // existence gate). cite_doc_ids restricts every lookup to that doc's
+  // chunks; SNIPPET_LOOKUP_KNOBS keeps the reranker (and its caps) out of
+  // the way.
   const snippet_failures: PreflightReport['snippet_failures'] = []
+  const rank_gaps: PreflightReport['rank_gaps'] = []
   let lookupUsd = 0
   let lookupCalls = 0
   for (const c of cases) {
@@ -182,27 +216,70 @@ export async function preflight(args: {
         })
         continue
       }
-      if (outcome.chunks.length === 0) {
-        snippet_failures.push({
-          case_id: c.id,
-          doc_id: docId,
-          reason: 'no chunks returned for doc',
-        })
-        continue
-      }
-      passages.forEach((p, i) => {
+      for (let i = 0; i < passages.length; i++) {
+        const p = passages[i]
+        // Contained in the question lookup's chunks → existence proven.
         if (
-          !outcome.chunks.some((ch) =>
+          outcome.chunks.some((ch) => snippetContained(p.text_snippet, ch.text))
+        ) {
+          continue
+        }
+        // The question missed it → the existence gate: a lookup whose
+        // query is derived from the snippet's own leading text.
+        const query = existenceQueryFor(p.text_snippet)
+        if (query === '') {
+          snippet_failures.push({
+            case_id: c.id,
+            doc_id: docId,
+            reason: `snippet ${i + 1} has an empty text_snippet`,
+          })
+          continue
+        }
+        let existence
+        try {
+          existence = await target.retrieve(query, {
+            cite_doc_ids: [docId],
+            ...SNIPPET_LOOKUP_KNOBS,
+          })
+          if (existence.cost_usd != null) {
+            lookupUsd += existence.cost_usd
+            lookupCalls++
+          }
+        } catch (e) {
+          snippet_failures.push({
+            case_id: c.id,
+            doc_id: docId,
+            reason: `existence retrieval failed: ${(e as Error).message}`,
+          })
+          continue
+        }
+        if (existence.chunks.length === 0) {
+          snippet_failures.push({
+            case_id: c.id,
+            doc_id: docId,
+            reason: 'no chunks returned for doc',
+          })
+          continue
+        }
+        if (
+          existence.chunks.some((ch) =>
             snippetContained(p.text_snippet, ch.text),
           )
         ) {
+          // Exists — the question just did not surface it.
+          rank_gaps.push({
+            case_id: c.id,
+            doc_id: docId,
+            snippet_index: i,
+          })
+        } else {
           snippet_failures.push({
             case_id: c.id,
             doc_id: docId,
             reason: `snippet ${i + 1} not contained in any returned chunk`,
           })
         }
-      })
+      }
     }
   }
 
@@ -241,10 +318,14 @@ export async function preflight(args: {
   ).length
   const rejected = cases.filter((c) => c.review_status === 'rejected').length
   const draft = cases.length - approved - rejected
-  // Each case×pass spends one retrieval and one synthesis call. Judge items:
-  // per case×pass, 1 fact-recall + 1 per (estimated) sentence + 1 unsupported.
+  // Each case×pass spends one retrieval and one synthesis call.
+  // no-selection derives each case's selection with one extra cite query
+  // (once per run, not per pass).
+  const citeCalls = args.selectionMode === 'no-selection' ? cases.length : 0
+  // Judge items: per case×pass, 1 fact-recall + 1 per (estimated)
+  // sentence + 1 unsupported.
   const estimated_calls = {
-    retrieval: cases.length * passes,
+    retrieval: cases.length * passes + citeCalls,
     synthesis: cases.length * passes,
     judge: judgeCfg
       ? cases.reduce((sum, c) => sum + passes * (2 + estimateSentences(c)), 0)
@@ -255,6 +336,7 @@ export async function preflight(args: {
     corpus_ok,
     missing_docs,
     snippet_failures,
+    rank_gaps,
     twins_ok,
     synthesis_probe_ok,
     judge_probe_ok,
@@ -280,6 +362,12 @@ export async function preflight(args: {
   for (const f of snippet_failures) {
     console.log(
       `[preflight] snippet failure: ${f.case_id} / ${f.doc_id}: ${f.reason}`,
+    )
+  }
+  for (const g of rank_gaps) {
+    console.log(
+      `[preflight] rank gap: ${g.case_id} / ${g.doc_id}: snippet ` +
+        `${g.snippet_index + 1} exists but the question lookup did not surface it`,
     )
   }
   console.log(

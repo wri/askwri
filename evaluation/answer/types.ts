@@ -134,6 +134,18 @@ export interface PreflightReport {
   corpus_ok: boolean
   missing_docs: string[]
   snippet_failures: Array<{ case_id: string; doc_id: string; reason: string }>
+  /** Expected passages that EXIST in the served corpus but were not
+   * surfaced by the question-based doc-scoped lookup — the cross-lingual
+   * rank gap (2026-09-08: an English question surfaced only ~134 of a
+   * doc's 406 chunks; the snippet-derived query ranked the expected chunk
+   * first). Informative, never a gate (plan ruling 6); the score stage
+   * lifts per-case counts into the report header. Absent at runtime on
+   * pre-@2 captures written before this field existed. */
+  rank_gaps: Array<{
+    case_id: string
+    doc_id: string
+    snippet_index: number
+  }>
   twins_ok: boolean
   synthesis_probe_ok: boolean
   judge_probe_ok: boolean

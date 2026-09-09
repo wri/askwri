@@ -55,6 +55,10 @@ interface FakeApp {
   answerFallback?: string
   /** usage.total_usd reported on every retrieval call (null = none). */
   retrievalUsd: number | null
+  /** When set, overrides chunkTexts per retrieval request (keyed on the
+   * body — the existence-lookup tests answer differently for the case
+   * question vs a snippet-derived query). */
+  onRetrieval?: (body: any) => string[]
 }
 
 // Registry teardown: a failed assertion skips the test's own close(), and a
@@ -85,9 +89,10 @@ async function startFakeApp(catalog: string[]): Promise<FakeApp> {
     } else if (req.method === 'POST' && req.url === '/api/llamaindex') {
       readJsonBody(req, (b) => {
         app.retrievalCalls.push(b)
+        const texts = app.onRetrieval ? app.onRetrieval(b) : app.chunkTexts
         respondJson(res, 200, {
           ok: true,
-          docs: app.chunkTexts.map((text, i) => ({
+          docs: texts.map((text, i) => ({
             doc_id: (b.cite_doc_ids ?? [])[0] ?? 'doc',
             score: 1 - i * 0.1,
             kps: [{ snippet: text }],
@@ -408,6 +413,128 @@ describe('preflight', () => {
     })
     // No judging in this run — vacuously ok.
     expect(report.judge_probe_ok).toBe(true)
+    await close(app.server)
+  })
+
+  it('existence gate: a variant-wording snippet the question misses passes as existence-true and is recorded as a rank gap', async () => {
+    const app = await startFakeApp(['doc_a', 'doc_twin', 'doc_c'])
+    // Exactly 48 code points by construction — the existence lookup's query
+    // is this prefix of the (longer) snippet (ruling 6: first 48 code
+    // points of the trimmed text_snippet, never the case question).
+    const ZH_QUERY =
+      '其次，为评估需求侧政策对新能源重卡推广的作用，本文构建了两类政策情景（见表ES-1）：第一类为现'
+    const ZH_SNIPPET = ZH_QUERY + '有政策情景，涵盖以旧换新补贴。'
+    // The zh source repeats the passage with variant wording (2026-09-08
+    // trucks case): the executive-summary chunk contains the snippet; the
+    // body chunk a question-based lookup surfaces does not.
+    const ES_TEXT = ZH_SNIPPET + '第二类为强化政策情景。'
+    const BODY_TEXT =
+      '其次，为评估需求侧政策对新能源重卡市场渗透率的作用，本文构建了两类政策情景：第一类为现有政策情景。'
+    app.onRetrieval = (b) =>
+      b.query === 'What is the projected market penetration rate?'
+        ? [BODY_TEXT]
+        : [ES_TEXT]
+    const zhEvalset: Evalset = {
+      ...evalset,
+      test_cases: [
+        {
+          ...evalset.test_cases[0],
+          retrieval_ground_truth: {
+            expected_external_ids: ['doc_a'],
+            expected_passages: [
+              {
+                doc_id: 'doc_a',
+                chunk_id: 'doc_a_chunk_14',
+                page: 7,
+                text_snippet: ZH_SNIPPET,
+              },
+            ],
+          },
+        },
+        evalset.test_cases[1],
+      ],
+    }
+    const target = gatewayTarget(app.url, fetchJson)
+    const report = await preflight({ evalset: zhEvalset, target, passes: 1 })
+    // Existence is proven by the snippet-derived lookup → no failure.
+    expect(report.snippet_failures).toEqual([])
+    // The question-based lookup missed it → recorded as a rank gap.
+    expect(report.rank_gaps).toEqual([
+      { case_id: 'case1', doc_id: 'doc_a', snippet_index: 0 },
+    ])
+    // A rank gap never aborts: the probes ran.
+    expect(report.synthesis_probe_ok).toBe(true)
+    expect(app.answerCalls).toHaveLength(1)
+    // The two lookups, in order: the case question first, then the
+    // snippet-derived existence query — identical doc-scoped wide-pool knobs.
+    expect(app.retrievalCalls).toEqual([
+      {
+        query: 'What is the projected market penetration rate?',
+        mode: 'answer',
+        cite_doc_ids: ['doc_a'],
+        rerank: false,
+        vector_top_k: 300,
+        bm25_top_k: 300,
+        fusion_top_k: 300,
+        max_results: 300,
+      },
+      {
+        query: ZH_QUERY,
+        mode: 'answer',
+        cite_doc_ids: ['doc_a'],
+        rerank: false,
+        vector_top_k: 300,
+        bm25_top_k: 300,
+        fusion_top_k: 300,
+        max_results: 300,
+      },
+    ])
+    await close(app.server)
+  })
+
+  it('genuine absence: question and existence lookups both miss → snippet failure, probes skipped', async () => {
+    const app = await startFakeApp(['doc_a', 'doc_twin', 'doc_c'])
+    app.onRetrieval = () => ['Something entirely unrelated to any snippet.']
+    const target = gatewayTarget(app.url, fetchJson)
+    const report = await preflight({ evalset, target, passes: 1 })
+    expect(report.snippet_failures).toEqual([
+      {
+        case_id: 'case1',
+        doc_id: 'doc_a',
+        reason: expect.stringContaining('not contained'),
+      },
+    ])
+    expect(report.rank_gaps).toEqual([])
+    expect(report.synthesis_probe_ok).toBe(false)
+    expect(app.answerCalls).toEqual([])
+    // Both lookups ran: the question first, then the existence query —
+    // case1's snippet is under 48 code points, so the derived query is the
+    // whole trimmed snippet.
+    expect(app.retrievalCalls).toHaveLength(2)
+    expect(app.retrievalCalls[1].query).toBe(
+      'market penetration rate reaches forty percent',
+    )
+    await close(app.server)
+  })
+
+  it('no-selection mode adds one cite retrieval per case to the estimate; fixture-set does not', async () => {
+    const app = await startFakeApp(['doc_a', 'doc_twin', 'doc_c'])
+    const target = gatewayTarget(app.url, fetchJson)
+    const noSel = await preflight({
+      evalset,
+      target,
+      passes: 2,
+      selectionMode: 'no-selection',
+    })
+    // 2 cases × 2 passes + 2 cite queries (one per case, once per run).
+    expect(noSel.estimated_calls.retrieval).toBe(6)
+    const fixtureSet = await preflight({
+      evalset,
+      target,
+      passes: 2,
+      selectionMode: 'fixture-set',
+    })
+    expect(fixtureSet.estimated_calls.retrieval).toBe(4)
     await close(app.server)
   })
 })
