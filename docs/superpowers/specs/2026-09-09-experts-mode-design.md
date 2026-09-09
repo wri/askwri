@@ -41,12 +41,26 @@ research UI (`Navbar`, `Tag`, `Table`, `Textarea`, `Button`, `InterpretationLine
 
 Two data facts that shaped the design:
 
-- **Hub topics.** "Transport decarbonization" is on 155 of 201 docs. Any tag-based
-  signal that ignores topic frequency connects everyone to everyone. Every use of a
-  topic in this design is weighted by specificity `ln(N / df)`.
+- **Hub topics.** "Transport decarbonization" is on 145 of 201 searchable docs. It is
+  a CSV-seeded program label (`source='external'`, confidence 1.0), not an LLM topic;
+  every other top topic is `llm` with df ≤ 45. Any tag-based signal that ignores topic
+  frequency connects everyone to everyone. Every use of a topic in this design is
+  weighted by specificity `ln(N / df)`.
 - **Split author identities.** 122 author entries on 30 docs are stored `Given Family`
   (CSV-imported rows) while worker-extracted rows store `Family, Given`; 25 people appear
   under two spellings (#411). Aggregation must group on a normalized key.
+- **Translations are separate rows.** 11 confirmed `translation_of` pairs are both
+  `searchable` on QA and 9 share identical author strings. `translation_pairs_enabled`
+  is off, so `/query` returns original and translation as separate hits. Every count in
+  this design is over *works* (an original plus its confirmed translations), never rows.
+- **`/query` is a top-25 slice, not the corpus.** `CITE_PRESET.maxResults` is 25
+  (`src/config/retrieval.ts`), and the reranker scores at most 100 chunks with 2 per doc
+  (`rerank_candidates`, `cite_rerank_per_doc_cap`), so at most about 50–100 docs can
+  carry a tier per query. The evidence term must ask for more than the UI preset does,
+  and the reranker window is a stated ceiling.
+
+Premise check (2026-09-09, adversarial agent) findings are folded into the sections
+below; the review notes are in §13.
 
 ## 3. Architecture
 
@@ -64,27 +78,48 @@ Option A from the brainstorm: app-tier aggregation.
 The `/query` request/response contract is untouched. `/tags/nearby` is a thin wrapper
 over the existing `nearby_tags()` and reuses the cached query embedding.
 
-**Sequence** for one request: the route fires `/query` (cite preset, same options as
-cite mode) and `/tags/nearby` in parallel; then one SQL round trip loads authors, office,
-year, doc type, and accepted topic/geography tags for every candidate document; then
-`rank()` runs. Expected latency: cite mode plus roughly 100 ms.
+**Sequence** for one request: the route calls the search service `/query` directly
+(cite preset fields, but `max_results: 200` so the evidence term sees every doc that
+cleared the logit floor, not the UI's top 25), then `/tags/nearby` (sequential, so the
+second call hits the query-embedding LRU cache rather than racing it), then one SQL
+round trip loads authors, office, year, doc type, accepted topic/geography tags, and
+confirmed translation relations for every candidate document; then `rank()` runs.
+Expected latency: cite mode plus roughly 150 ms. Known ceiling: the reranker window is
+100 chunks at 2 per doc, so `D` can never exceed about 100 docs regardless of
+`max_results`; the spec states this rather than pretending `D` is the corpus.
 
-**Why not the alternatives.** A search-service-native `/experts` would pull author and
-catalog logic into the Python tier that the app owns today. Precomputed author vectors
-would be fastest but rank people on something other than the documents that actually
-matched; that is a candidate later signal, not the MVP.
+**Why not the alternatives.** A search-service-native `/experts` is viable: the Python
+service already reads `documents`, `document_tags`, and `tags` on the query path
+(`topic_retrieval.py`, `main.py` corpus-match), and it would remove the second endpoint
+and the cache ordering concern. App-tier aggregation is a preference, chosen so the
+ranking is a pure TypeScript module next to the UI that consumes it and testable
+without the search service. Precomputed author vectors would be fastest but rank people
+on something other than the documents that actually matched; that is a candidate later
+signal, not the MVP.
 
 ## 4. Ranking
 
 ### 4.1 Inputs
 
-- `D`: docs from `/query` with `relevance_tier ∈ {strong, partial, weak}` and rank.
+- **Work**: a searchable doc plus its confirmed translations
+  (`document_relations` with `status='confirmed'`, `relation_type='translation_of'`).
+  Every set and count below is over works; a work's authors are the union of its rows'
+  authors (keyed per §6), its office and year come from the original, its tags are the
+  union. `/query` hits on either row collapse to the work with the best tier.
+- `D`: works from `/query` with `relevance_tier ∈ {strong, partial, weak}` and rank.
 - `T_topic`: top 10 topic tags by cosine, floor 0.30 (`topic_sense_min_cosine`).
   `T_geo`: top 3 geography tags, same floor.
-- For each candidate doc: authors in stored order, `wri_primary_office`,
-  `year_published`, `article_type`, accepted topic tags with confidence, accepted
-  geography tags.
-- `N`: count of searchable docs; `df(t)`: searchable docs with accepted tag `t`.
+- For each candidate work: authors in stored order, `wri_primary_office` (normalized on
+  read: `WRI México` → `WRI Mexico`), `year_published`, `article_type`, accepted topic
+  tags, accepted geography tags. Authors always come from `documents.authors`, never
+  from `/query` chunk metadata (that field is the raw CSV value and is truncated to 100
+  characters at embed time).
+- `N`: count of searchable works; `df(t)`: searchable works with accepted tag `t`.
+  Computed by extending the accepted-count query in `tagsAdmin.listTagsWithCounts` with
+  the `status='searchable'` filter and the work collapse, not by a new query shape.
+- Tag confidence is loaded but **not** used in `S(p)`; accepted tags count 1. The
+  retrieval tag lane weights by confidence; this design does not, because accepted
+  confidences on QA span only 0.72–1.0 and the specificity term carries far more signal.
 
 ### 4.2 Candidates
 
@@ -123,6 +158,12 @@ response sets `mode: "topic_only"`. The page shows the banner "No direct matches
 ‹query›. These people are closest by topic." If `T_topic` is also empty, the response
 carries no people and the page shows the nothing-at-all state with nearby-topic chips
 from `understanding.suggestions`.
+
+`likely_off_topic` is only ever set when the LLM understanding sidecar produced a
+`core_topic` (`QUERY_UNDERSTANDING_LLM_ENABLED`, on for QA, off for production), and it
+is a vocabulary-coverage heuristic, not a retrieval-quality measure. On production the
+`topic_only` branch therefore triggers only on empty `D`. The spec accepts that; the
+banner copy must not claim more than "no direct matches."
 
 ### 4.5 Peers
 
@@ -196,9 +237,12 @@ Response:
 }
 ```
 
-`docs` contains every doc referenced by any returned person's `doc_ids` (evidence set)
-plus, in `topic_only` mode, the tagged docs that produced the score. The graph is
-derived client-side from `people` and `docs`; it is not in the payload.
+`docs` is keyed by the work's original `doc_id` and contains every work referenced by
+any returned person's `doc_ids` (evidence set) plus, in `topic_only` mode, the tagged
+works that produced the score. Each entry carries `translations: [doc_id, ...]` for its
+confirmed translation rows so the evidence panel can show "also in Spanish". All
+`evidence` counts (`docs`, tiers, `corpus_docs`) are over works. The graph is derived
+client-side from `people` and `docs`; it is not in the payload.
 
 Errors: 400 for a bad body; 502 with `{ ok: false, error }` when both upstream calls
 fail; otherwise degrade (section 9).
@@ -214,9 +258,22 @@ fail; otherwise degrade (section 9).
   "model": "cohere-embed-v4", "degraded": [] }
 ```
 
-Uses `topic_sense.nearby_tags(embedding, facet)` per facet with `top_k` overriding
-`topic_sense_top_k` and the configured cosine floor. A facet with no `tag_embeddings`
-coverage returns `[]` and is named in `degraded`. Never raises for a facet failure.
+Uses `topic_sense.nearby_tags(embedding, facet)` per facet. That function currently
+reads `topic_sense_top_k` from settings and has no `top_k` parameter, so it gains an
+optional `top_k` keyword (default: the setting, so `/query`'s tag lanes are unchanged).
+The cosine floor stays the configured one. A facet with no `tag_embeddings` coverage
+returns `[]` and is named in `degraded`. Never raises for a facet failure.
+
+`search-service/app/main.py` has no router pattern today (`app/routers/` is empty), so
+the endpoint is registered in `main.py` next to `/query` unless the implementer prefers
+to introduce `APIRouter`; either is acceptable, neither is "the existing pattern."
+
+Why not read `query_understanding.matched_tags` off `/query` instead: on QA it already
+carries both topic and geography (`EXPANSION_FACETS`), but it is capped at
+`topic_sense_top_k = 3` and only populated when the expansion lanes are active. Three
+topics is too few for the graph. Raising the setting globally would change retrieval,
+which is out of scope, so the endpoint is the additive path. `matched_tags` remains a
+fallback source when `/tags/nearby` is degraded.
 
 ### 5.3 Query log
 
@@ -226,23 +283,33 @@ the page after results render, mirroring `cite_mode_query_logs`.
 
 ## 6. Author identity and organizations
 
-`authorKey(raw)` in `src/lib/experts/authorKey.ts`, pure:
+Splitting the stored string reuses `parseAuthors` in `src/app/utils/utils.tsx`
+(semicolon-only split; its comment explains why commas are not separators). Keying is
+`authorKey(raw, siblings)` in `src/lib/experts/authorKey.ts`, pure, where `siblings`
+is the set of all raw author strings across the candidate works:
 
 1. Trim; collapse internal whitespace; insert a space after a comma that lacks one.
-2. If the string contains a comma: `key = lower(family) + ", " + lower(given)`.
+2. If the string contains a comma: `family, given` → `key = lower(family) + ", " +
+   lower(first given token)`.
 3. Else if it is an organization (below): `key = lower(name)`, `org = true`.
-4. Else treat as `Given Family`: last token is the family name; `key` as in step 2.
-5. Display name: prefer any `Family, Given` variant seen across the candidate docs for
-   that key; else the raw string.
+4. Else the string is an unsplit personal name (`Given Family`, possibly a compound
+   family name such as `Nicolás García Córdoba` or `Hellen Njoki Wanjohi-Opil`). Do not
+   guess the split. Look for a sibling in `Family, Given` form whose family name is a
+   suffix of this string and whose first given token matches its first token; if found,
+   adopt that sibling's key. If none is found, key on `lower(last token) + ", " +
+   lower(first token)` and flag `unverified: true` so the UI can show the name as stored.
+5. Display name: prefer a `Family, Given` variant seen for that key; else the raw string.
 
-Organization when there is no comma and either an institutional keyword matches
+Organization when there is no comma and an institutional keyword matches
 (`institute|center|centre|council|coalition|bank|ministry|agency|university|programme|
-program|initiative|partnership|association|foundation|wri|world resources`) or the entry
-has four or more words. Organizations are excluded from `people` and returned in
-`organizations` with document counts.
+program|initiative|partnership|association|foundation|wri|world resources|group|network|
+alliance`). Word count is **not** a signal: four-word personal names are common in the
+corpus. Organizations are excluded from `people` and returned in `organizations` with
+work counts.
 
 This is a stopgap until #411 normalizes the stored values; the key logic stays because
-residual variants will exist.
+residual variants will exist. Test fixture: the 25 variant pairs listed in #411, plus the
+compound-name examples above.
 
 ## 7. Page
 
@@ -255,8 +322,8 @@ Layout and interaction follow the mockup exactly. Components:
 | Piece | Reuse / new |
 |---|---|
 | Navbar | existing `Navbar`; "New search" routes to `/experts` |
-| Query strip | design-system `Textarea` + primary `Button`, as on the landing card; `QuerySuggestions` with an experts pool |
-| Interpretation line | `InterpretationLine` chip idiom; matched topics and geographies, cosine shown small, removable → re-post with `excluded_topics` |
+| Query strip | design-system `Textarea` + primary `Button`, as on the landing card; `QuerySuggestions` with an experts pool (its `mode` type is `'cite' \| 'answer'` today and widens to include `'experts'`) |
+| Interpretation line | new `TopicChips`, styled like `InterpretationLine` but with a strength slot; the existing component's `FacetChip` has no cosine field, so it is a sibling, not a reuse. Matched topics and geographies, cosine shown small, removable → re-post with `excluded_topics` |
 | Summary line | "‹N› people across ‹M› offices, on ‹K› documents that match. Showing the top 20." |
 | Ranked list | new `ExpertsList` / `ExpertRow` (rank, name, office dot+label, gold relevance bar, evidence line, top 3 matched topic chips); rows are buttons |
 | Graph | new `TopicGraph` (section 8) |
@@ -309,7 +376,9 @@ Light and dark themes both defined.
 | both fail | 502; page error state |
 | DB join fails | 500; page error state |
 | `excluded_topics` empties `T_topic` | evidence only; chips remain removable |
-| no year / office on a doc | recency 0.7; office "Office unknown" and neutral color |
+| no year / office on a doc | recency 0.7; office "Office unknown" and neutral color (no searchable doc on QA has a null today; the path is defensive) |
+| `WRI México` / `WRI Mexico` | normalized on read to one office; same treatment for any future accent or spacing variant |
+| translation rows both retrieved | collapsed to one work with the best tier; never two rows for one person's one work |
 
 ## 10. Testing
 
@@ -322,9 +391,15 @@ Light and dark themes both defined.
 - **Components (Jest, jsdom):** list and evidence render from a fixture response; hover
   and select propagate; silent-corpus and nothing states.
 - **DB (Jest, `*.db.test.ts` pattern, skipped without `DATABASE_URL`):** the evidence
-  join returns authors in order, accepted tags only, and `df` counts.
-- **Python (pytest):** `/tags/nearby` per-facet results, cosine floor, degraded facet,
-  never raises.
+  join returns authors in order, accepted tags only, `df` counts over works, and
+  collapses a confirmed translation pair to one work.
+- **Python (pytest):** `/tags/nearby` per-facet results, cosine floor, `top_k`
+  override leaves the settings default untouched, degraded facet, never raises.
+- **Measurement instrument (before any weight is called tuned):** a labeled set of
+  10–20 queries with the expected top-3 people, written with someone who knows the
+  Cities program, stored under `evaluation/experts/`. Small-n justifies direction only;
+  no threshold in §4 is derived until it exists. Until then every constant in §4 is
+  labeled a prototype default in code comments, with the cost of changing it noted.
 
 ## 11. Non-goals
 
@@ -335,9 +410,30 @@ ranking are follow-ups.
 
 ## 12. Sequencing (for the implementation plan)
 
-1. `/tags/nearby` router + pytest.
-2. Migration for `experts_mode_query_logs`; `expertsEvidence.ts` join + db test.
+1. `/tags/nearby` endpoint (+ `top_k` kwarg on `nearby_tags`) + pytest.
+2. Migration for `experts_mode_query_logs`; `expertsEvidence.ts` join (works, tags,
+   `df`, office normalization) + db test.
 3. Pure modules: `authorKey`, `rank`, `peers` + tests.
-4. `/api/experts` route + route tests.
+4. `/api/experts` route (sequential upstream calls, `max_results: 200`) + route tests.
 5. Page: list, evidence panel, states; then `TopicGraph` with `d3-force` + `layout.ts`.
-6. Query log write; final cross-cutting review against the mockup.
+6. Query log write; labeled query set skeleton under `evaluation/experts/`; final
+   cross-cutting review against the mockup.
+
+## 13. Premise-check record (2026-09-09)
+
+An adversarial review of the first draft found two broken premises and five weakened
+ones; all are folded in above. Kept here so the next reader knows what was checked.
+
+| Premise in draft | Verdict | What changed |
+|---|---|---|
+| `D` from `/query` represents the corpus | broken: UI preset caps at 25; reranker window ≈100 docs | `max_results: 200`; ceiling stated (§3) |
+| Counts are over documents | broken: 11 confirmed translation pairs, 9 with identical authors | all counts over works (§4.1, §9) |
+| Aggregation must be app-tier | preference, not constraint: Python already reads these tables | stated as a choice (§3) |
+| `matched_tags` is topic-only | half true: QA has topic + geography; cap of 3 is the real limit | reason corrected (§5.2) |
+| `/tags/nearby` reuses the cached embedding | only if sequential | calls made sequential (§3) |
+| No LLM call per query | QA already makes one in `/query`'s understanding sidecar | noted; `likely_off_topic` is QA-only (§4.4) |
+| "last token is the family name" key rule | reproduces the #411 failure on compound names; 4-word org rule misfires | sibling-form lookup, keyword-only org rule (§6) |
+| Weights are tunable | no instrument exists | labeled query set added to testing and sequencing (§10, §12) |
+
+Premises that held: per-doc tiers, hub-topic specificity, `d3-force` as a new
+dependency, a new log table (the cite log lacks `mode`).
