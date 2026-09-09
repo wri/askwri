@@ -1,6 +1,39 @@
 import { createHash } from 'node:crypto'
 import { CaptureArtifact } from './types'
 
+/** The capture schemas the read paths (`run-judge`, `run-score`, label
+ * binding) accept — ruling 1 of the two-step plan: `@1` artifacts (no
+ * selection block, pre-selection-mode captures) stay valid alongside the
+ * `@2` the capture stage writes. */
+export const READABLE_CAPTURE_SCHEMAS = [
+  'answer-eval/capture@1',
+  'answer-eval/capture@2',
+] as const
+
+/** Fail loudly when a file handed to `--capture` is not a readable
+ * capture (a judged artifact, a future `@3`, anything else), naming where
+ * it came from — a raw JSON.parse would otherwise fail much later and far
+ * more confusingly (judge.ts would find no cases; score.ts would read
+ * `provenance.fixture` off the wrong shape). */
+export function assertReadableCaptureSchema(
+  capture: unknown,
+  origin: string,
+): void {
+  const schema = (capture as { schema?: unknown } | null | undefined)?.schema
+  if (
+    typeof schema !== 'string' ||
+    !READABLE_CAPTURE_SCHEMAS.includes(
+      schema as (typeof READABLE_CAPTURE_SCHEMAS)[number],
+    )
+  ) {
+    throw new Error(
+      `${origin}: not a readable capture (schema ` +
+        `${schema === undefined ? 'missing' : JSON.stringify(schema)}; ` +
+        `readable: ${READABLE_CAPTURE_SCHEMAS.join(', ')})`,
+    )
+  }
+}
+
 /**
  * Identity of a capture for resume safety and label binding: the cases
  * (plus the selection block when present — not the provenance; a

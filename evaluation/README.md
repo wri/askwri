@@ -161,7 +161,7 @@ compare  →  stdout                           (two reports, same fixture + pass
 ```
 
 ```bash
-npm run eval:answer-capture -- <evalset.json> [--passes N --knob k=v ...]
+npm run eval:answer-capture -- <evalset.json> [--selection-mode fixture-set|no-selection --passes N --knob k=v ...]
 npm run eval:answer-judge   -- --capture evaluation/answer/artifacts/capture-<label>.json
 npm run eval:answer-score   -- --capture evaluation/answer/artifacts/capture-<label>.json --judged evaluation/answer/artifacts/judged-<label>.json
 npm run eval:answer-compare -- <reportA.json> <reportB.json>
@@ -184,14 +184,19 @@ route imports silently load a different tree.
   synthesis probe (which carries the run's `model`/`base_url` knobs) falls
   back; drop a blocking case with `--skip`. A pass whose route reply was an
   infrastructure fallback (`no_api_key`, `api_error`, `exception`) is recorded
-  as an answer error and never judged or scored.
+  as an answer error and never judged or scored. The capture answers each
+  case within a selection (`--selection-mode`, above) and records it
+  top-level and per pass; a no-selection case whose cite query returns zero
+  docs is recorded as `unreachable` — no answer call, no error (see
+  [Selection modes and the two-step flow](#selection-modes-and-the-two-step-flow)).
 - **judge** reads a capture and writes verdicts. A partial `judged-*.json` is
   resumed; only missing items run (an `unjudged` item from an aborted run is
   retried, and so is any item judged by another model or prompt version).
   The judged file is fingerprinted to its capture — re-capturing under the
   same label and re-judging is refused rather than silently reusing stale
   verdicts. Progress is written after every item, so Ctrl-C or a 401 abort
-  preserves it. Exits 1 when every attempted item came back unjudged (a
+  preserves it. `unreachable` passes are skipped — there is nothing to
+  judge. Exits 1 when every attempted item came back unjudged (a
   misconfigured judge, e.g. a 4xx on every call).
 - **score** is a pure function `(fixture, capture, judged) → report` — no API
   calls, byte-identical on re-run. `unjudged` items and retrieval/answer
@@ -199,13 +204,17 @@ route imports silently load a different tree.
   zero; the unsupported-claims count is always shown with the number of
   judged passes it covers.
 - **compare** refuses runs with different fixture commits, pass counts, case
-  sets, or target modes (gateway vs direct chunk text differ), and prints
-  headline/draft block deltas followed by per-case deltas.
+  sets, target modes (gateway vs direct chunk text differ), or selection
+  modes (a hand-picked-set run and a top-20 run are not comparable), and
+  prints headline/draft block deltas followed by per-case deltas.
 
 ### Controls
 
 Only `run-capture` uses the full flag set: `--only <case-id>` / `--skip
-<case-id>` (repeatable), `--limit N`, `--passes N` (default 1), `--label`
+<case-id>` (repeatable), `--limit N`, `--passes N` (default 1),
+`--selection-mode fixture-set|no-selection` (default `fixture-set`; see
+[Selection modes and the two-step flow](#selection-modes-and-the-two-step-flow)),
+`--label`
 (default: evalset basename sans `.json`), `--concurrency` (default 1),
 `--target URL` (default `EVAL_TARGET` or `https://qa.askwri-app.org`),
 `--timeout MS` (per `/api/answer` call; default 300000 — lunaroute-hosted
@@ -228,6 +237,42 @@ comparison there is also `run-compare --pairwise <captureA.json> <captureB.json>
 (judge sees both answers in randomized order; reported as win rate with the
 order-swap check).
 
+### Selection modes and the two-step flow
+
+Answer mode in the product is a two-step flow: the user searches in cite
+mode, optionally selects documents from the results, and answer mode
+retrieves only within the selected docs. The harness makes that selection
+an explicit, recorded dimension of a run:
+
+- **`fixture-set`** (default) — the case is answered within its evalset
+  `doc_set`. Tuning sweeps run here: the selection is constant, so knob
+  deltas attribute cleanly. Requires the evalset restructure (the `doc_sets`
+  field); without it, capture hard-errors pointing at that PR.
+- **`no-selection`** — the selection is derived the way the UI does when the
+  user picks nothing: a cite-mode query (`max_results: 40`, the client's
+  shape), capped at the top 20 docs. The realism mode — and it runs on the
+  current evalset unchanged, no `doc_sets` needed, so a baseline is possible
+  the moment this harness lands.
+
+The two modes' reports are not comparable (a no-selection case can fail at
+the cite stage for a reason that cannot exist under fixture-set), so
+`compare` and the pairwise mode refuse cross-mode diffs. Two
+no-selection-specific outcomes to know when reading a report:
+
+- **`unreachable`** — the cite query returned zero docs, so the product
+  would never reach answer mode (the results table, and its Ask button,
+  never appear). Recorded per pass, no answer call, no error: an abstention
+  (pass) for a negative case, a cite-stage failure for a positive one,
+  counted in its own header bucket.
+- **`rank_gaps`** — per case, how many expected passages the case's question
+  fails to surface even when the expected doc is looked up directly with
+  wide pools. This is the cross-lingual rank gap: an English question can
+  rank a zh executive-summary chunk below hundreds of same-doc chunks that
+  repeat the fact with variant wording. It is a measurement, never a
+  preflight failure — preflight checks that the expected passage *exists*
+  in the served corpus via a snippet-derived query, not whether this
+  question retrieves it.
+
 ### Judge calibration against human labels
 
 `run-score --labels <path>` (repeatable; each path is a label file or a
@@ -241,10 +286,15 @@ Every label is validated against the capture — its recorded checksum must
 match, and every fact and sentence index must exist in that case and pass —
 so a label made from a different capture run is refused (exit 2, listing
 every rejection with its reason) rather than silently mixed into the report.
-The checksum is a sha256 over the capture's `cases`; the capture stage writes
-it into the artifact as `capture_fingerprint` so the notebook copies it
+The checksum is a sha256 over the capture's `cases` (plus its `selection`
+block, when the @2 capture carries one); the capture stage writes it into
+the artifact as `capture_fingerprint` so the notebook copies it
 rather than re-hashing (Python and Node format small floats differently, so
-a re-hash is not portable).
+a re-hash is not portable). Labels bind to either capture schema — `@1`
+(pre-selection) and `@2` (selection-bearing) both validate — but note the
+window: until the eval-review notebook's `@2` acceptance lands with the
+evalset PR, `@2` captures cannot be labeled, so calibration runs continue
+on `@1` captures.
 
 With labels, the report header changes: `judge: uncalibrated` becomes a
 calibration object (`calibrated`, label count, reviewers) and a

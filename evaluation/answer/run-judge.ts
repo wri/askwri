@@ -16,6 +16,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { runJudge } from './judge'
 import { JudgeAuthError } from './judge-client'
+import { assertReadableCaptureSchema } from './fingerprint'
 
 const USAGE = `usage: run-judge --capture <capture-X.json> [--label name]
        [--judge-model M] [--judge-base-url URL] [--only id]... [--concurrency N]`
@@ -98,6 +99,9 @@ function parseArgs(argv: string[]) {
 async function main(): Promise<void> {
   const a = parseArgs(process.argv.slice(2))
   const capture = JSON.parse(fs.readFileSync(a.capturePath, 'utf8'))
+  // Ruling 1: both @1 and @2 stay readable; anything else fails here,
+  // with the path, instead of confusingly deep in judge.ts.
+  assertReadableCaptureSchema(capture, a.capturePath)
   const judgedPath = path.join(
     path.dirname(a.capturePath),
     `judged-${a.label}.json`,
