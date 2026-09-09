@@ -25,8 +25,21 @@ export type CandidatePolicy = 'current' | 'stopword-filtered'
  * extractions (issue #402). Extend only with a blast-radius table attached.
  */
 export const STOP_WORDS: ReadonlySet<string> = new Set([
-  'or', 'in', 'and', 'of', 'to', 'at', 'for', 'with', 'on', 'by',
-  'the', 'a', 'an', 'vs', 'versus',
+  'or',
+  'in',
+  'and',
+  'of',
+  'to',
+  'at',
+  'for',
+  'with',
+  'on',
+  'by',
+  'the',
+  'a',
+  'an',
+  'vs',
+  'versus',
 ])
 
 /**
@@ -48,9 +61,7 @@ export function candidatesFor(
   }
   const filtered =
     policy === 'stopword-filtered'
-      ? candidates.filter(
-          (c) => !c.split(' ').some((w) => STOP_WORDS.has(w)),
-        )
+      ? candidates.filter((c) => !c.split(' ').some((w) => STOP_WORDS.has(w)))
       : candidates
   // Dedupe is a harmless divergence from Python (a 2-word topic generates
   // its own full phrase twice); it changes no match outcomes.

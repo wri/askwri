@@ -27,21 +27,21 @@ const EVALSET_DIR = path.join(__dirname, '..', 'eval-review', 'evalsets')
 // MUST stay identical to _SYSTEM in search-service/app/understanding_llm.py.
 const SYSTEM =
   "You analyze a search query for a document retrieval system over WRI's " +
-  "published corpus. Return JSON with: intent (one of \"topical\", " +
-  "\"known_item\", \"catalog\", \"binary_presence\"), facets (a list of " +
-  "{facet, value, confidence} where facet is one of \"year_min\", " +
-  "\"year_max\", \"language\", \"program\", \"excluded_keyword\" and " +
-  "confidence is 0.0-1.0), variants (0-2 alternative phrasings of the query), " +
-  "disambiguation (alternative readings if the query is ambiguous, else " +
+  'published corpus. Return JSON with: intent (one of "topical", ' +
+  '"known_item", "catalog", "binary_presence"), facets (a list of ' +
+  '{facet, value, confidence} where facet is one of "year_min", ' +
+  '"year_max", "language", "program", "excluded_keyword" and ' +
+  'confidence is 0.0-1.0), variants (0-2 alternative phrasings of the query), ' +
+  'disambiguation (alternative readings if the query is ambiguous, else ' +
   "empty), and core_topic (the single core noun phrase of the query's " +
   "SUBJECT only - not the framing. Strip generic framing like 'WRI " +
   "publications', 'has WRI written about', 'research on', 'published on' " +
-  "- the core_topic is the specific subject the query is about (e.g. for " +
+  '- the core_topic is the specific subject the query is about (e.g. for ' +
   "'What has WRI published authored by Pawan Mulukutla' -> 'Pawan Mulukutla'; " +
   "'surveillance technologies' -> 'surveillance technologies'; 'vertical " +
   "farming' -> 'vertical farming'; 'hydrogen' -> 'hydrogen'; 'container " +
   "port decarbonization' -> 'container port decarbonization'). Used for a " +
-  "corpus-coverage abstain check). Return only JSON, no commentary."
+  'corpus-coverage abstain check). Return only JSON, no commentary.'
 
 function loadKey(): string {
   if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY
@@ -49,17 +49,26 @@ function loadKey(): string {
   if (fs.existsSync(envPath)) {
     for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
       if (line.startsWith('OPENAI_API_KEY=')) {
-        return line.slice('OPENAI_API_KEY='.length).trim().replace(/^["']|["']$/g, '')
+        return line
+          .slice('OPENAI_API_KEY='.length)
+          .trim()
+          .replace(/^["']|["']$/g, '')
       }
     }
   }
   throw new Error('OPENAI_API_KEY not set (env or search-service/.env)')
 }
 
-async function extractCoreTopic(key: string, query: string): Promise<string | null> {
+async function extractCoreTopic(
+  key: string,
+  query: string,
+): Promise<string | null> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`,
+    },
     body: JSON.stringify({
       model: MODEL,
       temperature: 0,
@@ -106,10 +115,20 @@ async function main() {
     .filter((f) => f.endsWith('.json') && !f.includes('_bkup'))
     .sort()
 
-  const cases: Record<string, { question: string; polarity: string; samples: (string | null)[]; modal: string | null }> = {}
+  const cases: Record<
+    string,
+    {
+      question: string
+      polarity: string
+      samples: (string | null)[]
+      modal: string | null
+    }
+  > = {}
   let total = 0
   for (const set of sets) {
-    const evalset = JSON.parse(fs.readFileSync(path.join(EVALSET_DIR, set), 'utf-8'))
+    const evalset = JSON.parse(
+      fs.readFileSync(path.join(EVALSET_DIR, set), 'utf-8'),
+    )
     for (const tc of evalset.test_cases ?? []) {
       const expected =
         tc.expected_external_ids ??
@@ -126,7 +145,9 @@ async function main() {
         modal: modal(samples),
       }
       total++
-      process.stdout.write(`  ${tc.id.padEnd(45)} ${samples[0] === null ? 'NULL' : 'ok'}\r`)
+      process.stdout.write(
+        `  ${tc.id.padEnd(45)} ${samples[0] === null ? 'NULL' : 'ok'}\r`,
+      )
     }
   }
 
@@ -140,9 +161,13 @@ async function main() {
   fs.mkdirSync(path.dirname(OUT), { recursive: true })
   fs.writeFileSync(OUT, JSON.stringify(out, null, 1))
 
-  const flaky = Object.entries(cases).filter(([, c]) => new Set(c.samples).size > 1)
+  const flaky = Object.entries(cases).filter(
+    ([, c]) => new Set(c.samples).size > 1,
+  )
   console.log(`\nExtractions: ${OUT}`)
-  console.log(`  ${total} cases x ${N} samples | flaky (disagreeing samples): ${flaky.length}`)
+  console.log(
+    `  ${total} cases x ${N} samples | flaky (disagreeing samples): ${flaky.length}`,
+  )
   for (const [id, c] of flaky) {
     console.log(`  ! ${id}: ${JSON.stringify(c.samples)}`)
   }

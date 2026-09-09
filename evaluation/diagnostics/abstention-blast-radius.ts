@@ -25,7 +25,12 @@ import * as path from 'path'
 import { CandidatePolicy, candidatesFor } from '../lib/abstention-candidates'
 
 const SNAP_DIR = path.join(__dirname, 'snapshots')
-const EXTRACTIONS = path.join(__dirname, '..', 'extractions', 'core-topics.json')
+const EXTRACTIONS = path.join(
+  __dirname,
+  '..',
+  'extractions',
+  'core-topics.json',
+)
 
 interface SnapshotItem {
   file_name: string
@@ -47,13 +52,18 @@ function newestSnapshot(explicit?: string): string {
     .readdirSync(SNAP_DIR)
     .filter((f) => f.startsWith('match-surface-'))
     .sort()
-  if (!files.length) throw new Error(`no snapshots in ${SNAP_DIR} — run snapshot-match-surface.ts`)
+  if (!files.length)
+    throw new Error(
+      `no snapshots in ${SNAP_DIR} — run snapshot-match-surface.ts`,
+    )
   return path.join(SNAP_DIR, files[files.length - 1])
 }
 
 function main() {
   const snapshotPath = newestSnapshot(argValues('--snapshot')[0])
-  const policies = (argValues('--policy').length ? argValues('--policy') : ['current']) as CandidatePolicy[]
+  const policies = (
+    argValues('--policy').length ? argValues('--policy') : ['current']
+  ) as CandidatePolicy[]
 
   const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'))
   const items: SnapshotItem[] = snapshot.items
@@ -61,19 +71,47 @@ function main() {
   const cases = extractions.cases
 
   const hit = (term: string) => items.some((it) => it.text.includes(term))
-  const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s.padEnd(n))
-
-  console.log(`Blast radius — ${Object.keys(cases).length} cases x ${policies.length} polic${policies.length > 1 ? 'ies' : 'y'}`)
-  console.log(`  surface: ${path.basename(snapshotPath)} (${items.length} items, ${snapshot.fetched_at})`)
-  console.log(`  extractions: ${extractions.updated} (modal of ${extractions.samples_per_case} samples, model ${extractions.model})`)
-  console.log(`  NOTE: snapshot is the catalog approximation — blind to tags/aliases (see snapshot-match-surface.ts)`)
-  console.log()
-
-  const summary = new Map<string, { negAbstain: number; negTotal: number; posClear: number; posTotal: number; atRisk: string[] }>()
-  for (const p of policies) summary.set(p, { negAbstain: 0, negTotal: 0, posClear: 0, posTotal: 0, atRisk: [] })
+  const pad = (s: string, n: number) =>
+    s.length > n ? s.slice(0, n - 1) + '…' : s.padEnd(n)
 
   console.log(
-    pad('case', 38) + pad('pol', 4) + pad('flaky', 6) + policies.map((p) => pad(p, 20)).join(''),
+    `Blast radius — ${Object.keys(cases).length} cases x ${policies.length} polic${policies.length > 1 ? 'ies' : 'y'}`,
+  )
+  console.log(
+    `  surface: ${path.basename(snapshotPath)} (${items.length} items, ${snapshot.fetched_at})`,
+  )
+  console.log(
+    `  extractions: ${extractions.updated} (modal of ${extractions.samples_per_case} samples, model ${extractions.model})`,
+  )
+  console.log(
+    `  NOTE: snapshot is the catalog approximation — blind to tags/aliases (see snapshot-match-surface.ts)`,
+  )
+  console.log()
+
+  const summary = new Map<
+    string,
+    {
+      negAbstain: number
+      negTotal: number
+      posClear: number
+      posTotal: number
+      atRisk: string[]
+    }
+  >()
+  for (const p of policies)
+    summary.set(p, {
+      negAbstain: 0,
+      negTotal: 0,
+      posClear: 0,
+      posTotal: 0,
+      atRisk: [],
+    })
+
+  console.log(
+    pad('case', 38) +
+      pad('pol', 4) +
+      pad('flaky', 6) +
+      policies.map((p) => pad(p, 20)).join(''),
   )
   for (const [id, c] of Object.entries(cases)) {
     const flaky = new Set(c.samples.filter(Boolean)).size > 1 ? 'FLAKY' : ''
@@ -95,7 +133,12 @@ function main() {
       s.atRisk.push(id)
       return 'AT RISK'
     })
-    console.log(pad(id, 38) + pad(c.polarity === 'negative' ? 'neg' : 'pos', 4) + pad(flaky, 6) + cells.map((x) => pad(x, 20)).join(''))
+    console.log(
+      pad(id, 38) +
+        pad(c.polarity === 'negative' ? 'neg' : 'pos', 4) +
+        pad(flaky, 6) +
+        cells.map((x) => pad(x, 20)).join(''),
+    )
   }
 
   console.log()
@@ -106,8 +149,12 @@ function main() {
     )
   }
   console.log()
-  console.log('Read as: an at-risk positive = false abstention under this policy (the banner shown on a query the corpus answers).')
-  console.log('A negative that HITs = abstention guardrail missed (docs served with no banner).')
+  console.log(
+    'Read as: an at-risk positive = false abstention under this policy (the banner shown on a query the corpus answers).',
+  )
+  console.log(
+    'A negative that HITs = abstention guardrail missed (docs served with no banner).',
+  )
 }
 
 try {

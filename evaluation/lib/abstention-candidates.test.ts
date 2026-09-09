@@ -41,11 +41,17 @@ describe('abstention candidate policy (mirror of core_topic_in_corpus)', () => {
         'urban vertical farming or rooftop agriculture in cities',
         'stopword-filtered',
       )
-      expect(cands).toEqual(['urban vertical', 'vertical farming', 'rooftop agriculture'])
+      expect(cands).toEqual([
+        'urban vertical',
+        'vertical farming',
+        'rooftop agriculture',
+      ])
     })
 
-    it("can leave a topic with NO candidates - the q6 flip (this is why the filter was refuted)", () => {
-      expect(candidatesFor('bike-sharing in china', 'stopword-filtered')).toEqual([])
+    it('can leave a topic with NO candidates - the q6 flip (this is why the filter was refuted)', () => {
+      expect(
+        candidatesFor('bike-sharing in china', 'stopword-filtered'),
+      ).toEqual([])
     })
 
     it('current policy keeps the framing fragments (mirrors the deployed service)', () => {

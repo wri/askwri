@@ -31,7 +31,11 @@ async function main() {
 
   const items = (data.items ?? []).map((it: any) => {
     const meta = it.meta ?? {}
-    const text = [it.file_name ?? '', String(meta.metadata ?? ''), meta.summary ?? '']
+    const text = [
+      it.file_name ?? '',
+      String(meta.metadata ?? ''),
+      meta.summary ?? '',
+    ]
       .filter((p) => p && p !== 'null')
       .join(' | ')
       .toLowerCase()
