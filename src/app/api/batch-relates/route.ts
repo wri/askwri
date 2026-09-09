@@ -1,6 +1,7 @@
 /* eslint-disable */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { isEnglishText } from '@/lib/ensure-english'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -158,7 +159,14 @@ export async function POST(req: NextRequest) {
       // Pad with fallbacks if we got fewer results than docs
       const results = docs.map((doc, i) => {
         const item = parsed[i]
-        if (item && typeof item.relates === 'string' && item.relates.trim()) {
+        // Issue #387: the model sometimes mirrors Chinese passages despite the
+        // prompt rule — replace mirrored output with the English fallback.
+        if (
+          item &&
+          typeof item.relates === 'string' &&
+          item.relates.trim() &&
+          isEnglishText(item.relates)
+        ) {
           return {
             relates: item.relates.trim(),
             relation:

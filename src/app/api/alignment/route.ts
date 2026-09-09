@@ -13,6 +13,7 @@ import {
   ALIGNMENT_MAX_TOKENS as CFG_MAX_TOKENS,
   ALIGNMENT_TEMPERATURE as CFG_TEMPERATURE,
 } from '@/config/alignment'
+import { isEnglishText } from '@/lib/ensure-english'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -190,7 +191,10 @@ function stripMeta(arr: string[], limit: number): string[] {
 
 function sanitizeAssessment(input: any = {}): Assessment {
   const insightsRaw = Array.isArray(input?.insights) ? input.insights : []
-  const insights = stripMeta(insightsRaw, 5)
+  // Issue #386: drop insights that mirrored a non-English query/passage —
+  // prompt pins alone already failed once on QA. Empty result falls through
+  // to the English fallback below.
+  const insights = stripMeta(insightsRaw, 5).filter(isEnglishText)
   const alignmentRaw =
     typeof input.alignment === 'string' ? input.alignment.trim() : ''
 

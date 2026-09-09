@@ -76,6 +76,7 @@ search-service/data/
 
 # Evaluation intermediates
 evaluation/results/
+evaluation/diagnostics/snapshots/
 # Answer-eval harness stage artifacts (capture/judged/report JSON)
 evaluation/answer/artifacts/
 
