@@ -279,6 +279,97 @@ no-selection-specific outcomes to know when reading a report:
   in the served corpus via a snippet-derived query, not whether this
   question retrieves it.
 
+### Scoring dimensions (what the report means)
+
+`report-<label>.json` has three parts: a header (provenance — fixture commit,
+target, knobs, synthesis/judge models, `selection_mode`, cost, plus the
+`rank_gaps` and `unreachable_passes` diagnostics below), one block per
+fixture review tier — `headline` (expert-approved), `draft_block`,
+`rejected` — and a `per_case` array with the same metrics at case grain plus
+`per_pass` detail. Block numbers are macro-means: each case is scored first
+(its own passes averaged), then cases are averaged — passes are never pooled
+across cases. `n/a` on the console means no case had a value for the metric
+(nothing scored, or the metric does not apply) — never zero.
+
+**Retrieval** (positive cases; the universe is the chunks the model actually
+saw):
+
+- **evidence_coverage** (primary) — of the fixture's key facts, the share
+  whose supporting passage's text appears (normalized containment) in a
+  retrieved chunk of its own document or its translation twin. Facts with no
+  supporting passage or no snippet in the fixture leave the denominator and
+  are counted alongside as `facts_no_passage` / `facts_no_snippet` — read a
+  coverage mean together with those counts to know how much of the set it
+  actually measured.
+- **doc_map** — average precision over the expected documents, twin-collapsed
+  before ranking (a document and its translation are one source). Expected
+  docs the preflight proved missing from the corpus leave the denominator.
+- **attainable_recall** — of those same attainable expected docs, the share
+  retrieved at all. 100% means retrieval found everything findable; a low
+  value beside a high doc_map means the misses are total, not merely late.
+- **distinct_docs** — distinct twin-collapsed documents in the retrieved
+  list (breadth of the horizon).
+- **top_doc_share** — the most-represented document's share of the list
+  (concentration; a high value means one source dominated).
+- **chunk_id_hit_rate** (diagnostic) — exact `chunk_id` overlap between the
+  fixture's expected passages and the retrieved chunks. Healthy doc-grain
+  numbers beside low chunk-grain ones mean boundary drift, twin
+  substitution, or the right document ranked the wrong chunks — read it
+  against doc_map, never alone.
+- **selection_utilization** (two-step) — of the distinct documents in the
+  case's selection, the share that contributed at least one passage to what
+  the model saw: "picked but ignored" made visible. Undefined with no
+  selection. Structural ceiling when reading it: the model sees ≤
+  `max_passages` passages (8 for gpt-5 models, 6 otherwise), so a
+  20-document selection cannot exceed 8/20 at default knobs. Carried in the
+  JSON (`draft_block.retrieval` and `per_case`); the console's retrieval
+  line prints the other five.
+
+**Synthesis** (judged; an unjudged item leaves its mean and is counted in
+the header's `unjudged` block — never scored as zero):
+
+- **fact_recall_strict** — share of key facts the judge ruled fully stated.
+- **fact_recall_lenient** — fully stated plus partial.
+- **citation_precision** — over sentences citing at least one passage, the
+  share the judge found supported by the passages they cite. Zero-cite
+  sentences are deliberately excluded here — they are the
+  unsupported-claims lane's job.
+- **unsupported_claims** / **unsupported_rate** — judge-counted sentences no
+  passage supports, with the rate per sentence; the count is always shown
+  with the number of judged passes it covers
+  (`unsupported_claims_judged_passes`).
+
+**Compliance** (computed from the route reply, not judged):
+
+- **cites_valid** — every citation resolved to a passage actually sent.
+- **parsed_clean** — the route parsed the model reply without the
+  partial-extraction salvage path or an infrastructure fallback.
+- **all_english** — no Chinese sentences in an English answer.
+
+**Abstention** (negative cases) — the share of negative-case passes where
+the product correctly refused. The signal is the route's off-topic flag, its
+low-coverage warning, or an all-weak nano-filter result; `likely_off_topic`
+is corpus-level and computed pre-filter, so under `fixture-set` (a negative
+asked against a hand-picked set) it can be false and `low_coverage` is the
+signal instead — the report records both, and the interpretation depends on
+the mode. An `unreachable` negative stays in the denominator: never
+reaching answer mode IS the abstention. A positive unreachable pass is the
+opposite — a cite-stage failure, excluded from every mean, never scored as
+zero, and counted in the header's `unreachable_passes`
+(negative/positive).
+
+**Header diagnostics, recorded not gated:**
+
+- **rank_gaps** — per case, how many expected passages exist in the corpus
+  but the case's question fails to surface even when the expected document
+  is searched directly with wide pools. The cross-lingual rank gap: an
+  English question can rank a zh executive-summary chunk below hundreds of
+  same-document chunks that repeat the fact with variant wording.
+- **expected_doc_in_selection** (per case, `no-selection` mode) — whether
+  any expected document (or twin) made the top-20 selection. It separates
+  "retrieval never selected it" from "selected, but its chunks lost the
+  passage budget" when attainable_recall is 0.
+
 ### Judge calibration against human labels
 
 `run-score --labels <path>` (repeatable; each path is a label file or a
