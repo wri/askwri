@@ -21,6 +21,11 @@ export interface FixtureCase {
   difficulty?: string
   source_language?: string
   note?: string
+  /** Reference into Evalset.doc_sets — the curated selection this case is
+   * answered within (fixture-set mode). Absent = no curated set yet; load
+   * tolerates this (no-selection mode never reads it), capture in
+   * fixture-set mode hard-errors on it. */
+  doc_set_id?: string
   retrieval_ground_truth?: {
     expected_external_ids?: string[]
     expected_document_ids?: string[]
@@ -34,11 +39,20 @@ export interface FixtureCase {
   review_status?: 'draft' | 'expert_approved' | 'rejected'
 }
 
+/** A curated doc set: the selection a user (or the fixture) hands to answer
+ * mode. Multiple cases may share one set (topic clusters). */
+export interface DocSet {
+  id: string
+  doc_ids: string[]
+  note?: string
+}
+
 export interface Evalset {
   name: string
   version?: string
   test_cases: FixtureCase[]
   twins?: [string, string][]
+  doc_sets?: DocSet[]
 }
 
 export interface RetrievedChunk {
