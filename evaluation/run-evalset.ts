@@ -14,7 +14,10 @@
  * Positive cases score ranking quality (average precision over the returned
  * list) and coverage (recall over the expected docs present in the target's
  * corpus). Cases expecting no documents ("Has WRI written about X?" where it
- * hasn't) are scored as abstentions and reported separately.
+ * hasn't) are scored as abstentions and reported separately. Abstaining
+ * means an empty result OR the off-topic flag firing (issue #354): the flag
+ * is the shipped abstention contract, and documents may remain under its
+ * banner by design.
  *
  * Chunk grain is scored the same way and reported apart, over the subset of
  * cases that have passage ground truth — the answer sets are being migrated to
@@ -40,6 +43,7 @@ import {
   extractUrlSlug,
   latencySummary,
 } from './lib/metrics'
+import { isAbstained, isFalseAbstention } from './lib/abstention'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
@@ -110,8 +114,17 @@ interface CaseResult {
   attainable_recall?: number | null
   /** How many attainable expected docs were retrieved — attainable_recall's numerator. */
   attainable_retrieved?: number | null
-  /** Negative cases only: did the target correctly return nothing? */
+  /**
+   * Negative cases only: the target abstained — an empty result, or the
+   * off-topic flag firing (issue #354's shipped abstention contract).
+   */
   abstained?: boolean
+  /**
+   * The target's off-topic verdict for this query (the P3 slice 6 signal),
+   * false when the target predates the signal. Absent when the query failed —
+   * no response, no verdict.
+   */
+  likely_off_topic?: boolean
   /**
    * Chunk grain. Empty when the fixture case carries no `expected_passages` —
    * the answer sets are being migrated to passage ground truth cluster by
@@ -216,6 +229,7 @@ async function queryTarget(
   hits: RetrievedChunk[]
   serviceMs: number | null
   costUsd: number | null
+  likelyOffTopic: boolean
 }> {
   const response = await fetch(`${TARGET}/api/llamaindex`, {
     method: 'POST',
@@ -236,10 +250,14 @@ async function queryTarget(
     chunk_id: d.meta?.raw?.chunk_id ?? null,
     url: d.url ?? '',
   }))
+  // The search service's off-topic verdict (P3 slice 6) passes through the
+  // gateway at the top level of the response. `=== true` keeps targets that
+  // predate the signal scoring the old way: no docs, no abstention.
   return {
     hits,
     serviceMs: data.debug?.total_ms ?? null,
     costUsd: data.usage?.total_usd ?? null,
+    likelyOffTopic: data.likely_off_topic === true,
   }
 }
 
@@ -301,7 +319,10 @@ async function runCase(
   }
 
   try {
-    const { hits, serviceMs, costUsd } = await queryTarget(tc.question, mode)
+    const { hits, serviceMs, costUsd, likelyOffTopic } = await queryTarget(
+      tc.question,
+      mode,
+    )
     const docs = bestPerDoc(hits)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
@@ -312,20 +333,27 @@ async function runCase(
       .map((h) => h.chunk_id)
       .filter((id): id is string => id != null)
 
-    // Cite mode drops results below a calibrated score floor, so returning
-    // nothing is a reachable outcome — that, not ranking quality, is what a
-    // negative case measures.
+    // A negative case is abstained when the target returns nothing OR the
+    // off-topic flag fires. The flag is the shipped abstention contract
+    // (issue #354, P3 slice 6): the UI shows the "nothing relevant" banner
+    // and keeps the user in control, so documents may remain underneath it —
+    // the guardrail scores the signal, not the doc count alone.
     if (polarity === 'negative') {
-      const abstained = retrieved.length === 0
+      const abstained = isAbstained(retrieved.length, likelyOffTopic)
       console.log(
         `  ${tc.id.padEnd(40)} ${
-          abstained ? 'abstained' : `returned ${retrieved.length} docs`
+          abstained
+            ? likelyOffTopic
+              ? 'abstained (off-topic flag)'
+              : 'abstained (no docs)'
+            : `returned ${retrieved.length} docs (not flagged)`
         }`,
       )
       return {
         ...base,
         retrieved_ids: retrieved,
         retrieved_chunk_ids: retrievedChunkIds,
+        likely_off_topic: likelyOffTopic,
         abstained,
         execution_time_ms: Date.now() - start,
         service_time_ms: serviceMs,
@@ -407,6 +435,7 @@ async function runCase(
       execution_time_ms: Date.now() - start,
       service_time_ms: serviceMs,
       cost_usd: costUsd,
+      likely_off_topic: likelyOffTopic,
     }
   } catch (error: any) {
     console.log(`  ${tc.id.padEnd(40)} ERROR: ${error.message}`)
@@ -522,6 +551,12 @@ async function runEvalset(
   const negatives = results.filter((r) => r.polarity === 'negative')
   const ceilinged = results.filter((r) => r.missing_from_corpus.length > 0)
   const abstained = negatives.filter((r) => r.abstained)
+  // The inverse guardrail (#354): positive cases the off-topic flag fired
+  // on — users would see the "nothing relevant" banner on a query the corpus
+  // answers.
+  const falseAbstentions = positives.filter((r) =>
+    isFalseAbstention(r.polarity, r.likely_off_topic),
+  )
   const coverage = docCoverage(positives)
   // Chunk grain covers only the cases migrated to passage ground truth, so its
   // means are taken over those cases alone — never over the whole set.
@@ -600,6 +635,8 @@ async function runEvalset(
     expected_chunks_in_corpus: chunks.in_corpus,
     expected_chunks_retrieved: chunks.retrieved,
     negatives_abstained: abstained.length,
+    // Inverse guardrail (#354): positives the off-topic flag fired on.
+    positives_flagged_off_topic: falseAbstentions.length,
     latency,
     cost,
     by_query_type: byQueryType(results),
@@ -650,13 +687,19 @@ async function runEvalset(
   if (negatives.length) {
     console.log(
       `${negatives.length} negative   ` +
-        `${abstained.length}/${negatives.length} correctly returned nothing`,
+        `${abstained.length}/${negatives.length} abstained (no docs or off-topic flag)`,
     )
     for (const r of negatives.filter((n) => !n.abstained)) {
       console.log(
         `  - ${r.test_case_id}: ${r.error ?? `${r.retrieved_ids.length} docs`}`,
       )
     }
+  }
+  if (falseAbstentions.length) {
+    console.log(
+      `WARNING: ${falseAbstentions.length} positive case(s) flagged off-topic (false abstentions)`,
+    )
+    for (const r of falseAbstentions) console.log(`  - ${r.test_case_id}`)
   }
   if (report.by_query_type.length > 1) {
     console.log('\nBy query type')
