@@ -35,6 +35,29 @@ describe('abstention candidate policy (mirror of core_topic_in_corpus)', () => {
     expect(cands).not.toContain('farming')
   })
 
+  it('collapses subject/purpose and generic-location extraction variants', () => {
+    expect(
+      candidatesFor(
+        'using surveillance technologies to increase climate resilience in cities',
+      ),
+    ).toEqual(['surveillance technologies'])
+    expect(
+      candidatesFor('urban vertical farming or rooftop agriculture in cities'),
+    ).toEqual(candidatesFor('urban vertical farming or rooftop agriculture'))
+  })
+
+  it('retains named geography and substantive noun phrases', () => {
+    expect(candidatesFor('Coalition for Urban Transitions')[0]).toBe(
+      'coalition for urban transitions',
+    )
+    expect(candidatesFor('bike-sharing in China')[0]).toBe(
+      'bike-sharing in china',
+    )
+    expect(
+      candidatesFor('using access to transport to improve health')[0],
+    ).toBe('access to transport')
+  })
+
   describe('stopword-filtered policy', () => {
     it("drops framing fragments like 'in cities' (the d9 collision)", () => {
       const cands = candidatesFor(

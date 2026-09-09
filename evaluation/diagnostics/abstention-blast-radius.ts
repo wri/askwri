@@ -8,7 +8,11 @@
  * at risk of false abstention, and what flips between policies.
  *
  * Any PR that changes the abstain surface or the candidate policy MUST carry
- * this table. The table exists so fixes are chosen on the full case set, not
+ * a blast-radius table. For release evidence use search-service/scripts/
+ * abstention_exact.py: it evaluates EVERY extraction against the service SQL,
+ * including author-token and authoritative-summary matching. This older tool
+ * remains a modal-only catalog approximation, useful for quick experiments.
+ * The table exists so fixes are chosen on the full case set, not
  * on the case that motivated them (2026-09-09: the stop-word filter fixed d9
  * and silently flipped q5/q6 — this table is what caught it).
  *
@@ -84,7 +88,7 @@ function main() {
     `  extractions: ${extractions.updated} (modal of ${extractions.samples_per_case} samples, model ${extractions.model})`,
   )
   console.log(
-    `  NOTE: snapshot is the catalog approximation — blind to tags/aliases (see snapshot-match-surface.ts)`,
+    `  NOTE: modal-only catalog approximation; use search-service/scripts/abstention_exact.py for all-variant, exact-surface release evidence.`,
   )
   console.log()
 
