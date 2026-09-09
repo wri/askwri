@@ -353,6 +353,37 @@ describe('validateLabelsAgainstCapture', () => {
   })
 })
 
+describe('labels bind to either capture schema', () => {
+  /** Same cases as makeCapture, but an @2 selection-bearing artifact. */
+  const makeCapture2 = (): CaptureArtifact => ({
+    ...makeCapture(),
+    schema: 'answer-eval/capture@2',
+    selection: {
+      mode: 'fixture-set',
+      by_case: [{ case_id: 'case-a', selected_doc_ids: ['d1'] }],
+    },
+  })
+
+  it('accepts a label bound to an @2 capture — the fingerprint covers the selection', () => {
+    const capture2 = makeCapture2()
+    expect(
+      validateLabelsAgainstCapture(
+        makeLabels({ capture_fingerprint: captureFingerprint(capture2) }),
+        capture2,
+      ),
+    ).toEqual({ ok: true })
+  })
+
+  it('refuses a selection-less-bound label against the @2 capture — the selection is part of the binding', () => {
+    // makeLabels() carries the @1 (selection-less) fingerprint of the same
+    // cases; the @2 capture hashes its selection too, so the label must not
+    // silently rebind across selection modes.
+    const r = validateLabelsAgainstCapture(makeLabels(), makeCapture2())
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.reason).toMatch(/fingerprint/)
+  })
+})
+
 describe('captureFingerprint pin', () => {
   it('matches the hex PR A asserts', () => {
     const fixture = JSON.parse(

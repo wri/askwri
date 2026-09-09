@@ -125,6 +125,24 @@ describe('compareReports — guard', () => {
     )
     expect(() => compareReports(reportA, other)).toThrow(/target mode/)
   })
+
+  it('refuses differing selection modes (fixture-set vs no-selection are not comparable)', () => {
+    const a = { ...reportA, header: { selection_mode: 'fixture-set' } }
+    const b = { ...reportB, header: { selection_mode: 'no-selection' } }
+    expect(() => compareReports(a, b)).toThrow(/selection mode/)
+  })
+
+  it('refuses a selection-mode report against a selection-less one (@1 horizon differs)', () => {
+    const a = { ...reportA, header: { selection_mode: 'fixture-set' } }
+    // reportB's header is {} — no selection recorded (pre-@2 capture)
+    expect(() => compareReports(a, reportB)).toThrow(/selection mode/)
+  })
+
+  it('still compares two reports with the same recorded selection mode', () => {
+    const a = { ...reportA, header: { selection_mode: 'fixture-set' } }
+    const b = { ...reportB, header: { selection_mode: 'fixture-set' } }
+    expect(() => compareReports(a, b)).not.toThrow()
+  })
 })
 
 describe('compareReports — block deltas', () => {
@@ -532,6 +550,31 @@ function silenceConsole(): { restore: () => void } {
 }
 
 describe('runPairwise', () => {
+  it('refuses differing selection modes before any judge call', async () => {
+    const c = { n: 0 }
+    const judge = preferJudge('a', [], c)
+    const withSelection = (
+      cap: CaptureArtifact,
+      mode: 'fixture-set' | 'no-selection',
+    ): CaptureArtifact => ({
+      ...cap,
+      schema: 'answer-eval/capture@2',
+      selection: {
+        mode,
+        by_case: [{ case_id: 'q1', selected_doc_ids: ['d1'] }],
+      },
+    })
+    const capSelA = withSelection(capA, 'fixture-set')
+    const capSelB = withSelection(capB, 'no-selection')
+    await expect(runOn(judge, capSelA, capSelB)).rejects.toThrow(
+      /selection mode/,
+    )
+    // And an @1 (selection-less) capture vs a selection-mode one also refuses.
+    await expect(runOn(judge, capA, capSelB)).rejects.toThrow(/selection mode/)
+    // The guard fires before any judging is spent.
+    expect(c.n).toBe(0)
+  })
+
   it('counts a win for A only when A wins in both orders', async () => {
     const users: string[] = []
     const c = { n: 0 }

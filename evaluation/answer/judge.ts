@@ -109,8 +109,10 @@ function enumerateJobs(
     for (const p of c.passes) {
       // Answer-error passes are excluded from every mean the scorer computes
       // — spend no judge calls on them (their empty sentences would still
-      // bill a fact_recall + unsupported_claims pair).
-      if (p.answer.error) continue
+      // bill a fact_recall + unsupported_claims pair). Unreachable passes
+      // (zero-doc cite result, no-selection mode) never synthesized at all
+      // — same exclusion class, no spend.
+      if (p.unreachable || p.answer.error) continue
       const a = p.answer
       const key = (kind: Kind, index?: number) =>
         `${c.case_id}|${p.pass}|${kind}:${index ?? ''}`

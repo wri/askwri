@@ -60,6 +60,7 @@ export interface BlockReport {
     distinct_docs: MetricMean
     top_doc_share: MetricMean
     chunk_id_hit_rate: MetricMean
+    selection_utilization: MetricMean
   }
   synthesis: {
     fact_recall_strict: MetricMean
@@ -94,6 +95,10 @@ export interface BlockReport {
 interface PassMetrics {
   pass: number
   excluded?: 'retrieval_error' | 'answer_error'
+  /** Answer mode was never reached (zero-doc cite). Negatives carry
+   * `abstained: true` alongside; positives carry only the marker and stay
+   * out of every mean (counted in header.unreachable_passes instead). */
+  unreachable?: true
   abstained?: boolean
   evidence_coverage?: number
   facts_no_snippet?: number
@@ -103,6 +108,10 @@ interface PassMetrics {
   distinct_docs?: number
   top_doc_share?: number
   chunk_id_hit_rate?: number
+  /** Share of DISTINCT selected docs contributing ≥1 chunk to
+   * passages_sent (spec §7 selection utilization). Undefined on
+   * selection-less (@1) passes and unreachable passes. */
+  selection_utilization?: number
   fact_recall_strict?: number
   fact_recall_lenient?: number
   fact_recall_unjudged?: boolean
@@ -178,6 +187,17 @@ function scorePass(c: CaseCapture, p: PassCapture, ctx: ScoreCtx): PassMetrics {
   if (p.answer.error) return { pass: p.pass, excluded: 'answer_error' }
 
   const fc = c.fixture_case
+
+  // Ruling 5: a zero-doc cite result never reaches answer mode. A negative
+  // abstained (the product correctly showed nothing); a positive failed at
+  // the cite stage — out of every mean, never scored as zero, and never
+  // `unjudged` (the judge skips these passes by construction).
+  if (p.unreachable) {
+    return isNegative(fc)
+      ? { pass: p.pass, unreachable: true, abstained: true }
+      : { pass: p.pass, unreachable: true }
+  }
+
   const a = p.answer
   const debug = parseDebug(a.raw_model_json)
 
@@ -273,6 +293,18 @@ function scorePass(c: CaseCapture, p: PassCapture, ctx: ScoreCtx): PassMetrics {
         expectedChunkIds.size
       : undefined
 
+  // Selection utilization (spec §7): of the DISTINCT docs in this pass's
+  // selection, the share that contributed ≥1 chunk to what the model saw —
+  // "picked but ignored" made visible. No selection (@1) or an empty one
+  // (unreachable) leaves it undefined, never zero.
+  const selSet = new Set(p.selected_doc_ids ?? [])
+  const selection_utilization =
+    selSet.size > 0
+      ? new Set(
+          a.passages_sent.map((ps) => ps.doc_id).filter((d) => selSet.has(d)),
+        ).size / selSet.size
+      : undefined
+
   // --- §2.3 synthesis ---
   const key = (kind: string, index?: number) =>
     `${c.case_id}|${p.pass}|${kind}:${index ?? ''}`
@@ -354,6 +386,7 @@ function scorePass(c: CaseCapture, p: PassCapture, ctx: ScoreCtx): PassMetrics {
     distinct_docs,
     top_doc_share,
     chunk_id_hit_rate,
+    selection_utilization,
     fact_recall_strict,
     fact_recall_lenient,
     fact_recall_unjudged,
@@ -378,19 +411,23 @@ function scoreCase(c: CaseCapture, ctx: ScoreCtx): ScoredCase {
 }
 
 /** Case-level values: each metric is the mean over the case's non-excluded
- * passes (null when the case has nothing to score for it). */
+ * passes (null when the case has nothing to score for it). Unreachable
+ * passes leave the POSITIVE means (a cite-stage failure is not a zero) but
+ * stay in the NEGATIVE abstention denominators — for a negative, never
+ * reaching answer mode IS the abstention. */
 function caseMetrics(s: ScoredCase): Record<string, number | null> {
   const valid = s.passes.filter((p) => !p.excluded)
-  const m = (field: keyof PassMetrics): number | null =>
-    meanOf(
-      valid.map((p) => p[field]).filter((v): v is number => v !== undefined),
-    )
   if (s.negative) {
     const abstained = valid.filter((p) => p.abstained).length
     return {
       abstention_rate: valid.length > 0 ? abstained / valid.length : null,
     }
   }
+  const scored = s.passes.filter((p) => !p.excluded && !p.unreachable)
+  const m = (field: keyof PassMetrics): number | null =>
+    meanOf(
+      scored.map((p) => p[field]).filter((v): v is number => v !== undefined),
+    )
   return {
     evidence_coverage: m('evidence_coverage'),
     doc_map: m('doc_map'),
@@ -398,14 +435,15 @@ function caseMetrics(s: ScoredCase): Record<string, number | null> {
     distinct_docs: m('distinct_docs'),
     top_doc_share: m('top_doc_share'),
     chunk_id_hit_rate: m('chunk_id_hit_rate'),
+    selection_utilization: m('selection_utilization'),
     fact_recall_strict: m('fact_recall_strict'),
     fact_recall_lenient: m('fact_recall_lenient'),
     citation_precision: m('citation_precision'),
-    unsupported_claims_count: valid.reduce(
+    unsupported_claims_count: scored.reduce(
       (t, p) => t + (p.unsupported_claims_count ?? 0),
       0,
     ),
-    unsupported_claims_judged_passes: valid.filter(
+    unsupported_claims_judged_passes: scored.filter(
       (p) => p.unsupported_claims_count !== undefined,
     ).length,
     unsupported_claims_rate: m('unsupported_claims_rate'),
@@ -418,8 +456,13 @@ function blockFrom(scored: ScoredCase[]): BlockReport {
   const positives = scored.filter((s) => !s.negative)
   const negativeCases = scored.filter((s) => s.negative)
   const posPasses = positives.flatMap((s) =>
-    s.passes.filter((p) => !p.excluded),
+    // Unreachable positives never synthesized — out of every block mean and
+    // the compliance counts (a cite-stage failure is not a parsed-or-not
+    // pass either).
+    s.passes.filter((p) => !p.excluded && !p.unreachable),
   )
+  // Negatives keep their unreachable passes IN: never reaching answer mode
+  // is the abstention being measured (ruling 5).
   const negPasses = negativeCases.flatMap((s) =>
     s.passes.filter((p) => !p.excluded),
   )
@@ -446,6 +489,7 @@ function blockFrom(scored: ScoredCase[]): BlockReport {
       distinct_docs: mm('distinct_docs'),
       top_doc_share: mm('top_doc_share'),
       chunk_id_hit_rate: mm('chunk_id_hit_rate'),
+      selection_utilization: mm('selection_utilization'),
     },
     synthesis: {
       fact_recall_strict: mm('fact_recall_strict'),
@@ -534,6 +578,9 @@ export function score(
     if (s.negative) continue
     for (const p of s.passes) {
       if (p.excluded) continue
+      // The judge never runs on an unreachable pass — its absent items are
+      // not gaps, so it must never read as unjudged.
+      if (p.unreachable) continue
       if (p.fact_recall_unjudged) unjudged.fact_recall++
       if (p.sentence_support_unjudged) unjudged.sentence_support++
       if (p.unsupported_claims_unjudged) unjudged.unsupported_claims++
@@ -541,12 +588,15 @@ export function score(
   }
 
   const excluded = { retrieval_error: 0, answer_error: 0 }
+  const unreachablePasses = { negative: 0, positive: 0 }
   let costTotal = 0
   let costCalls = 0
   for (const s of scoredAll) {
     for (const p of s.passes) {
       if (p.excluded === 'retrieval_error') excluded.retrieval_error++
       else if (p.excluded === 'answer_error') excluded.answer_error++
+      if (p.unreachable)
+        unreachablePasses[s.negative ? 'negative' : 'positive']++
     }
     for (const cp of s.case.passes) {
       const cost = cp.retrieval.cost_usd
@@ -555,6 +605,41 @@ export function score(
         costCalls++
       }
     }
+  }
+
+  // Ruling 6: the preflight's cross-lingual rank gaps lift into the header
+  // as per-case counts — informative, never a gate. Absent on captures from
+  // before the field existed (omit, not empty).
+  const gaps = capture.preflight.rank_gaps
+  const rankGaps =
+    gaps === undefined
+      ? undefined
+      : Object.fromEntries(
+          [
+            ...gaps.reduce((m, g) => {
+              m.set(g.case_id, (m.get(g.case_id) ?? 0) + 1)
+              return m
+            }, new Map<string, number>()),
+          ].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        )
+
+  // Per-case expected-doc-in-selection (spec §7): whether any expected doc
+  // — or its twin — made the selection. In no-selection mode this splits a
+  // recall miss into "never selected" vs "selected, chunks didn't make the
+  // cut"; in fixture-set mode it is true by construction (the capture-time
+  // subset check). Null when the capture records no selection (@1).
+  const selByCase = new Map(
+    (capture.selection?.by_case ?? []).map((e) => [e.case_id, e]),
+  )
+  const expectedInSelection = (c: CaseCapture): boolean | null => {
+    const entry = selByCase.get(c.case_id)
+    if (!entry) return null
+    const sel = new Set(entry.selected_doc_ids)
+    return expectedIdsOf(c.fixture_case).some((id) => {
+      if (sel.has(id)) return true
+      const twin = twinOf(evalset, id)
+      return twin !== undefined && sel.has(twin)
+    })
   }
 
   const header = {
@@ -586,6 +671,11 @@ export function score(
       ...unjudged,
     },
     excluded_passes: excluded,
+    // Two-step flow (spec §4/§7): the run's selection mode, the unreachable
+    // bucket beside excluded_passes, and the lifted rank-gap counts.
+    selection_mode: capture.selection?.mode ?? null,
+    unreachable_passes: unreachablePasses,
+    ...(rankGaps !== undefined ? { rank_gaps: rankGaps } : {}),
     cost: {
       retrieval_usd_total: costCalls > 0 ? costTotal : null,
       retrieval_calls_reported: costCalls,
@@ -604,6 +694,7 @@ export function score(
     per_case: scoredAll.map((s) => ({
       ...s.case.fixture_case,
       per_pass: s.passes,
+      expected_doc_in_selection: expectedInSelection(s.case),
       ...caseMetrics(s),
     })),
   }

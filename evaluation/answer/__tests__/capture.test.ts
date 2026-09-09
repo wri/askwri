@@ -19,20 +19,30 @@ import { close, listen, readJsonBody, respondJson } from '../test-server'
 const sha256 = (s: string) =>
   crypto.createHash('sha256').update(s).digest('hex')
 
-const makeEvalset = (): Evalset => ({
+const makeEvalset = (withDocSets = true): Evalset => ({
   name: 'capture-test',
   version: '1',
+  ...(withDocSets
+    ? {
+        doc_sets: [
+          { id: 'trucks', doc_ids: ['doc_a'] },
+          { id: 'hydrogen', doc_ids: ['doc_b'] },
+        ],
+      }
+    : {}),
   test_cases: [
     {
       id: 'q1',
       question: 'What about trucks?',
       review_status: 'expert_approved',
+      ...(withDocSets ? { doc_set_id: 'trucks' } : {}),
       retrieval_ground_truth: { expected_external_ids: ['doc_a'] },
       synthesis_ground_truth: { key_facts: ['f1'] },
     },
     {
       id: 'q2',
       question: 'Anything on hydrogen?',
+      ...(withDocSets ? { doc_set_id: 'hydrogen' } : {}),
       retrieval_ground_truth: { expected_external_ids: ['doc_b'] },
       synthesis_ground_truth: { key_facts: ['f2'] },
     },
@@ -59,10 +69,18 @@ interface FakeGateway {
   server: http.Server
   retrievalCalls: any[]
   answerCalls: any[]
+  /** no-selection derivation source: cite-mode POST bodies. */
+  citeCalls: any[]
   answerStatusFor: (query: string) => number
   retrievalStatusFor: (query: string) => number
+  /** The docs the answer-mode retrieval returns (validDocs filter input). */
+  retrievalDocsFor: (query: string) => any[]
+  /** The ranked doc ids a cite-mode query returns. */
+  citeResultsFor: (query: string) => string[]
   /** Transport-level failure: destroy the socket instead of replying. */
   destroyAnswerFor: (query: string) => boolean
+  /** Transport-level cite failure: destroy the socket. */
+  destroyCiteFor: (query: string) => boolean
   /** route.ts fallback shape (HTTP 200, ok:true, debug.fallbackReason). */
   answerFallbackFor: (query: string) => string | undefined
   catalog: string[]
@@ -77,9 +95,13 @@ async function startFakeGateway(catalog: string[]): Promise<FakeGateway> {
     server: null as unknown as http.Server,
     retrievalCalls: [],
     answerCalls: [],
+    citeCalls: [],
     answerStatusFor: () => 200,
     retrievalStatusFor: () => 200,
+    retrievalDocsFor: () => [FAKE_DOC],
+    citeResultsFor: () => ['doc_a', 'doc_b'],
     destroyAnswerFor: () => false,
+    destroyCiteFor: () => false,
     answerFallbackFor: () => undefined,
     catalog,
   }
@@ -98,6 +120,27 @@ async function startFakeGateway(catalog: string[]): Promise<FakeGateway> {
       })
     } else if (req.method === 'POST' && req.url === '/api/llamaindex') {
       readJsonBody(req, (b) => {
+        if (b.mode === 'cite') {
+          // The no-selection derivation source (target.cite).
+          gw.citeCalls.push(b)
+          if (gw.destroyCiteFor(b.query)) {
+            req.socket.destroy()
+            return
+          }
+          respondJson(res, 200, {
+            ok: true,
+            docs: gw.citeResultsFor(b.query).map((id, i) => ({
+              doc_id: id,
+              title: `Doc ${id}`,
+              score: 1 - i * 0.01,
+              kps: [
+                { snippet: `text of ${id}`, passage_id: `${id}_c1`, page: 1 },
+              ],
+              meta: { raw: { chunk_id: `${id}_c1` } },
+            })),
+          })
+          return
+        }
         gw.retrievalCalls.push(b)
         if (gw.retrievalStatusFor(b.query) !== 200) {
           respondJson(res, gw.retrievalStatusFor(b.query), {
@@ -108,7 +151,7 @@ async function startFakeGateway(catalog: string[]): Promise<FakeGateway> {
         }
         respondJson(res, 200, {
           ok: true,
-          docs: [FAKE_DOC],
+          docs: gw.retrievalDocsFor(b.query),
           likely_off_topic: b.query === 'Anything on hydrogen?',
           debug: { total_ms: 7 },
           usage: { total_usd: 0.01 },
@@ -214,7 +257,7 @@ describe('runCapture', () => {
       controlsFor(gw.url, esPath, '--passes', '2'),
       { http: fetchJson, git: stubGit, now: stubNow },
     )
-    expect(artifact.schema).toBe('answer-eval/capture@1')
+    expect(artifact.schema).toBe('answer-eval/capture@2')
     // The artifact carries its own fingerprint so cross-language consumers
     // (the eval-review labels notebook) read it instead of re-hashing.
     expect(artifact.capture_fingerprint).toBe(captureFingerprint(artifact))
@@ -445,7 +488,7 @@ describe('runCapture', () => {
       git: stubGit,
       now: stubNow,
       checkpoint: (partial) => {
-        expect(partial.schema).toBe('answer-eval/capture@1')
+        expect(partial.schema).toBe('answer-eval/capture@2')
         expect(partial.provenance.harness_sha).toBe('harnesssha0000')
         checkpoints.push(partial.cases.map((c) => c.case_id))
       },
@@ -663,6 +706,197 @@ describe('runCapture', () => {
   })
 })
 
+describe('selection modes', () => {
+  it('fixture-set mode (default): scopes retrieval to the doc set via cite_doc_ids, records the selection top-level and per pass', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    const esPath = writeEvalsetTo(makeEvalset())
+    const artifact = await runCapture(controlsFor(gw.url, esPath), {
+      http: fetchJson,
+      git: stubGit,
+      now: stubNow,
+    })
+    expect(artifact.selection).toEqual({
+      mode: 'fixture-set',
+      by_case: [
+        { case_id: 'q1', selected_doc_ids: ['doc_a'] },
+        { case_id: 'q2', selected_doc_ids: ['doc_b'] },
+      ],
+    })
+    const q1Retrieval = gw.retrievalCalls.find(
+      (b) => b.query === 'What about trucks?',
+    )
+    expect(q1Retrieval.cite_doc_ids).toEqual(['doc_a'])
+    const q2Retrieval = gw.retrievalCalls.find(
+      (b) => b.query === 'Anything on hydrogen?',
+    )
+    expect(q2Retrieval.cite_doc_ids).toEqual(['doc_b'])
+    // Per-pass copy (ruling 3: derived once, reused across passes).
+    expect(artifact.cases[0].passes[0].selected_doc_ids).toEqual(['doc_a'])
+    expect(artifact.cases[0].passes[0].unreachable).toBeUndefined()
+    // fixture-set never issues a cite query.
+    expect(gw.citeCalls).toEqual([])
+    await close(gw.server)
+  })
+
+  it('fixture-set mode hard-errors before any spend when a case lacks a doc set or expects docs outside it', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    const noSet = makeEvalset()
+    delete noSet.test_cases[0].doc_set_id
+    const es1 = writeEvalsetTo(noSet)
+    await expect(
+      runCapture(controlsFor(gw.url, es1), {
+        http: fetchJson,
+        git: stubGit,
+        now: stubNow,
+      }),
+    ).rejects.toThrow(/q1 has no doc_set_id/)
+
+    const outside = makeEvalset()
+    outside.test_cases[0].retrieval_ground_truth = {
+      expected_external_ids: ['doc_z'],
+    }
+    const es2 = writeEvalsetTo(outside)
+    await expect(
+      runCapture(controlsFor(gw.url, es2), {
+        http: fetchJson,
+        git: stubGit,
+        now: stubNow,
+      }),
+    ).rejects.toThrow(/doc_z/)
+    // Both hard errors fired before any spend — not even preflight lookups.
+    expect(gw.retrievalCalls).toEqual([])
+    expect(gw.answerCalls).toEqual([])
+    await close(gw.server)
+  })
+
+  it('no-selection mode: derives the selection from a cite query, caps it at 20, and scopes retrieval to it', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    const ids = Array.from(
+      { length: 25 },
+      (_, i) => `doc_${String(i).padStart(2, '0')}`,
+    )
+    gw.citeResultsFor = () => ids
+    const esPath = writeEvalsetTo(makeEvalset(false)) // no doc_sets — tolerated
+    const artifact = await runCapture(
+      controlsFor(gw.url, esPath, '--selection-mode', 'no-selection'),
+      { http: fetchJson, git: stubGit, now: stubNow },
+    )
+    expect(gw.citeCalls.map((b) => b.query)).toEqual([
+      'What about trucks?',
+      'Anything on hydrogen?',
+    ])
+    expect(gw.citeCalls[0].mode).toBe('cite')
+    const capped = ids.slice(0, 20) // ResultsTable.tsx:20 MAXIMUM_CONSULTED_DOCS
+    expect(artifact.selection).toEqual({
+      mode: 'no-selection',
+      by_case: [
+        { case_id: 'q1', selected_doc_ids: capped },
+        { case_id: 'q2', selected_doc_ids: capped },
+      ],
+    })
+    expect(gw.retrievalCalls[0].cite_doc_ids).toEqual(capped)
+    expect(artifact.cases[0].passes[0].selected_doc_ids).toEqual(capped)
+    await close(gw.server)
+  })
+
+  it('no-selection mode: a zero-doc cite result records unreachable passes — no answer call, no error', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    gw.citeResultsFor = (q) => (q === 'What about trucks?' ? [] : ['doc_b'])
+    const esPath = writeEvalsetTo(makeEvalset(false))
+    const artifact = await runCapture(
+      controlsFor(gw.url, esPath, '--selection-mode', 'no-selection'),
+      { http: fetchJson, git: stubGit, now: stubNow },
+    )
+    const q1 = artifact.cases.find((c) => c.case_id === 'q1')!
+    const p = q1.passes[0]
+    expect(p.unreachable).toBe(true)
+    expect(p.selected_doc_ids).toEqual([])
+    expect(p.retrieval.error).toBeUndefined()
+    expect(p.answer.error).toBeUndefined()
+    expect(p.answer.sentences).toEqual([])
+    // No answer call and no answer-mode retrieval for q1.
+    expect(
+      gw.answerCalls.filter((b) => b.query === 'What about trucks?'),
+    ).toEqual([])
+    expect(
+      gw.retrievalCalls.filter((b) => b.query === 'What about trucks?'),
+    ).toEqual([])
+    // q2 proceeded normally.
+    const q2 = artifact.cases.find((c) => c.case_id === 'q2')!
+    expect(q2.passes[0].unreachable).toBeUndefined()
+    expect(q2.passes[0].answer.sentences).toEqual(['s one', 's two'])
+    await close(gw.server)
+  })
+
+  it('no-selection mode: a cite transport failure is a per-case retrieval error, never unreachable', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    gw.destroyCiteFor = (q) => q === 'What about trucks?'
+    const esPath = writeEvalsetTo(makeEvalset(false))
+    const artifact = await runCapture(
+      controlsFor(gw.url, esPath, '--selection-mode', 'no-selection'),
+      { http: fetchJson, git: stubGit, now: stubNow },
+    )
+    const q1 = artifact.cases.find((c) => c.case_id === 'q1')!
+    expect(q1.passes[0].unreachable).toBeUndefined()
+    expect(q1.passes[0].retrieval.error).toContain('cite query failed')
+    expect(q1.passes[0].answer.error).toContain('skipped: cite query failed')
+    expect(q1.passes[0].selected_doc_ids).toEqual([])
+    const q2 = artifact.cases.find((c) => c.case_id === 'q2')!
+    expect(q2.passes[0].answer.error).toBeUndefined()
+    await close(gw.server)
+  })
+
+  it("applies the UI's validDocs filter before /api/answer (empty-kps and thin-snippet docs never reach synthesis)", async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    const emptyKps = {
+      doc_id: 'doc_empty',
+      title: 'Empty',
+      score: 0.5,
+      kps: [],
+    }
+    const thin = {
+      doc_id: 'doc_thin',
+      title: 'Thin',
+      score: 0.4,
+      kps: [{ snippet: 'short', passage_id: 'x', page: 1 }],
+    }
+    gw.retrievalDocsFor = () => [emptyKps, thin, FAKE_DOC]
+    const esPath = writeEvalsetTo(makeEvalset())
+    await runCapture(controlsFor(gw.url, esPath), {
+      http: fetchJson,
+      git: stubGit,
+      now: stubNow,
+    })
+    const q1Answer = gw.answerCalls.find(
+      (b) => b.query === 'What about trucks?',
+    )
+    expect(q1Answer.docs).toEqual([FAKE_DOC])
+    await close(gw.server)
+  })
+
+  it('fingerprints a selection-bearing capture over cases + selection; selection-less captures keep the @1 formula', async () => {
+    const gw = await startFakeGateway(['doc_a', 'doc_b'])
+    const esPath = writeEvalsetTo(makeEvalset())
+    const artifact = await runCapture(controlsFor(gw.url, esPath), {
+      http: fetchJson,
+      git: stubGit,
+      now: stubNow,
+    })
+    expect(artifact.capture_fingerprint).toBe(captureFingerprint(artifact))
+    // The selection block is hashed in — a mode or doc-set change under the
+    // same label cannot reuse stale verdicts/labels.
+    expect(artifact.capture_fingerprint).not.toBe(
+      sha256(JSON.stringify(artifact.cases)),
+    )
+    // Selection-less (@1 shape): the historical formula, byte-for-byte.
+    const legacy: typeof artifact = { ...artifact, selection: undefined }
+    expect(captureFingerprint(legacy)).toBe(
+      sha256(JSON.stringify(artifact.cases)),
+    )
+    await close(gw.server)
+  })
+})
+
 describe('writeCaptureArtifact', () => {
   it('writes a pretty artifact with stable bytes under artifacts/capture-<label>.json', async () => {
     const gw = await startFakeGateway(['doc_a', 'doc_b'])
@@ -681,7 +915,7 @@ describe('writeCaptureArtifact', () => {
     expect(path.basename(file1)).toBe('capture-unit.json')
     expect(fs.readFileSync(file1, 'utf8')).toBe(fs.readFileSync(file2, 'utf8'))
     const round = JSON.parse(fs.readFileSync(file1, 'utf8'))
-    expect(round.schema).toBe('answer-eval/capture@1')
+    expect(round.schema).toBe('answer-eval/capture@2')
     expect(round.cases).toHaveLength(2)
     await close(gw.server)
   })

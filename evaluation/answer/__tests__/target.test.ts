@@ -97,6 +97,61 @@ describe('gatewayTarget', () => {
     await close(server)
   })
 
+  it("cite sends the UI client's full body and returns ranked doc ids", async () => {
+    let body: any
+    const server = http.createServer((req, res) => {
+      expect(req.method).toBe('POST')
+      expect(req.url).toBe('/api/llamaindex')
+      readJsonBody(req, (b) => {
+        body = b
+        respondJson(res, 200, {
+          ok: true,
+          docs: [
+            { doc_id: 'doc_a', score: 0.9 },
+            { doc_id: 'doc_b', score: 0.5 },
+            // A repeated doc_id never inflates the ranked list (first
+            // occurrence keeps its rank).
+            { doc_id: 'doc_a', score: 0.4 },
+          ],
+        })
+      })
+    })
+    const base = await listen(server)
+    try {
+      const target = gatewayTarget(base, fetchJson)
+      const ids = await target.cite('what about trucks?')
+      // The UI client's exact body (llamaindex-client.ts chatCiteLlamaIndex):
+      // toEqual also asserts the ABSENCE of extra fields.
+      expect(body).toEqual({
+        query: 'what about trucks?',
+        mode: 'cite',
+        max_results: 40,
+        similarity_threshold: 0.0,
+        include_metadata: true,
+        rerank: true,
+      })
+      expect(ids).toEqual(['doc_a', 'doc_b'])
+    } finally {
+      await close(server)
+    }
+  }, 10_000)
+
+  it('cite throws on a gateway error response', async () => {
+    const server = http.createServer((_req, res) => {
+      respondJson(res, 400, {
+        ok: false,
+        error: 'Unknown request field(s): nope',
+      })
+    })
+    const base = await listen(server)
+    try {
+      const target = gatewayTarget(base, fetchJson)
+      await expect(target.cite('q')).rejects.toThrow('400')
+    } finally {
+      await close(server)
+    }
+  }, 10_000)
+
   it('answer maps the /api/answer synthesis contract', async () => {
     let body: any
     const server = http.createServer((req, res) => {
@@ -461,4 +516,65 @@ describe('directTarget', () => {
     expect(out.chunks).toEqual([])
     await close(server)
   })
+
+  it("cite mirrors the route's cite-mode request field-for-field (no dense/sparse weights)", async () => {
+    let body: any
+    const server = http.createServer((req, res) => {
+      expect(req.url).toBe('/query')
+      readJsonBody(req, (b) => {
+        body = b
+        respondJson(res, 200, {
+          docs: [
+            {
+              doc_id: 'doc_b',
+              title: 'B',
+              content: 'x',
+              score: 0.5,
+              metadata: {},
+              chunk_id: 'doc_b_chunk_1',
+            },
+            {
+              doc_id: 'doc_a',
+              title: 'A',
+              content: 'y',
+              score: 0.9,
+              metadata: {},
+              chunk_id: 'doc_a_chunk_1',
+            },
+          ],
+          total_results: 2,
+          query: 'q',
+          mode: 'cite',
+          debug: {},
+        })
+      })
+    })
+    const searchUrl = await listen(server)
+    try {
+      const target = directTarget(searchUrl, searchUrl, fetchJson)
+      const ids = await target.cite('q')
+      // The route's cite-mode request, field-for-field, with the UI client's
+      // max_results override (40 over CITE_PRESET's 25) — toEqual also asserts
+      // the absence of extra fields.
+      expect(body).toEqual({
+        query: 'q',
+        mode: 'cite',
+        similarity_threshold: 0.0,
+        include_metadata: true,
+        rerank: true,
+        max_results: 40,
+        vector_top_k: 500,
+        bm25_top_k: 500,
+        rerank_top_n: 500,
+        fusion_top_k: 500,
+      })
+      // No dense/sparse weights — the gateway's cite branch sets none
+      // (alpha is answer-mode only); do not invent them.
+      expect(body.dense_weight).toBeUndefined()
+      expect(body.sparse_weight).toBeUndefined()
+      expect(ids).toEqual(['doc_b', 'doc_a'])
+    } finally {
+      await close(server)
+    }
+  }, 10_000)
 })

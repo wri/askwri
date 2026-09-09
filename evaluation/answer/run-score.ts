@@ -15,6 +15,7 @@
  */
 import * as fs from 'fs'
 import * as path from 'path'
+import { assertReadableCaptureSchema } from './fingerprint'
 import {
   HumanLabels,
   JudgeAgreement,
@@ -176,6 +177,9 @@ function printBlock(name: string, b: BlockReport): void {
 function main(): void {
   const a = parseArgs(process.argv.slice(2))
   const capture = JSON.parse(fs.readFileSync(a.capturePath, 'utf8'))
+  // Ruling 1: both @1 and @2 stay readable; anything else fails here,
+  // with the path, before the scorer reads the wrong shape.
+  assertReadableCaptureSchema(capture, a.capturePath)
   const judged = JSON.parse(fs.readFileSync(a.judgedPath, 'utf8'))
   const evalset = loadEvalset(capture.provenance.fixture.path)
   const labels = loadAndValidateLabels(a.labels, a.capturePath, capture)

@@ -5,11 +5,14 @@
  * - `compareReports` — guarded side-by-side of two score reports (headline
  *   and draft block deltas, then per-case deltas with the per-pass spread).
  *   The §6 guard is binding: a differing fixture commit, pass count, case
- *   set, or target mode refuses the comparison outright (throw) — never a
- *   delta over a mismatched pair. Target mode is guarded because gateway
- *   chunk text (the tidied marked span) and direct chunk text (the raw
- *   context window) differ, so a cross-mode retrieval delta would measure
- *   the transport.
+ *   set, target mode, or selection mode refuses the comparison outright
+ *   (throw) — never a delta over a mismatched pair. Target mode is guarded
+ *   because gateway chunk text (the tidied marked span) and direct chunk
+ *   text (the raw context window) differ, so a cross-mode retrieval delta
+ *   would measure the transport. Selection mode is guarded because a
+ *   fixture-set run and a no-selection run measure different horizons
+ *   (spec §4: no-selection can fail at the cite stage for reasons
+ *   fixture-set cannot have).
  * - `judgedAgreement` — per-verdict-type agreement between two judged
  *   artifacts over the same capture, split by source language.
  * - `runPairwise` — order-swapped preference runs of capture A vs capture B
@@ -48,7 +51,14 @@ interface Comparable {
   passes: number
   caseIds: string[]
   mode: string
+  /** The run's selection mode — 'fixture-set' | 'no-selection', or null
+   * when the artifact records no selection (pre-@2 captures). A selected
+   * run and an unselected one measure different horizons, so they refuse
+   * like gateway-vs-direct does (spec §4). */
+  selectionMode: string | null
 }
+
+const fmtSel = (m: string | null): string => m ?? 'unrecorded (@1)'
 
 /** Throws (never prints deltas) on any comparability mismatch. */
 function guardPair(a: Comparable, b: Comparable, what: string): void {
@@ -61,6 +71,15 @@ function guardPair(a: Comparable, b: Comparable, what: string): void {
     throw new Error(
       `refusing to ${what}: target modes differ (${a.mode} vs ${b.mode}) — ` +
         `gateway and direct chunk text are not comparable`,
+    )
+  }
+  if (a.selectionMode !== b.selectionMode) {
+    throw new Error(
+      `refusing to ${what}: selection modes differ ` +
+        `(${fmtSel(a.selectionMode)} vs ${fmtSel(b.selectionMode)}) — ` +
+        `a selected run and an unselected one measure different horizons ` +
+        `(no-selection can fail at the cite stage for reasons fixture-set ` +
+        `cannot have)`,
     )
   }
   if (a.passes !== b.passes) {
@@ -169,12 +188,14 @@ export function compareReports(a: Report, b: Report): string {
       passes: a.provenance.passes,
       caseIds: rowsOf(a).map((c) => c.id),
       mode: a.provenance.target.mode,
+      selectionMode: (a.header.selection_mode as string | null) ?? null,
     },
     {
       commit: b.provenance.fixture.commit,
       passes: b.provenance.passes,
       caseIds: rowsOf(b).map((c) => c.id),
       mode: b.provenance.target.mode,
+      selectionMode: (b.header.selection_mode as string | null) ?? null,
     },
     'compare reports',
   )
@@ -473,12 +494,14 @@ export async function runPairwise(
       passes: captureA.provenance.passes,
       caseIds: captureA.cases.map((c) => c.case_id),
       mode: captureA.provenance.target.mode,
+      selectionMode: captureA.selection?.mode ?? null,
     },
     {
       commit: captureB.provenance.fixture.commit,
       passes: captureB.provenance.passes,
       caseIds: captureB.cases.map((c) => c.case_id),
       mode: captureB.provenance.target.mode,
+      selectionMode: captureB.selection?.mode ?? null,
     },
     'run pairwise',
   )

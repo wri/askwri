@@ -33,6 +33,10 @@ export interface Controls {
   directAnswerUrl?: string
   retrievalKnobs: Record<string, unknown>
   synthesisKnobs: Record<string, unknown>
+  /** The doc-selection simulation (spec §4): `fixture-set` (default) answers
+   * each case within its curated doc set; `no-selection` derives the
+   * selection from a cite query's top-20 (the UI's default path). */
+  selectionMode: 'fixture-set' | 'no-selection'
   /** Per-call budget for /api/answer (ms); undefined = the target's default. */
   timeoutMs?: number
   evalsetPath: string
@@ -50,6 +54,7 @@ const SYNTHESIS_KNOB_KEYS = new Set([
 const USAGE = `usage: <evalset.json> [--only id]... [--skip id]... [--limit N] [--passes N]
        [--label name] [--concurrency N] [--target URL] [--timeout MS]
        [--knob key=value]... [--direct-search URL --direct-answer URL]
+       [--selection-mode fixture-set|no-selection]
 synthesis knobs: ${[...SYNTHESIS_KNOB_KEYS].join(', ')}
 retrieval knobs: any forwardable /query field (FORWARDABLE_FIELDS in
                  src/app/api/llamaindex/route.ts)`
@@ -106,6 +111,7 @@ export function parseControls(
     directAnswerUrl: undefined,
     retrievalKnobs: {},
     synthesisKnobs: {},
+    selectionMode: 'fixture-set',
     timeoutMs: undefined,
     evalsetPath: '',
   }
@@ -164,6 +170,16 @@ export function parseControls(
       case 'direct-answer':
         ctl.directAnswerUrl = value()
         break
+      case 'selection-mode': {
+        const v = value()
+        if (v !== 'fixture-set' && v !== 'no-selection') {
+          fail(
+            `--selection-mode expects fixture-set or no-selection, got: ${v}`,
+          )
+        }
+        ctl.selectionMode = v
+        break
+      }
       default:
         fail(`unknown flag --${flag} (stage: ${stage})`)
     }

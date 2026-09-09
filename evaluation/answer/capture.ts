@@ -14,7 +14,12 @@ import * as path from 'path'
 import { SYS_V1, SYS_V2 } from '@/app/api/answer/route'
 import { Controls } from './cli'
 import { captureFingerprint } from './fingerprint'
-import { expectedIdsOf, loadEvalset } from './fixture'
+import {
+  docSetOf,
+  expectedDocsOutsideSet,
+  expectedIdsOf,
+  loadEvalset,
+} from './fixture'
 import { fetchJson } from './http'
 import { preflight } from './preflight'
 import {
@@ -31,6 +36,7 @@ import {
   PassCapture,
   PreflightReport,
   Provenance,
+  SelectionBlock,
 } from './types'
 
 const sha256 = (s: string) =>
@@ -146,6 +152,24 @@ function abortMessage(evalset: Evalset, report: PreflightReport): string {
   return lines.join('\n')
 }
 
+/** The UI's cap on consulted docs (ResultsTable.tsx:20) — the
+ * no-selection derivation truncates the cite results to this. */
+const MAXIMUM_CONSULTED_DOCS = 20
+
+/** The UI's validDocs predicate (AIResearchModal.tsx:138–147): a doc
+ * reaches /api/answer only with kps and a snippet longer than 10 chars.
+ * Mirrored exactly (ruling 7). */
+const isValidDoc = (d: unknown): boolean => {
+  const doc = d as { kps?: Array<{ snippet?: unknown }> }
+  return (
+    Array.isArray(doc?.kps) &&
+    doc.kps.length > 0 &&
+    doc.kps.some(
+      (kp) => typeof kp?.snippet === 'string' && kp.snippet.length > 10,
+    )
+  )
+}
+
 const failedAnswer = (error: string): PassCapture['answer'] => ({
   knobs: {},
   passages_sent: [],
@@ -158,29 +182,135 @@ const failedAnswer = (error: string): PassCapture['answer'] => ({
   error,
 })
 
+/** An unreachable pass's answer shape: empty like a failure, but with NO
+ * error — the pass records that answer mode was never reached (ruling 5),
+ * not that it failed. */
+const unanswered = (): PassCapture['answer'] => ({
+  knobs: {},
+  passages_sent: [],
+  sentences: [],
+  cites: [],
+  raw_model_json: '',
+  low_coverage: false,
+  invalid_cites: 0,
+  wall_ms: 0,
+})
+
+/** A derived selection for one case (ruling 3: derived once per run,
+ * reused across passes). */
+interface Selection {
+  docIds: string[]
+  /** Zero-doc cite result: the product never reaches answer mode. */
+  unreachable: boolean
+  /** Cite transport failure: a per-case retrieval error instead. */
+  error?: string
+  wallMs: number
+}
+
+/** Fixture-set integrity (plan Tasks 1/3): every selected case must
+ * reference a doc set, and its expected docs (+ twins) must be ⊆ that set —
+ * a curated selection lacking the expected evidence is unmeasurable by
+ * construction (q16's union must hold). Runs before preflight: zero spend. */
+function validateFixtureSetSelections(
+  evalset: Evalset,
+  cases: FixtureCase[],
+): void {
+  for (const c of cases) {
+    const set = docSetOf(evalset, c)
+    if (!set) {
+      throw new Error(
+        `fixture-set mode: case ${c.id} has no doc_set_id — every case must ` +
+          `reference a doc set (see the evalset doc_sets PR); use ` +
+          `--selection-mode no-selection to derive selections from cite results`,
+      )
+    }
+    const outside = expectedDocsOutsideSet(evalset, c)
+    if (outside.length > 0) {
+      throw new Error(
+        `fixture-set mode: case ${c.id} expects docs outside its doc set ` +
+          `${set.id}: ${outside.join(', ')} — the set must contain the ` +
+          `expected evidence (union the sets when a case spans clusters)`,
+      )
+    }
+  }
+}
+
 /** One case × one pass: retrieve, then answer with the retrieval's docs
- * verbatim. A failure records `error` and never throws (run-evalset
- * precedent — one bad case must not sink the run). */
+ * (after the UI's validDocs filter) verbatim. A failure records `error`
+ * and never throws (run-evalset precedent — one bad case must not sink
+ * the run). The selection (derived once per case, ruling 3) scopes the
+ * answer retrieval via cite_doc_ids. */
 async function runPass(
   c: FixtureCase,
   pass: number,
   ctl: Controls,
   target: TargetClient,
+  sel: Selection,
 ): Promise<{
   capture: PassCapture
   debugKnobs?: { model?: string; base_url?: string }
 }> {
+  // Ruling 5, branch 1: a cite transport failure is a per-case retrieval
+  // error (all passes excluded) — never `unreachable`.
+  if (sel.error) {
+    return {
+      capture: {
+        pass,
+        selected_doc_ids: [],
+        retrieval: {
+          chunks: [],
+          likely_off_topic: false,
+          service_ms: null,
+          cost_usd: null,
+          wall_ms: sel.wallMs,
+          error: sel.error,
+        },
+        answer: failedAnswer(`skipped: ${sel.error}`),
+      },
+    }
+  }
+
+  // Ruling 5, branch 2: zero-doc cite result — the product's empty state
+  // never reaches answer mode. No answer call, no error; the pass carries
+  // the `unreachable` marker (negatives abstain on it, positives fail at
+  // the cite stage; the judge skips it).
+  if (sel.unreachable) {
+    return {
+      capture: {
+        pass,
+        unreachable: true,
+        selected_doc_ids: [],
+        retrieval: {
+          chunks: [],
+          likely_off_topic: false,
+          service_ms: null,
+          cost_usd: null,
+          wall_ms: sel.wallMs,
+        },
+        answer: unanswered(),
+      },
+    }
+  }
+
   const retStart = Date.now()
   let ret: RetrievalOutcome
   let retWall: number
   try {
-    ret = await target.retrieve(c.question, ctl.retrievalKnobs)
+    ret = await target.retrieve(c.question, {
+      ...ctl.retrievalKnobs,
+      // The selection constrains the horizon (spec §5 step 2) exactly as
+      // AIResearchModal's answer-mode query does. It overrides any user
+      // knob of the same name; the selection is recorded in its own
+      // artifact block, so provenance loses nothing.
+      cite_doc_ids: sel.docIds,
+    })
     retWall = Date.now() - retStart
   } catch (e) {
     const msg = (e as Error).message
     return {
       capture: {
         pass,
+        selected_doc_ids: sel.docIds,
         retrieval: {
           chunks: [],
           likely_off_topic: false,
@@ -206,11 +336,18 @@ async function runPass(
   // must not discard the paid capture data around it.
   let ans: Awaited<ReturnType<TargetClient['answer']>>
   try {
-    ans = await target.answer(c.question, ret.docs, knobs)
+    // The UI's validDocs filter (AIResearchModal.tsx:138–147, ruling 7):
+    // empty-kps and thin-snippet docs never reach synthesis. Mirrored
+    // before the answer call, including the all-filtered empty case (the
+    // UI sends the empty list too — the route's low-coverage answer is
+    // part of what we measure).
+    const validDocs = (ret.docs as unknown[]).filter(isValidDoc)
+    ans = await target.answer(c.question, validDocs, knobs)
   } catch (e) {
     return {
       capture: {
         pass,
+        selected_doc_ids: sel.docIds,
         retrieval: {
           chunks: ret.chunks,
           likely_off_topic: ret.likely_off_topic,
@@ -251,6 +388,7 @@ async function runPass(
   return {
     capture: {
       pass,
+      selected_doc_ids: sel.docIds,
       retrieval: {
         chunks: ret.chunks,
         likely_off_topic: ret.likely_off_topic,
@@ -298,11 +436,16 @@ export async function runCapture(
   // capture — a missing doc in a later, unselected case must neither abort
   // a --limit partial run nor inflate the estimate.
   const selected = selectCases(evalset, ctl)
+  // Fixture-set integrity fails fast, before preflight (zero spend).
+  if (ctl.selectionMode === 'fixture-set') {
+    validateFixtureSetSelections(evalset, selected)
+  }
   const report = await preflight({
     evalset: { ...evalset, test_cases: selected },
     target,
     passes: ctl.passes,
     synthesisKnobs: ctl.synthesisKnobs,
+    selectionMode: ctl.selectionMode,
   })
 
   // Abort gate (binding, Task 4 review): a run preflight already knows is
@@ -357,14 +500,54 @@ export async function runCapture(
   const caseCaptures: Array<CaseCapture | undefined> = new Array(
     selected.length,
   )
+  const selectionByCase: Array<SelectionBlock['by_case'][number] | undefined> =
+    new Array(selected.length)
   const artifact = (): CaptureArtifact => {
     const cases = caseCaptures.filter((c): c is CaseCapture => c !== undefined)
+    const by_case = selectionByCase.filter(
+      (s): s is SelectionBlock['by_case'][number] => s !== undefined,
+    )
+    const selection: SelectionBlock = { mode: ctl.selectionMode, by_case }
     return {
-      schema: 'answer-eval/capture@1',
+      schema: 'answer-eval/capture@2',
       provenance,
       preflight: report,
+      selection,
       cases,
-      capture_fingerprint: captureFingerprint({ cases }),
+      capture_fingerprint: captureFingerprint({ cases, selection }),
+    }
+  }
+
+  /** The selection derivation (ruling 3: once per case, before the pass
+   * loop — pass spreads measure synthesis variance only). fixture-set is
+   * pure (validated up front); no-selection issues the UI's cite query and
+   * caps at MAXIMUM_CONSULTED_DOCS. */
+  const deriveSelection = async (c: FixtureCase): Promise<Selection> => {
+    if (ctl.selectionMode === 'fixture-set') {
+      // Non-null: validateFixtureSetSelections already ran for every
+      // selected case.
+      return {
+        docIds: docSetOf(evalset, c)!.doc_ids,
+        unreachable: false,
+        wallMs: 0,
+      }
+    }
+    const start = Date.now()
+    try {
+      const ranked = await target.cite(c.question)
+      const docIds = ranked.slice(0, MAXIMUM_CONSULTED_DOCS)
+      return {
+        docIds,
+        unreachable: docIds.length === 0,
+        wallMs: Date.now() - start,
+      }
+    } catch (e) {
+      return {
+        docIds: [],
+        unreachable: false,
+        error: `cite query failed: ${(e as Error).message}`,
+        wallMs: Date.now() - start,
+      }
     }
   }
 
@@ -373,9 +556,11 @@ export async function runCapture(
   let costReported = 0
 
   const runCase = async (index: number, c: FixtureCase): Promise<void> => {
+    const sel = await deriveSelection(c)
+    selectionByCase[index] = { case_id: c.id, selected_doc_ids: sel.docIds }
     const passes: PassCapture[] = []
     for (let pass = 0; pass < ctl.passes; pass++) {
-      const { capture, debugKnobs } = await runPass(c, pass, ctl, target)
+      const { capture, debugKnobs } = await runPass(c, pass, ctl, target, sel)
       passes.push(capture)
       if (capture.retrieval.cost_usd != null) {
         costTotal += capture.retrieval.cost_usd

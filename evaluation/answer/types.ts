@@ -21,6 +21,11 @@ export interface FixtureCase {
   difficulty?: string
   source_language?: string
   note?: string
+  /** Reference into Evalset.doc_sets — the curated selection this case is
+   * answered within (fixture-set mode). Absent = no curated set yet; load
+   * tolerates this (no-selection mode never reads it), capture in
+   * fixture-set mode hard-errors on it. */
+  doc_set_id?: string
   retrieval_ground_truth?: {
     expected_external_ids?: string[]
     expected_document_ids?: string[]
@@ -34,11 +39,20 @@ export interface FixtureCase {
   review_status?: 'draft' | 'expert_approved' | 'rejected'
 }
 
+/** A curated doc set: the selection a user (or the fixture) hands to answer
+ * mode. Multiple cases may share one set (topic clusters). */
+export interface DocSet {
+  id: string
+  doc_ids: string[]
+  note?: string
+}
+
 export interface Evalset {
   name: string
   version?: string
   test_cases: FixtureCase[]
   twins?: [string, string][]
+  doc_sets?: DocSet[]
 }
 
 export interface RetrievedChunk {
@@ -59,6 +73,14 @@ export interface PassageSent {
 
 export interface PassCapture {
   pass: number
+  /** Zero-doc cite result (ruling 5): answer mode was never reached — no
+   * error, no synthesis; the pass records the product's empty state.
+   * Negatives abstain on it, positives fail at the cite stage; the judge
+   * skips it. Written by @2 captures only. */
+  unreachable?: true
+  /** The pass's selection copy (the capture's top-level selection block is
+   * authoritative; this is the per-pass mirror). @2 captures only. */
+  selected_doc_ids?: string[]
   retrieval: {
     chunks: RetrievedChunk[]
     likely_off_topic: boolean
@@ -120,6 +142,18 @@ export interface PreflightReport {
   corpus_ok: boolean
   missing_docs: string[]
   snippet_failures: Array<{ case_id: string; doc_id: string; reason: string }>
+  /** Expected passages that EXIST in the served corpus but were not
+   * surfaced by the question-based doc-scoped lookup — the cross-lingual
+   * rank gap (2026-09-08: an English question surfaced only ~134 of a
+   * doc's 406 chunks; the snippet-derived query ranked the expected chunk
+   * first). Informative, never a gate (plan ruling 6); the score stage
+   * lifts per-case counts into the report header. Absent at runtime on
+   * pre-@2 captures written before this field existed. */
+  rank_gaps: Array<{
+    case_id: string
+    doc_id: string
+    snippet_index: number
+  }>
   twins_ok: boolean
   synthesis_probe_ok: boolean
   judge_probe_ok: boolean
@@ -129,11 +163,24 @@ export interface PreflightReport {
   estimated_calls: { retrieval: number; synthesis: number; judge: number }
 }
 
+/** The selection a run was answered within (spec §4/§5): either the
+ * fixture's curated doc set (fixture-set mode) or the top-20 of a cite
+ * query (no-selection mode, the UI's default path). Recorded top-level
+ * and copied per pass; hashed into the capture fingerprint. */
+export interface SelectionBlock {
+  mode: 'fixture-set' | 'no-selection'
+  by_case: Array<{ case_id: string; selected_doc_ids: string[] }>
+}
+
 export interface CaptureArtifact {
-  schema: 'answer-eval/capture@1'
+  /** Writers emit `answer-eval/capture@2`; `@1` artifacts (no selection
+   * block, pre-selection-mode captures) remain valid on read. */
+  schema: 'answer-eval/capture@1' | 'answer-eval/capture@2'
   provenance: Provenance
   /** The pure scorer's only source of corpus-attainability. */
   preflight: PreflightReport
+  /** Present on every @2 capture — the run's selections. */
+  selection?: SelectionBlock
   cases: CaseCapture[]
   /** sha256 over `cases` (fingerprint.ts), written by the capture stage so
    * label producers copy it rather than re-hash. Optional: captures from

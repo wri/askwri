@@ -344,6 +344,31 @@ describe('runJudge', () => {
     expect(s.requests).toHaveLength(4)
   })
 
+  it('spends no judge calls on unreachable passes (zero-doc cite result — answer mode was never reached)', async () => {
+    const s = await startJudgeServer()
+    const file = judgedPathIn()
+    const c = makeCase('q1', ['f1'])
+    c.passes[1].unreachable = true
+    c.passes[1].answer.sentences = []
+    c.passes[1].answer.passages_sent = []
+    c.passes[1].answer.cites = []
+    const c2 = silenceConsole()
+    let artifact
+    try {
+      artifact = await runOn(s, file, makeCapture([c]))
+    } finally {
+      c2.restore()
+    }
+    // Only pass 0's items exist — the unreachable pass emitted no jobs.
+    expect(Object.keys(artifact.items).sort()).toEqual([
+      'q1|0|fact_recall:',
+      'q1|0|sentence_support:0',
+      'q1|0|sentence_support:2',
+      'q1|0|unsupported_claims:',
+    ])
+    expect(s.requests).toHaveLength(4)
+  })
+
   it('resumes: pre-judged items (same capture, same judge, same prompt) are skipped, only missing items hit the server', async () => {
     const s = await startJudgeServer()
     const file = judgedPathIn()
