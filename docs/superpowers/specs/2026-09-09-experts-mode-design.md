@@ -327,7 +327,7 @@ Layout and interaction follow the mockup exactly. Components:
 | Summary line | "‹N› people across ‹M› offices, on ‹K› documents that match. Showing the top 20." |
 | Ranked list | new `ExpertsList` / `ExpertRow` (rank, name, office dot+label, gold relevance bar, evidence line, top 3 matched topic chips); rows are buttons |
 | Graph | new `TopicGraph` (section 8) |
-| Evidence panel | new `ExpertEvidence`: offices with counts, "‹n› of ‹corpus_docs› documents match", docs by tier then year with tier chip and "author i of n", titles open `DocumentPreviewModal`, "Works alongside" peers (click switches selection), all topics as chips with matched ones gold |
+| Evidence panel | new `ExpertEvidence`: offices with counts, "‹n› of ‹corpus_docs› documents match", docs by tier then year with tier chip and "author i of n", titles link to the publication URL (reusing `DocumentPreviewModal` needs a cite-mode `RowData`; follow-up), "Works alongside" peers (click switches selection), all topics as chips with matched ones gold |
 | Organizations strip | new, under the list |
 
 States:
