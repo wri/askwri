@@ -221,6 +221,60 @@ describe('preflight', () => {
     await close(judge.server)
   })
 
+  it('existence gate: a stop-word-dominated head query falls back to the mid-window query (2026-09-09 EN-twin case)', async () => {
+    const app = await startFakeApp(['doc_a'])
+    // A snippet whose head is boilerplate ("The key findings are as
+    // follows:") and whose middle carries the content. The head query
+    // returns nothing; the mid-window query must recover the chunk.
+    const HEAD =
+      'The key findings are as follows: First, without policy incentives, '
+    const MID =
+      'regional delivery would see a modest ZET market share by 2035, while '
+    const TAIL = 'long-haul remains out of reach without stronger support.'
+    const SNIPPET = HEAD + MID + TAIL
+    const cps = Array.from(SNIPPET)
+    const start = Math.max(0, Math.floor(cps.length / 2) - 24)
+    const MID_QUERY = cps.slice(start, start + 48).join('')
+    const seen: string[] = []
+    app.onRetrieval = (b) => {
+      seen.push(b.query)
+      // The question lookup and the head-48 lookup both miss.
+      if (b.query === MID_QUERY) return [SNIPPET]
+      return []
+    }
+    const enEvalset: Evalset = {
+      ...evalset,
+      test_cases: [
+        {
+          ...evalset.test_cases[0],
+          retrieval_ground_truth: {
+            expected_external_ids: ['doc_a'],
+            expected_passages: [
+              {
+                doc_id: 'doc_a',
+                chunk_id: 'doc_a_chunk_7',
+                page: 3,
+                text_snippet: SNIPPET,
+              },
+            ],
+          },
+        },
+        evalset.test_cases[1],
+      ],
+    }
+    const target = gatewayTarget(app.url, fetchJson)
+    const report = await preflight({ evalset: enEvalset, target, passes: 1 })
+    expect(report.snippet_failures).toEqual([])
+    // Head query was tried and returned nothing, then the mid window fired.
+    expect(seen).toContain(MID_QUERY)
+    // No rank gap here: the question lookup missed, so the gate ran — and
+    // existence was proven by the fallback (rank-gap accounting is per
+    // question-miss, which this is: recorded).
+    expect(report.rank_gaps).toEqual([
+      { case_id: 'case1', doc_id: 'doc_a', snippet_index: 0 },
+    ])
+  })
+
   it("synthesis probe carries the run's provider knobs (model, base_url, prompt_version) but keeps its own size caps", async () => {
     const app = await startFakeApp(['doc_a', 'doc_twin', 'doc_c'])
     const target = gatewayTarget(app.url, fetchJson)
