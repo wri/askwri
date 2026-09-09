@@ -839,3 +839,282 @@ describe('score — human labels (§4.5 judge calibration)', () => {
     ).toThrow(/q1.*pass 7|pass 7.*q1/)
   })
 })
+
+/**
+ * TWO-STEP FIXTURE (@2): selection-aware scoring. Hand-computed numbers:
+ *
+ * - s1 (positive, draft): selection [doc_a2, doc_b, doc_c] (3 docs —
+ *   utilization denominators are DISTINCT selected docs). Pass 0 sends
+ *   passages from doc_a2 + doc_b → 2/3; pass 1 sends none → 0 (the
+ *   zero-utilization edge). Case mean 1/3. The expected doc doc_a is in the
+ *   selection via its TWIN doc_a2 → expected_doc_in_selection true.
+ * - s2 (negative, draft): unreachable (zero-doc cite) → abstained via the
+ *   marker; header.unreachable_passes.negative 1.
+ * - s3 (positive, draft): unreachable → cite-stage failure: excluded from
+ *   every mean and from compliance.passes, but NOT in excluded_passes nor
+ *   unjudged; header.unreachable_passes.positive 1.
+ * - s4 (positive, draft): selection [doc_c, doc_z], passages only from
+ *   doc_c → utilization 1/2 (doc_z picked-but-ignored). Expected doc_a
+ *   (and twin doc_a2) both outside the selection → expected_doc_in_selection
+ *   false.
+ * - preflight.rank_gaps [s1×2, s4×1] lifts into the header per case.
+ */
+const evalset2: Evalset = {
+  name: 'score-test-2',
+  version: '1',
+  twins: [['doc_a', 'doc_a2']],
+  test_cases: [
+    {
+      id: 's1',
+      question: 'Trucks again?',
+      retrieval_ground_truth: { expected_external_ids: ['doc_a'] },
+    },
+    { id: 's2', question: 'Tell me about unicorns?' },
+    {
+      id: 's3',
+      question: 'Dragons?',
+      retrieval_ground_truth: { expected_external_ids: ['doc_b'] },
+    },
+    {
+      id: 's4',
+      question: 'Peak?',
+      retrieval_ground_truth: { expected_external_ids: ['doc_a'] },
+    },
+  ],
+}
+
+const cleanDebug = JSON.stringify({
+  parsing: { parsedSuccessfully: true },
+  warnings: { isLowCoverage: false },
+})
+
+/** A scored (reachable) @2 pass carrying its selection copy. */
+const selPass = (
+  pass: number,
+  sel: string[],
+  sent: Array<[string, string]>,
+): PassCapture => ({
+  pass,
+  ...(sel ? { selected_doc_ids: sel } : {}),
+  retrieval: {
+    chunks: sent.map(([doc, cid], i) => chunk(i + 1, doc, cid, `text ${i}`)),
+    likely_off_topic: false,
+    service_ms: 1,
+    cost_usd: null,
+    wall_ms: 1,
+  },
+  answer: {
+    knobs: {},
+    passages_sent: sent.map(([doc, cid], i) => ({
+      id: i + 1,
+      doc_id: doc,
+      chunk_id: cid,
+      page: 1,
+      text: `text ${i}`,
+    })),
+    sentences: [],
+    cites: [],
+    raw_model_json: cleanDebug,
+    low_coverage: false,
+    invalid_cites: 0,
+    wall_ms: 1,
+  },
+})
+
+/** An unreachable pass (zero-doc cite): empty like a failure, but with NO
+ * error — answer mode was never reached (ruling 5). */
+const unreachablePass = (pass: number): PassCapture => ({
+  pass,
+  unreachable: true,
+  selected_doc_ids: [],
+  retrieval: {
+    chunks: [],
+    likely_off_topic: false,
+    service_ms: null,
+    cost_usd: null,
+    wall_ms: 5,
+  },
+  answer: {
+    knobs: {},
+    passages_sent: [],
+    sentences: [],
+    cites: [],
+    raw_model_json: '',
+    low_coverage: false,
+    invalid_cites: 0,
+    wall_ms: 0,
+  },
+})
+
+const capture2: CaptureArtifact = {
+  schema: 'answer-eval/capture@2',
+  provenance,
+  preflight: {
+    corpus_ok: true,
+    missing_docs: [],
+    snippet_failures: [],
+    rank_gaps: [
+      { case_id: 's4', doc_id: 'doc_a', snippet_index: 0 },
+      { case_id: 's1', doc_id: 'doc_a', snippet_index: 1 },
+      { case_id: 's1', doc_id: 'doc_a', snippet_index: 4 },
+    ],
+    twins_ok: true,
+    synthesis_probe_ok: true,
+    judge_probe_ok: true,
+    approved: 0,
+    draft: 4,
+    rejected: 0,
+    estimated_calls: { retrieval: 4, synthesis: 4, judge: 0 },
+  },
+  selection: {
+    mode: 'no-selection',
+    by_case: [
+      { case_id: 's1', selected_doc_ids: ['doc_a2', 'doc_b', 'doc_c'] },
+      { case_id: 's2', selected_doc_ids: [] },
+      { case_id: 's3', selected_doc_ids: [] },
+      { case_id: 's4', selected_doc_ids: ['doc_c', 'doc_z'] },
+    ],
+  },
+  cases: [
+    {
+      case_id: 's1',
+      fixture_case: evalset2.test_cases[0],
+      passes: [
+        selPass(
+          0,
+          ['doc_a2', 'doc_b', 'doc_c'],
+          [
+            ['doc_a2', 'doc_a2_chunk_1'],
+            ['doc_b', 'doc_b_chunk_1'],
+          ],
+        ),
+        selPass(1, ['doc_a2', 'doc_b', 'doc_c'], []),
+      ],
+    },
+    {
+      case_id: 's2',
+      fixture_case: evalset2.test_cases[1],
+      passes: [unreachablePass(0)],
+    },
+    {
+      case_id: 's3',
+      fixture_case: evalset2.test_cases[2],
+      passes: [unreachablePass(0)],
+    },
+    {
+      case_id: 's4',
+      fixture_case: evalset2.test_cases[3],
+      passes: [selPass(0, ['doc_c', 'doc_z'], [['doc_c', 'doc_c_chunk_1']])],
+    },
+  ],
+}
+
+const judged2: JudgedArtifact = {
+  schema: 'answer-eval/judged@1',
+  usage: { prompt_tokens: 10, completion_tokens: 2, calls: 3 },
+  provenance: {
+    ...provenance,
+    judge: {
+      model: 'judge-model',
+      base_url: 'http://judge/v1',
+      prompt_hashes: {
+        fact_recall: 'h1',
+        sentence_support: 'h2',
+        unsupported_claims: 'h3',
+      },
+    },
+  },
+  items: {
+    's1|0|unsupported_claims:': ucItem([]),
+    's1|1|unsupported_claims:': ucItem([]),
+    's4|0|unsupported_claims:': ucItem([]),
+  },
+}
+
+const report2 = score(evalset2, capture2, judged2)
+
+describe('score — two-step selection, unreachable, rank gaps (@2)', () => {
+  it('header: selection mode, unreachable bucket, rank gaps lifted per case from preflight', () => {
+    const h = report2.header as Record<string, any>
+    expect(h.selection_mode).toBe('no-selection')
+    expect(h.unreachable_passes).toEqual({ negative: 1, positive: 1 })
+    expect(h.rank_gaps).toEqual({ s1: 2, s4: 1 })
+  })
+
+  it('selection utilization: per-pass values, per-case means, and the zero edge', () => {
+    const by = (id: string) =>
+      (report2.per_case as Array<Record<string, any>>).find((c) => c.id === id)
+    const s1 = by('s1')!
+    expect(s1.per_pass[0].selection_utilization).toBeCloseTo(2 / 3, 12)
+    expect(s1.per_pass[1].selection_utilization).toBe(0)
+    expect(s1.selection_utilization).toBeCloseTo(1 / 3, 12)
+    expect(by('s4')!.selection_utilization).toBeCloseTo(0.5, 12)
+    const d = report2.draft_block as Record<string, any>
+    // mean over case values [1/3, 1/2] — the same arithmetic meanOf does
+    expect(d.retrieval.selection_utilization.cases).toBe(2)
+    expect(d.retrieval.selection_utilization.mean).toBeCloseTo(
+      (1 / 3 + 1 / 2) / 2,
+      12,
+    )
+  })
+
+  it('expected_doc_in_selection: true via the twin, false when both members miss, null on @1', () => {
+    const by = (id: string) =>
+      (report2.per_case as Array<Record<string, any>>).find((c) => c.id === id)
+    expect(by('s1')!.expected_doc_in_selection).toBe(true) // via doc_a2
+    expect(by('s4')!.expected_doc_in_selection).toBe(false)
+    expect(by('s3')!.expected_doc_in_selection).toBe(false) // empty selection
+    // @1 capture (no selection block): not applicable → null
+    const legacy = (report.per_case as Array<Record<string, any>>)[0]
+    expect(legacy.expected_doc_in_selection).toBeNull()
+  })
+
+  it('unreachable negatives count as abstained', () => {
+    const d = report2.draft_block as Record<string, any>
+    expect(d.abstention).toEqual({
+      negative_cases: 1,
+      passes: 1,
+      abstained: 1,
+      rate: 1,
+    })
+    const by = (report2.per_case as Array<Record<string, any>>).find(
+      (c) => c.id === 's2',
+    )!
+    expect(by.abstention_rate).toBe(1)
+    expect(by.per_pass[0].unreachable).toBe(true)
+    expect(by.per_pass[0].abstained).toBe(true)
+  })
+
+  it('unreachable positives: out of every mean and compliance count, but never an error or unjudged', () => {
+    const h = report2.header as Record<string, any>
+    expect(h.excluded_passes).toEqual({ retrieval_error: 0, answer_error: 0 })
+    expect(h.unjudged).toEqual({
+      total: 0,
+      fact_recall: 0,
+      sentence_support: 0,
+      unsupported_claims: 0,
+    })
+    const d = report2.draft_block as Record<string, any>
+    // s1's 2 scored passes + s4's 1 — s3's unreachable pass is not compliance
+    expect(d.compliance.passes).toBe(3)
+    expect(d.compliance.sentence_counts).toEqual({ '0': 3 })
+    const s3 = (report2.per_case as Array<Record<string, any>>).find(
+      (c) => c.id === 's3',
+    )!
+    expect(s3.per_pass[0].unreachable).toBe(true)
+    expect(s3.per_pass[0].evidence_coverage).toBeUndefined()
+    expect(s3.per_pass[0].excluded).toBeUndefined()
+  })
+
+  it('@1 captures stay shape-compatible: null mode, zero unreachable, no rank_gaps key, no utilization cases', () => {
+    const h = report.header as Record<string, any>
+    expect(h.selection_mode).toBeNull()
+    expect(h.unreachable_passes).toEqual({ negative: 0, positive: 0 })
+    expect('rank_gaps' in h).toBe(false)
+    const d = report.draft_block as Record<string, any>
+    expect(d.retrieval.selection_utilization).toEqual({
+      mean: null,
+      cases: 0,
+    })
+  })
+})

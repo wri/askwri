@@ -73,6 +73,14 @@ export interface PassageSent {
 
 export interface PassCapture {
   pass: number
+  /** Zero-doc cite result (ruling 5): answer mode was never reached — no
+   * error, no synthesis; the pass records the product's empty state.
+   * Negatives abstain on it, positives fail at the cite stage; the judge
+   * skips it. Written by @2 captures only. */
+  unreachable?: true
+  /** The pass's selection copy (the capture's top-level selection block is
+   * authoritative; this is the per-pass mirror). @2 captures only. */
+  selected_doc_ids?: string[]
   retrieval: {
     chunks: RetrievedChunk[]
     likely_off_topic: boolean
