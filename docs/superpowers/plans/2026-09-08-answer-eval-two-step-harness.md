@@ -155,6 +155,9 @@ one-liner rides with the evalset PR, not this one.
 ## Execution
 
 Superpowers SDD, one task at a time:
+- Before Task 1: the orchestrator derives the task briefs from the task
+  sections below and seeds `progress.md` in
+  `.pi-subagents/answer-eval-twostep/`.
 - Per task: an implementer child executes the task brief at
   `.pi-subagents/answer-eval-twostep/task-N-brief.md` (TDD: failing tests
   first), commits (conventional, no Co-Authored-By), saves the review
