@@ -24,6 +24,15 @@ const HALFWIDTH = ',.:;!?()[]""\'\'-'
 // over while copying a quote.
 const MD_EMPHASIS_RE = /[*_#`]/g
 
+// Markdown image/link syntax. The serving pipeline strips it from chunk text
+// (verified 2026-09-09 against the QA gateway: served text = DB chunk text
+// minus image refs, byte-for-byte otherwise), so a quote carrying it can
+// never be contained in served text — strip it on both sides, same rationale
+// as MD_EMPHASIS. Images BEFORE links: a link pattern would otherwise eat
+// the bracket half of an image and leave a stray '!'.
+const MD_IMAGE_RE = /!\[[^\]]*\]\([^)]*\)/g
+const MD_LINK_RE = /\[[^\]]*\]\([^)]*\)/g
+
 const WHITESPACE_RE = /\s+/g
 
 // The OCR'd text is also inconsistent about e.g. ", " vs "," after a comma —
@@ -41,6 +50,8 @@ function foldFullwidth(text: string): string {
 
 export function normalize(text: string): string {
   text = text.replace(MD_EMPHASIS_RE, '')
+  text = text.replace(MD_IMAGE_RE, '')
+  text = text.replace(MD_LINK_RE, '')
   text = foldFullwidth(text)
   text = text.replace(WHITESPACE_RE, ' ')
   text = text.replace(SPACE_AROUND_PUNCT_RE, '$1')

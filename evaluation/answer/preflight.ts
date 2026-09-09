@@ -88,6 +88,18 @@ function existenceQueryFor(textSnippet: string): string {
     .join('')
 }
 
+/** Fallback query when the head query surfaces nothing: 48 code points
+ * from the middle of the snippet — past the cover-page/figure-caption
+ * boilerplate that can dominate the head. */
+function midWindowQueryFor(textSnippet: string): string {
+  const cps = Array.from(textSnippet.trim())
+  const start = Math.max(
+    0,
+    Math.floor(cps.length / 2) - EXISTENCE_QUERY_CODEPOINTS / 2,
+  )
+  return cps.slice(start, start + EXISTENCE_QUERY_CODEPOINTS).join('')
+}
+
 /** The synthesis knobs that select a provider/prompt — forwarded to the
  * probe so it exercises what the run will use. Size knobs are NOT
  * forwarded: the probe keeps its own minimal caps. */
@@ -252,6 +264,27 @@ export async function preflight(args: {
             reason: `existence retrieval failed: ${(e as Error).message}`,
           })
           continue
+        }
+        if (existence.chunks.length === 0) {
+          // Head queries can be stop-word-dominated boilerplate ("The key
+          // findings are as follows:" — observed 2026-09-09 on the EN
+          // twin) and surface nothing even though the text exists. Retry
+          // once with a mid-window query before declaring the doc empty.
+          const mid = midWindowQueryFor(p.text_snippet)
+          if (mid !== '') {
+            try {
+              existence = await target.retrieve(mid, {
+                cite_doc_ids: [docId],
+                ...SNIPPET_LOOKUP_KNOBS,
+              })
+              if (existence.cost_usd != null) {
+                lookupUsd += existence.cost_usd
+                lookupCalls++
+              }
+            } catch {
+              // keep the zero-chunk result from the head query
+            }
+          }
         }
         if (existence.chunks.length === 0) {
           snippet_failures.push({

@@ -32,6 +32,22 @@ describe('normalize (TS mirror of lookup_chunk_id.py)', () => {
     expect(normalize('新能源重卡，包括：')).toBe(normalize('新能源重卡,包括:'))
   })
 
+  it('strips markdown image syntax — the serving pipeline deletes it from chunk text', () => {
+    // Verified 2026-09-09: served = DB text minus image refs, so a quote
+    // spanning one must strip it to ever be contained.
+    const dbQuote =
+      '成本回收期(区域运输场景,MY2024-2035)![img-7.jpeg](img-7.jpeg)驶向2035:中国研究'
+    const served = '成本回收期(区域运输场景,MY2024-2035)驶向2035:中国研究'
+    expect(snippetContained(dbQuote, served)).toBe(true)
+  })
+
+  it('strips bare markdown links, and images before links (no stray !)', () => {
+    expect(normalize('see [the report](http://x) here')).toBe('see here')
+    // An image must not be half-eaten by the link pattern.
+    expect(normalize('a ![alt](u) b [l](v) c')).toBe('a b c')
+    expect(normalize('left ![wri logo]() right')).toBe('left right')
+  })
+
   it('strips markdown emphasis characters a copier might carry over', () => {
     expect(normalize('**bold** and `code`')).toBe(normalize('bold and code'))
     expect(normalize('# heading _under_')).toBe(normalize('heading under'))
