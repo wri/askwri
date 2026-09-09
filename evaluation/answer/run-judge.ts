@@ -19,7 +19,12 @@ import { JudgeAuthError } from './judge-client'
 import { assertReadableCaptureSchema } from './fingerprint'
 
 const USAGE = `usage: run-judge --capture <capture-X.json> [--label name]
-       [--judge-model M] [--judge-base-url URL] [--only id]... [--concurrency N]`
+       [--judge-model M] [--judge-base-url URL] [--judge-thinking L]
+       [--only id]... [--concurrency N]
+
+--judge-thinking: gateway reasoning_effort — one of
+none|minimal|low|medium|high|xhigh|max (lunaroute thinking levels).
+Unset = no parameter sent (existing behavior).`
 
 function fail(msg: string): never {
   console.error(`run-judge: ${msg}\n${USAGE}`)
@@ -49,6 +54,7 @@ function parseArgs(argv: string[]) {
   let label: string | undefined
   let judgeModel = 'glm-5.2-vision'
   let judgeBaseUrl = process.env.LUNAROUTE_BASE_URL ?? ''
+  let judgeThinking: string | undefined
   const only: string[] = []
   let concurrency = 1
   for (let i = 0; i < args.length; i++) {
@@ -74,6 +80,26 @@ function parseArgs(argv: string[]) {
       case 'judge-base-url':
         judgeBaseUrl = value()
         break
+      case 'judge-thinking': {
+        const v = value()
+        if (
+          ![
+            'none',
+            'minimal',
+            'low',
+            'medium',
+            'high',
+            'xhigh',
+            'max',
+          ].includes(v)
+        ) {
+          fail(
+            `--judge-thinking must be one of none|minimal|low|medium|high|xhigh|max (got '${v}')`,
+          )
+        }
+        judgeThinking = v
+        break
+      }
       case 'only':
         only.push(value())
         break
@@ -93,7 +119,15 @@ function parseArgs(argv: string[]) {
     label =
       base.match(/^capture-(.+)\.json$/)?.[1] ?? path.parse(capturePath).name
   }
-  return { capturePath, label, judgeModel, judgeBaseUrl, only, concurrency }
+  return {
+    capturePath,
+    label,
+    judgeModel,
+    judgeBaseUrl,
+    judgeThinking,
+    only,
+    concurrency,
+  }
 }
 
 async function main(): Promise<void> {
@@ -113,6 +147,7 @@ async function main(): Promise<void> {
       judgedPath,
       judgeModel: a.judgeModel,
       judgeBaseUrl: a.judgeBaseUrl,
+      judgeThinking: a.judgeThinking,
       only: a.only,
       concurrency: a.concurrency,
     })

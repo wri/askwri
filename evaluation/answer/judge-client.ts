@@ -45,6 +45,10 @@ export interface JudgeCallParams<T> {
   user: string
   validate: (json: any) => T | Error
   judgeModel: string
+  /** Optional thinking level for gateways that support it (lunaroute's
+   * reasoning_effort: none|minimal|low|medium|high|xhigh|max). Sent as
+   * `reasoning_effort` in the request body; omitted entirely when unset. */
+  reasoningEffort?: string
   baseUrl: string
   apiKey: string | undefined
   /** default 300_000 — lunaroute is ~7x slower than GPT */
@@ -83,16 +87,21 @@ function isAbortError(e: unknown): boolean {
 }
 
 /** Mirror of route.ts: gpt-5* takes max_completion_tokens and no temperature. */
-function completionParams(model: string): Record<string, unknown> {
+function completionParams(
+  model: string,
+  reasoningEffort?: string,
+): Record<string, unknown> {
+  const effort = reasoningEffort ? { reasoning_effort: reasoningEffort } : {}
   return /^gpt-5/i.test(model)
-    ? { max_completion_tokens: MAX_TOKENS }
-    : { temperature: 0, max_tokens: MAX_TOKENS }
+    ? { max_completion_tokens: MAX_TOKENS, ...effort }
+    : { temperature: 0, max_tokens: MAX_TOKENS, ...effort }
 }
 
 /** One logical judge call with all transport-level retries applied. */
 async function transport(p: {
   messages: ChatMessage[]
   judgeModel: string
+  reasoningEffort?: string
   baseUrl: string
   apiKey: string
   timeoutMs: number
@@ -110,7 +119,7 @@ async function transport(p: {
         body: {
           model: p.judgeModel,
           messages: p.messages,
-          ...completionParams(p.judgeModel),
+          ...completionParams(p.judgeModel, p.reasoningEffort),
         },
         signal: AbortSignal.timeout(p.timeoutMs),
       })
@@ -173,6 +182,7 @@ export async function judgeCall<T>(
     transport({
       messages,
       judgeModel: p.judgeModel,
+      reasoningEffort: p.reasoningEffort,
       baseUrl: p.baseUrl,
       apiKey: p.apiKey ?? '',
       timeoutMs: p.timeoutMs ?? DEFAULT_TIMEOUT_MS,

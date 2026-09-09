@@ -47,6 +47,9 @@ export interface JudgeArgs {
   judgedPath: string
   judgeModel: string
   judgeBaseUrl: string
+  /** Thinking level (gateway `reasoning_effort`); unset = no parameter. A
+   * change re-judges: verdicts from different thinking levels never mix. */
+  judgeThinking?: string
   /** case ids (capture-stage semantics); omit = all cases */
   only?: string[]
   concurrency?: number
@@ -88,11 +91,16 @@ function writeJudgedArtifact(
  * matter (resume retries it), so the kind-specific verdict fields are
  * deliberately absent rather than stubbed.
  */
-const tombstone = (job: Job, r: JudgeUnjudged): JudgedItem =>
+const tombstone = (
+  job: Job,
+  r: JudgeUnjudged,
+  judgeThinking?: string,
+): JudgedItem =>
   ({
     kind: job.kind,
     prompt_hash: r.prompt_hash,
     judge_model: r.judge_model,
+    judge_reasoning_effort: judgeThinking,
     unjudged: r.unjudged,
   }) as unknown as JudgedItem
 
@@ -101,9 +109,10 @@ function enumerateJobs(
   judgeModel: string,
   baseUrl: string,
   apiKey: string | undefined,
+  reasoningEffort?: string,
 ): Job[] {
   const jobs: Job[] = []
-  const common = { judgeModel, baseUrl, apiKey }
+  const common = { judgeModel, baseUrl, apiKey, reasoningEffort }
   for (const c of cases) {
     const keyFacts = c.fixture_case.synthesis_ground_truth?.key_facts ?? []
     for (const p of c.passes) {
@@ -197,6 +206,7 @@ function enumerateJobs(
 
 export async function runJudge(args: JudgeArgs): Promise<JudgeRunResult> {
   const { capture, judgedPath, judgeModel, judgeBaseUrl } = args
+  const judgeThinking = args.judgeThinking
   const only = args.only ?? []
   const concurrency = args.concurrency ?? 1
   // Key selection mirrors the app tier (resolveProvider): a URL matching
@@ -249,6 +259,7 @@ export async function runJudge(args: JudgeArgs): Promise<JudgeRunResult> {
       judge: {
         model: judgeModel,
         base_url: judgeBaseUrl,
+        reasoning_effort: judgeThinking ?? null,
         prompt_hashes: PROMPT_HASHES,
       },
     },
@@ -256,15 +267,22 @@ export async function runJudge(args: JudgeArgs): Promise<JudgeRunResult> {
     items,
   }
 
-  const jobs = enumerateJobs(cases, judgeModel, judgeBaseUrl, apiKey)
+  const jobs = enumerateJobs(
+    cases,
+    judgeModel,
+    judgeBaseUrl,
+    apiKey,
+    judgeThinking,
+  )
   // Pending = missing, tombstoned, or judged by another model / prompt
-  // version (re-judged so the artifact never mixes judges).
+  // version / thinking level (re-judged so the artifact never mixes judges).
   const pending = jobs.filter((j) => {
     const it = items[j.key]
     return (
       !it ||
       it.unjudged ||
       it.judge_model !== judgeModel ||
+      it.judge_reasoning_effort !== judgeThinking ||
       it.prompt_hash !== PROMPT_HASHES[j.kind]
     )
   })
@@ -307,7 +325,9 @@ export async function runJudge(args: JudgeArgs): Promise<JudgeRunResult> {
             unjudgedCount++
             reasons[r.unjudged.reason] = (reasons[r.unjudged.reason] ?? 0) + 1
           }
-          items[j.key] = r.ok ? j.item(r) : tombstone(j, r)
+          items[j.key] = r.ok
+            ? { ...j.item(r), judge_reasoning_effort: judgeThinking }
+            : tombstone(j, r, judgeThinking)
           // Usage rides along on every write so a hard interrupt keeps it.
           artifact.usage = usageTotal
           writeJudgedArtifact(judgedPath, artifact)

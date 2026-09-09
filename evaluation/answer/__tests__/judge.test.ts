@@ -205,7 +205,7 @@ const runFull = async (
   s: JudgeServer,
   file: string,
   capture: CaptureArtifact,
-  extra: { only?: string[]; judgeModel?: string } = {},
+  extra: { only?: string[]; judgeModel?: string; judgeThinking?: string } = {},
 ) =>
   runJudge({
     capture,
@@ -219,7 +219,7 @@ const runOn = async (
   s: JudgeServer,
   file: string,
   capture: CaptureArtifact,
-  extra: { only?: string[]; judgeModel?: string } = {},
+  extra: { only?: string[]; judgeModel?: string; judgeThinking?: string } = {},
 ) => (await runFull(s, file, capture, extra)).artifact
 
 describe('runJudge', () => {
@@ -421,6 +421,59 @@ describe('runJudge', () => {
     })
   })
 
+  it('judgeThinking re-judges items judged without it, and same-level items resume (never mixes thinking levels)', async () => {
+    const s = await startJudgeServer()
+    const file = judgedPathIn()
+    const capture = makeCapture([makeCase('q1', ['f1'])])
+    const baseItem = (kind: 'fact_recall') => ({
+      kind,
+      prompt_hash: PROMPT_HASHES[kind],
+      judge_model: JUDGE_MODEL,
+      verdicts: [
+        { fact_index: 0, verdict: 'absent', evidence: 'prior evidence' },
+      ],
+    })
+    // Prior item judged WITHOUT a thinking level, same model/prompt.
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        schema: 'answer-eval/judged@1',
+        provenance: makeProvenance(),
+        capture_fingerprint: captureFingerprint(capture),
+        usage: { prompt_tokens: 0, completion_tokens: 0, calls: 0 },
+        items: { 'q1|0|fact_recall:': baseItem('fact_recall') },
+      } satisfies JudgedArtifact),
+    )
+    let c = silenceConsole()
+    let artifact
+    try {
+      artifact = await runOn(s, file, capture, { judgeThinking: 'max' })
+    } finally {
+      c.restore()
+    }
+    // The prior item (no thinking) was re-judged: all 8 items hit the server.
+    expect(s.requests).toHaveLength(8)
+    expect(
+      (artifact.items['q1|0|fact_recall:'] as FactRecallVerdicts).verdicts[0]
+        .evidence,
+    ).not.toBe('prior evidence')
+    // Provenance + every item carry the thinking level.
+    expect(artifact.provenance.judge?.reasoning_effort).toBe('max')
+    for (const it of Object.values(artifact.items)) {
+      expect(it.judge_reasoning_effort).toBe('max')
+    }
+
+    // Now resume the same artifact under the same level: everything skips.
+    const s2 = await startJudgeServer()
+    c = silenceConsole()
+    try {
+      await runOn(s2, file, capture, { judgeThinking: 'max' })
+    } finally {
+      c.restore()
+    }
+    expect(s2.requests).toHaveLength(0)
+  })
+
   it('refuses to resume a judged artifact that judged a DIFFERENT capture (same label, re-captured)', async () => {
     const s = await startJudgeServer()
     const file = judgedPathIn()
@@ -569,6 +622,7 @@ describe('runJudge', () => {
     expect(artifact.provenance.judge).toEqual({
       model: JUDGE_MODEL,
       base_url: s.url,
+      reasoning_effort: null,
       prompt_hashes: PROMPT_HASHES,
     })
     expect(artifact.provenance.harness_sha).toBe('harnesssha')

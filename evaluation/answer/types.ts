@@ -130,6 +130,8 @@ export interface Provenance {
   judge?: {
     model: string
     base_url: string
+    /** null = no thinking parameter was sent. */
+    reasoning_effort?: string | null
     prompt_hashes: Record<string, string>
   }
   passes: number
@@ -191,6 +193,9 @@ export interface CaptureArtifact {
 export interface JudgedItemBase {
   prompt_hash: string
   judge_model: string
+  /** Thinking level the item was judged under (gateway reasoning_effort);
+   * absent = no parameter was sent. Resume re-judges on mismatch. */
+  judge_reasoning_effort?: string
   unjudged?: { reason: string; raw: string }
 }
 
