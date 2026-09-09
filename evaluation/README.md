@@ -321,9 +321,10 @@ saw):
   the model saw: "picked but ignored" made visible. Undefined with no
   selection. Structural ceiling when reading it: the model sees ≤
   `max_passages` passages (8 for gpt-5 models, 6 otherwise), so a
-  20-document selection cannot exceed 8/20 at default knobs. Carried in the
-  JSON (`draft_block.retrieval` and `per_case`); the console's retrieval
-  line prints the other five.
+  20-document selection cannot exceed 8/20 at default knobs. Printed on the
+  console like the other retrieval dimensions (`n/a` on a capture with no
+  selection), and carried in the JSON (`draft_block.retrieval` and
+  `per_case`).
 
 **Synthesis** (judged; an unjudged item leaves its mean and is counted in
 the header's `unjudged` block — never scored as zero):
