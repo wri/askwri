@@ -92,7 +92,11 @@ interface RunResult {
 /** Start the fake server, run one judgeCall against it, close it. */
 async function runJudge(
   script: ScriptedReply[],
-  opts: { timeoutMs?: number; judgeModel?: string } = {},
+  opts: {
+    timeoutMs?: number
+    judgeModel?: string
+    reasoningEffort?: string
+  } = {},
 ): Promise<RunResult> {
   const sleepCalls: number[] = []
   const { requests, server, aborted } = startJudgeServer(script)
@@ -106,6 +110,7 @@ async function runJudge(
       user: USER,
       validate,
       judgeModel: opts.judgeModel ?? JUDGE_MODEL,
+      reasoningEffort: opts.reasoningEffort,
       baseUrl: url,
       apiKey: 'test-key',
       timeoutMs: opts.timeoutMs,
@@ -164,6 +169,22 @@ describe('judgeCall', () => {
     expect(r.requests[0].max_completion_tokens).toBe(2000)
     expect(r.requests[0]).not.toHaveProperty('temperature')
     expect(r.requests[0]).not.toHaveProperty('max_tokens')
+  })
+
+  it('sends reasoning_effort when reasoningEffort is set (lunaroute thinking level)', async () => {
+    const r = await runJudge([{ content: VALID_REPLY }], {
+      reasoningEffort: 'max',
+    })
+    expect(r.result!.ok).toBe(true)
+    expect(r.requests[0].reasoning_effort).toBe('max')
+    expect(r.requests[0].temperature).toBe(0)
+    expect(r.requests[0].max_tokens).toBe(2000)
+  })
+
+  it('omits reasoning_effort when not set — the body is unchanged for existing runs', async () => {
+    const r = await runJudge([{ content: VALID_REPLY }])
+    expect(r.result!.ok).toBe(true)
+    expect(r.requests[0]).not.toHaveProperty('reasoning_effort')
   })
 
   it('retries once on invalid JSON: the failed reply goes back as an assistant turn, the error as a user turn', async () => {

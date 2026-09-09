@@ -222,6 +222,12 @@ synthesis is slow), `--knob key=value` (repeatable), `--direct-search URL` /
 `--direct-answer URL` (switch to local services instead of the deployed
 gateway). The other stage CLIs each have their own parser:
 - `run-judge` — `--capture`, `--label`, `--judge-model`, `--judge-base-url`,
+  `--judge-thinking` (gateway `reasoning_effort`:
+  none|minimal|low|medium|high|xhigh|max — unset sends no parameter;
+  a change re-judges, so artifacts never mix thinking levels; recorded in
+  provenance as `judge.reasoning_effort` and on every verdict). The decided
+  baseline judge (2026-09-09): `--judge-model glm-5.3 --judge-thinking max`
+  via lunaroute.
   `--only`, `--concurrency`
 - `run-score` — `--capture`, `--judged`, `--label`, `--labels` (see
   [Judge calibration against human labels](#judge-calibration-against-human-labels) below)
