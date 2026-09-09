@@ -61,7 +61,16 @@ const DEFAULT_TIMEOUT_MS = 300_000
 /** 429 backoff: 1, 2, 4, 8, 16 seconds between the initial request and its
  * 5 retries (spec §4.3: "max 5" counts retries, not total requests). */
 const MAX_429_RETRIES = 5
-const MAX_TOKENS = 2000
+/** Judge replies are small JSON, but reasoning models spend thousands of
+ * tokens thinking before emitting it — and providers count reasoning against
+ * max_tokens. At 2000, glm-5.3 at reasoning_effort=max on the biggest prompts
+ * (unsupported_claims: all sentences + the full passage set) ended
+ * finish_reason "length" with reasoning_tokens=2000 and EMPTY content —
+ * starving the judge into unjudged (validation) tombstones with empty raw
+ * (probe 2026-09-09: the same prompt at 16000 finished with ~5.7k reasoning
+ * tokens and valid JSON). 16000 is a ceiling, not a target: non-reasoning
+ * judges stop at their natural end, so only the reasoning budget changes. */
+const MAX_TOKENS = 16000
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 

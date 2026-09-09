@@ -153,7 +153,7 @@ describe('judgeCall', () => {
     expect(r.requests).toHaveLength(1)
     expect(r.requests[0].model).toBe(JUDGE_MODEL)
     expect(r.requests[0].temperature).toBe(0)
-    expect(r.requests[0].max_tokens).toBe(2000)
+    expect(r.requests[0].max_tokens).toBe(16000)
     expect(r.requests[0].messages).toEqual([
       { role: 'system', content: SYSTEM },
       { role: 'user', content: USER },
@@ -166,7 +166,7 @@ describe('judgeCall', () => {
     })
     expect(r.result!.ok).toBe(true)
     expect(r.requests[0].model).toBe('gpt-5.6')
-    expect(r.requests[0].max_completion_tokens).toBe(2000)
+    expect(r.requests[0].max_completion_tokens).toBe(16000)
     expect(r.requests[0]).not.toHaveProperty('temperature')
     expect(r.requests[0]).not.toHaveProperty('max_tokens')
   })
@@ -178,7 +178,7 @@ describe('judgeCall', () => {
     expect(r.result!.ok).toBe(true)
     expect(r.requests[0].reasoning_effort).toBe('max')
     expect(r.requests[0].temperature).toBe(0)
-    expect(r.requests[0].max_tokens).toBe(2000)
+    expect(r.requests[0].max_tokens).toBe(16000)
   })
 
   it('omits reasoning_effort when not set — the body is unchanged for existing runs', async () => {
