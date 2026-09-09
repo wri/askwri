@@ -70,6 +70,12 @@ beforeEach(() => {
   process.env = { ...ENV, OPENAI_API_KEY: 'sk-test', OPENAI_MODEL: 'gpt-5.4' }
   delete process.env.OPENAI_BASE_URL
   delete process.env.USE_NANO_FILTER
+  // These tests assert the ROUTE's defaults; a developer's deploy-day .env
+  // (OPENAI_MAX_TOKENS / OPENAI_TEMPERATURE — loaded by next/jest even under
+  // NODE_ENV=test) must not masquerade as one. CI has no .env, which is why
+  // this only ever failed locally.
+  delete process.env.OPENAI_MAX_TOKENS
+  delete process.env.OPENAI_TEMPERATURE
   fetchMock = jest
     .spyOn(global, 'fetch')
     .mockResolvedValue(

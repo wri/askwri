@@ -150,7 +150,8 @@ function printBlock(name: string, b: BlockReport): void {
     `  retrieval: evidence_coverage=${fmtMean(r.evidence_coverage)} ` +
       `doc_map=${fmtMean(r.doc_map)} attainable_recall=${fmtMean(r.attainable_recall)} ` +
       `distinct_docs=${fmtMean(r.distinct_docs)} top_doc_share=${fmtMean(r.top_doc_share)} ` +
-      `chunk_id_hit_rate=${fmtMean(r.chunk_id_hit_rate)}`,
+      `chunk_id_hit_rate=${fmtMean(r.chunk_id_hit_rate)} ` +
+      `selection_utilization=${fmtMean(r.selection_utilization)}`,
   )
   const s = b.synthesis
   console.log(
