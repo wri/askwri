@@ -24,14 +24,12 @@ const HALFWIDTH = ',.:;!?()[]""\'\'-'
 // over while copying a quote.
 const MD_EMPHASIS_RE = /[*_#`]/g
 
-// Markdown image/link syntax. The serving pipeline strips it from chunk text
-// (verified 2026-09-09 against the QA gateway: served text = DB chunk text
-// minus image refs, byte-for-byte otherwise), so a quote carrying it can
-// never be contained in served text — strip it on both sides, same rationale
-// as MD_EMPHASIS. Images BEFORE links: a link pattern would otherwise eat
-// the bracket half of an image and leave a stray '!'.
+// Match extractPassage's image cleanup, including placeholders whose leading
+// ! was lost at a chunk boundary. Ordinary links carry evidence and survive.
+// Replace images with spaces so words on either side stay separated, just
+// as they do in the served passage.
 const MD_IMAGE_RE = /!\[[^\]]*\]\([^)]*\)/g
-const MD_LINK_RE = /\[[^\]]*\]\([^)]*\)/g
+const MD_ORPHAN_IMAGE_RE = /!?\[[^\]]*\.(?:jpe?g|png|gif|svg|webp)\]\([^)]*\)/gi
 
 const WHITESPACE_RE = /\s+/g
 
@@ -50,8 +48,8 @@ function foldFullwidth(text: string): string {
 
 export function normalize(text: string): string {
   text = text.replace(MD_EMPHASIS_RE, '')
-  text = text.replace(MD_IMAGE_RE, '')
-  text = text.replace(MD_LINK_RE, '')
+  text = text.replace(MD_IMAGE_RE, ' ')
+  text = text.replace(MD_ORPHAN_IMAGE_RE, ' ')
   text = foldFullwidth(text)
   text = text.replace(WHITESPACE_RE, ' ')
   text = text.replace(SPACE_AROUND_PUNCT_RE, '$1')
@@ -60,7 +58,8 @@ export function normalize(text: string): string {
 
 /** normalize(snippet) is a substring of normalize(chunkText). */
 export function snippetContained(snippet: string, chunkText: string): boolean {
-  return normalize(chunkText).includes(normalize(snippet))
+  const evidence = normalize(snippet)
+  return evidence !== '' && normalize(chunkText).includes(evidence)
 }
 
 const CJK_RE = /[\u3400-\u9fff\uf900-\ufaff]/
