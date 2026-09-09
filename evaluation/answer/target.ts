@@ -55,6 +55,10 @@ export interface TargetClient {
     docs: unknown[],
     knobs: Record<string, unknown>,
   ): Promise<AnswerOutcome>
+  /** Cite-mode query → ranked doc ids. The no-selection selection
+   * derivation's source (spec §5 step 1): what the product's default path
+   * consults when the user selects nothing. */
+  cite(query: string): Promise<string[]>
   health(): Promise<Record<string, unknown> | null>
   catalogIds(): Promise<Set<string>>
 }
@@ -79,6 +83,42 @@ const ANSWER_MODE_QUERY_DEFAULTS = {
 } as const
 
 const trimTrailingSlash = (url: string) => url.replace(/\/+$/, '')
+
+// The direct-mode cite request, mirroring the gateway's cite branch
+// field-for-field: src/config/retrieval.ts CITE_PRESET (dense/sparse 500,
+// rerankTopN 500, fusionTopK 500) plus the route's fixed
+// threshold/metadata/rerank, with the UI client's max_results override
+// (llamaindex-client.ts:49–57 sends 40 over CITE_PRESET's 25 — the route
+// forwards it). NO dense/sparse weights: the gateway's cite branch sets
+// none (alpha is answer-mode only), so neither do we — the search
+// service's own defaults apply, exactly as they do behind the gateway.
+// Keep in sync with CITE_PRESET / chatCiteLlamaIndex if either changes.
+const CITE_MODE_QUERY_DEFAULTS = {
+  similarity_threshold: 0.0,
+  include_metadata: true,
+  rerank: true,
+  max_results: 40,
+  vector_top_k: 500,
+  bm25_top_k: 500,
+  rerank_top_n: 500,
+  fusion_top_k: 500,
+} as const
+
+/** Ranked unique doc ids from a docs array (first occurrence keeps its
+ * rank). Cite mode returns one entry per document; the dedup is defensive
+ * so a chunk-grain response could never inflate a top-20 selection. */
+function rankedDocIds(docs: any[]): string[] {
+  const seen = new Set<string>()
+  const ids: string[] = []
+  for (const d of docs) {
+    const id = d?.doc_id
+    if (typeof id === 'string' && !seen.has(id)) {
+      seen.add(id)
+      ids.push(id)
+    }
+  }
+  return ids
+}
 
 /** Synthesis budget per call. Matches the judge client: lunaroute-hosted
  * models are ~7x slower than GPT, and the 120s http default would time out
@@ -195,6 +235,29 @@ export function gatewayTarget(
     },
     answer: (query, docs, knobs) =>
       answerAt(`${base}/api/answer`, http, query, docs, knobs, answerTimeoutMs),
+    async cite(query) {
+      // The UI client's exact body (llamaindex-client.ts
+      // chatCiteLlamaIndex:49–57) — the route hardcodes the same
+      // threshold/metadata/rerank and applies CITE_PRESET server-side, so
+      // behavior is identical; sending the full shape is for fidelity.
+      const r = await http(`${base}/api/llamaindex`, {
+        method: 'POST',
+        body: {
+          query,
+          mode: 'cite',
+          max_results: 40,
+          similarity_threshold: 0.0,
+          include_metadata: true,
+          rerank: true,
+        },
+      })
+      if (!r.ok || r.json?.ok === false) {
+        throw new Error(
+          `POST ${base}/api/llamaindex → ${r.status}: ${errorText(r.json, r.text)}`,
+        )
+      }
+      return rankedDocIds(r.json.docs ?? [])
+    },
     async health() {
       try {
         const r = await http(`${base}/api/llamaindex`)
@@ -264,6 +327,22 @@ export function directTarget(
     },
     answer: (query, docs, knobs) =>
       answerAt(`${app}/api/answer`, http, query, docs, knobs, answerTimeoutMs),
+    async cite(query) {
+      const r = await http(`${search}/query`, {
+        method: 'POST',
+        body: {
+          query,
+          mode: 'cite',
+          ...CITE_MODE_QUERY_DEFAULTS,
+        },
+      })
+      if (!r.ok || r.json?.ok === false) {
+        throw new Error(
+          `POST ${search}/query → ${r.status}: ${errorText(r.json, r.text)}`,
+        )
+      }
+      return rankedDocIds(r.json.docs ?? [])
+    },
     async health() {
       try {
         const r = await http(`${search}/health`)
