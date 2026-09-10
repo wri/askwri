@@ -48,7 +48,7 @@ export function resolveSynthesisConfig(body: any): SynthesisConfig {
     temperature,
     maxPassages: int(
       body?.max_passages,
-      provider.isGpt5 ? 15 : 6,
+      provider.isGpt5 ? 15 : 6, // gpt-5 default equals MAX_PASSAGES_CAP — raising the default requires raising the cap
       MAX_PASSAGES_CAP,
     ),
     passageChars: int(body?.passage_chars, provider.isGpt5 ? 800 : 350, 20_000),

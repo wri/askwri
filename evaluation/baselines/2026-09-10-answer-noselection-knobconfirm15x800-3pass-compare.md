@@ -60,3 +60,11 @@ does not consume these knobs; `eval:cite` is unaffected.
 - Compare commands:
   `npm run eval:answer-compare -- evaluation/baselines/2026-09-09-answer-noselection-maxpass15-3pass-qa.json evaluation/baselines/2026-09-10-answer-noselection-knobconfirm15x800-3pass-qa.json`
   `npm run eval:answer-compare -- evaluation/baselines/2026-09-09-answer-noselection-pchars800-3pass-qa.json evaluation/baselines/2026-09-10-answer-noselection-knobconfirm15x800-3pass-qa.json`
+
+## Provenance note
+
+The confirmation run harness_sha is `0a2adb8…-dirty` (worktree with uncommitted
+instrument changes at run time). Fixture commit, prompt hashes, judge config,
+and knobs are all pinned, so the measurement is well-anchored; exact harness
+reproducibility is weakened. If dirty shas recur, snapshot the harness state
+into the run label.
