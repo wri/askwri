@@ -6,7 +6,7 @@ import os
 import time
 import pickle
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from contextlib import asynccontextmanager
 from app.env import load_env
 from app.core_topic import core_topic_candidates
@@ -948,6 +948,52 @@ async def health_check():
                        else {"status": "live"}),
         "cache_stats": service_state["cache"].get_cache_stats() if service_state.get("cache") else {}
     }
+
+
+class TagsNearbyRequest(BaseModel):
+    """Experts mode (docs/superpowers/specs/2026-09-09-experts-mode-design.md §5.2).
+    Additive: /query is untouched."""
+    query: str
+    facets: List[str] = ["topic"]
+    top_k: int = 10
+
+
+class TagsNearbyResponse(BaseModel):
+    facets: Dict[str, List[Tuple[str, float]]]
+    model: str
+    degraded: List[str]
+
+
+@app.post("/tags/nearby", response_model=TagsNearbyResponse)
+async def tags_nearby(request: TagsNearbyRequest):
+    """Query→nearest tags per facet via tag_embeddings cosine. One embedding
+    call (LRU-cached with /query's), one indexed SELECT per facet. A facet
+    failure degrades that facet to [] and names it; it never 500s."""
+    from app import topic_sense
+    from app.config import get_settings
+
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required")
+    settings = get_settings()
+    out: Dict[str, List[Tuple[str, float]]] = {f: [] for f in request.facets}
+    degraded: List[str] = []
+    embed_model = service_state.get("embed_model")
+    if embed_model is None or not topic_sense.model_has_tag_embeddings(settings.embedding_model):
+        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=list(request.facets))
+    try:
+        emb = await asyncio.to_thread(embed_model.get_query_embedding, query)
+    except Exception as exc:  # noqa: BLE001 — never fail the caller on an embed error
+        logger.warning(f"/tags/nearby embed degraded: {exc}")
+        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=list(request.facets))
+    for facet in request.facets:
+        try:
+            out[facet] = await asyncio.to_thread(topic_sense.nearby_tags, emb, facet, request.top_k)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"/tags/nearby {facet} degraded: {exc}")
+            degraded.append(facet)
+    return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=degraded)
+
 
 def make_dense_retriever(top_k: int):
     """Dense lane: pgvector-backed or legacy in-memory, per settings."""

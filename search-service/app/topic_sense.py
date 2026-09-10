@@ -56,23 +56,27 @@ def filter_topics(rows, top_k: int, min_cosine: float):
     return [(label, cos) for label, cos in rows if cos >= min_cosine][:top_k]
 
 
-def nearby_tags(query_embedding, facet: str) -> list:
+def nearby_tags(query_embedding, facet: str, top_k: int | None = None) -> list:
     """Semantic query→tag match for one facet. Returns [(label, cosine), ...]
-    filtered by threshold + top_k (failure-soft, design §4.1)."""
+    filtered by threshold + top_k (failure-soft, design §4.1).
+
+    `top_k=None` keeps settings.topic_sense_top_k so /query's tag lanes are
+    byte-identical; /tags/nearby (experts mode) passes an explicit value."""
     from app.config import get_settings
     from app.db import get_pool
 
     s = get_settings()
+    k = s.topic_sense_top_k if top_k is None else int(top_k)
     qvec = np.array(query_embedding, dtype=np.float32)
     with get_pool().connection() as conn:
         rows = conn.execute(
             _TAG_SQL,
             {"q": qvec, "model": s.embedding_model, "facet": facet,
-             "k": max(s.topic_sense_top_k * 4, 20)},
+             "k": max(k * 4, 20)},
         ).fetchall()
     return filter_topics(
         [(label, float(cos)) for label, cos in rows],
-        top_k=s.topic_sense_top_k,
+        top_k=k,
         min_cosine=s.topic_sense_min_cosine,
     )
 
