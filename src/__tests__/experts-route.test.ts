@@ -1,0 +1,237 @@
+/**
+ * @jest-environment node
+ *
+ * Contract tests for POST /api/experts. The search service is a mocked global
+ * fetch (two calls: /query then /tags/nearby); the works query is stubbed.
+ */
+import { NextRequest } from 'next/server'
+import type { WorkRow } from '@/lib/experts/types'
+
+const WORKS: WorkRow[] = [
+  {
+    docId: 'd1',
+    translations: [],
+    title: 'Bus paper',
+    year: 2025,
+    type: 'Report',
+    office: 'WRI China',
+    url: 'https://x/1',
+    authorsRaw: ['Xue, Lulu'],
+    topics: ['Buses'],
+    geographies: ['China'],
+  },
+  {
+    docId: 'd2',
+    translations: [],
+    title: 'School bus',
+    year: 2024,
+    type: 'Report',
+    office: 'WRI US',
+    url: null,
+    authorsRaw: ['Lazer, Leah'],
+    topics: ['School Buses'],
+    geographies: [],
+  },
+]
+
+jest.mock('@/db/data-source', () => ({
+  initializeDatabase: jest.fn().mockResolvedValue(undefined),
+}))
+jest.mock('@/db/queries/expertsEvidence', () => ({
+  loadSearchableWorks: jest.fn(),
+}))
+
+// jest.resetModules() clears the mock registry as well (jest 29), so the
+// mocked module the route's dynamic import sees is created fresh per test —
+// re-acquire the mock after the reset; a top-level requireMock would go stale.
+let loadSearchableWorks: jest.Mock
+let fetchMock: jest.SpyInstance
+const ENV = { ...process.env }
+
+function queryReply(
+  docs: { doc_id: string; tier: string }[],
+  extra: Record<string, unknown> = {},
+) {
+  return {
+    docs: docs.map((d, i) => ({
+      doc_id: d.doc_id,
+      title: d.doc_id,
+      content: '',
+      score: 1 - i * 0.1,
+      metadata: { doc_id: d.doc_id, relevance_tier: d.tier },
+    })),
+    total_results: docs.length,
+    query: 'q',
+    mode: 'cite',
+    debug: {},
+    usage: { total_usd: 0.01 },
+    query_understanding: {
+      suggestions: [{ type: 'nearby_topic', text: 'Buses' }],
+    },
+    likely_off_topic: false,
+    ...extra,
+  }
+}
+function tagsReply(
+  topic: [string, number][],
+  geography: [string, number][] = [],
+  degraded: string[] = [],
+) {
+  return { facets: { topic, geography }, model: 'cohere-embed-v4', degraded }
+}
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+async function post(body: Record<string, unknown>) {
+  const { POST } = await import('@/app/api/experts/route')
+  const res = await POST(
+    new NextRequest('http://localhost/api/experts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    }),
+  )
+  return { status: res.status, json: await res.json() }
+}
+
+beforeEach(() => {
+  jest.resetModules()
+  process.env = { ...ENV, SEARCH_SERVICE_URL: 'http://search:8000' }
+  ;({ loadSearchableWorks } = jest.requireMock('@/db/queries/expertsEvidence'))
+  loadSearchableWorks.mockResolvedValue(WORKS)
+  fetchMock = jest.spyOn(global, 'fetch')
+})
+afterEach(() => fetchMock.mockRestore())
+
+describe('POST /api/experts', () => {
+  it('calls /query with max_results 200 then /tags/nearby, and ranks', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        json(queryReply([{ doc_id: 'd1', tier: 'strong' }])),
+      )
+      .mockResolvedValueOnce(
+        json(
+          tagsReply(
+            [
+              ['Buses', 0.66],
+              ['School Buses', 0.5],
+            ],
+            [['China', 0.4]],
+          ),
+        ),
+      )
+    const { status, json: body } = await post({ query: 'electric buses' })
+    expect(status).toBe(200)
+    const [queryUrl, queryInit] = fetchMock.mock.calls[0]
+    expect(queryUrl).toBe('http://search:8000/query')
+    const sent = JSON.parse(queryInit.body)
+    expect(sent).toMatchObject({
+      query: 'electric buses',
+      mode: 'cite',
+      max_results: 200,
+      rerank: true,
+      vector_top_k: 500,
+      bm25_top_k: 500,
+      fusion_top_k: 500,
+      rerank_top_n: 500,
+    })
+    const [tagsUrl, tagsInit] = fetchMock.mock.calls[1]
+    expect(tagsUrl).toBe('http://search:8000/tags/nearby')
+    expect(JSON.parse(tagsInit.body)).toEqual({
+      query: 'electric buses',
+      facets: ['topic', 'geography'],
+      top_k: 10,
+    })
+    expect(body.ok).toBe(true)
+    expect(body.mode).toBe('evidence')
+    expect(body.people[0]).toMatchObject({ key: 'xue, lulu', score: 1 })
+    expect(body.understanding.matched_topics).toEqual([
+      { label: 'Buses', cosine: 0.66, df: 1 },
+      { label: 'School Buses', cosine: 0.5, df: 1 },
+    ])
+    expect(body.understanding.matched_geographies).toEqual([
+      { label: 'China', cosine: 0.4, df: 1 },
+    ])
+    expect(body.understanding.suggestions).toEqual([
+      { type: 'nearby_topic', text: 'Buses' },
+    ])
+    expect(body.usage).toEqual({ total_usd: 0.01 })
+    expect(Object.keys(body.timing)).toEqual(
+      expect.arrayContaining(['query_ms', 'tags_ms', 'db_ms', 'rank_ms']),
+    )
+  })
+
+  it('degrades to evidence-only when /tags/nearby fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        json(queryReply([{ doc_id: 'd1', tier: 'strong' }])),
+      )
+      .mockResolvedValueOnce(json({ error: 'boom' }, 500))
+    const { status, json: body } = await post({ query: 'electric buses' })
+    expect(status).toBe(200)
+    expect(body.understanding.degraded).toEqual(['tags_nearby'])
+    expect(body.understanding.matched_topics).toEqual([])
+    expect(body.people[0].key).toBe('xue, lulu')
+  })
+
+  it('degrades to topic_only when /query fails', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValueOnce(json(tagsReply([['School Buses', 0.7]])))
+    const { status, json: body } = await post({ query: 'school buses' })
+    expect(status).toBe(200)
+    expect(body.mode).toBe('topic_only')
+    expect(body.understanding.degraded).toEqual(['query'])
+    expect(body.people[0].key).toBe('lazer, leah')
+  })
+
+  it('returns 502 when both upstreams fail', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error('down'))
+      .mockRejectedValueOnce(new Error('down'))
+    const { status, json: body } = await post({ query: 'anything' })
+    expect(status).toBe(502)
+    expect(body.ok).toBe(false)
+  })
+
+  it('validates the body', async () => {
+    expect((await post({ query: '   ' })).status).toBe(400)
+    expect((await post({ query: 'x', top_n: 'lots' })).status).toBe(400)
+    expect((await post({ query: 'x', excluded_topics: 'Buses' })).status).toBe(
+      400,
+    )
+  })
+
+  it('threads excluded_topics into the ranking', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        json(queryReply([{ doc_id: 'd1', tier: 'strong' }])),
+      )
+      .mockResolvedValueOnce(
+        json(
+          tagsReply([
+            ['Buses', 0.66],
+            ['School Buses', 0.5],
+          ]),
+        ),
+      )
+    const { json: body } = await post({
+      query: 'buses',
+      excluded_topics: ['Buses'],
+    })
+    expect(body.understanding.matched_topics.map((t: any) => t.label)).toEqual([
+      'School Buses',
+    ])
+  })
+
+  it('returns 500 when the works query fails', async () => {
+    loadSearchableWorks.mockRejectedValueOnce(new Error('db down'))
+    fetchMock
+      .mockResolvedValueOnce(json(queryReply([])))
+      .mockResolvedValueOnce(json(tagsReply([])))
+    expect((await post({ query: 'x' })).status).toBe(500)
+  })
+})
