@@ -17,6 +17,10 @@ build
 # reformatting it buys nothing and makes `git log -p docs/` unreadable.
 *.md
 
+# Hand-authored design artifacts (e.g. the experts-mode mockup) also live in
+# docs; like the prose above they are read in `git log -p`, not formatted.
+docs/**/*.html
+
 # Python service: not linted here either (eslint.config.mjs ignores it).
 search-service
 
