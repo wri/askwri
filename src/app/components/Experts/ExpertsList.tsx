@@ -9,9 +9,19 @@ export function yearsLabel(years: [number, number] | null): string {
   return years[0] === years[1] ? String(years[0]) : `${years[0]}–${years[1]}`
 }
 
+/** Did this person reach the list through retrieval, or only through topic
+ *  space? `evidence.docs` counts RETRIEVED works only (spec §4.3 + rank.ts), so
+ *  a tag-only candidate reports 0 there in EITHER mode while `docIds` still
+ *  holds their topic-matched works. Every surface that phrases a person's
+ *  evidence must branch on this rather than on the response `mode`, or the row
+ *  and the panel it opens end up telling the reader different stories. */
+export function hasTierEvidence(p: PersonResult): boolean {
+  return p.evidence.strong > 0 || p.evidence.partial > 0 || p.evidence.weak > 0
+}
+
 export function evidenceLine(p: PersonResult, mode: RankMode): string {
   const yr = yearsLabel(p.evidence.years)
-  if (mode === 'topic_only') {
+  if (mode === 'topic_only' || !hasTierEvidence(p)) {
     const n = p.docIds.length
     return `${n} doc${n === 1 ? '' : 's'} on these topics${yr ? ' · ' + yr : ''}`
   }
@@ -28,6 +38,7 @@ export const ExpertsList = ({
   mode,
   selectedKey,
   peerKeys,
+  hoverTopic = null,
   onHover,
   onSelect,
 }: {
@@ -35,6 +46,9 @@ export const ExpertsList = ({
   mode: RankMode
   selectedKey: string | null
   peerKeys: Set<string>
+  /** U14: the list is the graph's table twin (spec §8), so a topic hovered or
+   *  focused on the chips marks the people who carry it here too. */
+  hoverTopic?: string | null
   onHover: (key: string | null) => void
   onSelect: (key: string) => void
 }) => (
@@ -46,7 +60,23 @@ export const ExpertsList = ({
           className='experts-row'
           id={`expert-row-${encodeURIComponent(p.key)}`}
           aria-pressed={selectedKey === p.key}
+          // U13: tie the row to the evidence panel it opens, so a screen
+          // reader can follow the relationship instead of guessing.
+          aria-expanded={selectedKey === p.key}
+          aria-controls={
+            selectedKey === p.key ? 'experts-evidence-panel' : undefined
+          }
           data-peer={peerKeys.has(p.key) ? 'true' : 'false'}
+          // Present ONLY while a topic is hovered. Emitting 'false' at rest made
+          // the CSS's fade rule match every row at once, leaving the whole
+          // ranked list — the page's primary surface — at 45% opacity.
+          data-topic-match={
+            hoverTopic
+              ? p.topics.some((t) => t.label === hoverTopic)
+                ? 'true'
+                : 'false'
+              : undefined
+          }
           onMouseEnter={() => onHover(p.key)}
           onMouseLeave={() => onHover(null)}
           onFocus={() => onHover(p.key)}

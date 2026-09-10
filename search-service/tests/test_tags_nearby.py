@@ -2,6 +2,8 @@
 
 Wraps topic_sense.nearby_tags per facet. Never raises for a facet failure;
 the facet is named in `degraded` instead. /query is untouched."""
+import threading
+
 import httpx
 import pytest
 
@@ -22,7 +24,7 @@ class _Embed:
 def client(monkeypatch):
     embed = _Embed()
     monkeypatch.setitem(_main.service_state, "embed_model", embed)
-    monkeypatch.setattr(ts, "model_has_tag_embeddings", lambda m: True)
+    monkeypatch.setattr(ts, "facet_has_tag_embeddings", lambda model, facet: True)
     transport = httpx.ASGITransport(app=_main.app)
     return httpx.AsyncClient(transport=transport, base_url="http://test"), embed
 
@@ -73,6 +75,185 @@ async def test_no_embed_model_degrades_every_facet(client, monkeypatch):
         r = await c.post("/tags/nearby", json={"query": "buses", "facets": ["topic"]})
     assert r.status_code == 200
     assert r.json() == {"facets": {"topic": []}, "model": r.json()["model"], "degraded": ["topic"]}
+
+
+@pytest.mark.asyncio
+async def test_facet_without_tag_embedding_coverage_is_degraded(client, monkeypatch):
+    """P1 (spec §5.2): coverage is per FACET, not per model. A model with topic
+    rows but no geography rows must name geography in `degraded` — the empty
+    list alone is indistinguishable from a legitimate no-match."""
+    c, _ = client
+    monkeypatch.setattr(ts, "facet_has_tag_embeddings",
+                        lambda model, facet: facet == "topic")
+    monkeypatch.setattr(
+        ts, "nearby_tags",
+        lambda emb, facet, top_k=None: [("Buses", 0.5)] if facet == "topic" else [],
+    )
+    async with c:
+        r = await c.post("/tags/nearby",
+                         json={"query": "buses", "facets": ["topic", "geography"]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["facets"] == {"topic": [["Buses", 0.5]], "geography": []}
+    assert body["degraded"] == ["geography"]
+
+
+@pytest.mark.asyncio
+async def test_covered_facet_with_no_match_is_not_degraded(client, monkeypatch):
+    """P1 counterpart: a facet WITH coverage whose tags all sit below the cosine
+    floor returns [] and is NOT degraded. Only absent coverage is degraded."""
+    c, _ = client
+    monkeypatch.setattr(ts, "facet_has_tag_embeddings",
+                        lambda model, facet: True)
+    monkeypatch.setattr(ts, "nearby_tags", lambda emb, facet, top_k=None: [])
+    async with c:
+        r = await c.post("/tags/nearby", json={"query": "buses", "facets": ["topic"]})
+    assert r.status_code == 200
+    assert r.json() == {"facets": {"topic": []},
+                        "model": r.json()["model"], "degraded": []}
+
+
+@pytest.mark.asyncio
+async def test_no_covered_facet_skips_the_embedding_call(client, monkeypatch):
+    """P1: probe before embedding, so a fully uncovered request costs no embed."""
+    c, embed = client
+    monkeypatch.setattr(ts, "facet_has_tag_embeddings",
+                        lambda model, facet: False)
+    async with c:
+        r = await c.post("/tags/nearby", json={"query": "buses", "facets": ["topic"]})
+    assert r.status_code == 200
+    assert r.json()["degraded"] == ["topic"]
+    assert embed.calls == []
+
+
+@pytest.mark.asyncio
+async def test_coverage_probe_failure_degrades_and_never_500s(client, monkeypatch):
+    """P2: the coverage probe opens a pool connection. A DB/pool outage must
+    degrade the affected facets, not raise out of the handler (spec §5.2:
+    "Never raises for a facet failure")."""
+    c, _ = client
+
+    def boom(model, facet):
+        raise RuntimeError("pool exhausted")
+
+    monkeypatch.setattr(ts, "facet_has_tag_embeddings", boom)
+    monkeypatch.setattr(ts, "model_has_tag_embeddings", boom)
+    monkeypatch.setattr(ts, "nearby_tags",
+                        lambda emb, facet, top_k=None: [("Buses", 0.5)])
+    async with c:
+        r = await c.post("/tags/nearby",
+                         json={"query": "buses", "facets": ["topic", "geography"]})
+    assert r.status_code == 200
+    assert r.json()["facets"] == {"topic": [], "geography": []}
+    assert r.json()["degraded"] == ["topic", "geography"]
+
+
+@pytest.mark.parametrize("bad_top_k", [-5, 0, 101, 10_000_000])
+@pytest.mark.asyncio
+async def test_out_of_range_top_k_is_422(client, monkeypatch, bad_top_k):
+    """P3: /tags/nearby is unauthenticated and top_k reaches a SQL LIMIT and a
+    list slice. Unbounded, top_k=-5 slices rows[:-5] (silently dropping the last
+    5 of 20), top_k=0 returns [] undegraded, and 10_000_000 issues LIMIT
+    40000000. Bounds make a bad value a 422 instead of silent nonsense."""
+    c, _ = client
+    called = []
+    monkeypatch.setattr(ts, "nearby_tags",
+                        lambda emb, facet, top_k=None: called.append(top_k) or [])
+    async with c:
+        r = await c.post("/tags/nearby",
+                         json={"query": "buses", "facets": ["topic"], "top_k": bad_top_k})
+    assert r.status_code == 422
+    assert called == []
+
+
+@pytest.mark.parametrize("ok_top_k", [1, 100])
+@pytest.mark.asyncio
+async def test_top_k_bounds_are_inclusive(client, monkeypatch, ok_top_k):
+    """P3 boundary: 1 and 100 are accepted and passed through verbatim."""
+    c, _ = client
+    called = []
+    monkeypatch.setattr(ts, "nearby_tags",
+                        lambda emb, facet, top_k=None: called.append(top_k) or [])
+    async with c:
+        r = await c.post("/tags/nearby",
+                         json={"query": "buses", "facets": ["topic"], "top_k": ok_top_k})
+    assert r.status_code == 200
+    assert called == [ok_top_k]
+
+
+@pytest.mark.asyncio
+async def test_duplicate_facets_are_deduped_in_request_order(client, monkeypatch):
+    """P4: ["topic","topic","geography"] builds one key per facet but must not
+    run the probe or the cosine query twice for identical output."""
+    c, _ = client
+    probed, queried = [], []
+    monkeypatch.setattr(ts, "facet_has_tag_embeddings",
+                        lambda model, facet: probed.append(facet) or True)
+    monkeypatch.setattr(
+        ts, "nearby_tags",
+        lambda emb, facet, top_k=None: queried.append(facet) or [(facet.title(), 0.5)],
+    )
+    async with c:
+        r = await c.post("/tags/nearby",
+                         json={"query": "buses",
+                               "facets": ["topic", "topic", "geography", "topic"]})
+    assert r.status_code == 200
+    assert list(r.json()["facets"]) == ["topic", "geography"]
+    assert probed == ["topic", "geography"]
+    assert queried == ["topic", "geography"]
+
+
+@pytest.mark.asyncio
+async def test_duplicate_failing_facet_is_named_once_in_degraded(client, monkeypatch):
+    """P4: a duplicated failing facet must appear once in `degraded`."""
+    c, _ = client
+
+    def boom(emb, facet, top_k=None):
+        raise RuntimeError("no rows")
+
+    monkeypatch.setattr(ts, "nearby_tags", boom)
+    async with c:
+        r = await c.post("/tags/nearby",
+                         json={"query": "buses", "facets": ["topic", "topic"]})
+    assert r.status_code == 200
+    assert r.json()["degraded"] == ["topic"]
+
+
+@pytest.mark.asyncio
+async def test_unknown_facet_falls_out_as_degraded(client, monkeypatch):
+    """P4: "authors" is not a tag facet, so it has no tag_embeddings coverage and
+    the P1 probe degrades it. No special-casing of facet names."""
+    c, _ = client
+    monkeypatch.setattr(ts, "facet_has_tag_embeddings",
+                        lambda model, facet: facet in ("topic", "geography"))
+    monkeypatch.setattr(ts, "nearby_tags",
+                        lambda emb, facet, top_k=None: [("Buses", 0.5)])
+    async with c:
+        r = await c.post("/tags/nearby",
+                         json={"query": "buses", "facets": ["topic", "authors"]})
+    assert r.status_code == 200
+    assert r.json()["facets"] == {"topic": [["Buses", 0.5]], "authors": []}
+    assert r.json()["degraded"] == ["authors"]
+
+
+@pytest.mark.asyncio
+async def test_coverage_probe_runs_off_the_event_loop(client, monkeypatch):
+    """P5: the probe opens a pool connection and does a blocking SELECT, like the
+    embed and cosine calls that are already wrapped in asyncio.to_thread."""
+    c, _ = client
+    loop_thread = threading.get_ident()
+    probe_threads = []
+
+    def probe(model, facet):
+        probe_threads.append(threading.get_ident())
+        return True
+
+    monkeypatch.setattr(ts, "facet_has_tag_embeddings", probe)
+    monkeypatch.setattr(ts, "nearby_tags", lambda emb, facet, top_k=None: [])
+    async with c:
+        r = await c.post("/tags/nearby", json={"query": "buses", "facets": ["topic"]})
+    assert r.status_code == 200
+    assert probe_threads and loop_thread not in probe_threads
 
 
 @pytest.mark.asyncio

@@ -42,7 +42,14 @@ function splitComma(s: string): { family: string; givenFirst: string } {
   const i = s.indexOf(',')
   const family = s.slice(0, i).trim()
   const given = s.slice(i + 1).trim()
-  return { family, givenFirst: (given.split(' ')[0] || '').toLowerCase() }
+  // Split the given part on whitespace OR a further comma: "Smith, John, Jr."
+  // is family "Smith", given "John", suffix "Jr." — taking the first
+  // whitespace token would key it "smith, john," (trailing comma), which also
+  // fails KEY_RE in evaluation/experts/validate.ts.
+  return {
+    family,
+    givenFirst: (given.split(/[\s,]+/)[0] || '').toLowerCase(),
+  }
 }
 
 export function buildAuthorIndex(raws: string[]): AuthorIndex {

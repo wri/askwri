@@ -15,6 +15,18 @@ const customJestConfig = {
   // root-anchored exception would RE-ignore jose/next ESM paths that next/jest
   // deliberately exempts, breaking their suites. Map the d3 packages to their
   // bundled UMD dists (plain CJS, no transform needed) instead.
+  //
+  // Two tidier-looking alternatives were tried and REJECTED with evidence
+  // (2026-09-09); do not reintroduce either:
+  //   - require.resolve('d3-force/dist/d3-force.js') throws, because d3's
+  //     exports map only publishes "umd" and "default" — the dist path is not
+  //     an addressable subpath.
+  //   - testEnvironmentOptions.customExportConditions: ['umd', 'browser'],
+  //     which would let each package name its own UMD build, activates "umd"
+  //     for EVERY package: @aws-sdk/checksums then resolves to an ESM build and
+  //     5 suites die on `SyntaxError: Unexpected token 'export'`.
+  // The <rootDir> paths below are layout-dependent by construction, which is
+  // the accepted cost; `npm ci` produces the flat layout they assume.
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^d3-force$': '<rootDir>/node_modules/d3-force/dist/d3-force.js',

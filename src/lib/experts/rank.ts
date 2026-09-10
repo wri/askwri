@@ -43,6 +43,18 @@ export function specificity(df: number, n: number): number {
   return Math.log(Math.max(n, 1) / Math.max(df, 1))
 }
 
+/** docId -> work, including every confirmed translation id pointing at its
+ *  original (spec §4.1). Exported because /api/experts needs the identical
+ *  resolution for the §9 doc-derived fallback; two copies drifted apart once. */
+export function buildWorkIndex(works: WorkRow[]): Map<string, WorkRow> {
+  const byId = new Map<string, WorkRow>()
+  for (const w of works) {
+    byId.set(w.docId, w)
+    for (const tr of w.translations) byId.set(tr, w)
+  }
+  return byId
+}
+
 export function computeDf(works: WorkRow[]): Map<string, number> {
   const df = new Map<string, number>()
   for (const w of works)
@@ -61,7 +73,8 @@ interface PersonAcc {
   ref: AuthorRef
   evidence: number
   topic: number
-  docIds: Set<string> // retrieved works (evidence)
+  docIds: Set<string> // retrieved works, then back-filled with topic works
+  retrievedDocs: number // works actually retrieved — what `evidence.docs` reports
   tiers: Record<Tier, number>
   offices: Record<string, number>
   years: number[]
@@ -86,21 +99,31 @@ export function rank(
     }))
   const matchedLabels = new Set(matched.map((t) => t.label))
 
-  // Work lookup, including translation ids -> original.
-  const byId = new Map<string, WorkRow>()
-  for (const w of works) {
-    byId.set(w.docId, w)
-    for (const tr of w.translations) byId.set(tr, w)
-  }
+  const byId = buildWorkIndex(works)
 
   // Author resolution over the whole corpus (sibling lookup needs every form).
   const index = buildAuthorIndex(works.flatMap((w) => w.authorsRaw))
+  // Dedupe by RESOLVED key, not by raw string: a work's authorsRaw is the
+  // union of its rows' authors (spec §4.1), and a translation row can store
+  // `Lulu Xue` where the original stores `Xue, Lulu`. Both survive the
+  // exact-string dedupe in expertsEvidence and resolve to one person here, so
+  // without this every per-work count would fire twice and the phantom entry
+  // would shift the position index of every co-author after it. The key is
+  // only known after resolveAuthor (which needs the corpus-wide sibling
+  // index), which is why this cannot be done in SQL. First occurrence wins:
+  // the order is the author position that pos_w reads.
   const authorsOf = new Map<string, AuthorRef[]>()
-  for (const w of works)
-    authorsOf.set(
-      w.docId,
-      w.authorsRaw.map((r) => resolveAuthor(r, index)),
-    )
+  for (const w of works) {
+    const seen = new Set<string>()
+    const refs: AuthorRef[] = []
+    for (const raw of w.authorsRaw) {
+      const a = resolveAuthor(raw, index)
+      if (seen.has(a.key)) continue
+      seen.add(a.key)
+      refs.push(a)
+    }
+    authorsOf.set(w.docId, refs)
+  }
 
   // Retrieved works: best tier per work.
   const tierRank: Record<Tier, number> = { strong: 3, partial: 2, weak: 1 }
@@ -161,6 +184,7 @@ export function rank(
         evidence: 0,
         topic: 0,
         docIds: new Set(),
+        retrievedDocs: 0,
         tiers: { strong: 0, partial: 0, weak: 0 },
         offices: {},
         years: [],
@@ -206,6 +230,12 @@ export function rank(
       if (n > 0)
         p.topic += (t.cosine * specificity(t.df, N) * Math.min(n, 3)) / 3
     }
+    // Freeze the retrieved count BEFORE the back-fill below: `evidence.docs`
+    // is a retrieval claim and must stay 0 for a candidate with no retrieved
+    // work, or the row reads "3 docs" beside "0 strong · 0 partial · 0 weak".
+    // docIds still gets the topic works so the evidence panel has something to
+    // show (ExpertsList already phrases that case as "N docs on these topics").
+    p.retrievedDocs = p.docIds.size
     if (p.docIds.size === 0) {
       // topic-only person: office/years from their works on matched topics
       for (const w of works) {
@@ -275,7 +305,7 @@ export function rank(
       offices: p.offices,
       score: Number((score / maxScore).toFixed(4)),
       evidence: {
-        docs: mode === 'evidence' ? p.docIds.size : 0,
+        docs: mode === 'evidence' ? p.retrievedDocs : 0,
         strong: p.tiers.strong,
         partial: p.tiers.partial,
         weak: p.tiers.weak,

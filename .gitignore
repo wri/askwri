@@ -72,7 +72,8 @@ pip-delete-this-directory.txt
 .ruff_cache/
 
 # Local document data (search service)
-search-service/data/
+# Trailing slash would not match the worktree symlink of the same name.
+search-service/data
 
 # Evaluation intermediates
 evaluation/results/

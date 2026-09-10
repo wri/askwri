@@ -79,3 +79,55 @@ describe('computeLayout', () => {
     expect(one.nodes.map((n) => n.x)).not.toEqual(two.nodes.map((n) => n.x))
   })
 })
+
+describe('computeLayout with missing or NaN topic strengths (U15)', () => {
+  const brokenMatched = [
+    { label: 'Buses', cosine: NaN, df: 19 },
+    { label: 'Hub', cosine: undefined as unknown as number, df: 145 },
+  ] as MatchedTag[]
+
+  it('gives every node a finite radius when a cosine is NaN or missing', () => {
+    const g = buildGraph(people, brokenMatched)
+    for (const n of g.nodes) expect(Number.isFinite(n.r)).toBe(true)
+  })
+
+  it('never emits NaN coordinates, and keeps nodes inside the frame', () => {
+    const { nodes } = computeLayout(people, brokenMatched, 900, 600, 7)
+    for (const n of nodes) {
+      expect(Number.isFinite(n.x)).toBe(true)
+      expect(Number.isFinite(n.y)).toBe(true)
+      expect(n.x).toBeGreaterThanOrEqual(0)
+      expect(n.x).toBeLessThanOrEqual(900)
+      expect(n.y).toBeGreaterThanOrEqual(0)
+      expect(n.y).toBeLessThanOrEqual(600)
+    }
+  })
+
+  it('still ranks a real cosine above a missing one', () => {
+    const mixed = [
+      { label: 'Buses', cosine: 0.66, df: 19 },
+      { label: 'Hub', cosine: NaN, df: 145 },
+    ] as MatchedTag[]
+    const g = buildGraph(people, mixed)
+    const buses = g.nodes.find((n) => n.id === 't:Buses')!
+    const hub = g.nodes.find((n) => n.id === 't:Hub')!
+    expect(buses.r).toBeGreaterThan(hub.r)
+  })
+
+  it('survives a person whose score is missing or NaN', () => {
+    // A NaN person radius is worse than a NaN topic radius: r becomes the `lo`
+    // bound of that node's own clamp, and Math.max(NaN, …) is NaN however
+    // finite the coordinate is. Guarding the value alone is not enough.
+    const brokenPeople = [
+      { ...people[0], score: NaN },
+      { ...people[1], score: undefined as unknown as number },
+    ]
+    const g = buildGraph(brokenPeople, matched)
+    for (const n of g.nodes) expect(Number.isFinite(n.r)).toBe(true)
+    const { nodes } = computeLayout(brokenPeople, matched, 900, 600, 7)
+    for (const n of nodes) {
+      expect(Number.isFinite(n.x)).toBe(true)
+      expect(Number.isFinite(n.y)).toBe(true)
+    }
+  })
+})

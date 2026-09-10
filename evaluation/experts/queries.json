@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "status": "skeleton",
   "queries": [
     { "id": "q01", "query": "electric school buses", "expected_top3": [], "notes": "US-heavy; School Buses df 10" },
     { "id": "q02", "query": "zero-emission freight trucks in China", "expected_top3": [], "notes": "" },

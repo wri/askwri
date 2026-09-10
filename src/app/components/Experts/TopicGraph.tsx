@@ -8,6 +8,7 @@ import { ACCENT, ACCENT_WASH, INK, officeColor } from './officeColor'
 const W = 940
 const H = 760
 const LABEL_AT_REST = 8
+const DESC_ID = 'topic-graph-desc'
 const REST_HINT =
   'Hover a person to see their topics and who else works in them. Click to pin and open the evidence. Names for people ranked 9–20 appear on hover.'
 
@@ -21,22 +22,40 @@ type NodeState = 'rest' | 'focus' | 'peer' | 'dim' | 'on'
 export const TopicGraph = ({
   people,
   matched,
+  topicsAreDerived = false,
   hoverKey,
   selectedKey,
   peerKeys,
   onHover,
   onSelect,
+  hoverTopic: hoverTopicProp,
+  onHoverTopic,
 }: {
   people: PersonResult[]
   matched: MatchedTag[]
-  totalWorks: number // accepted for future peer wiring; not destructured yet
+  /** True when /tags/nearby's topic facet was degraded and the rings are the
+   *  retrieved documents' own accepted tags (spec §9, first row). Their size is
+   *  then NOT a query cosine, so the accessible name must not say it is. */
+  topicsAreDerived?: boolean
   hoverKey: string | null
   selectedKey: string | null
   peerKeys: Set<string>
   onHover: (key: string | null) => void
   onSelect: (key: string) => void
+  /** Topic hover, lifted. Spec §8 makes the list the graph's table twin and
+   *  requires every interaction to be reachable from the keyboard; the topic
+   *  chips are the keyboard route in, and they live outside this component.
+   *  Omit both props and the graph keeps its own state (mouse-only). */
+  hoverTopic?: string | null
+  onHoverTopic?: (label: string | null) => void
 }) => {
-  const [hoverTopic, setHoverTopic] = useState<string | null>(null)
+  const [ownHoverTopic, setOwnHoverTopic] = useState<string | null>(null)
+  const controlled = hoverTopicProp !== undefined
+  const hoverTopic = controlled ? hoverTopicProp : ownHoverTopic
+  const setHoverTopic = (label: string | null) => {
+    onHoverTopic?.(label)
+    if (!controlled) setOwnHoverTopic(label)
+  }
   const layout = useMemo(
     () => computeLayout(people, matched, W, H, 7),
     [people, matched],
@@ -102,14 +121,24 @@ export const TopicGraph = ({
   }
 
   const opacityFor = (s: NodeState) => (s === 'dim' ? 0.16 : 1)
+  const topicPhrase = topicsAreDerived
+    ? `${matched.length} topics drawn from the retrieved documents' own tags`
+    : `${matched.length} topics that match the query`
+  const ringPhrase = topicsAreDerived
+    ? "each gold ring is a topic taken from the retrieved documents' own accepted tags, sized by how prominent that tag is across them — these are not query match strengths"
+    : 'each gold ring is a topic that matches the query, sized by how strongly it matches'
   return (
     <div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         role='img'
-        aria-label={`${people.length} people connected to the ${matched.length} topics that match the query`}
+        aria-label={`${people.length} people connected to the ${topicPhrase}`}
+        aria-describedby={DESC_ID}
         style={{ display: 'block', width: '100%', height: 'auto' }}
       >
+        <desc id={DESC_ID}>
+          {`Each filled circle is a person, sized by rank score and colored by office; ${ringPhrase}. A line joins a person to a topic their documents are tagged with. The ranked list below carries the same information and every interaction.`}
+        </desc>
         <g>
           {layout.links.map((l) => {
             const s = byId.get(l.source)!
@@ -190,8 +219,11 @@ export const TopicGraph = ({
                   onClick={() => onSelect(n.key)}
                 >
                   <circle r={Math.max(n.r + 8, 16)} fill='transparent' />
-                  {st === 'focus' && selectedKey === n.key && (
+                  {/* Spec §8: hover is halo-only, so the halo follows focus
+                      (hovered OR pinned) and only the name tab is pinned-only. */}
+                  {st === 'focus' && (
                     <circle
+                      data-testid='person-halo'
                       r={n.r + 6}
                       fill='none'
                       stroke={INK}
@@ -206,6 +238,7 @@ export const TopicGraph = ({
                   />
                   {st === 'focus' && selectedKey === n.key && (
                     <rect
+                      data-testid='person-name-tab'
                       x={n.r + 4}
                       y={-9}
                       width={pillW}

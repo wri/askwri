@@ -68,7 +68,7 @@ if _use_custom_ssl_client:
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 # Import caching system
 from app.cache_system import AskWRICache
 
@@ -955,7 +955,10 @@ class TagsNearbyRequest(BaseModel):
     Additive: /query is untouched."""
     query: str
     facets: List[str] = ["topic"]
-    top_k: int = 10
+    # Bounded: the endpoint is unauthenticated and top_k reaches both a SQL
+    # LIMIT and a list slice. Out of range is a 422, never a silent rows[:-5]
+    # or a LIMIT 40000000.
+    top_k: int = Field(default=10, ge=1, le=100)
 
 
 class TagsNearbyResponse(BaseModel):
@@ -976,17 +979,40 @@ async def tags_nearby(request: TagsNearbyRequest):
     if not query:
         raise HTTPException(status_code=400, detail="query is required")
     settings = get_settings()
-    out: Dict[str, List[Tuple[str, float]]] = {f: [] for f in request.facets}
+    # Deduped in request order: a repeated facet builds one output key, so
+    # running its probe and cosine query twice is pure waste and would name it
+    # twice in `degraded`.
+    facets = list(dict.fromkeys(request.facets))
+    out: Dict[str, List[Tuple[str, float]]] = {f: [] for f in facets}
     degraded: List[str] = []
     embed_model = service_state.get("embed_model")
-    if embed_model is None or not topic_sense.model_has_tag_embeddings(settings.embedding_model):
-        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=list(request.facets))
+    if embed_model is None:
+        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=list(facets))
+    # Coverage is per FACET: a model can have topic rows and no geography rows,
+    # in which case the geography query returns zero rows without raising. Probe
+    # first so an uncovered facet is named in `degraded` (spec §5.2) rather than
+    # returning a silent [], and so a fully uncovered request costs no embedding.
+    covered: List[str] = []
+    for facet in facets:
+        try:
+            has_coverage = await asyncio.to_thread(
+                topic_sense.facet_has_tag_embeddings, settings.embedding_model, facet)
+        except Exception as exc:  # noqa: BLE001 — a probe outage degrades, never 500s
+            logger.warning(f"/tags/nearby {facet} coverage probe degraded: {exc}")
+            degraded.append(facet)
+            continue
+        if has_coverage:
+            covered.append(facet)
+        else:
+            degraded.append(facet)
+    if not covered:
+        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=degraded)
     try:
         emb = await asyncio.to_thread(embed_model.get_query_embedding, query)
     except Exception as exc:  # noqa: BLE001 — never fail the caller on an embed error
         logger.warning(f"/tags/nearby embed degraded: {exc}")
-        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=list(request.facets))
-    for facet in request.facets:
+        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=list(facets))
+    for facet in covered:
         try:
             out[facet] = await asyncio.to_thread(topic_sense.nearby_tags, emb, facet, request.top_k)
         except Exception as exc:  # noqa: BLE001

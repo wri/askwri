@@ -27,6 +27,21 @@ export interface LayoutLink {
 
 const TICKS = 360
 
+/** A missing or NaN strength must not poison the layout. For a topic cosine,
+ *  one bad value in `Math.max(...)` makes maxCos NaN, so every topic radius —
+ *  and then every simulated coordinate — is NaN and the graph disappears. For
+ *  a person score it is worse: the NaN radius becomes that node's own clamp
+ *  bound below, and `Math.max(NaN, …)` is NaN however finite the coordinate. */
+function finiteOrZero(c: number | undefined | null): number {
+  return typeof c === 'number' && Number.isFinite(c) ? c : 0
+}
+
+/** Clamp that also absorbs a NaN: plain Math.max/Math.min PROPAGATE NaN. */
+function clamp(v: number, lo: number, hi: number): number {
+  if (!Number.isFinite(v)) return lo
+  return Math.max(lo, Math.min(hi, v))
+}
+
 /** Small deterministic PRNG (mulberry32) so layouts are reproducible. */
 function mulberry32(seed: number) {
   let a = seed >>> 0
@@ -47,15 +62,15 @@ export function buildGraph(people: PersonResult[], matched: MatchedTag[]) {
       id: `p:${p.key}`,
       kind: 'person',
       key: p.key,
-      r: 7 + 13 * p.score,
+      r: 7 + 13 * finiteOrZero(p.score),
     })
-  const maxCos = Math.max(0.01, ...matched.map((t) => t.cosine))
+  const maxCos = Math.max(0.01, ...matched.map((t) => finiteOrZero(t.cosine)))
   for (const t of matched)
     nodes.push({
       id: `t:${t.label}`,
       kind: 'topic',
       key: t.label,
-      r: 9 + 18 * (t.cosine / maxCos),
+      r: 9 + 18 * (finiteOrZero(t.cosine) / maxCos),
     })
   const matchedSet = new Set(matched.map((t) => t.label))
   for (const p of people) {
@@ -115,8 +130,8 @@ export function computeLayout(
     kind: n.kind,
     key: n.key,
     r: n.r,
-    x: Math.max(n.r + 70, Math.min(width - n.r - 110, n.x)),
-    y: Math.max(n.r + 16, Math.min(height - n.r - 16, n.y)),
+    x: clamp(n.x, n.r + 70, width - n.r - 110),
+    y: clamp(n.y, n.r + 16, height - n.r - 16),
   }))
   return { nodes: out, links: g.links }
 }

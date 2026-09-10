@@ -19,26 +19,43 @@ function splitAuthors(s: string | null): string[] {
     .filter(Boolean)
 }
 
-// One row per WORK. A confirmed translation whose original is also searchable
-// folds into the original; a translation whose original is withdrawn stands
-// alone. Tags are the accepted union across the work's rows.
+// One row per WORK: the ROOT of a confirmed-translation chain, plus every
+// searchable doc that reaches it. `document_relations` only records a direct
+// original, and chains occur (leaf -> mid -> root), so the root is resolved by
+// walking the edges rather than by "is not anybody's translation" — filing the
+// leaf under a mid that is itself not an original dropped the leaf from the
+// corpus entirely and silently shrank N. A doc has at most one confirmed
+// original (partial unique index UQ_document_relations_confirmed), so the walk
+// is a function; the path guard is there only because a cycle of length >= 3
+// is not forbidden by that index and would otherwise never terminate. A
+// translation whose original is withdrawn has no edge here, so it stands alone
+// as its own work. Tags are the accepted union across the work's rows.
 const WORKS_SQL = `
-  WITH tr AS (
-    SELECT r.related_document_id AS original_id, r.document_id AS translation_id
+  WITH RECURSIVE pairs AS (
+    SELECT r.document_id AS translation_id, r.related_document_id AS original_id
     FROM document_relations r
     JOIN documents t ON t.id = r.document_id AND t.status = 'searchable'
     JOIN documents o ON o.id = r.related_document_id AND o.status = 'searchable'
     WHERE r.status = 'confirmed' AND r.relation_type = 'translation_of'
   ),
-  originals AS (
-    SELECT d.* FROM documents d
+  walk AS (
+    SELECT d.id AS doc_id, d.id AS cur, ARRAY[d.id] AS path
+    FROM documents d
     WHERE d.status = 'searchable'
-      AND NOT EXISTS (SELECT 1 FROM tr WHERE tr.translation_id = d.id)
+    UNION ALL
+    SELECT w.doc_id, p.original_id, w.path || p.original_id
+    FROM walk w
+    JOIN pairs p ON p.translation_id = w.cur
+    WHERE NOT (p.original_id = ANY(w.path))
   ),
   members AS (
-    SELECT o.id AS work_id, o.id AS doc_id FROM originals o
-    UNION ALL
-    SELECT tr.original_id AS work_id, tr.translation_id AS doc_id FROM tr
+    SELECT DISTINCT ON (doc_id) doc_id, cur AS work_id
+    FROM walk
+    ORDER BY doc_id, array_length(path, 1) DESC
+  ),
+  originals AS (
+    SELECT d.* FROM documents d
+    JOIN members m ON m.doc_id = d.id AND m.work_id = d.id
   )
   SELECT o.external_id AS "docId",
          COALESCE(o.title_en, o.title, '') AS title,
@@ -48,11 +65,11 @@ const WORKS_SQL = `
          o.url,
          o.authors AS "authorsOriginal",
          COALESCE((SELECT array_agg(t.external_id ORDER BY t.external_id)
-                   FROM tr JOIN documents t ON t.id = tr.translation_id
-                   WHERE tr.original_id = o.id), '{}') AS translations,
+                   FROM members m JOIN documents t ON t.id = m.doc_id
+                   WHERE m.work_id = o.id AND m.doc_id <> o.id), '{}') AS translations,
          COALESCE((SELECT array_agg(t.authors ORDER BY t.external_id)
-                   FROM tr JOIN documents t ON t.id = tr.translation_id
-                   WHERE tr.original_id = o.id AND t.authors IS NOT NULL), '{}') AS "authorsTranslations",
+                   FROM members m JOIN documents t ON t.id = m.doc_id
+                   WHERE m.work_id = o.id AND m.doc_id <> o.id AND t.authors IS NOT NULL), '{}') AS "authorsTranslations",
          COALESCE((SELECT array_agg(DISTINCT tg.value_id)
                    FROM members m JOIN document_tags dt ON dt.document_id = m.doc_id AND dt.status = 'accepted'
                    JOIN tags tg ON tg.id = dt.tag_id AND tg.facet = 'topic'

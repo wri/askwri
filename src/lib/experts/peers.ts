@@ -16,15 +16,20 @@ export interface Peer {
   topics: string[]
 }
 
+/** `corpusWorks` is the count of searchable WORKS (spec §4.5's N), NOT the
+ *  payload doc count — matched_topics[].df is corpus-wide, so specificity
+ *  ln(N/df) goes negative for hub topics if a caller passes the smaller number
+ *  and every peer silently disappears. Named to be un-confusable with the
+ *  page's `totalWorks`, which IS the payload count. */
 export function peersOf(
   person: PersonResult,
   others: PersonResult[],
   matched: MatchedTag[],
-  totalWorks: number,
+  corpusWorks: number,
 ): Peer[] {
   const mine = new Map(person.topics.map((t) => [t.label, t.n]))
   const spec = new Map(
-    matched.map((t) => [t.label, specificity(t.df, totalWorks)]),
+    matched.map((t) => [t.label, specificity(t.df, corpusWorks)]),
   )
   const out: Peer[] = []
   for (const q of others) {

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { Button } from '@worldresources/wri-design-systems'
 import type { Peer } from '@/lib/experts/peers'
 import type {
@@ -9,7 +10,7 @@ import type {
   RankMode,
 } from '@/lib/experts/types'
 import { ACCENT_WASH } from './officeColor'
-import { yearsLabel } from './ExpertsList'
+import { hasTierEvidence, yearsLabel } from './ExpertsList'
 import './Experts.css'
 
 const TIER_ORDER = { strong: 3, partial: 2, weak: 1 } as const
@@ -20,6 +21,7 @@ export const ExpertEvidence = ({
   peers,
   mode,
   matched,
+  returnFocusTo,
   onSelectPeer,
   onClose,
 }: {
@@ -28,9 +30,23 @@ export const ExpertEvidence = ({
   peers: Peer[]
   mode: RankMode
   matched: MatchedTag[]
+  /** U13: element id of the list row that opened this panel, so Close hands a
+   *  keyboard user back their place in a 20-row list instead of dropping focus
+   *  to <body> when the focused button unmounts. */
+  returnFocusTo?: string
   onSelectPeer: (key: string) => void
   onClose: () => void
 }) => {
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    headingRef.current?.focus?.()
+  }, [])
+  const close = () => {
+    // Move focus out BEFORE the panel unmounts, or the browser drops it to
+    // <body> when the subtree containing document.activeElement disappears.
+    if (returnFocusTo) document.getElementById(returnFocusTo)?.focus?.()
+    onClose()
+  }
   const matchedSet = new Set(matched.map((t) => t.label))
   const offices = Object.entries(person.offices)
     .sort((a, b) => b[1] - a[1])
@@ -44,13 +60,26 @@ export const ExpertEvidence = ({
         (TIER_ORDER[b.tier ?? 'weak'] ?? 0) -
           (TIER_ORDER[a.tier ?? 'weak'] ?? 0) || (b.year ?? 0) - (a.year ?? 0),
     )
-  const matchLine =
-    mode === 'evidence'
-      ? `${person.evidence.docs} of ${person.evidence.corpusDocs} documents match`
-      : `${person.docIds.length} of ${person.evidence.corpusDocs} documents are on these topics`
+  // I-2: branch on the same predicate the row does. Keying this off `mode`
+  // alone told a tag-only candidate's panel "0 of 27 documents match" under a
+  // row that had just said "3 docs on these topics".
+  const retrievalFramed = mode === 'evidence' && hasTierEvidence(person)
+  const matchLine = retrievalFramed
+    ? `${person.evidence.docs} of ${person.evidence.corpusDocs} documents match`
+    : `${person.docIds.length} of ${person.evidence.corpusDocs} documents are on these topics`
+  // U12: yearsLabel returns '' for a null range (spec §9 calls that path
+  // defensive but reachable), which used to leave the header ending "· ".
+  const headerLine = [offices, matchLine, yearsLabel(person.evidence.years)]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <aside
-      aria-live='polite'
+      // U13: aria-live on a region that mounts together with its content never
+      // reliably announces. A labelled region plus explicit focus management
+      // is what actually reaches a screen reader.
+      id='experts-evidence-panel'
+      role='region'
+      aria-labelledby='experts-evidence-heading'
       style={{
         marginTop: 16,
         background: 'white',
@@ -68,14 +97,24 @@ export const ExpertEvidence = ({
         }}
       >
         <div>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
+          <h3
+            id='experts-evidence-heading'
+            ref={headingRef}
+            tabIndex={-1}
+            style={{
+              margin: 0,
+              fontSize: 17,
+              fontWeight: 700,
+              outline: 'none',
+            }}
+          >
             {person.name}
           </h3>
           <div style={{ color: '#5E5B52', fontSize: 13, marginTop: 2 }}>
-            {offices} · {matchLine} · {yearsLabel(person.evidence.years)}
+            {headerLine}
           </div>
         </div>
-        <Button variant='borderless' size='small' onClick={onClose}>
+        <Button variant='borderless' size='small' onClick={close}>
           Close
         </Button>
       </div>
@@ -98,13 +137,23 @@ export const ExpertEvidence = ({
               fontWeight: 600,
             }}
           >
-            {mode === 'evidence'
+            {retrievalFramed
               ? `Evidence · ${person.evidence.strong} strong, ${person.evidence.partial} partial, ${person.evidence.weak} weak`
               : 'Documents on these topics'}
           </h4>
           <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {list.map((d) => {
-              const pos = d.authors.findIndex((a) => a.key === person.key) + 1
+              // U11: purely defensive. `loadSearchableWorks` sets a work's
+              // authorsRaw to the UNION of the original's and its translations'
+              // authors and rank() builds DocResult.authors from that same
+              // union, so a doc in person.docIds should always contain them —
+              // but `findIndex(...) + 1` renders "author 0 of n" if it ever
+              // does not, and a wrong credit is worse than a missing one.
+              const idx = d.authors.findIndex((a) => a.key === person.key)
+              const authorLabel =
+                idx >= 0
+                  ? `author ${idx + 1} of ${d.authors.length}`
+                  : `${d.authors.length} author${d.authors.length === 1 ? '' : 's'}`
               return (
                 <li
                   key={d.docId}
@@ -160,8 +209,9 @@ export const ExpertEvidence = ({
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
-                      {[d.year, d.type, d.office].filter(Boolean).join(' · ')} ·
-                      author {pos} of {d.authors.length}
+                      {[d.year, d.type, d.office, authorLabel]
+                        .filter(Boolean)
+                        .join(' · ')}
                       {d.translations.length > 0 &&
                         ` · also in ${d.translations.length} translation${d.translations.length === 1 ? '' : 's'}`}
                     </div>

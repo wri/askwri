@@ -5,7 +5,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CITE_PRESET } from '@/config/retrieval'
 import { initializeDatabase } from '@/db/data-source'
 import { loadSearchableWorks } from '@/db/queries/expertsEvidence'
-import { rank, specificity, DEFAULT_TOP_N, MAX_TOP_N } from '@/lib/experts/rank'
+import { isTopicDegraded, TOPIC_NO_MATCH } from '@/lib/experts/degraded'
+import {
+  buildWorkIndex,
+  computeDf,
+  rank,
+  specificity,
+  DEFAULT_TOP_N,
+  MAX_TOP_N,
+} from '@/lib/experts/rank'
 import type {
   ExpertsResponse,
   MatchedTag,
@@ -67,14 +75,12 @@ function fallbackTopics(
 ): MatchedTag[] {
   const excluded = new Set(excludedTopics)
   const N = works.length
-  const byId = new Map<string, WorkRow>()
-  for (const w of works) {
-    byId.set(w.docId, w)
-    for (const tr of w.translations) byId.set(tr, w)
-  }
-  const df = new Map<string, number>()
-  for (const w of works)
-    for (const t of new Set(w.topics)) df.set(t, (df.get(t) ?? 0) + 1)
+  // Translation rows resolve to their original work (spec §2) — rank()'s own
+  // index, not a second copy of the rule.
+  const byId = buildWorkIndex(works)
+  // rank()'s own df, not a second definition of it — the fallback's df is the
+  // number the response reports, so the two must never disagree.
+  const df = computeDf(works)
   const retrievedWorks = new Set<WorkRow>()
   for (const r of retrieved) {
     const w = byId.get(r.docId)
@@ -164,6 +170,12 @@ export async function POST(req: NextRequest) {
       similarity_threshold: 0,
       include_metadata: true,
       rerank: true,
+      // No dense_weight/sparse_weight, matching the cite branch of
+      // /api/llamaindex. CITE_PRESET.alpha (0.5) happens to equal the search
+      // service's QueryRequest default, so the lanes are weighted identically
+      // today — but that equality is a coincidence, not a contract. Retune
+      // CITE_PRESET.alpha and cite mode moves while experts evidence silently
+      // does not. Send it explicitly the moment the two diverge.
       vector_top_k: CITE_PRESET.denseTopK,
       bm25_top_k: CITE_PRESET.sparseTopK,
       rerank_top_n: CITE_PRESET.rerankTopN,
@@ -228,19 +240,37 @@ export async function POST(req: NextRequest) {
       topN,
     })
     timing.rank_ms = Date.now() - t0
-    // Spec §9: when the topic facet is degraded, the tags-derived topic list
-    // is empty, and /query produced retrieved docs, populate the graph's
-    // topic nodes from the retrieved works' own accepted tags. This fills
-    // understanding.matched_topics (chips, graph, peers) but MUST NOT enter
-    // rank()'s scoring — rank() already ran with the (empty) tags-derived list.
-    const topicDegraded =
-      degraded.includes('tags_nearby') || degraded.includes('tags_nearby:topic')
-    if (topicDegraded && topics.length === 0 && retrieved.length > 0) {
+    // Spec §9: an empty tags-derived topic list plus retrieved docs means the
+    // graph would have no topic nodes at all — substitute the retrieved works'
+    // own accepted tags. The trigger is the EMPTY LIST, not the `degraded`
+    // array: /tags/nearby can answer 200 with an empty topic facet it did not
+    // name in `degraded` (older or partial deployments), and the page would
+    // then render zero chips, an edgeless graph, no peers, and a ranking that
+    // silently lost S(p) — with nothing in `degraded` to explain it. This
+    // fills understanding.matched_topics (chips, graph, peers) but MUST NOT
+    // enter rank()'s scoring — rank() already ran with the (empty)
+    // tags-derived list.
+    // I-5: never in topic_only mode. There, `score = S/maxS` and rank() has
+    // already run with an empty topic list, so every score is 0 and `people` is
+    // empty — filling the chips would show ten topics above "No one in the
+    // corpus has published near this." Spec §4.4 reserves the nothing-state for
+    // D empty AND T_topic empty; substituting chips that fed no ranking is
+    // exactly the dishonesty this fallback exists to avoid.
+    if (
+      topics.length === 0 &&
+      retrieved.length > 0 &&
+      result.mode === 'evidence'
+    ) {
       const fb = fallbackTopics(retrieved, works, excludedTopics)
       result.matchedTopics = fb
       const fbLabels = new Set(fb.map((t) => t.label))
       for (const p of result.people)
         for (const t of p.topics) if (fbLabels.has(t.label)) t.matched = true
+      // I-1: the substitution must always be visible, but WHY it happened is
+      // two different facts and the page words them differently. The service
+      // deliberately does not call "covered facet, nothing above the cosine
+      // floor" a degradation, so neither do we — that is TOPIC_NO_MATCH.
+      if (!isTopicDegraded(degraded)) degraded.push(TOPIC_NO_MATCH)
     }
     const geoDf = new Map<string, number>()
     for (const w of works)
