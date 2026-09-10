@@ -244,6 +244,26 @@ class Settings(BaseSettings):
     # answer per-doc-cap A/B; None preserves the pre-existing behaviour.
     answer_rerank_per_doc_cap: int | None = None
 
+    # Answer-mode query translation (design 2026-09-09,
+    # docs/plans/2026-09-09-answer-mode-query-translation-design.md): translate
+    # the question into the selection's non-English languages, seed the rerank
+    # candidates from a dense retrieval per translation, and rerank once per
+    # query with a max-merge. Flag-dark: off => byte-identical behavior.
+    answer_translation_enabled: bool = False
+    answer_translation_max_langs: int = 2
+    # The seed is recall, not precision — Cohere filters it. Corpus-wide dense
+    # under a translated query puts the evalset's zh evidence at ranks 59-189
+    # (measured 2026-09-09); doc-scoping trims a little more. 200 within the
+    # selection carries it. Cost note: candidates 100 + 200×langs, each rerank
+    # call bills per 100 docs — see the design doc's cost section.
+    answer_translation_seed_k: int = 200
+    # The sparse lane's 3s query_translation_timeout_s is tuned for cite-mode
+    # latency ("a slow translator must not hold a search hostage"); observed
+    # 2026-09-09, a gpt-5-mini zh translation of an answer question exceeds
+    # it (~3.2s+). Answer mode runs multi-second end to end (dense + rerank +
+    # synthesis), so it can afford its own budget.
+    answer_translation_timeout_s: float = 8.0
+
     # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those
     # values, e.g. floor -9.0, would pass everything on this scale).
