@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "queries": [
+    { "id": "q01", "query": "electric school buses", "expected_top3": [], "notes": "US-heavy; School Buses df 10" },
+    { "id": "q02", "query": "zero-emission freight trucks in China", "expected_top3": [], "notes": "" },
+    { "id": "q03", "query": "bus rapid transit financing", "expected_top3": [], "notes": "" },
+    { "id": "q04", "query": "compact urban growth in India", "expected_top3": [], "notes": "" },
+    { "id": "q05", "query": "land value capture", "expected_top3": [], "notes": "" },
+    { "id": "q06", "query": "nature-based solutions in Brazilian cities", "expected_top3": [], "notes": "" },
+    { "id": "q07", "query": "informal settlements and climate resilience", "expected_top3": [], "notes": "" },
+    { "id": "q08", "query": "pedestrian road safety", "expected_top3": [], "notes": "" },
+    { "id": "q09", "query": "public charging infrastructure", "expected_top3": [], "notes": "" },
+    { "id": "q10", "query": "cities in NDCs", "expected_top3": [], "notes": "climate governance" }
+  ]
+}
