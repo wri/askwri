@@ -19,6 +19,19 @@ DATABASE_URL comes from the environment (invoke via
 `scripts/with-remote-env.sh qa search-service/venv/bin/python <this>`).
 
 Read-only: RDS access is SELECT-only; the rerank API mutates nothing.
+
+`--pool-realistic` (2026-09-10, fix round 1 of task 3): the default 20-source batch
+(expected chunks ∪ baseline final-15) flattered the zh lift — it validated byte-exact
+against the 2026-09-09 recorded table, but Cohere scores are batch-relative: in a
+realistic ~240-source pool (the product's seed-200 under the zh OR-join ∪ standard-100
+under the EN question) the top-15 boundary sits at 0.83–0.90 and the zh fact chunks land
+AT it, not above it — which is exactly what the corrected mirror runs then measured
+(q3 1–2/5, not 4–5/5). This mode reconstructs that pool (doc-scoped dense top-200 under
+the OR-join + top-100 under the EN question, texts from QA RDS), reranks it per query,
+max-merges each map with the EN map, and predicts the final 15 (rerank_top_n=20 →
+max_results=15) — reproducing the corrected mirror results. Gate prompt variants HERE,
+not on the default batch: the default batch's absolute scores do not transfer to the
+real pipeline.
 """
 import argparse
 import json
@@ -28,6 +41,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# --- pool-realistic mode constants (product-shape mirrors) --------------------
+EMBED_REGION = "us-east-1"          # app/config.py bedrock_embed_region
+EMBED_MODEL_ID = "cohere.embed-v4:0"  # app/config.py bedrock_embed_model_id
+EMBED_DIM = 1536                    # app/config.py EMBEDDING_DIMENSIONS[cohere-embed-v4]
+SEED_K = 200                        # answer_translation_seed_k default
+EN_SEED_K = 100                     # standard candidates = rerank_candidates default
+RERANK_TOP_N = 20                   # ANSWER_PRESET.rerankTopN
+MAX_RESULTS = 15                    # ANSWER_PRESET.maxResults
 FIXTURE_PATH = REPO_ROOT / "evaluation/eval-review/evalsets/evalset_answer_02.json"
 CAPTURE_PATH = REPO_ROOT / "evaluation/answer/artifacts/capture-baseline-noselection-20260909.json"
 ARTIFACT_DIR = REPO_ROOT / "evaluation/answer/artifacts"
@@ -282,6 +304,70 @@ def rerank_scores(query, batch, client=None):
             for r in response["results"]}
 
 
+# --- pool-realistic mode ------------------------------------------------------
+
+def _embed_query(text, client=None):
+    """Query embedding via bedrock-runtime InvokeModel (cohere.embed-v4,
+    input_type=search_query) — replicates app/bedrock_embed.py::_invoke's
+    request shape without importing app.* (standalone rule above)."""
+    if client is None:
+        import boto3
+        client = boto3.client(
+            "bedrock-runtime", region_name=EMBED_REGION,
+            endpoint_url=f"https://bedrock-runtime.{EMBED_REGION}.amazonaws.com")
+    body = json.dumps({"texts": [text], "input_type": "search_query",
+                       "truncate": "END", "embedding_types": ["float"]})
+    response = client.invoke_model(modelId=EMBED_MODEL_ID, body=body)
+    return json.loads(response["body"].read())["embeddings"]["float"]
+
+
+def dense_doc_top(database_url, query_text, doc_ids, k):
+    """[chunk_id,...] — the doc-scoped dense top-k (pg_store's seed SQL shape)
+    with the query vector passed as a bracket string + explicit cast (the
+    instrument has no pgvector adapter registered)."""
+    import psycopg
+
+    qvec = _embed_query(query_text)
+    qstr = "[" + ",".join(f"{v:.9g}" for v in qvec) + "]"
+    sslmode = os.environ.get("PGSSLMODE") or "require"
+    with psycopg.connect(database_url, sslmode=sslmode) as conn:
+        rows = conn.execute(
+            "SELECT dc.legacy_chunk_id "
+            "FROM document_chunks dc "
+            "JOIN documents d ON d.id = dc.document_id "
+            "WHERE d.status = 'searchable' "
+            "AND dc.embedding_model = 'cohere-embed-v4' "
+            "AND d.external_id = ANY(%(doc_ids)s) "
+            f"ORDER BY dc.embedding::vector({EMBED_DIM}) <=> %(q)s::vector "
+            "LIMIT %(k)s",
+            {"doc_ids": list(doc_ids), "q": qstr, "k": k},
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def build_pool(seed_ids, en_ids):
+    """Seed-lane ids then EN-lane ids, deduped order-preserving (the pipeline's
+    candidate union: nothing displaced, first occurrence keeps its lane)."""
+    out = []
+    for cid in list(seed_ids) + list(en_ids):
+        if cid not in out:
+            out.append(cid)
+    return out
+
+
+def predict_final15(en_map, zh_map, top_n=RERANK_TOP_N, cut=MAX_RESULTS):
+    """The dual-query max-merge offline: per-chunk max across the two maps,
+    sorted, cut at rerank_top_n then max_results — the final 15 the eval
+    sees. Pure; [(chunk_id, merged_score), ...] in ranked order."""
+    merged = {}
+    for m in (en_map, zh_map):
+        for cid, s in m.items():
+            if s > merged.get(cid, float("-inf")):
+                merged[cid] = s
+    ranked = sorted(merged.items(), key=lambda kv: (-kv[1], kv[0]))
+    return ranked[:top_n][:cut]
+
+
 # --- reporting ---------------------------------------------------------------
 
 def print_report(queries, batch, scores_by_query, rows, all_pass,
@@ -335,6 +421,13 @@ def main(argv=None):
                         help="JSON {label: query_text} — explicit queries to "
                              "score (prompt-variant iteration); skips the "
                              "standard three and the validation gate")
+    parser.add_argument("--pool-realistic", action="store_true",
+                        help="reconstruct the product's ~240-source candidate "
+                             "pool (seed-200 under the zh OR-join + standard-100 "
+                             "under the EN question) and predict the final 15 "
+                             "(max-merge + 20→15 cut) per query — see the "
+                             "docstring; replaces the default 20-source batch "
+                             "and its recorded-table gate")
     args = parser.parse_args(argv)
 
     question, expected_ids = load_fixture_case(args.case_id)
@@ -375,8 +468,25 @@ def main(argv=None):
             if chunk["text"] is None:
                 chunk["text"] = texts[chunk["chunk_id"]]
 
-    if queries.get("machine_zh") is None and not args.queries_json:
+    if queries.get("machine_zh") is None and (not args.queries_json or args.pool_realistic):
+        # the OR-join rendering is both a standard scored query and (pool
+        # mode) the seed lane's query text
         queries["machine_zh"] = translate_orjoined(question)
+
+    if args.pool_realistic:
+        database_url = os.environ.get("DATABASE_URL")
+        if not database_url:
+            raise SystemExit("DATABASE_URL not set — invoke via "
+                             "scripts/with-remote-env.sh qa <cmd>")
+        doc_ids = sorted({c["doc_id"] for c in batch})
+        seed_ids = dense_doc_top(database_url, queries["machine_zh"], doc_ids, SEED_K)
+        en_ids = dense_doc_top(database_url, question, doc_ids, EN_SEED_K)
+        pool_ids = build_pool(seed_ids, en_ids)
+        batch = [{"chunk_id": cid, "text": None,
+                  "doc_id": cid.rsplit("_chunk_", 1)[0],
+                  "source": "P", "rank": None} for cid in pool_ids]
+        print(f"pool-realistic: {len(seed_ids)} seed + {len(en_ids)} en-lane "
+              f"-> {len(batch)}-source pool over docs {doc_ids}")
 
     scores_by_query = {}
     for label, text in queries.items():
@@ -384,7 +494,30 @@ def main(argv=None):
             raise SystemExit(f"query {label!r} is empty")
         scores_by_query[label] = rerank_scores(text, batch)
 
-    gated = not args.queries_json
+    if args.pool_realistic:
+        en_map = scores_by_query.get("en", {})
+        predictions = {}
+        for label, scores in scores_by_query.items():
+            top15 = predict_final15(en_map, scores if label != "en" else {})
+            ids15 = [cid for cid, _ in top15]
+            hits = [c for c in expected_ids if c in ids15]
+            predictions[label] = {
+                "predicted_final15": top15,
+                "expected_hits": hits,
+                "n_hits": len(hits),
+                "expected_detail": {
+                    c: {"rank": (ids15.index(c) + 1) if c in ids15 else None,
+                        "score": dict(top15).get(c)} for c in expected_ids},
+            }
+            print(f"[{label}] predicted final-15 hits: {len(hits)}/{len(expected_ids)} "
+                  f"-> {[h.rsplit('_', 1)[-1] for h in hits]}")
+        print("pool-realistic mode: the recorded-table validation gate does not "
+              "apply (it was a 20-source-batch artifact) — compare predictions "
+              "across variants instead.")
+    else:
+        predictions = None
+
+    gated = not args.queries_json and not args.pool_realistic
     rows, all_pass = validation_verdict(scores_by_query) if gated else ([], True)
     print_report(queries, batch, scores_by_query, rows, all_pass, gated=gated)
 
@@ -401,6 +534,11 @@ def main(argv=None):
     }
     if rows:
         artifact["validation"] = {"rows": rows, "passed": all_pass}
+    if predictions is not None:
+        artifact["mode"] = "pool-realistic"
+        artifact["pool"] = {"seed_k": SEED_K, "en_k": EN_SEED_K,
+                            "rerank_top_n": RERANK_TOP_N, "max_results": MAX_RESULTS}
+        artifact["predictions"] = predictions
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     out = ARTIFACT_DIR / f"probe-isolation-{args.label}.json"
     out.write_text(json.dumps(artifact, ensure_ascii=False, indent=2))
@@ -409,7 +547,6 @@ def main(argv=None):
     if gated and not all_pass:
         return 1
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -239,3 +239,27 @@ def test_main_dry_run_makes_no_calls(fake_sources, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "What about A?" in out
     assert "NEEDS_RDS" in out  # expected chunks' texts not fetched in dry-run
+
+
+# --- pool-realistic mode (pure parts) ----------------------------------------
+
+def test_build_pool_dedupes_preserving_lane_order():
+    from scripts.probe_rerank_isolation import build_pool
+    out = build_pool(["s1", "s2", "e1"], ["e1", "e3", "s2"])
+    assert out == ["s1", "s2", "e1", "e3"]
+
+
+def test_predict_final15_max_merges_and_cuts():
+    from scripts.probe_rerank_isolation import predict_final15
+    en = {"a": 0.9, "b": 0.8, "c": 0.1}
+    zh = {"a": 0.5, "d": 0.95}
+    # rerank_top_n=20 > cut=15 here; pass a small top_n to exercise both cuts
+    out = predict_final15(en, zh, top_n=3, cut=2)
+    assert [cid for cid, _ in out] == ["d", "a"]
+    assert out[0] == ("d", 0.95) and out[1] == ("a", 0.9)
+
+
+def test_predict_final15_en_only_nodes_survive():
+    from scripts.probe_rerank_isolation import predict_final15
+    out = predict_final15({"x": 0.7}, {}, top_n=20, cut=15)
+    assert out == [("x", 0.7)]
