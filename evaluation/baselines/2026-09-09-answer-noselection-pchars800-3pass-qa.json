@@ -1,0 +1,2492 @@
+{
+  "schema": "answer-eval/report@1",
+  "provenance": {
+    "fixture": {
+      "path": "/Users/gutelius/dev/askwrimvp/evaluation/eval-review/evalsets/evalset_answer_02.json",
+      "name": "evalset-answer-02",
+      "commit": "1dcbeabc909073c4141e8088cce8b7fef6de243a"
+    },
+    "target": {
+      "mode": "gateway",
+      "urls": [
+        "https://qa.askwri-app.org"
+      ],
+      "config": {
+        "status": "healthy",
+        "service": "AskWRI Search Service",
+        "environment": "qa",
+        "keyword_backend": "sparse",
+        "retrieval_backend": "postgres",
+        "timestamp": "2026-09-10T03:13:47.147085+00:00",
+        "version": "2.0.0",
+        "indexing": {
+          "in_progress": false,
+          "error": null,
+          "ready": true
+        },
+        "indexes_loaded": {
+          "vector_index": true,
+          "bm25_retriever": true
+        },
+        "documents_count": 201,
+        "document_texts_count": 201,
+        "rerankers_loaded": {
+          "answer_mode": true,
+          "cite_mode": true
+        },
+        "dense_lane": {
+          "status": "live"
+        },
+        "cache_stats": {
+          "pdfs": 0,
+          "texts": 0,
+          "nodes": 0,
+          "embeddings": 0,
+          "indexes": 0
+        }
+      }
+    },
+    "knobs": {
+      "retrieval": {},
+      "synthesis": {
+        "max_passages": 15,
+        "passage_chars": 800
+      }
+    },
+    "synthesis": {
+      "model": "gpt-5.4-mini",
+      "base_url": "https://api.openai.com/v1",
+      "prompt_hashes": {
+        "v1": "3d9f95184ac5fea90fd0c9f767f4405922c7926084c2a33965c84e9503f48aa0",
+        "v2": "30510dc2a54c079a0b0f2446fd5a6fcc3d53c99ca4fad5737171cda370e163b5"
+      }
+    },
+    "passes": 3,
+    "harness_sha": "cade2a38e18a35164fd6b6d0f1798670f1aedf0b-dirty",
+    "timestamp": "2026-09-10T03:13:47.230Z",
+    "node_version": "v24.15.0",
+    "judge": {
+      "model": "glm-5.3",
+      "base_url": "https://gw.lunaroute.com/v1",
+      "reasoning_effort": "max",
+      "prompt_hashes": {
+        "fact_recall": "a475c55ad44a51a33576024438fa94b04878cfe48d193784254dce27bb4d20f8",
+        "sentence_support": "0b37ceeb65ecdf8ba2d69165751ffcf41a4f381ef2e26b8849a86a55c4527899",
+        "unsupported_claims": "48f1c55a0b21662a09ff463dbc3c6be3a6762d2839ec9ef2f14523a02257571b",
+        "pairwise": "70621d089de45f60da8799e0367c07930ebff2bb73738db97f92fa45094007a5"
+      }
+    }
+  },
+  "header": {
+    "judge": "uncalibrated",
+    "judge_model": "glm-5.3",
+    "fixture": {
+      "path": "/Users/gutelius/dev/askwrimvp/evaluation/eval-review/evalsets/evalset_answer_02.json",
+      "name": "evalset-answer-02",
+      "commit": "1dcbeabc909073c4141e8088cce8b7fef6de243a"
+    },
+    "target": {
+      "mode": "gateway",
+      "urls": [
+        "https://qa.askwri-app.org"
+      ],
+      "config": {
+        "status": "healthy",
+        "service": "AskWRI Search Service",
+        "environment": "qa",
+        "keyword_backend": "sparse",
+        "retrieval_backend": "postgres",
+        "timestamp": "2026-09-10T03:13:47.147085+00:00",
+        "version": "2.0.0",
+        "indexing": {
+          "in_progress": false,
+          "error": null,
+          "ready": true
+        },
+        "indexes_loaded": {
+          "vector_index": true,
+          "bm25_retriever": true
+        },
+        "documents_count": 201,
+        "document_texts_count": 201,
+        "rerankers_loaded": {
+          "answer_mode": true,
+          "cite_mode": true
+        },
+        "dense_lane": {
+          "status": "live"
+        },
+        "cache_stats": {
+          "pdfs": 0,
+          "texts": 0,
+          "nodes": 0,
+          "embeddings": 0,
+          "indexes": 0
+        }
+      }
+    },
+    "synthesis_model": "gpt-5.4-mini",
+    "knobs": {
+      "retrieval": {},
+      "synthesis": {
+        "max_passages": 15,
+        "passage_chars": 800
+      }
+    },
+    "passes": 3,
+    "cases": {
+      "total": 16,
+      "approved": 0,
+      "draft": 16,
+      "rejected": 0
+    },
+    "unjudged": {
+      "total": 3,
+      "fact_recall": 0,
+      "sentence_support": 0,
+      "unsupported_claims": 3
+    },
+    "excluded_passes": {
+      "retrieval_error": 0,
+      "answer_error": 0
+    },
+    "selection_mode": "no-selection",
+    "unreachable_passes": {
+      "negative": 0,
+      "positive": 0
+    },
+    "rank_gaps": {
+      "q1_zero-emission-heavy-duty-trucks": 2,
+      "q2_bev-diesel-truck-tco-china": 2,
+      "q3_regional-vs-longhaul-adoption": 5,
+      "q4_bev-payback-periods": 1,
+      "q5_bikeshare-trip-substitution": 3,
+      "q6_bikeshare-co2-reduction": 1,
+      "q8_yantian-port-mode-shift-targets": 2
+    },
+    "cost": {
+      "retrieval_usd_total": 0.09654800000000006,
+      "retrieval_calls_reported": 48,
+      "judge": {
+        "prompt_tokens": 302373,
+        "completion_tokens": 411054,
+        "calls": 218
+      }
+    }
+  },
+  "headline": {
+    "cases": 0,
+    "retrieval": {
+      "evidence_coverage": {
+        "mean": null,
+        "cases": 0
+      },
+      "facts_no_snippet": 0,
+      "facts_no_passage": 0,
+      "doc_map": {
+        "mean": null,
+        "cases": 0
+      },
+      "attainable_recall": {
+        "mean": null,
+        "cases": 0
+      },
+      "distinct_docs": {
+        "mean": null,
+        "cases": 0
+      },
+      "top_doc_share": {
+        "mean": null,
+        "cases": 0
+      },
+      "chunk_id_hit_rate": {
+        "mean": null,
+        "cases": 0
+      },
+      "selection_utilization": {
+        "mean": null,
+        "cases": 0
+      }
+    },
+    "synthesis": {
+      "fact_recall_strict": {
+        "mean": null,
+        "cases": 0
+      },
+      "fact_recall_lenient": {
+        "mean": null,
+        "cases": 0
+      },
+      "citation_precision": {
+        "mean": null,
+        "cases": 0
+      },
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 0,
+      "unsupported_claims_rate": {
+        "mean": null,
+        "cases": 0
+      }
+    },
+    "compliance": {
+      "passes": 0,
+      "cites_valid": 0,
+      "parsed_clean": 0,
+      "all_english": 0,
+      "sentence_counts": {}
+    },
+    "abstention": {
+      "negative_cases": 0,
+      "passes": 0,
+      "abstained": 0,
+      "rate": 0
+    }
+  },
+  "draft_block": {
+    "cases": 16,
+    "retrieval": {
+      "evidence_coverage": {
+        "mean": 0.15666666666666668,
+        "cases": 10
+      },
+      "facts_no_snippet": 0,
+      "facts_no_passage": 78,
+      "doc_map": {
+        "mean": 0.7703125,
+        "cases": 16
+      },
+      "attainable_recall": {
+        "mean": 0.84375,
+        "cases": 16
+      },
+      "distinct_docs": {
+        "mean": 2.75,
+        "cases": 16
+      },
+      "top_doc_share": {
+        "mean": 0.8291666666666667,
+        "cases": 16
+      },
+      "chunk_id_hit_rate": {
+        "mean": 0.09857142857142856,
+        "cases": 10
+      },
+      "selection_utilization": {
+        "mean": 0.2297462642276884,
+        "cases": 16
+      }
+    },
+    "synthesis": {
+      "fact_recall_strict": {
+        "mean": 0.15069444444444446,
+        "cases": 16
+      },
+      "fact_recall_lenient": {
+        "mean": 0.6145833333333333,
+        "cases": 16
+      },
+      "citation_precision": {
+        "mean": 0.9930555555555556,
+        "cases": 16
+      },
+      "unsupported_claims_count": 9,
+      "unsupported_claims_judged_passes": 45,
+      "unsupported_claims_rate": {
+        "mean": 0.08333333333333331,
+        "cases": 16
+      }
+    },
+    "compliance": {
+      "passes": 48,
+      "cites_valid": 48,
+      "parsed_clean": 48,
+      "all_english": 48,
+      "sentence_counts": {
+        "2": 19,
+        "3": 29
+      }
+    },
+    "abstention": {
+      "negative_cases": 0,
+      "passes": 0,
+      "abstained": 0,
+      "rate": 0
+    }
+  },
+  "per_case": [
+    {
+      "id": "q1_zero-emission-heavy-duty-trucks",
+      "question": "What is the projected market penetration rate of new energy heavy-duty trucks in China through 2035?",
+      "query_type": "quantitative_projection",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2025_zero-emission-heavy-duty-trucks_00015",
+          "2025_charging-toward-2035-policies-to-accelerate-zero_7455"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_14",
+            "page": 7,
+            "text_snippet": "在测算新能源重卡的成本回收期与TCO过程中，本研究识别并量化的关键决策变量不仅限于成本项，还包括里程焦虑、载质量损失等非成本因素，以全面反映运输企业（尤其是小微运输企业）的采购决策考量。\n\n其次，为评估需求侧政策对新能源重卡推广的作用，本文构建了两类政策情景（见表ES-1）：第一类为现有政策情景，涵盖“以旧换新”补贴与新能源汽车车辆购置税减免等政策；第二类为强化政策情景，包括额外政策，如新能源重卡道路通行费减免、充电基础设施加速部署等。",
+            "text_snippet_translation_en": "In estimating ZET payback periods and TCO, this study identifies and quantifies key decision variables beyond cost items alone, including non-cost factors such as range anxiety and payload loss, to fully reflect the purchasing considerations of transport enterprises (especially micro and small transport enterprises). Second, to evaluate the effect of demand-side policies on ZET adoption, this paper constructs two categories of policy scenarios (see Table ES-1): the first is the current-policy scenario, covering policies such as the trade-in subsidy and the new-energy vehicle purchase-tax exemption; the second is the enhanced-policy scenario, which includes additional policies such as road-toll relief for ZETs and accelerated deployment of charging infrastructure.",
+            "supports_key_fact": "The study evaluates two policy scenario categories beyond the no-policy baseline: current-policy (covering the trade-in subsidy and the purchase-tax exemption) and enhanced-policy (additional measures such as road-toll relief and accelerated charging infrastructure)."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_25",
+            "page": 8,
+            "text_snippet": "来源：WRI作者汇总。\n\n6\n\nWRI.ORG.CN\n\n## 主要研究结论\n\n本文测算了MY2025—2035期间，新能源重卡在区域运输场景与长途运输场景中的成本回收期。TCO与市场渗透率，并将5年内回收成本作为区域运输场景中新能源重卡具备成本竞争力的阈值，在长途运输场景中，该阈值设定为4年内回收成本。\n\n主要研究结果如下：\n\n**第一，无政策情景下，区域运输场景中新能源重卡的市场渗透率在MY2030前有望达到2%~17%的水平；但长途运输场景中，新能源重卡的推广在MY2035前仅处于起步阶段，市场渗透率持续处于低位。**\n\n在区域与长途运输场景中，新能源半挂牵引车的推广潜力明显高于新能源重型载货汽车。",
+            "text_snippet_translation_en": "Source: compiled by WRI authors. [p.6, WRI.ORG.CN] ## Key findings. This paper estimates ZET payback periods, TCO, and market penetration in the regional-transport and long-haul-transport applications over MY2025-2035, using a payback period within 5 years as the cost-competitiveness threshold for regional transport, and within 4 years for long-haul transport. The main findings are as follows: **First, under the no-policy scenario, ZET market penetration in the regional-transport application is expected to reach 2%-17% by MY2030; but in the long-haul-transport application, ZET adoption remains at an early stage through MY2035, with market penetration persistently low.** In both the regional and long-haul applications, the adoption potential of zero-emission semi-tractors is markedly higher than that of zero-emission heavy cargo (straight) trucks.",
+            "supports_key_fact": "Under the no-policy scenario, regional transport is projected to reach 2%-17% market penetration by MY2030, while long-haul transport remains at a nascent stage with persistently low penetration through MY2035."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_209",
+            "page": 62,
+            "text_snippet": "而新能源汽车车辆购置税减免与氢燃料电池汽车示范城市群补贴的作用相对有限(见图18):\n\n- 实施“以旧换新”补贴后,区域运输场景下,长年行驶里程的纯电动半挂牵引车将在MY2027实现5年内回收成本——较无政策情景提前三年,其市场渗透率预计将在MY2027上升至10%。\n- 新能源汽车车辆购置税减免虽有助于缩短成本回收期,但效果较为有限,未能使纯电动半挂牵引车在MY2025—2027期间具备成本竞争力。\n\n- 氢燃料电池汽车示范城市群补贴虽可降低氢燃料电池重卡的购置成本,但对高昂运营成本的改善作用有限。在本研究假设下,",
+            "text_snippet_translation_en": "By contrast, the new-energy vehicle purchase-tax exemption and the hydrogen fuel-cell vehicle demonstration-city-cluster subsidy have relatively limited effects (see Figure 18): - After the trade-in subsidy is implemented, in the regional-transport application, high-annual-mileage battery-electric semi-tractors will achieve a payback period within 5 years by MY2027 - three years earlier than under the no-policy scenario - with market penetration projected to rise to 10% by MY2027. - The new-energy vehicle purchase-tax exemption, while helping to shorten the payback period somewhat, has a relatively limited effect, and does not make battery-electric semi-tractors cost-competitive during MY2025-2027. - The hydrogen fuel-cell vehicle demonstration-city-cluster subsidy can lower the purchase cost of fuel-cell trucks, but has a limited effect on improving their high operating costs. Under this study's assumptions, [text continues]",
+            "supports_key_fact": "Under the current-policy scenario, the trade-in subsidy alone lifts the market penetration of high-annual-mileage battery-electric semi-tractors in regional transport to about 10% by MY2027 (three years earlier than the no-policy trajectory)."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_29",
+            "page": 9,
+            "text_snippet": "若缺乏后续政策支持，其市场渗透率可能出现回落（见图ES-2）。\n\n**第三，与现有政策相比，本研究所分析的强化政策有望显著提升新能源重卡在区域运输场景中的市场渗透率；而在长途运输场景中，则需要更强有力且持续的政策支持，方可在MY2035前达到一定的市场渗透率。具体而言：**\n\n在现有政策与强化政策叠加作用下，新能源重卡在区域运输场景中的市场渗透率呈现强劲增长——预计在MY2027—2030期间，其市场渗透率有望超过50%（见图ES-3）。",
+            "text_snippet_translation_en": "Without continued policy support after that, market penetration could decline again (see Figure ES-2). **Third, compared with current policy, the enhanced policies analyzed in this study are expected to significantly increase ZET market penetration in the regional-transport application; in the long-haul-transport application, stronger and sustained policy support is needed to reach a meaningful level of market penetration by MY2035. Specifically:** Under the combined effect of current and enhanced policy, ZET market penetration in the regional-transport application shows strong growth - projected to exceed 50% during MY2027-2030 (see Figure ES-3).",
+            "supports_key_fact": "Under the enhanced-policy scenario (current + enhanced combined), regional-transport penetration is projected to exceed 50% during MY2027-2030, while long-haul penetration grows slowly until a sharp acceleration in MY2032-2035 - indicating long-haul needs sustained policy support through 2035 to reach meaningful levels."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_30",
+            "page": 9,
+            "text_snippet": "在强化政策推动下，新能源重卡在长途运输场景中的市场渗透率，虽可能在MY2035达到较高市场渗透率，但其显著增长主要出现在MY2032—2035间（见图ES-4）。这表明针对长途运输的政策支持可能需持续至2035年左右才显效。\n\n图 ES-2 | 现有政策情景下新能源重卡的市场渗透率（区域运输场景，MY2024—2035）\n\n![img-7.jpeg](img-7.jpeg)\n\n驶向2035：中国新能源重卡在区域与长途运输场景中的推广潜力研究 | 7\n\n图 ES-2 | 现有政策情景下新能源重卡的市场渗透率 (区域运输场景, MY2024—2035) (续)\n\n![img-8.jpeg](img-8.jpeg)\n\n重型载货汽车: AVKT=60,000 km (RD)\n\n![img-9.jpeg](img-9.jpeg)\n\n重型载货汽车: AVKT=100,000 km (RD)\n\n!",
+            "text_snippet_translation_en": "Under enhanced policy, ZET market penetration in the long-haul-transport application, while it may reach a relatively high level by MY2035, sees its significant growth occur mainly between MY2032 and MY2035 (see Figure ES-4). This indicates that policy support for long-haul transport may need to be sustained through around 2035 before it takes full effect. [Followed by Figure ES-2 caption/image references: ZET market penetration under the current-policy scenario, regional-transport application, MY2024-2035.]",
+            "supports_key_fact": "Under the enhanced-policy scenario (current + enhanced combined), regional-transport penetration is projected to exceed 50% during MY2027-2030, while long-haul penetration grows slowly until a sharp acceleration in MY2032-2035 - indicating long-haul needs sustained policy support through 2035 to reach meaningful levels."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "The report models three scenarios - no-policy, current-policy, and enhanced-policy (which adds further demand-side measures beyond the current-policy scenario) - to project zero-emission heavy-duty truck market penetration in China through 2035. Without new policy, regional-transport penetration is projected to reach only 2%-17% by MY2030, while long-haul adoption remains at a nascent, low-level stage through MY2035. The trade-in subsidy under current policy is projected to lift high-annual-mileage battery-electric semi-tractor penetration in regional transport to about 10% by MY2027. Under the combined current + enhanced policy scenario, regional-transport penetration is projected to exceed 50% during MY2027-2030, whereas long-haul penetration grows slowly until an acceleration in MY2032-2035, indicating that long-haul policy support needs to be sustained through 2035.",
+        "key_facts": [
+          "The study evaluates two policy scenario categories beyond the no-policy baseline: current-policy (covering the trade-in subsidy and the purchase-tax exemption) and enhanced-policy (additional measures such as road-toll relief and accelerated charging infrastructure).",
+          "Under the no-policy scenario, regional transport is projected to reach 2%-17% market penetration by MY2030, while long-haul transport remains at a nascent stage with persistently low penetration through MY2035.",
+          "Under the current-policy scenario, the trade-in subsidy alone lifts the market penetration of high-annual-mileage battery-electric semi-tractors in regional transport to about 10% by MY2027 (three years earlier than the no-policy trajectory).",
+          "Under the enhanced-policy scenario (current + enhanced combined), regional-transport penetration is projected to exceed 50% during MY2027-2030, while long-haul penetration grows slowly until a sharp acceleration in MY2032-2035 - indicating long-haul needs sustained policy support through 2035 to reach meaningful levels."
+        ]
+      },
+      "source_document_id": "00be4a1d-33cc-4b56-a4d5-d15af0a5cc27",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2025_zero-emission-heavy-duty-trucks_00015) has a possible English twin (2025_charging-toward-2035-policies-to-accelerate-zero_7455). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document (docreview_20260807.md doc review 1); expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0.25,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "chunk_id_hit_rate": 0.2,
+          "selection_utilization": 0.6666666666666666,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_unjudged": true,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0.25,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "chunk_id_hit_rate": 0.2,
+          "selection_utilization": 0.6666666666666666,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0.25,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "chunk_id_hit_rate": 0.2,
+          "selection_utilization": 0.6666666666666666,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0.25,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 2,
+      "top_doc_share": 0.9333333333333332,
+      "chunk_id_hit_rate": 0.20000000000000004,
+      "selection_utilization": 0.6666666666666666,
+      "fact_recall_strict": 0,
+      "fact_recall_lenient": 0.75,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 2,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q2_bev-diesel-truck-tco-china",
+      "question": "How does total cost of ownership compare between battery electric and diesel heavy-duty trucks in China?",
+      "query_type": "cost_comparison",
+      "difficulty": "hard",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2025_zero-emission-heavy-duty-trucks_00015",
+          "2025_charging-toward-2035-policies-to-accelerate-zero_7455"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_26",
+            "page": 9,
+            "text_snippet": "**\n\n在区域与长途运输场景中，新能源半挂牵引车的推广潜力明显高于新能源重型载货汽车。这主要是因为新能源载货汽车与柴油载货汽车之间有更大的TCO成本差：一方面，新能源重型载货汽车的载质量损失问题比新能源半挂牵引车更为突出；另一方面，柴油重型载货汽车本身能耗更低、购置成本也低于柴油半挂牵引车，进一步增加了新能源重型载货汽车推广的难度。\n\n在技术路线方面，纯电动重卡在区域运输场景中更具成本竞争力，预计将占据主导地位。",
+            "text_snippet_translation_en": "[Continuing from the previous bolded finding.] In both the regional and long-haul applications, the adoption potential of zero-emission semi-tractors is markedly higher than that of zero-emission heavy cargo (straight) trucks. This is mainly because there is a larger TCO gap between zero-emission and diesel straight (cargo) trucks: on one hand, the payload-loss problem of zero-emission straight trucks is more pronounced than for zero-emission semi-tractors; on the other hand, diesel straight trucks themselves consume less energy and have lower purchase costs than diesel semi-tractors, which further increases the difficulty of promoting zero-emission straight trucks. In terms of technology pathway, battery electric trucks are more cost-competitive in the regional-transport application and are expected to dominate.",
+            "supports_key_fact": "Battery electric trucks are more cost-competitive than diesel trucks in regional transport and are projected to dominate that market segment. | The TCO gap versus diesel is larger for heavy cargo (straight) trucks than for semi-tractors, because cargo trucks face bigger payload losses and diesel cargo trucks already have lower baseline energy consumption and purchase costs than diesel semi-tractors."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_213",
+            "page": 64,
+            "text_snippet": "研究结果表明，在本文所分析的现有政策中，“以旧换新”补贴和氢燃料电池汽车示范城市群补贴对区域运输场景中新能源重卡购买阶段的资本支出影响最为显著，导致其在MY2025—2030期间出现明显波动（见图19）。对短续航里程纯电动重卡而言，这一现象尤为突出：\n\n- “以旧换新”补贴后，短续航里程纯电动重卡与柴油重卡的车辆资本支出差距将由MY2027的15万~26万元缩小至3.5万~12万元。然而，该政策将于2028年终止，此后两者差距将再次扩大至13万元以上，直至MY2030才会回落至10万元以内。",
+            "text_snippet_translation_en": "The results show that among the current policies analyzed in this study, the trade-in subsidy and the hydrogen fuel-cell vehicle demonstration-city-cluster subsidy have the most significant effect on capex during the ZET purchase phase in the regional-transport application, causing notable fluctuation during MY2025-2030 (see Figure 19). This is especially pronounced for short-range battery electric trucks: - After the trade-in subsidy, the capex gap between short-range battery electric trucks and diesel trucks narrows from CNY 150,000-260,000 in MY2027 to CNY 35,000-120,000. However, this policy expires in 2028, after which the gap widens again to over CNY 130,000, not falling back below CNY 100,000 until MY2030.",
+            "supports_key_fact": "For a short-range battery electric truck versus a comparable diesel heavy-duty truck in regional transport, the capex gap narrows from CNY 150,000-260,000 in MY2027 to CNY 35,000-120,000 with the trade-in subsidy, then widens back above CNY 130,000 once the subsidy ends in 2028, not dropping below CNY 100,000 again until MY2030."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Battery electric trucks (BETs) are found to be more cost-competitive than diesel in regional transport and are projected to dominate that segment. The total-cost-of-ownership gap versus diesel is wider for heavy cargo (straight) trucks than for semi-tractors, mainly because zero-emission cargo trucks suffer larger payload losses and because diesel cargo trucks already have lower baseline energy use and purchase costs than diesel semi-tractors. For a short-range battery electric truck versus a comparable diesel heavy-duty truck in regional transport, the capex gap narrows from CNY 150,000-260,000 in MY2027 to CNY 35,000-120,000 once the trade-in subsidy applies, then widens back above CNY 130,000 after the subsidy expires in 2028, not falling back below CNY 100,000 until MY2030.",
+        "key_facts": [
+          "Battery electric trucks are more cost-competitive than diesel trucks in regional transport and are projected to dominate that market segment.",
+          "The TCO gap versus diesel is larger for heavy cargo (straight) trucks than for semi-tractors, because cargo trucks face bigger payload losses and diesel cargo trucks already have lower baseline energy consumption and purchase costs than diesel semi-tractors.",
+          "For a short-range battery electric truck versus a comparable diesel heavy-duty truck in regional transport, the capex gap narrows from CNY 150,000-260,000 in MY2027 to CNY 35,000-120,000 with the trade-in subsidy, then widens back above CNY 130,000 once the subsidy ends in 2028, not dropping below CNY 100,000 again until MY2030."
+        ]
+      },
+      "source_document_id": "00be4a1d-33cc-4b56-a4d5-d15af0a5cc27",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2025_zero-emission-heavy-duty-trucks_00015) has a possible English twin (2025_charging-toward-2035-policies-to-accelerate-zero_7455). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document (docreview_20260807.md doc review 1); expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.325,
+          "attainable_recall": 1,
+          "distinct_docs": 9,
+          "top_doc_share": 0.26666666666666666,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.45,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.325,
+          "attainable_recall": 1,
+          "distinct_docs": 9,
+          "top_doc_share": 0.26666666666666666,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.45,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.3333333333333333,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.325,
+          "attainable_recall": 1,
+          "distinct_docs": 9,
+          "top_doc_share": 0.26666666666666666,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.45,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0,
+      "doc_map": 0.325,
+      "attainable_recall": 1,
+      "distinct_docs": 9,
+      "top_doc_share": 0.26666666666666666,
+      "chunk_id_hit_rate": 0,
+      "selection_utilization": 0.45,
+      "fact_recall_strict": 0,
+      "fact_recall_lenient": 0.1111111111111111,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q3_regional-vs-longhaul-adoption",
+      "question": "What is the difference in zero-emission truck adoption potential between regional transport and long-haul transport scenarios?",
+      "query_type": "comparative_analysis",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2025_zero-emission-heavy-duty-trucks_00015",
+          "2025_charging-toward-2035-policies-to-accelerate-zero_7455"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_209",
+            "page": 62,
+            "text_snippet": "而新能源汽车车辆购置税减免与氢燃料电池汽车示范城市群补贴的作用相对有限(见图18):\n\n- 实施“以旧换新”补贴后,区域运输场景下,长年行驶里程的纯电动半挂牵引车将在MY2027实现5年内回收成本——较无政策情景提前三年,其市场渗透率预计将在MY2027上升至10%。\n- 新能源汽车车辆购置税减免虽有助于缩短成本回收期,但效果较为有限,未能使纯电动半挂牵引车在MY2025—2027期间具备成本竞争力。\n\n- 氢燃料电池汽车示范城市群补贴虽可降低氢燃料电池重卡的购置成本,但对高昂运营成本的改善作用有限。在本研究假设下,",
+            "text_snippet_translation_en": "By contrast, the new-energy vehicle purchase-tax exemption and the hydrogen fuel-cell vehicle demonstration-city-cluster subsidy have relatively limited effects (see Figure 18): - After the trade-in subsidy is implemented, in the regional-transport application, high-annual-mileage battery-electric semi-tractors will achieve a payback period within 5 years by MY2027 - three years earlier than under the no-policy scenario - with market penetration projected to rise to 10% by MY2027. - The new-energy vehicle purchase-tax exemption, while helping to shorten the payback period somewhat, has a relatively limited effect, and does not make battery-electric semi-tractors cost-competitive during MY2025-2027. - The hydrogen fuel-cell vehicle demonstration-city-cluster subsidy can lower the purchase cost of fuel-cell trucks, but has a limited effect on improving their high operating costs. Under this study's assumptions, [text continues]",
+            "supports_key_fact": "Regional transport moves much faster toward competitiveness: with the trade-in subsidy, high-annual-mileage battery electric semi-tractors reach a 5-year payback by MY2027, and penetration crosses 50% during MY2027-2030 under the combined current-plus-enhanced policy scenario."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_29",
+            "page": 9,
+            "text_snippet": "若缺乏后续政策支持，其市场渗透率可能出现回落（见图ES-2）。\n\n**第三，与现有政策相比，本研究所分析的强化政策有望显著提升新能源重卡在区域运输场景中的市场渗透率；而在长途运输场景中，则需要更强有力且持续的政策支持，方可在MY2035前达到一定的市场渗透率。具体而言：**\n\n在现有政策与强化政策叠加作用下，新能源重卡在区域运输场景中的市场渗透率呈现强劲增长——预计在MY2027—2030期间，其市场渗透率有望超过50%（见图ES-3）。",
+            "text_snippet_translation_en": "Without continued policy support after that, market penetration could decline again (see Figure ES-2). **Third, compared with current policy, the enhanced policies analyzed in this study are expected to significantly increase ZET market penetration in the regional-transport application; in the long-haul-transport application, stronger and sustained policy support is needed to reach a meaningful level of market penetration by MY2035. Specifically:** Under the combined effect of current and enhanced policy, ZET market penetration in the regional-transport application shows strong growth - projected to exceed 50% during MY2027-2030 (see Figure ES-3).",
+            "supports_key_fact": "Regional transport moves much faster toward competitiveness: with the trade-in subsidy, high-annual-mileage battery electric semi-tractors reach a 5-year payback by MY2027, and penetration crosses 50% during MY2027-2030 under the combined current-plus-enhanced policy scenario."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_25",
+            "page": 8,
+            "text_snippet": "来源：WRI作者汇总。\n\n6\n\nWRI.ORG.CN\n\n## 主要研究结论\n\n本文测算了MY2025—2035期间，新能源重卡在区域运输场景与长途运输场景中的成本回收期。TCO与市场渗透率，并将5年内回收成本作为区域运输场景中新能源重卡具备成本竞争力的阈值，在长途运输场景中，该阈值设定为4年内回收成本。\n\n主要研究结果如下：\n\n**第一，无政策情景下，区域运输场景中新能源重卡的市场渗透率在MY2030前有望达到2%~17%的水平；但长途运输场景中，新能源重卡的推广在MY2035前仅处于起步阶段，市场渗透率持续处于低位。**\n\n在区域与长途运输场景中，新能源半挂牵引车的推广潜力明显高于新能源重型载货汽车。",
+            "text_snippet_translation_en": "Source: compiled by WRI authors. [p.6, WRI.ORG.CN] ## Key findings. This paper estimates ZET payback periods, TCO, and market penetration in the regional-transport and long-haul-transport applications over MY2025-2035, using a payback period within 5 years as the cost-competitiveness threshold for regional transport, and within 4 years for long-haul transport. The main findings are as follows: **First, under the no-policy scenario, ZET market penetration in the regional-transport application is expected to reach 2%-17% by MY2030; but in the long-haul-transport application, ZET adoption remains at an early stage through MY2035, with market penetration persistently low.** In both the regional and long-haul applications, the adoption potential of zero-emission semi-tractors is markedly higher than that of zero-emission heavy cargo (straight) trucks.",
+            "supports_key_fact": "Long-haul transport lags substantially, remaining nascent under the no-policy scenario through MY2035, with real growth only emerging in MY2032-2035 even under the enhanced-policy scenario."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_30",
+            "page": 9,
+            "text_snippet": "在强化政策推动下，新能源重卡在长途运输场景中的市场渗透率，虽可能在MY2035达到较高市场渗透率，但其显著增长主要出现在MY2032—2035间（见图ES-4）。这表明针对长途运输的政策支持可能需持续至2035年左右才显效。\n\n图 ES-2 | 现有政策情景下新能源重卡的市场渗透率（区域运输场景，MY2024—2035）\n\n![img-7.jpeg](img-7.jpeg)\n\n驶向2035：中国新能源重卡在区域与长途运输场景中的推广潜力研究 | 7\n\n图 ES-2 | 现有政策情景下新能源重卡的市场渗透率 (区域运输场景, MY2024—2035) (续)\n\n![img-8.jpeg](img-8.jpeg)\n\n重型载货汽车: AVKT=60,000 km (RD)\n\n![img-9.jpeg](img-9.jpeg)\n\n重型载货汽车: AVKT=100,000 km (RD)\n\n!",
+            "text_snippet_translation_en": "Under enhanced policy, ZET market penetration in the long-haul-transport application, while it may reach a relatively high level by MY2035, sees its significant growth occur mainly between MY2032 and MY2035 (see Figure ES-4). This indicates that policy support for long-haul transport may need to be sustained through around 2035 before it takes full effect. [Followed by Figure ES-2 caption/image references: ZET market penetration under the current-policy scenario, regional-transport application, MY2024-2035.]",
+            "supports_key_fact": "Long-haul transport lags substantially, remaining nascent under the no-policy scenario through MY2035, with real growth only emerging in MY2032-2035 even under the enhanced-policy scenario."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_27",
+            "page": 9,
+            "text_snippet": "在技术路线方面，纯电动重卡在区域运输场景中更具成本竞争力，预计将占据主导地位。而在长途运输场景（尤其是半挂牵引车）中，最优技术路线仍存在不确定性：在日行驶里程较短、时效要求低且承运轻抛货（即无载质量损失）的长途运输中，纯电动重卡更具优势；而在日行驶里程长、时效要求高$^{2}$且承运重货的长途运输中，氢燃料电池重卡的经济性更为突出。\n\n**第二，本研究评估的现行政策能有效提升新能源重卡市场渗透率，尤其对区域运输场景中年行驶里程较长的纯电动半挂牵引车效果最为显著（见图ES-2）。",
+            "text_snippet_translation_en": "In terms of technology pathway, battery electric trucks are more cost-competitive in the regional-transport application and are expected to dominate. In the long-haul-transport application (especially for semi-tractors), the optimal technology pathway remains uncertain: for long-haul routes with shorter daily mileage, low time-sensitivity, and light cargo (i.e. no payload loss), battery electric trucks have the advantage; for long-haul routes with longer daily mileage, high time-sensitivity, and heavy cargo, fuel-cell trucks are more economical. **Second, the current policies evaluated in this study effectively raise ZET market penetration, with the strongest effect on high-annual-mileage battery electric semi-tractors in the regional-transport application (see Figure ES-2).",
+            "supports_key_fact": "The optimal technology also differs by application: battery electric trucks dominate regional transport, while in long-haul, BEVs are more competitive on shorter-daily-mileage, low-time-sensitivity, light-cargo (no payload-loss) routes, and fuel-cell trucks (FCEVs) are more competitive on longer-daily-mileage, time-sensitive, heavy-cargo routes."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Regional transport moves toward zero-emission competitiveness much faster than long-haul: with the current-policy trade-in subsidy, high-annual-mileage battery electric semi-tractors reach a 5-year payback by MY2027, and under the combined current-plus-enhanced policy scenario, regional penetration exceeds 50% during MY2027-2030. Long-haul transport lags substantially - it remains nascent under the no-policy scenario through MY2035, and even under enhanced policy its real growth only emerges in MY2032-2035. The optimal technology also differs: battery electric trucks dominate regional transport, while in long-haul, BETs are more competitive on shorter-daily-mileage, low-time-sensitivity, light-cargo (no payload-loss) routes, and fuel-cell trucks are more economical on longer-daily-mileage, time-sensitive, heavy-cargo routes.",
+        "key_facts": [
+          "Regional transport moves much faster toward competitiveness: with the trade-in subsidy, high-annual-mileage battery electric semi-tractors reach a 5-year payback by MY2027, and penetration crosses 50% during MY2027-2030 under the combined current-plus-enhanced policy scenario.",
+          "Long-haul transport lags substantially, remaining nascent under the no-policy scenario through MY2035, with real growth only emerging in MY2032-2035 even under the enhanced-policy scenario.",
+          "The optimal technology also differs by application: battery electric trucks dominate regional transport, while in long-haul, BEVs are more competitive on shorter-daily-mileage, low-time-sensitivity, light-cargo (no payload-loss) routes, and fuel-cell trucks (FCEVs) are more competitive on longer-daily-mileage, time-sensitive, heavy-cargo routes."
+        ]
+      },
+      "source_document_id": "00be4a1d-33cc-4b56-a4d5-d15af0a5cc27",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2025_zero-emission-heavy-duty-trucks_00015) has a possible English twin (2025_charging-toward-2035-policies-to-accelerate-zero_7455). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document (docreview_20260807.md doc review 1); expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.6666666666666666,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.2222222222222222,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 1,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 1,
+          "unsupported_claims_rate": 0.5,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.6666666666666666,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.2222222222222222,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 1,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 1,
+          "unsupported_claims_rate": 0.5,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.6666666666666666,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.2222222222222222,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 1,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 2,
+      "top_doc_share": 0.6666666666666666,
+      "chunk_id_hit_rate": 0,
+      "selection_utilization": 0.2222222222222222,
+      "fact_recall_strict": 0,
+      "fact_recall_lenient": 1,
+      "citation_precision": 1,
+      "unsupported_claims_count": 2,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0.3333333333333333
+    },
+    {
+      "id": "q4_bev-payback-periods",
+      "question": "What are the payback periods for battery electric semi-trucks compared to diesel trucks in China?",
+      "query_type": "payback_analysis",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2025_zero-emission-heavy-duty-trucks_00015",
+          "2025_charging-toward-2035-policies-to-accelerate-zero_7455"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_166",
+            "page": 45,
+            "text_snippet": "[img-48.jpeg](img-48.jpeg)\n\n骏向2035: 中国新能源重卡在区域与长途运输场景中的推广潜力研究 | 43\n\n# 预计MY2030—2034期间，新能源重卡在区域运输场景中具备成本竞争力，但在长途运输场景中仍处于推广初期\n\n本章测算了MY2024—2035期间，在无任何激励政策的情况下，新能源重卡在区域运输场景与长途运输场景中的成本回收期与市场渗透率。研究重点为判断区域运输场景中新能源重卡成本回收期何时缩短至5年以内，以及长途运输场景中何时降至4年以内——这两个时间点被视为运输企业更可能购买新能源重卡的关键阈值，并在此基础上预测其在各场景下的市场渗透率。",
+            "text_snippet_translation_en": "[Image reference.] Charging toward 2035: Policies to accelerate zero-emission heavy-duty trucks in China's regional and long-haul freight | 43. # ZETs are projected to become cost-competitive in the regional-transport application by MY2030-2034, but remain at an early adoption stage in the long-haul-transport application. This chapter estimates ZET payback periods and market penetration in the regional and long-haul applications over MY2024-2035 with no incentive policy in place. The research focus is determining when the ZET payback period in the regional-transport application shortens to within 5 years, and when it drops to within 4 years in the long-haul-transport application - these two thresholds are treated as the points at which transport enterprises become more likely to purchase ZETs - and forecasting market penetration on this basis.",
+            "supports_key_fact": "The study defines truck cost-competitiveness thresholds as a payback period of 5 years or less for regional transport and 4 years or less for long-haul transport."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_209",
+            "page": 62,
+            "text_snippet": "而新能源汽车车辆购置税减免与氢燃料电池汽车示范城市群补贴的作用相对有限(见图18):\n\n- 实施“以旧换新”补贴后,区域运输场景下,长年行驶里程的纯电动半挂牵引车将在MY2027实现5年内回收成本——较无政策情景提前三年,其市场渗透率预计将在MY2027上升至10%。\n- 新能源汽车车辆购置税减免虽有助于缩短成本回收期,但效果较为有限,未能使纯电动半挂牵引车在MY2025—2027期间具备成本竞争力。\n\n- 氢燃料电池汽车示范城市群补贴虽可降低氢燃料电池重卡的购置成本,但对高昂运营成本的改善作用有限。在本研究假设下,",
+            "text_snippet_translation_en": "By contrast, the new-energy vehicle purchase-tax exemption and the hydrogen fuel-cell vehicle demonstration-city-cluster subsidy have relatively limited effects (see Figure 18): - After the trade-in subsidy is implemented, in the regional-transport application, high-annual-mileage battery-electric semi-tractors will achieve a payback period within 5 years by MY2027 - three years earlier than under the no-policy scenario - with market penetration projected to rise to 10% by MY2027. - The new-energy vehicle purchase-tax exemption, while helping to shorten the payback period somewhat, has a relatively limited effect, and does not make battery-electric semi-tractors cost-competitive during MY2025-2027. - The hydrogen fuel-cell vehicle demonstration-city-cluster subsidy can lower the purchase cost of fuel-cell trucks, but has a limited effect on improving their high operating costs. Under this study's assumptions, [text continues]",
+            "supports_key_fact": "With the trade-in subsidy, high-annual-mileage battery electric semi-tractors in regional transport reach the 5-year payback threshold by MY2027, three years earlier than under the no-policy scenario. | The vehicle purchase-tax exemption alone is not enough to make battery electric semi-tractors competitive during MY2025-2027."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_176",
+            "page": 48,
+            "text_snippet": "对于载货汽车而言, 纯电动重卡则较氢燃料电池重卡更具成本竞争力。与区域运输场景类似, 在缺乏政策支持的情况下, 长途运输中纯电动重卡的BET400_MCS成本回收期仍长于BET400_DCFC与BET800, 主要原因仍是充电成本偏高与里程焦虑问题突出。\n\n在长途运输场景中, 新能源半挂牵引车同样较新能源载货汽车更具有成本竞争力 (见图11):\n\n- 到MY2035, 在长途运输场景中, 长年行驶里程的新能源半挂牵引车成本竞争力较为明显, 但短年行驶里程的新能源半挂牵引车经济性欠佳; 在长年行驶里程工况下, 到MY2035, 纯电动重卡与氢燃料电池重卡均接近具备成本竞争力,",
+            "text_snippet_translation_en": "For cargo (straight) trucks, battery electric trucks are more cost-competitive than fuel-cell trucks. As in the regional-transport application, without policy support, the payback period for battery electric trucks on the BET400_MCS pathway in long-haul remains longer than for BET400_DCFC and BET800, again mainly due to high charging costs and range anxiety. In the long-haul-transport application, zero-emission semi-tractors are likewise more cost-competitive than zero-emission cargo trucks (see Figure 11): - By MY2035, in long-haul transport, zero-emission semi-tractors with high annual mileage show fairly clear cost-competitiveness, while those with low annual mileage remain uneconomical; under high-annual-mileage conditions, by MY2035 both battery electric and fuel-cell trucks approach cost-competitiveness,",
+            "supports_key_fact": "In long-haul transport, by MY2035, high-annual-mileage battery electric and fuel-cell semi-tractors both approach roughly a 5-year payback, while low-annual-mileage semi-tractors remain around a 10-year payback; heavy cargo (straight) trucks do not reach competitiveness even by MY2035 (battery electric: 6-7 years; fuel cell: more than 10 years)."
+          },
+          {
+            "doc_id": "2025_zero-emission-heavy-duty-trucks_00015",
+            "chunk_id": "2025_zero-emission-heavy-duty-trucks_00015_chunk_177",
+            "page": 48,
+            "text_snippet": "在长年行驶里程工况下, 到MY2035, 纯电动重卡与氢燃料电池重卡均接近具备成本竞争力, 两者的回收期约在5年左右¹⁰; 但在短年行驶里程工况下, 到MY2035, 其成本回收期仍较长 (约为10年)。\n- 与新能源半挂牵引车相比, 新能源载货汽车面临的成本挑战更为显著; 即便到MY2035, 其在长途运输场景中仍不具备经济可行性。其中, 纯电动重卡的经济性略优于氢燃料电池重卡——预计到MY2035, 纯电动载货汽车的回收期预计为6~7年; 而氢燃料电池载货汽车的回收期预计超过10年。长途运输场景下新能源载货汽车回收期较长的原因与区域运输场景一致。\n\n46 | WRI.ORG.",
+            "text_snippet_translation_en": "under high-annual-mileage conditions, by MY2035 both battery electric and fuel-cell trucks approach cost-competitiveness, with payback periods of around 5 years for both¹⁰; but under low-annual-mileage conditions, by MY2035 the payback period remains long (about 10 years). - Compared with zero-emission semi-tractors, zero-emission cargo (straight) trucks face more significant cost challenges; even by MY2035, they remain economically unviable in long-haul transport. Battery electric trucks are somewhat more economical than fuel-cell trucks - by MY2035, the payback period for battery electric cargo trucks is expected to be 6-7 years, while for fuel-cell cargo trucks it is expected to exceed 10 years. The longer payback period for zero-emission cargo trucks in long-haul is due to the same reasons as in regional transport.",
+            "supports_key_fact": "In long-haul transport, by MY2035, high-annual-mileage battery electric and fuel-cell semi-tractors both approach roughly a 5-year payback, while low-annual-mileage semi-tractors remain around a 10-year payback; heavy cargo (straight) trucks do not reach competitiveness even by MY2035 (battery electric: 6-7 years; fuel cell: more than 10 years)."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "The study defines a truck as cost-competitive when its payback period versus a diesel truck is within 5 years for regional transport or within 4 years for long-haul transport. With the trade-in subsidy, high-annual-mileage battery electric semi-tractors in regional transport reach the 5-year payback threshold by MY2027, three years earlier than under the no-policy scenario, while the vehicle purchase-tax exemption alone is not enough to make battery electric semi-tractors competitive during MY2025-2027. In long-haul transport, by MY2035 high-annual-mileage battery electric and fuel-cell semi-tractors both approach roughly a 5-year payback, whereas low-annual-mileage semi-tractors remain around a 10-year payback; heavy cargo (straight) trucks fare worse, with battery electric cargo trucks still needing 6-7 years and fuel-cell cargo trucks needing more than 10 years even by MY2035.",
+        "key_facts": [
+          "The study defines truck cost-competitiveness thresholds as a payback period of 5 years or less for regional transport and 4 years or less for long-haul transport.",
+          "With the trade-in subsidy, high-annual-mileage battery electric semi-tractors in regional transport reach the 5-year payback threshold by MY2027, three years earlier than under the no-policy scenario.",
+          "The vehicle purchase-tax exemption alone is not enough to make battery electric semi-tractors competitive during MY2025-2027.",
+          "In long-haul transport, by MY2035, high-annual-mileage battery electric and fuel-cell semi-tractors both approach roughly a 5-year payback, while low-annual-mileage semi-tractors remain around a 10-year payback; heavy cargo (straight) trucks do not reach competitiveness even by MY2035 (battery electric: 6-7 years; fuel cell: more than 10 years)."
+        ]
+      },
+      "source_document_id": "00be4a1d-33cc-4b56-a4d5-d15af0a5cc27",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2025_zero-emission-heavy-duty-trucks_00015) has a possible English twin (2025_charging-toward-2035-policies-to-accelerate-zero_7455). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document (docreview_20260807.md doc review 1); expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.07692307692307693,
+          "fact_recall_strict": 0.5,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 0.6666666666666666,
+          "unsupported_claims_count": 1,
+          "unsupported_claims_rate": 0.3333333333333333,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.07692307692307693,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.5,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 1,
+          "unsupported_claims_rate": 0.5,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.07692307692307693,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 1,
+          "unsupported_claims_rate": 0.3333333333333333,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0,
+      "doc_map": 0.5,
+      "attainable_recall": 0.5,
+      "distinct_docs": 1,
+      "top_doc_share": 1,
+      "chunk_id_hit_rate": 0,
+      "selection_utilization": 0.07692307692307693,
+      "fact_recall_strict": 0.25,
+      "fact_recall_lenient": 0.6666666666666666,
+      "citation_precision": 0.8888888888888888,
+      "unsupported_claims_count": 3,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0.38888888888888884
+    },
+    {
+      "id": "q5_bikeshare-trip-substitution",
+      "question": "What share of bike-share trips replace private car, taxi, or ride-hailing trips in China?",
+      "query_type": "modal_substitution",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2020_dockless-bike-sharing_00124",
+          "2020_how-dockless-bike-sharing-changes-lives-an_2277"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2020_dockless-bike-sharing_00124",
+            "chunk_id": "2020_dockless-bike-sharing_00124_chunk_5",
+            "page": 4,
+            "text_snippet": "通过一系列研究，报告旨在回答三个问题：\n\n- ■ 问题1：共享单车是否改变了人们的出行行为？它是如何使人们从其他交通方式转向单车出行的？\n- ■ 问题2：共享单车如何影响城市公共健康、碳排放和出行安全？\n- ■ 问题3：城市可以如何改进共享单车的管理手段？\n\n报告在12个研究城市调研采集共计8,218份共享单车用户的出行数据，分析城市中居民使用共享单车的出行特征与行为转变。基于问卷结果，研究结合了健康影响评估、减排估算和道路安全风险评估等方法，综合评估共享单车在不同维度对城市的影响。基于共享单车的对城市建成环境的主要挑战，报告回顾了12个研究城市共60多项相关的政策法规和案例研究，总结了有效的实施经验，并为城市提供了政策与管理建议。\n\n![img-5.jpeg](img-5.",
+            "text_snippet_translation_en": "Through a series of studies, the report aims to answer three questions: Question 1: Has bike-sharing changed people's travel behavior, and how does it cause people to shift from other transport modes to bike-sharing? Question 2: How does bike-sharing affect urban public health, carbon emissions, and travel safety? Question 3: How can cities improve bike-sharing management? The report collected travel data from a total of 8,218 bike-share users surveyed across 12 study cities, analyzing residents' bike-sharing travel characteristics and behavioral shifts. Based on the survey results, the study combined health-impact assessment, emissions-reduction estimation, and road-safety risk assessment methods to comprehensively evaluate bike-sharing's impact on cities across different dimensions. Based on the main challenges bike-sharing poses to the urban built environment, the report reviewed more than 60 related policies/regulations and case studies from the 12 study cities, summarized effective implementation experience, and provided cities with policy and management recommendations.",
+            "supports_key_fact": "Based on survey data from 8,218 bike-share users across 12 Chinese cities."
+          },
+          {
+            "doc_id": "2020_dockless-bike-sharing_00124",
+            "chunk_id": "2020_dockless-bike-sharing_00124_chunk_8",
+            "page": 5,
+            "text_snippet": "### 共享单车的影响\n\n研究显示在不同经济水平、气候条件和发展阶段中国城市的使用者对于共享单车在出行特征、使用偏好和服务痛点发掘上显示高度一致性。进一步量化分析显示，共享单车不仅可以增强与公共交通的连通性、取代短途机动车出行，还可以改善城市环境与公共健康，是解决城市最后一公里出行的多赢方案。\n\n### 出行行为转变：\n\n- 尽管12个研究城市经济社会发展特点不尽相同，但研究结果表明共享单车对的出行行为影响在12个研究城市具有同质性。\n- 调查结果显示，54%的共享单车用户使用共享单车连接其他交通方式，其中91%的骑行用于连接公共交通。\n- 12个城市中，有17%~45%的共享单车出行代替了原本的私人机动车出行，包括小汽车、出租车、网约车和摩托车。",
+            "text_snippet_translation_en": "Impacts of bike-sharing: research shows that users across Chinese cities with different economic levels, climate conditions, and stages of development display high consistency in travel characteristics, usage preferences, and identified service pain points. Further quantitative analysis shows that bike-sharing can not only strengthen connectivity with public transit and substitute for short-distance motorized-vehicle trips, but also improve the urban environment and public health - it is a 'multi-win' solution for last-mile urban travel. Shifts in travel behavior: (1) although the 12 study cities differ in economic and social development characteristics, results show bike-sharing's effect on travel behavior is consistent across all 12 cities; (2) survey results show 54% of bike-share users use bike-sharing to connect with other transport modes, of which 91% of that connecting use is to link with public transit; (3) across the 12 cities, 17%-45% of bike-share trips replaced private motorized trips that would otherwise have been made, including private cars, taxis, ride-hailing, and motorcycles.",
+            "supports_key_fact": "54% of bike-share users use bike-sharing to connect with other transport modes; of those, 91% of that connecting use is to link with public transit."
+          },
+          {
+            "doc_id": "2020_dockless-bike-sharing_00124",
+            "chunk_id": "2020_dockless-bike-sharing_00124_chunk_9",
+            "page": 5,
+            "text_snippet": "- 12个城市中，有17%~45%的共享单车出行代替了原本的私人机动车出行，包括小汽车、出租车、网约车和摩托车。\n\n### 减少碳排放：\n\n- 虽然大部分共享单车骑行是用于替代由步行和公共交通完成的短距离出行，但是部分骑行仍可通过取代私人机动车出行，每年减少约480万吨二氧化碳排放，相当于680万英亩森林一年对二氧化碳的吸收。\n\n### 改善公共健康：\n\n- 适当的骑行时间和强度所带来的健康效益远超空气污染造成的健康风险。相对于不运动带来的健康风险，共享骑行作为一种积极的活动方式，在全国2.35亿共享单车用户中，每年可以避免约6万人的早亡风险。\n\n图ES-1 | 共享单车影响评估分析框架\n\n![img-6.jpeg](img-6.",
+            "text_snippet_translation_en": "Across the 12 cities, 17%-45% of bike-share trips replaced private motorized trips that would otherwise have been made, including private cars, taxis, ride-hailing, and motorcycles. Reducing carbon emissions: although most bike-share rides substitute for short-distance trips otherwise made by walking or public transit, some rides still reduce CO2 emissions by substituting for private motorized trips - by about 4.8 million tonnes per year, equivalent to the annual CO2 absorption of 6.8 million acres of forest. Improving public health: the health benefits of appropriate cycling duration and intensity far outweigh the health risks from air pollution; relative to the health risks of physical inactivity, bike-sharing as an active-travel mode can, across the nation's 235 million bike-share users, avert an estimated 60,000 premature deaths per year.",
+            "supports_key_fact": "Across the 12 cities, 17%-45% of bike-share trips replaced private motorized trips - including private cars, taxis, ride-hailing, and motorcycles."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "In China, dockless bike-sharing meaningfully substitutes for private motorized trips, based on survey data from 8,218 bike-share users across 12 Chinese cities. About 54% of bike-share users use bike-sharing to connect with other transport modes, and of that connecting use, 91% is to link with public transit. Across the 12 cities, 17%-45% of bike-share trips replaced private motorized trips - including private cars, taxis, ride-hailing, and motorcycles.",
+        "key_facts": [
+          "Based on survey data from 8,218 bike-share users across 12 Chinese cities.",
+          "54% of bike-share users use bike-sharing to connect with other transport modes; of those, 91% of that connecting use is to link with public transit.",
+          "Across the 12 cities, 17%-45% of bike-share trips replaced private motorized trips - including private cars, taxis, ride-hailing, and motorcycles."
+        ]
+      },
+      "source_document_id": "98cc253e-8d96-4499-b67a-38baffe2f3f2",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2020_dockless-bike-sharing_00124) has a possible English twin (2020_how-dockless-bike-sharing-changes-lives-an_2277). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document (docreview_20260807.md doc review 2); expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.1,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.6666666666666666,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.1,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.6666666666666666,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.1,
+          "fact_recall_strict": 0.3333333333333333,
+          "fact_recall_lenient": 1,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0,
+      "doc_map": 0.5,
+      "attainable_recall": 0.5,
+      "distinct_docs": 2,
+      "top_doc_share": 0.9333333333333332,
+      "chunk_id_hit_rate": 0,
+      "selection_utilization": 0.10000000000000002,
+      "fact_recall_strict": 0.1111111111111111,
+      "fact_recall_lenient": 0.7777777777777777,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q6_bikeshare-co2-reduction",
+      "question": "How much CO2 emissions reduction is attributed to bike-sharing in China?",
+      "query_type": "impact_assessment",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2020_dockless-bike-sharing_00124",
+          "2020_how-dockless-bike-sharing-changes-lives-an_2277"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2020_dockless-bike-sharing_00124",
+            "chunk_id": "2020_dockless-bike-sharing_00124_chunk_9",
+            "page": 5,
+            "text_snippet": "- 12个城市中，有17%~45%的共享单车出行代替了原本的私人机动车出行，包括小汽车、出租车、网约车和摩托车。\n\n### 减少碳排放：\n\n- 虽然大部分共享单车骑行是用于替代由步行和公共交通完成的短距离出行，但是部分骑行仍可通过取代私人机动车出行，每年减少约480万吨二氧化碳排放，相当于680万英亩森林一年对二氧化碳的吸收。\n\n### 改善公共健康：\n\n- 适当的骑行时间和强度所带来的健康效益远超空气污染造成的健康风险。相对于不运动带来的健康风险，共享骑行作为一种积极的活动方式，在全国2.35亿共享单车用户中，每年可以避免约6万人的早亡风险。\n\n图ES-1 | 共享单车影响评估分析框架\n\n![img-6.jpeg](img-6.",
+            "text_snippet_translation_en": "Across the 12 cities, 17%-45% of bike-share trips replaced private motorized trips that would otherwise have been made, including private cars, taxis, ride-hailing, and motorcycles. Reducing carbon emissions: although most bike-share rides substitute for short-distance trips otherwise made by walking or public transit, some rides still reduce CO2 emissions by substituting for private motorized trips - by about 4.8 million tonnes per year, equivalent to the annual CO2 absorption of 6.8 million acres of forest. Improving public health: the health benefits of appropriate cycling duration and intensity far outweigh the health risks from air pollution; relative to the health risks of physical inactivity, bike-sharing as an active-travel mode can, across the nation's 235 million bike-share users, avert an estimated 60,000 premature deaths per year.",
+            "supports_key_fact": "Most bike-share trips substitute for walking or public transit trips (not emissions-reducing), but the portion that substitutes for private motorized trips does reduce emissions. | That substitution effect reduces CO2 emissions by approximately 4.8 million tonnes per year. | The report frames this as equivalent to the annual CO2 absorption of about 6.8 million acres of forest."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Bike-sharing in China reduces CO2 emissions primarily through the share of trips that substitute for private motorized trips, since most bike-share trips substitute for walking or public transit trips and are not themselves emissions-reducing. The substitution effect for private motorized trips reduces CO2 emissions by approximately 4.8 million tonnes per year, which the report frames as equivalent to the annual CO2 absorption of about 6.8 million acres of forest.",
+        "key_facts": [
+          "Most bike-share trips substitute for walking or public transit trips (not emissions-reducing), but the portion that substitutes for private motorized trips does reduce emissions.",
+          "That substitution effect reduces CO2 emissions by approximately 4.8 million tonnes per year.",
+          "The report frames this as equivalent to the annual CO2 absorption of about 6.8 million acres of forest."
+        ]
+      },
+      "source_document_id": "98cc253e-8d96-4499-b67a-38baffe2f3f2",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2020_dockless-bike-sharing_00124) has a possible English twin (2020_how-dockless-bike-sharing-changes-lives-an_2277). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document (docreview_20260807.md doc review 2); expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.06666666666666667,
+          "fact_recall_strict": 0.6666666666666666,
+          "fact_recall_lenient": 0.6666666666666666,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.06666666666666667,
+          "fact_recall_strict": 0.6666666666666666,
+          "fact_recall_lenient": 0.6666666666666666,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.06666666666666667,
+          "fact_recall_strict": 0.6666666666666666,
+          "fact_recall_lenient": 0.6666666666666666,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0,
+      "doc_map": 0.5,
+      "attainable_recall": 0.5,
+      "distinct_docs": 1,
+      "top_doc_share": 1,
+      "chunk_id_hit_rate": 0,
+      "selection_utilization": 0.06666666666666667,
+      "fact_recall_strict": 0.6666666666666666,
+      "fact_recall_lenient": 0.6666666666666666,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q7_bikeshare-travel-behavior",
+      "question": "How does dockless bike-sharing affect travel behavior in Chinese cities?",
+      "query_type": "behavioral_impact",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2020_dockless-bike-sharing_00124",
+          "2020_how-dockless-bike-sharing-changes-lives-an_2277"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2020_dockless-bike-sharing_00124",
+            "chunk_id": "2020_dockless-bike-sharing_00124_chunk_8",
+            "page": 5,
+            "text_snippet": "### 共享单车的影响\n\n研究显示在不同经济水平、气候条件和发展阶段中国城市的使用者对于共享单车在出行特征、使用偏好和服务痛点发掘上显示高度一致性。进一步量化分析显示，共享单车不仅可以增强与公共交通的连通性、取代短途机动车出行，还可以改善城市环境与公共健康，是解决城市最后一公里出行的多赢方案。\n\n### 出行行为转变：\n\n- 尽管12个研究城市经济社会发展特点不尽相同，但研究结果表明共享单车对的出行行为影响在12个研究城市具有同质性。\n- 调查结果显示，54%的共享单车用户使用共享单车连接其他交通方式，其中91%的骑行用于连接公共交通。\n- 12个城市中，有17%~45%的共享单车出行代替了原本的私人机动车出行，包括小汽车、出租车、网约车和摩托车。",
+            "text_snippet_translation_en": "Impacts of bike-sharing: research shows that users across Chinese cities with different economic levels, climate conditions, and stages of development display high consistency in travel characteristics, usage preferences, and identified service pain points. Further quantitative analysis shows that bike-sharing can not only strengthen connectivity with public transit and substitute for short-distance motorized-vehicle trips, but also improve the urban environment and public health - it is a 'multi-win' solution for last-mile urban travel. Shifts in travel behavior: (1) although the 12 study cities differ in economic and social development characteristics, results show bike-sharing's effect on travel behavior is consistent across all 12 cities; (2) survey results show 54% of bike-share users use bike-sharing to connect with other transport modes, of which 91% of that connecting use is to link with public transit; (3) across the 12 cities, 17%-45% of bike-share trips replaced private motorized trips that would otherwise have been made, including private cars, taxis, ride-hailing, and motorcycles.",
+            "supports_key_fact": "The study found high consistency in travel-behavior effects across all 12 cities, despite differing economic/social development levels. | 54% of users ride to connect with other transport modes, primarily public transit (91% of connecting trips). | The report frames bike-sharing as a \"multi-win\" solution for last-mile urban travel: it strengthens connectivity with public transit, substitutes for short-distance motorized-vehicle trips, and improves the urban environment and public health."
+          },
+          {
+            "doc_id": "2020_dockless-bike-sharing_00124",
+            "chunk_id": "2020_dockless-bike-sharing_00124_chunk_9",
+            "page": 5,
+            "text_snippet": "- 12个城市中，有17%~45%的共享单车出行代替了原本的私人机动车出行，包括小汽车、出租车、网约车和摩托车。\n\n### 减少碳排放：\n\n- 虽然大部分共享单车骑行是用于替代由步行和公共交通完成的短距离出行，但是部分骑行仍可通过取代私人机动车出行，每年减少约480万吨二氧化碳排放，相当于680万英亩森林一年对二氧化碳的吸收。\n\n### 改善公共健康：\n\n- 适当的骑行时间和强度所带来的健康效益远超空气污染造成的健康风险。相对于不运动带来的健康风险，共享骑行作为一种积极的活动方式，在全国2.35亿共享单车用户中，每年可以避免约6万人的早亡风险。\n\n图ES-1 | 共享单车影响评估分析框架\n\n![img-6.jpeg](img-6.",
+            "text_snippet_translation_en": "Across the 12 cities, 17%-45% of bike-share trips replaced private motorized trips that would otherwise have been made, including private cars, taxis, ride-hailing, and motorcycles. Reducing carbon emissions: although most bike-share rides substitute for short-distance trips otherwise made by walking or public transit, some rides still reduce CO2 emissions by substituting for private motorized trips - by about 4.8 million tonnes per year, equivalent to the annual CO2 absorption of 6.8 million acres of forest. Improving public health: the health benefits of appropriate cycling duration and intensity far outweigh the health risks from air pollution; relative to the health risks of physical inactivity, bike-sharing as an active-travel mode can, across the nation's 235 million bike-share users, avert an estimated 60,000 premature deaths per year.",
+            "supports_key_fact": "17%-45% of bike-share trips (varying by city) displace private motorized trips (cars, taxis, ride-hailing, motorcycles)."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Dockless bike-sharing has a substantial and consistent effect on travel behavior across Chinese cities: the study found high consistency in these effects across all 12 cities, despite differing economic and social development levels. 54% of users ride to connect with other transport modes, primarily public transit (91% of connecting trips), while 17%-45% of bike-share trips (varying by city) displace private motorized trips such as cars, taxis, ride-hailing, and motorcycles. Overall, the report frames bike-sharing as a \"multi-win\" solution for last-mile urban travel: it strengthens connectivity with public transit, substitutes for short-distance motorized-vehicle trips, and improves the urban environment and public health.",
+        "key_facts": [
+          "The study found high consistency in travel-behavior effects across all 12 cities, despite differing economic/social development levels.",
+          "54% of users ride to connect with other transport modes, primarily public transit (91% of connecting trips).",
+          "17%-45% of bike-share trips (varying by city) displace private motorized trips (cars, taxis, ride-hailing, motorcycles).",
+          "The report frames bike-sharing as a \"multi-win\" solution for last-mile urban travel: it strengthens connectivity with public transit, substitutes for short-distance motorized-vehicle trips, and improves the urban environment and public health."
+        ]
+      },
+      "source_document_id": "98cc253e-8d96-4499-b67a-38baffe2f3f2",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2020_dockless-bike-sharing_00124) has a possible English twin (2020_how-dockless-bike-sharing-changes-lives-an_2277). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document (docreview_20260807.md doc review 2); expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.058823529411764705,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.5,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.058823529411764705,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0,
+          "selection_utilization": 0.058823529411764705,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0,
+      "doc_map": 0.5,
+      "attainable_recall": 0.5,
+      "distinct_docs": 1,
+      "top_doc_share": 1,
+      "chunk_id_hit_rate": 0,
+      "selection_utilization": 0.0588235294117647,
+      "fact_recall_strict": 0.16666666666666666,
+      "fact_recall_lenient": 0.6666666666666666,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q8_yantian-port-mode-shift-targets",
+      "question": "Can Yantian Port realistically meet the mode-shift targets set in Shenzhen's Master Plan (2035), or would it require more aggressive measures than a \"stated policy\" trajectory?",
+      "query_type": "policy_feasibility",
+      "difficulty": "hard",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2024_optimizing-container-ports-transportation-and_9894"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_271",
+            "page": 67,
+            "text_snippet": "值得指出的是，实现强化情景——即完成深圳港相关规划提出的运输结构调整目标，存在较大难度。未来，要想实现盐田港集疏港体系的深度减排，政府与企业需要下决心采取较激进的减排措施。\n\n其次，港口集疏运体系优化有必要协同实现减污降碳。从各项措施减污降碳的效果上看，本研究情景中“公转铁”措施减污降碳潜力最大。即便是2035年提升强化情景中新能源集卡在车队中的占比（从15%提高至95%），“公转铁”的减污降碳潜力仍最大。这说明未来从减污降碳角度推广“公转铁”的必要性。",
+            "text_snippet_translation_en": "It's worth noting that achieving the Enhanced_policy scenario - i.e. meeting the transport-structure adjustment targets set out in Shenzhen port-related plans - is quite difficult. Going forward, to achieve deep decarbonization of Yantian Port's collection-and-distribution system, government and enterprises need to resolve to adopt more aggressive emission-reduction measures. Second, optimizing the collection-and-distribution system needs to jointly achieve pollution and carbon reduction; looking at each measure's effectiveness, road-to-rail has the greatest pollution/carbon-reduction potential in this study's scenarios - even after raising the Enhanced scenario's 2035 battery-electric-truck fleet share from 15% to 95%, road-to-rail's potential remains the largest.",
+            "supports_key_fact": "The scenario analysis found it would be very difficult for Yantian Port to reach the Master Plan (2035) mode-shift targets without aggressive measures."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_222",
+            "page": 51,
+            "text_snippet": "到2035年，水中中转和铁水联运的占比进一步上升到31%和18%，新能源集卡保有量占比为5%。值得注意的是，考虑到铁路建设与货源扩展需要时日，难以在短时间（未来2~3年内）将水中中转与铁水联运占比快速提升10%~13%，加之中长期盐田港货源地具有较大不确定性，所以，该情景无法实现深圳港相关规划中提出的盐田港2025年与2035年的运输结构调整目标（特别是水中中转目标），盐田港仍以公路运输为主；公路运输在港口集疏运中占比52%，水中中转和铁水联运占比分别为31%和18%。",
+            "text_snippet_translation_en": "By 2035, water-water transshipment and rail-water intermodal shares rise further to 31% and 18% [under the conservative/Stated_policy scenario], with electric-truck fleet share at 5%. Note that, given rail construction and cargo-source expansion take time, it's difficult to quickly raise these shares by 10-13 points within the next 2-3 years; combined with considerable uncertainty in Yantian's mid/long-term cargo sources, this scenario cannot achieve the 2025/2035 transport-structure targets in Shenzhen port plans (especially the water-water target) - Yantian remains road-dominant: road accounts for 52% of throughput, water-water transshipment and rail-water intermodal 31% and 18% respectively. [Note: the source text has “水中中转” here, an apparent OCR artifact for “水水中转” (water-water transshipment), used correctly elsewhere in the same document.]",
+            "supports_key_fact": "Under the \"Stated_policy\" (realistic/conservative) scenario, the port cannot reach the targets by either 2025 or 2035; roadways would still account for the majority of throughput."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_25",
+            "page": 9,
+            "text_snippet": "（3）强化情景：该情景将完成深圳港相关规划提出的运输结构调整的目标：2035年，盐田港以铁路与水路运输为主（集疏港吞吐量占比超过50%）。此外，考虑到强化情景基于国家层面预测对2035年新能源集卡在车队中的占比提出的假设（15%）可能较保守，因此，本文进一步分析了在强化情景基础上，2035年新能源集卡在车队中的占比达到95%时（即较为极端的上限情景）的减污降碳潜力。",
+            "text_snippet_translation_en": "(3) Enhanced_policy scenario: this scenario achieves the transport-structure targets in Shenzhen port-related plans - by 2035 Yantian is rail/water-dominant (combined collection-and-distribution throughput share exceeds 50%). Since the Enhanced scenario's assumed 2035 battery-electric-truck fleet share (15%), based on national-level forecasts, may be conservative, this paper further analyzes the pollution/carbon-reduction potential if that share reaches 95% by 2035 (an extreme upper-bound scenario).",
+            "supports_key_fact": "Only the \"Enhanced_policy\" scenario assumes the targets are met: by 2035, railways and waterways combined account for over 50% of port throughput (roadway share drops to 35%, waterway to 45%, railway to 20%)."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_223",
+            "page": 51,
+            "text_snippet": "(3)\n\n强化情景：在保守情景的基础上，通过近期政策大力引导，深化港口运输结构调整，加速推广新能源集卡，进而完成深圳港相关规划提出的运输结构调整目标。所以，在强化情景下，到2025年，盐田港水中中转和铁水联运的占比将上升到27%和14%（较2022年提升10%~13%），并实现新能源集卡试点推广。到2035年，水中中转和铁水联运占比进一步提升到45%和20%，届时盐田港将以水中中转为主，高碳排放的公路运输在集疏运结构中占比仅为35%（即水中中转与铁水联运占比之和超过公路运输）。此外，新能源集卡即将进入规模化推广阶段。",
+            "text_snippet_translation_en": "(3) Enhanced_policy scenario: building on the conservative scenario, through strong near-term policy guidance, deepening transport-structure adjustment and accelerating electric-truck rollout, the plan's target is achieved. Under the Enhanced scenario, by 2025 Yantian's water-water and rail-water intermodal shares rise to 27% and 14% (up 10-13 points vs. 2022). By 2035, water-water and rail-water intermodal shares rise further to 45% and 20% - Yantian becomes water-water-transshipment-dominant, and road transport's share falls to just 35% (i.e. water-water plus rail-water intermodal exceeds road). Electric trucks also enter large-scale rollout.",
+            "supports_key_fact": "Only the \"Enhanced_policy\" scenario assumes the targets are met: by 2035, railways and waterways combined account for over 50% of port throughput (roadway share drops to 35%, waterway to 45%, railway to 20%)."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_232",
+            "page": 55,
+            "text_snippet": "- 二氧化硫：水路运输排放最大，占比为64%；公路运输占比为36%。\n\n5.2 不同情景下大气污染物及碳排放预测\n\n5.2.1 二氧化碳排放呈持续下降趋势\n\n从碳排放的未来趋势上看，与基准情景的上升趋势相反，在保守情景和强化情景下，WTW二氧化碳排放均呈现下降趋势，但降速不一致（见图5-1）：\n\n- 保守情景：二氧化碳排放降速呈现先慢后快的趋势。2025年二氧化碳排放较2022年仅下降了1%，降幅不明显。",
+            "text_snippet_translation_en": "Sulfur dioxide: water transport has the largest emissions share (64%); road 36%. Section 5.2: air-pollutant and carbon projections under different scenarios. 5.2.1: CO2 emissions show a sustained downward trend. Unlike the rising trend under the baseline scenario, WTW CO2 emissions decline under both the conservative and Enhanced scenarios, though at different rates: under the conservative scenario, the decline starts slow then speeds up - 2025 CO2 emissions fall only 1% versus 2022, an insignificant decline.",
+            "supports_key_fact": "Even in the Stated_policy scenario, 2025 shows almost no progress - WTW CO2 emissions fall only 1% versus 2022, and road throughput actually rises 5% above 2022 levels."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_275",
+            "page": 67,
+            "text_snippet": "但值得注意的是，2025年保守情景不仅二氧化碳的减排效果不佳，其对缓解港城矛盾的效果也有限。在该情景下，公路运输吞吐量甚至较2022年水平提高了5%（见表5-3）。所以，综合考虑减污降碳与缓解道路交通拥堵的效果，盐田港应尽可能在2025年能够超越本文中保守情景对这一年的假设。",
+            "text_snippet_translation_en": "It's also worth noting that under the 2025 conservative scenario, not only is the CO2-reduction effect poor, its effect on relieving port-city conflict is also limited. Under this scenario, road throughput actually rises 5% above the 2022 level (see Table 5-3). So, weighing both pollution/carbon reduction and road-congestion relief, Yantian Port should aim to exceed this paper's conservative-scenario assumptions for 2025 wherever possible.",
+            "supports_key_fact": "Even in the Stated_policy scenario, 2025 shows almost no progress - WTW CO2 emissions fall only 1% versus 2022, and road throughput actually rises 5% above 2022 levels."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_165",
+            "page": 43,
+            "text_snippet": "集装箱港集疏运体系低碳发展潜力研究：深圳港的启示\n\n15\n\n深圳港其他港区（深圳市交通运输局，2023）。公路运输带来的穿越影响、污染与碳排放问题更显著。三是平盐铁路改造比平南铁路改造更具可行性，特别是2022年底，平盐铁路改造工程已正式开工（深圳市盐田区人民政府，2023）。\n\n## 4.1 盐田港未来推进集装箱铁水联运的潜力\n\n根据本研究对盐田国际的调研，2022年，盐田港铁路集疏运量为23.2万TEU，较2016年增长59%，但仍仅占盐田港集装箱吞吐量的1%左右。",
+            "text_snippet_translation_en": "[Yantian's road-throughput share is higher than] other Shenzhen port areas; road transport's cross-city impact, pollution, and carbon problems are more pronounced [there]. Third, the Ping-Yan railway (平盐铁路) retrofit is more feasible than the Pingnan railway (平南铁路) retrofit, especially since, at the end of 2022, the Ping-Yan railway retrofit officially broke ground. Section 4.1: Yantian Port's future potential for expanding container rail-water intermodal transport. Per this study's survey of Yantian International, in 2022 Yantian's rail-based collection/distribution volume was 232,000 TEU, up 59% from 2016 - but still only about 1% of Yantian Port's container throughput.",
+            "supports_key_fact": "Conclusion: achieving the Enhanced_policy targets requires aggressive short-term action (e.g., accelerating the Ping-Yan railway retrofit, 平盐铁路), since the Stated_policy trajectory alone is insufficient."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Yantian Port would find it very difficult to meet the mode-shift targets set in Shenzhen's Master Plan (2035) without aggressive policy measures. Under the \"Stated_policy\" (realistic/conservative) scenario, the port cannot reach the targets by either 2025 or 2035, and roadways would still account for the majority of throughput; even by 2025 there is almost no progress, with well-to-wheel CO2 emissions falling only 1% versus 2022 and road throughput actually rising 5% above 2022 levels. Only the \"Enhanced_policy\" scenario achieves the targets: by 2035, railways and waterways combined account for over 50% of port throughput (roadway share drops to 35%, waterway rises to 45%, and railway to 20%). Reaching the Enhanced_policy targets therefore requires aggressive short-term action, such as accelerating the Ping-Yan railway (平盐铁路) retrofit, since the Stated_policy trajectory alone is insufficient.",
+        "key_facts": [
+          "The scenario analysis found it would be very difficult for Yantian Port to reach the Master Plan (2035) mode-shift targets without aggressive measures.",
+          "Under the \"Stated_policy\" (realistic/conservative) scenario, the port cannot reach the targets by either 2025 or 2035; roadways would still account for the majority of throughput.",
+          "Only the \"Enhanced_policy\" scenario assumes the targets are met: by 2035, railways and waterways combined account for over 50% of port throughput (roadway share drops to 35%, waterway to 45%, railway to 20%).",
+          "Even in the Stated_policy scenario, 2025 shows almost no progress - WTW CO2 emissions fall only 1% versus 2022, and road throughput actually rises 5% above 2022 levels.",
+          "Conclusion: achieving the Enhanced_policy targets requires aggressive short-term action (e.g., accelerating the Ping-Yan railway retrofit, 平盐铁路), since the Stated_policy trajectory alone is insufficient."
+        ]
+      },
+      "source_document_id": "e36cae4c-c6fb-441b-adf0-f43e2aec9ad9",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2024_optimizing-container-ports-transportation-and_9894, docreview_20260807.md doc review 3). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document; expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Corrected the railway name in key_facts[4]/canonical_answer: the source calls it 平盐铁路 (Ping-Yan Railway, i.e. the Pinghu-Yantian railway), not \"Yantian-Pinghunan railway\" - a garbled name that doesn't match either of the two railways the source actually discusses (平盐铁路 serving the eastern/Yantian port area, vs. the demolished 平南铁路/Pingnan railway serving the western port area). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0.4,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.2857142857142857,
+          "selection_utilization": 0.16666666666666666,
+          "fact_recall_strict": 0.4,
+          "fact_recall_lenient": 0.6,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0.4,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.2857142857142857,
+          "selection_utilization": 0.16666666666666666,
+          "fact_recall_strict": 0.4,
+          "fact_recall_lenient": 0.6,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_unjudged": true,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0.4,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.2857142857142857,
+          "selection_utilization": 0.16666666666666666,
+          "fact_recall_strict": 0.4,
+          "fact_recall_lenient": 0.8,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0.4000000000000001,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 1,
+      "top_doc_share": 1,
+      "chunk_id_hit_rate": 0.2857142857142857,
+      "selection_utilization": 0.16666666666666666,
+      "fact_recall_strict": 0.4000000000000001,
+      "fact_recall_lenient": 0.6666666666666666,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 2,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q9_yantian-port-rail-water-barriers",
+      "question": "What are the barriers to expanding rail-water intermodal transport (road-to-rail) at Yantian Port?",
+      "query_type": "barrier_analysis",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2024_optimizing-container-ports-transportation-and_9894"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_152",
+            "page": 40,
+            "text_snippet": "然而，平盐铁路和平南铁路由于建设时间早、建设标准低，通行能力无法满足需求，严重制约了铁水联运潜力。在东部港区，平盐铁路是由盐田港集团投资建设运营的地方铁路，建成于 1994 年，为单线非电气化铁路，运输能力低（深圳市规划和自然资源局，2021）。本研究对盐田国际的调研显示，2022 年其仅承担盐田港集装箱吞吐量的 1% 左右。",
+            "text_snippet_translation_en": "However, both the Ping-Yan railway (平盐铁路) and the Pingnan railway (平南铁路), due to early construction dates and low construction standards, cannot meet capacity demand, severely constraining rail-water intermodal potential. In the eastern port area, the Ping-Yan railway is a local railway invested in and operated by Yantian Port Group, built in 1994, single-track and non-electrified, with low capacity. This study's survey of Yantian International found it handled only about 1% of Yantian Port's container throughput in 2022.",
+            "supports_key_fact": "Rail infrastructure capacity: the Ping-Yan railway (平盐铁路, built 1994) is a single non-electrified track with low capacity, handling only ~1% of Yantian Port's container throughput as of 2022."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_165",
+            "page": 43,
+            "text_snippet": "集装箱港集疏运体系低碳发展潜力研究：深圳港的启示\n\n15\n\n深圳港其他港区（深圳市交通运输局，2023）。公路运输带来的穿越影响、污染与碳排放问题更显著。三是平盐铁路改造比平南铁路改造更具可行性，特别是2022年底，平盐铁路改造工程已正式开工（深圳市盐田区人民政府，2023）。\n\n## 4.1 盐田港未来推进集装箱铁水联运的潜力\n\n根据本研究对盐田国际的调研，2022年，盐田港铁路集疏运量为23.2万TEU，较2016年增长59%，但仍仅占盐田港集装箱吞吐量的1%左右。",
+            "text_snippet_translation_en": "[Yantian's road-throughput share is higher than] other Shenzhen port areas; road transport's cross-city impact, pollution, and carbon problems are more pronounced [there]. Third, the Ping-Yan railway (平盐铁路) retrofit is more feasible than the Pingnan railway (平南铁路) retrofit, especially since, at the end of 2022, the Ping-Yan railway retrofit officially broke ground. Section 4.1: Yantian Port's future potential for expanding container rail-water intermodal transport. Per this study's survey of Yantian International, in 2022 Yantian's rail-based collection/distribution volume was 232,000 TEU, up 59% from 2016 - but still only about 1% of Yantian Port's container throughput.",
+            "supports_key_fact": "Rail infrastructure capacity: the Ping-Yan railway (平盐铁路, built 1994) is a single non-electrified track with low capacity, handling only ~1% of Yantian Port's container throughput as of 2022."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_153",
+            "page": 40,
+            "text_snippet": "本研究对盐田国际的调研显示，2022 年其仅承担盐田港集装箱吞吐量的 1% 左右。在西部港区，由于铁路线路以地面敷设为主、线路切割与城市规划矛盾等问题，服务西部港区的平南铁路成为前海地区路网建设的阻碍而被拆除（深圳市交通运输局，2015），严重影响了西部港区铁水联运的发展。\n\n12\n\nWRI.org.cn\n\n图 3-2 | 平盐铁路、平南铁路线路走向\n\n![img-19.jpeg](img-19.jpeg)\n\n来源：作者根据全国铁路网绘制。\n\n为此，深圳市开始相应的铁路改造工程。",
+            "text_snippet_translation_en": "This study's survey of Yantian International found it handled only about 1% of Yantian Port's container throughput in 2022. In the western port area, due to at-grade track layout and conflicts with urban planning, the Pingnan railway (平南铁路) serving the western port area became an obstacle to Qianhai district road-network construction and was demolished, severely affecting rail-water intermodal development there. So, Shenzhen began corresponding railway retrofit projects.",
+            "supports_key_fact": "The parallel Pingnan railway (平南铁路) serving the western port area was actually demolished to make way for Qianhai district road network construction."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_154",
+            "page": 40,
+            "text_snippet": "org.cn\n\n图 3-2 | 平盐铁路、平南铁路线路走向\n\n![img-19.jpeg](img-19.jpeg)\n\n来源：作者根据全国铁路网绘制。\n\n为此，深圳市开始相应的铁路改造工程。目前，服务盐田港的平盐铁路改造已进入施工阶段（深圳市盐田区人民政府，2023）。但服务西部港区的平南铁路自2015年提出改造规划以来，仍处谋划阶段，短期内无法承担西部港区的铁水联运功能。\n\n二是本研究对盐田国际的调研显示，集装箱铁水联运货源不稳定，加之铁路货运由于存在编组、解编等作业步骤，运输时效性低于公路货运，成本高于公路货运，所以，对货主与货代企业的吸引力有限。",
+            "text_snippet_translation_en": "Shenzhen began corresponding railway retrofit projects. Currently, the Ping-Yan railway retrofit serving Yantian Port has entered the construction phase. But the Pingnan railway serving the western port area, despite a retrofit plan proposed in 2015, remains at the planning stage and cannot take on rail-water intermodal functions there in the near term. Second, this study's survey of Yantian International found that container rail-water intermodal cargo sources are unstable, and rail freight - due to marshalling/decoupling steps - has lower time-efficiency and higher cost than trucking, limiting its appeal to shippers and freight forwarders.",
+            "supports_key_fact": "Unstable/limited cargo sources: rail freight volumes are inconsistent, so railways don't prioritize container shipments, causing unreliable empty-container allocation, scheduling, and delivery times."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_155",
+            "page": 41,
+            "text_snippet": "例如，由于港口铁水联运发箱量较少，不能引起铁路干线的重视，导致无论空箱配给，还是计划审批、运输时效性都无法保证。\n\n### 3.3 水深条件与腹地不同，水水中转比例差异大\n\n深圳港地处珠江口，可同时承担远洋国际海运、国内近海海运和内河航运的功能。至2020年，深圳市港口水水集疏运占比已达27.9%（深圳市交通运输局，2022）。\n\n但值得注意的是，深圳东部港区、西部港区进行水水中转的条件与腹地差异较大：\n\n由于深圳港集装箱内河支线运输主要集中在西部港区。",
+            "text_snippet_translation_en": "For example, because rail-water intermodal container volumes at the port are low, trunk railways don't prioritize them, so neither empty-container allocation, plan approval, nor delivery time can be guaranteed. Section 3.3: water-depth and hinterland conditions differ, causing large variation in water-water transshipment shares. Shenzhen Port, at the mouth of the Pearl River, can serve ocean-going, coastal, and inland-river shipping simultaneously; by 2020 water-water transshipment was 27.9% of Shenzhen port throughput.",
+            "supports_key_fact": "Unstable/limited cargo sources: rail freight volumes are inconsistent, so railways don't prioritize container shipments, causing unreliable empty-container allocation, scheduling, and delivery times."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_178",
+            "page": 45,
+            "text_snippet": "本研究对盐田国际的调研显示，以盐田港到清远市为例，公路里程约200千米，“门到门”运价约2200元，而铁路“门到门”运价约3290元（包括港口倒短费290元、内陆港装卸费220元、平盐铁路运费240元、京九铁路运费1620元、到端装卸费220元、货车短驳费700元），比公路运输高出1090元。\n\n本研究对盐田国际的调研显示，虽然铁路运价高，但在干线铁路运价下浮与政策支持下，省内铁路运价几乎能够与公路运价持平。",
+            "text_snippet_translation_en": "Per this study's survey of Yantian International, taking Yantian Port to Qingyuan as an example: road distance is about 200 km, road ‘door-to-door’ price is about 2,200 RMB, while rail ‘door-to-door’ price is about 3,290 RMB (including a 290 RMB port-shuttle fee, 220 RMB inland-port handling fee, 240 RMB Ping-Yan railway fee, 1,620 RMB Jingjiu trunk-rail fee, 220 RMB destination handling fee, and 700 RMB truck drayage fee) - 1,090 RMB higher than road. Although rail pricing is high, under trunk-line rail-rate discounts and policy support, intra-province rail pricing can nearly match road pricing.",
+            "supports_key_fact": "Cost: rail \"door-to-door\" pricing (~3,290 RMB, Yantian to Qingyuan) is higher than trucking (~2,200 RMB) under current pricing mechanisms, though trunk-line rail discounts (50-60%) and subsidies (200 RMB/TEU) can nearly close the gap."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_179",
+            "page": 45,
+            "text_snippet": "本研究对盐田国际的调研显示，虽然铁路运价高，但在干线铁路运价下浮与政策支持下，省内铁路运价几乎能够与公路运价持平。其中，京九铁路运价可下浮50%~60%，以盐田港到清远市为例，干线铁路运价下浮能提供可观的优惠（约800~900元），成为降低铁路运输\n\n集装箱港集疏运体系低碳发展潜力研究：深圳港的启示\n\n17\n\n成本最主要的贡献因素。同时，深圳市也按照考核年度铁水联运完成的集装箱量，向多式联运运营企业提供补贴，省内运输的资助标准为200元/标准箱（深圳交通运输委员会，2018）。",
+            "text_snippet_translation_en": "Intra-province rail pricing can nearly match road pricing. Among these, Jingjiu trunk-line rail rates can be discounted 50-60%; for Yantian-to-Qingyuan, this discount provides a substantial saving (about 800-900 RMB), the single largest contributor to lowering rail cost. Shenzhen also subsidizes intermodal operators based on annual assessed rail-water intermodal container volumes, at 200 RMB/TEU for intra-province transport.",
+            "supports_key_fact": "Cost: rail \"door-to-door\" pricing (~3,290 RMB, Yantian to Qingyuan) is higher than trucking (~2,200 RMB) under current pricing mechanisms, though trunk-line rail discounts (50-60%) and subsidies (200 RMB/TEU) can nearly close the gap."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_180",
+            "page": 46,
+            "text_snippet": "同时，深圳市也按照考核年度铁水联运完成的集装箱量，向多式联运运营企业提供补贴，省内运输的资助标准为200元/标准箱（深圳交通运输委员会，2018）。二者叠加，弥合了目前省内铁路成本高的问题。但值得注意的是，依靠补贴推广铁路运输并不可持续，未来仍需要采取更灵活的市场化定价机制（特别是铁路运输），化解铁路成本高的问题。\n\n此外，铁路运输的时效性也不高（亚洲开发银行，2012）。",
+            "text_snippet_translation_en": "Shenzhen subsidizes intermodal operators at 200 RMB/TEU for intra-province transport. Combined, the trunk-line discount and subsidy narrow the current cost gap for intra-province rail. But relying on subsidies is not sustainable; a more flexible market-based pricing mechanism is still needed. In addition, rail transport's time-efficiency is also not high.",
+            "supports_key_fact": "Cost: rail \"door-to-door\" pricing (~3,290 RMB, Yantian to Qingyuan) is higher than trucking (~2,200 RMB) under current pricing mechanisms, though trunk-line rail discounts (50-60%) and subsidies (200 RMB/TEU) can nearly close the gap."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_181",
+            "page": 46,
+            "text_snippet": "此外，铁路运输的时效性也不高（亚洲开发银行，2012）。以东莞市常平镇出口货物为例，本研究对盐田国际的调研显示，公路运输从盐田港提空集装箱去装货，再返回港口，仅1天完成；而铁路运输环节多，且受承认车、空车、装卸货位、调机取送等因素的影响，从提箱到还箱用时将近3天。\n\n#### 4.1.",
+            "text_snippet_translation_en": "Rail transport's time-efficiency is also not high. Taking export cargo from Changping town, Dongguan as an example, this study's survey of Yantian International found road transport - picking up an empty container at Yantian Port, loading it, and returning to port - takes just 1 day; rail transport, with more steps and subject to railcar assignment, empty wagons, loading-bay availability, and shunting, takes nearly 3 days from container pickup to return.",
+            "supports_key_fact": "Time competitiveness: rail transport takes nearly 3 days (container pickup to return) versus 1 day for trucking, due to marshalling/decoupling steps and dependency on train scheduling, empty wagons, and loading slots."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_170",
+            "page": 44,
+            "text_snippet": "盐田港铁路集疏运的能力由内陆港的容量与铁路运力限制共同决定。目前，盐田港在平盐铁路运力与内陆港处理能力两个方面均存在短板：\n\n首先，为解决平盐铁路运力不足问题，深圳市交通委2016年发布《深圳市综合交通“十三五”规划》，提出平盐铁路改造方案。根据规划，改造后的平盐铁路将由现状地面铺设为主改为以地下铺设为主，由单线非电气化铁路升级为双线电气化铁路，设计时速由30~50千米/小时提升至120千米/小时（深圳市规划和自然资源局，2021）（见表4-2）。",
+            "text_snippet_translation_en": "Yantian's rail collection/distribution capacity is jointly determined by inland-port capacity and rail-capacity constraints; Yantian currently has shortfalls in both Ping-Yan railway capacity and inland-port handling capacity. To address the Ping-Yan railway's insufficient capacity, the Shenzhen Municipal Transport Commission's 2016 13th-Five-Year integrated transport plan proposed a Ping-Yan railway retrofit: from mostly at-grade to mostly underground, upgraded from single-track non-electrified to double-track electrified, design speed raised from 30-50 km/h to 120 km/h.",
+            "supports_key_fact": "Retrofitting is underway: the Ping-Yan railway (平盐铁路) upgrade (to double-track, electrified, 120 km/h) began construction in December 2022, targeting completion around 2027."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_171",
+            "page": 44,
+            "text_snippet": "目前，平盐铁路改造工程已于2022年12月正式开工，于2023年上半年进入全线施工阶段，计划建设工期4年（深圳市盐田区人民政府，2023）。",
+            "text_snippet_translation_en": "The Ping-Yan railway retrofit officially began construction in December 2022, entering full-scale construction in the first half of 2023, with a planned 4-year construction period.",
+            "supports_key_fact": "Retrofitting is underway: the Ping-Yan railway (平盐铁路) upgrade (to double-track, electrified, 120 km/h) began construction in December 2022, targeting completion around 2027."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_183",
+            "page": 46,
+            "text_snippet": "但是，上述目标其实较难实现。一是铁路建设需要时间，平盐铁路可能2027年才能完工。二是从省外货源地货源增长的角度分析，平盐铁路复线改造完成以后，省外铁路货源开拓有难度且仍需时日。因此，根据本研究对盐田国际的调研，即便加快平盐铁路改造进展，2025年铁路集装箱运量仅能从2022年23.2万TEU增长到120万TEU，仍将低于231万TEU的铁水联运最大运力；远期综合考虑产业外移的影响，盐田港省外运输货量将接近铁水联运最大运力，鉴于货源开拓有难度，所以，2035年铁路集装箱运量将达到324万TEU。",
+            "text_snippet_translation_en": "But that target is actually difficult to achieve. First, rail construction takes time - the Ping-Yan railway may not be completed until 2027. Second, expanding out-of-province rail cargo sources will still be difficult even after the double-track retrofit. Per this study's survey, even with an accelerated retrofit, rail container volume would only grow from 232,000 TEU (2022) to 1.2 million TEU by 2025 - still below the 2.31-million-TEU maximum rail-water intermodal capacity; by 2035, rail container volume is projected to reach 3.24 million TEU.",
+            "supports_key_fact": "Retrofitting is underway: the Ping-Yan railway (平盐铁路) upgrade (to double-track, electrified, 120 km/h) began construction in December 2022, targeting completion around 2027."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Expanding rail-water intermodal transport at Yantian Port faces several barriers. Rail infrastructure capacity is limited: the Ping-Yan railway (平盐铁路, built 1994) is a single non-electrified track with low capacity, handling only about 1% of Yantian Port's container throughput as of 2022, and the parallel Pingnan railway (平南铁路) serving the western port area was actually demolished to make way for Qianhai district road network construction. Cargo sources for rail are unstable and limited - rail freight volumes are inconsistent, so railways don't prioritize container shipments, causing unreliable empty-container allocation, scheduling, and delivery times. Cost is also a barrier: rail \"door-to-door\" pricing (about 3,290 RMB, Yantian to Qingyuan) is higher than trucking (about 2,200 RMB) under current pricing mechanisms, though trunk-line rail discounts (50-60%) and subsidies (200 RMB/TEU) can nearly close the gap. Rail is also slower: it takes nearly 3 days from container pickup to return, versus 1 day for trucking, due to marshalling/decoupling steps and dependency on train scheduling, empty wagons, and loading slots. A retrofit is already underway - the Ping-Yan railway (平盐铁路) upgrade (to double-track, electrified, 120 km/h) began construction in December 2022, targeting completion around 2027.",
+        "key_facts": [
+          "Rail infrastructure capacity: the Ping-Yan railway (平盐铁路, built 1994) is a single non-electrified track with low capacity, handling only ~1% of Yantian Port's container throughput as of 2022.",
+          "The parallel Pingnan railway (平南铁路) serving the western port area was actually demolished to make way for Qianhai district road network construction.",
+          "Unstable/limited cargo sources: rail freight volumes are inconsistent, so railways don't prioritize container shipments, causing unreliable empty-container allocation, scheduling, and delivery times.",
+          "Cost: rail \"door-to-door\" pricing (~3,290 RMB, Yantian to Qingyuan) is higher than trucking (~2,200 RMB) under current pricing mechanisms, though trunk-line rail discounts (50-60%) and subsidies (200 RMB/TEU) can nearly close the gap.",
+          "Time competitiveness: rail transport takes nearly 3 days (container pickup to return) versus 1 day for trucking, due to marshalling/decoupling steps and dependency on train scheduling, empty wagons, and loading slots.",
+          "Retrofitting is underway: the Ping-Yan railway (平盐铁路) upgrade (to double-track, electrified, 120 km/h) began construction in December 2022, targeting completion around 2027."
+        ]
+      },
+      "source_document_id": "e36cae4c-c6fb-441b-adf0-f43e2aec9ad9",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2024_optimizing-container-ports-transportation-and_9894, docreview_20260807.md doc review 3). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document; expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Corrected the railway name throughout (key_facts[0], key_facts[5], canonical_answer): the source calls it 平盐铁路 (Ping-Yan Railway, i.e. the Pinghu-Yantian railway) - the local railway built/operated by Yantian Port Group serving the eastern port area - not \"Yantian-Pinghunan railway\". That garbled name doesn't match either real railway in the source: 平盐铁路 (Ping-Yan, this one) vs. 平南铁路 (Pingnan, the demolished one serving the western port area, correctly named elsewhere in these facts). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0.6666666666666666,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.3333333333333333,
+          "selection_utilization": 0.25,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.8333333333333334,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0.6666666666666666,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.3333333333333333,
+          "selection_utilization": 0.25,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.8333333333333334,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0.6666666666666666,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.3333333333333333,
+          "selection_utilization": 0.25,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.6666666666666666,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0.6666666666666666,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 1,
+      "top_doc_share": 1,
+      "chunk_id_hit_rate": 0.3333333333333333,
+      "selection_utilization": 0.25,
+      "fact_recall_strict": 0,
+      "fact_recall_lenient": 0.7777777777777778,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q10_yantian-port-drayage-electrification-co2",
+      "question": "How much would well-to-wheel CO2 emissions decline if drayage truck electrification reached 95% by 2035 at Yantian Port, and how does that compare to rail and water mode-shift measures?",
+      "query_type": "quantitative_projection",
+      "difficulty": "hard",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2024_optimizing-container-ports-transportation-and_9894"
+        ],
+        "expected_document_ids": [],
+        "expected_passages": [
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_30",
+            "page": 10,
+            "text_snippet": "而在2035年强化情景中，WTW二氧化碳排放仅较2022年下降50%，无法实现大比例的深度减排。\n\n即便考虑到新能源集卡在车队占比达到95%的情况，2035年强化情景的WTW二氧化碳排放仍将较2022年下降71%。剩余29%的碳排放仍有必要通过进一步推广“公转铁”、“公转水”以及加速上游电网减排，才能实现深度减排。不同情景下WTW二氧化碳排放变化趋势如图 ES-1所示。\n\n值得指出的是，**实现强化情景——即完成深圳港相关规划提出的运输结构调整目标，存在较大难度。",
+            "text_snippet_translation_en": "In the 2035 Enhanced_policy scenario, WTW CO2 emissions fall only 50% versus 2022, failing to achieve large-scale (e.g. 80-90%) deep decarbonization. Even accounting for battery-electric-truck fleet share reaching 95%, 2035 Enhanced_policy WTW CO2 emissions would still only fall 71% versus 2022. The remaining 29% of emissions would still require further road-to-rail and road-to-water shift plus accelerated upstream grid decarbonization to achieve deep reductions. It's worth noting that achieving the Enhanced_policy scenario - meeting the transport-structure targets in Shenzhen port plans - is quite difficult.",
+            "supports_key_fact": "In the Enhanced_policy scenario with only 15% battery-electric truck penetration (the base assumption), WTW CO2 emissions fall 50% versus 2022."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_250",
+            "page": 60,
+            "text_snippet": "未来，如果能实现新能源集卡大规模推广、车辆能耗改进以及上游电力行业减排，新能源集卡推广的减排量将大幅提升，超越“公转水”的减排量。如果到2035年，集疏港新能源集卡能够解决技术与成本问题，实现规模化推广——即其在车队保有量中占比达到95%。同时，新能源集卡的百公里电耗得到改善，相较2022年能耗下降23%（即2035年百公里电耗为100kWh）（California Air Resources Board, 2019），加上粤港澳大湾区的上游发电碳排放下降（即2035年碳排放因子降至0.36吨二氧化碳/兆瓦时）（Huang等，2023），新能源集卡推广的减排潜力将大幅提升（见图5-5）。",
+            "text_snippet_translation_en": "In the future, large-scale electric-truck rollout, vehicle-efficiency improvement, and upstream power-sector decarbonization would substantially increase electric trucks' emission-reduction potential, surpassing road-to-water's reduction. If by 2035 port drayage trucks overcome technology/cost barriers and reach 95% fleet-share penetration, while per-100km energy consumption also improves - falling 23% versus 2022 (i.e. 100 kWh/100km in 2035) - and combined with declining upstream Greater Bay Area grid emissions (the 2035 emission factor falling to 0.36 tonnes CO2/MWh), electric-truck rollout's emission-reduction potential would increase substantially.",
+            "supports_key_fact": "If drayage truck electrification is pushed to 95% fleet penetration by 2035 (assuming truck energy consumption also improves to 100 kWh/100km and Greater Bay Area grid emission factors drop to 0.36 tonnes CO2/MWh), WTW CO2 emissions would fall 71% versus 2022."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_251",
+            "page": 60,
+            "text_snippet": "36吨二氧化碳/兆瓦时）（Huang等，2023），新能源集卡推广的减排潜力将大幅提升（见图5-5）。届时，强化情景下，2035年，新能源集卡推广措施将有望将较基准情景减少71万吨WTW二氧化碳排放，成为继“公转铁”之后减排量第二大的措施。进一步加强后，强化情景下WTW二氧化碳排放将较2022年下降71%。\n\n图 5-4 | 不同措施二氧化碳减排量 (WTW CO₂)\n\n#### a. 保守情景\n\n(a) 2022基准情景到2025保守情景减排贡献\n\n![img-31.jpeg](img-31.jpeg)\n\n(b) 2025基准情景到2035保守情景减排贡献\n\n!",
+            "text_snippet_translation_en": "[grid emission factor falling to 0.]36 tonnes CO2/MWh, electric-truck rollout's emission-reduction potential would increase substantially. At that point, under the Enhanced_policy scenario, in 2035 electric-truck rollout would be expected to cut WTW CO2 emissions by 71 (10,000-tonne units) versus the baseline scenario, becoming the second-largest reduction measure after road-to-rail. With this further strengthening, 2035 Enhanced_policy WTW CO2 emissions would fall 71% versus 2022.",
+            "supports_key_fact": "If drayage truck electrification is pushed to 95% fleet penetration by 2035 (assuming truck energy consumption also improves to 100 kWh/100km and Greater Bay Area grid emission factors drop to 0.36 tonnes CO2/MWh), WTW CO2 emissions would fall 71% versus 2022. | Contribution breakdown for the 2035 Enhanced_policy scenario, relative to the baseline (no-policy) scenario: road-to-rail is the largest contributor at -195 (10,000-tonne units), followed by zero-emission drayage (95% scenario) at -71 (10,000-tonne units, second-largest, surpassing road-to-water), and road-to-water at -66 (10,000-tonne units). The resulting 2035 Enhanced_policy WTW CO2 emissions are 71% lower than 2022's baseline of 332 (10,000-tonne units)."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_248",
+            "page": 60,
+            "text_snippet": "例如，在强化情景下，2035年，水水中转在港口集装箱集疏运中占比增幅最大，较2022年水平提升了28%，铁水联运占比较2022年水平提升了19%。但从二氧化碳减排量看，强化情景下，“公转铁”的减排量大于“公转水”的减排量；2035年“公转铁”措施较基准情景降低了195万吨碳排放，“公转水”措施较基准情景仅降低了66万吨碳排放。\n\n与其相比，在保守情景与强化情景下，新能源集卡推广措施的减排量极为有限。即便在强化情景下，2035年，新能源集卡推广措施也仅较基准情景降低了1万吨碳排放。",
+            "text_snippet_translation_en": "For example, under the Enhanced_policy scenario, by 2035 water-water transshipment sees the largest increase in throughput share (up 28 points vs. 2022), rail-water intermodal up 19 points. But by CO2-reduction volume, road-to-rail's reduction exceeds road-to-water's: in 2035 road-to-rail cuts 195 (10,000-tonne units) of carbon emissions versus the baseline scenario, while road-to-water cuts only 66 (10,000-tonne units). By comparison, electric-truck rollout's reduction is far more limited under both scenarios - even under Enhanced, 2035 electric-truck rollout cuts only 1 (10,000-tonne unit) versus baseline.",
+            "supports_key_fact": "Contribution breakdown for the 2035 Enhanced_policy scenario, relative to the baseline (no-policy) scenario: road-to-rail is the largest contributor at -195 (10,000-tonne units), followed by zero-emission drayage (95% scenario) at -71 (10,000-tonne units, second-largest, surpassing road-to-water), and road-to-water at -66 (10,000-tonne units). The resulting 2035 Enhanced_policy WTW CO2 emissions are 71% lower than 2022's baseline of 332 (10,000-tonne units)."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_230",
+            "page": 55,
+            "text_snippet": "5.1 基准年排放情况\n\n在二氧化碳排放方面，2022年盐田港集疏港运输产生的油井到车轮二氧化碳排放（WTW，即包含上游发电排放）为332万吨。其中，公路运输领域是主要碳排放来源，在盐田港集疏港运输产生的碳排放中占比达96%。\n\n在空气污染物排放方面，2022年盐田港集疏港运输产生空气污染物排放中，各运输模式的排放贡献有差异，并以公路运输排放与水路运输排放为主，铁路运输的污染物排放极低。",
+            "text_snippet_translation_en": "5.1 Baseline-year emissions. On CO2: in 2022, Yantian Port's collection/distribution transport produced 332 (10,000-tonne units) of well-to-wheel (WTW, i.e. including upstream power-generation) CO2 emissions. Road transport is the main source, accounting for 96% of Yantian's collection/distribution carbon emissions. On air pollutants, contributions differ by mode, dominated by road and water transport, with rail's pollutant emissions extremely low.",
+            "supports_key_fact": "Contribution breakdown for the 2035 Enhanced_policy scenario, relative to the baseline (no-policy) scenario: road-to-rail is the largest contributor at -195 (10,000-tonne units), followed by zero-emission drayage (95% scenario) at -71 (10,000-tonne units, second-largest, surpassing road-to-water), and road-to-water at -66 (10,000-tonne units). The resulting 2035 Enhanced_policy WTW CO2 emissions are 71% lower than 2022's baseline of 332 (10,000-tonne units)."
+          },
+          {
+            "doc_id": "2024_optimizing-container-ports-transportation-and_9894",
+            "chunk_id": "2024_optimizing-container-ports-transportation-and_9894_chunk_249",
+            "page": 60,
+            "text_snippet": "即便在强化情景下，2035年，新能源集卡推广措施也仅较基准情景降低了1万吨碳排放。主要原因有二：一是在强化情景下，新能源集卡2035年在车队中占比仍较\n\n低，只有15%；二是基于本研究上游发电排放因子与新能源集卡百公里电耗的假设（即2035年保持2022年水平），同等里程下，新能源集卡WTW二氧化碳排放仅较柴油集卡降低约7%。\n\n未来，如果能实现新能源集卡大规模推广、车辆能耗改进以及上游电力行业减排，新能源集卡推广的减排量将大幅提升，超越“公转水”的减排量。",
+            "text_snippet_translation_en": "Even under the Enhanced_policy scenario, in 2035 electric-truck rollout cuts only 1 (10,000-tonne unit) of carbon emissions versus the baseline scenario. Two main reasons: first, under Enhanced, electric trucks' 2035 fleet share remains low, at only 15%; second, given this study's assumptions for the upstream grid emission factor and truck energy consumption per 100km (held at 2022 levels through 2035), over the same distance an electric truck's WTW CO2 emissions are only about 7% lower than a diesel truck's.",
+            "supports_key_fact": "At the more conservative 15% electrification assumption, the drayage measure only cuts ~1 (10,000 tonnes) - negligible - because so few trucks are converted and the electric truck's per-km WTW advantage over diesel is only ~7% under 2022 grid/efficiency assumptions."
+          }
+        ]
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "If drayage truck electrification at Yantian Port reached 95% fleet penetration by 2035 (assuming truck energy consumption also improves to 100 kWh/100km and Greater Bay Area grid emission factors drop to 0.36 tonnes CO2/MWh), well-to-wheel (WTW) CO2 emissions would fall 71% versus 2022, compared to only a 50% reduction under the Enhanced_policy scenario's base assumption of just 15% battery-electric truck penetration. In the 2035 Enhanced_policy scenario, relative to the baseline (no-policy) scenario, road-to-rail mode shift is the single largest contributor to emissions reduction at -195 (10,000-tonne units), followed by zero-emission drayage at 95% electrification at -71 (10,000-tonne units) - which surpasses road-to-water's -66 (10,000-tonne units). The resulting 2035 Enhanced_policy WTW CO2 emissions are 71% lower than 2022's baseline of 332 (10,000-tonne units). At the more conservative 15% electrification assumption, however, the drayage measure only cuts about 1 (10,000-tonne units) - a negligible amount - because so few trucks are converted and the electric truck's per-km WTW advantage over diesel is only about 7% under 2022 grid/efficiency assumptions.",
+        "key_facts": [
+          "In the Enhanced_policy scenario with only 15% battery-electric truck penetration (the base assumption), WTW CO2 emissions fall 50% versus 2022.",
+          "If drayage truck electrification is pushed to 95% fleet penetration by 2035 (assuming truck energy consumption also improves to 100 kWh/100km and Greater Bay Area grid emission factors drop to 0.36 tonnes CO2/MWh), WTW CO2 emissions would fall 71% versus 2022.",
+          "Contribution breakdown for the 2035 Enhanced_policy scenario, relative to the baseline (no-policy) scenario: road-to-rail is the largest contributor at -195 (10,000-tonne units), followed by zero-emission drayage (95% scenario) at -71 (10,000-tonne units, second-largest, surpassing road-to-water), and road-to-water at -66 (10,000-tonne units). The resulting 2035 Enhanced_policy WTW CO2 emissions are 71% lower than 2022's baseline of 332 (10,000-tonne units).",
+          "At the more conservative 15% electrification assumption, the drayage measure only cuts ~1 (10,000 tonnes) - negligible - because so few trucks are converted and the electric truck's per-km WTW advantage over diesel is only ~7% under 2022 grid/efficiency assumptions."
+        ]
+      },
+      "source_document_id": "e36cae4c-c6fb-441b-adf0-f43e2aec9ad9",
+      "source_language": "zh",
+      "note": "Source doc (zh, external_id 2024_optimizing-container-ports-transportation-and_9894, docreview_20260807.md doc review 3). canonical_answer/key_facts regenerated quote-first (2026-08-31) directly from the zh source document; expected_passages resolved via direct DB lookup against document_chunks (non-circular - no retrieval/embedding service used). Reworded key_facts[2]/canonical_answer's contribution breakdown to drop the \"2035 BAU baseline of 392\" and \"net 95 remaining\" figures from the prior draft: those numbers only appear as jumbled numeric axis labels inside a waterfall chart (this doc's extraction_method is cache-plaintext, which does not preserve chart structure), not in verifiable prose, and cross-checking (392 ≈ 332 × 1650/1400, the 2022→2025 throughput growth ratio from Table 4-1) suggests 392 is actually the *2025* baseline-scenario value, not a 2035 BAU figure as the prior fact implied. Kept only the -195/-66/-71 measure-level contributions and the 71% final reduction vs. 2022's 332 (both confirmed in clean narrative prose, not chart OCR). Pending AskWRI expert review.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "evidence_coverage": 0.25,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.16666666666666666,
+          "selection_utilization": 0.06666666666666667,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.5,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 1,
+          "evidence_coverage": 0.25,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.16666666666666666,
+          "selection_utilization": 0.06666666666666667,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.5,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 2,
+          "evidence_coverage": 0.25,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 0,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "chunk_id_hit_rate": 0.16666666666666666,
+          "selection_utilization": 0.06666666666666667,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.5,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_unjudged": true,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": 0.25,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 1,
+      "top_doc_share": 1,
+      "chunk_id_hit_rate": 0.16666666666666666,
+      "selection_utilization": 0.06666666666666667,
+      "fact_recall_strict": 0.08333333333333333,
+      "fact_recall_lenient": 0.5,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 2,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q11_mexico-transport-covid-methodology",
+      "question": "What methodology was used to estimate COVID-19 financial impacts on Mexican urban public transport operators?",
+      "query_type": "methodology",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2022_impactos-economicos-pandemia-covid19-transporte-publico_0070"
+        ],
+        "expected_document_ids": [
+          "987353ab-9454-473f-8f00-eb767750dd24"
+        ],
+        "expected_passages": []
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "The study used three methodological approaches to estimate COVID-19's financial impacts on Mexican urban public transport operators: surveys of AMAM mobility authorities (15 member states, conducted in March and May 2020); interviews and workshops with 10 operating companies (20 key informants, plus follow-up workshops in September, November, and December 2021); and financial estimates for the 76 cities/metropolitan zones with over 100,000 inhabitants. Operators were classified three ways - public vs. private, company vs. individual concession, and fleet condition - using fleet renewal percentage as a proxy for financial resilience, yielding categories of renewal above 50%, below 50%, and ECI. Data sources varied by mode: public financial statements for trains, cable cars, and trolleybuses; published cost-benefit analyses for BRT; INEGI (2021) data for passenger figures; and interview-based extrapolation across 75 metropolitan zones for buses and ECI, generating IKB (bus-kilometer) and IPB (passengers-per-bus) indices. Key assumptions included an average fare of 7 to 7.5 Mexican pesos nationally, all buses being diesel-powered, and, for ECI, supply falling in the same proportion as demand. The research ran from June to December 2020 with World Bank support, covering the period from April 2020 to September 2021.",
+        "key_facts": [
+          "Three methodological approaches: surveys of AMAM mobility authorities (15 member states, surveys in March and May 2020); interviews and workshops with 10 operating companies (20 key informants, plus follow-up workshops in September, November and December 2021); and financial estimates for the 76 cities/metropolitan zones with over 100,000 inhabitants.",
+          "Operators classified three ways - public vs. private, company vs. individual concession, and fleet condition - with fleet renewal percentage used as a proxy for financial resilience, yielding categories of renewal above 50%, below 50%, and ECI.",
+          "Data sources varied by mode: public financial statements for trains, cable cars and trolleybuses; published cost-benefit analyses for BRT; INEGI (2021) for passenger figures; interview-based extrapolation across 75 metropolitan zones for buses and ECI, generating IKB (bus-kilometer) and IPB (passengers-per-bus) indices.",
+          "Key assumptions: average fare of 7 and 7.5 Mexican pesos nationally, all buses diesel-powered, and - for ECI - supply falling in the same proportion as demand. Research ran June-December 2020 with World Bank support, covering April 2020-September 2021."
+        ]
+      },
+      "source_document_id": "987353ab-9454-473f-8f00-eb767750dd24",
+      "source_language": "es",
+      "note": "canonical_answer/key_facts drafted from reviewer's docreview notes.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "selection_utilization": 0.058823529411764705,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "selection_utilization": 0.058823529411764705,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 2,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "selection_utilization": 0.058823529411764705,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": null,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 1,
+      "top_doc_share": 1,
+      "chunk_id_hit_rate": null,
+      "selection_utilization": 0.0588235294117647,
+      "fact_recall_strict": 0,
+      "fact_recall_lenient": 0.75,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q12_mexico-transport-jobs-dependency",
+      "question": "How many jobs depend on the public transport sector in Mexico?",
+      "query_type": "quantitative_fact",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2022_impactos-economicos-pandemia-covid19-transporte-publico_0070"
+        ],
+        "expected_document_ids": [
+          "987353ab-9454-473f-8f00-eb767750dd24"
+        ],
+        "expected_passages": []
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "More than 410,000 direct jobs depend on Mexico's public transport sector, principally drivers of transport units, according to a WRI México estimate based on interviews with mobility authorities (AMAM 2020). Significant indirect employment also comes from individuals, small and medium enterprises, and cooperatives, which make up around 75 percent of the sector's organization. Before the pandemic, roughly 50 million people used collective public transport as their first mobility option, representing 87 percent of Mexico's economically active population (SEDATU 2016). Secondary pandemic impacts included loss of purchasing power for thousands of drivers and auxiliary personnel, as private companies negotiated salary reductions of 20-30 percent, with cuts reaching 50 percent in some cases.",
+        "key_facts": [
+          "More than 410,000 direct jobs depend on the sector, principally drivers of transport units (WRI México estimate based on interviews with mobility authorities; AMAM 2020).",
+          "Significant indirect employment comes from individuals, small and medium enterprises, and cooperatives, which make up around 75 percent of the sector's organization.",
+          "Before the pandemic, roughly 50 million people used collective public transport as their first mobility option - 87 percent of Mexico's economically active population (SEDATU 2016).",
+          "Secondary pandemic impacts included loss of purchasing power for thousands of drivers and auxiliary personnel; private companies negotiated salary reductions of 20-30 percent, with cuts reaching 50 percent in some cases."
+        ]
+      },
+      "source_document_id": "987353ab-9454-473f-8f00-eb767750dd24",
+      "source_language": "es",
+      "note": "canonical_answer/key_facts drafted from reviewer's docreview notes.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 7,
+          "top_doc_share": 0.4666666666666667,
+          "selection_utilization": 0.35,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.5,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 7,
+          "top_doc_share": 0.4666666666666667,
+          "selection_utilization": 0.35,
+          "fact_recall_strict": 0.5,
+          "fact_recall_lenient": 0.5,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 2,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 7,
+          "top_doc_share": 0.4666666666666667,
+          "selection_utilization": 0.35,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.5,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": null,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 7,
+      "top_doc_share": 0.4666666666666666,
+      "chunk_id_hit_rate": null,
+      "selection_utilization": 0.3499999999999999,
+      "fact_recall_strict": 0.3333333333333333,
+      "fact_recall_lenient": 0.5,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q13_mexico-transport-financing-barriers",
+      "question": "What barriers limit fondeo and financiamiento for urban public transport in Mexico?",
+      "query_type": "barrier_analysis",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2023_analisis-de-los-mecanismos-financieros-para-la_3765"
+        ],
+        "expected_document_ids": [
+          "2e5d79b9-7077-43a2-bc48-3661e7d3fd36"
+        ],
+        "expected_passages": []
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "The document distinguishes two Spanish-language financing concepts: fondeo, which refers to potential revenues generated by the government entity's own action (its source is public administration itself), and financiamiento, which refers to the capital structure underpinning a project, drawing on resources captured externally to the government body. Barriers to fondeo include scarcity of budget resources, public transport projects not always being treated as a priority, and a lack of integration in defining transport public policy across planning, design, strategy, actions, and budget. Barriers to financiamiento include limited access due to numerous requirements or rigorous selectivity, inflexible credit conditions in terms and rates, and financing mechanisms that are little known or used in Mexico. A cross-cutting constraint is that public transport is not, and has not been, legally considered a priority for budget allocation (SHCP 2020); adopting new mechanisms requires political will and cross-sector support. As a result, fare revenue and complementary subsidies remain the most important financing source in Mexico, leaving supply vulnerable to demand shifts.",
+        "key_facts": [
+          "The document distinguishes the two: fondeo refers to potential revenues generated by the government entity's own action (its source is public administration itself), while financiamiento refers to the capital structure underpinning a project - resources captured externally to the government body.",
+          "Barriers to fondeo: scarcity of budget resources; public transport projects are not always treated as a priority; and a lack of integration in defining transport public policy across planning, design, strategy, actions and budget.",
+          "Barriers to financiamiento: limited access due to numerous requirements or rigorous selectivity; inflexible credit conditions in terms and rates; and financing mechanisms that are little known or used in Mexico.",
+          "A cross-cutting constraint: public transport is not, and has not been, legally considered a priority for budget allocation (SHCP 2020); adopting new mechanisms requires political will and cross-sector support. Fare revenue and complementary subsidies remain the most important financing source in Mexico, leaving supply vulnerable to demand shifts."
+        ]
+      },
+      "source_document_id": "2e5d79b9-7077-43a2-bc48-3661e7d3fd36",
+      "source_language": "es",
+      "note": "canonical_answer/key_facts drafted from reviewer's docreview notes.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "selection_utilization": 0.1,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 1,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "selection_utilization": 0.1,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 2,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 2,
+          "top_doc_share": 0.9333333333333333,
+          "selection_utilization": 0.1,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.75,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": null,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 2,
+      "top_doc_share": 0.9333333333333332,
+      "chunk_id_hit_rate": null,
+      "selection_utilization": 0.10000000000000002,
+      "fact_recall_strict": 0.25,
+      "fact_recall_lenient": 0.75,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q14_mexico-carbon-tax-transport-financing",
+      "question": "Why is revenue from Mexico's carbon tax not currently available for public transport, and how could that change?",
+      "query_type": "policy_mechanism",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2023_analisis-de-los-mecanismos-financieros-para-la_3765"
+        ],
+        "expected_document_ids": [
+          "2e5d79b9-7077-43a2-bc48-3661e7d3fd36"
+        ],
+        "expected_passages": []
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Revenue from Mexico's carbon tax is not currently available for public transport because all revenue collected under the tax goes into the country's general budget and is not earmarked for any specific use. The tax has applied since January 2014 under the Special Tax on Production and Services law (IEPS), incorporated in 2013, with each fossil fuel carrying a different rate according to its carbon dioxide content, determined by its annual CO2 emission potential on combustion; at the private sector's request, the tax does not apply to natural gas or jet fuel (turbosina). Through February 2020, cumulative collection reached 41,336 million pesos, though this amount has declined annually since 2014, which could limit project development from this source. SHCP frames the tax as serving two central objectives: reducing emissions and increasing federal revenue. For this to change, the document proposes assigning these revenues to finance a National Public Transport Financing Program, linking revenue from a polluting source to projects that help mitigate greenhouse gases - though more generally, earmarking any contribution for a specific purpose requires a provision in tax law or in the sector-specific (mobility or transport) law; absent such provision, contributions flow by default into the general collection pool. As a reference point, 2020 carbon tax rates ranged from 7.48 centavos per liter for propane to 16.99 for fuel oil, and from 19.72 pesos per tonne for petroleum coke to 50.32 for other fossil fuels.",
+        "key_facts": [
+          "Mexico's carbon tax has applied since January 2014 under the Special Tax on Production and Services law (IEPS), incorporated in 2013; each fossil fuel carries a different rate according to its carbon dioxide content, determined by the annual CO2 emission potential released on combustion.",
+          "All revenue collected goes into the country's general budget and is not earmarked for any specific use. Through February 2020 cumulative collection reached 41,336 million pesos, an amount that has declined annually since 2014, which could limit project development from this source.",
+          "At the private sector's request, the tax does not apply to natural gas or jet fuel (turbosina). SHCP frames the tax as serving two central objectives: reducing emissions and increasing federal revenue.",
+          "The document proposes assigning these revenues to finance a National Public Transport Financing Program, linking revenue from a polluting source to projects that help mitigate greenhouse gases. More generally, specific earmarking of any contribution requires provision in tax law or in the sector-specific (mobility or transport) law - absent such provision, contributions flow by default into the general collection pool.",
+          "2020 carbon tax rates ranged from 7.48 centavos per liter for propane to 16.99 for fuel oil, and from 19.72 pesos per tonne for petroleum coke to 50.32 for other fossil fuels."
+        ]
+      },
+      "source_document_id": "2e5d79b9-7077-43a2-bc48-3661e7d3fd36",
+      "source_language": "es",
+      "note": "canonical_answer/key_facts drafted from reviewer's docreview notes.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 5,
+          "doc_map": 0.5,
+          "attainable_recall": 1,
+          "distinct_docs": 8,
+          "top_doc_share": 0.4666666666666667,
+          "selection_utilization": 0.42105263157894735,
+          "fact_recall_strict": 0.2,
+          "fact_recall_lenient": 0.4,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 1,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 5,
+          "doc_map": 0.5,
+          "attainable_recall": 1,
+          "distinct_docs": 8,
+          "top_doc_share": 0.4666666666666667,
+          "selection_utilization": 0.42105263157894735,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.4,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 2,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 5,
+          "doc_map": 0.5,
+          "attainable_recall": 1,
+          "distinct_docs": 8,
+          "top_doc_share": 0.4666666666666667,
+          "selection_utilization": 0.42105263157894735,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.4,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": null,
+      "doc_map": 0.5,
+      "attainable_recall": 1,
+      "distinct_docs": 8,
+      "top_doc_share": 0.4666666666666666,
+      "chunk_id_hit_rate": null,
+      "selection_utilization": 0.42105263157894735,
+      "fact_recall_strict": 0.06666666666666667,
+      "fact_recall_lenient": 0.4000000000000001,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    },
+    {
+      "id": "q15_mexico-parking-meter-revenue",
+      "question": "How much revenue do parking meters generate in Mexican cities, and where does that money go?",
+      "query_type": "quantitative_fact",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2023_analisis-de-los-mecanismos-financieros-para-la_3765"
+        ],
+        "expected_document_ids": [
+          "2e5d79b9-7077-43a2-bc48-3661e7d3fd36"
+        ],
+        "expected_passages": []
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Parking meter revenue in Mexican cities varies by city and goes toward a mix of improvement works and collection-company payments. In Mexico City, approximately 30 percent of the amount collected through parking meters (Ecoparq, tracked from 2012 onward) is directed to executing improvement works, with the remainder distributed to the companies carrying out collection. In the municipality of Guadalajara, collection shifted from physical meters to a virtual process via a technological application: in 2017, the last year of traditional meters, total collection was 12 million pesos across 6,000 devices, while in 2018 virtual meters brought in 15 million pesos across 2,665 parking spaces. Parking charges are classified as revenue from the use of public goods, applied at the local (state/municipal) level, and collection capacity is inherently limited by the number of regulated spaces available; reference cases include Mexico City, Guadalajara, Zapopan, and Tonalá. By law, revenues captured under these concepts can be concentrated in local public finances and assigned to a specific purpose such as public transport projects, though the document notes that implementation and maintenance costs must not exceed revenues received, and that transparent application and distribution schemes are needed. By contrast, urban road pricing or congestion charging does not currently exist in Mexico as a revenue source for public transport, though the document identifies it as an opportunity to explore.",
+        "key_facts": [
+          "In Mexico City, approximately 30 percent of the amount collected through parking meters is directed to executing improvement works, with the remainder distributed to the companies carrying out collection. Ecoparq revenues are tracked from 2012 onward.",
+          "In the municipality of Guadalajara, collection shifted from physical meters to a virtual process via a technological application: in 2017, the last year of traditional meters, total collection was 12 million pesos across 6,000 devices; in 2018 virtual meters brought in 15 million pesos across 2,665 parking spaces.",
+          "Parking charges are classified as revenue from the use of public goods, applied at the local (state/municipal) level. Collection capacity is inherently limited by the number of regulated spaces available. Reference cases include CDMX, Guadalajara, Zapopan and Tonalá.",
+          "Revenues captured under these concepts can be concentrated in local public finances and, by law, assigned to a specific purpose such as public transport projects. The document notes implementation and maintenance costs must not exceed revenues received, and that transparent application and distribution schemes are needed.",
+          "By contrast, urban road pricing or congestion charging does not exist in Mexico as a revenue source for public transport, though the document identifies it as an opportunity to explore."
+        ]
+      },
+      "source_document_id": "2e5d79b9-7077-43a2-bc48-3661e7d3fd36",
+      "source_language": "es",
+      "note": "canonical_answer/key_facts drafted from reviewer's docreview notes.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 5,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 4,
+          "top_doc_share": 0.6,
+          "selection_utilization": 0.5714285714285714,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.6,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 1,
+          "unsupported_claims_rate": 0.5,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 1,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 5,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 4,
+          "top_doc_share": 0.6,
+          "selection_utilization": 0.5714285714285714,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.6,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 2,
+          "unsupported_claims_rate": 1,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 2,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 5,
+          "doc_map": 1,
+          "attainable_recall": 1,
+          "distinct_docs": 4,
+          "top_doc_share": 0.6,
+          "selection_utilization": 0.5714285714285714,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.6,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 1,
+          "unsupported_claims_rate": 0.3333333333333333,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": null,
+      "doc_map": 1,
+      "attainable_recall": 1,
+      "distinct_docs": 4,
+      "top_doc_share": 0.6,
+      "chunk_id_hit_rate": null,
+      "selection_utilization": 0.5714285714285714,
+      "fact_recall_strict": 0,
+      "fact_recall_lenient": 0.6,
+      "citation_precision": 1,
+      "unsupported_claims_count": 4,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0.611111111111111
+    },
+    {
+      "id": "q16_mexico-transport-covid-demand-change",
+      "question": "How did public transport demand in Mexican cities change during the COVID-19 pandemic?",
+      "query_type": "impact_assessment",
+      "difficulty": "medium",
+      "retrieval_ground_truth": {
+        "expected_external_ids": [
+          "2022_impactos-economicos-pandemia-covid19-transporte-publico_0070",
+          "2023_analisis-de-los-mecanismos-financieros-para-la_3765"
+        ],
+        "expected_document_ids": [
+          "987353ab-9454-473f-8f00-eb767750dd24",
+          "2e5d79b9-7077-43a2-bc48-3661e7d3fd36"
+        ],
+        "expected_passages": []
+      },
+      "synthesis_ground_truth": {
+        "canonical_answer": "Public transport demand in Mexican cities fell sharply during the COVID-19 pandemic, dropping by up to 70 percent in April-June 2020, the period of greatest national restrictions and the most significant shift in mobility patterns. Reduction varied by mode: as a share of pre-pandemic demand in April-June 2020, BRT fell to 29%, trains to 33%, trolleybuses/companies to 45%, and ECI to 45%; by June-September 2021 these had recovered to 69%, 56%, 65%, and 65% respectively. Supply did not fall as much as demand for trains in particular - trains maintained 97% of 2019 kilometers offered in April-June 2020 to reduce vehicle occupancy, while BRT supply fell to 61% over the same period. Even by September 2021, systems had still not fully recovered: BRT demand stood at 71 percent and buses/trolleybuses at 68 percent of 2019 ridership levels.",
+        "key_facts": [
+          "Demand fell by up to 70 percent in April-June 2020, the period of greatest national restrictions; the most significant shifts in mobility patterns occurred in those months.",
+          "Reduction factors by mode (share of pre-pandemic demand) in April-June 2020: BRT 29%, trains 33%, trolleybuses/companies 45%, ECI 45% - recovering by June-September 2021 to 69%, 56%, 65% and 65% respectively.",
+          "Trains cut supply far less than demand (97% of 2019 kilometers offered in April-June 2020), maintaining coverage to reduce vehicle occupancy; BRT supply fell to 61% in the same period.",
+          "By September 2021, systems had still not recovered: BRT demand at 71 percent and buses/trolleybuses at 68 percent of 2019 ridership."
+        ]
+      },
+      "source_document_id": "987353ab-9454-473f-8f00-eb767750dd24",
+      "source_language": "es",
+      "note": "Canonical_answer/key_facts drafted from reviewer's docreview notes.",
+      "per_pass": [
+        {
+          "pass": 0,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "selection_utilization": 0.05,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.25,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 2
+        },
+        {
+          "pass": 1,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "selection_utilization": 0.05,
+          "fact_recall_strict": 0.25,
+          "fact_recall_lenient": 0.25,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        },
+        {
+          "pass": 2,
+          "facts_no_snippet": 0,
+          "facts_no_passage": 4,
+          "doc_map": 0.5,
+          "attainable_recall": 0.5,
+          "distinct_docs": 1,
+          "top_doc_share": 1,
+          "selection_utilization": 0.05,
+          "fact_recall_strict": 0,
+          "fact_recall_lenient": 0.25,
+          "fact_recall_unjudged": false,
+          "citation_precision": 1,
+          "unsupported_claims_count": 0,
+          "unsupported_claims_rate": 0,
+          "unsupported_claims_unjudged": false,
+          "sentence_support_unjudged": false,
+          "cites_valid": true,
+          "parsed_clean": true,
+          "all_english": true,
+          "sentence_count": 3
+        }
+      ],
+      "expected_doc_in_selection": true,
+      "evidence_coverage": null,
+      "doc_map": 0.5,
+      "attainable_recall": 0.5,
+      "distinct_docs": 1,
+      "top_doc_share": 1,
+      "chunk_id_hit_rate": null,
+      "selection_utilization": 0.05000000000000001,
+      "fact_recall_strict": 0.08333333333333333,
+      "fact_recall_lenient": 0.25,
+      "citation_precision": 1,
+      "unsupported_claims_count": 0,
+      "unsupported_claims_judged_passes": 3,
+      "unsupported_claims_rate": 0
+    }
+  ]
+}
