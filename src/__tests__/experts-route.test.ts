@@ -226,6 +226,36 @@ describe('POST /api/experts', () => {
         if (fbLabels.has(t.label)) expect(t.matched).toBe(true)
   })
 
+  it('filters excluded_topics out of the doc-derived fallback (spec §5.1)', async () => {
+    const degradedTags = () =>
+      json(
+        queryReply([
+          { doc_id: 'd1', tier: 'strong' },
+          { doc_id: 'd2', tier: 'strong' },
+        ]),
+      )
+    const labels = (body: any) =>
+      body.understanding.matched_topics.map((t: any) => t.label)
+    // Control: without exclusions the fallback still includes the label.
+    fetchMock
+      .mockResolvedValueOnce(degradedTags())
+      .mockResolvedValueOnce(json(tagsReply([], [], ['topic'])))
+    const control = await post({ query: 'electric buses' })
+    expect(control.status).toBe(200)
+    expect(labels(control.json)).toContain('Buses')
+    // Excluding 'Buses' must remove it from the fallback chips entirely.
+    fetchMock
+      .mockResolvedValueOnce(degradedTags())
+      .mockResolvedValueOnce(json(tagsReply([], [], ['topic'])))
+    const excluded = await post({
+      query: 'electric buses',
+      excluded_topics: ['Buses'],
+    })
+    expect(excluded.status).toBe(200)
+    expect(labels(excluded.json)).not.toContain('Buses')
+    expect(labels(excluded.json)).toContain('School Buses')
+  })
+
   it('degrades to topic_only when /query fails', async () => {
     fetchMock
       .mockRejectedValueOnce(new Error('ECONNREFUSED'))

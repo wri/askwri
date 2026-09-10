@@ -63,7 +63,9 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 function fallbackTopics(
   retrieved: RetrievedDoc[],
   works: WorkRow[],
+  excludedTopics: string[],
 ): MatchedTag[] {
+  const excluded = new Set(excludedTopics)
   const N = works.length
   const byId = new Map<string, WorkRow>()
   for (const w of works) {
@@ -79,8 +81,14 @@ function fallbackTopics(
     if (w) retrievedWorks.add(w)
   }
   const count = new Map<string, number>()
+  // Spec §5.1: excluded topics leave the topic space — skipped here so they
+  // never become fallback candidates (and the top-10 is over non-excluded
+  // topics only).
   for (const w of retrievedWorks)
-    for (const t of new Set(w.topics)) count.set(t, (count.get(t) ?? 0) + 1)
+    for (const t of new Set(w.topics)) {
+      if (excluded.has(t)) continue
+      count.set(t, (count.get(t) ?? 0) + 1)
+    }
   const scored = [...count.entries()].map(([label, c]) => ({
     label,
     score: c * specificity(df.get(label) ?? 1, N),
@@ -228,7 +236,7 @@ export async function POST(req: NextRequest) {
     const topicDegraded =
       degraded.includes('tags_nearby') || degraded.includes('tags_nearby:topic')
     if (topicDegraded && topics.length === 0 && retrieved.length > 0) {
-      const fb = fallbackTopics(retrieved, works)
+      const fb = fallbackTopics(retrieved, works, excludedTopics)
       result.matchedTopics = fb
       const fbLabels = new Set(fb.map((t) => t.label))
       for (const p of result.people)
