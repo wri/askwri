@@ -15,7 +15,7 @@
     "test": "jest",
     "test:ci": "jest --ci --coverage --runInBand",
     "search-service": "cd search-service && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt && ./venv/bin/python -m app.main",
-    "search-service:stop": "bash -c 'if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then kill $(lsof -t -i:8000) 2>/dev/null; echo \"✅ Search service stopped\"; else echo \"ℹ️  Search service not running\"; fi'",
+    "search-service:stop": "bash -c 'if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then kill $(lsof -t -i:8000) 2>/dev/null; echo \"\u2705 Search service stopped\"; else echo \"\u2139\ufe0f  Search service not running\"; fi'",
     "typeorm": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js ./node_modules/typeorm/cli.js",
     "migration:generate": "npm run typeorm -- migration:generate src/db/migrations/Migration -d src/db/migration-data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/db/migration-data-source.ts",
@@ -34,7 +34,8 @@
     "seed:admin": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/seed-admin.ts",
     "seed:tag-aliases": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/seed-tag-aliases.ts",
     "repair:author-formats": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/repair-author-formats.ts",
-    "convert:wri-keywords": "ts-node --project tsconfig.typeorm.json --transpile-only scripts/convert-wri-keywords-csv.ts"
+    "convert:wri-keywords": "ts-node --project tsconfig.typeorm.json --transpile-only scripts/convert-wri-keywords-csv.ts",
+    "verify:experts": "node scripts/playwright/verify-experts.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.997.0",
@@ -85,6 +86,7 @@
     "jest": "29.7.0",
     "jest-environment-jsdom": "29.7.0",
     "picomatch": "^4.0.3",
+    "playwright": "1.62.1",
     "prettier": "^3.8.1",
     "tailwindcss": "^4.1.18",
     "ts-node": "^10.9.2",
