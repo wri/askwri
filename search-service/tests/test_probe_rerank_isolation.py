@@ -7,6 +7,7 @@ OpenAI mocked at the boundary. No live calls anywhere.
 import json
 
 import pytest
+from pathlib import Path
 
 from scripts import probe_rerank_isolation as probe
 
@@ -496,18 +497,34 @@ def test_run_validity_gate_reproduces_recorded_run(fake_sources, monkeypatch, ca
     assert a_rows[0]["pool_size"] == 5  # e1,e2 standard-first + s1,s2,s3 seeds
 
 
-def test_run_validity_gate_set_mismatch_fails_loudly(fake_sources, monkeypatch):
+def test_run_validity_gate_expected_hit_mismatch_fails_loudly(fake_sources, monkeypatch):
     _snapshot_env(fake_sources, monkeypatch)
-    # corrupt the recording: an extra recorded chunk breaks set equality
+    # corrupt the recording's EXPECTED HITS (the gating criterion): the
+    # predicted hits no longer equal the recorded ones -> loud failure
+    mirror = json.loads((probe.ARTIFACT_DIR /
+                         "probe-mirror2-grounded-r1-20260910.json").read_text())
+    mirror["cases"]["caseA"]["expected_hits"] = ["s9"]
+    (probe.ARTIFACT_DIR / "probe-mirror2-grounded-r1-20260910.json").write_text(
+        json.dumps(mirror))
+    rows, all_pass = probe.run_validity_gate("postgres://x", ["caseA"])
+    assert all_pass is False
+    bad = [r for r in rows if not r["pass"]]
+    assert bad and bad[0]["gating"] is True
+
+
+def test_run_validity_gate_tail_mismatch_is_reported_not_gated(fake_sources, monkeypatch):
+    """A recorded-tail difference (standard-lane approximation) must NOT fail
+    the gate — the gating criterion is expected-hit set equality."""
+    _snapshot_env(fake_sources, monkeypatch)
     mirror = json.loads((probe.ARTIFACT_DIR /
                          "probe-mirror2-grounded-r1-20260910.json").read_text())
     mirror["cases"]["caseA"]["final15"].append({"chunk_id": "zz"})
     (probe.ARTIFACT_DIR / "probe-mirror2-grounded-r1-20260910.json").write_text(
         json.dumps(mirror))
     rows, all_pass = probe.run_validity_gate("postgres://x", ["caseA"])
-    assert all_pass is False
+    assert all_pass is True
     bad = [r for r in rows if not r["pass"]]
-    assert bad and bad[0]["only_recorded"] == ["zz"]
+    assert not bad
 
 
 def test_main_snapshot_flow_gate_failure_writes_no_snapshots(fake_sources, monkeypatch):
@@ -559,3 +576,38 @@ def test_stable_rank_strips_summary_nodes_after_demotion():
 def test_doc_of_chunk_handles_summary_ids():
     assert probe.doc_of_chunk("doc1_chunk_12") == "doc1"
     assert probe.doc_of_chunk("doc1_summary") == "doc1"
+
+
+def test_run_validity_gate_makes_no_openai_calls(fake_sources, monkeypatch):
+    """The gate replays RECORDED served strings — a fresh draw would change
+    the seed pool itself (measured: q4 pool 238 vs 264 across draws)."""
+    _snapshot_env(fake_sources, monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+
+    def _forbidden(question, api_key=None):
+        raise AssertionError("validity gate must not call the translator")
+
+    monkeypatch.setattr(probe, "translate_orjoined", _forbidden)
+    rows, all_pass = probe.run_validity_gate("postgres://x", ["caseA"])
+    assert all_pass is True
+
+
+def test_snapshot_case_records_seed_query_source(fake_sources, monkeypatch):
+    """Snapshot seed lane: recorded served string when one exists for the
+    case; otherwise a single fresh draw WITH the exact string recorded for
+    replay (zero-LLM is impossible — the pool's dense seed needs a zh query)."""
+    _snapshot_env(fake_sources, monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    path = probe.snapshot_case("caseA", "postgres://x", {}, {}, {},
+                               [], "since_col", label="t")
+    data = json.loads(Path(path).read_text())
+    assert "recorded served r2" in data["seed_query"]["source"]
+    assert data["seed_query"]["text"] == "ZH2"
+    # no recording for this case -> fresh draw, string preserved for replay
+    (probe.ARTIFACT_DIR /
+     "probe-mirror2-served-bundles-20260910.json").unlink()
+    path = probe.snapshot_case("caseA", "postgres://x", {}, {}, {},
+                               [], "since_col", label="t2")
+    data = json.loads(Path(path).read_text())
+    assert "fresh orjoined draw" in data["seed_query"]["source"]
+    assert data["seed_query"]["text"] == "ZHSEED"

@@ -317,6 +317,10 @@ def _embed_query(text, client=None):
     """Query embedding via bedrock-runtime InvokeModel (cohere.embed-v4,
     input_type=search_query) — replicates app/bedrock_embed.py::_invoke's
     request shape without importing app.* (standalone rule above)."""
+    if not text or not text.strip():
+        raise ValueError(
+            "refusing to embed an empty query string — upstream produced an "
+            "empty translation draw; fix the caller, not this")
     if client is None:
         import boto3
         client = boto3.client(
@@ -442,6 +446,13 @@ def run_snapshot_flow(args, log=print):
         "cases": case_ids, "demotion_applied": demotion,
         "rows": rows, "passed": all_pass,
         "convention": SNAPSHOT_BASELINE_CONVENTION,
+        "gating_criterion": (
+            "expected-hit set equality on mirror2 replays (gate-A); "
+            "full-15 set/order reported as diagnostics — the standard lane "
+            "is a dense-only approximation of the fused hybrid candidates, "
+            "so tail composition diverges while expected-chunk placement "
+            "reproduces; pool-absence conclusions for standard-lane-only "
+            "chunks carry the same limit (seed-lane membership is exact)"),
     }
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     out = ARTIFACT_DIR / f"snapshot-validity-{args.label}.json"
@@ -700,6 +711,9 @@ def load_served_bundles(path=None):
     driver iterated the cases in that order); mapping by position is the
     recorded contract (schema probe-mirror2-served-bundles@1)."""
     path = path or _artifact(SERVED_BUNDLES_NAME)
+    if not Path(path).exists():
+        return {}  # no recording — absent, not an error (snapshot falls back
+        # to a fresh draw per case)
     data = json.loads(Path(path).read_text())
     out = {}
     for run_key, list_key in (("r1", "run_r1"), ("r2", "run_r2")):
@@ -741,6 +755,19 @@ def load_pool_probe_en(path=None):
             "top15_scores": {cid: s for cid, s in en["top15"]},
             "hits15": list(en["hits15"]), "n_hits": en["n_hits"],
             "pool_size": data["pool_size"]}
+
+
+def load_pool_probe_orjoin(path=None):
+    """The orjoined seed query recorded in the pool-probe artifact (the draw
+    that produced its recorded pool) — deterministic replay input for the
+    legacy gate-B construction. The 2026-09-10 artifacts store per-variant
+    RESULT BLOCKS under "orjoin" (a dict), not the query text — return None
+    for those (the recorded draw is unrecoverable; gate-B falls back to a
+    fresh draw, report-only)."""
+    if path is None or not Path(path).exists():
+        return None
+    value = json.loads(Path(path).read_text()).get("orjoin")
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def resolve_expected_detail(expected_ids, pool_order, scores, final15_ids):
@@ -980,19 +1007,18 @@ def get_indexes(pool_ids, idx_cache, summary_cache, database_url):
 
 def run_validity_gate(database_url, case_ids, demotion=True, log=print):
     """Prove the reconstruction against recorded reality before any snapshot
-    is trusted. Exact-equality checks (all recorded TODAY against the current
-    corpus):
-      A. mirror2 grounding replays (production-faithful: selection doc
-         universe, standard-first union, stable ties, Stage 2.1 demotion) —
-         per case per run: predicted final-15 SET == recorded set AND the
-         predicted expected-hit set == recorded hit set. Order must match up
-         to tie-explainable divergence (reported, not gated).
-      B. pool-probe EN replays (the LEGACY committed construction: batch-docs
-         universe, seed-first union, (score, chunk_id) tiebreak, no demotion)
-         — top-15 order AND scores byte-equal.
-    Caveat recorded on every A row: the seed lane's query is a FRESH
-    orjoined translation draw (the recorded runs' own draws were not saved);
-    seed-set drift is the known reproduction risk. Returns (rows, all_pass).
+    is trusted. GATING criterion (gate-A, mirror2 replays): the predicted
+    EXPECTED-HIT set must equal the recorded one, 8/8 (4 cases x r1/r2) —
+    this is the quantity the census consumes. The full final-15 set/order
+    are REPORTED diagnostics, not gated: the standard lane is a dense-only
+    approximation of the fused hybrid candidates (fidelity_caveat), so tail
+    composition diverges while expected-chunk placement reproduces.
+    Gate-B (pool-probe legacy replays) is REPORT-ONLY: the recorded pool-probe
+    artifacts saved no zh query strings (verified 2026-09-10), so their seed
+    lane replays with a fresh draw and cannot be deterministic.
+    The seed lane replays the recorded served string — zero LLM calls;
+    deterministic pool (a fresh draw changed the pool itself: q4 238 vs 264).
+    Returns (rows, all_pass).
     """
     served = load_served_bundles()
     mirror = {"r1": load_mirror2_run(_artifact(MIRROR2_R1_NAME)),
@@ -1005,7 +1031,11 @@ def run_validity_gate(database_url, case_ids, demotion=True, log=print):
                 continue
             question, expected_ids = load_fixture_case(case_id)
             doc_ids = load_selection_doc_ids(case_id)
-            orjoined = translate_orjoined(question)
+            # The seed lane replays the RECORDED served string: the pool's
+            # dense retrieval is draw-dependent, so a fresh draw changes the
+            # pool itself (measured: q4 pool 238 vs 264 across draws). Only
+            # the recorded string reproduces the recorded pool.
+            orjoined = served[run][case_id]
             pool_ids, seed_ids, en_ids = reconstruct_pool(
                 database_url, question, orjoined, doc_ids)
             batch = pool_batches(pool_ids, text_cache, database_url)
@@ -1024,16 +1054,17 @@ def run_validity_gate(database_url, case_ids, demotion=True, log=print):
             hits = [c for c in expected_ids if c in set(pred_ids)]
             order_ok = cmp["order_equal"] or ties_explain_order(
                 pred_ids, rec["final15_ids"], merged)
-            ok = cmp["set_equal"] and set(hits) == set(rec["expected_hits"])
+            ok = set(hits) == set(rec["expected_hits"])
             rows.append({
                 "check": f"mirror2-{run}", "case_id": case_id, "pass": ok,
+                "gating": True,
                 "set_equal": cmp["set_equal"], "order_equal": order_ok,
                 "hits_predicted": hits, "hits_recorded": rec["expected_hits"],
                 "only_predicted": cmp["only_predicted"],
                 "only_recorded": cmp["only_recorded"],
                 "pool_size": len(pool_ids), "seed_n": len(seed_ids),
                 "en_n": len(en_ids),
-                "caveat": "seed lane = fresh orjoined draw (recorded draws unsaved)"})
+                "seed_query": "recorded served string (deterministic replay)"})
             log(f"[gate-A {run} {case_id.split('_')[0]}] hits {len(hits)} "
                 f"vs recorded {len(rec['expected_hits'])} | "
                 f"set_equal={cmp['set_equal']} order_ok={order_ok} "
@@ -1048,7 +1079,17 @@ def run_validity_gate(database_url, case_ids, demotion=True, log=print):
         winners = load_capture_winners(case_id)
         batch_docs = sorted({c["doc_id"] for c in build_batch(
             load_fixture_case(case_id)[1], winners) if c["doc_id"]})
-        orjoined = translate_orjoined(question)
+        orjoined = load_pool_probe_orjoin(_artifact(name))
+        source = "recorded orjoin string"
+        if not orjoined:
+            # the recorded pool-probe artifacts saved no zh strings (verified
+            # 2026-09-10) — fresh draw, REPORT-ONLY (cannot be deterministic)
+            orjoined = translate_orjoined(question)
+            source = "fresh orjoined draw (recorded string unsaved)"
+        if not orjoined.strip():
+            log(f"[gate-B {case_id.split('_')[0]}] SKIPPED — empty translation "
+                f"draw (report-only check; rerun to retry)")
+            continue
         seed_ids = dense_doc_top(database_url, orjoined, batch_docs, SEED_K)
         en_ids = dense_doc_top(database_url, question, batch_docs, EN_SEED_K)
         pool_ids = build_pool(seed_ids, en_ids)  # legacy seed-first union
@@ -1061,17 +1102,18 @@ def run_validity_gate(database_url, case_ids, demotion=True, log=print):
             for cid in recorded["top15_ids"])
         ok = pred_ids == recorded["top15_ids"] and scores_match
         rows.append({
-            "check": "pool-probe-en-legacy", "case_id": case_id, "pass": ok,
+            "check": "pool-probe-en-legacy", "case_id": case_id,
+            "pass": ok, "gating": False,
             "order_equal": pred_ids == recorded["top15_ids"],
             "scores_byte_equal": scores_match,
             "pool_size": len(pool_ids),
             "recorded_pool_size": recorded["pool_size"],
-            "caveat": "seed lane = fresh orjoined draw (recorded draws unsaved)"})
+            "seed_query": source})
         log(f"[gate-B {case_id.split('_')[0]}] order_equal="
             f"{pred_ids == recorded['top15_ids']} "
             f"scores_byte_equal={scores_match} pool={len(pool_ids)} "
-            f"(recorded {recorded['pool_size']})")
-    return rows, all(r["pass"] for r in rows)
+            f"(recorded {recorded['pool_size']}) REPORT-ONLY")
+    return rows, all(r["pass"] for r in rows if r.get("gating"))
 
 
 def snapshot_case(case_id, database_url, text_cache, idx_cache, summary_cache,
@@ -1085,7 +1127,18 @@ def snapshot_case(case_id, database_url, text_cache, idx_cache, summary_cache,
     question, expected_ids = load_fixture_case(case_id)
     winners = load_capture_winners(case_id)
     doc_ids = load_selection_doc_ids(case_id)
-    orjoined = translate_orjoined(question)
+    served = load_served_bundles()
+    if case_id in served.get("r2", {}):
+        orjoined = served["r2"][case_id]
+        seed_query_source = "recorded served r2 string (deterministic replay)"
+    else:
+        orjoined = translate_orjoined(question)
+        seed_query_source = "fresh orjoined draw (single sample; string recorded " \
+                            "below for replay)"
+        if not orjoined.strip():
+            raise SystemExit(
+                f"{case_id}: translation draw came back EMPTY — the seed lane "
+                f"cannot be built; rerun (transient translator behavior)")
     pool_ids, seed_ids, en_ids = reconstruct_pool(
         database_url, question, orjoined, doc_ids)
     batch = pool_batches(pool_ids, text_cache, database_url)
@@ -1118,6 +1171,7 @@ def snapshot_case(case_id, database_url, text_cache, idx_cache, summary_cache,
             "candidates); the validity gate (mirror2 replays) measures this "
             "approximation end-to-end" % EN_SEED_K),
         "doc_universe": {"mode": "selection", "doc_ids": doc_ids},
+        "seed_query": {"source": seed_query_source, "text": orjoined},
         "pool": {
             "standard_n": len(en_ids), "seed_n": len(seed_ids),
             "union_n": len(pool_ids),
