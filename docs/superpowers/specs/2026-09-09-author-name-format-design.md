@@ -107,8 +107,10 @@ No schema changes and no migration: `metadata_source` is free-form jsonb.
 
 **Mapping.** Both row shapes — legacy JSON-blob (`mapRowToDocument`) and flat
 CSV (`mapFlatRowToDocument`) — pass `authors` through `tidyAuthorsField()`.
-The tidied value becomes the stored form, including the `sourceMetadata`
-mirror (consistent with the flat path's existing reconstruction).
+The tidied value becomes the stored column value. The flat path's
+`sourceMetadata` mirror carries the tidied value too (it reconstructs
+metadata from parsed fields); the legacy path's `sourceMetadata` keeps the
+raw import blob verbatim — it is the archival record.
 `MappedDocument` gains `authorsUnverified: boolean`.
 
 **Write paths.**
