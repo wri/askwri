@@ -51,6 +51,22 @@ def get_client():
     return _client
 
 
+def max_merge(score_maps) -> dict:
+    """Per-node max across score maps ({node_id: score}).
+
+    The dual-query rerank's \"or\" semantics: a chunk rides its best query —
+    zh evidence keeps its zh-question score, English evidence its
+    English-question score (design 2026-09-09 §3.4). Nodes missing from
+    every map are absent from the result (callers default them to 0).
+    """
+    merged: dict = {}
+    for m in score_maps:
+        for node_id, score in m.items():
+            if score > merged.get(node_id, float("-inf")):
+                merged[node_id] = score
+    return merged
+
+
 class BedrockReranker:
     """Drop-in for the removed OnnxReranker: same postprocess_nodes surface
     (per-call top_n, no global mutation), scores from the Bedrock Rerank API.
@@ -90,16 +106,17 @@ class BedrockReranker:
             selected.extend(skipped[: limit - len(selected)])
         return selected
 
-    def postprocess_nodes(self, nodes, query_bundle, top_n=None):
-        if not nodes:
-            return []
-        if query_bundle is None:
-            return nodes
+    def score_documents(self, nodes, query_bundle) -> dict:
+        """Relevance scores for the given nodes against one query.
 
+        Returns {node_id: score}; no mutation — the caller owns the scores
+        (the dual-query max-merge path needs per-query maps, and a plain
+        rerank applies them itself). Empty inputs short-circuit with no API
+        call, mirroring postprocess_nodes' early returns.
+        """
+        if not nodes or query_bundle is None:
+            return {}
         settings = get_settings()
-        effective_top_n = top_n if top_n is not None else self.top_n
-        candidates = self._select_candidates(nodes, settings.rerank_candidates)
-
         model_arn = (f"arn:aws:bedrock:{settings.bedrock_rerank_region}::"
                      f"foundation-model/{settings.bedrock_rerank_model_id}")
         response = get_client().rerank(
@@ -111,25 +128,39 @@ class BedrockReranker:
                      "type": "TEXT",
                      "textDocument": {"text": node.node.get_content()},
                  }}
-                for node in candidates
+                for node in nodes
             ],
             rerankingConfiguration={
                 "type": "BEDROCK_RERANKING_MODEL",
                 "bedrockRerankingConfiguration": {
                     "modelConfiguration": {"modelArn": model_arn},
-                    "numberOfResults": len(candidates),
+                    "numberOfResults": len(nodes),
                 },
             },
         )
-
         # One billed query covers <=100 documents; rerank_candidates=100 keeps
         # this at one, but the meter derives it from the actual batch size.
         usage_meter.record_rerank(
-            "rerank", settings.bedrock_rerank_model_id, documents=len(candidates)
+            "rerank", settings.bedrock_rerank_model_id, documents=len(nodes)
         )
+        return {
+            nodes[r["index"]].node.node_id: float(r["relevanceScore"])
+            for r in response["results"]
+        }
 
-        for result in response["results"]:
-            candidates[result["index"]].score = float(result["relevanceScore"])
+    def postprocess_nodes(self, nodes, query_bundle, top_n=None):
+        if not nodes:
+            return []
+        if query_bundle is None:
+            return nodes
+
+        settings = get_settings()
+        effective_top_n = top_n if top_n is not None else self.top_n
+        candidates = self._select_candidates(nodes, settings.rerank_candidates)
+
+        scores = self.score_documents(candidates, query_bundle)
+        for node in candidates:
+            node.score = scores.get(node.node.node_id, 0.0)
 
         candidates.sort(key=lambda n: n.score, reverse=True)
         return candidates[:effective_top_n]

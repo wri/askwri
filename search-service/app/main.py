@@ -1115,6 +1115,111 @@ def build_variant_lanes(
     return lanes
 
 
+# --- Answer-mode query translation (design 2026-09-09) -----------------------
+#
+# The eval-baseline's dominant miss is cross-lingual: an English question
+# does not rank zh/es fact chunks (dense 190-460 on q3; Cohere scores them
+# 0.108-0.718 under the EN question vs 0.828-0.947 under a translated one
+# — probes 2026-09-09, docs/plans/2026-09-09-answer-mode-query-translation-
+# design.md). The fix is answer-mode-only and selection-scoped: translate the
+# question into the selection's non-English languages, seed the rerank
+# candidates from a dense retrieval per translation, and rerank once per
+# query with a max-merge. Cite mode is untouched (the 2026-07-24 P8
+# regression shape); no RRF lane, no corpus mutation.
+
+def _selection_languages(cite_doc_ids, max_langs, documents_metadata):
+    """Distinct non-English languages of the selection's documents, capped.
+
+    Pure over the startup-hydrated documents_metadata (pg_store loads
+    `language` alongside the catalog fields). Order = first appearance in
+    the selection, so the cap keeps the selection's dominant language.
+    """
+    langs = []
+    for doc_id in cite_doc_ids or []:
+        lang = ((documents_metadata or {}).get(doc_id) or {}).get("language")
+        if lang and lang != "en" and lang not in langs:
+            langs.append(lang)
+    return langs[:max_langs]
+
+
+def _default_seed_retriever(query_str, doc_ids, k):
+    """The production seed retrieval: doc-scoped dense against Postgres,
+    embedded with the service's embed model (the same cohere-embed-v4 the
+    main dense lane uses — probe 2026-09-09 validated it carries translated
+    queries to zh evidence)."""
+    from app import pg_store
+    return pg_store.dense_retrieve_doc_scoped(
+        service_state.get("embed_model"), query_str, doc_ids, k)
+
+
+def build_answer_translation(query, cite_doc_ids, documents_metadata, settings,
+                              seed_retriever=None, translate=None):
+    """(translation_bundles, seed_nodes) for one answer query, or ([], []).
+
+    Factory-injected so it is unit-testable without a DB or OpenAI:
+    `seed_retriever(query_str, doc_ids, k)` is the doc-scoped dense seed
+    (default: pg_store.dense_retrieve_doc_scoped via the service's embed
+    model), `translate` is the query_translate.translate_query callable (one
+    LLM call covering every language, LRU-cached, failure-soft). Every
+    failure degrades to ([], []) — today's behavior — never fails the
+    search. A translation whose seed retrieval fails still yields its
+    bundle: the rerank can lift zh chunks that reached the standard
+    candidates via the English lanes.
+    """
+    if not settings.answer_translation_enabled or not cite_doc_ids or not query:
+        return [], []
+    langs = _selection_languages(cite_doc_ids, settings.answer_translation_max_langs,
+                                documents_metadata)
+    if not langs:
+        return [], []
+    if translate is None:
+        from app.query_translate import translate_query_orjoined as translate
+    try:
+        translations = translate(
+            query, tuple(langs), settings.answer_translation_timeout_s) or {}
+    except Exception as exc:  # noqa: BLE001 — never fail a search on translation
+        logger.warning(f"Answer-mode query translation failed ({exc}) — using untranslated path")
+        return [], []
+    if seed_retriever is None:
+        seed_retriever = _default_seed_retriever
+    cite_set = set(cite_doc_ids)
+    bundles, seeds = [], []
+    for lang in langs:
+        text = (translations.get(lang) or "").strip()
+        if not text:
+            continue
+        bundles.append(QueryBundle(query_str=text))
+        try:
+            nodes = seed_retriever(text, cite_set, settings.answer_translation_seed_k)
+        except Exception as exc:  # noqa: BLE001 — a failed seed drops its lane only
+            logger.warning(f"Answer-mode translation seed ({lang}) failed ({exc}) — seed dropped")
+            continue
+        seeds.extend(nodes)
+    return bundles, seeds
+
+
+def _union_seed_candidates(candidates, seed_nodes):
+    """Standard candidates + seed nodes, deduped by node_id. Nothing is
+    displaced (the 07-24 §5.5a lesson: additions, never replacements)."""
+    seen = {n.node.node_id for n in candidates}
+    return candidates + [n for n in seed_nodes if n.node.node_id not in seen]
+
+
+def _rerank_with_translation_bundles(base_reranker, candidates, query_bundle,
+                                      translation_bundles, top_n):
+    """Dual-query max-merge rerank: score once per query (the original + each
+    translation), keep each node's best score, sort, cut at top_n. Blocking
+    (one rerank API call per query) — callers wrap in a worker thread."""
+    from app.bedrock_rerank import max_merge
+    score_maps = [base_reranker.score_documents(candidates, qb)
+                  for qb in [query_bundle, *translation_bundles]]
+    merged = max_merge(score_maps)
+    for node in candidates:
+        node.score = merged.get(node.node.node_id, 0.0)
+    candidates.sort(key=lambda n: n.score, reverse=True)
+    return candidates[:top_n]
+
+
 def _emit_query_emf(mode: str, debug: dict) -> None:
     """CloudWatch EMF metric line for per-stage /query latency histograms
     (L0 instrumentation). Pure-JSON stdout line — the ECS awslogs driver
@@ -1438,6 +1543,25 @@ async def hybrid_query(request: QueryRequest):
             stage1_results = [n for n in stage1_results if n.node.metadata.get("doc_id") in request.cite_doc_ids]
             logger.info(f"Answer mode: Filtered to cite_doc_ids ({before_filter} -> {len(stage1_results)})")
 
+        # Answer-mode query translation (design 2026-09-09): translate the
+        # question into the selection's non-English languages. The translated
+        # bundles feed a dual-query max-merge rerank below; the seed nodes
+        # (dense retrieval per translation, filtered to the selection) join
+        # the rerank candidates. Flag-dark: off => both stay empty and the
+        # path below is byte-identical to the standard rerank. Blocking calls
+        # (one cached translation + one dense retrieval per language) run in
+        # a worker thread.
+        translation_bundles, translation_seed = [], []
+        if (request.mode == "answer" and request.cite_doc_ids and request.rerank
+                and settings.answer_translation_enabled):
+            translation_bundles, translation_seed = await asyncio.to_thread(
+                build_answer_translation, request.query, request.cite_doc_ids,
+                service_state.get("documents_metadata") or {}, settings)
+            if translation_bundles:
+                logger.info(
+                    f"Answer mode: query translation active "
+                    f"({len(translation_bundles)} language(s), {len(translation_seed)} seed nodes)")
+
         # Translation pairs (#325): confirmed edges only, flag-gated (Task 9
         # loader returns {} when off). Answer mode: a translation's chunks can
         # never be legitimately cited (citations come from originals), so drop
@@ -1467,20 +1591,26 @@ async def hybrid_query(request: QueryRequest):
         # raw RRF scores (~0.008-0.03) that would all land below the floor.
         rerank_applied = False
         rerank_window_ids = None
-        if request.rerank and stage1_results:
+        if request.rerank and (stage1_results or translation_seed):
             base_reranker = (service_state["reranker_answer"] if request.mode == "answer"
                             else service_state["reranker_cite"])
 
             if base_reranker:
                 # P2 displacement instrument: the EXACT candidate set the
                 # reranker saw. _select_candidates is pure — recomputing it
-                # here is race-free on the shared reranker singleton.
-                if request.return_intermediate_results:
-                    rerank_window_ids = [
-                        n.node.node_id
-                        for n in base_reranker._select_candidates(
-                            stage1_results, settings.rerank_candidates)
-                    ]
+                # here is race-free on the shared reranker singleton. Built
+                # lazily (only when something needs it) so stub rerankers
+                # without the method are never touched on the standard path.
+                # With translation seeds, the window is the union (design
+                # 2026-09-09 §3.3 — the seed UNIONs, nothing is displaced).
+                candidates = None
+                if translation_seed or translation_bundles or request.return_intermediate_results:
+                    candidates = base_reranker._select_candidates(
+                        stage1_results, settings.rerank_candidates)
+                    if translation_seed:
+                        candidates = _union_seed_candidates(candidates, translation_seed)
+                    if request.return_intermediate_results:
+                        rerank_window_ids = [n.node.node_id for n in candidates]
                 try:
                     stage2_start = time.time()
                     # BedrockReranker (and the e2e stub): per-call top_n, no
@@ -1488,13 +1618,23 @@ async def hybrid_query(request: QueryRequest):
                     # The rerank is a blocking boto3 round-trip (~0.5s) — run
                     # in a worker thread so the event loop stays responsive
                     # (d214f3f adapted to the Bedrock reranker).
-                    stage2_results = await asyncio.to_thread(
-                        base_reranker.postprocess_nodes,
-                        stage1_results, query_bundle, top_n=request.rerank_top_n
-                    )
+                    if translation_bundles:
+                        # Dual-query max-merge (design §3.4): score once per
+                        # query, keep each chunk's best score — zh evidence
+                        # rides its translated-query score, English evidence
+                        # its original-query score.
+                        stage2_results = await asyncio.to_thread(
+                            _rerank_with_translation_bundles,
+                            base_reranker, candidates, query_bundle,
+                            translation_bundles, top_n=request.rerank_top_n)
+                    else:
+                        stage2_results = await asyncio.to_thread(
+                            base_reranker.postprocess_nodes,
+                            stage1_results, query_bundle, top_n=request.rerank_top_n
+                        )
                     rerank_applied = True
                     stage2_elapsed = time.time() - stage2_start
-                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
+                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(candidates) if translation_seed else len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
                 except Exception as e:
                     logger.warning(f"Reranking failed: {e}, using Stage 1 results")
                     stage2_results = stage1_results
