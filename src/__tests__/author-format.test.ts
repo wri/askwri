@@ -1,4 +1,9 @@
 import {
+  planAuthorRepairs,
+  buildEvidenceIndex,
+  type CandidateDoc,
+} from '../lib/authorFormat'
+import {
   splitAuthorsField,
   parseAuthorName,
   formatAuthorName,
@@ -166,5 +171,100 @@ describe('strictAuthorKey', () => {
   it('treats differently-spaced givens as distinct (conservative)', () => {
     expect(strictAuthorKey('Li, Xiang Yi')).toBe('li|xiang yi')
     expect(strictAuthorKey('Li, Xiangyi')).not.toBe(strictAuthorKey('Li, Xiang Yi'))
+  })
+})
+
+const EVIDENCE = new Map<string, string>([
+  ['mahendra|anjali', 'Mahendra, Anjali'],
+  ['pai|madhav', 'Pai, Madhav'],
+])
+
+describe('buildEvidenceIndex', () => {
+  it("normalizes comma'd evidence forms and dedupes identical people", () => {
+    const idx = buildEvidenceIndex([
+      { src: 'llm', canonical: 'Amos,Albert' },
+      { src: 'external', canonical: 'Amos, Albert' },
+    ])
+    expect(idx.get('amos|albert')).toBe('Amos, Albert')
+  })
+
+  it('breaks true conflicts by source quality: human > external > llm', () => {
+    const idx = buildEvidenceIndex([
+      { src: 'llm', canonical: 'Meneses, Sandra' },
+      { src: 'human', canonical: 'meneses, Sandra' }, // case variant: same strict key
+    ])
+    expect(idx.get('meneses|sandra')).toBe('meneses, Sandra')
+  })
+})
+
+describe('planAuthorRepairs', () => {
+  const doc = (authors: string, provenance: 'external' | 'llm' = 'external'): CandidateDoc => ({
+    id: '11111111-1111-1111-1111-111111111111',
+    externalId: 'doc-1',
+    authors,
+    provenance,
+  })
+
+  it('flips an external comma-less name with strict-key evidence', () => {
+    const [plan] = planAuthorRepairs([doc('Anjali Mahendra')], EVIDENCE)
+    expect(plan.ops[0]).toEqual({
+      type: 'flip',
+      before: 'Anjali Mahendra',
+      after: 'Mahendra, Anjali',
+      key: 'mahendra|anjali',
+    })
+    expect(plan.finalAuthors).toBe('Mahendra, Anjali')
+    expect(plan.authorsChanged).toBe(true)
+    expect(plan.stillUnverified).toBe(false)
+  })
+
+  it('flips llm rows under the same evidence rule', () => {
+    const [plan] = planAuthorRepairs([doc('Madhav Pai', 'llm')], EVIDENCE)
+    expect(plan.ops[0].type).toBe('flip')
+    expect(plan.finalAuthors).toBe('Pai, Madhav')
+  })
+
+  it('flags unconfirmed external comma-less names; whitespace-tidies them only', () => {
+    const [plan] = planAuthorRepairs([doc('  Xyz   Abc ')], EVIDENCE)
+    expect(plan.ops[0]).toEqual({ type: 'flag-unverified', before: 'Xyz Abc', after: 'Xyz Abc' })
+    expect(plan.stillUnverified).toBe(true)
+    expect(plan.authorsChanged).toBe(true) // whitespace collapsed
+    expect(plan.finalAuthors).toBe('Xyz Abc')
+  })
+
+  it('drops llm docs whose names have no evidence (no-op)', () => {
+    expect(planAuthorRepairs([doc('Xyz Abc', 'llm')], EVIDENCE)).toEqual([])
+  })
+
+  it('flags single-token external names and drops single-token llm names', () => {
+    expect(planAuthorRepairs([doc('Cheng')], EVIDENCE)[0].stillUnverified).toBe(true)
+    expect(planAuthorRepairs([doc('Cheng', 'llm')], EVIDENCE)).toEqual([])
+  })
+
+  it('fixes comma spacing on both provenances without evidence', () => {
+    for (const provenance of ['external', 'llm'] as const) {
+      const [plan] = planAuthorRepairs([doc('Amos,Albert', provenance)], EVIDENCE)
+      expect(plan.ops[0].type).toBe('fix-spacing')
+      expect(plan.finalAuthors).toBe('Amos, Albert')
+    }
+  })
+
+  it('handles mixed ops in one doc with one plan', () => {
+    const [plan] = planAuthorRepairs(
+      [doc('Anjali Mahendra; Amos,Albert; Cheng; Pai, Madhav')],
+      EVIDENCE,
+    )
+    expect(plan.ops.map((o) => o.type)).toEqual([
+      'flip',
+      'fix-spacing',
+      'flag-unverified',
+      'none',
+    ])
+    expect(plan.finalAuthors).toBe('Mahendra, Anjali; Amos, Albert; Cheng; Pai, Madhav')
+    expect(plan.stillUnverified).toBe(true)
+  })
+
+  it('drops external docs that are already tidy and need no flag', () => {
+    expect(planAuthorRepairs([doc('Pai, Madhav')], EVIDENCE)).toEqual([])
   })
 })

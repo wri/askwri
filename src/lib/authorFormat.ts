@@ -128,3 +128,125 @@ export function strictAuthorKey(name: string): string {
   const parsed = parseAuthorName(name)
   return `${foldToken(parsed.family)}|${foldToken(parsed.given).replace(/\./g, '')}`
 }
+
+// ---------------------------------------------------------------------------
+// Repair planning (pure — the script owns all I/O)
+// ---------------------------------------------------------------------------
+
+export type RepairOpType = 'fix-spacing' | 'flip' | 'flag-unverified' | 'none'
+
+export interface RepairOp {
+  type: RepairOpType
+  before: string
+  after: string
+  /** strictAuthorKey used for a flip. */
+  key?: string
+}
+
+export interface CandidateDoc {
+  id: string
+  externalId: string
+  authors: string
+  provenance: 'external' | 'llm'
+}
+
+export interface RepairDocPlan {
+  documentId: string
+  externalId: string
+  provenance: 'external' | 'llm'
+  originalAuthors: string
+  ops: RepairOp[]
+  finalAuthors: string
+  authorsChanged: boolean
+  /** External only: comma-less names remain, so authors_format must be set. */
+  stillUnverified: boolean
+}
+
+/**
+ * Plan repairs for candidate documents. Rules (spec 2026-09-09 §3):
+ * - comma'd but badly spaced -> fix-spacing (no evidence needed, both rows)
+ * - comma-less with a strict-key match in the evidence index -> flip (both rows)
+ * - comma-less, no match, external -> flag-unverified (name untouched apart
+ *   from whitespace collapsing; the flag marks values that cannot self-heal)
+ * - comma-less, no match, llm -> untouched, no flag (the worker may rewrite
+ *   the field at any re-ingest; llm no-match docs are dropped entirely)
+ * External docs are planned when authors change OR the flag must be set; llm
+ * docs only when authors change.
+ */
+export function planAuthorRepairs(
+  candidates: CandidateDoc[],
+  evidence: ReadonlyMap<string, string>,
+): RepairDocPlan[] {
+  const plans: RepairDocPlan[] = []
+  for (const doc of candidates) {
+    const ops: RepairOp[] = splitAuthorsField(doc.authors).map((name) => {
+      const parsed = parseAuthorName(name)
+      if (parsed.hasComma && parsed.isSplittable) {
+        const after = formatAuthorName(parsed)
+        return {
+          type: (after === name ? 'none' : 'fix-spacing') as RepairOpType,
+          before: name,
+          after,
+        }
+      }
+      const canonical = evidence.get(strictAuthorKey(name))
+      if (canonical) {
+        return { type: 'flip' as const, before: name, after: canonical, key: strictAuthorKey(name) }
+      }
+      if (doc.provenance === 'external') {
+        return { type: 'flag-unverified' as const, before: name, after: collapseWhitespace(name) }
+      }
+      return { type: 'none' as const, before: name, after: name }
+    })
+    const finalAuthors = ops.map((op) => op.after).join('; ')
+    const authorsChanged = finalAuthors !== doc.authors
+    const stillUnverified = ops.some((op) => op.type === 'flag-unverified')
+    const needsWrite =
+      doc.provenance === 'external' ? authorsChanged || stillUnverified : authorsChanged
+    if (!needsWrite) continue
+    plans.push({
+      documentId: doc.id,
+      externalId: doc.externalId,
+      provenance: doc.provenance,
+      originalAuthors: doc.authors,
+      ops,
+      finalAuthors,
+      authorsChanged,
+      stillUnverified,
+    })
+  }
+  return plans
+}
+
+// ---------------------------------------------------------------------------
+// Evidence index (pure — the script feeds it query rows)
+// ---------------------------------------------------------------------------
+
+export interface EvidenceRow {
+  /** metadata_source->>'authors' of the row the comma'd name came from. */
+  src: string
+  /** A comma'd name as stored, e.g. "Amos,Albert" or "Mahendra, Anjali". */
+  canonical: string
+}
+
+const SOURCE_PRIORITY: Record<string, number> = { human: 0, external: 1, llm: 2 }
+
+/**
+ * strictAuthorKey -> tidy canonical "Family, Given". Collisions on distinct
+ * normalized spellings are broken by source quality: human > external > llm.
+ */
+export function buildEvidenceIndex(rows: EvidenceRow[]): Map<string, string> {
+  const best = new Map<string, { value: string; rank: number }>()
+  for (const row of rows) {
+    const value = formatAuthorName(parseAuthorName(row.canonical))
+    const key = strictAuthorKey(value)
+    const rank = SOURCE_PRIORITY[row.src] ?? 3
+    const existing = best.get(key)
+    if (!existing) {
+      best.set(key, { value, rank })
+    } else if (existing.value !== value && rank < existing.rank) {
+      best.set(key, { value, rank })
+    }
+  }
+  return new Map([...best].map(([k, v]) => [k, v.value]))
+}
