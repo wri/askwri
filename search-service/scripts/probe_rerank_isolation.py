@@ -426,10 +426,14 @@ def print_report(queries, batch, scores_by_query, rows, all_pass,
 
 
 def run_snapshot_flow(args, log=print):
-    """--snapshot: validity gate FIRST (exact-equality against recorded runs;
-    non-zero exit and NO snapshots when it fails), then the per-case EN-only
-    snapshots with resolved expected_detail and drift-attributed baseline
-    structural checks."""
+    """--snapshot: validity gate FIRST (its verdict + divergence
+    classifications are recorded in the gate artifact), then the per-case
+    EN-only SHIPPED-state snapshots. The gate validates the UNION
+    reconstruction (standard+seed, mirror2 replays); the EN-only snapshots do
+    NOT depend on it — their fidelity check is the baseline structural
+    comparison — so snapshots run regardless of the gate verdict, with the
+    verdict logged. Grounding-state occupancy comes from the RECORDED
+    mirror2 artifacts, never fresh draws."""
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         raise SystemExit("DATABASE_URL not set — invoke via "
@@ -447,21 +451,25 @@ def run_snapshot_flow(args, log=print):
         "rows": rows, "passed": all_pass,
         "convention": SNAPSHOT_BASELINE_CONVENTION,
         "gating_criterion": (
-            "expected-hit set equality on mirror2 replays (gate-A); "
-            "full-15 set/order reported as diagnostics — the standard lane "
-            "is a dense-only approximation of the fused hybrid candidates, "
-            "so tail composition diverges while expected-chunk placement "
-            "reproduces; pool-absence conclusions for standard-lane-only "
-            "chunks carry the same limit (seed-lane membership is exact)"),
+            "RESTORED per ruling: the full final-15 SET must match on every "
+            "gating row (set_equal; subsumes expected-hit equality). "
+            "Divergences carry per-chunk classifications (dense-retrievable "
+            "checks against the recorded EN + zh queries). A FAILED gate is "
+            "a finding, not something to tune away; EN-only snapshots run "
+            "regardless (they do not depend on the union reconstruction)."),
     }
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     out = ARTIFACT_DIR / f"snapshot-validity-{args.label}.json"
     out.write_text(json.dumps(gate, ensure_ascii=False, indent=2))
     log(f"gate artifact: {out}")
     if not all_pass:
-        log("VALIDITY GATE FAILED — the snapshot is not trustworthy; "
-            "no snapshots written (a failed gate is a finding, not a tune-away)")
-        return 1
+        log("VALIDITY GATE FAILED (union reconstruction) — recorded as a "
+            "finding with per-chunk divergence classifications in the gate "
+            "artifact; EN-only snapshots proceed (they do not depend on the "
+            "union reconstruction — fidelity check = baseline structural "
+            "comparison)")
+    else:
+        log("validity gate PASSED")
     text_cache, idx_cache, summary_cache = {}, {}, {}
     new_docs, drift_column = new_doc_ids_since(database_url)
     log(f"corpus drift since {BASELINE_DATE}: {len(new_docs)} new searchable "
@@ -712,8 +720,10 @@ def load_served_bundles(path=None):
     recorded contract (schema probe-mirror2-served-bundles@1)."""
     path = path or _artifact(SERVED_BUNDLES_NAME)
     if not Path(path).exists():
-        return {}  # no recording — absent, not an error (snapshot falls back
-        # to a fresh draw per case)
+        raise SystemExit(
+            f"served-bundles artifact missing: {path} — the validity gate "
+            f"cannot replay without the recorded strings (hard failure, "
+            f"not a fallback)")
     data = json.loads(Path(path).read_text())
     out = {}
     for run_key, list_key in (("r1", "run_r1"), ("r2", "run_r2")):
@@ -905,11 +915,16 @@ def new_doc_ids_since(database_url, date_str=BASELINE_DATE):
             "WHERE table_name = 'documents' "
             "AND (column_name ILIKE '%creat%' OR column_name ILIKE '%added%') "
             "AND data_type IN ('timestamp without time zone', "
-            "'timestamp with time zone', 'date')"
+            "'timestamp with time zone', 'date') "
+            "ORDER BY column_name"
         ).fetchall()
         if not cols:
             return set(), None
-        column = cols[0][0]
+        colnames = [c[0] for c in cols]
+        # deterministic pick: explicit preference, then alphabetical (the
+        # information_schema row order is not guaranteed)
+        prefs = ["created_at", "inserted_at", "added_at"]
+        column = next((p for p in prefs if p in colnames), colnames[0])
         rows = conn.execute(
             f"SELECT external_id FROM documents WHERE {column} >= %(d)s "
             "AND status = 'searchable'",
@@ -1005,25 +1020,57 @@ def get_indexes(pool_ids, idx_cache, summary_cache, database_url):
     return idx_cache, summary_cache
 
 
+def _dense_rank_in_doc(database_url, query, doc_id, chunk_id, cache, k=1000):
+    """1-based dense rank of chunk_id within its own document for query
+    (None if the document's dense ranking does not surface it at depth k).
+    Results cached per (query, doc) — one doc-scoped dense call each."""
+    key = (query, doc_id)
+    if key not in cache:
+        cache[key] = {cid: i + 1 for i, cid in
+                      enumerate(dense_doc_top(database_url, query, [doc_id], k))}
+    return cache[key].get(chunk_id)
+
+
+def _classify_divergent_chunk(chunk_id, en_rank, zh_rank, in_reconstructed_standard):
+    """Per-chunk classification of a set_equal divergence (controller ruling:
+    no attribution without evidence)."""
+    if en_rank is None:
+        if zh_rank is not None:
+            return ("other: zh-seed-lane product — not EN-dense-retrievable; "
+                    "the recorded run reached it via the zh seed lane")
+        return "not-dense-retrievable (pool-membership bug — ESCALATE)"
+    if in_reconstructed_standard:
+        return ("other: present in the reconstructed standard pool "
+                "(order/tie divergence)")
+    return ("dense-retrievable-but-outside-reconstructed-top-%d "
+            "(supports fused-lane attribution)" % EN_SEED_K)
+
+
 def run_validity_gate(database_url, case_ids, demotion=True, log=print):
-    """Prove the reconstruction against recorded reality before any snapshot
-    is trusted. GATING criterion (gate-A, mirror2 replays): the predicted
-    EXPECTED-HIT set must equal the recorded one, 8/8 (4 cases x r1/r2) —
-    this is the quantity the census consumes. The full final-15 set/order
-    are REPORTED diagnostics, not gated: the standard lane is a dense-only
-    approximation of the fused hybrid candidates (fidelity_caveat), so tail
-    composition diverges while expected-chunk placement reproduces.
-    Gate-B (pool-probe legacy replays) is REPORT-ONLY: the recorded pool-probe
-    artifacts saved no zh query strings (verified 2026-09-10), so their seed
-    lane replays with a fresh draw and cannot be deterministic.
-    The seed lane replays the recorded served string — zero LLM calls;
+    """Prove the reconstruction against recorded reality. GATING criterion
+    (restored per controller ruling): the full final-15 SET must equal the
+    recorded one on every gate-A row (mirror2 replays) — set equality
+    subsumes expected-hit equality (hits ⊆ final15). A FAILED gate is a
+    finding, not something to tune away: each set_equal divergence carries a
+    per-chunk classification (dense-retrievability checks against the
+    recorded EN and zh queries) so the failure is attributed, not averaged
+    away. Gate-B (pool-probe legacy replays) is REPORT-ONLY: the recorded
+    pool-probe artifacts saved no zh query strings (verified 2026-09-10), so
+    their seed lane replays with a fresh draw and cannot be deterministic.
+    The gate-A seed lane replays the recorded served string — zero LLM calls;
     deterministic pool (a fresh draw changed the pool itself: q4 238 vs 264).
     Returns (rows, all_pass).
     """
     served = load_served_bundles()
+    for run in ("r1", "r2"):
+        if run not in served:
+            raise SystemExit(f"served-bundles artifact missing run '{run}' — "
+                             f"the gate cannot replay without the recorded "
+                             f"strings (hard failure, not a fallback)")
     mirror = {"r1": load_mirror2_run(_artifact(MIRROR2_R1_NAME)),
               "r2": load_mirror2_run(_artifact(MIRROR2_R2_NAME))}
     text_cache, idx_cache, summary_cache = {}, {}, {}
+    dense_cache = {}
     rows = []
     for run in ("r1", "r2"):
         for case_id in MIRROR2_CASE_ORDER:
@@ -1031,6 +1078,10 @@ def run_validity_gate(database_url, case_ids, demotion=True, log=print):
                 continue
             question, expected_ids = load_fixture_case(case_id)
             doc_ids = load_selection_doc_ids(case_id)
+            if case_id not in served[run]:
+                raise SystemExit(f"served-bundles artifact has no recorded "
+                                 f"string for run '{run}' case '{case_id}' — "
+                                 f"hard failure, not a fallback")
             # The seed lane replays the RECORDED served string: the pool's
             # dense retrieval is draw-dependent, so a fresh draw changes the
             # pool itself (measured: q4 pool 238 vs 264 across draws). Only
@@ -1054,7 +1105,9 @@ def run_validity_gate(database_url, case_ids, demotion=True, log=print):
             hits = [c for c in expected_ids if c in set(pred_ids)]
             order_ok = cmp["order_equal"] or ties_explain_order(
                 pred_ids, rec["final15_ids"], merged)
-            ok = set(hits) == set(rec["expected_hits"])
+            ok = cmp["set_equal"]  # GATING criterion (restored per ruling):
+            # the full final-15 SET must match; set equality subsumes
+            # expected-hit equality (hits ⊆ final15).
             rows.append({
                 "check": f"mirror2-{run}", "case_id": case_id, "pass": ok,
                 "gating": True,
@@ -1065,6 +1118,18 @@ def run_validity_gate(database_url, case_ids, demotion=True, log=print):
                 "pool_size": len(pool_ids), "seed_n": len(seed_ids),
                 "en_n": len(en_ids),
                 "seed_query": "recorded served string (deterministic replay)"})
+            if not cmp["set_equal"]:
+                divergent = sorted(set(cmp["only_predicted"])
+                                   | set(cmp["only_recorded"]))
+                rows[-1]["divergence_classification"] = {
+                    cid: _classify_divergent_chunk(
+                        cid,
+                        _dense_rank_in_doc(database_url, question,
+                                           doc_of_chunk(cid), cid, dense_cache),
+                        _dense_rank_in_doc(database_url, served[run][case_id],
+                                           doc_of_chunk(cid), cid, dense_cache),
+                        cid in en_ids)
+                    for cid in divergent}
             log(f"[gate-A {run} {case_id.split('_')[0]}] hits {len(hits)} "
                 f"vs recorded {len(rec['expected_hits'])} | "
                 f"set_equal={cmp['set_equal']} order_ok={order_ok} "
@@ -1118,44 +1183,28 @@ def run_validity_gate(database_url, case_ids, demotion=True, log=print):
 
 def snapshot_case(case_id, database_url, text_cache, idx_cache, summary_cache,
                   new_docs, drift_column, demotion=True, label=None, log=print):
-    """One case's EN-only snapshot: reconstruct the production pool
-    (standard-first union over the case's selection), score the EN question
-    once over the union (cross-encoder scores are per-(query,doc) pairs, so
-    one call serves both views), and record both views with resolved
-    expected_detail plus the baseline structural check with drift
-    attribution. Writes snapshot-<case>-<label>.json; returns its path."""
+    """One case's EN-only SHIPPED-state snapshot: the production pool with the
+    flag dark is the standard candidates ALONE — no seed lane, no zh lane, no
+    LLM call anywhere in this mode. Scores the EN question over the standard
+    pool and records the predicted final 15 with resolved expected_detail,
+    plus the baseline structural check with drift attribution.
+    Grounding-state occupancy analysis does NOT come from this mode — it uses
+    the RECORDED mirror2 artifacts (see SNAPSHOT_BASELINE_CONVENTION);
+    recorded draws, no new ones.
+    Writes snapshot-<case>-<label>.json; returns its path."""
     question, expected_ids = load_fixture_case(case_id)
     winners = load_capture_winners(case_id)
     doc_ids = load_selection_doc_ids(case_id)
-    served = load_served_bundles()
-    if case_id in served.get("r2", {}):
-        orjoined = served["r2"][case_id]
-        seed_query_source = "recorded served r2 string (deterministic replay)"
-    else:
-        orjoined = translate_orjoined(question)
-        seed_query_source = "fresh orjoined draw (single sample; string recorded " \
-                            "below for replay)"
-        if not orjoined.strip():
-            raise SystemExit(
-                f"{case_id}: translation draw came back EMPTY — the seed lane "
-                f"cannot be built; rerun (transient translator behavior)")
-    pool_ids, seed_ids, en_ids = reconstruct_pool(
-        database_url, question, orjoined, doc_ids)
-    batch = pool_batches(pool_ids, text_cache, database_url)
+    en_ids = dense_doc_top(database_url, question, doc_ids, EN_SEED_K)
+    batch = pool_batches(en_ids, text_cache, database_url)
     indexes, summaries = get_indexes(
-        pool_ids, idx_cache, summary_cache, database_url)
+        en_ids, idx_cache, summary_cache, database_url)
     exclude = {c for c, is_sum in summaries.items() if is_sum}
     en_map = rerank_scores(question, batch)
-    standard_set = set(en_ids)
-    shipped_pool = [cid for cid in pool_ids if cid in standard_set]
-    shipped = stable_rank(shipped_pool, en_map, RERANK_TOP_N, MAX_RESULTS,
+    shipped = stable_rank(en_ids, en_map, RERANK_TOP_N, MAX_RESULTS,
                           chunk_index_of=indexes if demotion else None,
                           exclude=exclude)
-    union = stable_rank(pool_ids, en_map, RERANK_TOP_N, MAX_RESULTS,
-                        chunk_index_of=indexes if demotion else None,
-                        exclude=exclude)
     shipped_ids = [cid for cid, _ in shipped]
-    union_ids = [cid for cid, _ in union]
     doc_of = doc_of_chunk
     structural = attribute_baseline_drift(
         shipped_ids, winners, new_docs, doc_of)
@@ -1168,40 +1217,27 @@ def snapshot_case(case_id, database_url, text_cache, idx_cache, summary_cache,
         "fidelity_caveat": (
             "standard lane = doc-scoped dense top-%d under the EN question "
             "(dense-only approximation of the fused hybrid standard "
-            "candidates); the validity gate (mirror2 replays) measures this "
-            "approximation end-to-end" % EN_SEED_K),
+            "candidates); shipped-state pool-absence conclusions for "
+            "standard-lane-only chunks carry this limit" % EN_SEED_K),
         "doc_universe": {"mode": "selection", "doc_ids": doc_ids},
-        "seed_query": {"source": seed_query_source, "text": orjoined},
         "pool": {
-            "standard_n": len(en_ids), "seed_n": len(seed_ids),
-            "union_n": len(pool_ids),
-            "order": "standard-first (production union); stable ties",
-            "ids": pool_ids,
-            "seed_ids": seed_ids, "en_ids": en_ids,
+            "standard_n": len(en_ids),
+            "order": "standard candidates only (flag-dark production pool)",
+            "ids": en_ids,
             "doc_composition": {
                 "standard": {d: sum(1 for c in en_ids if doc_of(c) == d)
                               for d in doc_ids},
-                "union": {d: sum(1 for c in pool_ids if doc_of(c) == d)
-                           for d in doc_ids},
             },
         },
-        "queries": {"en": question, "seed_zh_orjoined": orjoined},
+        "queries": {"en": question},
         "en_scores": en_map,
         "views": {
             "shipped_en_only": {
                 "note": "the EN-only shipped state's predicted final 15 "
-                        "(standard candidates only)",
+                        "(standard candidates only — the flag-dark pool)",
                 "final15": shipped,
                 "expected_detail": resolve_expected_detail(
-                    expected_ids, shipped_pool, en_map, shipped_ids),
-            },
-            "en_over_union_pool": {
-                "note": "EN scores over the standard+seed union pool — NOT a "
-                        "production state (the real grounding state max-merges "
-                        "a zh map over this pool); recorded for the T2 census",
-                "final15": union,
-                "expected_detail": resolve_expected_detail(
-                    expected_ids, pool_ids, en_map, union_ids),
+                    expected_ids, en_ids, en_map, shipped_ids),
             },
         },
         "baseline_structural": {
@@ -1224,10 +1260,10 @@ def snapshot_case(case_id, database_url, text_cache, idx_cache, summary_cache,
     absent_s = [d["chunk_id"] for d
                 in artifact["views"]["shipped_en_only"]["expected_detail"]
                 if not d["in_pool"]]
-    log(f"[snapshot {case_id.split('_')[0]}] shipped hits "
-        f"{len(hits_s)}/{len(expected_ids)} | pool {len(en_ids)}+{len(seed_ids)}"
-        f"={len(pool_ids)} | shared-vs-baseline "
-        f"{len(structural['shared'])}/{len(winners)} | pool-absent: "
+    log(f"[snapshot {case_id.split('_')[0]}] shipped(EN-only) hits "
+        f"{len(hits_s)}/{len(expected_ids)} | standard pool {len(en_ids)} | "
+        f"shared-vs-baseline {len(structural['shared'])}/{len(winners)} | "
+        f"pool-absent: "
         f"{[a.rsplit('_chunk_',1)[-1] for a in absent_s] or 'none'}")
     log(f"artifact: {out}")
     return out

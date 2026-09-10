@@ -497,24 +497,11 @@ def test_run_validity_gate_reproduces_recorded_run(fake_sources, monkeypatch, ca
     assert a_rows[0]["pool_size"] == 5  # e1,e2 standard-first + s1,s2,s3 seeds
 
 
-def test_run_validity_gate_expected_hit_mismatch_fails_loudly(fake_sources, monkeypatch):
-    _snapshot_env(fake_sources, monkeypatch)
-    # corrupt the recording's EXPECTED HITS (the gating criterion): the
-    # predicted hits no longer equal the recorded ones -> loud failure
-    mirror = json.loads((probe.ARTIFACT_DIR /
-                         "probe-mirror2-grounded-r1-20260910.json").read_text())
-    mirror["cases"]["caseA"]["expected_hits"] = ["s9"]
-    (probe.ARTIFACT_DIR / "probe-mirror2-grounded-r1-20260910.json").write_text(
-        json.dumps(mirror))
-    rows, all_pass = probe.run_validity_gate("postgres://x", ["caseA"])
-    assert all_pass is False
-    bad = [r for r in rows if not r["pass"]]
-    assert bad and bad[0]["gating"] is True
-
-
-def test_run_validity_gate_tail_mismatch_is_reported_not_gated(fake_sources, monkeypatch):
-    """A recorded-tail difference (standard-lane approximation) must NOT fail
-    the gate — the gating criterion is expected-hit set equality."""
+def test_run_validity_gate_tail_mismatch_fails_gate(fake_sources, monkeypatch):
+    """RESTORED ruling: the full final-15 SET is the gating criterion — a
+    tail mismatch FAILS the gate (a failed gate is a finding, not a
+    tune-away). The expected-hits still match here; that does not rescue
+    the verdict."""
     _snapshot_env(fake_sources, monkeypatch)
     mirror = json.loads((probe.ARTIFACT_DIR /
                          "probe-mirror2-grounded-r1-20260910.json").read_text())
@@ -522,23 +509,47 @@ def test_run_validity_gate_tail_mismatch_is_reported_not_gated(fake_sources, mon
     (probe.ARTIFACT_DIR / "probe-mirror2-grounded-r1-20260910.json").write_text(
         json.dumps(mirror))
     rows, all_pass = probe.run_validity_gate("postgres://x", ["caseA"])
-    assert all_pass is True
+    assert all_pass is False
     bad = [r for r in rows if not r["pass"]]
-    assert not bad
+    assert bad and bad[0]["gating"] is True
+    assert bad[0]["only_recorded"] == ["zz"]
+    # hits still match — reported, and visibly NOT the gating criterion
+    assert bad[0]["hits_predicted"] == bad[0]["hits_recorded"]
 
 
-def test_main_snapshot_flow_gate_failure_writes_no_snapshots(fake_sources, monkeypatch):
+def test_run_validity_gate_reports_hit_divergence_when_sets_match(fake_sources, monkeypatch):
+    """A corrupted recording whose expected_hits disagree with its own
+    final15 is a recording-integrity issue: set_equal still holds (the
+    reconstruction matched), and the row REPORTS the hits divergence."""
+    _snapshot_env(fake_sources, monkeypatch)
+    mirror = json.loads((probe.ARTIFACT_DIR /
+                         "probe-mirror2-grounded-r1-20260910.json").read_text())
+    mirror["cases"]["caseA"]["expected_hits"] = ["s9"]
+    (probe.ARTIFACT_DIR / "probe-mirror2-grounded-r1-20260910.json").write_text(
+        json.dumps(mirror))
+    rows, all_pass = probe.run_validity_gate("postgres://x", ["caseA"])
+    assert all_pass is True  # set_equal intact — the reconstruction matched
+    assert rows[0]["hits_predicted"] == ["s1"]
+    assert rows[0]["hits_recorded"] == ["s9"]
+
+
+def test_main_snapshot_flow_proceeds_on_gate_failure(fake_sources, monkeypatch):
+    """Ruling: the gate validates the UNION reconstruction; the EN-only
+    snapshots do not depend on it — they run regardless, with the verdict
+    recorded in the gate artifact."""
     monkeypatch.setenv("DATABASE_URL", "postgres://x")
     monkeypatch.setattr(probe, "measurable_case_ids", lambda: ["caseA"])
     monkeypatch.setattr(probe, "run_validity_gate",
                         lambda db, cases, demotion=True, log=print:
-                        ([{"check": "x", "pass": False}], False))
+                        ([{"check": "x", "pass": False, "gating": True}], False))
     snapshots = []
     monkeypatch.setattr(probe, "snapshot_case",
                         lambda *a, **k: snapshots.append(a) or "p")
+    monkeypatch.setattr(probe, "new_doc_ids_since",
+                        lambda db, date_str=None: (set(), "created_at"))
     rc = probe.main(["--snapshot", "--all-cases", "--label", "t1"])
-    assert rc == 1
-    assert snapshots == []
+    assert rc == 0
+    assert len(snapshots) == 1  # the EN-only snapshot ran despite the failure
     assert (probe.ARTIFACT_DIR / "snapshot-validity-t1.json").exists()
 
 
@@ -592,22 +603,20 @@ def test_run_validity_gate_makes_no_openai_calls(fake_sources, monkeypatch):
     assert all_pass is True
 
 
-def test_snapshot_case_records_seed_query_source(fake_sources, monkeypatch):
-    """Snapshot seed lane: recorded served string when one exists for the
-    case; otherwise a single fresh draw WITH the exact string recorded for
-    replay (zero-LLM is impossible — the pool's dense seed needs a zh query)."""
+def test_snapshot_case_is_en_only_shipped_state(fake_sources, monkeypatch):
+    """Snapshot = the EN-only SHIPPED state (flag dark): no seed lane, no zh
+    lane, NO LLM call anywhere; pool = standard candidates only."""
     _snapshot_env(fake_sources, monkeypatch)
     monkeypatch.setenv("DATABASE_URL", "postgres://x")
+
+    def _forbidden(question, api_key=None):
+        raise AssertionError("snapshot mode must not call the translator")
+
+    monkeypatch.setattr(probe, "translate_orjoined", _forbidden)
     path = probe.snapshot_case("caseA", "postgres://x", {}, {}, {},
                                [], "since_col", label="t")
     data = json.loads(Path(path).read_text())
-    assert "recorded served r2" in data["seed_query"]["source"]
-    assert data["seed_query"]["text"] == "ZH2"
-    # no recording for this case -> fresh draw, string preserved for replay
-    (probe.ARTIFACT_DIR /
-     "probe-mirror2-served-bundles-20260910.json").unlink()
-    path = probe.snapshot_case("caseA", "postgres://x", {}, {}, {},
-                               [], "since_col", label="t2")
-    data = json.loads(Path(path).read_text())
-    assert "fresh orjoined draw" in data["seed_query"]["source"]
-    assert data["seed_query"]["text"] == "ZHSEED"
+    assert "seed_query" not in data
+    assert data["pool"]["order"].startswith("standard candidates only")
+    assert "seed_ids" not in data["pool"]
+    assert list(data["views"].keys()) == ["shipped_en_only"]
