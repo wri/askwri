@@ -12,14 +12,18 @@ import {
  * One-off repair for mixed author name formats (issue #411; spec
  * docs/superpowers/specs/2026-09-09-author-name-format-design.md).
  *
- * Dry-run by default; pass --apply to commit. Idempotent: external docs
- * already flagged authors_format='unverified' and fully-comma'd docs are
- * never re-planned, so a rerun after --apply performs no writes.
+ * Dry-run by default; pass --apply to commit. Idempotent by SHAPE, not by
+ * flag: an already-flagged external doc is still queried, but planned only if
+ * its authors actually change — so a rerun after --apply performs no writes,
+ * while a doc whose name gains a verified sibling later can still be repaired.
+ * Writes are guarded on the planned authors value as well as provenance, so a
+ * concurrent worker or import write is dropped, never clobbered.
  *
  * Ownership note: this script writes llm-provenanced authors — a deliberate,
- * bounded exception to one-owner-per-domain (evidence-gated flips only,
- * provenance left 'llm' so the worker can still supersede on re-ingest).
- * Every written doc gets an audit row recording that rationale.
+ * bounded exception to one-owner-per-domain (evidence-gated flips and per-name
+ * comma spacing only, never separator cosmetics; provenance left 'llm' so the
+ * worker can still supersede on re-ingest). Every written doc gets an audit
+ * row recording that rationale.
  *
  * Run against an environment:
  *   ./scripts/with-remote-env.sh qa         npm run repair:author-formats
@@ -29,7 +33,8 @@ import {
 
 const CANDIDATE_SQL = `
   SELECT DISTINCT d.id::text AS id, d.external_id, d.authors,
-         d.metadata_source->>'authors' AS provenance
+         d.metadata_source->>'authors' AS provenance,
+         jsonb_exists(d.metadata_source, 'authors_format') AS already_flagged
   FROM documents d
   CROSS JOIN LATERAL unnest(string_to_array(d.authors, ';')) AS u(nm)
   WHERE d.authors IS NOT NULL
@@ -38,11 +43,11 @@ const CANDIDATE_SQL = `
       SELECT 1 FROM ingestion_jobs j
       WHERE j.document_id = d.id AND j.status IN ('queued', 'running')
     )
-    AND NOT (d.metadata_source ? 'authors_format')
     AND (
       position(',' in trim(u.nm)) = 0
       OR trim(u.nm) <> regexp_replace(regexp_replace(trim(u.nm), '\\s+', ' ', 'g'), '\\s*,\\s*', ', ')
     )
+  ORDER BY d.external_id
 `
 
 const EVIDENCE_SQL = `
@@ -52,6 +57,7 @@ const EVIDENCE_SQL = `
   WHERE d.authors IS NOT NULL
     AND position(',' in trim(u.nm)) > 0
     AND trim(u.nm) <> ''
+  ORDER BY d.metadata_source->>'authors', trim(u.nm)
 `
 
 async function main() {
@@ -74,12 +80,14 @@ async function main() {
       external_id: string
       authors: string
       provenance: 'external' | 'llm'
+      already_flagged: boolean
     }>
     const candidates: CandidateDoc[] = candidateRows.map((r) => ({
       id: r.id,
       externalId: r.external_id,
       authors: r.authors,
       provenance: r.provenance,
+      alreadyFlagged: r.already_flagged,
     }))
 
     const plans = planAuthorRepairs(candidates, evidence)
@@ -98,9 +106,9 @@ async function main() {
     console.log(
       `Ops: fix-spacing=${counts['fix-spacing']} flip=${counts.flip} flag-unverified=${counts['flag-unverified']}`,
     )
+    const plannedIds = new Set(plans.map((p) => p.documentId))
     const untouchedLlm = candidates.filter(
-      (c) =>
-        c.provenance === 'llm' && !plans.some((p) => p.documentId === c.id),
+      (c) => c.provenance === 'llm' && !plannedIds.has(c.id),
     ).length
     if (untouchedLlm > 0) {
       console.log(
@@ -133,22 +141,39 @@ async function main() {
           : {},
       )
       const result = await AppDataSource.transaction(async (tm) => {
+        // The provenance guard alone is not enough. The worker writes authors
+        // under exactly the condition it checks —
+        // search-service/worker/stages/parse.py:681 updates WHERE
+        // metadata_source->>'authors' IS NULL OR = 'llm' — so a parse that
+        // lands between the candidate query and this transaction is invisible
+        // to a provenance-only guard and gets clobbered by our stale plan. The
+        // open-job exclusion in CANDIDATE_SQL closes the window only at query
+        // time. Guarding on the value we planned from closes it at write time.
         const updated =
           plan.provenance === 'external'
             ? await tm.query(
                 `UPDATE documents
                  SET authors = $2,
                      metadata_source = (metadata_source - 'authors_format') || $3::jsonb
-                 WHERE id = $1::uuid AND metadata_source->>'authors' = 'external'
+                 WHERE id = $1::uuid
+                   AND metadata_source->>'authors' = 'external'
+                   AND authors IS NOT DISTINCT FROM $4
                  RETURNING id`,
-                [plan.documentId, plan.finalAuthors, flagJson],
+                [
+                  plan.documentId,
+                  plan.finalAuthors,
+                  flagJson,
+                  plan.originalAuthors,
+                ],
               )
             : await tm.query(
                 `UPDATE documents
                  SET authors = $2
-                 WHERE id = $1::uuid AND metadata_source->>'authors' = 'llm'
+                 WHERE id = $1::uuid
+                   AND metadata_source->>'authors' = 'llm'
+                   AND authors IS NOT DISTINCT FROM $3
                  RETURNING id`,
-                [plan.documentId, plan.finalAuthors],
+                [plan.documentId, plan.finalAuthors, plan.originalAuthors],
               )
         if (updated.length === 0) return false
         await writeAudit(
@@ -163,9 +188,16 @@ async function main() {
               authors: plan.finalAuthors,
               provenance: plan.provenance,
               ops: plan.ops.filter((o) => o.type !== 'none').map((o) => o.type),
+              authorsFormat:
+                plan.provenance !== 'external'
+                  ? 'unchanged'
+                  : plan.stillUnverified
+                    ? 'set'
+                    : 'cleared',
               rationale:
-                'issue #411 one-off: evidence-gated author format repair; ' +
-                'llm rows keep provenance so the worker may supersede on re-ingest',
+                'issue #411 one-off: evidence-gated flips plus per-name comma ' +
+                'spacing repair; llm rows keep provenance so the worker may ' +
+                'supersede on re-ingest',
             },
           },
           tm,
@@ -177,11 +209,15 @@ async function main() {
       } else {
         dropped++
         console.log(
-          `  DROPPED (guard missed — provenance changed concurrently?): ${plan.externalId}`,
+          `  DROPPED (guard missed — authors or provenance changed since the plan): ${plan.externalId}`,
         )
       }
     }
     console.log(`Applied: ${applied} | Dropped: ${dropped}`)
+    if (dropped > 0) {
+      console.log('Re-run the dry run to re-plan the dropped documents.')
+      process.exitCode = 1
+    }
   } finally {
     await AppDataSource.destroy()
   }
