@@ -146,16 +146,21 @@ const ExpertsPageContent = () => {
   const people = data?.people ?? []
   const matched = data?.understanding.matched_topics ?? []
   const totalWorks = useMemo(() => Object.keys(data?.docs ?? {}).length, [data])
+  // Spec §4.5: peersOf's N is the count of searchable works (corpus N),
+  // NOT the payload doc count (5-50). matched_topics[].df is corpus-wide,
+  // so specificity = ln(N/df) needs the real corpus size or it goes negative
+  // for hub topics and peers silently vanish. Fallback for older payloads.
+  const corpusN = useMemo(
+    () => data?.total_works ?? Math.max(totalWorks, 1),
+    [data, totalWorks],
+  )
   const activeKey = selectedKey ?? hoverKey
   const activePerson = activeKey
     ? (people.find((p) => p.key === activeKey) ?? null)
     : null
   const peers = useMemo(
-    () =>
-      activePerson
-        ? peersOf(activePerson, people, matched, Math.max(totalWorks, 1))
-        : [],
-    [activePerson, people, matched, totalWorks],
+    () => (activePerson ? peersOf(activePerson, people, matched, corpusN) : []),
+    [activePerson, people, matched, corpusN],
   )
   const peerKeys = useMemo(() => new Set(peers.map((p) => p.key)), [peers])
   const selectedPerson = selectedKey

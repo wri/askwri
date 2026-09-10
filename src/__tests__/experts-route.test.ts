@@ -146,6 +146,7 @@ describe('POST /api/experts', () => {
       top_k: 10,
     })
     expect(body.ok).toBe(true)
+    expect(body.total_works).toBe(2)
     expect(body.mode).toBe('evidence')
     expect(body.people[0]).toMatchObject({ key: 'xue, lulu', score: 1 })
     expect(body.understanding.matched_topics).toEqual([

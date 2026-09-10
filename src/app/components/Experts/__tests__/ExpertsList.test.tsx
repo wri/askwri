@@ -106,4 +106,61 @@ describe('ExpertsList', () => {
     )
     expect(screen.getByText(/2 docs on these topics/)).toBeInTheDocument()
   })
+
+  it('evidence mode tag-only candidate: docs>0, all tiers 0 renders no double dot', () => {
+    const p: PersonResult = {
+      ...people[0],
+      evidence: {
+        docs: 3,
+        strong: 0,
+        partial: 0,
+        weak: 0,
+        years: [2020, 2025],
+        corpusDocs: 27,
+      },
+      docIds: ['d1', 'd2', 'd3'],
+    }
+    render(
+      <ChakraProvider>
+        <ExpertsList
+          people={[p]}
+          mode='evidence'
+          selectedKey={null}
+          peerKeys={new Set()}
+          onHover={jest.fn()}
+          onSelect={jest.fn()}
+        />
+      </ChakraProvider>,
+    )
+    expect(screen.getByText('3 docs · 2020–2025')).toBeInTheDocument()
+    expect(screen.queryByText(/\. · \.|\. $/)).not.toBeInTheDocument()
+  })
+
+  it('evidence mode tag-only candidate: docs>0, all tiers 0, no years renders just docs', () => {
+    const p: PersonResult = {
+      ...people[0],
+      evidence: {
+        docs: 1,
+        strong: 0,
+        partial: 0,
+        weak: 0,
+        years: null,
+        corpusDocs: 27,
+      },
+      docIds: ['d1'],
+    }
+    render(
+      <ChakraProvider>
+        <ExpertsList
+          people={[p]}
+          mode='evidence'
+          selectedKey={null}
+          peerKeys={new Set()}
+          onHover={jest.fn()}
+          onSelect={jest.fn()}
+        />
+      </ChakraProvider>,
+    )
+    expect(screen.getByText('1 doc')).toBeInTheDocument()
+  })
 })

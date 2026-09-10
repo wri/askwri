@@ -99,6 +99,7 @@ export interface ExpertsResponse {
   understanding: ExpertsUnderstanding
   people: PersonResult[]
   total_people: number
+  total_works: number
   docs: Record<string, DocResult>
   organizations: { name: string; docs: number }[]
   usage: Record<string, unknown> | null

@@ -263,6 +263,7 @@ export async function POST(req: NextRequest) {
       },
       people: result.people,
       total_people: result.totalPeople,
+      total_works: works.length,
       docs: result.docs,
       organizations: result.organizations,
       usage,

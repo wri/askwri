@@ -19,7 +19,8 @@ export function evidenceLine(p: PersonResult, mode: RankMode): string {
   if (p.evidence.strong) parts.push(`${p.evidence.strong} strong`)
   if (p.evidence.partial) parts.push(`${p.evidence.partial} partial`)
   if (p.evidence.weak) parts.push(`${p.evidence.weak} weak`)
-  return `${p.evidence.docs} doc${p.evidence.docs === 1 ? '' : 's'} · ${parts.join(' · ')}${yr ? ' · ' + yr : ''}`
+  const tierPart = parts.length > 0 ? ` · ${parts.join(' · ')}` : ''
+  return `${p.evidence.docs} doc${p.evidence.docs === 1 ? '' : 's'}${tierPart}${yr ? ' · ' + yr : ''}`
 }
 
 export const ExpertsList = ({

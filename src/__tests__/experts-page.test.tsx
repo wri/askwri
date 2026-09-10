@@ -78,6 +78,7 @@ const response = (over: Partial<ExpertsResponse> = {}): ExpertsResponse => ({
     },
   ],
   total_people: 2,
+  total_works: 201,
   docs: {
     d1: {
       docId: 'd1',
