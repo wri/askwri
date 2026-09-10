@@ -19,7 +19,9 @@ describe('splitAuthorsField', () => {
       'Pai, Madhav',
     ])
     expect(splitAuthorsField('A;; B ;')).toEqual(['A', 'B'])
-    expect(splitAuthorsField('  Anjali  Mahendra  ')).toEqual(['Anjali Mahendra'])
+    expect(splitAuthorsField('  Anjali  Mahendra  ')).toEqual([
+      'Anjali Mahendra',
+    ])
     expect(splitAuthorsField('')).toEqual([])
   })
 })
@@ -74,16 +76,31 @@ describe('parseAuthorName', () => {
 describe('formatAuthorName', () => {
   it('renders Family, Given for splittable names', () => {
     expect(
-      formatAuthorName({ family: 'Amos', given: 'Albert', hasComma: true, isSplittable: true }),
+      formatAuthorName({
+        family: 'Amos',
+        given: 'Albert',
+        hasComma: true,
+        isSplittable: true,
+      }),
     ).toBe('Amos, Albert')
     expect(
-      formatAuthorName({ family: 'Smith', given: '', hasComma: true, isSplittable: true }),
+      formatAuthorName({
+        family: 'Smith',
+        given: '',
+        hasComma: true,
+        isSplittable: true,
+      }),
     ).toBe('Smith')
   })
 
   it('returns the family unchanged for non-splittable names', () => {
     expect(
-      formatAuthorName({ family: 'Cheng', given: '', hasComma: false, isSplittable: false }),
+      formatAuthorName({
+        family: 'Cheng',
+        given: '',
+        hasComma: false,
+        isSplittable: false,
+      }),
     ).toBe('Cheng')
   })
 })
@@ -95,7 +112,11 @@ describe('tidyAuthorsField', () => {
       changed: true,
       unverified: false,
     })
-    expect(tidyAuthorsField('A;B')).toEqual({ value: 'A; B', changed: true, unverified: true })
+    expect(tidyAuthorsField('A;B')).toEqual({
+      value: 'A; B',
+      changed: true,
+      unverified: true,
+    })
     expect(tidyAuthorsField('Mahendra, Anjali;  Pai , Madhav ')).toEqual({
       value: 'Mahendra, Anjali; Pai, Madhav',
       changed: true,
@@ -147,7 +168,9 @@ describe('canonicalAuthorKey', () => {
 
   it('folds diacritics and keeps hyphens', () => {
     expect(canonicalAuthorKey('Muñoz, Ana')).toBe('munoz|a')
-    expect(canonicalAuthorKey('Adriazola-Steil, Claudia')).toBe('adriazola-steil|c')
+    expect(canonicalAuthorKey('Adriazola-Steil, Claudia')).toBe(
+      'adriazola-steil|c',
+    )
   })
 
   it('handles multi-token given names and empty givens', () => {
@@ -160,7 +183,9 @@ describe('strictAuthorKey', () => {
   it('uses the full given name — initials would merge distinct people', () => {
     expect(strictAuthorKey('Li, Xiangyi')).toBe('li|xiangyi')
     expect(strictAuthorKey('Li, Xiaoyi')).toBe('li|xiaoyi')
-    expect(strictAuthorKey('Li, Xiangyi')).not.toBe(strictAuthorKey('Li, Xiaoyi'))
+    expect(strictAuthorKey('Li, Xiangyi')).not.toBe(
+      strictAuthorKey('Li, Xiaoyi'),
+    )
   })
 
   it('strips periods and matches order-swapped spellings of the same person', () => {
@@ -170,7 +195,9 @@ describe('strictAuthorKey', () => {
 
   it('treats differently-spaced givens as distinct (conservative)', () => {
     expect(strictAuthorKey('Li, Xiang Yi')).toBe('li|xiang yi')
-    expect(strictAuthorKey('Li, Xiangyi')).not.toBe(strictAuthorKey('Li, Xiang Yi'))
+    expect(strictAuthorKey('Li, Xiangyi')).not.toBe(
+      strictAuthorKey('Li, Xiang Yi'),
+    )
   })
 })
 
@@ -198,7 +225,10 @@ describe('buildEvidenceIndex', () => {
 })
 
 describe('planAuthorRepairs', () => {
-  const doc = (authors: string, provenance: 'external' | 'llm' = 'external'): CandidateDoc => ({
+  const doc = (
+    authors: string,
+    provenance: 'external' | 'llm' = 'external',
+  ): CandidateDoc => ({
     id: '11111111-1111-1111-1111-111111111111',
     externalId: 'doc-1',
     authors,
@@ -226,7 +256,11 @@ describe('planAuthorRepairs', () => {
 
   it('flags unconfirmed external comma-less names; whitespace-tidies them only', () => {
     const [plan] = planAuthorRepairs([doc('  Xyz   Abc ')], EVIDENCE)
-    expect(plan.ops[0]).toEqual({ type: 'flag-unverified', before: 'Xyz Abc', after: 'Xyz Abc' })
+    expect(plan.ops[0]).toEqual({
+      type: 'flag-unverified',
+      before: 'Xyz Abc',
+      after: 'Xyz Abc',
+    })
     expect(plan.stillUnverified).toBe(true)
     expect(plan.authorsChanged).toBe(true) // whitespace collapsed
     expect(plan.finalAuthors).toBe('Xyz Abc')
@@ -237,13 +271,18 @@ describe('planAuthorRepairs', () => {
   })
 
   it('flags single-token external names and drops single-token llm names', () => {
-    expect(planAuthorRepairs([doc('Cheng')], EVIDENCE)[0].stillUnverified).toBe(true)
+    expect(planAuthorRepairs([doc('Cheng')], EVIDENCE)[0].stillUnverified).toBe(
+      true,
+    )
     expect(planAuthorRepairs([doc('Cheng', 'llm')], EVIDENCE)).toEqual([])
   })
 
   it('fixes comma spacing on both provenances without evidence', () => {
     for (const provenance of ['external', 'llm'] as const) {
-      const [plan] = planAuthorRepairs([doc('Amos,Albert', provenance)], EVIDENCE)
+      const [plan] = planAuthorRepairs(
+        [doc('Amos,Albert', provenance)],
+        EVIDENCE,
+      )
       expect(plan.ops[0].type).toBe('fix-spacing')
       expect(plan.finalAuthors).toBe('Amos, Albert')
     }
@@ -260,7 +299,9 @@ describe('planAuthorRepairs', () => {
       'flag-unverified',
       'none',
     ])
-    expect(plan.finalAuthors).toBe('Mahendra, Anjali; Amos, Albert; Cheng; Pai, Madhav')
+    expect(plan.finalAuthors).toBe(
+      'Mahendra, Anjali; Amos, Albert; Cheng; Pai, Madhav',
+    )
     expect(plan.stillUnverified).toBe(true)
   })
 

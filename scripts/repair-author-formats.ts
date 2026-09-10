@@ -63,7 +63,10 @@ async function main() {
       canonical: string
     }>
     const evidence = buildEvidenceIndex(
-      evidenceRows.map((r): EvidenceRow => ({ src: r.src ?? 'llm', canonical: r.canonical })),
+      evidenceRows.map((r): EvidenceRow => ({
+        src: r.src ?? 'llm',
+        canonical: r.canonical,
+      })),
     )
 
     const candidateRows = (await AppDataSource.query(CANDIDATE_SQL)) as Array<{
@@ -96,7 +99,8 @@ async function main() {
       `Ops: fix-spacing=${counts['fix-spacing']} flip=${counts.flip} flag-unverified=${counts['flag-unverified']}`,
     )
     const untouchedLlm = candidates.filter(
-      (c) => c.provenance === 'llm' && !plans.some((p) => p.documentId === c.id),
+      (c) =>
+        c.provenance === 'llm' && !plans.some((p) => p.documentId === c.id),
     ).length
     if (untouchedLlm > 0) {
       console.log(
@@ -172,7 +176,9 @@ async function main() {
         applied++
       } else {
         dropped++
-        console.log(`  DROPPED (guard missed — provenance changed concurrently?): ${plan.externalId}`)
+        console.log(
+          `  DROPPED (guard missed — provenance changed concurrently?): ${plan.externalId}`,
+        )
       }
     }
     console.log(`Applied: ${applied} | Dropped: ${dropped}`)

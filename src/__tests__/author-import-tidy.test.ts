@@ -16,13 +16,19 @@ import type { Document } from '../db/entities/Document.entity'
 
 describe('import mapping tidies authors', () => {
   it('flat rows: comma spacing fixed, no flag', () => {
-    const mapped = mapFlatRowToDocument({ authors: 'Amos,Albert', file_path: 'x.pdf' })
+    const mapped = mapFlatRowToDocument({
+      authors: 'Amos,Albert',
+      file_path: 'x.pdf',
+    })
     expect(mapped.authors).toBe('Amos, Albert')
     expect(mapped.authorsUnverified).toBe(false)
   })
 
   it('flat rows: comma-less value kept verbatim and flagged', () => {
-    const mapped = mapFlatRowToDocument({ authors: 'Anjali Mahendra', file_path: 'x.pdf' })
+    const mapped = mapFlatRowToDocument({
+      authors: 'Anjali Mahendra',
+      file_path: 'x.pdf',
+    })
     expect(mapped.authors).toBe('Anjali Mahendra')
     expect(mapped.authorsUnverified).toBe(true)
   })
@@ -35,7 +41,9 @@ describe('import mapping tidies authors', () => {
     expect(mapped.authors).toBe('Anjali Mahendra; Amos, Albert')
     expect(mapped.authorsUnverified).toBe(true)
     // source_metadata is the raw import record for legacy rows — NOT tidied.
-    expect(mapped.sourceMetadata.metadata['All authors']).toBe('Anjali Mahendra; Amos,Albert')
+    expect(mapped.sourceMetadata.metadata['All authors']).toBe(
+      'Anjali Mahendra; Amos,Albert',
+    )
   })
 
   it('null authors stay null and unflagged', () => {
@@ -66,13 +74,22 @@ describe('computeOverwriteChanges flags unverified authors', () => {
       file_path: 'x.pdf',
     })
     const { warnings } = computeOverwriteChanges(existing, mapped, {})
-    expect(warnings).toContain("⚠ authors: \"Old Author\" → \"Anjali Mahendra\" (overwrite)")
-    expect(warnings).toContain('⚠ authors: format unverified (name without comma)')
+    expect(warnings).toContain(
+      '⚠ authors: "Old Author" → "Anjali Mahendra" (overwrite)',
+    )
+    expect(warnings).toContain(
+      '⚠ authors: format unverified (name without comma)',
+    )
   })
 
   it('does not warn on verified overwrites', () => {
-    const mapped = mapFlatRowToDocument({ authors: 'Amos, Albert', file_path: 'x.pdf' })
+    const mapped = mapFlatRowToDocument({
+      authors: 'Amos, Albert',
+      file_path: 'x.pdf',
+    })
     const { warnings } = computeOverwriteChanges(existing, mapped, {})
-    expect(warnings).not.toContain('⚠ authors: format unverified (name without comma)')
+    expect(warnings).not.toContain(
+      '⚠ authors: format unverified (name without comma)',
+    )
   })
 })

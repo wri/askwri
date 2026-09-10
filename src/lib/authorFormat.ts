@@ -40,7 +40,10 @@ function collapseWhitespace(s: string): string {
 
 /** Lowercase and strip diacritics; keeps hyphens and letters. */
 function foldToken(s: string): string {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
 }
 
 export function splitAuthorsField(raw: string): string[] {
@@ -191,10 +194,19 @@ export function planAuthorRepairs(
       }
       const canonical = evidence.get(strictAuthorKey(name))
       if (canonical) {
-        return { type: 'flip' as const, before: name, after: canonical, key: strictAuthorKey(name) }
+        return {
+          type: 'flip' as const,
+          before: name,
+          after: canonical,
+          key: strictAuthorKey(name),
+        }
       }
       if (doc.provenance === 'external') {
-        return { type: 'flag-unverified' as const, before: name, after: collapseWhitespace(name) }
+        return {
+          type: 'flag-unverified' as const,
+          before: name,
+          after: collapseWhitespace(name),
+        }
       }
       return { type: 'none' as const, before: name, after: name }
     })
@@ -202,7 +214,9 @@ export function planAuthorRepairs(
     const authorsChanged = finalAuthors !== doc.authors
     const stillUnverified = ops.some((op) => op.type === 'flag-unverified')
     const needsWrite =
-      doc.provenance === 'external' ? authorsChanged || stillUnverified : authorsChanged
+      doc.provenance === 'external'
+        ? authorsChanged || stillUnverified
+        : authorsChanged
     if (!needsWrite) continue
     plans.push({
       documentId: doc.id,
@@ -229,7 +243,11 @@ export interface EvidenceRow {
   canonical: string
 }
 
-const SOURCE_PRIORITY: Record<string, number> = { human: 0, external: 1, llm: 2 }
+const SOURCE_PRIORITY: Record<string, number> = {
+  human: 0,
+  external: 1,
+  llm: 2,
+}
 
 /**
  * strictAuthorKey -> tidy canonical "Family, Given". Collisions on distinct
