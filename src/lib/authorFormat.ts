@@ -1,0 +1,311 @@
+/**
+ * Author name format utilities (issue #411).
+ *
+ * Format contract: documents.authors is a semicolon-delimited string; each
+ * person is "Family, Given". Organizations and unverified names are free
+ * text. CSV-imported values may arrive in any order; the repair script flips
+ * a comma-less "Given Family" name ONLY when a comma'd sibling for the same
+ * person exists somewhere in the corpus.
+ *
+ * KNOWN LIMITATION: the field contract is semicolon-delimited, so a value that
+ * uses commas as the author separator ("Anjali Mahendra, Madhav Pai") parses as
+ * one person and is reported verified. This is not detectable without
+ * false-positives on legitimate multi-token families ("van der Berg, Jan"),
+ * so it is documented rather than guessed at. CSV sources that delimit authors
+ * with commas must be fixed upstream.
+ *
+ * Pure module — safe to import from server code and scripts; no I/O.
+ * CONSUMERS THAT GROUP BY AUTHOR (future admin filters, /experts) MUST:
+ *   1. group on canonicalAuthorKey(name), never the raw string;
+ *   2. skip or down-weight documents whose metadata_source.authors_format
+ *      is 'unverified';
+ *   3. split fields with splitAuthorsField (semicolons only, never commas).
+ * The Python side (search-service, where /experts will live) must port these
+ * functions exactly: family = diacritic-folded (NFD, combining marks
+ * stripped), lowercased, hyphens kept; given reduced to initials (first
+ * character of each whitespace-separated token, periods stripped), joined
+ * with no separator; key = `${family}|${initials}`.
+ */
+
+export interface ParsedAuthorName {
+  family: string
+  given: string
+  hasComma: boolean
+  isSplittable: boolean
+}
+
+export interface TidyResult {
+  value: string
+  changed: boolean
+  unverified: boolean
+}
+
+/** Collapse internal whitespace runs to single spaces and trim. */
+function collapseWhitespace(s: string): string {
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+/** Lowercase and strip diacritics; keeps hyphens and letters. */
+function foldToken(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+export function splitAuthorsField(raw: string): string[] {
+  return (raw || '')
+    .split(';')
+    .map((v) => collapseWhitespace(v))
+    .filter(Boolean)
+}
+
+export function parseAuthorName(name: string): ParsedAuthorName {
+  const trimmed = collapseWhitespace(name)
+  if (trimmed.includes(',')) {
+    const idx = trimmed.indexOf(',')
+    const family = collapseWhitespace(trimmed.slice(0, idx))
+    const given = collapseWhitespace(trimmed.slice(idx + 1))
+    return { family, given, hasComma: true, isSplittable: family.length > 0 }
+  }
+  const tokens = trimmed.split(' ').filter(Boolean)
+  if (tokens.length >= 2) {
+    return {
+      family: tokens[tokens.length - 1],
+      given: tokens.slice(0, -1).join(' '),
+      hasComma: false,
+      isSplittable: true,
+    }
+  }
+  // Single token: an organization or a mononym — not guessable.
+  return { family: trimmed, given: '', hasComma: false, isSplittable: false }
+}
+
+/** "Family, Given" for splittable names; the family (unchanged) otherwise. */
+export function formatAuthorName(parsed: ParsedAuthorName): string {
+  if (!parsed.isSplittable) return parsed.family
+  return parsed.given ? `${parsed.family}, ${parsed.given}` : parsed.family
+}
+
+/**
+ * True when a parsed name renders as a complete "Family, Given" pair — the
+ * verified convention. `hasComma` alone is not enough: "Cheng," parses with an
+ * empty given and renders comma-less, so it is NOT verified. Both the import
+ * tidy path and the repair planner ask this question; they must ask it the
+ * same way or the authors_format flag drifts from the value it describes.
+ */
+export function isVerifiedForm(parsed: ParsedAuthorName): boolean {
+  return parsed.hasComma && parsed.isSplittable && parsed.given.length > 0
+}
+
+/**
+ * Import-path tidying: comma'd names are reformatted to "Family, Given"
+ * (fixes "Amos,Albert", "A , B", double spaces); separator whitespace is
+ * normalized ("A;B" -> "A; B"). Comma-less names are kept verbatim (order is
+ * never guessed here). `unverified: true` when any name fails isVerifiedForm —
+ * i.e. it does not render as a complete "Family, Given" pair.
+ */
+export function tidyAuthorsField(raw: string): TidyResult {
+  const segments = (raw || '').split(';')
+  const out: string[] = []
+  let unverified = false
+  for (const segment of segments) {
+    const collapsed = collapseWhitespace(segment)
+    if (collapsed.length === 0) continue
+    const parsed = parseAuthorName(collapsed)
+    if (isVerifiedForm(parsed)) {
+      out.push(formatAuthorName(parsed))
+    } else {
+      // Kept verbatim: order is never guessed at import, and a degenerate
+      // comma ("Cheng,") must not be normalized into a value that LOOKS
+      // verified — that would let a later import clear the flag.
+      out.push(collapsed)
+      unverified = true
+    }
+  }
+  const value = out.join('; ')
+  return { value, changed: value !== raw, unverified }
+}
+
+/**
+ * Aggregation key collapsing residual variants: "Mahendra, Anjali" and
+ * "Mahendra, A." both -> "mahendra|a". Collapses distinct people sharing a
+ * family name and first initial — acceptable for ranking aggregation, where
+ * dedup matters more than splitting. Consumers should skip fields flagged
+ * authors_format='unverified'.
+ */
+export function canonicalAuthorKey(name: string): string {
+  const parsed = parseAuthorName(name)
+  const initials = parsed.given
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => foldToken(t).replace(/\./g, '').charAt(0))
+    .join('')
+  return `${foldToken(parsed.family)}|${initials}`
+}
+
+/**
+ * Full-precision key for repair matching: "mahendra|anjali". Initials would
+ * merge distinct people (Li, Xiangyi vs Li, Xiaoyi -> li|x). Differently
+ * spaced givens ("Xiang Yi" vs "Xiangyi") stay distinct — conservative.
+ */
+export function strictAuthorKey(name: string): string {
+  const parsed = parseAuthorName(name)
+  return `${foldToken(parsed.family)}|${foldToken(parsed.given).replace(/\./g, '')}`
+}
+
+// ---------------------------------------------------------------------------
+// Repair planning (pure — the script owns all I/O)
+// ---------------------------------------------------------------------------
+
+export type RepairOpType = 'fix-spacing' | 'flip' | 'flag-unverified' | 'none'
+
+export interface RepairOp {
+  type: RepairOpType
+  before: string
+  after: string
+  /** strictAuthorKey used for a flip. */
+  key?: string
+}
+
+export interface CandidateDoc {
+  id: string
+  externalId: string
+  authors: string
+  provenance: 'external' | 'llm'
+  /** True when metadata_source already carries an authors_format key. */
+  alreadyFlagged: boolean
+}
+
+export interface RepairDocPlan {
+  documentId: string
+  externalId: string
+  provenance: 'external' | 'llm'
+  originalAuthors: string
+  ops: RepairOp[]
+  finalAuthors: string
+  authorsChanged: boolean
+  /** External only: comma-less names remain, so authors_format must be set. */
+  stillUnverified: boolean
+}
+
+/**
+ * Plan repairs for candidate documents. Rules (spec 2026-09-09 §3):
+ * - comma'd but badly spaced -> fix-spacing (no evidence needed, both rows)
+ * - comma-less with a strict-key match in the evidence index -> flip (both rows)
+ * - comma-less, no match, external -> flag-unverified (name untouched apart
+ *   from whitespace collapsing; the flag marks values that cannot self-heal)
+ * - comma-less, no match, llm -> untouched, no flag (the worker may rewrite
+ *   the field at any re-ingest; llm no-match docs are dropped entirely)
+ * External docs are planned when authors change, or when the flag must be set
+ * and is not already stored. LLM docs are planned only when a name changed —
+ * separator-only whitespace is left alone.
+ */
+export function planAuthorRepairs(
+  candidates: CandidateDoc[],
+  evidence: ReadonlyMap<string, string>,
+): RepairDocPlan[] {
+  const plans: RepairDocPlan[] = []
+  for (const doc of candidates) {
+    const ops: RepairOp[] = splitAuthorsField(doc.authors).map((name) => {
+      const parsed = parseAuthorName(name)
+      if (isVerifiedForm(parsed)) {
+        const after = formatAuthorName(parsed)
+        return {
+          type: (after === name ? 'none' : 'fix-spacing') as RepairOpType,
+          before: name,
+          after,
+        }
+      }
+      const canonical = evidence.get(strictAuthorKey(name))
+      if (canonical) {
+        return {
+          type: 'flip' as const,
+          before: name,
+          after: canonical,
+          key: strictAuthorKey(name),
+        }
+      }
+      if (doc.provenance === 'external') {
+        return {
+          type: 'flag-unverified' as const,
+          before: name,
+          after: collapseWhitespace(name),
+        }
+      }
+      return { type: 'none' as const, before: name, after: name }
+    })
+    const finalAuthors = ops.map((op) => op.after).join('; ')
+    const authorsChanged = finalAuthors !== doc.authors
+    const stillUnverified = ops.some((op) => op.type === 'flag-unverified')
+    const needsWrite =
+      doc.provenance === 'external'
+        ? // Re-flagging an already-flagged doc is a no-op write. Gating on the
+          // stored flag (not on excluding the row from the query) keeps the
+          // doc eligible for a flip if evidence for its name appears later.
+          authorsChanged || (stillUnverified && !doc.alreadyFlagged)
+        : // llm rows are not ours to tidy. Write only when a NAME changed —
+          // never for a separator-only difference ("A;B" -> "A; B"), which is
+          // cosmetic and would make the audit rationale untrue.
+          ops.some((op) => op.type !== 'none')
+    if (!needsWrite) continue
+    plans.push({
+      documentId: doc.id,
+      externalId: doc.externalId,
+      provenance: doc.provenance,
+      originalAuthors: doc.authors,
+      ops,
+      finalAuthors,
+      authorsChanged,
+      stillUnverified,
+    })
+  }
+  return plans
+}
+
+// ---------------------------------------------------------------------------
+// Evidence index (pure — the script feeds it query rows)
+// ---------------------------------------------------------------------------
+
+export interface EvidenceRow {
+  /** metadata_source->>'authors' of the row the comma'd name came from. */
+  src: string
+  /** A comma'd name as stored, e.g. "Amos,Albert" or "Mahendra, Anjali". */
+  canonical: string
+}
+
+const SOURCE_PRIORITY: Record<string, number> = {
+  human: 0,
+  external: 1,
+  llm: 2,
+}
+
+/**
+ * strictAuthorKey -> tidy canonical "Family, Given". Collisions on distinct
+ * normalized spellings are broken by source quality: human > external > llm.
+ */
+export function buildEvidenceIndex(rows: EvidenceRow[]): Map<string, string> {
+  const best = new Map<string, { value: string; rank: number }>()
+  for (const row of rows) {
+    const parsed = parseAuthorName(row.canonical)
+    // A row that renders comma-less is not evidence of anything. Without this,
+    // "Cheng," would index key "cheng|" -> "Cheng" and a bare surname would
+    // "flip" to itself, silently dropping out of the plan unflagged.
+    if (!isVerifiedForm(parsed)) continue
+    const value = formatAuthorName(parsed)
+    const key = strictAuthorKey(value)
+    const rank = SOURCE_PRIORITY[row.src] ?? 3
+    const existing = best.get(key)
+    if (
+      !existing ||
+      rank < existing.rank ||
+      // Same-rank conflicts must not depend on the order Postgres returned
+      // rows in: the dry run an operator reviews and the --apply that follows
+      // are separate queries. Smallest spelling wins, arbitrarily but stably.
+      (rank === existing.rank && value < existing.value)
+    ) {
+      best.set(key, { value, rank })
+    }
+  }
+  return new Map([...best].map(([k, v]) => [k, v.value]))
+}

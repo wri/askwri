@@ -586,3 +586,60 @@ Worker (Python) inserts `source='system', status='suggested'` rows only. App tie
 (Node) owns confirm/reject/flip/unlink/manual-create and the review UI. Same
 two-writer precedence as `document_tags`; the worker never touches human-reviewed
 rows.
+
+## Author name format (issue #411)
+
+`documents.authors` is a semicolon-delimited string; each person is
+`Family, Given` (e.g. `Mahendra, Anjali; Pai, Madhav`). The ingest worker
+writes this format; CSV imports may deliver any order.
+
+- **CSV imports** tidy comma spacing on arrival and mark values that still
+  contain a comma-less name with `metadata_source.authors_format =
+  'unverified'` — these are CSV-sourced (`external`) values the worker is
+  forbidden from rewriting, so they cannot self-heal. A later CSV import with
+  a fully comma'd value clears the flag, and so does a human editing authors
+  in the admin UI (the edit *is* the verification). The flag is written only
+  on the flat-CSV paths, which also assert `external` provenance: a legacy
+  JSON-blob import leaves provenance NULL, so its authors stay
+  worker-overwritable and need no marker.
+- **A spacing-only difference is not an overwrite.** If the stored value
+  differs from the CSV cell only in comma or separator whitespace, the import
+  skips the field rather than rewriting it — otherwise re-importing an
+  unchanged CSV over a corpus stored before tidying shipped would stamp
+  `external` provenance and enqueue a re-ingest for most of the corpus.
+  Cleaning up stored values is the repair script's job, below.
+- **Known limitation:** the field contract is semicolon-delimited. A value
+  that uses commas as the author separator (`Anjali Mahendra, Madhav Pai`)
+  parses as one person and is reported verified. No heuristic detects this
+  without false-positives on legitimate multi-token families
+  (`van der Berg, Jan`), so CSV sources that delimit authors with commas must
+  be fixed upstream.
+- **`scripts/repair-author-formats.ts`** repairs existing rows. It flips a
+  comma-less `Given Family` name to the `Family, Given` form only when a
+  comma'd spelling of the same person (strict key: family + full given name,
+  diacritic-folded) exists elsewhere in the corpus; unconfirmed external
+  names are left in place and flagged `unverified`; llm rows are flipped
+  under the same evidence rule (provenance stays `llm`, so a future re-ingest
+  supersedes the script's value). Human-edited rows are never touched. The
+  script is dry-run by default; `--apply` commits, writes one
+  `author_format_repair` audit row per changed document, and is idempotent.
+
+Run it (manual ops action — deploys nothing):
+
+    ./scripts/with-remote-env.sh qa         npm run repair:author-formats          # dry run
+    ./scripts/with-remote-env.sh qa         npm run repair:author-formats -- --apply
+    ./scripts/with-remote-env.sh production npm run repair:author-formats -- --apply
+
+Run the repair script **before** the next CSV re-import of the same corpus, so
+the stored values are already canonical and the import has nothing cosmetic to
+disagree with.
+
+Read the report top-down: op counts, then one line per document with each
+`before -> after` (ordered by `external_id`, so two runs diff cleanly).
+`DROPPED` lines mean a guard missed at write time — the document's authors or
+provenance changed between the plan and the write, usually a worker re-ingest
+or a concurrent import. The script exits non-zero when anything dropped; rerun
+the dry run to re-plan. Consumers that group
+by author (e.g. a future /experts mode) must group on
+`canonicalAuthorKey()` from `src/lib/authorFormat.ts` and skip fields flagged
+`unverified`.

@@ -151,6 +151,7 @@ const HISTORY_VERB: Record<string, string> = {
   import: 'import',
   create: 'created',
   delete: 'deleted',
+  author_format_repair: 'author format repair',
 }
 
 const historyLine = (e: any) => {

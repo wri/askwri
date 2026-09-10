@@ -4,6 +4,12 @@ import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
 import { PROVENANCE_KEY } from '../../lib/metadataProvenance'
+import {
+  isVerifiedForm,
+  parseAuthorName,
+  splitAuthorsField,
+  tidyAuthorsField,
+} from '../../lib/authorFormat'
 
 // Mirrors LANGUAGE_MAP in search-service/scripts/migrate_csv_to_postgres.py
 // plus Phase 1 amendment: bahasa → id
@@ -67,6 +73,8 @@ export interface MappedDocument {
   articleType: string | null
   wriPrimaryOffice: string | null
   authors: string | null
+  /** True when any author name lacked a comma (tidyAuthorsField). */
+  authorsUnverified: boolean
   url: string | null
   datePublished: string | null
   summary: string | null
@@ -226,6 +234,8 @@ export function mapRowToDocument(row: ImportRow): MappedDocument {
   const documentsS3Prefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'
   const base = row.file_path.split('/').pop() ?? row.file_path
   const s3Key = `${documentsS3Prefix}${base}`
+  const rawAuthors = (raw['All authors'] as string | undefined) || null
+  const legacyTidy = rawAuthors ? tidyAuthorsField(rawAuthors) : null
 
   return {
     externalId,
@@ -243,7 +253,8 @@ export function mapRowToDocument(row: ImportRow): MappedDocument {
     doi: (raw['DOI'] as string | undefined) || null,
     articleType: (raw['article_type'] as string | undefined) || null,
     wriPrimaryOffice: (raw['wri_primary_office'] as string | undefined) || null,
-    authors: (raw['All authors'] as string | undefined) || null,
+    authors: legacyTidy?.value ?? null,
+    authorsUnverified: legacyTidy?.unverified ?? false,
     url: (raw['URL'] as string | undefined) || null,
     datePublished: parseDatePublished(raw['Date published']),
     summary: row.summary ?? null,
@@ -296,7 +307,9 @@ export function mapFlatRowToDocument(row: FlatImportRow): MappedDocument {
   const doi = resolveField(row, 'doi') || null
   const articleType = resolveField(row, 'article_type') || null
   const wriPrimaryOffice = resolveField(row, 'wri_primary_office') || null
-  const authors = resolveField(row, 'authors', 'All authors') || null
+  const authorsRaw = resolveField(row, 'authors', 'All authors') || null
+  const authorsTidy = authorsRaw ? tidyAuthorsField(authorsRaw) : null
+  const authors = authorsTidy?.value ?? null
   const url = resolveField(row, 'url') || null
   const datePublishedRaw = resolveField(row, 'date_published', 'Date published')
   const datePublished = datePublishedRaw
@@ -334,6 +347,7 @@ export function mapFlatRowToDocument(row: FlatImportRow): MappedDocument {
     articleType,
     wriPrimaryOffice,
     authors,
+    authorsUnverified: authorsTidy?.unverified ?? false,
     url,
     datePublished,
     summary,
@@ -447,6 +461,30 @@ async function readMetadataSource(
   }
 }
 
+/**
+ * Preview warning naming the names that are not in "Family, Given" form, per
+ * spec §2. Without the names a 12-author field gives the reviewer nothing to
+ * act on.
+ */
+function unverifiedAuthorsWarning(authors: string | null): string {
+  const bad = splitAuthorsField(authors || '')
+    .filter((n) => !isVerifiedForm(parseAuthorName(n)))
+    .map((n) => `'${n}'`)
+    .join(', ')
+  return `⚠ authors: format unverified (name without comma) ${bad}`
+}
+
+/**
+ * metadata_source stamps degrade gracefully because the column may not exist
+ * on an old schema — but authors_format is a correctness marker, so a silent
+ * swallow hides a real problem. Log and continue.
+ */
+function warnStampFailure(stage: string) {
+  return (err: unknown) => {
+    console.warn(`[import] metadata_source stamp failed (${stage}):`, err)
+  }
+}
+
 /** Compute field changes for the overwrite preview (dry-run). */
 export function computeOverwriteChanges(
   existing: Document,
@@ -473,6 +511,19 @@ export function computeOverwriteChanges(
     // Skip if values are the same
     if (existingStr === mappedStr) continue
 
+    // authors: a spacing-only difference is the repair script's job, not an
+    // import overwrite. Treating it as a change would rewrite the value, stamp
+    // 'external' provenance over a possibly-'llm' field, and enqueue a
+    // re-ingest — for a space after a comma. On a corpus stored before tidying
+    // shipped, that fires for most of the corpus on the next re-import.
+    if (
+      field === 'authors' &&
+      existingStr !== null &&
+      tidyAuthorsField(existingStr).value === mappedStr
+    ) {
+      continue
+    }
+
     // Check metadata_source — protect human edits
     const sourceForField = metadataSource[PROVENANCE_KEY[field] ?? field]
     if (sourceForField === 'human') {
@@ -497,6 +548,11 @@ export function computeOverwriteChanges(
     })
     if (isOverwrite) {
       warnings.push(`⚠ ${field}: "${existingStr}" → "${mappedStr}" (overwrite)`)
+    }
+    // Outside the isOverwrite guard on purpose: filling a NULL authors field
+    // also stamps authors_format at apply time, so the preview must show it.
+    if (field === 'authors' && mapped.authorsUnverified) {
+      warnings.push(unverifiedAuthorsWarning(mapped.authors))
     }
   }
 
@@ -576,6 +632,9 @@ export async function importDocuments(
         matchKey: mapped.doi
           ? `doi:${mapped.doi}`
           : `external_id:${mapped.externalId}`,
+        warnings: mapped.authorsUnverified
+          ? [unverifiedAuthorsWarning(mapped.authors)]
+          : undefined,
       }
 
       if (options.dryRun) {
@@ -618,10 +677,17 @@ export async function importDocuments(
               if (mapped[f] !== null && mapped[f] !== undefined)
                 fields[PROVENANCE_KEY[f] ?? f] = 'external'
             }
+            // authors_format rides the SAME merge that asserts 'external'
+            // provenance — the spec invariant. The legacy create path stamps no
+            // provenance, so its authors stay worker-overwritable and self-heal;
+            // flagging them would strand a marker nothing can ever clear (the
+            // worker does not clear it, the repair script only sees
+            // external/llm rows, and no import overwrites a legacy row).
+            if (mapped.authorsUnverified) fields.authors_format = 'unverified'
             await AppDataSource.query(
               `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
               [insertedId, JSON.stringify(fields)],
-            ).catch(() => {})
+            ).catch(warnStampFailure('create'))
           }
 
           // Atomic job creation
@@ -689,6 +755,10 @@ export async function importDocuments(
               }
               metaUpdates[PROVENANCE_KEY[field] ?? field] = 'external'
             }
+            const authorsWritten = 'authors' in metaUpdates
+            if (authorsWritten && mapped.authorsUnverified) {
+              metaUpdates.authors_format = 'unverified'
+            }
             if (Object.keys(updates).length > 0) {
               // Always update sourceMetadata for flat imports
               updates.sourceMetadata = mapped.sourceMetadata
@@ -697,10 +767,17 @@ export async function importDocuments(
               // Update metadata_source — atomic jsonb merge so concurrent
               // worker stamps are never clobbered by a stale read
               if (hasMetadataSource) {
+                // A verified authors overwrite clears a stale flag; the flag
+                // is otherwise written iff authors is written (human-
+                // protected authors never reach metaUpdates, so protection
+                // is inherited).
+                const clearFlag = authorsWritten && !mapped.authorsUnverified
                 await AppDataSource.query(
-                  `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
+                  clearFlag
+                    ? `UPDATE documents SET metadata_source = (metadata_source - 'authors_format') || $2::jsonb WHERE id = $1`
+                    : `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
                   [existing.id, JSON.stringify(metaUpdates)],
-                ).catch(() => {})
+                ).catch(warnStampFailure('overwrite'))
               }
             }
 

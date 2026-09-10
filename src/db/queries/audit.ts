@@ -18,6 +18,7 @@ export type AuditAction =
   | 'lifecycle'
   | 'collection_change'
   | 'import'
+  | 'author_format_repair'
 
 export interface AuditEntry {
   actorUserId: string | null
