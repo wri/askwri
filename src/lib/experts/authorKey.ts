@@ -1,6 +1,22 @@
 // src/lib/experts/authorKey.ts
-// Experts mode author identity (spec §6). Stopgap until wri/askwri#411
-// normalizes stored values; kept afterwards because residual variants exist.
+// Experts mode author identity (spec §6).
+//
+// #411 has since landed src/lib/authorFormat.ts, whose header names /experts as
+// a consumer that must group on a shared key rather than a raw string. We honor
+// that by folding with ITS foldToken, but we deliberately do NOT use its
+// canonicalAuthorKey, which reduces the given name to initials. Measured over
+// the 460 unique author strings in the local corpus the two disagree 8 times:
+// initials correctly merge 4 (Welle Ben/Benjamin, Jacquin C/Céline, and two
+// accent pairs) but wrongly merge 3 DIFFERENT researchers (Chen Yong/Yidan,
+// Jiang Hui/Hongqiang, López Segundo/Sandra). For a ranking feature a false
+// merge is the worse error — it invents a composite person and floats them to
+// the top of a list of experts, where a false split only under-counts someone
+// real. So the key folds diacritics and keeps the whole given name, which is
+// strictAuthorKey's grouping with this module's sibling lookup on top:
+// authorFormat's parseAuthorName takes the LAST token as the family for a
+// comma-less name, the exact heuristic spec §6's premise check rejected
+// ("Nicolás García Córdoba" -> family "Córdoba").
+import { foldToken } from '@/lib/authorFormat'
 import type { AuthorRef } from './types'
 
 const ORG_RE =
@@ -22,7 +38,8 @@ export function clean(raw: string): string {
 interface CommaForm {
   raw: string
   family: string // as stored, case preserved
-  givenFirst: string // lowercased first given token
+  given: string // whole given part, suffix commas normalized to spaces
+  givenFirst: string // first given token, for the sibling lookup (spec §6.4)
 }
 
 export interface AuthorIndex {
@@ -32,23 +49,30 @@ export interface AuthorIndex {
   display: Map<string, string>
 }
 
-function keyOf(family: string, givenFirst: string): string {
-  return givenFirst
-    ? `${family.toLowerCase()}, ${givenFirst}`
-    : family.toLowerCase()
+function keyOf(family: string, given: string): string {
+  return given ? `${foldToken(family)}, ${foldToken(given)}` : foldToken(family)
 }
 
-function splitComma(s: string): { family: string; givenFirst: string } {
+function splitComma(s: string): {
+  family: string
+  given: string
+  givenFirst: string
+} {
   const i = s.indexOf(',')
   const family = s.slice(0, i).trim()
-  const given = s.slice(i + 1).trim()
-  // Split the given part on whitespace OR a further comma: "Smith, John, Jr."
-  // is family "Smith", given "John", suffix "Jr." — taking the first
-  // whitespace token would key it "smith, john," (trailing comma), which also
-  // fails KEY_RE in evaluation/experts/validate.ts.
+  const rest = s.slice(i + 1).trim()
+  // A further comma introduces a SUFFIX, not more given name: "Smith, John,
+  // Jr." is family "Smith", given "John", suffix "Jr.". The suffix is dropped —
+  // keeping it would both split "Smith, John" from "Smith, John, Jr." and leave
+  // a trailing comma in the key, which fails KEY_RE in
+  // evaluation/experts/validate.ts.
+  const j = rest.indexOf(',')
+  const givenPart = (j >= 0 ? rest.slice(0, j) : rest).trim()
+  const tokens = givenPart.split(/\s+/).filter(Boolean)
   return {
     family,
-    givenFirst: (given.split(/[\s,]+/)[0] || '').toLowerCase(),
+    given: tokens.join(' '),
+    givenFirst: (tokens[0] || '').toLowerCase(),
   }
 }
 
@@ -58,10 +82,10 @@ export function buildAuthorIndex(raws: string[]): AuthorIndex {
   for (const raw of raws) {
     const s = clean(raw)
     if (!s || !s.includes(',')) continue
-    const { family, givenFirst } = splitComma(s)
+    const { family, given, givenFirst } = splitComma(s)
     if (!family) continue
-    commaForms.push({ raw: s, family, givenFirst })
-    const k = keyOf(family, givenFirst)
+    commaForms.push({ raw: s, family, given, givenFirst })
+    const k = keyOf(family, given)
     if (!display.has(k)) display.set(k, s)
   }
   return { commaForms, display }
@@ -70,30 +94,37 @@ export function buildAuthorIndex(raws: string[]): AuthorIndex {
 export function resolveAuthor(raw: string, index: AuthorIndex): AuthorRef {
   const s = clean(raw)
   if (s.includes(',')) {
-    const { family, givenFirst } = splitComma(s)
-    const key = keyOf(family, givenFirst)
+    const { family, given } = splitComma(s)
+    const key = keyOf(family, given)
     return { key, name: index.display.get(key) ?? s, org: false }
   }
   if (isOrganization(s)) {
-    return { key: s.toLowerCase(), name: s, org: true }
+    return { key: foldToken(s), name: s, org: true }
   }
   const tokens = s.split(' ')
   if (tokens.length === 1) {
-    return { key: s.toLowerCase(), name: s, org: false }
+    return { key: foldToken(s), name: s, org: false }
   }
   // Unsplit personal name. Do not guess the family/given boundary: adopt a
   // sibling whose family name is a suffix of this string and whose first
   // given token is this string's first token (spec §6 step 4).
-  const first = tokens[0].toLowerCase()
-  const lower = s.toLowerCase()
+  // Fold both sides so an accented spelling still finds its sibling.
+  const first = foldToken(tokens[0])
+  const lower = foldToken(s)
   const sibling = index.commaForms.find(
     (c) =>
-      c.givenFirst === first && lower.endsWith(' ' + c.family.toLowerCase()),
+      foldToken(c.givenFirst) === first &&
+      lower.endsWith(' ' + foldToken(c.family)),
   )
   if (sibling) {
-    const key = keyOf(sibling.family, sibling.givenFirst)
+    const key = keyOf(sibling.family, sibling.given)
     return { key, name: index.display.get(key) ?? sibling.raw, org: false }
   }
   const family = tokens[tokens.length - 1]
-  return { key: keyOf(family, first), name: s, org: false, unverified: true }
+  return {
+    key: keyOf(family, tokens.slice(0, -1).join(' ')),
+    name: s,
+    org: false,
+    unverified: true,
+  }
 }

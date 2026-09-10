@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { computeLayout } from '@/lib/experts/layout'
 import type { MatchedTag, PersonResult } from '@/lib/experts/types'
 import { ACCENT, ACCENT_WASH, INK, officeColor } from './officeColor'
@@ -120,6 +120,29 @@ export const TopicGraph = ({
     hint = `${hoverTopic} · ${withTopic.size} of the ${people.length} shown people have documents tagged with it`
   }
 
+  // The tab used to be sized `label.length * 6.6 + 10`, which under-measured
+  // proportional text: "Lulu Xue" ran 5px past its own ink and the final glyph
+  // vanished into the white background. Measure the rendered glyphs instead —
+  // only one person is ever pinned, so this is a single measurement.
+  const tabTextRef = useRef<SVGTextElement | null>(null)
+  const [tabWidth, setTabWidth] = useState(0)
+  useLayoutEffect(() => {
+    const el = tabTextRef.current
+    if (!el) {
+      setTabWidth(0)
+      return
+    }
+    // jsdom implements no text metrics, so keep the old character estimate as a
+    // FALLBACK: the component must still render a tab under test, it just
+    // cannot be measured there. Browsers take the measured path.
+    const measured =
+      typeof el.getComputedTextLength === 'function'
+        ? el.getComputedTextLength()
+        : 0
+    const estimated = (el.textContent || '').length * 6.6
+    setTabWidth(Math.max(measured, estimated) + 12)
+  }, [selectedKey, hoverKey, people, matched])
+
   const opacityFor = (s: NodeState) => (s === 'dim' ? 0.16 : 1)
   const topicPhrase = topicsAreDerived
     ? `${matched.length} topics drawn from the retrieved documents' own tags`
@@ -193,19 +216,14 @@ export const TopicGraph = ({
                 </g>
               )
             })}
+          {/* Interaction + marks. Labels are a SEPARATE pass below: SVG paints
+              in document order, so a node drawn after a label overdraws it —
+              "Ryan Sclar" lost its last letter under a neighbouring circle. */}
           {layout.nodes
             .filter((n) => n.kind === 'person')
             .map((n) => {
               const p = personByKey.get(n.key)!
-              const rankIndex = people.indexOf(p)
               const st = personState(n.key)
-              const quiet =
-                rankIndex >= LABEL_AT_REST &&
-                st !== 'focus' &&
-                st !== 'peer' &&
-                hoverKey !== n.key
-              const label = shortName(p.name)
-              const pillW = label.length * 6.6 + 10
               return (
                 <g
                   key={n.id}
@@ -236,31 +254,51 @@ export const TopicGraph = ({
                     stroke={st === 'peer' ? ACCENT : 'white'}
                     strokeWidth={st === 'peer' ? 1.5 : 2}
                   />
-                  {st === 'focus' && selectedKey === n.key && (
+                </g>
+              )
+            })}
+          {layout.nodes
+            .filter((n) => n.kind === 'person')
+            .map((n) => {
+              const p = personByKey.get(n.key)!
+              const rankIndex = people.indexOf(p)
+              const st = personState(n.key)
+              const quiet =
+                rankIndex >= LABEL_AT_REST &&
+                st !== 'focus' &&
+                st !== 'peer' &&
+                hoverKey !== n.key
+              const pinned = st === 'focus' && selectedKey === n.key
+              return (
+                <g
+                  key={`label:${n.id}`}
+                  transform={`translate(${n.x},${n.y})`}
+                  opacity={opacityFor(st)}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {pinned && tabWidth > 0 && (
                     <rect
                       data-testid='person-name-tab'
                       x={n.r + 4}
                       y={-9}
-                      width={pillW}
+                      width={tabWidth}
                       height={18}
                       rx={3}
                       fill={INK}
                     />
                   )}
                   <text
+                    ref={pinned ? tabTextRef : undefined}
                     data-testid='person-label'
                     data-quiet={quiet ? 'true' : 'false'}
                     x={n.r + 9}
                     y={4}
                     fontSize={11.5}
                     fontWeight={st === 'focus' ? 700 : 500}
-                    fill={
-                      st === 'focus' && selectedKey === n.key ? '#FBFAF6' : INK
-                    }
+                    fill={pinned ? '#FBFAF6' : INK}
                     opacity={quiet ? 0 : 1}
-                    style={{ pointerEvents: 'none' }}
                   >
-                    {label}
+                    {shortName(p.name)}
                   </text>
                 </g>
               )

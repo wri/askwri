@@ -102,12 +102,15 @@ describe('TopicGraph focus decoration (U5)', () => {
       />,
     )
 
+  // The name tab lives in the LABEL pass, not inside person-node: labels are
+  // painted after every node so a neighbouring circle cannot overdraw them.
+  // The halo is a mark, so it stays with the node.
   it('draws the halo but NOT the name tab for a hovered, unpinned person', () => {
     renderWith({ hoverKey: 'k0' })
     const node = screen.getAllByTestId('person-node')[0]
     expect(node).toHaveAttribute('data-state', 'focus')
     expect(within(node).queryByTestId('person-halo')).not.toBeNull()
-    expect(within(node).queryByTestId('person-name-tab')).toBeNull()
+    expect(screen.queryByTestId('person-name-tab')).toBeNull()
   })
 
   it('draws both the halo and the name tab for a pinned person', () => {
@@ -115,14 +118,14 @@ describe('TopicGraph focus decoration (U5)', () => {
     const node = screen.getAllByTestId('person-node')[0]
     expect(node).toHaveAttribute('data-state', 'focus')
     expect(within(node).queryByTestId('person-halo')).not.toBeNull()
-    expect(within(node).queryByTestId('person-name-tab')).not.toBeNull()
+    expect(screen.getAllByTestId('person-name-tab')).toHaveLength(1)
   })
 
   it('draws neither on a person who is not the focus', () => {
     renderWith({ selectedKey: 'k0' })
     const other = screen.getAllByTestId('person-node')[1]
     expect(within(other).queryByTestId('person-halo')).toBeNull()
-    expect(within(other).queryByTestId('person-name-tab')).toBeNull()
+    expect(screen.getAllByTestId('person-name-tab')).toHaveLength(1)
   })
 })
 

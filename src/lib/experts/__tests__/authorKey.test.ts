@@ -69,9 +69,9 @@ describe('resolveAuthor', () => {
     expect(a.unverified).toBeFalsy()
   })
 
-  it('keys on family + first given token', () => {
+  it('keys on the folded family plus the WHOLE given name', () => {
     expect(resolveAuthor('Beard, Victoria A.', index).key).toBe(
-      'beard, victoria',
+      'beard, victoria a.',
     )
   })
 
@@ -86,7 +86,7 @@ describe('resolveAuthor', () => {
 
   it('resolves a compound family name through its comma-form sibling', () => {
     const a = resolveAuthor('Nicolás García Córdoba', index)
-    expect(a.key).toBe('garcía córdoba, nicolás')
+    expect(a.key).toBe('garcia cordoba, nicolas') // diacritics folded (#411 foldToken)
     expect(a.name).toBe('García Córdoba, Nicolás')
     expect(a.unverified).toBeFalsy()
   })
@@ -96,7 +96,7 @@ describe('resolveAuthor', () => {
     expect(a.org).toBe(false)
     expect(a.unverified).toBe(true)
     expect(a.name).toBe('Hellen Njoki Wanjohi-Opil')
-    expect(a.key).toBe('wanjohi-opil, hellen')
+    expect(a.key).toBe('wanjohi-opil, hellen njoki')
   })
 
   it('repairs a comma without a space', () => {
@@ -132,7 +132,7 @@ describe('resolveAuthor', () => {
     // unverified flag is what makes it recoverable in the UI.
     const lonely = buildAuthorIndex(['Beard, Victoria A.'])
     const a = resolveAuthor('Nicolás García Córdoba', lonely)
-    expect(a.key).toBe('córdoba, nicolás') // wrong: family is 'García Córdoba'
+    expect(a.key).toBe('cordoba, nicolas garcia') // wrong: family is 'García Córdoba'
     expect(a.unverified).toBe(true)
     expect(a.name).toBe('Nicolás García Córdoba') // shown as stored
     expect(a.org).toBe(false)
@@ -143,9 +143,57 @@ describe('resolveAuthor', () => {
     // family-first order shares neither the first-token nor the suffix test,
     // so no sibling is adopted and the last token wins.
     const a = resolveAuthor('Fong Wee Kean', index)
-    expect(a.key).toBe('kean, fong') // wrong: family is 'Fong'
+    expect(a.key).toBe('kean, fong wee') // wrong: family is 'Fong'
     expect(a.key).not.toBe('fong, wee') // it does NOT merge with the pair form
     expect(a.unverified).toBe(true)
     expect(a.name).toBe('Fong Wee Kean')
+  })
+})
+
+describe('keying agrees with the #411 format contract where it should (and not where it should not)', () => {
+  // src/lib/authorFormat.ts names /experts as a consumer that must group on a
+  // shared key rather than a raw string. Measured over the 460 unique author
+  // strings in the local corpus, the two schemes disagree in 8 places; these
+  // tests pin the direction we chose for each kind, with the real names.
+  const index = buildAuthorIndex([
+    'Castellanos, Sebastian',
+    'Castellanos, Sebastián',
+    'Hidalgo, Dario',
+    'Hidalgo, Darío',
+    'Chen, Yong',
+    'Chen, Yidan',
+    'Jiang, Hui',
+    'Jiang, Hongqiang',
+    'López, Segundo',
+    'López, Sandra',
+    'Hernández, Ana Itzel',
+    'Hernández, Ana Milena Quinchara',
+  ])
+  const k = (s: string) => resolveAuthor(s, index).key
+
+  it('folds diacritics: one person written two ways is one person', () => {
+    expect(k('Castellanos, Sebastián')).toBe(k('Castellanos, Sebastian'))
+    expect(k('Hidalgo, Darío')).toBe(k('Hidalgo, Dario'))
+  })
+
+  it('does NOT reduce the given name to an initial', () => {
+    // canonicalAuthorKey would make all of these one key each pair. For a
+    // RANKING feature a false merge is the worse error: it invents a composite
+    // person and floats them to the top of a list of experts, where a false
+    // split merely under-counts someone real.
+    expect(k('Chen, Yong')).not.toBe(k('Chen, Yidan'))
+    expect(k('Jiang, Hui')).not.toBe(k('Jiang, Hongqiang'))
+    expect(k('López, Segundo')).not.toBe(k('López, Sandra'))
+  })
+
+  it('keeps the whole given name, not just its first token', () => {
+    expect(k('Hernández, Ana Itzel')).not.toBe(
+      k('Hernández, Ana Milena Quinchara'),
+    )
+  })
+
+  it('still produces a key shaped like evaluation/experts/validate.ts KEY_RE', () => {
+    for (const n of ['Castellanos, Sebastián', 'Hernández, Ana Itzel'])
+      expect(k(n)).toMatch(/^[^,]+, [^,]+$/)
   })
 })

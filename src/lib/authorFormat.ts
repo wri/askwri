@@ -46,7 +46,9 @@ function collapseWhitespace(s: string): string {
 }
 
 /** Lowercase and strip diacritics; keeps hyphens and letters. */
-function foldToken(s: string): string {
+/** Exported so /experts keys on the SAME folding rule rather than a second
+ *  copy of it (this module's own consumer contract, above). */
+export function foldToken(s: string): string {
   return s
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
