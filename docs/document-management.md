@@ -639,7 +639,23 @@ Read the report top-down: op counts, then one line per document with each
 `DROPPED` lines mean a guard missed at write time — the document's authors or
 provenance changed between the plan and the write, usually a worker re-ingest
 or a concurrent import. The script exits non-zero when anything dropped; rerun
-the dry run to re-plan. Consumers that group
-by author (e.g. a future /experts mode) must group on
-`canonicalAuthorKey()` from `src/lib/authorFormat.ts` and skip fields flagged
-`unverified`.
+the dry run to re-plan. Consumers that group by author must group on a key from
+`src/lib/authorFormat.ts`, never on the raw string. WHICH key depends on what a
+mistake costs, and the two are not interchangeable:
+
+- `canonicalAuthorKey()` reduces the given name to initials. Measured over the
+  460 unique author strings in the QA corpus that correctly merges four spelling
+  variants (`Welle, Ben`/`Benjamin`, `Jacquin, C`/`Céline`, and two accent
+  pairs) but also merges three pairs of **different researchers** —
+  `Chen, Yong`/`Chen, Yidan`, `Jiang, Hui`/`Jiang, Hongqiang`,
+  `López, Segundo`/`López, Sandra`. That is the right trade for an admin filter,
+  where a stray extra row is cheap to notice.
+- `/experts` ranks people, where a false merge invents a composite person and
+  floats them to the top of a list of named colleagues. It therefore folds
+  diacritics with this module's `foldToken()` and keeps the WHOLE given name
+  (`src/lib/experts/authorKey.ts`), accepting two conservative splits rather
+  than three false merges.
+
+Either way, skip or down-weight fields flagged `unverified` — note that
+`/experts` does not do this yet, because the flag is still unpopulated on the
+environments it reads.
