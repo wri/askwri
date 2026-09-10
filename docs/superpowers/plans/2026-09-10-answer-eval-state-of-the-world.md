@@ -120,3 +120,9 @@ position in that pool.
 probe-mirror2-* (corrected mirror runs), snapshot-* (10-case EN-only shipped
 state), snapshot-validity-20260910 (the honest FAILED 6/8 gate with
 per-chunk divergence classifications), pool-probe-q3/q7 (union pools).
+
+## Tracker log
+
+- 2026-09-10: tracker created. Step 0 shipped (#425 merged, c035a62 — gpt-5 synthesis
+  defaults 15×800). Queue: T1 independent re-review, premise-checker on the A/B fork,
+  T5a fixture edits, gate-B diagnosis, fetch-mock hygiene, next periodic run.
