@@ -7,6 +7,13 @@
  * a comma-less "Given Family" name ONLY when a comma'd sibling for the same
  * person exists somewhere in the corpus.
  *
+ * KNOWN LIMITATION: the field contract is semicolon-delimited, so a value that
+ * uses commas as the author separator ("Anjali Mahendra, Madhav Pai") parses as
+ * one person and is reported verified. This is not detectable without
+ * false-positives on legitimate multi-token families ("van der Berg, Jan"),
+ * so it is documented rather than guessed at. CSV sources that delimit authors
+ * with commas must be fixed upstream.
+ *
  * Pure module — safe to import from server code and scripts; no I/O.
  * CONSUMERS THAT GROUP BY AUTHOR (future admin filters, /experts) MUST:
  *   1. group on canonicalAuthorKey(name), never the raw string;
@@ -81,10 +88,22 @@ export function formatAuthorName(parsed: ParsedAuthorName): string {
 }
 
 /**
+ * True when a parsed name renders as a complete "Family, Given" pair — the
+ * verified convention. `hasComma` alone is not enough: "Cheng," parses with an
+ * empty given and renders comma-less, so it is NOT verified. Both the import
+ * tidy path and the repair planner ask this question; they must ask it the
+ * same way or the authors_format flag drifts from the value it describes.
+ */
+export function isVerifiedForm(parsed: ParsedAuthorName): boolean {
+  return parsed.hasComma && parsed.isSplittable && parsed.given.length > 0
+}
+
+/**
  * Import-path tidying: comma'd names are reformatted to "Family, Given"
  * (fixes "Amos,Albert", "A , B", double spaces); separator whitespace is
  * normalized ("A;B" -> "A; B"). Comma-less names are kept verbatim (order is
- * never guessed here) and set `unverified: true` when any name lacks a comma.
+ * never guessed here). `unverified: true` when any name fails isVerifiedForm —
+ * i.e. it does not render as a complete "Family, Given" pair.
  */
 export function tidyAuthorsField(raw: string): TidyResult {
   const segments = (raw || '').split(';')
@@ -94,9 +113,12 @@ export function tidyAuthorsField(raw: string): TidyResult {
     const collapsed = collapseWhitespace(segment)
     if (collapsed.length === 0) continue
     const parsed = parseAuthorName(collapsed)
-    if (parsed.hasComma && parsed.isSplittable) {
+    if (isVerifiedForm(parsed)) {
       out.push(formatAuthorName(parsed))
     } else {
+      // Kept verbatim: order is never guessed at import, and a degenerate
+      // comma ("Cheng,") must not be normalized into a value that LOOKS
+      // verified — that would let a later import clear the flag.
       out.push(collapsed)
       unverified = true
     }
@@ -151,6 +173,8 @@ export interface CandidateDoc {
   externalId: string
   authors: string
   provenance: 'external' | 'llm'
+  /** True when metadata_source already carries an authors_format key. */
+  alreadyFlagged: boolean
 }
 
 export interface RepairDocPlan {
@@ -173,8 +197,9 @@ export interface RepairDocPlan {
  *   from whitespace collapsing; the flag marks values that cannot self-heal)
  * - comma-less, no match, llm -> untouched, no flag (the worker may rewrite
  *   the field at any re-ingest; llm no-match docs are dropped entirely)
- * External docs are planned when authors change OR the flag must be set; llm
- * docs only when authors change.
+ * External docs are planned when authors change, or when the flag must be set
+ * and is not already stored. LLM docs are planned only when a name changed —
+ * separator-only whitespace is left alone.
  */
 export function planAuthorRepairs(
   candidates: CandidateDoc[],
@@ -184,7 +209,7 @@ export function planAuthorRepairs(
   for (const doc of candidates) {
     const ops: RepairOp[] = splitAuthorsField(doc.authors).map((name) => {
       const parsed = parseAuthorName(name)
-      if (parsed.hasComma && parsed.isSplittable) {
+      if (isVerifiedForm(parsed)) {
         const after = formatAuthorName(parsed)
         return {
           type: (after === name ? 'none' : 'fix-spacing') as RepairOpType,
@@ -215,8 +240,14 @@ export function planAuthorRepairs(
     const stillUnverified = ops.some((op) => op.type === 'flag-unverified')
     const needsWrite =
       doc.provenance === 'external'
-        ? authorsChanged || stillUnverified
-        : authorsChanged
+        ? // Re-flagging an already-flagged doc is a no-op write. Gating on the
+          // stored flag (not on excluding the row from the query) keeps the
+          // doc eligible for a flip if evidence for its name appears later.
+          authorsChanged || (stillUnverified && !doc.alreadyFlagged)
+        : // llm rows are not ours to tidy. Write only when a NAME changed —
+          // never for a separator-only difference ("A;B" -> "A; B"), which is
+          // cosmetic and would make the audit rationale untrue.
+          ops.some((op) => op.type !== 'none')
     if (!needsWrite) continue
     plans.push({
       documentId: doc.id,
@@ -256,13 +287,23 @@ const SOURCE_PRIORITY: Record<string, number> = {
 export function buildEvidenceIndex(rows: EvidenceRow[]): Map<string, string> {
   const best = new Map<string, { value: string; rank: number }>()
   for (const row of rows) {
-    const value = formatAuthorName(parseAuthorName(row.canonical))
+    const parsed = parseAuthorName(row.canonical)
+    // A row that renders comma-less is not evidence of anything. Without this,
+    // "Cheng," would index key "cheng|" -> "Cheng" and a bare surname would
+    // "flip" to itself, silently dropping out of the plan unflagged.
+    if (!isVerifiedForm(parsed)) continue
+    const value = formatAuthorName(parsed)
     const key = strictAuthorKey(value)
     const rank = SOURCE_PRIORITY[row.src] ?? 3
     const existing = best.get(key)
-    if (!existing) {
-      best.set(key, { value, rank })
-    } else if (existing.value !== value && rank < existing.rank) {
+    if (
+      !existing ||
+      rank < existing.rank ||
+      // Same-rank conflicts must not depend on the order Postgres returned
+      // rows in: the dry run an operator reviews and the --apply that follows
+      // are separate queries. Smallest spelling wins, arbitrarily but stably.
+      (rank === existing.rank && value < existing.value)
+    ) {
       best.set(key, { value, rank })
     }
   }

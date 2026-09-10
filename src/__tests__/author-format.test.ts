@@ -7,6 +7,7 @@ import {
   splitAuthorsField,
   parseAuthorName,
   formatAuthorName,
+  isVerifiedForm,
   tidyAuthorsField,
   canonicalAuthorKey,
   strictAuthorKey,
@@ -159,6 +160,37 @@ describe('tidyAuthorsField', () => {
   })
 })
 
+describe('tidyAuthorsField — degenerate commas (M7)', () => {
+  it('treats an empty given as unverified and does not drop the comma', () => {
+    expect(tidyAuthorsField('Cheng,')).toEqual({
+      value: 'Cheng,',
+      changed: false,
+      unverified: true,
+    })
+  })
+
+  it('flags a field whose only defect is a trailing-comma name', () => {
+    expect(tidyAuthorsField('Amos, Albert; Cheng,')).toEqual({
+      value: 'Amos, Albert; Cheng,',
+      changed: false,
+      unverified: true,
+    })
+  })
+})
+
+describe('isVerifiedForm', () => {
+  const v = (name: string) => isVerifiedForm(parseAuthorName(name))
+
+  it('requires both halves of a Family, Given pair', () => {
+    expect(v('Mahendra, Anjali')).toBe(true)
+    expect(v('Amos,Albert')).toBe(true)
+    expect(v('Cheng,')).toBe(false)
+    expect(v(', Albert')).toBe(false)
+    expect(v('Anjali Mahendra')).toBe(false)
+    expect(v('WHO')).toBe(false)
+  })
+})
+
 describe('canonicalAuthorKey', () => {
   it('folds to family + given initials', () => {
     expect(canonicalAuthorKey('Mahendra, Anjali')).toBe('mahendra|a')
@@ -233,6 +265,7 @@ describe('planAuthorRepairs', () => {
     externalId: 'doc-1',
     authors,
     provenance,
+    alreadyFlagged: false,
   })
 
   it('flips an external comma-less name with strict-key evidence', () => {
@@ -307,5 +340,86 @@ describe('planAuthorRepairs', () => {
 
   it('drops external docs that are already tidy and need no flag', () => {
     expect(planAuthorRepairs([doc('Pai, Madhav')], EVIDENCE)).toEqual([])
+  })
+})
+
+describe('buildEvidenceIndex — rank and determinism (M6, m11)', () => {
+  it('keeps the human spelling when a lower-quality row repeated it first', () => {
+    const idx = buildEvidenceIndex([
+      { src: 'llm', canonical: 'Meneses, Sandra' },
+      { src: 'human', canonical: 'Meneses, Sandra' },
+      { src: 'external', canonical: 'MENESES, Sandra' },
+    ])
+    expect(idx.get('meneses|sandra')).toBe('Meneses, Sandra')
+  })
+
+  it('breaks same-rank conflicts deterministically, not by row order', () => {
+    const rows = [
+      { src: 'external', canonical: 'Zeta, Ana' },
+      { src: 'external', canonical: 'ZETA, Ana' },
+    ]
+    const forward = buildEvidenceIndex(rows)
+    const reversed = buildEvidenceIndex([...rows].reverse())
+    expect(forward.get('zeta|ana')).toBe(reversed.get('zeta|ana'))
+  })
+
+  it('rejects degenerate evidence that renders without a comma', () => {
+    const idx = buildEvidenceIndex([{ src: 'external', canonical: 'Cheng,' }])
+    expect(idx.size).toBe(0)
+  })
+})
+
+describe('planAuthorRepairs — write rules (M4, m11, m12)', () => {
+  const doc = (
+    authors: string,
+    provenance: 'external' | 'llm' = 'external',
+    alreadyFlagged = false,
+  ): CandidateDoc => ({
+    id: '22222222-2222-2222-2222-222222222222',
+    externalId: 'doc-2',
+    authors,
+    provenance,
+    alreadyFlagged,
+  })
+
+  it('does not re-flag an external doc that is already flagged', () => {
+    expect(
+      planAuthorRepairs([doc('Xyz Abc', 'external', true)], EVIDENCE),
+    ).toEqual([])
+  })
+
+  it('still repairs an already-flagged external doc when evidence appears', () => {
+    const [plan] = planAuthorRepairs(
+      [doc('Anjali Mahendra', 'external', true)],
+      EVIDENCE,
+    )
+    expect(plan.finalAuthors).toBe('Mahendra, Anjali')
+    expect(plan.ops[0].type).toBe('flip')
+  })
+
+  it('flags a single-token external name even when degenerate evidence exists', () => {
+    const idx = buildEvidenceIndex([{ src: 'external', canonical: 'Cheng,' }])
+    const [plan] = planAuthorRepairs([doc('Cheng')], idx)
+    expect(plan.stillUnverified).toBe(true)
+    expect(plan.finalAuthors).toBe('Cheng')
+  })
+
+  it('leaves a trailing-comma external name in place and flags it', () => {
+    const [plan] = planAuthorRepairs([doc('Cheng,')], EVIDENCE)
+    expect(plan.ops[0].type).toBe('flag-unverified')
+    expect(plan.finalAuthors).toBe('Cheng,')
+    expect(plan.stillUnverified).toBe(true)
+  })
+
+  it('does not write an llm row for a separator-only difference', () => {
+    expect(
+      planAuthorRepairs([doc('Pai, Madhav;Amos, Albert', 'llm')], EVIDENCE),
+    ).toEqual([])
+  })
+
+  it('still writes an llm row when a name itself needs spacing repair', () => {
+    const [plan] = planAuthorRepairs([doc('Amos,Albert', 'llm')], EVIDENCE)
+    expect(plan.ops[0].type).toBe('fix-spacing')
+    expect(plan.finalAuthors).toBe('Amos, Albert')
   })
 })
