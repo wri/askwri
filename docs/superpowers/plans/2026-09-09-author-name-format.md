@@ -35,7 +35,7 @@ Branch: `fix/author-name-formats` (already checked out; PR targets `qa` — **ne
 - Create: `src/lib/authorFormat.ts`
 - Test: `src/__tests__/author-format.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/__tests__/author-format.test.ts`:
 
@@ -211,12 +211,12 @@ describe('strictAuthorKey', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx jest src/__tests__/author-format.test.ts`
 Expected: FAIL — `Cannot find module '../lib/authorFormat'`
 
-- [ ] **Step 3: Implement `src/lib/authorFormat.ts`**
+- [x] **Step 3: Implement `src/lib/authorFormat.ts`**
 
 ```ts
 /**
@@ -351,12 +351,12 @@ export function strictAuthorKey(name: string): string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx jest src/__tests__/author-format.test.ts`
 Expected: PASS (all suites)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/authorFormat.ts src/__tests__/author-format.test.ts
@@ -371,7 +371,7 @@ git commit -m "feat(authors): pure author-format module — parse, tidy, keys (i
 - Modify: `src/lib/authorFormat.ts` (append)
 - Test: `src/__tests__/author-format.test.ts` (append)
 
-- [ ] **Step 1: Write the failing tests** — put the new imports at the TOP of `src/__tests__/author-format.test.ts`, the `EVIDENCE` constant and describe blocks at the bottom:
+- [x] **Step 1: Write the failing tests** — put the new imports at the TOP of `src/__tests__/author-format.test.ts`, the `EVIDENCE` constant and describe blocks at the bottom:
 
 ```ts
 import {
@@ -476,12 +476,12 @@ describe('planAuthorRepairs', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx jest src/__tests__/author-format.test.ts`
 Expected: FAIL — `planAuthorRepairs` / `buildEvidenceIndex` not exported
 
-- [ ] **Step 3: Implement the planner** (append to `src/lib/authorFormat.ts`)
+- [x] **Step 3: Implement the planner** (append to `src/lib/authorFormat.ts`)
 
 ```ts
 // ---------------------------------------------------------------------------
@@ -607,12 +607,12 @@ export function buildEvidenceIndex(rows: EvidenceRow[]): Map<string, string> {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx jest src/__tests__/author-format.test.ts`
 Expected: PASS (all suites, including Task 1's)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/authorFormat.ts src/__tests__/author-format.test.ts
@@ -627,7 +627,7 @@ git commit -m "feat(authors): pure repair planner + evidence index (issue #411)"
 - Modify: `src/db/queries/importDocuments.ts`
 - Test: `src/__tests__/author-import-tidy.test.ts` (create)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/__tests__/author-import-tidy.test.ts`:
 
@@ -704,12 +704,12 @@ describe('computeOverwriteChanges flags unverified authors', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx jest src/__tests__/author-import-tidy.test.ts`
 Expected: FAIL — `authorsUnverified` missing on `MappedDocument`; the unverified warning never fires
 
-- [ ] **Step 3: Modify `src/db/queries/importDocuments.ts`**
+- [x] **Step 3: Modify `src/db/queries/importDocuments.ts`**
 
 3a. Add the import at the top (after the `PROVENANCE_KEY` import):
 
@@ -875,17 +875,17 @@ with:
 
 (Leave the legacy fill-only-empty branch untouched — it writes authors with NULL provenance, which the worker can overwrite, so it self-heals and needs no flag.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx jest src/__tests__/author-import-tidy.test.ts src/__tests__/author-format.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run the full existing test suite (regression)**
+- [x] **Step 5: Run the full existing test suite (regression)**
 
 Run: `npm test`
 Expected: PASS — no existing test asserts on raw un-tidied author values (if one does, update it to the tidied expectation; that is the intended behavior change)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/db/queries/importDocuments.ts src/__tests__/author-import-tidy.test.ts
@@ -901,7 +901,7 @@ git commit -m "feat(import): tidy authors and stamp/clear authors_format flag (i
 - Create: `scripts/repair-author-formats.ts`
 - Modify: `package.json` (one line)
 
-- [ ] **Step 1: Extend the audit action union**
+- [x] **Step 1: Extend the audit action union**
 
 In `src/db/queries/audit.ts`, change:
 
@@ -920,7 +920,7 @@ to:
 
 (`audit_log.action` is a plain `text` column with no CHECK constraint — DDL at `src/db/migrations/1781280000000-Migration.ts:170`.)
 
-- [ ] **Step 2: Create `scripts/repair-author-formats.ts`**
+- [x] **Step 2: Create `scripts/repair-author-formats.ts`**
 
 ```ts
 import 'reflect-metadata'
@@ -1112,23 +1112,23 @@ main().catch((err) => {
 })
 ```
 
-- [ ] **Step 3: Add the npm script** — in `package.json`, insert a new entry alongside the other seed scripts (e.g. right after the `"seed:tag-aliases"` line), preserving valid JSON (mind the trailing comma):
+- [x] **Step 3: Add the npm script** — in `package.json`, insert a new entry alongside the other seed scripts (e.g. right after the `"seed:tag-aliases"` line), preserving valid JSON (mind the trailing comma):
 
 ```json
     "repair:author-formats": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/repair-author-formats.ts",
 ```
 
-- [ ] **Step 4: Typecheck the script**
+- [x] **Step 4: Typecheck the script**
 
 Run: `npx tsc --noEmit -p tsconfig.json`
 Expected: no errors (the script is included via path aliasing; if tsconfig excludes `scripts/`, run `npx tsc --noEmit --skipLibCheck --module commonjs --target es2020 --esModuleInterop --resolveJsonModule scripts/repair-author-formats.ts` instead and fix what it reports)
 
-- [ ] **Step 5: Smoke the dry run locally (optional; needs the local docker DB from `./scripts/local-bootstrap.sh`)**
+- [ ] **Step 5: Smoke the dry run locally (optional; needs the local docker DB from `./scripts/local-bootstrap.sh`)** — skipped in the executing environment (optional step; no local Postgres running)
 
 Run: `npm run repair:author-formats`
 Expected: report prints with `DRY RUN`, zero rows applied, exit 0. (Local counts will differ from QA.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scripts/repair-author-formats.ts src/db/queries/audit.ts package.json
@@ -1142,7 +1142,7 @@ git commit -m "feat(repair): author format repair script — dry-run default, gu
 **Files:**
 - Modify: `docs/document-management.md`
 
-- [ ] **Step 1: Add the format contract + runbook section** — append to `docs/document-management.md`:
+- [x] **Step 1: Add the format contract + runbook section** — append to `docs/document-management.md`:
 
 ```markdown
 ## Author name format (issue #411)
@@ -1180,7 +1180,7 @@ by author (e.g. a future /experts mode) must group on
 `unverified`.
 ```
 
-- [ ] **Step 2: Run the full gates**
+- [x] **Step 2: Run the full gates**
 
 Run: `npm test && npm run lint && npm run format:check`
 Expected: all PASS
@@ -1188,7 +1188,7 @@ Expected: all PASS
 Run: `npx next build --webpack`
 Expected: build succeeds (Turbopack panics on the search-service venv symlink — use the webpack variant per CLAUDE.md)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/document-management.md

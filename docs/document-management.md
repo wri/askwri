@@ -586,3 +586,37 @@ Worker (Python) inserts `source='system', status='suggested'` rows only. App tie
 (Node) owns confirm/reject/flip/unlink/manual-create and the review UI. Same
 two-writer precedence as `document_tags`; the worker never touches human-reviewed
 rows.
+
+## Author name format (issue #411)
+
+`documents.authors` is a semicolon-delimited string; each person is
+`Family, Given` (e.g. `Mahendra, Anjali; Pai, Madhav`). The ingest worker
+writes this format; CSV imports may deliver any order.
+
+- **CSV imports** tidy comma spacing on arrival and mark values that still
+  contain a comma-less name with `metadata_source.authors_format =
+  'unverified'` — these are CSV-sourced (`external`) values the worker is
+  forbidden from rewriting, so they cannot self-heal. A later CSV import with
+  a fully comma'd value clears the flag.
+- **`scripts/repair-author-formats.ts`** repairs existing rows. It flips a
+  comma-less `Given Family` name to the `Family, Given` form only when a
+  comma'd spelling of the same person (strict key: family + full given name,
+  diacritic-folded) exists elsewhere in the corpus; unconfirmed external
+  names are left in place and flagged `unverified`; llm rows are flipped
+  under the same evidence rule (provenance stays `llm`, so a future re-ingest
+  supersedes the script's value). Human-edited rows are never touched. The
+  script is dry-run by default; `--apply` commits, writes one
+  `author_format_repair` audit row per changed document, and is idempotent.
+
+Run it (manual ops action — deploys nothing):
+
+    ./scripts/with-remote-env.sh qa         npm run repair:author-formats          # dry run
+    ./scripts/with-remote-env.sh qa         npm run repair:author-formats -- --apply
+    ./scripts/with-remote-env.sh production npm run repair:author-formats -- --apply
+
+Read the report top-down: op counts, then one line per document with each
+`before -> after`. `DROPPED` lines mean the provenance guard missed at write
+time (a concurrent edit) — rerun the dry run to re-plan. Consumers that group
+by author (e.g. a future /experts mode) must group on
+`canonicalAuthorKey()` from `src/lib/authorFormat.ts` and skip fields flagged
+`unverified`.
