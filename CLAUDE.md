@@ -25,6 +25,10 @@ per the runbook. Trap edge to know: docs-only pushes (`.md`, `docs/**`) deploy
 *nothing* on either branch, so a "safe-looking" main push can hide the fact that
 the next code push there ships straight to prod.
 
+Standing release checklist: `docs/runbooks/production-release.md` — pending-ops
+discovery commands to run at every release, plus the dated snapshot of what is
+still owed to production (migrations, data repairs).
+
 This has bitten twice (PR #360 on 2026-08-25 and PR #395 on 2026-09-02 — both
 merged to `main` believing it was inert code-landing, both deployed production
 unintentionally). The README's "Deploy to Production: `git push origin main`"
