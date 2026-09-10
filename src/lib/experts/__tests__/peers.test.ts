@@ -3,9 +3,24 @@ import { peersOf, PEER_THRESHOLD } from '@/lib/experts/peers'
 import type { MatchedTag, PersonResult } from '@/lib/experts/types'
 
 const person = (key: string, topics: Record<string, number>): PersonResult => ({
-  key, name: key, office: 'WRI Global', offices: {}, score: 1,
-  evidence: { docs: 0, strong: 0, partial: 0, weak: 0, years: null, corpusDocs: 0 },
-  topics: Object.entries(topics).map(([label, n]) => ({ label, n, matched: true })),
+  key,
+  name: key,
+  office: 'WRI Global',
+  offices: {},
+  score: 1,
+  evidence: {
+    docs: 0,
+    strong: 0,
+    partial: 0,
+    weak: 0,
+    years: null,
+    corpusDocs: 0,
+  },
+  topics: Object.entries(topics).map(([label, n]) => ({
+    label,
+    n,
+    matched: true,
+  })),
   docIds: [],
 })
 const N = 201

@@ -1,9 +1,37 @@
 /* src/app/components/Experts/Experts.css */
-.experts-row { border-left: 3px solid transparent; }
-.experts-row:hover { background: rgba(240, 171, 0, 0.16); }
-.experts-row[aria-pressed='true'] { background: rgba(240, 171, 0, 0.16); border-left-color: #1b1a17; }
-.experts-row[data-peer='true'] { background: rgba(240, 171, 0, 0.07); }
-.experts-row:focus-visible { outline: 2px solid #1b1a17; outline-offset: -2px; }
-.experts-peer-btn { border: 0; background: none; cursor: pointer; padding: 0; font: inherit; font-weight: 500; text-align: left; }
-.experts-peer-btn:hover { text-decoration: underline; }
-.experts-chip-x { border: 0; background: none; cursor: pointer; padding: 0 2px; line-height: 1; }
+.experts-row {
+  border-left: 3px solid transparent;
+}
+.experts-row:hover {
+  background: rgba(240, 171, 0, 0.16);
+}
+.experts-row[aria-pressed='true'] {
+  background: rgba(240, 171, 0, 0.16);
+  border-left-color: #1b1a17;
+}
+.experts-row[data-peer='true'] {
+  background: rgba(240, 171, 0, 0.07);
+}
+.experts-row:focus-visible {
+  outline: 2px solid #1b1a17;
+  outline-offset: -2px;
+}
+.experts-peer-btn {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+}
+.experts-peer-btn:hover {
+  text-decoration: underline;
+}
+.experts-chip-x {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}

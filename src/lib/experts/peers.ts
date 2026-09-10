@@ -23,7 +23,9 @@ export function peersOf(
   totalWorks: number,
 ): Peer[] {
   const mine = new Map(person.topics.map((t) => [t.label, t.n]))
-  const spec = new Map(matched.map((t) => [t.label, specificity(t.df, totalWorks)]))
+  const spec = new Map(
+    matched.map((t) => [t.label, specificity(t.df, totalWorks)]),
+  )
   const out: Peer[] = []
   for (const q of others) {
     if (q.key === person.key) continue

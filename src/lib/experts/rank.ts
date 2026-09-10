@@ -17,7 +17,11 @@ import type {
   WorkRow,
 } from './types'
 
-export const TIER_W: Record<Tier, number> = { strong: 1, partial: 0.5, weak: 0.15 }
+export const TIER_W: Record<Tier, number> = {
+  strong: 1,
+  partial: 0.5,
+  weak: 0.15,
+}
 export const POS_DECAY = 0.3 // pos_w = 1 / (1 + POS_DECAY * index)
 export const EVIDENCE_WEIGHT = 0.7
 export const TOPIC_WEIGHT = 0.3
@@ -41,7 +45,8 @@ export function specificity(df: number, n: number): number {
 
 export function computeDf(works: WorkRow[]): Map<string, number> {
   const df = new Map<string, number>()
-  for (const w of works) for (const t of new Set(w.topics)) df.set(t, (df.get(t) ?? 0) + 1)
+  for (const w of works)
+    for (const t of new Set(w.topics)) df.set(t, (df.get(t) ?? 0) + 1)
   return df
 }
 
@@ -64,7 +69,9 @@ interface PersonAcc {
   corpusDocs: number
 }
 
-export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTag[] } {
+export function rank(
+  opts: RankOptions,
+): RankResult & { matchedTopics: MatchedTag[] } {
   const { works, currentYear } = opts
   const topN = Math.min(Math.max(opts.topN ?? DEFAULT_TOP_N, 1), MAX_TOP_N)
   const excluded = new Set(opts.excludedTopics ?? [])
@@ -72,7 +79,11 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
   const df = computeDf(works)
   const matched: MatchedTag[] = opts.matchedTopics
     .filter((t) => !excluded.has(t.label))
-    .map((t) => ({ label: t.label, cosine: t.cosine, df: df.get(t.label) ?? 0 }))
+    .map((t) => ({
+      label: t.label,
+      cosine: t.cosine,
+      df: df.get(t.label) ?? 0,
+    }))
   const matchedLabels = new Set(matched.map((t) => t.label))
 
   // Work lookup, including translation ids -> original.
@@ -85,7 +96,11 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
   // Author resolution over the whole corpus (sibling lookup needs every form).
   const index = buildAuthorIndex(works.flatMap((w) => w.authorsRaw))
   const authorsOf = new Map<string, AuthorRef[]>()
-  for (const w of works) authorsOf.set(w.docId, w.authorsRaw.map((r) => resolveAuthor(r, index)))
+  for (const w of works)
+    authorsOf.set(
+      w.docId,
+      w.authorsRaw.map((r) => resolveAuthor(r, index)),
+    )
 
   // Retrieved works: best tier per work.
   const tierRank: Record<Tier, number> = { strong: 3, partial: 2, weak: 1 }
@@ -94,7 +109,8 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
     const w = byId.get(r.docId)
     if (!w) continue
     const cur = retrievedTier.get(w.docId)
-    if (!cur || tierRank[r.tier] > tierRank[cur]) retrievedTier.set(w.docId, r.tier)
+    if (!cur || tierRank[r.tier] > tierRank[cur])
+      retrievedTier.set(w.docId, r.tier)
   }
   const mode: RankResult['mode'] =
     retrievedTier.size === 0 || opts.likelyOffTopic ? 'topic_only' : 'evidence'
@@ -103,9 +119,16 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
   // Candidate works: retrieved first, then tagged by matched topics (best cosine first).
   const candidateIds: string[] = [...retrievedTier.keys()]
   const bestCos = (w: WorkRow) =>
-    Math.max(0, ...matched.filter((t) => w.topics.includes(t.label)).map((t) => t.cosine))
+    Math.max(
+      0,
+      ...matched.filter((t) => w.topics.includes(t.label)).map((t) => t.cosine),
+    )
   const tagged = works
-    .filter((w) => !retrievedTier.has(w.docId) && w.topics.some((t) => matchedLabels.has(t)))
+    .filter(
+      (w) =>
+        !retrievedTier.has(w.docId) &&
+        w.topics.some((t) => matchedLabels.has(t)),
+    )
     .sort((a, b) => bestCos(b) - bestCos(a))
   for (const w of tagged) {
     if (candidateIds.length >= MAX_CANDIDATES) break
@@ -120,7 +143,10 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
       if (a.org) continue
       corpusCount.set(a.key, (corpusCount.get(a.key) ?? 0) + 1)
       let tc = topicCountsAll.get(a.key)
-      if (!tc) { tc = new Map(); topicCountsAll.set(a.key, tc) }
+      if (!tc) {
+        tc = new Map()
+        topicCountsAll.set(a.key, tc)
+      }
       for (const t of new Set(w.topics)) tc.set(t, (tc.get(t) ?? 0) + 1)
     }
   }
@@ -131,8 +157,13 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
     let p = people.get(a.key)
     if (!p) {
       p = {
-        ref: a, evidence: 0, topic: 0, docIds: new Set(),
-        tiers: { strong: 0, partial: 0, weak: 0 }, offices: {}, years: [],
+        ref: a,
+        evidence: 0,
+        topic: 0,
+        docIds: new Set(),
+        tiers: { strong: 0, partial: 0, weak: 0 },
+        offices: {},
+        years: [],
         topicCounts: topicCountsAll.get(a.key) ?? new Map(),
         corpusDocs: corpusCount.get(a.key) ?? 0,
       }
@@ -155,11 +186,15 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
       }
       const p = acc(a)
       if (tier) {
-        p.evidence += TIER_W[tier] * (1 / (1 + POS_DECAY * personIndex)) * recencyWeight(w.year, currentYear)
+        p.evidence +=
+          TIER_W[tier] *
+          (1 / (1 + POS_DECAY * personIndex)) *
+          recencyWeight(w.year, currentYear)
         p.docIds.add(w.docId)
         p.tiers[tier] += 1
         if (w.year != null) p.years.push(w.year)
-        p.offices[w.office ?? 'Office unknown'] = (p.offices[w.office ?? 'Office unknown'] ?? 0) + 1
+        p.offices[w.office ?? 'Office unknown'] =
+          (p.offices[w.office ?? 'Office unknown'] ?? 0) + 1
       }
       personIndex += 1
     }
@@ -168,14 +203,16 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
   for (const p of people.values()) {
     for (const t of matched) {
       const n = p.topicCounts.get(t.label) ?? 0
-      if (n > 0) p.topic += t.cosine * specificity(t.df, N) * Math.min(n, 3) / 3
+      if (n > 0)
+        p.topic += (t.cosine * specificity(t.df, N) * Math.min(n, 3)) / 3
     }
     if (p.docIds.size === 0) {
       // topic-only person: office/years from their works on matched topics
       for (const w of works) {
         if (!w.topics.some((t) => matchedLabels.has(t))) continue
         if (!authorsOf.get(w.docId)!.some((a) => a.key === p.ref.key)) continue
-        p.offices[w.office ?? 'Office unknown'] = (p.offices[w.office ?? 'Office unknown'] ?? 0) + 1
+        p.offices[w.office ?? 'Office unknown'] =
+          (p.offices[w.office ?? 'Office unknown'] ?? 0) + 1
         if (w.year != null) p.years.push(w.year)
         p.docIds.add(w.docId)
       }
@@ -188,11 +225,14 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
     .map((p) => {
       const e = maxE > 0 ? p.evidence / maxE : 0
       const s = maxS > 0 ? p.topic / maxS : 0
-      const score = mode === 'evidence' ? EVIDENCE_WEIGHT * e + TOPIC_WEIGHT * s : s
+      const score =
+        mode === 'evidence' ? EVIDENCE_WEIGHT * e + TOPIC_WEIGHT * s : s
       return { p, score }
     })
     .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || a.p.ref.name.localeCompare(b.p.ref.name))
+    .sort(
+      (a, b) => b.score - a.score || a.p.ref.name.localeCompare(b.p.ref.name),
+    )
   const maxScore = scored[0]?.score ?? 1
 
   const docs: Record<string, DocResult> = {}
@@ -200,9 +240,16 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
     if (docs[id]) return
     const w = byId.get(id)!
     docs[id] = {
-      docId: w.docId, title: w.title, year: w.year, type: w.type, office: w.office,
-      tier: retrievedTier.get(w.docId) ?? null, url: w.url,
-      authors: authorsOf.get(w.docId)!, topics: w.topics, geographies: w.geographies,
+      docId: w.docId,
+      title: w.title,
+      year: w.year,
+      type: w.type,
+      office: w.office,
+      tier: retrievedTier.get(w.docId) ?? null,
+      url: w.url,
+      authors: authorsOf.get(w.docId)!,
+      topics: w.topics,
+      geographies: w.geographies,
       translations: w.translations,
     }
   }
@@ -210,27 +257,47 @@ export function rank(opts: RankOptions): RankResult & { matchedTopics: MatchedTa
   const results: PersonResult[] = scored.slice(0, topN).map(({ p, score }) => {
     const ids = [...p.docIds]
     ids.forEach(addDoc)
-    const office = Object.entries(p.offices).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'Office unknown'
+    const office =
+      Object.entries(p.offices).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+      'Office unknown'
     const topics = [...p.topicCounts.entries()]
       .map(([label, n]) => ({ label, n, matched: matchedLabels.has(label) }))
-      .sort((a, b) => Number(b.matched) - Number(a.matched) || b.n - a.n || a.label.localeCompare(b.label))
+      .sort(
+        (a, b) =>
+          Number(b.matched) - Number(a.matched) ||
+          b.n - a.n ||
+          a.label.localeCompare(b.label),
+      )
     return {
-      key: p.ref.key, name: p.ref.name, office, offices: p.offices,
+      key: p.ref.key,
+      name: p.ref.name,
+      office,
+      offices: p.offices,
       score: Number((score / maxScore).toFixed(4)),
       evidence: {
         docs: mode === 'evidence' ? p.docIds.size : 0,
-        strong: p.tiers.strong, partial: p.tiers.partial, weak: p.tiers.weak,
-        years: p.years.length ? [Math.min(...p.years), Math.max(...p.years)] : null,
+        strong: p.tiers.strong,
+        partial: p.tiers.partial,
+        weak: p.tiers.weak,
+        years: p.years.length
+          ? [Math.min(...p.years), Math.max(...p.years)]
+          : null,
         corpusDocs: p.corpusDocs,
       },
-      topics, docIds: ids,
+      topics,
+      docIds: ids,
       ...(p.ref.unverified ? { unverified: true } : {}),
     }
   })
 
   return {
-    mode, people: results, totalPeople: scored.length, docs,
-    organizations: [...orgs.values()].sort((a, b) => b.docs - a.docs || a.name.localeCompare(b.name)),
+    mode,
+    people: results,
+    totalPeople: scored.length,
+    docs,
+    organizations: [...orgs.values()].sort(
+      (a, b) => b.docs - a.docs || a.name.localeCompare(b.name),
+    ),
     matchedTopics: matched,
   }
 }
