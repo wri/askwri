@@ -19,7 +19,7 @@
  * loads a different tree (or nothing).
  */
 import * as path from 'path'
-import { FORWARDABLE_FIELDS } from '@/app/api/llamaindex/route'
+import { FORWARDABLE_FIELDS } from '@/lib/llamaindex-client'
 
 export interface Controls {
   only: string[]
