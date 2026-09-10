@@ -173,8 +173,57 @@ describe('POST /api/experts', () => {
     const { status, json: body } = await post({ query: 'electric buses' })
     expect(status).toBe(200)
     expect(body.understanding.degraded).toEqual(['tags_nearby'])
-    expect(body.understanding.matched_topics).toEqual([])
+    // spec §9: graph falls back to topics from the docs' own accepted tags.
+    expect(body.understanding.matched_topics).toEqual([
+      { label: 'Buses', cosine: 1, df: 1 },
+    ])
     expect(body.people[0].key).toBe('xue, lulu')
+  })
+
+  it('derives matched_topics from retrieved docs when the topic facet is degraded (spec §9)', async () => {
+    // /tags/nearby returns 200 but names the topic facet degraded and empty;
+    // /query returns two docs with distinct accepted topics.
+    fetchMock
+      .mockResolvedValueOnce(
+        json(
+          queryReply([
+            { doc_id: 'd1', tier: 'strong' },
+            { doc_id: 'd2', tier: 'strong' },
+          ]),
+        ),
+      )
+      .mockResolvedValueOnce(json(tagsReply([], [], ['topic'])))
+    const { status, json: body } = await post({ query: 'electric buses' })
+    expect(status).toBe(200)
+    // degraded still names the topic facet.
+    expect(body.understanding.degraded).toEqual(['tags_nearby:topic'])
+    // mode stays evidence (retrieved docs exist).
+    expect(body.mode).toBe('evidence')
+    // matched_topics is doc-derived, non-empty, with df and a 0..1 strength.
+    const mt = body.understanding.matched_topics
+    expect(mt.length).toBe(2)
+    for (const t of mt) {
+      expect(t.df).toBeGreaterThan(0)
+      expect(t.cosine).toBeGreaterThanOrEqual(0)
+      expect(t.cosine).toBeLessThanOrEqual(1)
+    }
+    expect(mt.map((t: any) => t.label).sort()).toEqual([
+      'Buses',
+      'School Buses',
+    ])
+    // ordered by score = count · specificity(df, N) descending.
+    const N = 2
+    const scoreOf = (t: any) => 1 * Math.log(N / Math.max(t.df, 1))
+    for (let i = 1; i < mt.length; i++)
+      expect(scoreOf(mt[i - 1])).toBeGreaterThanOrEqual(scoreOf(mt[i]))
+    // fallback did not feed the score: top person is a pure-evidence ranking.
+    expect(body.people[0].score).toBe(1)
+    expect(body.people[0].evidence.docs).toBeGreaterThan(0)
+    // people's topics carry matched:true for fallback labels.
+    const fbLabels = new Set(mt.map((t: any) => t.label))
+    for (const p of body.people)
+      for (const t of p.topics)
+        if (fbLabels.has(t.label)) expect(t.matched).toBe(true)
   })
 
   it('degrades to topic_only when /query fails', async () => {

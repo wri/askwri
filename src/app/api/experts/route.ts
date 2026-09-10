@@ -5,8 +5,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CITE_PRESET } from '@/config/retrieval'
 import { initializeDatabase } from '@/db/data-source'
 import { loadSearchableWorks } from '@/db/queries/expertsEvidence'
-import { rank, DEFAULT_TOP_N, MAX_TOP_N } from '@/lib/experts/rank'
-import type { ExpertsResponse, RetrievedDoc, Tier } from '@/lib/experts/types'
+import { rank, specificity, DEFAULT_TOP_N, MAX_TOP_N } from '@/lib/experts/rank'
+import type {
+  ExpertsResponse,
+  MatchedTag,
+  RetrievedDoc,
+  Tier,
+  WorkRow,
+} from '@/lib/experts/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -47,6 +53,47 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   })
   if (!res.ok) throw new Error(`${path} ${res.status}`)
   return (await res.json()) as T
+}
+
+// Spec §9 graph fallback: when /tags/nearby's topic facet is degraded, derive
+// the topic nodes from the retrieved works' own accepted tags. score(t) =
+// count(t) · specificity(df(t), N); the cosine slot carries score/maxScore, a
+// 0..1 display strength — NOT a true cosine. Top 10 by score. Pure; never
+// enters rank() (scoring stays evidence-only on degradation).
+function fallbackTopics(
+  retrieved: RetrievedDoc[],
+  works: WorkRow[],
+): MatchedTag[] {
+  const N = works.length
+  const byId = new Map<string, WorkRow>()
+  for (const w of works) {
+    byId.set(w.docId, w)
+    for (const tr of w.translations) byId.set(tr, w)
+  }
+  const df = new Map<string, number>()
+  for (const w of works)
+    for (const t of new Set(w.topics)) df.set(t, (df.get(t) ?? 0) + 1)
+  const retrievedWorks = new Set<WorkRow>()
+  for (const r of retrieved) {
+    const w = byId.get(r.docId)
+    if (w) retrievedWorks.add(w)
+  }
+  const count = new Map<string, number>()
+  for (const w of retrievedWorks)
+    for (const t of new Set(w.topics)) count.set(t, (count.get(t) ?? 0) + 1)
+  const scored = [...count.entries()].map(([label, c]) => ({
+    label,
+    score: c * specificity(df.get(label) ?? 1, N),
+  }))
+  scored.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label))
+  const top = scored.slice(0, TOPIC_TOP_K)
+  const maxScore = top[0]?.score ?? 0
+  return top.map(({ label, score }) => ({
+    label,
+    // display strength, not a true cosine
+    cosine: maxScore > 0 ? score / maxScore : 0,
+    df: df.get(label) ?? 0,
+  }))
 }
 
 export async function POST(req: NextRequest) {
@@ -173,6 +220,20 @@ export async function POST(req: NextRequest) {
       topN,
     })
     timing.rank_ms = Date.now() - t0
+    // Spec §9: when the topic facet is degraded, the tags-derived topic list
+    // is empty, and /query produced retrieved docs, populate the graph's
+    // topic nodes from the retrieved works' own accepted tags. This fills
+    // understanding.matched_topics (chips, graph, peers) but MUST NOT enter
+    // rank()'s scoring — rank() already ran with the (empty) tags-derived list.
+    const topicDegraded =
+      degraded.includes('tags_nearby') || degraded.includes('tags_nearby:topic')
+    if (topicDegraded && topics.length === 0 && retrieved.length > 0) {
+      const fb = fallbackTopics(retrieved, works)
+      result.matchedTopics = fb
+      const fbLabels = new Set(fb.map((t) => t.label))
+      for (const p of result.people)
+        for (const t of p.topics) if (fbLabels.has(t.label)) t.matched = true
+    }
     const geoDf = new Map<string, number>()
     for (const w of works)
       for (const g of new Set(w.geographies))
