@@ -78,7 +78,7 @@ describe('computeOverwriteChanges flags unverified authors', () => {
       '⚠ authors: "Old Author" → "Anjali Mahendra" (overwrite)',
     )
     expect(warnings).toContain(
-      '⚠ authors: format unverified (name without comma)',
+      "⚠ authors: format unverified (name without comma) 'Anjali Mahendra'",
     )
   })
 
@@ -88,8 +88,43 @@ describe('computeOverwriteChanges flags unverified authors', () => {
       file_path: 'x.pdf',
     })
     const { warnings } = computeOverwriteChanges(existing, mapped, {})
-    expect(warnings).not.toContain(
-      '⚠ authors: format unverified (name without comma)',
+    expect(warnings.some((w) => w.includes('format unverified'))).toBe(false)
+  })
+
+  it('warns when FILLING a null authors field, not just overwriting', () => {
+    const empty = { ...existing, authors: null } as unknown as Document
+    const mapped = mapFlatRowToDocument({
+      authors: 'Anjali Mahendra',
+      file_path: 'x.pdf',
+    })
+    const { warnings } = computeOverwriteChanges(empty, mapped, {})
+    // The apply path stamps authors_format here, so the preview must say so.
+    expect(warnings).toContain(
+      "⚠ authors: format unverified (name without comma) 'Anjali Mahendra'",
     )
+  })
+
+  it('names every offending author, not just the first', () => {
+    const mapped = mapFlatRowToDocument({
+      authors: 'Anjali Mahendra; Amos, Albert; Madhav Pai',
+      file_path: 'x.pdf',
+    })
+    const { warnings } = computeOverwriteChanges(existing, mapped, {})
+    expect(warnings).toContain(
+      "⚠ authors: format unverified (name without comma) 'Anjali Mahendra', 'Madhav Pai'",
+    )
+  })
+
+  it('does not treat a spacing-only authors difference as a change', () => {
+    const stored = {
+      ...existing,
+      authors: 'Amos,Albert',
+    } as unknown as Document
+    const mapped = mapFlatRowToDocument({
+      authors: 'Amos,Albert',
+      file_path: 'x.pdf',
+    })
+    const { changes } = computeOverwriteChanges(stored, mapped, {})
+    expect(changes.find((c) => c.field === 'authors')).toBeUndefined()
   })
 })

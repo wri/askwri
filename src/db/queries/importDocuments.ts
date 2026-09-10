@@ -4,7 +4,12 @@ import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
 import { PROVENANCE_KEY } from '../../lib/metadataProvenance'
-import { tidyAuthorsField } from '../../lib/authorFormat'
+import {
+  isVerifiedForm,
+  parseAuthorName,
+  splitAuthorsField,
+  tidyAuthorsField,
+} from '../../lib/authorFormat'
 
 // Mirrors LANGUAGE_MAP in search-service/scripts/migrate_csv_to_postgres.py
 // plus Phase 1 amendment: bahasa → id
@@ -456,6 +461,30 @@ async function readMetadataSource(
   }
 }
 
+/**
+ * Preview warning naming the names that are not in "Family, Given" form, per
+ * spec §2. Without the names a 12-author field gives the reviewer nothing to
+ * act on.
+ */
+function unverifiedAuthorsWarning(authors: string | null): string {
+  const bad = splitAuthorsField(authors || '')
+    .filter((n) => !isVerifiedForm(parseAuthorName(n)))
+    .map((n) => `'${n}'`)
+    .join(', ')
+  return `⚠ authors: format unverified (name without comma) ${bad}`
+}
+
+/**
+ * metadata_source stamps degrade gracefully because the column may not exist
+ * on an old schema — but authors_format is a correctness marker, so a silent
+ * swallow hides a real problem. Log and continue.
+ */
+function warnStampFailure(stage: string) {
+  return (err: unknown) => {
+    console.warn(`[import] metadata_source stamp failed (${stage}):`, err)
+  }
+}
+
 /** Compute field changes for the overwrite preview (dry-run). */
 export function computeOverwriteChanges(
   existing: Document,
@@ -482,6 +511,19 @@ export function computeOverwriteChanges(
     // Skip if values are the same
     if (existingStr === mappedStr) continue
 
+    // authors: a spacing-only difference is the repair script's job, not an
+    // import overwrite. Treating it as a change would rewrite the value, stamp
+    // 'external' provenance over a possibly-'llm' field, and enqueue a
+    // re-ingest — for a space after a comma. On a corpus stored before tidying
+    // shipped, that fires for most of the corpus on the next re-import.
+    if (
+      field === 'authors' &&
+      existingStr !== null &&
+      tidyAuthorsField(existingStr).value === mappedStr
+    ) {
+      continue
+    }
+
     // Check metadata_source — protect human edits
     const sourceForField = metadataSource[PROVENANCE_KEY[field] ?? field]
     if (sourceForField === 'human') {
@@ -506,9 +548,11 @@ export function computeOverwriteChanges(
     })
     if (isOverwrite) {
       warnings.push(`⚠ ${field}: "${existingStr}" → "${mappedStr}" (overwrite)`)
-      if (field === 'authors' && mapped.authorsUnverified) {
-        warnings.push('⚠ authors: format unverified (name without comma)')
-      }
+    }
+    // Outside the isOverwrite guard on purpose: filling a NULL authors field
+    // also stamps authors_format at apply time, so the preview must show it.
+    if (field === 'authors' && mapped.authorsUnverified) {
+      warnings.push(unverifiedAuthorsWarning(mapped.authors))
     }
   }
 
@@ -589,7 +633,7 @@ export async function importDocuments(
           ? `doi:${mapped.doi}`
           : `external_id:${mapped.externalId}`,
         warnings: mapped.authorsUnverified
-          ? ['⚠ authors: format unverified (name without comma)']
+          ? [unverifiedAuthorsWarning(mapped.authors)]
           : undefined,
       }
 
@@ -633,21 +677,17 @@ export async function importDocuments(
               if (mapped[f] !== null && mapped[f] !== undefined)
                 fields[PROVENANCE_KEY[f] ?? f] = 'external'
             }
+            // authors_format rides the SAME merge that asserts 'external'
+            // provenance — the spec invariant. The legacy create path stamps no
+            // provenance, so its authors stay worker-overwritable and self-heal;
+            // flagging them would strand a marker nothing can ever clear (the
+            // worker does not clear it, the repair script only sees
+            // external/llm rows, and no import overwrites a legacy row).
+            if (mapped.authorsUnverified) fields.authors_format = 'unverified'
             await AppDataSource.query(
               `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
               [insertedId, JSON.stringify(fields)],
-            ).catch(() => {})
-          }
-
-          // authors_format flag: marks CSV values that cannot self-heal
-          // (external provenance shields them from the worker's rewrite).
-          // Legacy-seed fills leave provenance NULL — worker-overwritable,
-          // so they self-heal and get no flag.
-          if (hasMetadataSource && mapped.authorsUnverified) {
-            await AppDataSource.query(
-              `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
-              [insertedId, JSON.stringify({ authors_format: 'unverified' })],
-            ).catch(() => {})
+            ).catch(warnStampFailure('create'))
           }
 
           // Atomic job creation
@@ -737,7 +777,7 @@ export async function importDocuments(
                     ? `UPDATE documents SET metadata_source = (metadata_source - 'authors_format') || $2::jsonb WHERE id = $1`
                     : `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
                   [existing.id, JSON.stringify(metaUpdates)],
-                ).catch(() => {})
+                ).catch(warnStampFailure('overwrite'))
               }
             }
 
