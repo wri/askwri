@@ -150,6 +150,11 @@ relying on it.
 
 ## 6. Snapshot — pending as of 2026-09-10 (next release must cover; then CLEAR)
 
+> Between releases this section is maintained on the **open production-release
+> runbook PR** so the pending list stays visible in the repo's PR list — update it
+> (on that branch) whenever qa work lands with production follow-ups, and clear it
+> in the release that discharges the items.
+
 **Prod state verified 2026-09-10:** serving `main@7c91ffe` (the 09-02 accidental
 build) — healthy (`/api/health` OK, 3/3 ECS services stable), but with latent gaps
 below. `qa` ⊇ `main` and `qa` ⊇ `production` (both logs empty); delta 173 files.
