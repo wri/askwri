@@ -35,3 +35,10 @@
   padding: 0 2px;
   line-height: 1;
 }
+/* The page's two-column bench grid is inline-styled; !important wins over
+   the inline grid-template-columns on narrow screens (single column). */
+@media (max-width: 980px) {
+  .experts-bench {
+    grid-template-columns: 1fr !important;
+  }
+}
