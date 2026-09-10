@@ -134,6 +134,21 @@ d('documentsAdmin (DB integration)', () => {
     expect(row.a).toBe('human')
   })
 
+  it('clears authors_format when a human edits authors (they are the verifier)', async () => {
+    await AppDataSource.query(
+      `UPDATE documents SET metadata_source = metadata_source || '{"authors_format":"unverified"}'::jsonb
+       WHERE id = $1`,
+      [docId],
+    )
+    await updateDocumentFields(docId, { authors: 'Mahendra, Anjali' }, identity)
+    const [row] = await AppDataSource.query(
+      `SELECT metadata_source FROM documents WHERE id = $1`,
+      [docId],
+    )
+    expect(row.metadata_source.authors).toBe('human')
+    expect(row.metadata_source.authors_format).toBeUndefined()
+  })
+
   it('syncs title_en = title when an English doc title is renamed', async () => {
     const ext = `en_title_sync_${Date.now()}`
     const [ins] = await AppDataSource.query(
