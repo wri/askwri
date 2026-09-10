@@ -1225,7 +1225,8 @@ def _default_seed_retriever(query_str, doc_ids, k):
 
 
 def build_answer_translation(query, cite_doc_ids, documents_metadata, settings,
-                              seed_retriever=None, translate=None):
+                              seed_retriever=None, translate=None,
+                              term_extractor=None, grounded_translate=None):
     """(translation_bundles, seed_nodes) for one answer query, or ([], []).
 
     Factory-injected so it is unit-testable without a DB or OpenAI:
@@ -1237,6 +1238,16 @@ def build_answer_translation(query, cite_doc_ids, documents_metadata, settings,
     search. A translation whose seed retrieval fails still yields its
     bundle: the rerank can lift zh chunks that reached the standard
     candidates via the English lanes.
+
+    Vocabulary grounding (plan 2026-09-10 §3.1): when the seed retrieval
+    returns chunks, `term_extractor` (default extract_native_terms) pulls
+    the corpus's frequent native terms out of the chunks' texts and
+    `grounded_translate` (default translate_query_grounded) re-renders the
+    ENGLISH QUESTION in that vocabulary — the machine translations otherwise
+    lose the terminology the reranker rewards. Failure-soft at every step: any
+    grounding problem keeps the shipped literal/field rendering; the bundle
+    is never dropped because grounding failed. Seeds stay from the
+    first-pass translation (no re-seeding with the grounded text).
     """
     if not settings.answer_translation_enabled or not cite_doc_ids or not query:
         return [], []
@@ -1254,6 +1265,10 @@ def build_answer_translation(query, cite_doc_ids, documents_metadata, settings,
         return [], []
     if seed_retriever is None:
         seed_retriever = _default_seed_retriever
+    if term_extractor is None:
+        from app.query_translate import extract_native_terms as term_extractor
+    if grounded_translate is None:
+        from app.query_translate import translate_query_grounded as grounded_translate
     cite_set = set(cite_doc_ids)
     bundles, seeds = [], []
     for lang in langs:
@@ -1267,6 +1282,30 @@ def build_answer_translation(query, cite_doc_ids, documents_metadata, settings,
             logger.warning(f"Answer-mode translation seed ({lang}) failed ({exc}) — seed dropped")
             continue
         seeds.extend(nodes)
+        # Vocabulary grounding (plan 2026-09-10 §3.1): the seed chunks carry
+        # the documents' real terminology — extract it and re-render the
+        # bundle in that vocabulary. Every step failure-soft: any problem
+        # keeps the shipped literal/field rendering.
+        bundle_text = None
+        if nodes:
+            try:
+                terms = term_extractor([n.node.get_content() for n in nodes], lang)
+            except Exception as exc:  # noqa: BLE001 — grounding must never fail a search
+                logger.warning(
+                    f"Answer-mode term extraction ({lang}) failed ({exc}) — ungrounded rendering kept")
+                terms = []
+            if terms:
+                try:
+                    grounded = grounded_translate(
+                        query, lang, terms, settings.answer_translation_timeout_s)
+                except Exception as exc:  # noqa: BLE001 — grounding must never fail a search
+                    logger.warning(
+                        f"Answer-mode grounded re-translation ({lang}) failed ({exc}) — literal/field rendering kept")
+                else:
+                    if grounded and grounded.strip():
+                        bundle_text = grounded.strip()
+        if bundle_text:
+            bundles[-1] = QueryBundle(query_str=bundle_text)
     return bundles, seeds
 
 
