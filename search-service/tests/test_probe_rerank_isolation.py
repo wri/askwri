@@ -295,3 +295,267 @@ def test_main_pool_realistic_fetches_pool_texts(fake_sources, monkeypatch, capsy
     assert artifact["mode"] == "pool-realistic"
     assert "predictions" in artifact
     assert artifact["predictions"]["variantA"]["n_hits"] >= 0
+
+# --- snapshot mode (program Step 1): pure parts -------------------------------
+
+def test_resolve_expected_detail_full_matrix():
+    pool = ["c1", "c2", "c3", "c4", "c5", "c6"]
+    scores = {"c1": 0.9, "c2": 0.5, "c3": 0.4, "c4": 0.3, "c5": 0.2, "c6": 0.1}
+    detail = probe.resolve_expected_detail(
+        ["c1", "c2", "c9"], pool, scores, final15_ids=["c1", "c4"])
+    by = {d["chunk_id"]: d for d in detail}
+    assert by["c1"] == {"chunk_id": "c1", "in_pool": True, "pool_rank": 1,
+                        "in_final15": True, "final_rank": 1, "score": 0.9}
+    assert by["c2"]["in_final15"] is False and by["c2"]["final_rank"] is None
+    assert by["c2"]["pool_rank"] == 2 and by["c2"]["score"] == 0.5
+    assert by["c9"] == {"chunk_id": "c9", "in_pool": False, "pool_rank": None,
+                        "in_final15": False, "final_rank": None, "score": None}
+
+
+def test_stable_rank_ties_keep_pool_order():
+    # production sorts candidates stably: ties keep candidate-list order
+    # (standard lane first, seeds appended) — NOT a (score, chunk_id) sort
+    ranked = probe.stable_rank(
+        ["b", "a", "c"], {"a": 0.9, "b": 0.9, "c": 0.1}, top_n=3, cut=3)
+    assert [cid for cid, _ in ranked] == ["b", "a", "c"]
+
+
+def test_stable_rank_applies_page1_demotion_between_cuts():
+    # production Stage 2.1: after the rerank top_n cut, chunk_index==0 scores
+    # are halved and the list re-sorts — a demoted chunk can fall out of the
+    # final cut while a formerly-below-top_n chunk rises in
+    pool = [f"c{i}" for i in range(1, 21)]  # c1..c20, descending scores
+    scores = {f"c{i}": 1.0 - i * 0.01 for i in range(1, 21)}
+    # c1 (rank 1) and c18 (rank 18) are chunk_index 0
+    idx = {"c1": 0, "c18": 0}
+    idx.update({f"c{i}": i for i in range(2, 18)})
+    ranked = probe.stable_rank(pool, scores, top_n=20, cut=15,
+                               chunk_index_of=idx)
+    ids = [cid for cid, _ in ranked]
+    assert "c1" not in ids                      # demoted out of the 15
+    assert "c18" not in ids                     # demoted below the cut
+    assert ids[-1] == "c16"                     # formerly rank 16 rose in
+    assert [s for cid, s in ranked if cid == "c16"] == [pytest.approx(0.84)]
+
+
+def test_stable_rank_missing_chunk_index_is_demoted_like_production():
+    # production reads metadata.get("chunk_index", 0) — a chunk with no
+    # chunk_index is treated as index 0 and demoted
+    ranked = probe.stable_rank(
+        ["a", "b"], {"a": 0.9, "b": 0.8}, top_n=2, cut=2,
+        chunk_index_of={"a": 3})  # b missing from the map
+    assert [cid for cid, _ in ranked] == ["a", "b"]
+    assert dict(ranked)["b"] == pytest.approx(0.4)
+
+
+def test_attribute_baseline_drift_labels_new_docs_vs_approximation():
+    baseline = [{"chunk_id": "old1", "doc_id": "d_old"},
+                {"chunk_id": "gone", "doc_id": "d_new"}]
+    out = probe.attribute_baseline_drift(
+        predicted_ids=["old1", "fresh"],
+        baseline_entries=baseline,
+        new_doc_ids={"d_new"},
+        doc_of=lambda cid: {"old1": "d_old", "fresh": "d_new",
+                            "gone": "d_new"}[cid])
+    assert out["shared"] == ["old1"]
+    assert out["predicted_only"] == [
+        {"chunk_id": "fresh", "doc_id": "d_new", "attribution": "new-doc-drift"}]
+    assert out["baseline_only"] == [
+        {"chunk_id": "gone", "doc_id": "d_new", "attribution": "new-doc-drift"}]
+
+
+def test_attribute_baseline_drift_known_doc_delta_is_approximation():
+    baseline = [{"chunk_id": "gone", "doc_id": "d_old"}]
+    out = probe.attribute_baseline_drift(
+        predicted_ids=["old1"], baseline_entries=baseline,
+        new_doc_ids=set(),
+        doc_of=lambda cid: {"old1": "d_old", "gone": "d_old"}[cid])
+    assert out["baseline_only"][0]["attribution"] == "lane-approximation"
+
+
+def test_compare_final15_distinguishes_set_from_order():
+    cmp = probe.compare_final15(
+        ["a", "b", "c"], ["b", "a", "c"])
+    assert cmp["set_equal"] is True and cmp["order_equal"] is False
+    cmp2 = probe.compare_final15(["a", "b"], ["a", "c"])
+    assert cmp2["set_equal"] is False
+    assert cmp2["only_predicted"] == ["b"] and cmp2["only_recorded"] == ["c"]
+
+
+def test_load_served_bundles_maps_run_lists_by_case_order(tmp_path, monkeypatch):
+    served = {"schema": "probe-mirror2-served-bundles@1",
+              "run_r1": [{"lang": "zh", "grounded": True, "text": "t1"},
+                          {"lang": "zh", "grounded": True, "text": "t2"},
+                          {"lang": "zh", "grounded": True, "text": "t3"},
+                          {"lang": "zh", "grounded": True, "text": "t4"}],
+              "run_r2": [{"lang": "zh", "grounded": True, "text": "u1"},
+                          {"lang": "zh", "grounded": True, "text": "u2"},
+                          {"lang": "zh", "grounded": True, "text": "u3"},
+                          {"lang": "zh", "grounded": True, "text": "u4"}]}
+    p = tmp_path / "served.json"
+    p.write_text(json.dumps(served))
+    monkeypatch.setattr(probe, "MIRROR2_CASE_ORDER",
+                        ["caseA", "caseB", "caseC", "caseD"])
+    out = probe.load_served_bundles(p)
+    assert out == {"r1": {"caseA": "t1", "caseB": "t2", "caseC": "t3",
+                           "caseD": "t4"},
+                    "r2": {"caseA": "u1", "caseB": "u2", "caseC": "u3",
+                            "caseD": "u4"}}
+
+
+def test_load_mirror2_run_extracts_ids(tmp_path):
+    mirror = {"cases": {"caseA": {
+        "final15": [{"chunk_id": "x1"}, {"chunk_id": "x2"}],
+        "expected_hits": ["x2"],
+        "expected_chunk_ids": ["x2", "x3"]}}}
+    p = tmp_path / "m.json"
+    p.write_text(json.dumps(mirror))
+    out = probe.load_mirror2_run(p)
+    assert out["caseA"]["final15_ids"] == ["x1", "x2"]
+    assert out["caseA"]["expected_hits"] == ["x2"]
+
+
+def test_load_pool_probe_en_returns_none_when_absent(tmp_path):
+    p = tmp_path / "nope.json"
+    assert probe.load_pool_probe_en(p) is None
+    rec = {"en": {"top15": [["a", 0.9], ["b", 0.8]], "hits15": ["a"],
+                   "n_hits": 1}, "pool_size": 7}
+    p2 = tmp_path / "pp.json"
+    p2.write_text(json.dumps(rec))
+    out = probe.load_pool_probe_en(p2)
+    assert out["top15_ids"] == ["a", "b"]
+    assert out["top15_scores"] == {"a": 0.9, "b": 0.8}
+    assert out["pool_size"] == 7
+
+
+def test_load_selection_doc_ids_reads_capture(fake_sources):
+    capture = {"cases": [{
+        "case_id": "caseA",
+        "passes": [{"retrieval": {"chunks": []},
+                     "selected_doc_ids": ["d1", "d2"]}]}]}
+    (probe.CAPTURE_PATH).write_text(json.dumps(capture))
+    assert probe.load_selection_doc_ids("caseA") == ["d1", "d2"]
+
+# --- snapshot flow: orchestration contract (live sides mocked) ----------------
+
+def _snapshot_env(fake_sources, monkeypatch, hits_a=1):
+    """Synthetic recorded-reality set: one mirror2 case (caseA), served
+    bundles, deterministic dense/rerank fakes. Returns the recorded r1 final15."""
+    fixture = {"test_cases": [{
+        "id": "caseA", "question": "Q?",
+        "retrieval_ground_truth": {"expected_passages": [
+            {"chunk_id": "s1"}, {"chunk_id": "s9"}]}}]}
+    capture = {"cases": [{
+        "case_id": "caseA",
+        "passes": [{"retrieval": {"chunks": [
+            {"chunk_id": "e1", "doc_id": "d1", "text": "t-e1", "rank": 1}]},
+            "selected_doc_ids": ["d1", "d2"]}]}]}
+    served = {"schema": "probe-mirror2-served-bundles@1",
+              "run_r1": [{"lang": "zh", "grounded": True, "text": "ZH1"}],
+              "run_r2": [{"lang": "zh", "grounded": True, "text": "ZH2"}]}
+    final15 = ["s1", "e1", "e2", "s2", "s3"]
+    mirror = {"cases": {"caseA": {
+        "final15": [{"chunk_id": c} for c in final15],
+        "expected_hits": ["s1"],
+        "expected_chunk_ids": ["s1", "s9"]}}}
+    (probe.FIXTURE_PATH).write_text(json.dumps(fixture))
+    (probe.CAPTURE_PATH).write_text(json.dumps(capture))
+    (probe.ARTIFACT_DIR / "probe-mirror2-served-bundles-20260910.json").write_text(
+        json.dumps(served))
+    (probe.ARTIFACT_DIR / "probe-mirror2-grounded-r1-20260910.json").write_text(
+        json.dumps(mirror))
+    (probe.ARTIFACT_DIR / "probe-mirror2-confirm-r2-20260910.json").write_text(
+        json.dumps(mirror))
+    monkeypatch.setattr(probe, "MIRROR2_CASE_ORDER", ["caseA"])
+    monkeypatch.setattr(probe, "translate_orjoined", lambda q: "ZHSEED")
+    def fake_dense(db, query, doc_ids, k):
+        return ["e1", "e2"] if query == "Q?" else ["s1", "s2", "s3"]
+    monkeypatch.setattr(probe, "dense_doc_top", fake_dense)
+    texts = {"e1": "t-e1", "e2": "t-e2", "s1": "t-s1", "s2": "t-s2", "s3": "t-s3"}
+    monkeypatch.setattr(probe, "fetch_chunk_texts", lambda db, ids: {c: texts[c] for c in ids})
+    monkeypatch.setattr(probe, "fetch_chunk_meta",
+                        lambda db, ids: ({c: 3 for c in ids},
+                                          {c: False for c in ids}))
+    en_scores = {"e1": 0.95, "e2": 0.90, "s1": 0.50, "s2": 0.40, "s3": 0.30}
+    zh_scores = {"s1": 0.99, "e1": 0.60, "e2": 0.55, "s2": 0.20, "s3": 0.10}
+    def fake_rerank(query, batch, client=None):
+        return dict(zh_scores if query.startswith("ZH") else en_scores)
+    monkeypatch.setattr(probe, "rerank_scores", fake_rerank)
+    return final15
+
+
+def test_run_validity_gate_reproduces_recorded_run(fake_sources, monkeypatch, capsys):
+    final15 = _snapshot_env(fake_sources, monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    rows, all_pass = probe.run_validity_gate("postgres://x", ["caseA"])
+    assert all_pass is True
+    a_rows = [r for r in rows if r["check"].startswith("mirror2")]
+    assert len(a_rows) == 2  # r1 + r2
+    assert all(r["set_equal"] and r["pass"] for r in a_rows)
+    assert a_rows[0]["hits_predicted"] == ["s1"]
+    assert a_rows[0]["pool_size"] == 5  # e1,e2 standard-first + s1,s2,s3 seeds
+
+
+def test_run_validity_gate_set_mismatch_fails_loudly(fake_sources, monkeypatch):
+    _snapshot_env(fake_sources, monkeypatch)
+    # corrupt the recording: an extra recorded chunk breaks set equality
+    mirror = json.loads((probe.ARTIFACT_DIR /
+                         "probe-mirror2-grounded-r1-20260910.json").read_text())
+    mirror["cases"]["caseA"]["final15"].append({"chunk_id": "zz"})
+    (probe.ARTIFACT_DIR / "probe-mirror2-grounded-r1-20260910.json").write_text(
+        json.dumps(mirror))
+    rows, all_pass = probe.run_validity_gate("postgres://x", ["caseA"])
+    assert all_pass is False
+    bad = [r for r in rows if not r["pass"]]
+    assert bad and bad[0]["only_recorded"] == ["zz"]
+
+
+def test_main_snapshot_flow_gate_failure_writes_no_snapshots(fake_sources, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    monkeypatch.setattr(probe, "measurable_case_ids", lambda: ["caseA"])
+    monkeypatch.setattr(probe, "run_validity_gate",
+                        lambda db, cases, demotion=True, log=print:
+                        ([{"check": "x", "pass": False}], False))
+    snapshots = []
+    monkeypatch.setattr(probe, "snapshot_case",
+                        lambda *a, **k: snapshots.append(a) or "p")
+    rc = probe.main(["--snapshot", "--all-cases", "--label", "t1"])
+    assert rc == 1
+    assert snapshots == []
+    assert (probe.ARTIFACT_DIR / "snapshot-validity-t1.json").exists()
+
+
+def test_main_snapshot_flow_success_runs_every_measurable_case(fake_sources, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    monkeypatch.setattr(probe, "measurable_case_ids", lambda: ["caseA", "caseB"])
+    monkeypatch.setattr(probe, "run_validity_gate",
+                        lambda db, cases, demotion=True, log=print: ([], True))
+    seen = []
+    monkeypatch.setattr(probe, "snapshot_case",
+                        lambda case_id, db, tc, ic, sc, nd, dc, **k:
+                        seen.append(case_id) or "p")
+    monkeypatch.setattr(probe, "new_doc_ids_since",
+                        lambda db: ({"d_new"}, "created_at"))
+    rc = probe.main(["--snapshot", "--all-cases", "--label", "t2"])
+    assert rc == 0
+    assert seen == ["caseA", "caseB"]
+
+def test_stable_rank_strips_summary_nodes_after_demotion():
+    # production strips is_summary_node chunks from the answer results AFTER
+    # the rerank cut and demotion: a summary can occupy a rerank slot but
+    # never the final list, and chunks beyond top_n do NOT get promoted
+    pool = [f"c{i}" for i in range(1, 21)]
+    scores = {f"c{i}": 1.0 - i * 0.01 for i in range(1, 21)}
+    idx = {f"c{i}": i for i in range(1, 21)}
+    ranked = probe.stable_rank(pool, scores, top_n=20, cut=15,
+                               chunk_index_of=idx,
+                               exclude={"c2", "c3"})   # summaries at ranks 2,3
+    ids = [cid for cid, _ in ranked]
+    assert "c2" not in ids and "c3" not in ids
+    assert ids[:3] == ["c1", "c4", "c5"]              # no promotion from rank 21
+    assert len(ids) == 15 and ids[-1] == "c17"
+
+
+def test_doc_of_chunk_handles_summary_ids():
+    assert probe.doc_of_chunk("doc1_chunk_12") == "doc1"
+    assert probe.doc_of_chunk("doc1_summary") == "doc1"
