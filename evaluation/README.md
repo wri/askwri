@@ -320,8 +320,11 @@ saw):
   case's selection, the share that contributed at least one passage to what
   the model saw: "picked but ignored" made visible. Undefined with no
   selection. Structural ceiling when reading it: the model sees ≤
-  `max_passages` passages (8 for gpt-5 models, 6 otherwise), so a
-  20-document selection cannot exceed 8/20 at default knobs. Printed on the
+  `max_passages` passages (15 for gpt-5 models at 800 chars since the
+  2026-09-10 default change — see
+  `evaluation/baselines/2026-09-10-answer-noselection-knobconfirm15x800-3pass-compare.md`;
+  6 otherwise), so a 20-document selection cannot exceed 15/20 at default
+  knobs. Printed on the
   console like the other retrieval dimensions (`n/a` on a capture with no
   selection), and carried in the JSON (`draft_block.retrieval` and
   `per_case`).
