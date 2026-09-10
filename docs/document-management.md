@@ -656,6 +656,28 @@ mistake costs, and the two are not interchangeable:
   (`src/lib/experts/authorKey.ts`), accepting two conservative splits rather
   than three false merges.
 
-Either way, skip or down-weight fields flagged `unverified` — note that
-`/experts` does not do this yet, because the flag is still unpopulated on the
-environments it reads.
+**On `unverified`, be careful what you skip.** Measured on QA after the repair
+ran (2026-09-10): 10 of 201 searchable documents carry
+`authors_format='unverified'`, 191 carry no flag, and none are marked
+`verified` — the flag is stamped when an entry cannot be split, not cleared to
+a positive. Of those 10, **eight are flagged solely because their sole author is
+an organization** (`Coalition for Urban Transitions`), and the other two because
+one co-author is a bare single token (`Cheng`, `Burlacu`) alongside four or five
+perfectly well-formed names.
+
+So a document-level skip is the wrong instrument for a ranking: it would discard
+good evidence for correctly-named people because a co-author's name is a bare
+token, and it would re-solve a problem that is better handled per author.
+`/experts` therefore drops organizations from `people` entirely (keyword match,
+never word count) and marks an unsplittable personal name `unverified` on the
+author, showing the name as stored rather than guessing a key. Prefer the same
+shape — per author, not per document — unless your consumer genuinely needs the
+document-level flag.
+
+**The repair does not remove residual variants**, which is why the key logic
+still matters. It only flips a comma-less name when a comma'd sibling exists, so
+after it ran QA still holds `Castellanos, Sebastian` **and** `Sebastián`,
+`Hidalgo, Dario` and `Darío`, `Duarte, Lorenzo Hernandez` and `Hernández`,
+`Welle, Ben` and `Benjamin`, `Jacquin, C` and `Céline`, and
+`López, José Segundo` and `López, Segundo`. Comma-less entries fell from 122 to
+79 of 907 — the remainder are organizations and genuinely unsplittable names.
