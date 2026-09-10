@@ -8,13 +8,18 @@ import { QuerySuggestionsProps } from './types'
 import {
   ANSWER_MODE_SUGGESTION_POOL,
   CITE_MODE_SUGGESTION_POOL,
+  EXPERTS_MODE_SUGGESTION_POOL,
   getRandomSuggestions,
 } from './suggestionPool'
 import './QuerySuggestions.css'
 
 const QuerySuggestions = ({ mode, onExampleClick }: QuerySuggestionsProps) => {
   const pool =
-    mode === 'cite' ? CITE_MODE_SUGGESTION_POOL : ANSWER_MODE_SUGGESTION_POOL
+    mode === 'cite'
+      ? CITE_MODE_SUGGESTION_POOL
+      : mode === 'experts'
+        ? EXPERTS_MODE_SUGGESTION_POOL
+        : ANSWER_MODE_SUGGESTION_POOL
   const [localSuggestions, setLocalSuggestions] = useState(() =>
     pool.slice(0, 3),
   )
@@ -59,8 +64,9 @@ const QuerySuggestions = ({ mode, onExampleClick }: QuerySuggestionsProps) => {
         fontWeight='400'
         fontSize='sm'
       >
-        For best results, ask a direct question and experiment with different
-        levels of specificity, including geography.
+        {mode === 'experts'
+          ? 'Name a topic, method, or place. Results are people whose published WRI work is closest to it.'
+          : 'For best results, ask a direct question and experiment with different levels of specificity, including geography.'}
       </Text>
       <section className='suggestions-list'>
         {localSuggestions.map((item) => (
