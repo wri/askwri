@@ -144,9 +144,9 @@ tsx script, thin IO shell around a pure `planAuthorRepairs()` in
 default; `--apply` commits.
 
 ```
-./scripts/with-remote-env.sh qa         npx tsx scripts/repair-author-formats.ts          # dry run
-./scripts/with-remote-env.sh qa         npx tsx scripts/repair-author-formats.ts --apply
-./scripts/with-remote-env.sh production npx tsx scripts/repair-author-formats.ts --apply
+./scripts/with-remote-env.sh qa         npm run repair:author-formats          # dry run
+./scripts/with-remote-env.sh qa         npm run repair:author-formats -- --apply
+./scripts/with-remote-env.sh production npm run repair:author-formats -- --apply
 ```
 
 **Inputs, queried live (no hardcoded doc lists — counts drift):**
@@ -280,3 +280,39 @@ Admin search stays ILIKE substring; the cite panel stays as-is. Neither groups.
   old parse output, the worker may rewrite the same comma-less names, so
   post-repair re-ingests of these docs should expect a parse-cache miss or a
   re-check afterwards.
+
+## Errata (2026-09-09, post-implementation review)
+
+The design above is otherwise as-approved. Four corrections, applied in
+`docs/superpowers/plans/2026-09-09-author-format-review-fixes.md`:
+
+1. **§2 Create contradicted §2 Invariant.** "merge `authors_format` … for both
+   row shapes" cannot hold together with "`authors_format` is written only
+   where `authors` is written by a path that also asserts `'external'`
+   provenance" — the legacy create path asserts no provenance. The Invariant
+   wins: only the flat-CSV paths write the flag. A flag on a NULL-provenance
+   row is unclearable by every writer in the system, which is the stale-marker
+   hazard §3 already cites as the reason llm no-match rows go unflagged.
+
+2. **§3 idempotency.** "External rows already flagged … are skipped by the
+   candidates query" also skips them forever, including after evidence for
+   their names appears. Idempotency is now shape-based: flagged rows are still
+   queried, but planned only when their authors actually change.
+
+3. **§3 apply guards.** "provenance re-checked at write time" is insufficient
+   for llm rows — the worker writes under the same provenance condition
+   (`parse.py:681`). Both UPDATEs also guard on the authors value the plan was
+   built from.
+
+4. **§3 command block.** The shipped entry point is
+   `npm run repair:author-formats` (ts-node), not `npx tsx scripts/…`. See
+   `docs/document-management.md` for the current invocation.
+
+§3's per-name decision table stands, with one narrowing: llm rows are not
+written for separator-only whitespace differences, only for changes to a name
+itself. The ownership-exception wording is amended accordingly.
+
+§1's `tidyAuthorsField` contract gains a precision: `unverified` is decided on
+the *rendered* value, not the input. `"Cheng,"` has a comma but renders
+comma-less, so it is unverified — the shared `isVerifiedForm()` predicate
+decides this for both the import path and the repair planner.
