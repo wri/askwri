@@ -1171,8 +1171,8 @@ def build_answer_translation(query, cite_doc_ids, documents_metadata, settings,
     returns chunks, `term_extractor` (default extract_native_terms) pulls
     the corpus's frequent native terms out of the chunks' texts and
     `grounded_translate` (default translate_query_grounded) re-renders the
-    bundle in that vocabulary — the machine translations otherwise lose the
-    terminology the reranker rewards. Failure-soft at every step: any
+    ENGLISH QUESTION in that vocabulary — the machine translations otherwise
+    lose the terminology the reranker rewards. Failure-soft at every step: any
     grounding problem keeps the shipped literal/field rendering; the bundle
     is never dropped because grounding failed. Seeds stay from the
     first-pass translation (no re-seeding with the grounded text).
@@ -1225,7 +1225,7 @@ def build_answer_translation(query, cite_doc_ids, documents_metadata, settings,
             if terms:
                 try:
                     grounded = grounded_translate(
-                        text, lang, terms, settings.answer_translation_timeout_s)
+                        query, lang, terms, settings.answer_translation_timeout_s)
                 except Exception as exc:  # noqa: BLE001 — grounding must never fail a search
                     logger.warning(
                         f"Answer-mode grounded re-translation ({lang}) failed ({exc}) — literal/field rendering kept")

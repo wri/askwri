@@ -379,8 +379,10 @@ def test_build_answer_translation_grounds_the_bundle(monkeypatch):
         grounded_translate=grounded)
     # the grounded rendering REPLACES the OR-join in the rerank bundle (stripped)
     assert [b.query_str for b in bundles] == ["新能源重卡在区域与长途场景的渗透率"]
-    # the grounded call sources the first-pass rendering + the extracted terms
-    assert grounded.calls == [("字面 / 术语", "zh", ("新能源重卡", "市场渗透率"),
+    # the grounded call sources the ENGLISH question (controller ruling: plan
+    # §3.1 "render the question"; the OR-join is not a question — slash-echo
+    # risk and translation drift compounding) + the extracted terms
+    assert grounded.calls == [("q", "zh", ("新能源重卡", "市场渗透率"),
                                s.answer_translation_timeout_s)]
     # seeds stay from the first pass — no re-seeding with the grounded text
     assert [n.node.node_id for n in seeds] == ["n1", "n2", "n3"]

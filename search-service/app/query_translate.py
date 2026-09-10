@@ -337,8 +337,8 @@ def _translate_grounded_cached(query: str, lang: str, terms: tuple,
 
 def translate_query_grounded(query: str, lang: str, terms,
                              timeout_s: float | None = None) -> str:
-    """One grounded rendering (plan 2026-09-10 §3.1): the first-pass
-    translation re-rendered in the corpus's own vocabulary. Raises on any
+    """One grounded rendering (plan 2026-09-10 §3.1): the English question
+    re-rendered in the corpus's own vocabulary. Raises on any
     bad input or bad response — build_answer_translation catches and keeps
     the shipped rendering (failure-soft, the bundle is never dropped).
     """
