@@ -32,6 +32,13 @@ max-merges each map with the EN map, and predicts the final 15 (rerank_top_n=20 
 max_results=15) — reproducing the corrected mirror results. Gate prompt variants HERE,
 not on the default batch: the default batch's absolute scores do not transfer to the
 real pipeline.
+
+Batching: the pool is sent to the rerank API as ONE call with all ~240 sources
+(numberOfResults=len(pool)) — the 2026-09-10 pool-probe run that reproduced the
+mirror runs did exactly this, and the pipeline's own score_documents sends the
+~300-source candidate set in one call the same way. The "one billed query covers
+≤100 documents" note in app/bedrock_rerank.py is about billing granularity, not a
+request-size limit; no pagination here.
 """
 import argparse
 import json
@@ -485,6 +492,12 @@ def main(argv=None):
         batch = [{"chunk_id": cid, "text": None,
                   "doc_id": cid.rsplit("_chunk_", 1)[0],
                   "source": "P", "rank": None} for cid in pool_ids]
+        # pool sources' texts come from the same SELECT-only RDS path the
+        # 20-source mode uses — a missing id aborts (the pool must not
+        # silently shrink, and Bedrock rejects null document text)
+        pool_texts = fetch_chunk_texts(database_url, pool_ids)
+        for chunk in batch:
+            chunk["text"] = pool_texts[chunk["chunk_id"]]
         print(f"pool-realistic: {len(seed_ids)} seed + {len(en_ids)} en-lane "
               f"-> {len(batch)}-source pool over docs {doc_ids}")
 

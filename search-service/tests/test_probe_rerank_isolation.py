@@ -263,3 +263,35 @@ def test_predict_final15_en_only_nodes_survive():
     from scripts.probe_rerank_isolation import predict_final15
     out = predict_final15({"x": 0.7}, {}, top_n=20, cut=15)
     assert out == [("x", 0.7)]
+
+
+def test_main_pool_realistic_fetches_pool_texts(fake_sources, monkeypatch, capsys):
+    """Regression (fix round 2): the pool rebuild must fetch pool sources'
+    texts from RDS before reranking — Bedrock rejects null document text."""
+    fetch_calls = []
+    monkeypatch.setattr(probe, "fetch_chunk_texts",
+                        lambda url, ids: fetch_calls.append(list(ids)) or
+                        {cid: f"rds-{cid}" for cid in ids})
+    monkeypatch.setattr(probe, "translate_orjoined", lambda q: "字面 / 术语")
+    monkeypatch.setattr(probe, "dense_doc_top",
+                        lambda url, q, doc_ids, k: ["d1_chunk_1", "d2_chunk_9"][:k // 100])
+    seen_batches = []
+
+    def fake_rerank(query, batch, client=None):
+        seen_batches.append([c["chunk_id"] for c in batch])
+        assert all(c["text"] is not None for c in batch), "null pool text reached rerank"
+        return {c["chunk_id"]: 0.5 for c in batch}
+
+    monkeypatch.setattr(probe, "rerank_scores", fake_rerank)
+    rc = probe.main(["--case-id", "caseA", "--label", "poollabel",
+                     "--pool-realistic",
+                     "--queries-json", json.dumps({"variantA": "查询A"})])
+    assert rc == 0
+    # the LAST fetch is the pool fetch (the first is the 20-source fill),
+    # and it covers exactly the rebuilt pool's ids
+    assert fetch_calls[-1] == ["d1_chunk_1", "d2_chunk_9"]
+    artifact = json.loads(
+        (fake_sources["adir"] / "probe-isolation-poollabel.json").read_text())
+    assert artifact["mode"] == "pool-realistic"
+    assert "predictions" in artifact
+    assert artifact["predictions"]["variantA"]["n_hits"] >= 0
