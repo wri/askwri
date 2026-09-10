@@ -21,7 +21,6 @@ type NodeState = 'rest' | 'focus' | 'peer' | 'dim' | 'on'
 export const TopicGraph = ({
   people,
   matched,
-  totalWorks,
   hoverKey,
   selectedKey,
   peerKeys,
@@ -30,7 +29,7 @@ export const TopicGraph = ({
 }: {
   people: PersonResult[]
   matched: MatchedTag[]
-  totalWorks: number
+  totalWorks: number // accepted for future peer wiring; not destructured yet
   hoverKey: string | null
   selectedKey: string | null
   peerKeys: Set<string>
