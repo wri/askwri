@@ -90,12 +90,12 @@ afterEach(() => {
 })
 
 describe('POST /api/answer — defaults reproduce current behaviour', () => {
-  it('gpt-5 default: 8 passages, 400 chars, max_completion_tokens, no temperature', async () => {
+  it('gpt-5 default: 15 passages, 800 chars, max_completion_tokens, no temperature', async () => {
     const out = await post({ query: 'q', docs: docs(15) })
     expect(out.ok).toBe(true)
-    expect(out.passages_sent).toHaveLength(8)
+    expect(out.passages_sent).toHaveLength(15)
     for (const p of out.passages_sent)
-      expect(p.text.length).toBeLessThanOrEqual(400)
+      expect(p.text.length).toBeLessThanOrEqual(800)
     const body = sentBody()
     expect(body.model).toBe('gpt-5.4')
     expect(body.max_completion_tokens).toBe(2000)

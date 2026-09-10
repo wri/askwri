@@ -20,9 +20,12 @@ export interface SynthesisConfig {
 
 /**
  * Everything that shapes one synthesis call, from env defaults plus optional
- * request knobs. With no knobs this reproduces the pre-2026-09 behaviour
- * exactly (gpt-5*: 8 passages × 400 chars; else 6 × 350). The knobs exist for
- * the eval harness's sweeps; production callers never send them.
+ * request knobs. With no knobs this reproduces the 2026-09-10 default change
+ * (gpt-5*: 15 passages × 800 chars; else 6 × 350) — measured in the
+ * 15×800 confirmation run (see evaluation/baselines/2026-09-10-answer-
+ * noselection-knobconfirm15x800-3pass-compare.md; §10.4 no-selection
+ * confirmation preceded this default). The knobs exist for the eval
+ * harness's sweeps; production callers never send them.
  */
 export function resolveSynthesisConfig(body: any): SynthesisConfig {
   const str = (v: unknown) =>
@@ -45,10 +48,10 @@ export function resolveSynthesisConfig(body: any): SynthesisConfig {
     temperature,
     maxPassages: int(
       body?.max_passages,
-      provider.isGpt5 ? 8 : 6,
+      provider.isGpt5 ? 15 : 6,
       MAX_PASSAGES_CAP,
     ),
-    passageChars: int(body?.passage_chars, provider.isGpt5 ? 400 : 350, 20_000),
+    passageChars: int(body?.passage_chars, provider.isGpt5 ? 800 : 350, 20_000),
     promptVersion: body?.prompt_version === 'v1' ? 'v1' : 'v2',
     likelyOffTopic: body?.likely_off_topic === true,
   }
