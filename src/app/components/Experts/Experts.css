@@ -1,5 +1,8 @@
 /* src/app/components/Experts/Experts.css */
 .experts-row {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #e6e2d6;
   border-left: 3px solid transparent;
 }
 /* U16: spec §7 reserves gold for "relevance to the query". Hover and selection

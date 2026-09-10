@@ -82,12 +82,14 @@ export const ExpertsList = ({
           onFocus={() => onHover(p.key)}
           onBlur={() => onHover(null)}
           onClick={() => onSelect(p.key)}
+          // background / border live in Experts.css, NOT here: an inline
+          // declaration outranks any stylesheet rule, so setting them here
+          // silently killed the hover wash, the selected row's ink left rule
+          // (spec §8) and the gold peer tint. They looked correct in the CSS
+          // file — and a test that reads that file as text cannot tell.
           style={{
             width: '100%',
             textAlign: 'left',
-            background: 'none',
-            border: 0,
-            borderBottom: '1px solid #E6E2D6',
             display: 'grid',
             gridTemplateColumns: '28px 1fr',
             columnGap: 10,
