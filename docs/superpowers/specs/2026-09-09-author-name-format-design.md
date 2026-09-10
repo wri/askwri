@@ -43,6 +43,11 @@ Findings that update the issue text:
 2. A batch the issue did not see: **113 llm-stamped `Given Family` person
    names on 21 docs** created 2026-07-27 → 2026-08-07 (the cutover window).
    These self-heal only if those docs are re-ingested; nothing schedules that.
+   Measured against every comma'd name in the corpus, **38 of the 105 distinct
+   comma-less llm names (36%) have a strict-key `Family, Given` sibling; 67
+   have none.** The llm-row flip yield is therefore a minority — roughly 40 of
+   the 113 entries — and the remainder can only be fixed by re-ingestion or
+   editorial review, never by a rule-governed flip.
 3. Production was not inspected from this machine (no `aws` CLI); its numbers
    are unknown. The repair script queries live data for exactly this reason.
 
@@ -267,4 +272,9 @@ Admin search stays ILIKE substring; the cite panel stays as-is. Neither groups.
 - Changes to the worker's parse stage — `_format_authors` already emits the
   correct convention.
 - Re-ingestion scheduling for the 21 cutover-window docs; the repair script
-  supersedes the need for it in place.
+  supersedes the need for it for the ~40 entries with verified siblings. Two
+  residual notes for the runbook: the remaining ~73 comma-less llm names have
+  no verified canonical form and stay as-is; and if a re-ingest cache-hits the
+  old parse output, the worker may rewrite the same comma-less names, so
+  post-repair re-ingests of these docs should expect a parse-cache miss or a
+  re-check afterwards.
