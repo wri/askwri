@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Spinner } from '@chakra-ui/react'
 import {
@@ -243,7 +244,10 @@ const ExpertsPageContent = () => {
           <div style={{ textAlign: 'left' }}>
             Experts mode is an internal prototype. It ranks people by their
             published WRI work only; it has no contact details and no review or
-            correction history.
+            correction history.{' '}
+            <Link href='/experts/help' style={{ textDecoration: 'underline' }}>
+              How this works
+            </Link>
           </div>
         </AlertBanner>
 

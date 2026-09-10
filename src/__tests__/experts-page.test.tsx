@@ -183,6 +183,16 @@ describe('/experts page', () => {
     expect(routerPush).toHaveBeenCalledWith('/experts?q=electric%20buses')
   })
 
+  it('offers help from the staff banner, which is present in every state', async () => {
+    // The banner is where expectations are already set, and it renders in the
+    // idle, empty and error states too — which is exactly when someone needs it.
+    mockFetch.mockResolvedValue(response())
+    renderPage()
+    expect(
+      screen.getByRole('link', { name: /how this works/i }),
+    ).toHaveAttribute('href', '/experts/help')
+  })
+
   it('results: renders list, chips, summary, organizations; selecting opens evidence and updates URL', async () => {
     setUrl('q=electric+buses')
     mockFetch.mockResolvedValue(response())
