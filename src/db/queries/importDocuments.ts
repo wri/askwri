@@ -4,6 +4,7 @@ import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
 import { auditActor } from '../../lib/auth/identity'
 import { PROVENANCE_KEY } from '../../lib/metadataProvenance'
+import { tidyAuthorsField } from '../../lib/authorFormat'
 
 // Mirrors LANGUAGE_MAP in search-service/scripts/migrate_csv_to_postgres.py
 // plus Phase 1 amendment: bahasa → id
@@ -67,6 +68,8 @@ export interface MappedDocument {
   articleType: string | null
   wriPrimaryOffice: string | null
   authors: string | null
+  /** True when any author name lacked a comma (tidyAuthorsField). */
+  authorsUnverified: boolean
   url: string | null
   datePublished: string | null
   summary: string | null
@@ -226,6 +229,8 @@ export function mapRowToDocument(row: ImportRow): MappedDocument {
   const documentsS3Prefix = process.env.DOCUMENTS_S3_PREFIX || 'documents/'
   const base = row.file_path.split('/').pop() ?? row.file_path
   const s3Key = `${documentsS3Prefix}${base}`
+  const rawAuthors = (raw['All authors'] as string | undefined) || null
+  const legacyTidy = rawAuthors ? tidyAuthorsField(rawAuthors) : null
 
   return {
     externalId,
@@ -243,7 +248,8 @@ export function mapRowToDocument(row: ImportRow): MappedDocument {
     doi: (raw['DOI'] as string | undefined) || null,
     articleType: (raw['article_type'] as string | undefined) || null,
     wriPrimaryOffice: (raw['wri_primary_office'] as string | undefined) || null,
-    authors: (raw['All authors'] as string | undefined) || null,
+    authors: legacyTidy?.value ?? null,
+    authorsUnverified: legacyTidy?.unverified ?? false,
     url: (raw['URL'] as string | undefined) || null,
     datePublished: parseDatePublished(raw['Date published']),
     summary: row.summary ?? null,
@@ -296,7 +302,9 @@ export function mapFlatRowToDocument(row: FlatImportRow): MappedDocument {
   const doi = resolveField(row, 'doi') || null
   const articleType = resolveField(row, 'article_type') || null
   const wriPrimaryOffice = resolveField(row, 'wri_primary_office') || null
-  const authors = resolveField(row, 'authors', 'All authors') || null
+  const authorsRaw = resolveField(row, 'authors', 'All authors') || null
+  const authorsTidy = authorsRaw ? tidyAuthorsField(authorsRaw) : null
+  const authors = authorsTidy?.value ?? null
   const url = resolveField(row, 'url') || null
   const datePublishedRaw = resolveField(row, 'date_published', 'Date published')
   const datePublished = datePublishedRaw
@@ -334,6 +342,7 @@ export function mapFlatRowToDocument(row: FlatImportRow): MappedDocument {
     articleType,
     wriPrimaryOffice,
     authors,
+    authorsUnverified: authorsTidy?.unverified ?? false,
     url,
     datePublished,
     summary,
@@ -497,6 +506,9 @@ export function computeOverwriteChanges(
     })
     if (isOverwrite) {
       warnings.push(`⚠ ${field}: "${existingStr}" → "${mappedStr}" (overwrite)`)
+      if (field === 'authors' && mapped.authorsUnverified) {
+        warnings.push('⚠ authors: format unverified (name without comma)')
+      }
     }
   }
 
@@ -576,6 +588,9 @@ export async function importDocuments(
         matchKey: mapped.doi
           ? `doi:${mapped.doi}`
           : `external_id:${mapped.externalId}`,
+        warnings: mapped.authorsUnverified
+          ? ['⚠ authors: format unverified (name without comma)']
+          : undefined,
       }
 
       if (options.dryRun) {
@@ -621,6 +636,17 @@ export async function importDocuments(
             await AppDataSource.query(
               `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
               [insertedId, JSON.stringify(fields)],
+            ).catch(() => {})
+          }
+
+          // authors_format flag: marks CSV values that cannot self-heal
+          // (external provenance shields them from the worker's rewrite).
+          // Legacy-seed fills leave provenance NULL — worker-overwritable,
+          // so they self-heal and get no flag.
+          if (hasMetadataSource && mapped.authorsUnverified) {
+            await AppDataSource.query(
+              `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
+              [insertedId, JSON.stringify({ authors_format: 'unverified' })],
             ).catch(() => {})
           }
 
@@ -689,6 +715,10 @@ export async function importDocuments(
               }
               metaUpdates[PROVENANCE_KEY[field] ?? field] = 'external'
             }
+            const authorsWritten = 'authors' in metaUpdates
+            if (authorsWritten && mapped.authorsUnverified) {
+              metaUpdates.authors_format = 'unverified'
+            }
             if (Object.keys(updates).length > 0) {
               // Always update sourceMetadata for flat imports
               updates.sourceMetadata = mapped.sourceMetadata
@@ -697,8 +727,15 @@ export async function importDocuments(
               // Update metadata_source — atomic jsonb merge so concurrent
               // worker stamps are never clobbered by a stale read
               if (hasMetadataSource) {
+                // A verified authors overwrite clears a stale flag; the flag
+                // is otherwise written iff authors is written (human-
+                // protected authors never reach metaUpdates, so protection
+                // is inherited).
+                const clearFlag = authorsWritten && !mapped.authorsUnverified
                 await AppDataSource.query(
-                  `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
+                  clearFlag
+                    ? `UPDATE documents SET metadata_source = (metadata_source - 'authors_format') || $2::jsonb WHERE id = $1`
+                    : `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
                   [existing.id, JSON.stringify(metaUpdates)],
                 ).catch(() => {})
               }
