@@ -280,6 +280,27 @@ def test_extract_native_terms_zh_cap():
     assert len(qt.extract_native_terms(_ZH_SEED_TEXTS, "zh", max_terms=2)) <= 2
 
 
+_ES_CAP_TEXTS = [
+    "En el sector, eficiencia energética transporte urbano carbono emisiones mejoran.",
+    "La ciudad mide eficiencia energética transporte urbano carbono emisiones hoy.",
+    "El estudio trata eficiencia energética transporte urbano carbono emisiones bien.",
+]
+
+
+def test_extract_native_terms_es_caps_at_max_terms():
+    # 11 qualifying grams (6 unigrams + 5 bigrams, all df=3) — the latin
+    # path's cap slice must return exactly max_terms, deterministically.
+    # Rank order per the implementation: df desc, string length desc, total
+    # desc, codepoint (the length tiebreak is the same key the zh path uses
+    # for longer-form preference; across latin bigrams it orders by the
+    # grams' string length).
+    terms = qt.extract_native_terms(_ES_CAP_TEXTS, "es", max_terms=5)
+    assert len(terms) == 5
+    assert terms == ["eficiencia energética", "energética transporte",
+                     "carbono emisiones", "transporte urbano", "urbano carbono"]
+    assert terms == qt.extract_native_terms(_ES_CAP_TEXTS, "es", max_terms=5)
+
+
 def test_extract_native_terms_zh_relaxes_min_df_for_few_texts():
     terms = qt.extract_native_terms(_ZH_SEED_TEXTS[:2], "zh")
     # 新能源重卡 appears in exactly 2 of 2 texts — kept under the relaxed floor
