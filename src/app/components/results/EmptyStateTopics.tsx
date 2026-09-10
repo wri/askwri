@@ -8,14 +8,19 @@ export const EmptyStateTopics = ({
   query,
   topics,
   onPickTopic,
+  message,
 }: {
   query: string
   topics: string[]
   onPickTopic: (topic: string) => void
+  /** Overrides the default sentence. `/experts` looks for PEOPLE, so the
+   *  document-framed default reads wrong there — but the chips-as-a-door
+   *  behaviour is identical, so the component is shared, not copied. */
+  message?: React.ReactNode
 }) => (
   <div style={{ padding: '32px', textAlign: 'center' }}>
     <p style={{ fontSize: '16px', marginBottom: '12px' }}>
-      No strong matches for &ldquo;{query}&rdquo;.
+      {message ?? <>No strong matches for &ldquo;{query}&rdquo;.</>}
     </p>
     {topics.length > 0 && (
       <>

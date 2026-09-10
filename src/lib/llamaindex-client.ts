@@ -1,6 +1,34 @@
 import { ChatResponse } from './llamacloud'
 
 /**
+ * Body fields the gateway forwards to the search service's /query. Every name
+ * is a QueryRequest field (search-service/app/main.py). The eval harness
+ * sweeps retrieval through these; anything not listed is rejected so a stray
+ * field can never override a mode preset.
+ */
+export const FORWARDABLE_FIELDS: ReadonlySet<string> = new Set([
+  'max_results',
+  'similarity_threshold',
+  'include_metadata',
+  'rerank',
+  'vector_top_k',
+  'bm25_top_k',
+  'rerank_top_n',
+  'fusion_top_k',
+  'dense_weight',
+  'sparse_weight',
+  'expansion_lane_weight',
+  'expansion',
+  'facets',
+  'min_year',
+  'max_year',
+  'excluded_keywords',
+  'required_program',
+  'cite_doc_ids',
+  'return_intermediate_results',
+])
+
+/**
  * LlamaIndex client - direct replacement for LlamaCloud with full control
  */
 

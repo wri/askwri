@@ -51,28 +51,64 @@ def model_has_tag_embeddings(model: str) -> bool:
     return False
 
 
+# Facet-scoped coverage, keyed (model, facet). value_id is unique per facet
+# and a facet can be absent for a model that has rows for another facet, so the
+# model-scoped probe above cannot answer "does /tags/nearby have geography?".
+# Positive-only, same as _MODEL_COVERAGE: a miss is re-probed so a later
+# tag-embedding backfill is picked up without a restart.
+_FACET_COVERAGE: set = set()
+
+
+def facet_has_tag_embeddings(model: str, facet: str) -> bool:
+    """True when at least one tag_embeddings row exists for (model, facet).
+
+    Distinguishes "this facet is not covered" (degraded, spec §5.2) from
+    "covered but nothing cleared the cosine floor" (a legitimate empty result).
+    """
+    from app.db import get_pool
+
+    key = (model, facet)
+    if key in _FACET_COVERAGE:
+        return True
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            """SELECT 1 FROM tag_embeddings te
+                 JOIN tags t ON t.id = te.tag_id
+                WHERE te.embedding_model = %s AND t.facet = %s LIMIT 1""",
+            (model, facet),
+        ).fetchone()
+    if row is not None:
+        _FACET_COVERAGE.add(key)
+        return True
+    return False
+
+
 def filter_topics(rows, top_k: int, min_cosine: float):
     """Pure: threshold + limit. Split out so the policy is unit-testable."""
     return [(label, cos) for label, cos in rows if cos >= min_cosine][:top_k]
 
 
-def nearby_tags(query_embedding, facet: str) -> list:
+def nearby_tags(query_embedding, facet: str, top_k: int | None = None) -> list:
     """Semantic query→tag match for one facet. Returns [(label, cosine), ...]
-    filtered by threshold + top_k (failure-soft, design §4.1)."""
+    filtered by threshold + top_k (failure-soft, design §4.1).
+
+    `top_k=None` keeps settings.topic_sense_top_k so /query's tag lanes are
+    byte-identical; /tags/nearby (experts mode) passes an explicit value."""
     from app.config import get_settings
     from app.db import get_pool
 
     s = get_settings()
+    k = s.topic_sense_top_k if top_k is None else int(top_k)
     qvec = np.array(query_embedding, dtype=np.float32)
     with get_pool().connection() as conn:
         rows = conn.execute(
             _TAG_SQL,
             {"q": qvec, "model": s.embedding_model, "facet": facet,
-             "k": max(s.topic_sense_top_k * 4, 20)},
+             "k": max(k * 4, 20)},
         ).fetchall()
     return filter_topics(
         [(label, float(cos)) for label, cos in rows],
-        top_k=s.topic_sense_top_k,
+        top_k=k,
         min_cosine=s.topic_sense_min_cosine,
     )
 

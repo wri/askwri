@@ -1,0 +1,574 @@
+<meta charset="utf-8">
+<title>Ask WRI Experts</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --ground: #FBFAF6;
+    --panel: #FFFFFF;
+    --ink: #1B1A17;
+    --ink-2: #5E5B52;
+    --ink-3: #8A877E;
+    --hair: #E6E2D6;
+    --hair-2: #D6D1C2;
+    --accent: #B8800A;
+    --accent-ink: #7A5400;
+    --accent-wash: rgba(240, 171, 0, 0.16);
+    --accent-wash-2: rgba(240, 171, 0, 0.34);
+    --gradient-top: rgba(255,255,255,0.0);
+    --gradient-bot: rgba(245,191,79,0.22);
+    --o-global: #2a78d6;
+    --o-china: #eb6834;
+    --o-india: #1baf7a;
+    --o-other: #8A877E;
+    --topic-node: #FFFFFF;
+    --topic-ring: #B8800A;
+    --edge: #C9C4B4;
+    --focus-ring: #1B1A17;
+    --sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #171613;
+      --panel: #1F1D19;
+      --ink: #F4F1E8;
+      --ink-2: #B8B4A8;
+      --ink-3: #8A877E;
+      --hair: #2C2A25;
+      --hair-2: #3A372F;
+      --accent: #F0AB00;
+      --accent-ink: #F5C24A;
+      --accent-wash: rgba(240, 171, 0, 0.18);
+      --accent-wash-2: rgba(240, 171, 0, 0.36);
+      --gradient-top: rgba(23,22,19,0);
+      --gradient-bot: rgba(245,191,79,0.10);
+      --o-global: #3987e5;
+      --o-china: #d95926;
+      --o-india: #199e70;
+      --o-other: #8A877E;
+      --topic-node: #1F1D19;
+      --topic-ring: #F0AB00;
+      --edge: #3A372F;
+      --focus-ring: #F4F1E8;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #171613;
+    --panel: #1F1D19;
+    --ink: #F4F1E8;
+    --ink-2: #B8B4A8;
+    --ink-3: #8A877E;
+    --hair: #2C2A25;
+    --hair-2: #3A372F;
+    --accent: #F0AB00;
+    --accent-ink: #F5C24A;
+    --accent-wash: rgba(240, 171, 0, 0.18);
+    --accent-wash-2: rgba(240, 171, 0, 0.36);
+    --gradient-top: rgba(23,22,19,0);
+    --gradient-bot: rgba(245,191,79,0.10);
+    --o-global: #3987e5;
+    --o-china: #d95926;
+    --o-india: #199e70;
+    --o-other: #8A877E;
+    --topic-node: #1F1D19;
+    --topic-ring: #F0AB00;
+    --edge: #3A372F;
+    --focus-ring: #F4F1E8;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+  /* ---------- navbar ---------- */
+  .nav {
+    height: 56px;
+    border-bottom: 1px solid var(--hair);
+    background: var(--panel);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .nav-left { display: flex; align-items: center; gap: 14px; }
+  .wordmark { font-weight: 700; letter-spacing: 0.08em; font-size: 15px; }
+  .wordmark span { font-weight: 400; color: var(--ink-2); letter-spacing: 0; margin-left: 10px; }
+  .nav-right { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    border: 1px solid var(--hair-2); background: var(--panel); border-radius: 4px;
+    padding: 6px 12px; cursor: pointer; font-weight: 500; font-size: 13px;
+  }
+  .btn.ghost { border-color: transparent; color: var(--ink-2); }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 3px;
+    background: var(--hair); color: var(--ink-2);
+  }
+
+  /* ---------- query strip ---------- */
+  .query-strip {
+    background: linear-gradient(to bottom, var(--gradient-top), var(--gradient-bot));
+    border-bottom: 1px solid var(--hair);
+    padding: 22px 24px 18px;
+  }
+  .query-inner { max-width: 1400px; margin: 0 auto; }
+  .query-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 8px; }
+  .query-box {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--hair-2); border-radius: 6px;
+    padding: 10px 10px 10px 16px; max-width: 760px;
+  }
+  .query-box .q { flex: 1; font-size: 17px; font-weight: 500; }
+  .query-box .q em { font-style: normal; color: var(--ink-3); font-weight: 400; }
+  .go {
+    width: 36px; height: 36px; border-radius: 4px; border: 0; background: var(--ink); color: var(--ground);
+    display: grid; place-items: center; cursor: pointer;
+  }
+  .reading {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--ink-2);
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--hair-2); background: var(--panel); border-radius: 999px;
+    padding: 3px 8px 3px 10px; font-size: 12.5px; color: var(--ink);
+  }
+  .chip.on { border-color: var(--accent); background: var(--accent-wash); }
+  .chip .w { font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 11px; }
+  .chip button { border: 0; background: none; cursor: pointer; color: var(--ink-3); padding: 0 2px; line-height: 1; }
+  .summary { margin-top: 10px; font-size: 13px; color: var(--ink-2); }
+  .summary b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* ---------- workbench ---------- */
+  .bench {
+    max-width: 1400px; margin: 0 auto; padding: 18px 24px 48px;
+    display: grid; grid-template-columns: minmax(380px, 460px) 1fr; gap: 20px; align-items: start;
+  }
+  @media (max-width: 980px) { .bench { grid-template-columns: 1fr; } }
+
+  .pane-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 0 4px 10px; border-bottom: 1px solid var(--hair);
+  }
+  .pane-head h2 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+  .pane-head .sub { font-size: 12px; color: var(--ink-3); }
+
+  /* ranked list */
+  .list { list-style: none; margin: 0; padding: 0; }
+  .row {
+    width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--hair);
+    display: grid; grid-template-columns: 28px 1fr; column-gap: 10px; padding: 12px 6px 12px 4px; cursor: pointer;
+    border-left: 3px solid transparent;
+  }
+  .row:hover { background: var(--accent-wash); }
+  .row.selected { background: var(--accent-wash); border-left-color: var(--ink); }
+  .row.peer { background: color-mix(in srgb, var(--accent-wash) 45%, transparent); }
+  .rank { font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 12px; padding-top: 3px; }
+  .name-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .name { font-weight: 600; font-size: 14.5px; }
+  .office { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .bar { display: block; height: 3px; background: var(--hair); border-radius: 2px; margin: 7px 0 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .ev { display: block; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .ev b { color: var(--ink); font-weight: 600; }
+  .topics { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .tp { font-size: 11.5px; padding: 1px 7px; border-radius: 3px; background: var(--hair); color: var(--ink-2); }
+  .tp.on { background: var(--accent-wash-2); color: var(--accent-ink); }
+  .list-foot { padding: 10px 4px; font-size: 12px; color: var(--ink-3); }
+
+  /* graph */
+  .graph-card { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
+  .graph-toolbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--hair); font-size: 12px; color: var(--ink-2);
+  }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .legend .li { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .sel-key { width: 8px; height: 8px; border-radius: 50%; background: var(--o-other); outline: 2px solid var(--ink); outline-offset: 2px; }
+  .legend .topic-key { width: 10px; height: 10px; border-radius: 50%; background: var(--topic-node); border: 2px solid var(--topic-ring); }
+  svg { display: block; width: 100%; height: auto; }
+  .edge { stroke: var(--edge); fill: none; }
+  .edge.on { stroke: var(--accent); }
+  .edge.peer { stroke: var(--accent); stroke-opacity: 0.35; }
+  .edge.dim { stroke-opacity: 0.12; }
+  .node { cursor: pointer; }
+  .node.person circle { stroke: var(--panel); stroke-width: 2; }
+  .node.topic circle { fill: var(--topic-node); stroke: var(--topic-ring); stroke-width: 2; }
+  .node text { font-family: var(--sans); fill: var(--ink); pointer-events: none; }
+  .node.person text { font-size: 11.5px; font-weight: 500; }
+  .node.person text.quiet { opacity: 0; }
+  .node.person.focus text.quiet, .node.person.peer text.quiet, .node.person:hover text.quiet { opacity: 1; }
+  .node.person.focus { opacity: 1; }
+  .node.topic text { font-size: 11px; fill: var(--ink-2); font-weight: 600; letter-spacing: 0.01em; }
+  .node.dim { opacity: 0.16; }
+  .node.peer circle { stroke: var(--accent); stroke-width: 1.5; }
+  .node.person .halo { fill: none; stroke: var(--ink); stroke-width: 2.5; opacity: 0; }
+  .node.person.focus .halo { opacity: 1; }
+  .node.person .pill { fill: var(--ink); opacity: 0; }
+  .node.person.focus .pill { opacity: 1; }
+  .node.person.focus text { fill: var(--ground); }
+  .node.focus text { font-weight: 700; }
+  .node.topic.on circle { fill: var(--accent-wash-2); }
+  .node.topic.on text { fill: var(--accent-ink); }
+  .hit { fill: transparent; }
+  .hint { padding: 8px 14px 10px; font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--hair); }
+
+  /* evidence panel */
+  .evidence { margin-top: 16px; background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; padding: 16px 18px; }
+  .evidence[hidden] { display: none; }
+  .ev-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .ev-head h3 { margin: 0; font-size: 17px; font-weight: 700; }
+  .ev-meta { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+  .ev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 14px; }
+  @media (max-width: 720px) { .ev-grid { grid-template-columns: 1fr; } }
+  .ev-grid h4 { margin: 0 0 8px; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  .docs { list-style: none; margin: 0; padding: 0; }
+  .docs li { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding: 7px 0; border-top: 1px solid var(--hair); align-items: start; }
+  .docs li:first-child { border-top: 0; }
+  .tier { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; text-align: center; }
+  .tier.strong { background: var(--accent-wash-2); color: var(--accent-ink); }
+  .tier.partial { background: var(--accent-wash); color: var(--accent-ink); }
+  .tier.weak { background: var(--hair); color: var(--ink-2); }
+  .doc-t { font-size: 13px; line-height: 1.35; }
+  .doc-m { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .peers { list-style: none; margin: 0; padding: 0; }
+  .peers li { padding: 6px 0; border-top: 1px solid var(--hair); display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .peers li:first-child { border-top: 0; }
+  .peers button { border: 0; background: none; cursor: pointer; padding: 0; font-weight: 500; text-align: left; }
+  .peers button:hover { color: var(--accent-ink); text-decoration: underline; }
+  .peers .shared { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .note {
+    max-width: 1400px; margin: 0 auto; padding: 0 24px 40px; font-size: 12.5px; color: var(--ink-3); max-width: 72ch;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .node, .edge, .row { transition: opacity 160ms ease, background-color 160ms ease; }
+  }
+</style>
+
+<header class="nav">
+  <div class="nav-left">
+    <div class="wordmark">WRI <span>Ask WRI · Experts</span></div>
+    <span class="tag">Alpha</span>
+  </div>
+  <div class="nav-right">
+    <button class="btn ghost" type="button">Leave feedback</button>
+    <button class="btn" type="button">＋ New search</button>
+  </div>
+</header>
+
+<section class="query-strip">
+  <div class="query-inner">
+    <p class="query-label">Who at WRI works on…</p>
+    <div class="query-box">
+      <div class="q">electric buses <em>— in cities</em></div>
+      <button class="go" type="button" aria-label="Search">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="reading" id="reading"><span>Reading your query as</span></div>
+    <p class="summary" id="summary"></p>
+  </div>
+</section>
+
+<main class="bench">
+  <section aria-labelledby="list-h">
+    <div class="pane-head">
+      <h2 id="list-h">People closest to this question</h2>
+      <span class="sub">ranked by document evidence</span>
+    </div>
+    <ol class="list" id="list"></ol>
+    <div class="list-foot" id="list-foot"></div>
+  </section>
+
+  <section aria-labelledby="graph-h">
+    <div class="graph-card">
+      <div class="graph-toolbar">
+        <div><strong id="graph-h" style="color:var(--ink);font-weight:600">Topic space</strong> · people sized by relevance, topics sized by match to the query</div>
+        <div class="legend" aria-label="Office legend">
+          <span class="li"><i class="dot" style="background:var(--o-global)"></i>WRI Global</span>
+          <span class="li"><i class="dot" style="background:var(--o-china)"></i>WRI China</span>
+          <span class="li"><i class="dot" style="background:var(--o-india)"></i>WRI India</span>
+          <span class="li"><i class="dot" style="background:var(--o-other)"></i>Other offices</span>
+          <span class="li"><i class="topic-key"></i>Topic</span>
+          <span class="li"><i class="sel-key"></i>Selected person</span>
+        </div>
+      </div>
+      <div id="graph"></div>
+      <div class="hint" id="hint">Hover a person to see their topics and who else works in them. Click to pin and open the evidence. Names for people ranked 9–20 appear on hover.</div>
+    </div>
+
+    <aside class="evidence" id="evidence" hidden aria-live="polite">
+      <div class="ev-head">
+        <div>
+          <h3 id="ev-name"></h3>
+          <div class="ev-meta" id="ev-meta"></div>
+        </div>
+        <button class="btn ghost" type="button" id="ev-close">Close</button>
+      </div>
+      <div class="ev-grid">
+        <div>
+          <h4 id="ev-docs-h">Evidence</h4>
+          <ol class="docs" id="ev-docs"></ol>
+        </div>
+        <div>
+          <h4>Works alongside</h4>
+          <ul class="peers" id="ev-peers"></ul>
+          <h4 style="margin-top:16px">All topics on their documents</h4>
+          <div class="topics" id="ev-topics"></div>
+        </div>
+      </div>
+    </aside>
+  </section>
+</main>
+
+<p class="note">Sample data: 89 searchable QA documents tagged with the ten topics nearest “electric buses”. Relevance tiers and person scores here are simulated from tag matches; the real page would take them from the hybrid retriever’s tiers. Author names are shown as stored, so a few inconsistencies (order, spacing) are real and are a design input, not a rendering bug.</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+const DOCS = [{"id":"2025_zero-emission-heavy-duty-trucks_00015","title":"Charging Toward 2035: Policies to Accelerate Zero-Emission Heavy-Duty Trucks in China's Regional and Long-Haul Freight","year":2025,"office":"WRI China","type":"Report","topics":["Freight Transport","Public Charging Infrastructure","Climate Policy","Transport decarbonization","Zero-Emission Trucks"],"geo":["China"],"authors":[{"name":"Chen, Ke","org":false},{"name":"Xue, Lulu","org":false}]},{"id":"2024_real-world-electric-bus-operation-trend-in_3497","title":"Real-World Electric Bus Operation: Trend in Technology, Performance, Degradation, and Lifespan of Batteries","year":2024,"office":"WRI India","type":"Working Paper","topics":["Degradation","Transport decarbonization","EV Batteries","Electric Mobility","Lithium-Ion Batteries","Vehicle Electrification"],"geo":["India"],"authors":[{"name":"Kumar, Dr Parveen","org":false},{"name":"Mulukutla, Pawan","org":false},{"name":"Doshi, Priyansh","org":false}]},{"id":"2022_impactar-tool-valuing-air-quality-health-impacts_4741","title":"ImpactAr Tool: Valuing Air Quality Health Impacts of Urban Bus Fleet Changes in Brazil","year":2022,"office":"WRI Brasil","type":"Technical Note","topics":["Public Health","Public Transit","Buses","Transport decarbonization","Air Pollution","Emissions"],"geo":["Brazil"],"authors":[{"name":"Betti, Luana","org":false},{"name":"Garcia, Marina Caregnato","org":false},{"name":"Siqueira, Eduardo","org":false},{"name":"Evers, Henrique","org":false}]},{"id":"2020_design-manual-on-safe-access-to-public_5869","title":"Design Manual on Safe Access to Public Transportation in China","year":2020,"office":"WRI China","type":"Report","topics":["Pedestrians","Public Transit","Road Safety","Cycling","Urban Planning","Transport decarbonization"],"geo":["China"],"authors":[{"name":"Li, Wei","org":false},{"name":"Hui, Jiang","org":false},{"name":"Zhong, Chen","org":false},{"name":"Le, Zhou","org":false},{"name":"Lua, Kim Beng","org":false}]},{"id":"2024_dataset-of-us-school-bus-depots_6105","title":"Dataset of U.S. School Bus Depots","year":2024,"office":"WRI US","type":"Technical Note","topics":["Geospatial Analysis","School Buses","Electric Grid","Transport decarbonization","Air Quality","Electric School Buses"],"geo":["United States"],"authors":[{"name":"Shao, Yang","org":false},{"name":"Lazer, Leah","org":false},{"name":"Taff, Gregory","org":false}]},{"id":"2024_assessing-financing-challenges-for-implementing_4732","title":"Assessing Financing Challenges for Implementing the Large-Scale Electric Bus Program in India","year":2024,"office":"WRI India","type":"Working Paper","topics":["Public Transportation","Buses","Debt","Transport decarbonization","Electric Mobility","Electric Vehicles"],"geo":["India"],"authors":[{"name":"Pandey, Manish Dutta","org":false},{"name":"Kp, Aswathy","org":false},{"name":"Mulukutla, Pawan","org":false}]},{"id":"2014_qingdao-sustainable-transport_00033","title":"Low-Carbon and Sustainable Transport for Qingdao: A Strategic Study","year":2014,"office":"WRI China","type":"Working Paper","topics":["Public Transit","Urban Mobility","Urban Planning","Transport decarbonization","Low-Carbon Transport"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Zhang, Haitao","org":false}]},{"id":"2024_techno-economic-feasibility-analysis-of-zero_7051","title":"Techno-Economic Feasibility Analysis of Zero-Emission Trucks in Urban and Regional Delivery Use Cases: A Case Study of Guangdong Province, China","year":2024,"office":"WRI China","type":"Report","topics":["Freight Transport","Diesel","Transport decarbonization","Electric Vehicles","Vehicle Electrification","Zero-Emission Trucks"],"geo":["China"],"authors":[{"name":"Chen, Ke","org":false},{"name":"Xue, Lulu","org":false}]},{"id":"2021_demand-responsive-transit-understanding-emerging_8185","title":"Demand Responsive Transit: Understanding Emerging Solutions","year":2021,"office":"WRI Mexico","type":"Working Paper","topics":["Integrated Transport","Public Transit","Public Transportation","Urban Mobility","Transport decarbonization","Shared Mobility"],"geo":[],"authors":[{"name":"Pérez, Tania","org":false},{"name":"Freiberg, German","org":false},{"name":"Bueno, Leonardo","org":false},{"name":"Pizzol, Bruna","org":false},{"name":"Escalante, David","org":false}]},{"id":"2022_research-on-medium-and-long-term-in-depth_4687","title":"Pathways to Decarbonize the Road Transport Sector in Guangdong, China","year":2023,"office":"WRI China","type":"Report","topics":["GHG Emissions","Transport decarbonization","Electric Vehicles","Long-Term Decarbonization","Zero-Emission Trucks"],"geo":["China"],"authors":[{"name":"Miao, Ling","org":false},{"name":"Liu, Yonghong","org":false},{"name":"Zeng, Xuelan","org":false},{"name":"Ren, Huanhuan","org":false},{"name":"Huang, Zhuohui","org":false},{"name":"Xue, Lulu","org":false}]},{"id":"2019_costs-and-emissions-appraisal-tool-for-transit_4706","title":"Costs and Emissions Appraisal Tool for Transit Buses","year":2019,"office":"WRI Global","type":"Technical Note","topics":["Public Transportation","Buses","Diesel","Transport decarbonization","Electric Vehicles","Vehicle Electrification"],"geo":["Brazil"],"authors":[{"name":"Cooper, Erin","org":false},{"name":"Kenney, Erin","org":false},{"name":"Velásquez, Juan Miguel","org":false},{"name":"Li, Xiangyi","org":false},{"name":"Tun, Thet Hein","org":false}]},{"id":"2022_developing-an-electric-mobility-roadmap_8409","title":"Developing an Electric Mobility Roadmap: International Experiences From Subnational Case Studies for Vietnamese Cities","year":2022,"office":"WRI Global","type":"Working Paper","topics":["Urban Mobility","Transport decarbonization","Electric Mobility","Electrification","Low-Carbon Transport"],"geo":["Vietnam"],"authors":[{"name":"Liu, Kangjie","org":false},{"name":"Ly, Stephanie","org":false},{"name":"Jackson, Eleanor","org":false},{"name":"Steimer, Hamilton","org":false},{"name":"Cassius, Sarah","org":false},{"name":"Li, Xiangyi","org":false},{"name":"Myers, Erika","org":false},{"name":"Duarte, Lorenzo Hernandez","org":false},{"name":"Freehafer, Lydia","org":false}]},{"id":"2024_feasibility-of-zero-emission-freight-zones_1267","title":"Feasibility of Zero Emission Freight Zones: Scenario Analysis and Risk Assessment","year":2023,"office":"WRI China","type":"Report","topics":["Carbon Emissions","Transport decarbonization","Emission Reduction","Low-Carbon Transport","Zero-Emission Delivery Zones","Zero-Emission Trucks"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Chen, Ke","org":false}]},{"id":"2022_rolling-out-electric-buses-a-guidebook-on-route_8515","title":"Rolling Out Electric Buses: A Guidebook on Route Prioritization and Implementation Planning","year":2022,"office":"WRI India","type":"Guidebook","topics":["Public Charging Infrastructure","Public Transit","Buses","Transport decarbonization","Electric Mobility","Vehicle Electrification"],"geo":["India"],"authors":[{"name":"Mulukutla, Pawan","org":false},{"name":"Pai, Madhav","org":false},{"name":"Das, Shyamasis","org":false},{"name":"Ray, Anirudh","org":false}]},{"id":"2020_net-zero-urban-transport_00022","title":"Achieving Net Zero Carbon Emissions of Transportation Sector: Analytical Framework, Key Actions and Policy Suggestions for Chinese Cities","year":2020,"office":"WRI China","type":"Report","topics":["Net Zero Emissions","Carbon Emissions","Transport decarbonization","Low-Carbon Transport","Vehicle Electrification"],"geo":["China"],"authors":[{"name":"Xi, Wenyi","org":false},{"name":"Jiang, Hui","org":false},{"name":"Lu, Lu","org":false},{"name":"Jiang, Xiaoqian","org":false}]},{"id":"2025_fare-free-bus-travel-scheme-for-women-lessons_2822","title":"Fare-Free Bus Travel Scheme for Women: Lessons From Delhi","year":2025,"office":"WRI India","type":"Working Paper","topics":["Gender Equality","Public Transit","Public Transportation","Buses","Transport decarbonization","Women"],"geo":["India"],"authors":[{"name":"Jamba, Harshita","org":false},{"name":"Devaraj, Aravinda","org":false},{"name":"Kanuri, Chaitanya","org":false}]},{"id":"2025_completing-the-trip-establishing-a-global_1426","title":"Completing the Trip: Establishing a Global Quantified Climate Goal for the Transport Sector","year":2025,"office":"WRI Global","type":"Expert Note","topics":["Public Transit","Transport decarbonization","Emission Reduction","Low-Carbon Transport","Vehicle Electrification"],"geo":[],"authors":[{"name":"Zhang, Yiqian","org":false},{"name":"Welle, Ben","org":false}]},{"id":"2018_beijing-congestion-charging-opinion_00026","title":"Analysis of Public Opinion on Congestion Charging Policy in Beijing in 2016","year":2018,"office":"WRI China","type":"Report","topics":["Public Transit","Public Transportation","Carbon Pricing","Congestion","Urban Mobility"],"geo":["China"],"authors":[{"name":"Qiu, Shiyong","org":false},{"name":"Wang, Ying","org":false},{"name":"Song, Su","org":false},{"name":"Song, Liying","org":false},{"name":"Li, Baowen","org":false},{"name":"Bian, Qian","org":false},{"name":"Wang, Jun","org":false},{"name":"Liu, Cong","org":false}]},{"id":"2019_how-to-enable-electric-bus-adoption-in-cities_4136","title":"How to Enable Electric Bus Adoption in Cities Worldwide: A Guiding Report for City Transit Agencies and Bus Operating Entities","year":2019,"office":"WRI Global","type":"Report","topics":["Infrastructure","Public Charging Infrastructure","Public Transit","Buses","Transport decarbonization","Vehicle Electrification"],"geo":[],"authors":[{"name":"Li, Xiangyi","org":false},{"name":"Gorguinpour, Camron","org":false},{"name":"Sclar, Ryan","org":false},{"name":"Castellanos, Sebastian","org":false}]},{"id":"2021_seizing-indias-urban-opportunity_1949","title":"Seizing India's Urban Opportunity: Mobilising National Missions to Unleash the Full Potential of Climate Smart Cities","year":2021,"office":"WRI Global","type":"Report","topics":["Climate Finance","Decarbonization","Urban Equity","Low-Carbon City","Low-Carbon Transport"],"geo":["India"],"authors":[{"name":"Coalition for Urban Transitions","org":true}]},{"id":"2014_the-trillion-dollar-question_3289","title":"The Trillion Dollar Question: Tracking Public and Private Investment in Transport","year":2014,"office":"WRI Global","type":"Working Paper","topics":["Investments","Mobilized Private Finance","Public Finance","Transportation","Transport decarbonization","Low-Carbon Transport"],"geo":["China","Japan"],"authors":[{"name":"Lefevre, Benoit","org":false},{"name":"Leipziger, David","org":false},{"name":"Raifman, Matthew","org":false}]},{"id":"2014_chengdu-private-vehicle-strategies_00034","title":"Smart Strategies for Private Vehicle Ownership and Usage in Chengdu","year":2014,"office":"WRI China","type":"Working Paper","topics":["Private Cars","Public Transit","Congestion","Urban Mobility","Low-Carbon Transport"],"geo":["China"],"authors":[{"name":"Zhao, Jing","org":false},{"name":"Song, Su","org":false},{"name":"Xue, Lulu","org":false},{"name":"Zhang, Haitao","org":false}]},{"id":"2025_charging-toward-2035-policies-to-accelerate-zero_7455","title":"Charging Toward 2035: Policies to Accelerate Zero-Emission Heavy-Duty Trucks in China’s Regional and Long-Haul Freight","year":2025,"office":"WRI China","type":"Report","topics":["Freight Transport","Transport decarbonization","Vehicle Electrification","Zero-Emission Trucks","ZETs"],"geo":["China"],"authors":[{"name":"Chen, Ke","org":false},{"name":"Xue, Lulu","org":false}]},{"id":"2022_technical-note-for-a-dataset-of-us-school-bus_8896","title":"Dataset of U.S. School Bus Fleets","year":2022,"office":"WRI US","type":"Technical Note","topics":["Public Schools","School Buses","Transport decarbonization","Electric School Buses","Vehicle Electrification"],"geo":["United States"],"authors":[{"name":"Lazer, Leah","org":false},{"name":"Freehafer, Lydia","org":false},{"name":"Wang, Jessica","org":false}]},{"id":"2024_open-e-bus-blueprint_4307","title":"Open E-Bus Blueprint","year":2024,"office":"WRI India","type":"Working Paper","topics":["Modularity","Public Transit","Buses","Transport decarbonization","Electric Mobility","Vehicle Electrification"],"geo":["India"],"authors":[{"name":"Mulukutla, Pawan","org":false},{"name":"Pai, Madhav","org":false},{"name":"Bhat, Rajit K.","org":false},{"name":"Bachu, Prashant","org":false},{"name":"Dubedi, Avinash","org":false},{"name":"Varma, Dr Pramod","org":false},{"name":"Nair, Sujith","org":false},{"name":"Sinha, Anirban","org":false}]},{"id":"2020_understanding-the-impact-of-bus-aggregators-on_5716","title":"Understanding the Impact of Bus Aggregators on Urban Mobility in India's National Capital Region","year":2020,"office":"WRI India","type":"Practice Note","topics":["Private Cars","Buses","Urban Mobility","Transport decarbonization","Shared Mobility"],"geo":["India"],"authors":[{"name":"Chadha, Jyot","org":false},{"name":"Shetty, Ojas","org":false},{"name":"Shastry, Srikanth","org":false}]},{"id":"2017_chengdu-low-carbon-blueprint_00027","title":"Chengdu Low-Carbon Development Blueprint Study","year":2017,"office":"WRI China","type":"Report","topics":["Carbon Emissions","Energy Demand","Low-Carbon City","Low Carbon Development","Low-Carbon Transport"],"geo":["China"],"authors":[{"name":"Lei, Hongpeng","org":false},{"name":"Mao, Ziwei","org":false},{"name":"Yuan, Min","org":false}]},{"id":"FINAL_Working Paper_Just Transition_1905","title":"Driving a Just EV Transition in India: Supply Chain Practices for Large Automotive Manufacturing Enterprises","year":2026,"office":"WRI India","type":"Working Paper","topics":["Original Equipment Manufacturers","Supply Chains","Electric Vehicles","SMEs","Vehicle Electrification"],"geo":["India"],"authors":[{"name":"Bansal, Priya","org":false},{"name":"Shah, Priyal","org":false},{"name":"Singh, Tavleen","org":false},{"name":"Kanuri, Chaitanya","org":false},{"name":"Hingne, Ashwini","org":false},{"name":"Ranganath, Anuradha","org":false}]},{"id":"2021_ruas-completas-no-brasil-promovendo-uma-mudanca_5028","title":"Complete Streets in Brazil: Promoting a Paradigm Shift","year":2021,"office":"WRI Brasil","type":"Report","topics":["Pedestrians","Public Participation","Public Transit","Road Safety","Urban Planning","Transport decarbonization"],"geo":["Brazil"],"authors":[{"name":"Bonini, Ana Paula Hoppe","org":false},{"name":"Turbay, André","org":false},{"name":"Rosa, Ashiley Adelaide","org":false},{"name":"Araújo, Betina","org":false},{"name":"Frankl, Carla Choma","org":false},{"name":"Redondo, Débora","org":false},{"name":"Zampieri, Fábio Lúcio Lopes","org":false},{"name":"Tavares, Fabrício","org":false},{"name":"Balestro, Fernanda","org":false},{"name":"Lima, Fernando Tadeu de Araújo","org":false},{"name":"Lentino, Izabella","org":false},{"name":"Torres, Jair Gustavo de Mello","org":false},{"name":"Oliveira, Marcelo José Vieira","org":false},{"name":"Valente, Marcelo","org":false},{"name":"Lemos, Maria Fernanda","org":false},{"name":"Santos, Paula Manoela dos","org":false},{"name":"Rosa, Michelle da Silveira","org":false},{"name":"Lima, Ronaldo","org":false},{"name":"Rodrigues, Ronaldo","org":false},{"name":"Santos, Paula Manoela dos","org":false},{"name":"Samios, Ariadne","org":false},{"name":"Batista, Bruno","org":false}]},{"id":"2019_overcoming-the-operational-challenges-of-electric_2317","title":"Overcoming the Operational Challenges of Electric Buses: Lessons Learnt From China","year":2019,"office":"WRI China","type":"Working Paper","topics":["Public Charging Infrastructure","Public Transit","Buses","Transport decarbonization","Electric Mobility","Electric Vehicles"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Wei, Wei","org":false},{"name":"Liu, Peng","org":false},{"name":"Liu, Daizong","org":false}]},{"id":"2023_assessing-the-viability-of-using-autorickshaws_2146","title":"Assessing the Viability of Using Autorickshaws for Urban Freight Delivery in India","year":2023,"office":"WRI India","type":"Working Paper","topics":["Freight Transport","Income","Urban Mobility","Transport decarbonization","Electric Vehicles","SMEs"],"geo":["India"],"authors":[{"name":"Rao, Rohan","org":false},{"name":"Maiti, Sudeept","org":false},{"name":"Mulukutla, Pawan","org":false}]},{"id":"2025_a-just-transition-in-the-downstream-automotive_1481","title":"A Just Transition in the Downstream Automotive Segment: Evidence From Delhi","year":2025,"office":"WRI India","type":"Working Paper","topics":["Green Jobs","Public Charging Infrastructure","Transport decarbonization","EV","Electric Mobility","Employment"],"geo":["India"],"authors":[{"name":"Sharma, Purva","org":false},{"name":"Mukherjee, Aloke","org":false},{"name":"Kanuri, Chaitanya","org":false},{"name":"Chatterjee, Sudeshna","org":false}]},{"id":"2024_zero-emission-trucks-guangdong_00006","title":"Techno-Economic Feasibility Analysis of Zero-Emission Trucks in Urban and Regional Delivery Use Cases: A Case Study of Guangdong Province, China","year":2024,"office":"WRI China","type":"Report","topics":["Freight Transport","Transport decarbonization","EV Batteries","Zero-Emission Trucks","ZETs"],"geo":["China"],"authors":[{"name":"Chen, Ke","org":false},{"name":"Xue, Lulu","org":false}]},{"id":"2026_fortaleciendo-sinergias-electromovilidad-calidad-aire_XXXX","title":"Strengthening Synergies Between Electromobility and Air Quality in Latin America","year":2026,"office":"WRI Colombia","type":"Acta de Conferencia","topics":["Public Transportation","BRT","Transport decarbonization","Air Pollution","Electric Mobility"],"geo":["Colombia"],"authors":[{"name":"Achury, Alejandra","org":false},{"name":"Meneses, Sandra","org":false}]},{"id":"2021_steering-a-green-healthy-and-inclusive-recovery_1692","title":"Steering a Green, Healthy, and Inclusive Recovery Through Transport","year":2021,"office":"WRI Global","type":"Working Paper","topics":["Green Jobs","Climate Action","Transport decarbonization","Low-Carbon Economy","Low-Carbon Transport"],"geo":[],"authors":[{"name":"Fried, Travis","org":false},{"name":"Welle, Ben","org":false},{"name":"Avelleda, Sergio","org":false}]},{"id":"2021_simulator-to-quantify-and-manage-electric-vehicle_1145","title":"Simulator to Quantify and Manage Electric Vehicle Load Impacts on Low-Voltage Distribution Grids","year":2021,"office":"WRI China","type":"Technical Note","topics":["Electric Grid","Transport decarbonization","Energy Planning","EV Batteries","Electric Vehicles","Vehicle-Grid Integration"],"geo":["China","United States"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Xia, Junrong","org":false}]},{"id":"2019_en-electric-bus-adoption-guide_00123","title":"How to Enable Electric Bus Adoption in Cities Worldwide: A Guiding Report for City Transit Agencies and Bus Operating Entities","year":2019,"office":"WRI China","type":"Report","topics":["Public Transit","Buses","Electric Mobility","Electrification","Low-Carbon Transport"],"geo":[],"authors":[{"name":"Li, Xiangyi","org":false},{"name":"Gorguinpour, Camron","org":false},{"name":"Sclar, Ryan","org":false},{"name":"Castellanos, Sebastian","org":false}]},{"id":"2021_future-mobility-calculator-an-electric-mobility_8375","title":"Future Mobility Calculator: An Electric Mobility Infrastructure Assessment Tool","year":2021,"office":"WRI Global","type":"Technical Note","topics":["Public Charging Infrastructure","Urban Mobility","Transport decarbonization","Electric Mobility","Electric Vehicles"],"geo":[],"authors":[{"name":"Kothari, Vishant","org":false},{"name":"Sclar, Ryan","org":false},{"name":"Jackson, Eleanor","org":false},{"name":"Werthmann, Emmett","org":false},{"name":"Orbea, Jone","org":false}]},{"id":"2021_electrifying-ride-hailing-in-the-united-states_1753","title":"Electrifying Ride-Hailing in the United States, Europe, and Canada: How to Enable Ride-Hailing Drivers to Switch to Electric Vehicles","year":2021,"office":"WRI US","type":"Working Paper","topics":["Public Charging Infrastructure","Ride Hailing","Transport decarbonization","Electric Vehicles","Shared Mobility","Vehicle Electrification"],"geo":["Netherlands","North America","United States"],"authors":[{"name":"Lazer, Leah","org":false},{"name":"Wachche, Sadanand","org":false},{"name":"Sclar, Ryan","org":false},{"name":"Cassius, Sarah","org":false}]},{"id":"2022_china-road-transport-decarbonization_00145","title":"Decarbonizing China's Road Transport Sector: Strategies toward Carbon Neutrality","year":2022,"office":"WRI China","type":"Report","topics":["Carbon Neutrality","Transport decarbonization","Long-Term Decarbonization","Low-Carbon Transport","Vehicle Electrification"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Liu, Daizong","org":false}]},{"id":"2020_quantifying-the-grid-impacts-from-large-adoption_6748","title":"Quantifying the Grid Impacts from Large Adoption of Electric Vehicles in China","year":2020,"office":"WRI China","type":"Report","topics":["Grid Reliability","Public Charging Infrastructure","Electric Grid","Transport decarbonization","Electric Vehicles","Vehicle-Grid Integration"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Xia, Junrong","org":false},{"name":"Yu, Rujie","org":false},{"name":"Ren, Huanhuan","org":false},{"name":"Liu, Yong","org":false},{"name":"Wei, Wei","org":false},{"name":"Liu, Peng","org":false}]},{"id":"2021_zero-emission-logistic-vehicles-promotion_1319","title":"Zero-Emission Logistic Vehicles Promotion Challenges and Experiences: Beijing Case Study","year":2021,"office":"WRI China","type":"Working Paper","topics":["Freight Transport","Public Charging Infrastructure","Transport decarbonization","Electric Vehicles","Zero-Emission Delivery Zones","Zero-Emission Trucks"],"geo":["China"],"authors":[{"name":"Qiu, Shiyong","org":false},{"name":"Xue, Lulu","org":false},{"name":"Cai, Jing","org":false},{"name":"Chen, Jiaqi","org":false},{"name":"Song, Liying","org":false},{"name":"Wu, Zheng","org":false}]},{"id":"2023_analisis-de-los-mecanismos-financieros-para-la_3765","title":"Analysis of Financial Mechanisms for the Sustainability of Public Transport in Mexican Cities","year":2023,"office":"WRI Mexico","type":"Working Paper","topics":["Public Finance","Public Transit","Carbon Taxes","Congestion","Transport decarbonization","Metropolitan Areas"],"geo":["Mexico"],"authors":[{"name":"Govea, Ariel","org":false},{"name":"Martínez, Ana María","org":false},{"name":"Hernández, José Juan","org":false}]},{"id":"2023_changing-the-demand-preference-for-electric_8865","title":"Changing the Demand Preference for Electric Vehicles in Ho Chi Minh City: Costs and Benefits From Incentives in the Early Stages of Adoption","year":2023,"office":"WRI Global","type":"Working Paper","topics":["Incentives","Micromobility","Public Charging Infrastructure","Transport decarbonization","Electric Mobility","Electric Vehicles"],"geo":["Vietnam"],"authors":[{"name":"Tesoriere, Giuseppe","org":false},{"name":"Shrestha, Rajat","org":false},{"name":"Kothari, Vishant","org":false},{"name":"Steimer, Hamilton","org":false},{"name":"Yangden, Mende Thuji","org":false},{"name":"Duarte, Lorenzo Hernández","org":false}]},{"id":"2020_vehicle-grid-integration-china_00101","title":"Action Plans and Policy Recommendations on Vehicle Grid Integration in China","year":2020,"office":"WRI China","type":"Report","topics":["Renewable Energy","Electric Grid","EV Batteries","Electric Vehicles","Vehicle-Grid Integration"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Liu, Jian","org":false},{"name":"Wang, Ying","org":false},{"name":"Liu, Xiaoshi","org":false},{"name":"Xiong, Ying","org":false}]},{"id":"2022_decarbonizing-chinas-road-transport-sector_2101","title":"Decarbonizing China's Road Transport Sector: Strategies Toward Carbon Neutrality","year":2022,"office":"WRI China","type":"Report","topics":["Decarbonization","Transport decarbonization","Long-Term Decarbonization","Low-Carbon Transport","Vehicle Electrification"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Liu, Daizong","org":false}]},{"id":"2024_manual-da-pesquisa-de-satisfacao-qualionibus_7600","title":"QualiÔnibus Satisfaction Survey Manual: A Methodology to Assess the Satisfaction of Public Bus Customers","year":2024,"office":"WRI Brasil","type":"Guidebook","topics":["Public Transit","Public Transportation","Safety","Buses","Transport decarbonization"],"geo":["Brazil"],"authors":[{"name":"Cabral, Henrique","org":false},{"name":"Barcelos, Mariana Müller","org":false},{"name":"Blank, Cynthia","org":false},{"name":"Albuquerque, Cristina","org":false},{"name":"Petzhold, Guillermo","org":false},{"name":"Silva, Rafael Stucchi da","org":false},{"name":"Siqueira, Rafael Gustavo Silva","org":false},{"name":"Alves, Luiz Marcelo Teixeira","org":false}]},{"id":"2021_future-mobility-calculator-an-electric-mobility_8974","title":"Future Mobility Calculator: An Electric Mobility Infrastructure Assessment Tool Technical Note","year":2021,"office":"WRI Global","type":"Technical Note","topics":["Public Charging Infrastructure","Urban Mobility","Transport decarbonization","Electric Mobility","Electric Vehicles","Vehicle Electrification"],"geo":[],"authors":[{"name":"Kothari, Vishant","org":false},{"name":"Sclar, Ryan","org":false},{"name":"Jackson, Eleanor","org":false},{"name":"Werthmann, Emmett","org":false},{"name":"Orbea, Jone","org":false}]},{"id":"2022_sustainable-urban-mobility-in-the-ndcs-the_7992","title":"Sustainable Urban Mobility in the NDCs: The Essential Role of Public Transport","year":2022,"office":"WRI Global","type":"Working Paper","topics":["National Action Plans","Public Transportation","Buses","Urban Mobility","Transport decarbonization"],"geo":[],"authors":[{"name":"Kustar, Anna","org":false},{"name":"Welle, Ben","org":false},{"name":"Tun, Thet Hein","org":false}]},{"id":"2023_our-journey-with-the-city-deciphering-wri-india_5344","title":"Our Journey with the City: Deciphering WRI India Ross Center's Influence in Bengaluru","year":2023,"office":"WRI India","type":"Practice Note","topics":["Funding","Public Transit","Public Transportation","Urban Mobility","Transport decarbonization","Low-Carbon City"],"geo":["India"],"authors":[{"name":"Chanchani, Radha","org":false},{"name":"Dhindaw, Jaya","org":false},{"name":"King, Robin","org":false},{"name":"Pai, Madhav","org":false}]},{"id":"2022_introduction-and-case-studies-of-mobility-as-a_9845","title":"Mobility-as-a-Service (MaaS) Guideline for Chinese Cities and Case Studies","year":2022,"office":"WRI China","type":"Report","topics":["Integrated Transport","Public-Private Partnerships","Urban Mobility","Transport decarbonization","Low-Carbon Transport"],"geo":["China"],"authors":[{"name":"Song, Su","org":false},{"name":"Ma, Jiahui","org":false},{"name":"Liu, Andi","org":false},{"name":"Ji, Junyi","org":false},{"name":"Lu, Qingling","org":false},{"name":"Zhong, Miaoqing","org":false},{"name":"Tan, Ding","org":false},{"name":"Xu, Xiaotian","org":false}]},{"id":"2020_how-dockless-bike-sharing-changes-lives-an_2277","title":"How Dockless Bike-Sharing Changes Lives: An Analysis of Chinese Cities","year":2020,"office":"WRI China","type":"Report","topics":["Public Bicycle-Sharing","Public Transit","CO2","Cycling","Transport decarbonization","Air Pollution"],"geo":["China"],"authors":[{"name":"Jiang, Hui","org":false},{"name":"Song, Su","org":false},{"name":"Zou, Xuan","org":false},{"name":"Lu, Lu","org":false}]},{"id":"2024_pathways-to-decarbonize-indias-transport-sector_2978","title":"Pathways to Decarbonize India's Transport Sector: Scenario Analysis Using the Energy Policy Simulator","year":2024,"office":"WRI India","type":"Working Paper","topics":["Fuel Efficiency","Transport decarbonization","Electric Vehicles","Emission Reduction","Vehicle Electrification"],"geo":["India"],"authors":[{"name":"Ma, Ramya","org":false},{"name":"Chakrabarty, Subrata","org":false}]},{"id":"2023_developing-an-electric-mobility-roadmap-for_9237","title":"Developing an Electric Mobility Roadmap for Vietnam: Global Experiences from National Case Studies","year":2023,"office":"WRI Global","type":"Working Paper","topics":["Public Transportation","Transport decarbonization","EV Batteries","Electric Mobility","Electric Vehicles","Vehicle Electrification"],"geo":["China","India","Malaysia","Vietnam"],"authors":[{"name":"Liu, K. Zé","org":false},{"name":"Ly, Stephanie","org":false},{"name":"Ghanadan, Linus","org":false},{"name":"Ding, Yifan","org":false},{"name":"Jackson, Eleanor","org":false},{"name":"Steimer, Hamilton","org":false},{"name":"Cassius, Sarah","org":false},{"name":"Li, Xiangyi","org":false},{"name":"Freehafer, Lydia","org":false}]},{"id":"2017_urban-transport-performance-appraisal_00028","title":"Urban Transport Performance Appraisal: International Case Studies and Recommendations for China's National Transit Metropolis Program","year":2017,"office":"WRI China","type":"Working Paper","topics":["Integrated Transport","Public Transit","Public Transportation","Urban Mobility","Urban Planning"],"geo":["Canada","Colombia","Mexico","China","Germany","Singapore","South Korea"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Carrigen, Aileen","org":false},{"name":"Lu, Lu","org":false},{"name":"Jiang, Hui","org":false}]},{"id":"2024_enabling-the-shift-to-electric-auto-rickshaws-a_6804","title":"Enabling the Shift to Electric Auto-Rickshaws: A Guidebook for Electrification of Auto-Rickshaw Fleets in Indian Cities","year":2024,"office":"WRI India","type":"Guidebook","topics":["Public Charging Infrastructure","Urban Mobility","Transport decarbonization","Electric Mobility","Electric Vehicles","Vehicle Electrification"],"geo":["India"],"authors":[{"name":"Gounder, Kanika","org":false},{"name":"Kanuri, Chaitanya","org":false}]},{"id":"2025_technical-note-for-a-dataset-modeling-the_1957","title":"Modeling the Societal Health and Climate Benefits Associated With Transitioning the US School Bus Fleet From Diesel to Electric","year":2025,"office":"WRI US","type":"Technical Note","topics":["School Buses","Climate Impacts","Transport decarbonization","Electric School Buses","Societal Health","Vehicle Electrification"],"geo":["United States"],"authors":[{"name":"Oztaner, Burak","org":false},{"name":"Soltanzadeh, Marjan","org":false},{"name":"Todd, Amy","org":false},{"name":"Zepka, Brian","org":false},{"name":"Hakami, Amir","org":false}]},{"id":"2024_access-to-climate-finance-in-low-and-middle_4708","title":"Access to Climate Finance in Low- and Middle-Income Countries: 14 Case Studies in the Transport Sector","year":2024,"office":"WRI Global","type":"Working Paper","topics":["Mobilized Private Finance","Climate Finance","Climate Resilience","Transport decarbonization","Low-Carbon Transport"],"geo":["Burundi","Ethiopia","Malawi","Maldives","Mali","Mongolia","Mozambique","Nigeria","Sudan","Tanzania"],"authors":[{"name":"Zhang, Yiqian","org":false},{"name":"Caldwell, Molly","org":false},{"name":"Laxton, Valerie","org":false},{"name":"Welle, Ben","org":false},{"name":"Liu, K. Zé","org":false}]},{"id":"2024_optimizing-container-ports-transportation-and_9894","title":"Optimizing Container Ports' Transportation and Distribution Systems Toward a Low-Carbon Future: A Shenzhen Port Case Study","year":2024,"office":"WRI China","type":"Report","topics":["Freight Transport","Trains","Transport decarbonization","Emission Reduction","Low-Carbon Transport"],"geo":["China"],"authors":[{"name":"Wang, Renjie","org":false},{"name":"Yang, Daoyuan","org":false},{"name":"Chang, Xing","org":false},{"name":"Tan, Xiaoyu","org":false},{"name":"Xing, Youkai","org":false},{"name":"Li, Xiaoyi","org":false},{"name":"Xue, Lulu","org":false},{"name":"Chen, Ke","org":false}]},{"id":"2021_seizing-brazils-urban-opportunity_3268","title":"Seizing Brazil's Urban Opportunity: Prioritising Urban Transport and Housing Investments for Inclusion and Resilience","year":2021,"office":"WRI Global","type":"Report","topics":["Climate Finance","Climate Policy","Transport decarbonization","Low-Carbon City","Low-Carbon Transport"],"geo":["Brazil"],"authors":[{"name":"Coalition for Urban Transitions","org":true}]},{"id":"2025_the-projected-ev-transition-in-the-indian_3470","title":"The Projected EV Transition in the Indian Automotive Manufacturing Industry: Perceptions and Enterprise-Level Strategies","year":2025,"office":"WRI India","type":"Working Paper","topics":["OEMs","Diversification","Transport decarbonization","EV","SMEs","Vehicle Electrification"],"geo":["India"],"authors":[{"name":"Sen, Trinayani","org":false},{"name":"Bansal, Priya","org":false},{"name":"Kulkarni, Pranusha","org":false},{"name":"Kanuri, Chaitanya","org":false}]},{"id":"2025_financial-impact-assessment-for-zero-emission_8156","title":"Financial Impact Assessment for Zero-Emission Trucks (Fi-ZET): A Tool for Comparative Feasibility Analysis of a Single Zero-Emission Truck (ZET) and an Internal Combustion Engine (ICE) Truck","year":2025,"office":"WRI India","type":"Technical Note","topics":["Freight Transport","Diesel","Transport decarbonization","Electric Vehicles","Zero-Emission Trucks"],"geo":["India"],"authors":[{"name":"Patki, Sharvari","org":false},{"name":"Polisetty, Manojna","org":false},{"name":"Ramaprasad, Vishal","org":false},{"name":"Mir, Waseem","org":false},{"name":"Mulukutla, Pawan","org":false}]},{"id":"2020_the-future-of-urban-mobility-the-case-for_6259","title":"The Future of Urban Mobility: The Case for Electric Bus Deployment in Bogotá, Colombia","year":2020,"office":"WRI Global","type":"Working Paper","topics":["Public Transit","Buses","Bus Rapid Transit","Transport decarbonization","Electric Mobility"],"geo":["Colombia"],"authors":[{"name":"Sclar, Ryan","org":false},{"name":"Werthmann, Emmett","org":false},{"name":"Orbea, Jone","org":false},{"name":"Siqueira, Eduardo","org":false},{"name":"Tavares, Virginia","org":false},{"name":"Pinheiro, Berta","org":false},{"name":"Albuquerque, Cristina","org":false},{"name":"Castellanos, Sebastian","org":false}]},{"id":"2023_exploring-wri-ross-centers-experience-in-mexico_6692","title":"Exploring WRI Ross Center's Experience in Mexico City: A Deep City-Level Engagement Approach","year":2023,"office":"WRI Mexico","type":"Practice Note","topics":["Public Transit","BRT","Bus Rapid Transit","Urban Mobility","Urban Transformations","Transport decarbonization"],"geo":["Mexico"],"authors":[{"name":"Martínez, A","org":false},{"name":"King, Robin","org":false},{"name":"Santana, J.L.","org":false},{"name":"Jacquin, C","org":false},{"name":"Páez, F","org":false}]},{"id":"2024_accelerating-zero-emission-truck-adoption-in_6287","title":"Accelerating Zero Emission Truck Adoption in Urban Applications: Beijing's Analysis and Recommendations","year":2023,"office":"WRI China","type":"Report","topics":["Freight Transport","Policy Reform","Public Charging Infrastructure","Transport decarbonization","Zero-Emission Trucks"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Chen, Ke","org":false},{"name":"Liu, Xiaoying","org":false},{"name":"Cheng","org":false},{"name":"Song, Liying","org":false},{"name":"Ren, Huanhuan","org":false}]},{"id":"2025_driving-forward-on-a-clean-ride-for-kids_5008","title":"Driving Forward on a Clean Ride for Kids","year":2025,"office":"WRI Global","type":"Expert Note","topics":["Funding","School Buses","CSBP","Transport decarbonization","ESBs","Electric School Buses"],"geo":["United States"],"authors":[{"name":"Gander, Sue","org":false},{"name":"Epstein, Meredith","org":false}]},{"id":"2023_pathway-green-transition-transport-mexico_0121","title":"A Pathway for a Green Transition of the Transport Sector in Mexico: Feasible Interventions That Are Environmentally, Economically, and Socially Beneficial","year":2023,"office":"WRI Mexico","type":"Issue Brief","topics":["GHG Emissions","Climate Policy","Transport decarbonization","Electric Mobility","Low-Carbon Transport"],"geo":["Mexico"],"authors":[{"name":"Ruiz, Avelina","org":false},{"name":"Olea, Fernando","org":false},{"name":"Montalvo, Andrés Flores","org":false},{"name":"García, Emilio","org":false}]},{"id":"2023_visioning-to-implementation-national-transport_8631","title":"Visioning to Implementation: National Transport Decarbonization Policies That Match Climate Targets in China, India, and Vietnam","year":2023,"office":"WRI Global","type":"Report","topics":["Integrated Transport","Net Zero Emissions","Climate Policy","Transport decarbonization","Electric Mobility"],"geo":["China","India","Vietnam"],"authors":[{"name":"Zhang, Yiqian","org":false},{"name":"Castellanos, Sebastian","org":false},{"name":"Welle, Ben","org":false}]},{"id":"2025_needs-assessment-for-equitable-school-bus_6149","title":"Needs Assessment for Equitable School Bus Electrification in US School Districts","year":2025,"office":"WRI US","type":"Working Paper","topics":["School Buses","Transport decarbonization","Energy Equity","ESBs","Electric School Buses","Electrification"],"geo":["United States"],"authors":[{"name":"Brown, Charles T.","org":false},{"name":"Jackson, Eleanor","org":false}]},{"id":"2023_financial-analysis-of-charging-station-fact_2082","title":"Financial Analysis of Charging Station (FACt): A Tool for Easy Financial Evaluation of Public Charging Infrastructure Deployment in India","year":2023,"office":"WRI India","type":"Technical Note","topics":["Finance","Public Charging Infrastructure","Public Charging Station","Electricity","Transport decarbonization","Electric Vehicles"],"geo":["India"],"authors":[{"name":"Mulukutla, Pawan","org":false},{"name":"Das, Shyamasis","org":false},{"name":"Bansal, Priya","org":false}]},{"id":"2019_barriers-to-adopting-electric-buses_4116","title":"Barriers to Adopting Electric Buses","year":2019,"office":"WRI Global","type":"Report","topics":["Public Transportation","Buses","Transport decarbonization","Electric Mobility","Electric Vehicles","Vehicle Electrification"],"geo":[],"authors":[{"name":"Sclar, Ryan","org":false},{"name":"Gorguinpour, Camron","org":false},{"name":"Castellanos, Sebastian","org":false},{"name":"Li, Xiangyi","org":false}]},{"id":"2020_informal-and-semiformal-services-in-latin-america_2995","title":"Informal and Semiformal Services in Latin America: An Overview of Public Transportation Reforms","year":2020,"office":"WRI Global","type":"Working Paper","topics":["Policy Reform","Public Transportation","BRT","Buses","Urban Mobility","Transport decarbonization"],"geo":[],"authors":[{"name":"Tun, Thet Hein","org":false},{"name":"Welle, Benjamin","org":false},{"name":"Hidalgo, Darío","org":false},{"name":"Albuquerque, Cristina","org":false},{"name":"Castellanos, Sebastián","org":false},{"name":"Sclar, Ryan","org":false},{"name":"Escalante, David","org":false}]},{"id":"2025_assessing-supply-chain-barriers-to-and_3205","title":"Assessing Supply Chain Barriers to and Opportunities for Advancing Road Transport Electrification in Kenya","year":2025,"office":"WRI Africa","type":"Working Paper","topics":["Public Charging Infrastructure","Climate Finance","Transport decarbonization","Electric Mobility","Vehicle Electrification"],"geo":["Kenya"],"authors":[{"name":"Mwangi, Amos","org":false},{"name":"Abubaker, Iman Abdulwassi","org":false},{"name":"Kipkirui, Japheth","org":false},{"name":"Oursler, Anna","org":false}]},{"id":"2020_impactar-tool-valuing-air-quality-health-impacts_1028","title":"ImpactAr Tool: Valuing Air Quality Health Impacts of Urban Bus Fleet Changes in Brazil","year":2020,"office":"WRI Brasil","type":"Technical Note","topics":["Mortality","Public Transit","Buses","Air Pollution","Air Quality"],"geo":["Brazil"],"authors":[{"name":"Betti, Luana","org":false},{"name":"Caregnato Garcia, Marin","org":false},{"name":"Siqueira, Eduardo","org":false},{"name":"Evers, Henrique","org":false}]},{"id":"2022_decarbonizing-hong-kongs-roads-pathways-towards-a_8751","title":"Decarbonising Hong Kong's Roads: Pathways Towards a Net-Zero Road Transport System","year":2022,"office":"WRI China","type":"Report","topics":["Net Zero Emissions","Buses","Transport decarbonization","Vehicle Electrification","Zero-Emission Trucks"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Song, Su","org":false},{"name":"Xi, Wenyi","org":false},{"name":"Jiang, Xiaoqian","org":false},{"name":"Iu, Lawrence","org":false},{"name":"Sawhney, Simran","org":false}]},{"id":"2023_electric-school-bus-us-market-study-and-buyers_1646","title":"Electric School Bus US Market Study: A Resource for School Districts and Other School Bus Operators for Pursuing Fleet Electrification","year":2023,"office":"WRI US","type":"Issue Brief","topics":["School Buses","Transport decarbonization","ESBs","Electric School Buses","Electric Vehicles","Electrification"],"geo":["United States"],"authors":[{"name":"Wang, Jessica","org":false},{"name":"Kothari, Vishant","org":false},{"name":"Werthmann, Emmett","org":false},{"name":"Jackson, Eleanor","org":false},{"name":"Henderson, Lidia","org":false},{"name":"Huntington, Alissa","org":false}]},{"id":"2025_roadmap-to-100-electrifying-the-full-us-school_7216","title":"Roadmap to 100: Electrifying the Full US School Bus Fleet","year":2025,"office":"WRI Global","type":"Working Paper","topics":["School Buses","U.S. Climate Policy","ESBs","Electric School Buses","Vehicle Electrification"],"geo":["United States"],"authors":[{"name":"Todd, Amy","org":false},{"name":"Walton, Todd","org":false}]},{"id":"2017_connected-urban-growth-public-private_1272","title":"Connected Urban Growth: Public-Private Collaborations for Transforming Urban Mobility","year":2017,"office":"WRI Global","type":"Working Paper","topics":["Public-Private Partnerships","Public Transit","Urban Mobility","Transport decarbonization","Low-Carbon Transport","Shared Mobility"],"geo":["Mexico"],"authors":[{"name":"Canales, Diego","org":false},{"name":"Bouton, Shannon","org":false},{"name":"Trimble, Elaine","org":false},{"name":"Thayne, Julia","org":false},{"name":"Fernandes, Larissa","org":false},{"name":"Shastry, Srikanth","org":false},{"name":"Knupfer, Stefan","org":false},{"name":"Powell, Martin","org":false}]},{"id":"2024_electrifying-us-school-bus-fleets-equitably-to_7005","title":"Electrifying US School Bus Fleets Equitably to Reduce Air Pollution Exposure in Underserved Communities","year":2024,"office":"WRI US","type":"Report","topics":["School Buses","Transport decarbonization","Energy Equity","Environmental Justice","Electric School Buses","Vehicle Electrification"],"geo":[],"authors":[{"name":"Lazer, Leah","org":false},{"name":"Freehafer, Lydia","org":false},{"name":"Worker, Jesse","org":false},{"name":"Achury, Alejandra","org":false},{"name":"Shrestha, Rajat","org":false},{"name":"Brown, Charles T.","org":false},{"name":"Kodakkandathil, Vineesh","org":false},{"name":"Zepka, Brian","org":false}]},{"id":"2020_the-costs-and-benefits-appraisal-tool-for-transit_6714","title":"The Costs and Benefits Appraisal Tool for Transit Buses","year":2020,"office":"WRI Global","type":"Technical Note","topics":["GHG Emissions","Public Charging Infrastructure","Buses","Transport decarbonization","Electric Vehicles","Vehicle Electrification"],"geo":["Brazil","China","India"],"authors":[{"name":"Li, Xiangyi","org":false},{"name":"Gao, Jun","org":false},{"name":"Song, Su","org":false}]},{"id":"2021_10-questions-to-ask-about-planning-financing-and_8828","title":"10 Questions to Ask About Planning, Financing, and Implementing Transit-Oriented Development Strategies","year":2021,"office":"WRI Global","type":"Working Paper","topics":["Land Value Capture","Public Transit","Urban Development","Urban Equity","Urban Planning"],"geo":[],"authors":[{"name":"Amos, Albert","org":false},{"name":"Moon-Miklaucic, Christopher Tristan","org":false},{"name":"Orloff, Mariana","org":false}]},{"id":"2024_a-fare-look-funding-urban-public-transport_7541","title":"A Fare Look: Funding Urban Public Transport Operations","year":2024,"office":"WRI Global","type":"Working Paper","topics":["Funding","Pandemic","Public Finance","Public Transit","Resilience","Transport decarbonization"],"geo":["Brazil","France"],"authors":[{"name":"Kustar, Anna","org":false},{"name":"Davidson, Adam","org":false},{"name":"Tun, Thet Hein","org":false},{"name":"Welle, Ben","org":false},{"name":"Muralidaran, Santosh","org":false}]},{"id":"26_tech_esb-adoption_version-10","title":"Technical Note for a Dataset of Electric School Bus Adoption in the United States","year":2026,"office":"WRI US","type":"Technical Note","topics":["Public Schools","School Buses","Energy Equity","ESBs","Electric School Buses"],"geo":["United States"],"authors":[{"name":"Lazer, Leah","org":false},{"name":"Freehafer, Lydia","org":false},{"name":"Zepka, Brian","org":false}]},{"id":"2021_open-communication-protocols-vehicle-grid_1665","title":"Open Communication Protocols for Vehicle Grid Integration in China: Global Experiences and Local Recommendations","year":2021,"office":"WRI China","type":"Working Paper","topics":["Public Charging Infrastructure","Electric Grid","Transport decarbonization","Electric Vehicles","Vehicle-Grid Integration","Vulnerability Assessment"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Xiong, Ying","org":false},{"name":"Zhu, Jin","org":false}]},{"id":"2019_toward-net-zero-emissions-in-the-road-transport_1735","title":"Toward \"Net Zero\" Emissions in the Road Transport Sector in China","year":2019,"office":"WRI China","type":"Working Paper","topics":["Freight Transport","Net Zero Emissions","Transport decarbonization","Vehicle Electrification","Zero-Emission Trucks"],"geo":["China"],"authors":[{"name":"Xue, Lulu","org":false},{"name":"Jin, Yana","org":false},{"name":"Yu, Rujie","org":false},{"name":"Liu, Yong","org":false},{"name":"Ren, Huanhuan","org":false}]},{"id":"2021_seizing-mexicos-urban-opportunity_3303","title":"Seizing Mexico’s Urban Opportunity: How Urban Transformation Can Reduce Poverty and Inequality and Build Resilience","year":2021,"office":"WRI Global","type":"Report","topics":["Green Jobs","Net Zero Emissions","Equitable Cities","Low-Carbon City","Low-Carbon Transport"],"geo":["Mexico"],"authors":[{"name":"Coalition for Urban Transitions","org":true}]},{"id":"2019_financing-electric-and-hybrid-electric-buses-10_6301","title":"Financing Electric and Hybrid-Electric Buses: 10 Questions City Decision-Makers Should Ask","year":2019,"office":"WRI Global","type":"Working Paper","topics":["Funding","Public Finance","Buses","Transport decarbonization","Electric Mobility","Vehicle Electrification"],"geo":[],"authors":[{"name":"Moon, Christopher","org":false},{"name":"Maassen, Anne","org":false},{"name":"Li, Xiangyi","org":false},{"name":"Castellanos, Sebastian","org":false}]},{"id":"2021_pole-mounted-electric-vehicle-charging_6046","title":"Pole-Mounted Electric Vehicle Charging: Preliminary Guidance for a Low-Cost and More Accessible Public Charging Solution for U.S. Cities","year":2021,"office":"WRI US","type":"Working Paper","topics":["PMCs","Pole-Mounted Chargers","Public Charging Infrastructure","Transport decarbonization","Energy Equity","Electric Vehicles"],"geo":["United States"],"authors":[{"name":"Werthmann, Emmett","org":false},{"name":"Kothari, Vishant","org":false}]},{"id":"2025_improving-school-infrastructure-for-healthier_3532","title":"Improving School Infrastructure for Healthier Students and Communities","year":2025,"office":"WRI US","type":"Expert Note","topics":["Public Schools","Rooftop Solar","Tax Credits","Transport decarbonization","Energy Equity","Electric School Buses"],"geo":["United States"],"authors":[{"name":"Roboff, Katherine","org":false},{"name":"Gander, Sue","org":false}]}];
+
+// Simulated query→topic match (would come from tag_embeddings cosine).
+const TOPIC_W = {
+  'Electric Mobility': 0.66, 'Buses': 0.63, 'Electric School Buses': 0.58,
+  'Vehicle Electrification': 0.52, 'Electric Vehicles': 0.47, 'Public Transit': 0.45,
+  'Public Charging Infrastructure': 0.42, 'School Buses': 0.40,
+  'Zero-Emission Trucks': 0.31, 'Low-Carbon Transport': 0.29,
+};
+const MATCHED = Object.keys(TOPIC_W);
+// Corpus document frequency per matched topic (QA, 201 searchable docs) -> specificity = ln(N/df).
+const TOPIC_DF = { 'Electric Mobility': 20, 'Buses': 19, 'Electric School Buses': 11, 'Vehicle Electrification': 28, 'Electric Vehicles': 26, 'Public Transit': 25, 'Public Charging Infrastructure': 18, 'School Buses': 10, 'Zero-Emission Trucks': 11, 'Low-Carbon Transport': 20 };
+const N_DOCS = 201;
+const spec = t => Math.log(N_DOCS / (TOPIC_DF[t] || 1));
+const OFFICE_VAR = { 'WRI Global': 'var(--o-global)', 'WRI China': 'var(--o-china)', 'WRI India': 'var(--o-india)' };
+const officeColor = o => OFFICE_VAR[o] || 'var(--o-other)';
+const tierW = { strong: 1, partial: 0.5, weak: 0.2 };
+
+// Doc relevance + tier (simulated).
+DOCS.forEach(d => {
+  const ws = d.topics.filter(t => TOPIC_W[t]).map(t => TOPIC_W[t]);
+  const base = ws.length ? Math.max(...ws) : 0.2;
+  d.rel = Math.min(0.95, base + 0.03 * Math.max(0, ws.length - 1));
+  d.tier = d.rel >= 0.58 ? 'strong' : d.rel >= 0.42 ? 'partial' : 'weak';
+});
+
+// Aggregate people.
+const people = new Map();
+DOCS.forEach(d => {
+  d.authors.forEach((a, i) => {
+    if (a.org) return;
+    let p = people.get(a.name);
+    if (!p) { p = { name: a.name, docs: [], offices: {}, topics: {}, score: 0 }; people.set(a.name, p); }
+    const pos = 1 / (1 + 0.3 * i);
+    const rec = d.year >= 2023 ? 1 : d.year >= 2020 ? 0.85 : 0.7;
+    p.score += tierW[d.tier] * pos * rec;
+    p.docs.push(d);
+    p.offices[d.office] = (p.offices[d.office] || 0) + 1;
+    d.topics.forEach(t => { p.topics[t] = (p.topics[t] || 0) + 1; });
+  });
+});
+let ranked = [...people.values()].sort((a, b) => b.score - a.score);
+const maxScore = ranked[0].score;
+ranked.forEach((p, i) => {
+  p.rank = i + 1;
+  p.norm = p.score / maxScore;
+  p.office = Object.entries(p.offices).sort((a, b) => b[1] - a[1])[0][0];
+  const ys = p.docs.map(d => d.year).filter(Boolean);
+  p.years = ys.length ? [Math.min(...ys), Math.max(...ys)] : null;
+  p.tiers = { strong: 0, partial: 0, weak: 0 };
+  p.docs.forEach(d => p.tiers[d.tier]++);
+  p.matched = MATCHED.filter(t => p.topics[t]).sort((a, b) => (p.topics[b] - p.topics[a]) || (TOPIC_W[b] - TOPIC_W[a]));
+});
+const TOP = ranked.slice(0, 20);
+const GRAPH_PEOPLE = TOP;
+
+// ----- header -----
+const reading = document.getElementById('reading');
+MATCHED.slice(0, 7).forEach(t => {
+  const c = document.createElement('span');
+  c.className = 'chip on';
+  c.innerHTML = `${t} <span class="w">${TOPIC_W[t].toFixed(2)}</span><button type="button" aria-label="Remove ${t}">✕</button>`;
+  reading.appendChild(c);
+});
+const more = document.createElement('span'); more.className = 'chip'; more.textContent = `+${MATCHED.length - 7} more`; reading.appendChild(more);
+const offices = new Set(DOCS.map(d => d.office).filter(Boolean));
+document.getElementById('summary').innerHTML =
+  `<b>${ranked.length}</b> people across <b>${offices.size}</b> offices, on <b>${DOCS.length}</b> documents that match. Showing the top ${TOP.length}.`;
+
+// ----- list -----
+const list = document.getElementById('list');
+TOP.forEach(p => {
+  const li = document.createElement('li');
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'row'; b.dataset.name = p.name; b.id = 'row-' + slug(p.name);
+  const yr = p.years ? (p.years[0] === p.years[1] ? p.years[0] : `${p.years[0]}–${p.years[1]}`) : '';
+  const evParts = [];
+  if (p.tiers.strong) evParts.push(`<b>${p.tiers.strong} strong</b>`);
+  if (p.tiers.partial) evParts.push(`${p.tiers.partial} partial`);
+  if (p.tiers.weak) evParts.push(`${p.tiers.weak} weak`);
+  b.innerHTML = `
+    <span class="rank">${p.rank}</span>
+    <span>
+      <span class="name-line"><span class="name">${p.name}</span>
+        <span class="office"><i class="dot" style="background:${officeColor(p.office)}"></i>${p.office || 'Office unknown'}</span></span>
+      <span class="bar" aria-hidden="true"><i style="width:${Math.round(p.norm * 100)}%"></i></span>
+      <span class="ev">${p.docs.length} doc${p.docs.length === 1 ? '' : 's'} · ${evParts.join(' · ')}${yr ? ' · ' + yr : ''}</span>
+      <span class="topics">${p.matched.slice(0, 3).map(t => `<span class="tp on">${t}<span style="opacity:.7"> ${p.topics[t]}</span></span>`).join('')}</span>
+    </span>`;
+  b.addEventListener('mouseenter', () => { if (!selected) highlight(p.name); });
+  b.addEventListener('mouseleave', () => { if (!selected) clearHighlight(); });
+  b.addEventListener('focus', () => { if (!selected) highlight(p.name); });
+  b.addEventListener('blur', () => { if (!selected) clearHighlight(); });
+  b.addEventListener('click', () => select(p.name));
+  li.appendChild(b); list.appendChild(li);
+});
+document.getElementById('list-foot').textContent = `${ranked.length - TOP.length} more people with weaker evidence · organizations as authors (e.g. Coalition for Urban Transitions) are listed separately in the full design`;
+
+function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
+
+// ----- graph -----
+const W = 940, H = 760;
+const nodes = [];
+const links = [];
+GRAPH_PEOPLE.forEach(p => nodes.push({ id: 'p:' + p.name, kind: 'person', p, r: 7 + 13 * p.norm }));
+MATCHED.forEach(t => nodes.push({ id: 't:' + t, kind: 'topic', t, r: 9 + 18 * (TOPIC_W[t] - 0.25) / 0.45 }));
+GRAPH_PEOPLE.forEach(p => MATCHED.forEach(t => { if (p.topics[t]) links.push({ source: 'p:' + p.name, target: 't:' + t, w: p.topics[t] }); }));
+
+const sim = d3.forceSimulation(nodes)
+  .force('link', d3.forceLink(links).id(d => d.id).distance(l => 96 - 8 * Math.min(l.w, 5)).strength(l => 0.25 + 0.1 * Math.min(l.w, 4)))
+  .force('charge', d3.forceManyBody().strength(d => d.kind === 'topic' ? -900 : -260))
+  .force('collide', d3.forceCollide().radius(d => d.r + (d.kind === 'topic' ? 48 : 34)).iterations(2))
+  .force('center', d3.forceCenter(W / 2, H / 2))
+  .force('x', d3.forceX(W / 2).strength(0.05))
+  .force('y', d3.forceY(H / 2).strength(0.07))
+  .stop();
+for (let i = 0; i < 360; i++) sim.tick();
+nodes.forEach(n => { n.x = Math.max(n.r + 70, Math.min(W - n.r - 110, n.x)); n.y = Math.max(n.r + 16, Math.min(H - n.r - 16, n.y)); });
+
+const svg = d3.select('#graph').append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img')
+  .attr('aria-label', 'People connected to the topics that match the query');
+const gL = svg.append('g');
+const gN = svg.append('g');
+const edgeSel = gL.selectAll('line').data(links).join('line').attr('class', 'edge')
+  .attr('stroke-width', d => 0.8 + 0.7 * Math.min(d.w, 5))
+  .attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+const nodeSel = gN.selectAll('g').data(nodes).join('g')
+  .attr('class', d => 'node ' + d.kind).attr('transform', d => `translate(${d.x},${d.y})`);
+nodeSel.append('circle').attr('class', 'hit').attr('r', d => Math.max(d.r + 8, 16));
+nodeSel.filter(d => d.kind === 'person').append('circle').attr('class', 'halo').attr('r', d => d.r + 6);
+nodeSel.append('circle').attr('r', d => d.r).attr('fill', d => d.kind === 'person' ? officeColor(d.p.office) : null);
+nodeSel.filter(d => d.kind === 'person').append('rect').attr('class', 'pill').attr('rx', 3).attr('ry', 3);
+nodeSel.filter(d => d.kind === 'person').append('text').attr('x', d => d.r + 9).attr('y', 4).attr('class', d => d.p.rank <= 8 ? 'lbl' : 'lbl quiet').text(d => shortName(d.p.name));
+// Size each label pill from the rendered text so the selected name sits in a solid ink tab.
+nodeSel.filter(d => d.kind === 'person').each(function (d) {
+  const t = d3.select(this).select('text').node();
+  const w = t ? t.getComputedTextLength() : 60;
+  d3.select(this).select('rect.pill').attr('x', d.r + 4).attr('y', -9).attr('width', w + 10).attr('height', 18);
+});
+nodeSel.filter(d => d.kind === 'topic').append('text').attr('text-anchor', 'middle').attr('y', d => d.r + 13).text(d => d.t);
+nodeSel.filter(d => d.kind === 'person')
+  .on('mouseenter', (e, d) => { if (!selected) highlight(d.p.name); })
+  .on('mouseleave', () => { if (!selected) clearHighlight(); })
+  .on('click', (e, d) => select(d.p.name));
+nodeSel.filter(d => d.kind === 'topic')
+  .on('mouseenter', (e, d) => { if (!selected) highlightTopic(d.t); })
+  .on('mouseleave', () => { if (!selected) clearHighlight(); });
+
+function shortName(n) { const [fam, giv] = n.split(', '); return giv ? `${giv.split(' ')[0]} ${fam}` : fam; }
+
+// ----- interaction -----
+let selected = null;
+function peersOf(name) {
+  const p = people.get(name);
+  const out = new Map();
+  GRAPH_PEOPLE.concat(TOP).forEach(q => {
+    if (q.name === name) return;
+    let shared = 0; const topics = [];
+    MATCHED.forEach(t => { if (p.topics[t] && q.topics[t]) { shared += Math.min(p.topics[t], q.topics[t]) * spec(t); topics.push(t); } });
+    topics.sort((a, b) => spec(b) - spec(a));
+    if (shared >= 4.5) out.set(q.name, { shared, topics });
+  });
+  return out;
+}
+function highlight(name) {
+  const p = people.get(name);
+  const peers = peersOf(name);
+  const on = new Set(p.matched);
+  nodeSel.attr('class', d => {
+    if (d.kind === 'person') return 'node person ' + (d.p.name === name ? 'focus' : peers.has(d.p.name) ? 'peer' : 'dim');
+    return 'node topic ' + (on.has(d.t) ? 'on' : 'dim');
+  });
+  edgeSel.attr('class', d => {
+    const pn = d.source.p.name;
+    if (pn === name) return 'edge on';
+    if (peers.has(pn) && on.has(d.target.t)) return 'edge peer';
+    return 'edge dim';
+  });
+  document.querySelectorAll('.row').forEach(r => {
+    r.classList.toggle('selected', r.dataset.name === name);
+    r.classList.toggle('peer', peers.has(r.dataset.name));
+  });
+  document.getElementById('hint').textContent = `${shortName(name)} · ${p.matched.length} matched topic${p.matched.length === 1 ? '' : 's'} · shares topics with ${peers.size} other ranked ${peers.size === 1 ? 'person' : 'people'} (highlighted)`;
+}
+function highlightTopic(t) {
+  nodeSel.attr('class', d => d.kind === 'topic' ? ('node topic ' + (d.t === t ? 'on' : 'dim')) : ('node person ' + (d.p.topics[t] ? 'peer' : 'dim')));
+  edgeSel.attr('class', d => d.target.t === t ? 'edge on' : 'edge dim');
+  document.querySelectorAll('.row').forEach(r => { r.classList.remove('selected'); r.classList.toggle('peer', !!people.get(r.dataset.name).topics[t]); });
+  const n = GRAPH_PEOPLE.filter(p => p.topics[t]).length;
+  document.getElementById('hint').textContent = `${t} · ${n} of the ${GRAPH_PEOPLE.length} shown people have documents tagged with it`;
+}
+function clearHighlight() {
+  nodeSel.attr('class', d => 'node ' + d.kind);
+  edgeSel.attr('class', 'edge');
+  document.querySelectorAll('.row').forEach(r => r.classList.remove('selected', 'peer'));
+  document.getElementById('hint').textContent = 'Hover a person to see their topics and who else works in them. Click to pin and open the evidence.';
+}
+function select(name) {
+  if (selected === name) { selected = null; clearHighlight(); document.getElementById('evidence').hidden = true; return; }
+  selected = name; highlight(name); renderEvidence(name);
+  const row = document.getElementById('row-' + slug(name));
+  if (row) row.scrollIntoView({ block: 'nearest' });
+}
+document.getElementById('ev-close').addEventListener('click', () => { selected = null; clearHighlight(); document.getElementById('evidence').hidden = true; });
+
+function renderEvidence(name) {
+  const p = people.get(name);
+  const el = document.getElementById('evidence'); el.hidden = false;
+  document.getElementById('ev-name').textContent = p.name;
+  const yr = p.years ? `${p.years[0]}–${p.years[1]}` : '';
+  const offs = Object.entries(p.offices).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${o} (${n})`).join(', ');
+  document.getElementById('ev-meta').textContent = `${offs} · ${p.docs.length} matching documents · ${yr}`;
+  document.getElementById('ev-docs-h').textContent = `Evidence · ${p.tiers.strong} strong, ${p.tiers.partial} partial, ${p.tiers.weak} weak`;
+  const docs = document.getElementById('ev-docs'); docs.innerHTML = '';
+  [...p.docs].sort((a, b) => b.rel - a.rel || b.year - a.year).forEach(d => {
+    const pos = d.authors.findIndex(a => a.name === name) + 1;
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="tier ${d.tier}">${d.tier}</span><span><div class="doc-t">${d.title}</div><div class="doc-m">${d.year || ''} · ${d.type || 'Document'} · ${d.office || ''} · author ${pos} of ${d.authors.length}</div></span>`;
+    docs.appendChild(li);
+  });
+  const peers = [...peersOf(name).entries()].sort((a, b) => b[1].shared - a[1].shared).slice(0, 6);
+  const pl = document.getElementById('ev-peers'); pl.innerHTML = '';
+  peers.forEach(([n, v]) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<button type="button">${n}</button><span class="shared">${v.topics.slice(0, 2).join(', ')}${v.topics.length > 2 ? ` +${v.topics.length - 2}` : ''}</span>`;
+    li.querySelector('button').addEventListener('click', () => select(n));
+    pl.appendChild(li);
+  });
+  const tp = document.getElementById('ev-topics'); tp.innerHTML = '';
+  Object.entries(p.topics).sort((a, b) => b[1] - a[1]).slice(0, 14).forEach(([t, n]) => {
+    const s = document.createElement('span'); s.className = 'tp' + (TOPIC_W[t] ? ' on' : ''); s.textContent = `${t} ${n}`; tp.appendChild(s);
+  });
+}
+</script>

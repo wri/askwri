@@ -1,0 +1,78 @@
+/* src/app/components/Experts/Experts.css */
+.experts-row {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #e6e2d6;
+  border-left: 3px solid transparent;
+}
+/* U16: spec §7 reserves gold for "relevance to the query". Hover and selection
+   are interaction states, so they read as an ink wash; only the peer tint below
+   (spec §8 golds peers) and the relevance bar stay gold. */
+.experts-row:hover {
+  background: rgba(27, 26, 23, 0.05);
+}
+.experts-row[aria-pressed='true'] {
+  background: rgba(27, 26, 23, 0.08);
+  border-left-color: #1b1a17;
+}
+.experts-row[data-peer='true'] {
+  background: rgba(240, 171, 0, 0.07);
+}
+/* U14: a topic hovered or focused on the chips fades the people who do not
+   carry it, mirroring the graph's topic hover on the keyboard-reachable twin. */
+.experts-row[data-topic-match='false']:not([aria-pressed='true']) {
+  opacity: 0.45;
+}
+.experts-row[data-topic-match='true'] {
+  background: rgba(240, 171, 0, 0.16);
+}
+.experts-row:focus-visible {
+  outline: 2px solid #1b1a17;
+  outline-offset: -2px;
+}
+.experts-peer-btn {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+}
+.experts-peer-btn:hover {
+  text-decoration: underline;
+}
+.experts-chip-x {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+/* The page's two-column bench grid is inline-styled; !important wins over
+   the inline grid-template-columns on narrow screens (single column). */
+@media (max-width: 980px) {
+  .experts-bench {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* U9: skeleton rows for the no-previous-results loading state (spec §7). */
+.experts-skeleton-bar {
+  background: #e6e2d6;
+  border-radius: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .experts-skeleton-row {
+    animation: experts-skeleton-pulse 1.4s ease-in-out infinite;
+  }
+}
+@keyframes experts-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}

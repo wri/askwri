@@ -11,7 +11,7 @@ import { execFileSync } from 'child_process'
 import * as crypto from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { SYS_V1, SYS_V2 } from '@/app/api/answer/route'
+import { SYS_V1, SYS_V2 } from '@/lib/answer-synthesis'
 import { Controls } from './cli'
 import { captureFingerprint } from './fingerprint'
 import {

@@ -14,6 +14,7 @@ import { DocumentCollection } from './entities/DocumentCollection.entity'
 import { AuditLog } from './entities/AuditLog.entity'
 import { TagAlias } from './entities/TagAlias.entity'
 import { ReclassifyJob } from './entities/ReclassifyJob.entity'
+import { ExpertsModeQueryLogs } from './entities/ExpertsModeQueryLogs.entity'
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -40,6 +41,7 @@ const MigrationDataSource = new DataSource({
     AuditLog,
     TagAlias,
     ReclassifyJob,
+    ExpertsModeQueryLogs,
   ],
   migrations: ['src/db/migrations/**/*.ts'],
   subscribers: [],

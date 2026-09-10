@@ -4,7 +4,7 @@ import * as fs from 'fs'
 import * as http from 'http'
 import * as os from 'os'
 import * as path from 'path'
-import { SYS_V1, SYS_V2 } from '@/app/api/answer/route'
+import { SYS_V1, SYS_V2 } from '@/lib/answer-synthesis'
 import { parseControls } from '../cli'
 import {
   PreflightAbortError,

@@ -181,7 +181,7 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
 
 describe('POST /api/answer — v2 cited sentences', () => {
   it('v2 is the default prompt and asks for cites', async () => {
-    const { SYS_V2 } = await import('@/app/api/answer/route')
+    const { SYS_V2 } = await import('@/lib/answer-synthesis')
     await post({ query: 'q', docs: docs(3) })
     expect(sentBody().messages[0]).toEqual({ role: 'system', content: SYS_V2 })
     expect(SYS_V2).toContain('"cites"')

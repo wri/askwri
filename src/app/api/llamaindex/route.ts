@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ANSWER_PRESET, CITE_PRESET } from '@/config/retrieval'
 import { extractPassage } from '@/app/utils/passage'
+import { FORWARDABLE_FIELDS } from '@/lib/llamaindex-client'
 
 const SEARCH_SERVICE_URL =
   process.env.SEARCH_SERVICE_URL || 'http://localhost:8000'
@@ -42,34 +43,6 @@ interface LlamaIndexResponse {
   /** Slice 6 (#356): abstain flag — core topic absent from corpus. */
   likely_off_topic?: boolean
 }
-
-/**
- * Body fields the gateway forwards to the search service's /query. Every name
- * is a QueryRequest field (search-service/app/main.py). The eval harness
- * sweeps retrieval through these; anything not listed is rejected so a stray
- * field can never override a mode preset.
- */
-export const FORWARDABLE_FIELDS: ReadonlySet<string> = new Set([
-  'max_results',
-  'similarity_threshold',
-  'include_metadata',
-  'rerank',
-  'vector_top_k',
-  'bm25_top_k',
-  'rerank_top_n',
-  'fusion_top_k',
-  'dense_weight',
-  'sparse_weight',
-  'expansion_lane_weight',
-  'expansion',
-  'facets',
-  'min_year',
-  'max_year',
-  'excluded_keywords',
-  'required_program',
-  'cite_doc_ids',
-  'return_intermediate_results',
-])
 
 export async function POST(req: NextRequest) {
   try {
