@@ -303,8 +303,14 @@ export async function updateDocumentFields(
   await AppDataSource.transaction(async (em) => {
     await em.getRepository(Document).save(doc)
     if (Object.keys(provenance).length > 0) {
+      // A human editing authors IS the verification the authors_format flag is
+      // asking for. Leaving it set would exclude the corrected document from
+      // author aggregation forever: consumers skip flagged fields, and nothing
+      // else can clear it (the repair script only sees external/llm rows).
       await em.query(
-        `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
+        'authors' in after
+          ? `UPDATE documents SET metadata_source = (metadata_source - 'authors_format') || $2::jsonb WHERE id = $1`
+          : `UPDATE documents SET metadata_source = metadata_source || $2::jsonb WHERE id = $1`,
         [id, JSON.stringify(provenance)],
       )
     }
