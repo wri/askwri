@@ -101,7 +101,19 @@ _EXTRACT_SCHEMA = {
     "properties": {
         "title": {"type": ["string", "null"]},
         "title_en": {"type": ["string", "null"]},
-        "authors": {"type": ["string", "null"]},
+        "authors": {
+            "type": ["array", "null"],
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "family_name": {"type": ["string", "null"]},
+                    "given_names": {"type": ["string", "null"]},
+                    "organization_name": {"type": ["string", "null"]},
+                },
+                "required": ["family_name", "given_names", "organization_name"],
+            },
+        },
         "doi": {"type": ["string", "null"]},
         "year_published": {"type": ["integer", "null"]},
         "article_type": {"type": ["string", "null"]},
@@ -120,6 +132,35 @@ def _extract_doi(text: str) -> str | None:
     return None
 
 
+def _format_authors(authors: object) -> str | None:
+    """Convert structured model output to the DMS semicolon-delimited string."""
+    if not isinstance(authors, list):
+        return None
+
+    formatted = []
+    for author in authors:
+        if not isinstance(author, dict):
+            continue
+        family = author.get("family_name")
+        given = author.get("given_names")
+        organization = author.get("organization_name")
+        family = family.strip() if isinstance(family, str) else ""
+        given = given.strip() if isinstance(given, str) else ""
+        organization = organization.strip() if isinstance(organization, str) else ""
+
+        # A model item must represent either a person or an organization.
+        if organization and (family or given):
+            continue
+        if organization:
+            formatted.append(organization)
+        elif family and given:
+            formatted.append(f"{family}, {given}")
+        elif family or given:
+            formatted.append(family or given)
+
+    return "; ".join(formatted) or None
+
+
 def _extract_metadata_llm(full_text: str, model: str) -> dict:
     """Extract bibliographic metadata from PDF text via one LLM call.
     Returns a dict with keys from _EXTRACT_FIELDS; values are None if not determinable.
@@ -131,7 +172,7 @@ def _extract_metadata_llm(full_text: str, model: str) -> dict:
             "You extract bibliographic metadata from research publication text. "
             "Return JSON with: title (the document's actual title, NOT a header, "
             "banner, or table-of-contents line), title_en, authors "
-            "(semicolon-separated full names), doi (the DOI string if present, "
+            "(an array of structured person or organization authors), doi (the DOI string if present, "
             "e.g. 10.xxxx/yyyy, else null), year_published (integer publication "
             "year if determinable, else null — use the year the document itself "
             "was published, preferring an explicit copyright or publication "
@@ -158,18 +199,26 @@ def _extract_metadata_llm(full_text: str, model: str) -> dict:
             "'Main Title: Subtitle'. Write English titles in Headline Case "
             "(Capitalize Principal Words); keep other languages' own casing "
             "conventions. Do not add quotes, commentary, or a trailing period.\n\n"
-            "AUTHORS. Transliterate every author name into the Latin alphabet, "
-            "e.g. '薛露露' -> 'Xue, Lulu'. When the document itself prints a "
-            "romanized form of a name, use that spelling rather than your own. "
-            "Return only the transliterated names — never the native script."
+            "AUTHORS. Return authors in document order. For a person, put the "
+            "family name in 'family_name', all given names in 'given_names', "
+            "and null in 'organization_name'. Separate name parts semantically "
+            "regardless of the order printed in the source. Prefer a romanized "
+            "form printed by the document; otherwise transliterate into the "
+            "Latin alphabet. For example, '薛露露' becomes family_name='Xue', "
+            "given_names='Lulu', and '陈科' becomes family_name='Chen', "
+            "given_names='Ke'. For a group or institution, set only "
+            "'organization_name'. Use null rather than guessing an unknown part. "
+            "Never put native-script and Latin versions in the same item."
         ),
         user=f"Document text (first ~12000 chars):\n{full_text[:12000]}",
         schema=_EXTRACT_SCHEMA,
         model=model,
         max_tokens=1000,
     )
-    # Normalize: ensure all expected keys exist
-    return {f: result.get(f) for f in _EXTRACT_FIELDS}
+    # Normalize: ensure all expected keys exist and keep the DB contract stable.
+    normalized = {f: result.get(f) for f in _EXTRACT_FIELDS}
+    normalized["authors"] = _format_authors(result.get("authors"))
+    return normalized
 
 
 def _extract_pdf_metadata(content: bytes) -> dict:

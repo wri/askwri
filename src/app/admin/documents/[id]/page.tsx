@@ -10,6 +10,7 @@ import { StatusChip } from '../../components/StatusChip'
 import { Tooltip } from '../../components/Tooltip'
 import { ReviewBar } from '../../components/ReviewBar'
 import { Flash } from '../../components/Flash'
+import { RelationsPanel } from '../../components/RelationsPanel'
 import { PROVENANCE_KEY, PROVENANCE_LABEL } from '@/lib/metadataProvenance'
 
 interface Detail {
@@ -150,6 +151,7 @@ const HISTORY_VERB: Record<string, string> = {
   import: 'import',
   create: 'created',
   delete: 'deleted',
+  author_format_repair: 'author format repair',
 }
 
 const historyLine = (e: any) => {
@@ -1327,6 +1329,14 @@ const DocumentEditorPage = () => {
                 </button>
               )}
             </details>
+          </section>
+
+          {/* Translation pairs (issue #325) */}
+          <section style={{ marginBottom: 32 }}>
+            <Heading size='md' style={{ marginBottom: 12 }}>
+              Translation pairs
+            </Heading>
+            <RelationsPanel docId={id} />
           </section>
         </>
       )}

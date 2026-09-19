@@ -6,7 +6,6 @@ import {
   getThemedColor,
   InlineMessage,
 } from '@worldresources/wri-design-systems'
-import { DocMeta, KP } from '@/lib/llamacloud'
 import { getCatalog } from '@/lib/catalog-cache'
 import { CitationCard } from './CitationCard'
 import {
@@ -15,6 +14,7 @@ import {
   titleFrom,
 } from '../../utils/utils'
 import { WhyMeta, SupportingCitationsProps } from './types'
+import { orderCitationItems } from './citations'
 
 export const SupportingCitations = ({
   supportingDocs,
@@ -25,8 +25,7 @@ export const SupportingCitations = ({
   sourceRelevance,
   coverageRating,
   coverageExplanation,
-  directlyCitedCount = 0,
-  citationLabels,
+  inline,
   passageWhy: externalPassageWhy,
   setPassageWhy: setExternalPassageWhy,
   passageWhyLoading: externalPassageWhyLoading,
@@ -58,18 +57,11 @@ export const SupportingCitations = ({
     })
   }, [])
 
-  // Flatten all passages and sort by relevance
-  const allItems = useMemo(() => {
-    const arr: { doc: DocMeta; kp: KP }[] = []
-    for (const d of supportingDocs) {
-      if (d.kps) {
-        for (const kp of d.kps) {
-          arr.push({ doc: d, kp })
-        }
-      }
-    }
-    return arr.sort((a, b) => b.kp.kp_relevance - a.kp.kp_relevance)
-  }, [supportingDocs])
+  // Flatten all passages; cited ones first in first-citation order
+  const { items: allItems, citedCount } = useMemo(
+    () => orderCitationItems(supportingDocs, inline),
+    [supportingDocs, inline],
+  )
 
   const paginatedItems = allItems
   const itemRefs = useRef<Record<number, HTMLElement | null>>({})
@@ -277,69 +269,64 @@ export const SupportingCitations = ({
         }}
       >
         <Heading size='md' flexShrink={0}>
-          Directly cited{' '}
-          {directlyCitedCount > 0 ? `(${directlyCitedCount})` : ''}
+          Directly cited {citedCount > 0 ? `(${citedCount})` : ''}
         </Heading>
         <Text paddingBottom='16px' color={getThemedColor('neutral', 700)}>
           Excerpts used directly to generate answer.
         </Text>
         {/* Directly cited cards */}
         <Box display='flex' flexDirection='column' gap='3'>
-          {paginatedItems
-            .slice(0, directlyCitedCount)
-            .map(({ doc, kp }, idx) => (
-              <CitationCard
-                key={`${doc.doc_id}-${kp.passage_id}`}
-                doc={doc}
-                kp={kp}
-                idx={idx}
-                catalogIndex={catalogIndex}
-                isActive={controlledPage === idx + 1}
-                isDirectlyCited
-                citationLabel={citationLabels?.[idx]}
-                sourceRelevance={sourceRelevance}
-                itemRef={(el) => {
-                  itemRefs.current[idx] = el
-                }}
-                passageWhy={passageWhy}
-                passageWhyLoading={passageWhyLoading}
-              />
-            ))}
+          {paginatedItems.slice(0, citedCount).map((item, idx) => (
+            <CitationCard
+              key={`${item.doc.doc_id}-${item.kp.passage_id}`}
+              doc={item.doc}
+              kp={item.kp}
+              idx={idx}
+              catalogIndex={catalogIndex}
+              isActive={controlledPage === idx + 1}
+              isDirectlyCited
+              citationLabel={item.label}
+              sourceRelevance={sourceRelevance}
+              itemRef={(el) => {
+                itemRefs.current[idx] = el
+              }}
+              passageWhy={passageWhy}
+              passageWhyLoading={passageWhyLoading}
+            />
+          ))}
         </Box>
-        {paginatedItems.length > directlyCitedCount && (
+        {paginatedItems.length > citedCount && (
           <>
             <Heading size='md' flexShrink={0} marginTop='4'>
               Additional reading{' '}
-              {paginatedItems.length - directlyCitedCount > 0
-                ? `(${paginatedItems.length - directlyCitedCount})`
+              {paginatedItems.length - citedCount > 0
+                ? `(${paginatedItems.length - citedCount})`
                 : ''}
             </Heading>
             <Text paddingBottom='8px' color={getThemedColor('neutral', 700)}>
-              Other potentially relevant excerpts not used to generate answer.
+              Other retrieved excerpts not cited in the answer.
             </Text>
             <Box display='flex' flexDirection='column' gap='3'>
-              {paginatedItems
-                .slice(directlyCitedCount)
-                .map(({ doc, kp }, i) => {
-                  const idx = directlyCitedCount + i
-                  return (
-                    <CitationCard
-                      key={`${doc.doc_id}-${kp.passage_id}`}
-                      doc={doc}
-                      kp={kp}
-                      idx={idx}
-                      catalogIndex={catalogIndex}
-                      isActive={controlledPage === idx + 1}
-                      isDirectlyCited={false}
-                      sourceRelevance={sourceRelevance}
-                      itemRef={(el) => {
-                        itemRefs.current[idx] = el
-                      }}
-                      passageWhy={passageWhy}
-                      passageWhyLoading={passageWhyLoading}
-                    />
-                  )
-                })}
+              {paginatedItems.slice(citedCount).map(({ doc, kp }, i) => {
+                const idx = citedCount + i
+                return (
+                  <CitationCard
+                    key={`${doc.doc_id}-${kp.passage_id}`}
+                    doc={doc}
+                    kp={kp}
+                    idx={idx}
+                    catalogIndex={catalogIndex}
+                    isActive={controlledPage === idx + 1}
+                    isDirectlyCited={false}
+                    sourceRelevance={sourceRelevance}
+                    itemRef={(el) => {
+                      itemRefs.current[idx] = el
+                    }}
+                    passageWhy={passageWhy}
+                    passageWhyLoading={passageWhyLoading}
+                  />
+                )
+              })}
             </Box>
           </>
         )}

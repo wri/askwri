@@ -1,0 +1,218 @@
+{
+  "_comment": "P2 alias seed derived from DOMAIN_EXPANSIONS (query_expansion.py), mapped onto the tag taxonomy. Reviewed by operator before qa apply (decision 2026-08-19). Aliases are lowercase phrases; matching is word-boundary, case-insensitive (app/alias_expand.py).",
+  "entries": [
+    {
+      "facet": "topic",
+      "value_id": "Finance",
+      "aliases": [
+        "financing",
+        "funding",
+        "investment",
+        "financial mechanisms",
+        "economic",
+        "costs",
+        "financieros",
+        "investimento"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Public Finance",
+      "aliases": [
+        "urban finance",
+        "transit financing",
+        "infrastructure funding",
+        "urban investment",
+        "municipal finance",
+        "transport finance",
+        "mobility financing"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Buses",
+      "aliases": [
+        "bus",
+        "transit",
+        "public transport",
+        "mass transit",
+        "brt",
+        "bus rapid transit"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Electric Mobility",
+      "aliases": [
+        "electric buses",
+        "e-buses",
+        "electric transit",
+        "battery buses",
+        "zero-emission buses",
+        "ev buses"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Micromobility",
+      "aliases": [
+        "bike sharing",
+        "e-bikes",
+        "electric bikes",
+        "scooters",
+        "bike-share",
+        "bicycle sharing",
+        "dockless",
+        "shared mobility"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Green Hydrogen",
+      "aliases": [
+        "hydrogen",
+        "fuel cell",
+        "h2",
+        "hydrogen fuel",
+        "fuel cells",
+        "alternative fuels"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Climate Change",
+      "aliases": [
+        "climate",
+        "emissions",
+        "greenhouse gas",
+        "ghg",
+        "carbon",
+        "decarbonization",
+        "decarbonisation",
+        "low-carbon"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Pollution",
+      "aliases": [
+        "air quality",
+        "emissions",
+        "air pollution",
+        "particulate matter",
+        "pm2.5",
+        "nox"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Housing",
+      "aliases": [
+        "affordable housing",
+        "informal settlements",
+        "residential",
+        "housing crisis",
+        "land use",
+        "tod",
+        "transit-oriented development"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Land Value Capture",
+      "aliases": [
+        "lvc",
+        "value capture",
+        "betterment levy",
+        "land value tax",
+        "property tax"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Infrastructure",
+      "aliases": ["built environment", "facilities", "systems", "networks"]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Public Charging Infrastructure",
+      "aliases": [
+        "charging",
+        "charging infrastructure",
+        "charging stations",
+        "ev charging",
+        "chargers",
+        "charging network"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Health",
+      "aliases": [
+        "public health",
+        "health impacts",
+        "health outcomes",
+        "wellness",
+        "safety"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Equity",
+      "aliases": [
+        "equitable",
+        "inclusive",
+        "accessibility",
+        "social equity",
+        "environmental justice"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Policy",
+      "aliases": [
+        "policies",
+        "regulation",
+        "governance",
+        "legislation",
+        "mandates"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Urban Planning",
+      "aliases": [
+        "planning",
+        "city planning",
+        "transport planning",
+        "land use planning"
+      ]
+    },
+    {
+      "facet": "topic",
+      "value_id": "Nature-Based Solutions",
+      "aliases": [
+        "nature",
+        "nbs",
+        "green infrastructure",
+        "natural infrastructure",
+        "green space",
+        "parks"
+      ]
+    },
+    {
+      "facet": "office",
+      "value_id": "WRI Brasil",
+      "aliases": ["brazil", "brazilian", "brasil", "são paulo", "rio"]
+    },
+    {
+      "facet": "office",
+      "value_id": "WRI India",
+      "aliases": ["bangalore", "bengaluru"]
+    }
+  ],
+  "_unmapped": [
+    "children — no Children/Youth topic tag exists on qa (School Buses and Public Schools are too narrow)"
+  ],
+  "_note_geo": "Geo groups ride the office tags (2026-08-20): the expander reads aliases from ALL tags, and since the curated-order fix the label is never emitted as an expansion. Alias order is curated — the first two after the matched term are what the lane emits."
+}

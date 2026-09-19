@@ -58,6 +58,19 @@ class Settings(BaseSettings):
     # flag-off rebuild restores byte-identical current weights (rollback).
     sparse_en_handles: bool = False
 
+    # Translation-pair suggestion thresholds (issue #325). Title is the primary
+    # trigger; embedding is a high-bar secondary for retitled near-duplicates.
+    # Measured on qa 2026-08-13: known pairs' embedding cosines span 0.63-0.76
+    # while revised editions/country series reach 0.85-0.95.
+    relation_title_threshold: float = 0.75
+    relation_embed_threshold: float = 0.85
+
+    # Query-time translation-pair filtering (issue #325). OFF by default:
+    # activation is eval-gated (#333) — run cite+answer evals flag-off then
+    # flag-on on the same harness before enabling in any environment.
+    # Rollback is flag off; no reindex either way.
+    translation_pairs_enabled: bool = False
+
     # Query-side translation for the SPARSE lane only (cross-lingual, 2026-07-24).
     # The BM25 lane is English-only by construction, so an English query cannot
     # match a Spanish body — not because the stemmer cannot handle Spanish, but
@@ -80,19 +93,94 @@ class Settings(BaseSettings):
     # every first-hit translation times out and degrades to the untranslated
     # query. Kept as the failure-soft reference config; a real enablement
     # needs a faster model or a precomputed dictionary.
+    # Priced in app/usage_meter.py — update its table when changing this.
     query_translation_model: str = "gpt-5-mini"
     query_translation_timeout_s: float = 3.0
+
+    # Query understanding (design 2026-08-19). Dark by default: flag-off is
+    # byte-identical to the pre-feature pipeline (guarded by
+    # tests/test_understanding.py + the P1 gate's flag-off eval run).
+    # P1 ships the deterministic tier only (facet parsers, trigram
+    # did-you-mean, tag-embedding topic sensing). Cost of enabling (P1): two
+    # small SQL lookups + one cached embed reuse per query; no LLM call.
+    query_understanding_enabled: bool = False
+    # Initial conservative thresholds — MUST be re-derived from the labeled
+    # fixture sets (tests/fixtures/didyoumean_queries.json,
+    # facet_queries.json) before any flag-on deploy; never hand-tuned.
+    spell_suggest_similarity: float = 0.45
+    # df floor for correction targets: a suggested term must appear at least
+    # this many times across titles/tags/aliases. Blocks 'corrections' of
+    # ordinary English words to one-off title terms. Cost of raising it:
+    # misspellings of rare-but-real corpus terms stop getting suggestions.
+    spell_suggest_min_df: int = 2
+    topic_sense_top_k: int = 3
+    topic_sense_min_cosine: float = 0.30
+    # P2/P2.5 multi-lane fusion (design 2026-08-19 §4.3). Dark by default;
+    # active only when query_understanding_enabled is ALSO on (lanes_active()).
+    # Cost of enabling: one tag_aliases SELECT per query (diagnostic) plus,
+    # when topic_sense matches tags, one TopicTagRetriever DB query (docs-by-tag)
+    # and 2x weight on the original lanes. Flag-on ALSO retires
+    # DOMAIN_EXPANSIONS OR-stuffing on the original sparse lane (the gated
+    # retirement, spec §4.3). Flag-off is byte-identical, OR-stuffing included.
+    query_expansion_lanes_enabled: bool = False
+    # Which facets get a semantic retrieval lane (one lane per matching facet).
+    # Default topic-only = P2.5 byte-identical. Add 'geography' to enable the
+    # geo lane (gated, P2.6). No per-facet flag; the master flag above gates all.
+    expansion_facets: list[str] = ["topic"]
+    # Alias-expansion caps — mirror expand_query_conservative's shape
+    # (3 groups x 2 terms) so what replaces it is auditable against it.
+    alias_expand_max_groups: int = 3
+    alias_expand_max_terms: int = 2
+
+    # P3 LLM understanding sidecar (design 2026-08-19 §4.1, §7). Dark by
+    # default; active only when query_understanding_enabled is ALSO on.
+    # One strict json_schema OpenAI call per query, lru_cached, short
+    # timeout, one attempt (no retry loop in the request path, design §5).
+    # Model is a small fast current-gen model via the existing OpenAI path
+    # (design decision #5 — NOT Bedrock/Haiku). gpt-5.4-mini: OpenAI's fast
+    # mini (2x faster than gpt-5-mini), clean variants, valid structured JSON.
+    # LLM facets are suggest-only (slice 1) so facet noise is invisible;
+    # variants (the retrieval win) are clean. Measured ~0.8-1.0s vs
+    # gpt-5.6-luna ~2-3s. Swap is an env/code change, not a contract change.
+    # Flag-off is byte-identical to the deterministic-only tier.
+    query_understanding_llm_enabled: bool = False
+    # Priced in app/usage_meter.py — update its table when changing this.
+    query_understanding_llm_model: str = "gpt-5.4-mini"
+    query_understanding_llm_timeout_s: float = 4.0
+
+    # Slice 5a (design §4.3 + user direction 2026-08-25): per-mode
+    # expansion-lane RRF weight. Values DERIVED from a live-qa sweep
+    # (eval-minimal EVAL_EXPANSION_LANE_WEIGHT, 2026-08-26), not guessed:
+    #   cite 0.5: best on cite_02 (MAP 80.1 / aR 88.8 vs 72.4 / 86.7 at 1.0) —
+    #     the 2x original multiplier + 0.5 expansion is the sweet spot; 1.0
+    #     dilutes direct-match goldens (d3 20->100 at 0.5). Regresses cite_01
+    #     q8 (67->47) — an irreducible cite_01/cite_02 tradeoff (slice 5b:
+    #     per-query intent adaptation, not a single mode default).
+    #   answer 1.0: best on answer_02 (MAP 80.2 / aR 87.5); 0.25 HURTS
+    #     (73.9 / 81.3). Answer retrieves the specific source doc — expansion
+    #     lanes help find it, so high weight helps. Precision-first here means
+    #     "find the one right doc", not "narrow the pool".
+    # The 2x original multiplier stays (the recall-vs-precision asymmetry).
+    # EXPANSION_LANE_WEIGHT env overrides both (back-compat with qa.tfvars).
+    # Re-gate at production corpus scale before any production flag-on.
+    cite_expansion_lane_weight: float = 0.5
+    answer_expansion_lane_weight: float = 1.0
 
     # Phase 1 ingestion worker
     worker_poll_seconds: int = 10
     worker_max_attempts: int = 3
     worker_reap_minutes: int = 15              # requeue 'running' jobs idle longer than this
-    worker_llm_model: str = "gpt-5-mini"      # summaries + tagging; override in env
+    worker_llm_model: str = "gpt-5.6-luna"   # summaries + tagging; override in env
     intake_s3_prefix: str = "intake/"          # watched S3 prefix (bulk drop)
     intake_local_dir: str = ""                 # local-dev alternative to S3 intake
     documents_s3_bucket: str = ""              # reuse the existing env var name
     documents_s3_prefix: str = "documents/"
     tag_confidence_accept: float = 0.7         # >= -> accepted, else suggested
+    tag_candidate_top_n: int = 20              # retrieve-then-classify candidate set size
+    tag_reclassify_concurrency: int = 4        # reclassify_jobs claim parallelism
+    tag_embed_batch_size: int = 100            # one-time/batch tag-embedding build
+    classify_topic_only: bool = False          # restrict a classify run to the topic facet
+    reclassify_poll_first: bool = True          # poll reclassify_jobs before ingestion_jobs
     quality_min_chars_per_page: int = 200      # extraction_confidence gate input
 
     # Dense embedding model for BOTH worker chunk writes and query-side
@@ -123,6 +211,7 @@ class Settings(BaseSettings):
     # embed-v4 is not natively there — call the nearest hosting region
     # (cross-region, still in-AWS/IAM).
     bedrock_embed_region: str = "us-east-1"
+    # Priced in app/usage_meter.py — update its table when changing this.
     bedrock_embed_model_id: str = "cohere.embed-v4:0"
     # Per-call text batch for bulk document embeds (Cohere API cap 96 is the
     # ceiling). Large docs at 96 blow the tokens/min bucket and error whole
@@ -133,6 +222,7 @@ class Settings(BaseSettings):
     # Bedrock placement for Cohere Rerank 3.5 (spec v3 §5): not hosted in
     # us-east-2 — call the nearest hosting region.
     bedrock_rerank_region: str = "us-east-1"
+    # Priced in app/usage_meter.py — update its table when changing this.
     bedrock_rerank_model_id: str = "cohere.rerank-v3-5:0"
 
     # Candidate-set size sent to the Rerank API. Cost/latency scale with doc
@@ -153,6 +243,26 @@ class Settings(BaseSettings):
     # chunks came from a single doc after the cutover). Value tuned via the
     # answer per-doc-cap A/B; None preserves the pre-existing behaviour.
     answer_rerank_per_doc_cap: int | None = None
+
+    # Answer-mode query translation (design 2026-09-09,
+    # docs/plans/2026-09-09-answer-mode-query-translation-design.md): translate
+    # the question into the selection's non-English languages, seed the rerank
+    # candidates from a dense retrieval per translation, and rerank once per
+    # query with a max-merge. Flag-dark: off => byte-identical behavior.
+    answer_translation_enabled: bool = False
+    answer_translation_max_langs: int = 2
+    # The seed is recall, not precision — Cohere filters it. Corpus-wide dense
+    # under a translated query puts the evalset's zh evidence at ranks 59-189
+    # (measured 2026-09-09); doc-scoping trims a little more. 200 within the
+    # selection carries it. Cost note: candidates 100 + 200×langs, each rerank
+    # call bills per 100 docs — see the design doc's cost section.
+    answer_translation_seed_k: int = 200
+    # The sparse lane's 3s query_translation_timeout_s is tuned for cite-mode
+    # latency ("a slow translator must not hold a search hostage"); observed
+    # 2026-09-09, a gpt-5-mini zh translation of an answer question exceeds
+    # it (~3.2s+). Answer mode runs multi-second end to end (dense + rerank +
+    # synthesis), so it can afford its own budget.
+    answer_translation_timeout_s: float = 8.0
 
     # Cite mode thresholds on Cohere Rerank's 0-1 relevance-score scale
     # (spec v3 §0.1: re-derived, NOT the old ms-marco raw logits — those

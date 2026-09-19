@@ -1,6 +1,34 @@
 import { ChatResponse } from './llamacloud'
 
 /**
+ * Body fields the gateway forwards to the search service's /query. Every name
+ * is a QueryRequest field (search-service/app/main.py). The eval harness
+ * sweeps retrieval through these; anything not listed is rejected so a stray
+ * field can never override a mode preset.
+ */
+export const FORWARDABLE_FIELDS: ReadonlySet<string> = new Set([
+  'max_results',
+  'similarity_threshold',
+  'include_metadata',
+  'rerank',
+  'vector_top_k',
+  'bm25_top_k',
+  'rerank_top_n',
+  'fusion_top_k',
+  'dense_weight',
+  'sparse_weight',
+  'expansion_lane_weight',
+  'expansion',
+  'facets',
+  'min_year',
+  'max_year',
+  'excluded_keywords',
+  'required_program',
+  'cite_doc_ids',
+  'return_intermediate_results',
+])
+
+/**
  * LlamaIndex client - direct replacement for LlamaCloud with full control
  */
 
@@ -9,6 +37,10 @@ interface LlamaIndexQueryOptions {
   similarity_threshold?: number
   include_metadata?: boolean
   rerank?: boolean
+  // Query understanding (design 2026-08-19 §4.6) — forwarded verbatim via
+  // the ...options spread in route.ts. facets presence disables auto-detect.
+  facets?: { facet: string; value: string }[]
+  expansion?: boolean
 }
 
 async function callLlamaIndexService(
@@ -38,31 +70,6 @@ async function callLlamaIndexService(
   return response.json()
 }
 
-export async function chatAnswerLlamaIndex(
-  query: string,
-  overrides?: Record<string, any>,
-): Promise<ChatResponse> {
-  const options: LlamaIndexQueryOptions = {
-    max_results: 100, // Increased for 203-doc corpus (answer mode: precision)
-    similarity_threshold: 0.05, // Slightly more selective for answers
-    include_metadata: true,
-    rerank: true,
-    ...overrides,
-  }
-
-  const data = await callLlamaIndexService(query, 'answer', options)
-
-  return {
-    message: '',
-    docs: data.docs,
-    usage: data.usage,
-    debug: {
-      llamaindex: true,
-      ...data.debug,
-    },
-  }
-}
-
 export async function chatCiteLlamaIndex(
   query: string,
   overrides?: Record<string, any>,
@@ -85,6 +92,8 @@ export async function chatCiteLlamaIndex(
       llamaindex: true,
       ...data.debug,
     },
+    queryUnderstanding: data.query_understanding ?? null,
+    likely_off_topic: data.likely_off_topic ?? false,
   }
 }
 

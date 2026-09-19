@@ -1,8 +1,7 @@
 """End-to-end pipeline integration test.
 
 Drives the REAL pipeline (no stage mocked except external services:
-LLM + embeddings + reindex POST) against a dedicated scratch DB:
-  askwri_pipeline_test
+LLM + embeddings + reindex POST) against a UUID-suffixed scratch DB.
 
 Hermetic pattern: create / migrate / drop — never touches the qa database.
 Skip guard: requires DATABASE_URL (same convention as other DB tests).
@@ -10,6 +9,7 @@ Skip guard: requires DATABASE_URL (same convention as other DB tests).
 import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 import psycopg
@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(
 # Constants
 # ---------------------------------------------------------------------------
 _SUPERDB_URL = "postgresql://askwri:password@localhost:5432/postgres"
-_TEST_DB = "askwri_pipeline_test"
+_TEST_DB = f"askwri_pipeline_{uuid.uuid4().hex[:12]}"
 _TEST_DB_URL = f"postgresql://askwri:password@localhost:5432/{_TEST_DB}"
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _FIXTURE_PDF = Path(__file__).parent / "fixtures" / "sample.pdf"
@@ -60,7 +60,8 @@ def _fake_chat_json(system, user, schema, model, max_tokens=1500):
 
     Detect which stage is calling by inspecting the schema properties:
     - summarize schema has 'long' property -> return summary shape
-    - classify schema has facet-array properties -> return classification shape
+    - classify topic schema has 'topic' property -> return topic picks
+    - classify non-topic schema has facet-array properties -> return per-facet picks
     """
     props = schema.get("properties", {})
     if set(props) == {"long", "short"}:
@@ -72,14 +73,20 @@ def _fake_chat_json(system, user, schema, model, max_tokens=1500):
     # take the summary branch above
     assert "long" not in props and "short" not in props, \
         f"Ambiguous schema in fake chat_json — properties: {set(props)}"
-    # Classification schema: return topic picks with both accepted and suggested confidence
-    return {
-        "topic": [
+    # Return only the facets present in this schema's properties
+    result = {}
+    if "topic" in props:
+        result["topic"] = [
             {"value": "forests", "confidence": 0.9},
             {"value": "water", "confidence": 0.5},
-        ],
-        "doc_type": [],
-    }
+        ]
+    if "doc_type" in props:
+        result["doc_type"] = []
+    # Handle any other non-topic facets that might appear
+    for facet in props:
+        if facet not in result:
+            result[facet] = []
+    return result
 
 
 # Records every parse-stage metadata-extraction call; _run_full_pipeline resets it.
@@ -99,14 +106,27 @@ def _fake_embed_texts(texts):
 
 
 def _seed_tags(conn) -> None:
-    """Seed taxonomy tags required by the classify stage."""
+    """Seed taxonomy tags required by the classify stage.
+
+    Also inserts tag_embeddings for topic tags so the retrieve-then-classify
+    path finds candidates.
+    """
     conn.execute("DELETE FROM tags")
+    conn.execute("DELETE FROM tag_embeddings")
     for facet, value_id in [("topic", "forests"), ("topic", "water"), ("doc_type", "report")]:
-        conn.execute(
+        tag_id = conn.execute(
             """INSERT INTO tags (facet, value_id, taxonomy_version)
-               VALUES (%s, %s, 'v1')""",
+               VALUES (%s, %s, 'v1')
+               RETURNING id""",
             (facet, value_id),
-        )
+        ).fetchone()[0]
+        if facet == "topic":
+            vec_str = "[" + ",".join("0.1" for _ in range(1536)) + "]"
+            conn.execute(
+                """INSERT INTO tag_embeddings (tag_id, embedding_model, dimension, embedding, embedded_text, embedded_at)
+                   VALUES (%s, 'cohere-embed-v4', 1536, %s::vector, %s, now())""",
+                (tag_id, vec_str, value_id),
+            )
     conn.commit()
 
 
@@ -136,6 +156,10 @@ def _run_full_pipeline(monkeypatch, tmp_path) -> None:
     # Post-cutover the embed stage dispatches to Bedrock for the default
     # cohere-embed-v4 model — stub that lane too (no AWS calls in tests).
     monkeypatch.setattr("worker.stages.embed._embed_texts_bedrock", _fake_embed_texts)
+    # classify now calls embed_one (Bedrock) for retrieve-then-classify;
+    # stub it + sweep_pending so no real Bedrock/AWS calls happen in tests.
+    monkeypatch.setattr("worker.stages.classify.embed_one", lambda text: [0.1] * 1536)
+    monkeypatch.setattr("worker.stages.classify.sweep_pending", lambda conn, batch_size=None: 0)
 
     # 1. Intake sweep
     from worker import intake_s3
@@ -156,7 +180,7 @@ def _run_full_pipeline(monkeypatch, tmp_path) -> None:
 
 @pytest.fixture(scope="session")
 def pipeline_test_db():
-    """Create askwri_pipeline_test, apply migrations, yield URL, then drop."""
+    """Create a uniquely named scratch DB, apply migrations, then drop it."""
     with psycopg.connect(_SUPERDB_URL, autocommit=True) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {_TEST_DB}")
         conn.execute(f"CREATE DATABASE {_TEST_DB}")
@@ -468,6 +492,8 @@ class TestWorkerPipeline:
         monkeypatch.setattr("worker.stages.classify.chat_json", _fake_chat_json)
         monkeypatch.setattr("worker.stages.embed._embed_texts", _fake_embed_texts)
         monkeypatch.setattr("worker.stages.embed._embed_texts_bedrock", _fake_embed_texts)
+        monkeypatch.setattr("worker.stages.classify.embed_one", lambda text: [0.1] * 1536)
+        monkeypatch.setattr("worker.stages.classify.sweep_pending", lambda conn, batch_size=None: 0)
         from app.config import get_settings
         get_settings.cache_clear()
 

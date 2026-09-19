@@ -1,12 +1,15 @@
 import asyncio
+import contextvars
 import logging
 from datetime import datetime, timezone
 import os
 import time
 import pickle
-from typing import List, Dict, Any, Optional
+import re
+from typing import List, Dict, Any, Optional, Tuple
 from contextlib import asynccontextmanager
 from app.env import load_env
+from app.core_topic import core_topic_candidates
 import certifi
 import httpx
 
@@ -65,7 +68,7 @@ if _use_custom_ssl_client:
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 # Import caching system
 from app.cache_system import AskWRICache
 
@@ -81,11 +84,14 @@ from llama_index.core import (
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.core.retrievers import BaseRetriever
-from llama_index.core.schema import NodeWithScore, QueryBundle
+from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.embeddings.openai import OpenAIEmbedding
 
+from app import usage_meter
 from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
+from app.translation_pairs import load_confirmed_pairs
+from app.understanding import build_understanding, lanes_active, understanding_active, Suggestion
 
 settings = get_settings()
 
@@ -129,6 +135,14 @@ service_state = {
     "dense_error": None,
 }
 
+class FacetSpec(BaseModel):
+    """Explicit chip state from the UI (design §4.6). Loose on purpose —
+    validation happens when it becomes an understanding.Facet; an invalid
+    chip is dropped there, never a 422 here."""
+    facet: str
+    value: str
+
+
 class QueryRequest(BaseModel):
     query: str
     mode: str = "cite"  # "answer" or "cite"
@@ -143,6 +157,9 @@ class QueryRequest(BaseModel):
     dense_weight: float = 0.5
     sparse_weight: float = 0.5
     fusion_top_k: Optional[int] = None  # RRF fusion limit (None = mode default: 500 cite, 100 answer)
+    # 5a sweep knob: override the per-mode expansion-lane weight for data-driven
+    # tuning without a redeploy. None -> per-mode config default (cite 1.0 / answer 0.25).
+    expansion_lane_weight: Optional[float] = None
     # Metadata filtering
     min_year: Optional[int] = None  # Filter documents by minimum publication year
     max_year: Optional[int] = None  # Filter documents by maximum publication year
@@ -152,6 +169,9 @@ class QueryRequest(BaseModel):
     cite_doc_ids: Optional[List[str]] = None  # List of doc_ids to filter results (answer mode)
     # Diagnostic parameter
     return_intermediate_results: bool = False  # Return stage-by-stage results for debugging
+    # Query understanding (design 2026-08-19 §4.6) — additive only.
+    facets: Optional[List[FacetSpec]] = None  # explicit chip state; presence disables auto-detect
+    expansion: bool = True                    # eval control: False forces raw-query behavior
 
 class DocumentResult(BaseModel):
     doc_id: str
@@ -168,6 +188,17 @@ class QueryResponse(BaseModel):
     query: str
     mode: str
     debug: Dict[str, Any]
+    # Dollar cost of this request's paid API calls (app/usage_meter.py):
+    # {"calls": [...], "total_usd": float}. Additive — was always null before.
+    usage: Optional[Dict[str, Any]] = None
+    # Query understanding (design 2026-08-19 §4.6) — additive only.
+    query_understanding: Optional[Dict[str, Any]] = None
+    # Slice 6 (#356): abstain flag — the core topic is absent from the corpus
+    # vocabulary; the results below are likely off-topic. The UI renders the
+    # empty-state banner ("No strong matches for X — WRI hasn't published on
+    # this topic; the results below are likely off-topic") and still shows the
+    # partial-tier docs. Additive; False by default (flag-off byte-identical).
+    likely_off_topic: bool = False
     # Optional diagnostic fields
     vector_results: Optional[List[Dict[str, Any]]] = None
     bm25_results: Optional[List[Dict[str, Any]]] = None
@@ -187,6 +218,9 @@ class HybridFusionRetriever(BaseRetriever):
         sparse_weight: Optional[float] = None,
         fusion_top_k: Optional[int] = None,
         bm25_top_k: Optional[int] = None,
+        extra_lanes: Optional[List[Dict[str, Any]]] = None,
+        domain_expansion: bool = True,
+        expansion_lane_weight: Optional[float] = None,  # 5a: per-mode; None -> sparse_weight (back-compat)
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -195,6 +229,16 @@ class HybridFusionRetriever(BaseRetriever):
         self.mode = mode
         self.similarity_threshold = similarity_threshold
         self.bm25_top_k = bm25_top_k
+
+        # P2 lane list (design §4.3): additive lanes beyond the original
+        # {dense, sparse} pair. Each: {"name", "retriever", "query_str",
+        # "weight" (None -> sparse_weight), "top_k" (None -> no slice)}.
+        self.extra_lanes = list(extra_lanes) if extra_lanes else []
+        # False = the gated DOMAIN_EXPANSIONS retirement (P2 flag-on).
+        self.domain_expansion = domain_expansion
+        # 5a: per-mode expansion-lane RRF weight (cite 1.0 recall-first / answer
+        # 0.25 precision-first). None -> sparse_weight (pre-5a back-compat).
+        self.expansion_lane_weight = expansion_lane_weight
 
         # Weights default to 0.5/0.5 if not specified by caller
         self.dense_weight = dense_weight if dense_weight is not None else 0.5
@@ -219,7 +263,9 @@ class HybridFusionRetriever(BaseRetriever):
         # result lists ~40% in the 2026-07-24 probe. See query_expansion.py.
         from app.query_expansion import sparse_query_for
 
-        expanded_query = sparse_query_for(query_bundle.query_str)
+        expanded_query = sparse_query_for(
+            query_bundle.query_str, domain_expansion=self.domain_expansion
+        )
         if expanded_query != query_bundle.query_str:
             logger.info(f"Sparse query: {query_bundle.query_str[:50]}... → {expanded_query[:120]}...")
         expanded_bundle = QueryBundle(query_str=expanded_query)
@@ -230,18 +276,32 @@ class HybridFusionRetriever(BaseRetriever):
         self.timings = {}
 
         def _timed(fn, key, arg):
+            # Pool threads don't inherit contextvars, so run each lane in a
+            # copy of the request context — usage_meter records made inside
+            # (query embed, translation) land in the request's ledger.
+            ctx = contextvars.copy_context()
+
             def run():
                 t0 = time.time()
-                out = fn(arg)
+                out = ctx.run(fn, arg)
                 self.timings[key] = round((time.time() - t0) * 1000, 1)
                 return out
             return run
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        self.degraded_lanes = []
+        extra_results: Dict[str, List[NodeWithScore]] = {}
+        pool_size = 2 + len(self.extra_lanes)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=pool_size) as executor:
             dense_future = executor.submit(
                 _timed(self.vector_retriever.retrieve, "dense_ms", query_bundle))
             sparse_future = executor.submit(
                 _timed(self.bm25_retriever.retrieve, "sparse_ms", expanded_bundle))
+            extra_futures = {
+                lane["name"]: executor.submit(
+                    _timed(lane["retriever"].retrieve, f"{lane['name']}_ms",
+                           QueryBundle(query_str=lane["query_str"])))
+                for lane in self.extra_lanes
+            }
             # Post-cutover the dense lane is a Bedrock API call with no local
             # fallback (query embed via BedrockCohereQueryEmbedding). Degrade
             # to sparse-only rather than 500 — mirrors the rerank lane's
@@ -260,6 +320,21 @@ class HybridFusionRetriever(BaseRetriever):
                 service_state["dense_error"] = str(exc)
                 dense_results = []
             sparse_results = sparse_future.result()
+            # Extra lanes are additive recall: a failed lane is dropped, the
+            # query proceeds (spec §5 — degrade toward P1 behavior).
+            for lane in self.extra_lanes:
+                try:
+                    lane_results = extra_futures[lane["name"]].result()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        f"{lane['name']} lane failed ({exc}) — lane dropped (failure-soft)"
+                    )
+                    self.degraded_lanes.append(lane["name"])
+                    continue
+                lane_top_k = lane.get("top_k")
+                if lane_top_k is not None:
+                    lane_results = lane_results[:lane_top_k]
+                extra_results[lane["name"]] = lane_results
 
         # Slice BM25 results to requested top_k (BM25Retriever is a singleton built
         # at startup with similarity_top_k=1000; per-request limit applied here)
@@ -269,23 +344,48 @@ class HybridFusionRetriever(BaseRetriever):
         logger.info(f"Dense retrieval: {len(dense_results)} results")
         logger.info(f"Sparse retrieval: {len(sparse_results)} results")
 
-        # Apply RRF (Reciprocal Rank Fusion)
+        # Multi-lane weighted RRF (design §4.3). Original lanes at 2x ONLY
+        # when an expansion lane materialized (operator decision 2026-08-19):
+        # no lane -> weights untouched -> flag-on-no-topic-tags == P1 behavior.
+        # k=60 and node-id dedupe unchanged.
+        if extra_results:
+            w_dense, w_sparse = self.dense_weight * 2.0, self.sparse_weight * 2.0
+        else:
+            w_dense, w_sparse = self.dense_weight, self.sparse_weight
+        lane_specs = [("dense", dense_results, w_dense),
+                      ("sparse", sparse_results, w_sparse)]
+        for lane in self.extra_lanes:
+            if lane["name"] not in extra_results:
+                continue
+            lane_weight = lane.get("weight")
+            if lane_weight is None:
+                # 5a: per-mode expansion-lane weight (cite 1.0 / answer 0.25);
+                # fall back to sparse_weight when not set (pre-5a back-compat).
+                lane_weight = self.expansion_lane_weight if self.expansion_lane_weight is not None else self.sparse_weight
+            lane_specs.append((
+                lane["name"], extra_results[lane["name"]],
+                lane_weight,
+            ))
+
         fused_scores = {}
-
-        # Process dense results
-        for i, node_with_score in enumerate(dense_results):
-            node_id = node_with_score.node.node_id
-            rrf_score = self.dense_weight * (1.0 / (60 + i + 1))  # k=60 is standard
-            fused_scores[node_id] = fused_scores.get(node_id, 0) + rrf_score
-
-        # Process sparse results
-        for i, node_with_score in enumerate(sparse_results):
-            node_id = node_with_score.node.node_id
-            rrf_score = self.sparse_weight * (1.0 / (60 + i + 1))
-            fused_scores[node_id] = fused_scores.get(node_id, 0) + rrf_score
+        lane_rank_maps = {}
+        for lane_name, lane_results, lane_weight in lane_specs:
+            # Per-lane rank attribution (design 2026-08-19 P0). These are the
+            # rankings that FED RRF — the only valid basis for lane-level
+            # claims (cross-lingual design §5.2).
+            lane_rank_maps[lane_name] = {
+                n.node.node_id: i + 1 for i, n in enumerate(lane_results)
+            }
+            for i, node_with_score in enumerate(lane_results):
+                node_id = node_with_score.node.node_id
+                rrf_score = lane_weight * (1.0 / (60 + i + 1))  # k=60 is standard
+                fused_scores[node_id] = fused_scores.get(node_id, 0) + rrf_score
 
         # Combine and sort by fused score
-        all_nodes = {node.node.node_id: node for node in dense_results + sparse_results}
+        all_lane_results = dense_results + sparse_results
+        for lane_name, lane_results, _ in lane_specs[2:]:
+            all_lane_results = all_lane_results + lane_results
+        all_nodes = {node.node.node_id: node for node in all_lane_results}
 
         # Sort by fused score and take top k
         sorted_nodes = sorted(
@@ -293,6 +393,12 @@ class HybridFusionRetriever(BaseRetriever):
             key=lambda x: x[1],
             reverse=True
         )[:self.fusion_top_k]
+
+        self.lane_ranks = {
+            node_id: {name: lane_rank_maps[name].get(node_id)
+                      for name, _, _ in lane_specs}
+            for node_id, _ in sorted_nodes
+        }
 
         # Create final results
         final_results = []
@@ -843,6 +949,78 @@ async def health_check():
         "cache_stats": service_state["cache"].get_cache_stats() if service_state.get("cache") else {}
     }
 
+
+class TagsNearbyRequest(BaseModel):
+    """Experts mode (docs/superpowers/specs/2026-09-09-experts-mode-design.md §5.2).
+    Additive: /query is untouched."""
+    query: str
+    facets: List[str] = ["topic"]
+    # Bounded: the endpoint is unauthenticated and top_k reaches both a SQL
+    # LIMIT and a list slice. Out of range is a 422, never a silent rows[:-5]
+    # or a LIMIT 40000000.
+    top_k: int = Field(default=10, ge=1, le=100)
+
+
+class TagsNearbyResponse(BaseModel):
+    facets: Dict[str, List[Tuple[str, float]]]
+    model: str
+    degraded: List[str]
+
+
+@app.post("/tags/nearby", response_model=TagsNearbyResponse)
+async def tags_nearby(request: TagsNearbyRequest):
+    """Query→nearest tags per facet via tag_embeddings cosine. One embedding
+    call (LRU-cached with /query's), one indexed SELECT per facet. A facet
+    failure degrades that facet to [] and names it; it never 500s."""
+    from app import topic_sense
+    from app.config import get_settings
+
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required")
+    settings = get_settings()
+    # Deduped in request order: a repeated facet builds one output key, so
+    # running its probe and cosine query twice is pure waste and would name it
+    # twice in `degraded`.
+    facets = list(dict.fromkeys(request.facets))
+    out: Dict[str, List[Tuple[str, float]]] = {f: [] for f in facets}
+    degraded: List[str] = []
+    embed_model = service_state.get("embed_model")
+    if embed_model is None:
+        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=list(facets))
+    # Coverage is per FACET: a model can have topic rows and no geography rows,
+    # in which case the geography query returns zero rows without raising. Probe
+    # first so an uncovered facet is named in `degraded` (spec §5.2) rather than
+    # returning a silent [], and so a fully uncovered request costs no embedding.
+    covered: List[str] = []
+    for facet in facets:
+        try:
+            has_coverage = await asyncio.to_thread(
+                topic_sense.facet_has_tag_embeddings, settings.embedding_model, facet)
+        except Exception as exc:  # noqa: BLE001 — a probe outage degrades, never 500s
+            logger.warning(f"/tags/nearby {facet} coverage probe degraded: {exc}")
+            degraded.append(facet)
+            continue
+        if has_coverage:
+            covered.append(facet)
+        else:
+            degraded.append(facet)
+    if not covered:
+        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=degraded)
+    try:
+        emb = await asyncio.to_thread(embed_model.get_query_embedding, query)
+    except Exception as exc:  # noqa: BLE001 — never fail the caller on an embed error
+        logger.warning(f"/tags/nearby embed degraded: {exc}")
+        return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=list(facets))
+    for facet in covered:
+        try:
+            out[facet] = await asyncio.to_thread(topic_sense.nearby_tags, emb, facet, request.top_k)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"/tags/nearby {facet} degraded: {exc}")
+            degraded.append(facet)
+    return TagsNearbyResponse(facets=out, model=settings.embedding_model, degraded=degraded)
+
+
 def make_dense_retriever(top_k: int):
     """Dense lane: pgvector-backed or legacy in-memory, per settings."""
     if settings.retrieval_backend == "postgres":
@@ -853,6 +1031,304 @@ def make_dense_retriever(top_k: int):
     return VectorIndexRetriever(
         index=service_state["vector_index"], similarity_top_k=top_k
     )
+
+
+def _corpus_match(conn, term: str) -> str | None:
+    """The first corpus surface where `term` appears as a substring —
+    title / title_en / authors / tag / alias / summary — or None.
+
+    Author tokens may appear in any order within ONE semicolon-delimited
+    author, never across people. Summaries follow the catalog's authoritative
+    English-long-summary then legacy-import fallback. One query per term.
+    """
+    pattern = "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    author_tokens = re.findall(r"[^\W_]+", term.lower())
+    row = conn.execute(
+        """SELECT s.surface FROM (
+             (SELECT 'title' AS surface FROM documents WHERE title ILIKE %s LIMIT 1)
+             UNION ALL
+             (SELECT 'title_en' AS surface FROM documents WHERE title_en ILIKE %s LIMIT 1)
+             UNION ALL
+             (SELECT 'tag' AS surface FROM tags WHERE value_id ILIKE %s LIMIT 1)
+             UNION ALL
+             (SELECT 'alias' AS surface FROM tag_aliases a
+                JOIN tags t ON a.tag_id = t.id
+                WHERE a.alias ILIKE %s LIMIT 1)
+             UNION ALL
+             (SELECT 'authors' AS surface FROM documents d
+                CROSS JOIN LATERAL regexp_split_to_table(d.authors, ';') AS a(name)
+                WHERE cardinality(%s::text[]) >= 1
+                  AND regexp_split_to_array(
+                    trim(regexp_replace(lower(a.name), '[^[:alnum:]]+', ' ', 'g')), ' +'
+                  ) @> %s::text[] LIMIT 1)
+             UNION ALL
+             (SELECT 'summary' AS surface FROM documents d
+                LEFT JOIN document_summaries s ON s.document_id = d.id
+                  AND s.language = 'en' AND s.kind = 'long'
+                WHERE COALESCE(NULLIF(s.text, ''), d.source_metadata->>'summary')
+                  ILIKE %s LIMIT 1)
+           ) AS s LIMIT 1""",
+        (pattern, pattern, pattern, pattern, author_tokens, author_tokens, pattern),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def match_core_topic(conn, core_topic: str) -> dict:
+    """Exact check on a supplied connection; DB errors propagate to callers.
+
+    The service wraps this failure-soft; offline evaluation must fail loudly.
+    """
+    cands = core_topic_candidates(core_topic or "")
+    if not cands:
+        return {"present": True, "matched_term": None, "matched_surface": None}
+    for term in cands:
+        surface = _corpus_match(conn, term)
+        if surface:
+            return {"present": True, "matched_term": term, "matched_surface": surface}
+    return {"present": False, "matched_term": None, "matched_surface": None}
+
+
+def core_topic_in_corpus(core_topic: str) -> dict:
+    """Is the normalized core topic present in titles/authors/tags/summaries?
+
+    Vocabulary membership is a coverage heuristic, not proof of absence from
+    the full corpus. One attempt, failure-soft (present=True on DB errors).
+
+    The LLM's core_topic is often a long clause ('zero-emission heavy-duty truck
+    adoption') whose full phrase misses titles even when the topic is real
+    (the title has 'zero-emission heavy-duty'). So: try the full phrase first,
+    then each contiguous 2-gram. A hit on any -> present. Single words are NOT
+    candidates for multi-word topics (generic noise that rescues negatives d8/d9).
+
+    Returns the decision plus its details — {present, matched_term,
+    matched_surface} — so the query response's debug.abstention explains
+    exactly why a flag fired (or didn't): the one-call repro for false flags."""
+    if not core_topic or not core_topic.strip():
+        # no core topic extracted -> can't abstain -> today's behavior
+        return {"present": True, "matched_term": None, "matched_surface": None}
+    try:
+        from app.db import get_pool
+        with get_pool().connection() as conn:
+            return match_core_topic(conn, core_topic)
+    except Exception:  # noqa: BLE001 - DB failure never abstains
+        logger.warning("core_topic_in_corpus: check failed for %r", core_topic, exc_info=True)
+        return {"present": True, "matched_term": None, "matched_surface": None}
+
+
+
+def _expansion_lane_weight_for(settings, mode: str, request_override: Optional[float] = None) -> Optional[float]:
+    """5a: per-mode expansion-lane RRF weight (cite 1.0 recall-first / answer
+    0.25 precision-first). Request-level override wins (sweep knob — data-driven
+    tuning without a redeploy), then EXPANSION_LANE_WEIGHT env (back-compat with
+    qa.tfvars), then per-mode config default. Returns None when lanes are off
+    (no expansion lanes → weight is inert; keeps the fusion call simple)."""
+    if request_override is not None:
+        return request_override
+    import os
+    override = os.getenv("EXPANSION_LANE_WEIGHT")
+    if override not in (None, ""):
+        try:
+            return float(override)
+        except ValueError:
+            pass
+    if mode == "answer":
+        return settings.answer_expansion_lane_weight
+    return settings.cite_expansion_lane_weight
+
+
+def build_variant_lanes(
+    variants: list[str],
+    query: str,
+    dense_retriever_factory,
+    bm25_retriever,
+    lanes_on: bool,
+    top_k: int,
+) -> list[dict]:
+    """P3 slice 2 (design §4.3): one dense + one sparse lane per LLM variant,
+    at 1× weight, fed into `extra_lanes`. Pure + factory-injected so it's
+    unit-testable without a DB.
+
+    - `lanes_on=False` ⇒ no lanes (variant lanes are expansion lanes; gated
+      by lanes_active exactly like the tag lanes; flag-off byte-identical).
+    - A variant equal to the original query (case-insensitive) is skipped
+      (dedupe, design §4.1): re-querying the original adds no candidates and
+      would inflate its RRF weight.
+    - Dense lanes carry the raw variant query; sparse lanes carry the
+      expanded variant query (sparse_query_for) so the sparse lane sees the
+      same expansion discipline as the original sparse lane.
+    - Each lane is one entry in the list (the fusion core runs each lane's
+      retriever in its existing parallel pool; one retriever per lane).
+    """
+    if not lanes_on or not variants:
+        return []
+    from app.query_expansion import sparse_query_for
+    lanes: list[dict] = []
+    i = 0
+    for v in variants:
+        if not v or v.lower() == query.lower():
+            continue
+        dense_name = f"variant{i}_dense"
+        sparse_name = f"variant{i}_sparse"
+        lanes.append({
+            "name": dense_name,
+            "retriever": dense_retriever_factory(top_k),
+            "query_str": v,
+            "weight": None,   # 1x
+            "top_k": top_k,
+        })
+        lanes.append({
+            "name": sparse_name,
+            "retriever": bm25_retriever,
+            "query_str": sparse_query_for(v),
+            "weight": None,   # 1x
+            "top_k": top_k,
+        })
+        i += 1
+    return lanes
+
+
+# --- Answer-mode query translation (design 2026-09-09) -----------------------
+#
+# The eval-baseline's dominant miss is cross-lingual: an English question
+# does not rank zh/es fact chunks (dense 190-460 on q3; Cohere scores them
+# 0.108-0.718 under the EN question vs 0.828-0.947 under a translated one
+# — probes 2026-09-09, docs/plans/2026-09-09-answer-mode-query-translation-
+# design.md). The fix is answer-mode-only and selection-scoped: translate the
+# question into the selection's non-English languages, seed the rerank
+# candidates from a dense retrieval per translation, and rerank once per
+# query with a max-merge. Cite mode is untouched (the 2026-07-24 P8
+# regression shape); no RRF lane, no corpus mutation.
+
+def _selection_languages(cite_doc_ids, max_langs, documents_metadata):
+    """Distinct non-English languages of the selection's documents, capped.
+
+    Pure over the startup-hydrated documents_metadata (pg_store loads
+    `language` alongside the catalog fields). Order = first appearance in
+    the selection, so the cap keeps the selection's dominant language.
+    """
+    langs = []
+    for doc_id in cite_doc_ids or []:
+        lang = ((documents_metadata or {}).get(doc_id) or {}).get("language")
+        if lang and lang != "en" and lang not in langs:
+            langs.append(lang)
+    return langs[:max_langs]
+
+
+def _default_seed_retriever(query_str, doc_ids, k):
+    """The production seed retrieval: doc-scoped dense against Postgres,
+    embedded with the service's embed model (the same cohere-embed-v4 the
+    main dense lane uses — probe 2026-09-09 validated it carries translated
+    queries to zh evidence)."""
+    from app import pg_store
+    return pg_store.dense_retrieve_doc_scoped(
+        service_state.get("embed_model"), query_str, doc_ids, k)
+
+
+def build_answer_translation(query, cite_doc_ids, documents_metadata, settings,
+                              seed_retriever=None, translate=None,
+                              term_extractor=None, grounded_translate=None):
+    """(translation_bundles, seed_nodes) for one answer query, or ([], []).
+
+    Factory-injected so it is unit-testable without a DB or OpenAI:
+    `seed_retriever(query_str, doc_ids, k)` is the doc-scoped dense seed
+    (default: pg_store.dense_retrieve_doc_scoped via the service's embed
+    model), `translate` is the query_translate.translate_query callable (one
+    LLM call covering every language, LRU-cached, failure-soft). Every
+    failure degrades to ([], []) — today's behavior — never fails the
+    search. A translation whose seed retrieval fails still yields its
+    bundle: the rerank can lift zh chunks that reached the standard
+    candidates via the English lanes.
+
+    Vocabulary grounding (plan 2026-09-10 §3.1): when the seed retrieval
+    returns chunks, `term_extractor` (default extract_native_terms) pulls
+    the corpus's frequent native terms out of the chunks' texts and
+    `grounded_translate` (default translate_query_grounded) re-renders the
+    ENGLISH QUESTION in that vocabulary — the machine translations otherwise
+    lose the terminology the reranker rewards. Failure-soft at every step: any
+    grounding problem keeps the shipped literal/field rendering; the bundle
+    is never dropped because grounding failed. Seeds stay from the
+    first-pass translation (no re-seeding with the grounded text).
+    """
+    if not settings.answer_translation_enabled or not cite_doc_ids or not query:
+        return [], []
+    langs = _selection_languages(cite_doc_ids, settings.answer_translation_max_langs,
+                                documents_metadata)
+    if not langs:
+        return [], []
+    if translate is None:
+        from app.query_translate import translate_query_orjoined as translate
+    try:
+        translations = translate(
+            query, tuple(langs), settings.answer_translation_timeout_s) or {}
+    except Exception as exc:  # noqa: BLE001 — never fail a search on translation
+        logger.warning(f"Answer-mode query translation failed ({exc}) — using untranslated path")
+        return [], []
+    if seed_retriever is None:
+        seed_retriever = _default_seed_retriever
+    if term_extractor is None:
+        from app.query_translate import extract_native_terms as term_extractor
+    if grounded_translate is None:
+        from app.query_translate import translate_query_grounded as grounded_translate
+    cite_set = set(cite_doc_ids)
+    bundles, seeds = [], []
+    for lang in langs:
+        text = (translations.get(lang) or "").strip()
+        if not text:
+            continue
+        bundles.append(QueryBundle(query_str=text))
+        try:
+            nodes = seed_retriever(text, cite_set, settings.answer_translation_seed_k)
+        except Exception as exc:  # noqa: BLE001 — a failed seed drops its lane only
+            logger.warning(f"Answer-mode translation seed ({lang}) failed ({exc}) — seed dropped")
+            continue
+        seeds.extend(nodes)
+        # Vocabulary grounding (plan 2026-09-10 §3.1): the seed chunks carry
+        # the documents' real terminology — extract it and re-render the
+        # bundle in that vocabulary. Every step failure-soft: any problem
+        # keeps the shipped literal/field rendering.
+        bundle_text = None
+        if nodes:
+            try:
+                terms = term_extractor([n.node.get_content() for n in nodes], lang)
+            except Exception as exc:  # noqa: BLE001 — grounding must never fail a search
+                logger.warning(
+                    f"Answer-mode term extraction ({lang}) failed ({exc}) — ungrounded rendering kept")
+                terms = []
+            if terms:
+                try:
+                    grounded = grounded_translate(
+                        query, lang, terms, settings.answer_translation_timeout_s)
+                except Exception as exc:  # noqa: BLE001 — grounding must never fail a search
+                    logger.warning(
+                        f"Answer-mode grounded re-translation ({lang}) failed ({exc}) — literal/field rendering kept")
+                else:
+                    if grounded and grounded.strip():
+                        bundle_text = grounded.strip()
+        if bundle_text:
+            bundles[-1] = QueryBundle(query_str=bundle_text)
+    return bundles, seeds
+
+
+def _union_seed_candidates(candidates, seed_nodes):
+    """Standard candidates + seed nodes, deduped by node_id. Nothing is
+    displaced (the 07-24 §5.5a lesson: additions, never replacements)."""
+    seen = {n.node.node_id for n in candidates}
+    return candidates + [n for n in seed_nodes if n.node.node_id not in seen]
+
+
+def _rerank_with_translation_bundles(base_reranker, candidates, query_bundle,
+                                      translation_bundles, top_n):
+    """Dual-query max-merge rerank: score once per query (the original + each
+    translation), keep each node's best score, sort, cut at top_n. Blocking
+    (one rerank API call per query) — callers wrap in a worker thread."""
+    from app.bedrock_rerank import max_merge
+    score_maps = [base_reranker.score_documents(candidates, qb)
+                  for qb in [query_bundle, *translation_bundles]]
+    merged = max_merge(score_maps)
+    for node in candidates:
+        node.score = merged.get(node.node.node_id, 0.0)
+    candidates.sort(key=lambda n: n.score, reverse=True)
+    return candidates[:top_n]
 
 
 def _emit_query_emf(mode: str, debug: dict) -> None:
@@ -876,8 +1352,15 @@ def _emit_query_emf(mode: str, debug: dict) -> None:
             "dense_db_ms": lanes.get("dense_db_ms"),
             "passage_ms": debug.get("passage_ms"),
         }
+        counts = {
+            "facets_hard": debug.get("facets_hard"),
+            "suggestions": debug.get("suggestions"),
+            "matched_tags_count": debug.get("matched_tags_count"),
+        }
+        counts = {k: v for k, v in counts.items() if v is not None}
+        metrics["understanding_ms"] = debug.get("understanding_ms")
         metrics = {k: round(v, 1) for k, v in metrics.items() if v is not None}
-        if not metrics:
+        if not metrics and not counts:
             return
         print(_json.dumps({
             "_aws": {
@@ -885,12 +1368,15 @@ def _emit_query_emf(mode: str, debug: dict) -> None:
                 "CloudWatchMetrics": [{
                     "Namespace": "AskWRI/Query",
                     "Dimensions": [["mode"]],
-                    "Metrics": [{"Name": k, "Unit": "Milliseconds"}
-                                for k in metrics],
+                    "Metrics": ([{"Name": k, "Unit": "Milliseconds"}
+                                for k in metrics]
+                                + [{"Name": k, "Unit": "Count"}
+                                   for k in counts]),
                 }],
             },
             "mode": mode,
             **metrics,
+            **counts,
         }), flush=True)
     except Exception:  # noqa: BLE001 — metrics must never break /query
         logger.debug("EMF emit failed", exc_info=True)
@@ -967,11 +1453,66 @@ async def hybrid_query(request: QueryRequest):
     if not dense_ready or not service_state["bm25_retriever"]:
         raise HTTPException(status_code=500, detail="Service not properly initialized")
 
+    # Per-request dollar ledger — every paid call site below records into it
+    # (see app/usage_meter.py); the summary ships in the response's `usage`.
+    usage_meter.start()
     request_start = time.time()
     try:
         logger.info(f"Processing hybrid query: '{request.query}' (mode: {request.mode})")
 
         query_bundle = QueryBundle(query_str=request.query)
+
+        # Query understanding — deterministic tier (design 2026-08-19).
+        # ALL understanding code below is behind `understanding is not None`:
+        # flag off ⇒ byte-identical legacy pipeline.
+        understanding = None
+        if understanding_active(settings, request):
+            from datetime import datetime
+            u_start = time.time()
+            # Blocking (spell-suggest DB round trips) — worker thread, like
+            # every other blocking stage in this handler.
+            understanding = await asyncio.to_thread(
+                build_understanding,
+                request.query,
+                explicit_facets=request.facets,
+                today_year=datetime.now().year,
+                expansion_lanes=lanes_active(settings, request),
+                embed_model=service_state.get("embed_model"),
+            )
+            understanding.timings["deterministic_ms"] = round((time.time() - u_start) * 1000, 1)
+
+            # P3 LLM sidecar (design §4.1, §5, §7). Dark: only when the new
+            # flag is on (and the P1 understanding flag, which gates this block).
+            # Deterministic-first: augments, never replaces. One attempt, cached,
+            # failure-soft — a miss degrades to the deterministic tier (recorded in
+            # understanding.degraded). Slice 1 is blocking within the budget; the
+            # non-blocking parallel timeline (design §4.2) is slice 2.
+            if getattr(settings, "query_understanding_llm_enabled", False):
+                from app.understanding_llm import build_understanding_llm
+                l_start = time.time()
+                llm = await asyncio.to_thread(build_understanding_llm, request.query)
+                understanding.timings["llm_ms"] = round((time.time() - l_start) * 1000, 1)
+                if llm is None:
+                    understanding.degraded.append("understanding_llm")
+                else:
+                    if llm.get("intent") is not None:
+                        understanding.intent = llm["intent"]
+                    # Dedupe variants vs the original query (design §4.1); cap 2
+                    # is already enforced by build_understanding_llm.
+                    understanding.variants = [
+                        v for v in llm.get("variants", [])
+                        if v and v.lower() != request.query.lower()
+                    ]
+                    understanding.facets.extend(llm.get("facets", []))
+                    for d in llm.get("disambiguation", []):
+                        understanding.suggestions.append(
+                            Suggestion(type="disambiguation", text=d)
+                        )
+                    if llm.get("core_topic") is not None:
+                        understanding.core_topic = llm["core_topic"]
+
+        # P2 (design §4.3): lanes_on implies understanding is not None.
+        lanes_on = lanes_active(settings, request)
 
         # Capture individual retriever results if diagnostic mode
         vector_only_results = None
@@ -990,7 +1531,7 @@ async def hybrid_query(request: QueryRequest):
             from app.query_expansion import sparse_query_for as _sqf
             bm25_only_results = await asyncio.to_thread(
                 service_state["bm25_retriever"].retrieve,
-                QueryBundle(query_str=_sqf(request.query)),
+                QueryBundle(query_str=_sqf(request.query, domain_expansion=not lanes_on)),
             )
             if request.bm25_top_k is not None:
                 bm25_only_results = bm25_only_results[:request.bm25_top_k]
@@ -999,6 +1540,54 @@ async def hybrid_query(request: QueryRequest):
         # Stage 1: Hybrid Fusion Retrieval
         stage1_start = time.time()
         vector_retriever = make_dense_retriever(request.vector_top_k)
+
+        # P2.6 semantic tag lanes (design §4.1, §4.3): one lane per matching
+        # facet in settings.expansion_facets. P2.5 built only topic_dense; this
+        # loops over the config list so geography (and future facets) get their
+        # own lane. The reranker still only ever sees the original query (§4.4)
+        # — TagRetriever feeds RRF candidate docs; postprocess_nodes' query_bundle
+        # is untouched. A facet with no matches produces no lane (no cost).
+        extra_lanes = None
+        if lanes_on and understanding is not None:
+            from app.topic_retrieval import TagRetriever
+            from app.db import get_pool
+            for facet in settings.expansion_facets:
+                tags = understanding.matched_tags.get(facet, [])
+                if not tags:
+                    continue
+                retriever = TagRetriever(
+                    tags, get_pool(), top_k=request.bm25_top_k, facet=facet,
+                )
+                logger.info(f"{facet} lane: {len(tags)} tags "
+                            f"({', '.join(t for t, _ in tags[:3])})")
+                if extra_lanes is None:
+                    extra_lanes = []
+                extra_lanes.append({
+                    "name": f"{facet}_dense",
+                    "retriever": retriever,
+                    "query_str": request.query,  # unused by TagRetriever (tag lookups), but required by the lane dict shape
+                    "weight": None,   # 1x
+                    "top_k": request.bm25_top_k,
+                })
+
+            # P3 slice 2 (design §4.3): one dense + one sparse lane per LLM
+            # variant, at 1× weight. The reranker still only sees the original
+            # query (§4.4): variants widen the candidate pool pre-rerank, never
+            # redefine it. Gated by lanes_on + the LLM flag; variants come from
+            # the LLM sidecar merge above. Dedupe vs the original query is done
+            # inside build_variant_lanes (§4.1).
+            if getattr(settings, "query_understanding_llm_enabled", False) \
+                    and understanding.variants:
+                if extra_lanes is None:
+                    extra_lanes = []
+                extra_lanes.extend(build_variant_lanes(
+                    variants=understanding.variants,
+                    query=request.query,
+                    dense_retriever_factory=make_dense_retriever,
+                    bm25_retriever=service_state["bm25_retriever"],
+                    lanes_on=True,
+                    top_k=request.bm25_top_k,
+                ))
 
         hybrid_retriever = HybridFusionRetriever(
             vector_retriever=vector_retriever,
@@ -1009,6 +1598,9 @@ async def hybrid_query(request: QueryRequest):
             sparse_weight=request.sparse_weight,
             fusion_top_k=request.fusion_top_k,
             bm25_top_k=request.bm25_top_k,
+            extra_lanes=extra_lanes,
+            domain_expansion=not lanes_on,
+            expansion_lane_weight=_expansion_lane_weight_for(settings, request.mode, request.expansion_lane_weight),
         )
 
         # Retrieve with hybrid fusion (worker thread — keeps the event loop
@@ -1020,22 +1612,116 @@ async def hybrid_query(request: QueryRequest):
 
         logger.info(f"Stage 1 (Hybrid Fusion): {len(stage1_results)} results in {stage1_elapsed:.1f}s")
 
+        if understanding is not None:
+            understanding.degraded.extend(
+                getattr(hybrid_retriever, "degraded_lanes", []) or []
+            )
+
+        # Diagnostic-only fused snapshot (P2 instrument): rank + per-lane
+        # attribution per node, captured before rerank mutates scores.
+        fused_nodes = None
+        if request.return_intermediate_results:
+            _ranks = getattr(hybrid_retriever, "lane_ranks", {}) or {}
+            fused_nodes = [{
+                "node_id": n.node.node_id,
+                "doc_id": n.node.metadata.get("doc_id"),
+                "url": n.node.metadata.get("url", ""),
+                "fused_rank": i + 1,
+                "lanes": _ranks.get(n.node.node_id),
+            } for i, n in enumerate(stage1_results)]
+
+        # Topic sensing (design 2026-08-19 §4.1): attach nearby_topic
+        # suggestions now — on the Bedrock path the dense lane just warmed
+        # the embed LRU cache, so get_query_embedding is a hit (zero extra
+        # Bedrock calls). Other embed models have no such cache; the
+        # tag-embedding coverage probe inside attach_topic_suggestions
+        # skips the call entirely when the model has no rows to match.
+        # Behind `understanding is not None`: flag off ⇒ nothing happens.
+        if understanding is not None:
+            from app.topic_sense import attach_topic_suggestions
+            t_start = time.time()
+            # Blocking (pgvector query + a possibly-uncached embedding HTTP
+            # call) — worker thread keeps /health responsive.
+            await asyncio.to_thread(
+                attach_topic_suggestions,
+                understanding, request.query, service_state.get("embed_model"),
+            )
+            understanding.timings["topic_sense_ms"] = round((time.time() - t_start) * 1000, 1)
+
         # If answer mode and cite_doc_ids provided, filter stage1_results
         if request.mode == "answer" and request.cite_doc_ids:
             before_filter = len(stage1_results)
             stage1_results = [n for n in stage1_results if n.node.metadata.get("doc_id") in request.cite_doc_ids]
             logger.info(f"Answer mode: Filtered to cite_doc_ids ({before_filter} -> {len(stage1_results)})")
 
+        # Answer-mode query translation (design 2026-09-09): translate the
+        # question into the selection's non-English languages. The translated
+        # bundles feed a dual-query max-merge rerank below; the seed nodes
+        # (dense retrieval per translation, filtered to the selection) join
+        # the rerank candidates. Flag-dark: off => both stay empty and the
+        # path below is byte-identical to the standard rerank. Blocking calls
+        # (one cached translation + one dense retrieval per language) run in
+        # a worker thread.
+        translation_bundles, translation_seed = [], []
+        if (request.mode == "answer" and request.cite_doc_ids and request.rerank
+                and settings.answer_translation_enabled):
+            translation_bundles, translation_seed = await asyncio.to_thread(
+                build_answer_translation, request.query, request.cite_doc_ids,
+                service_state.get("documents_metadata") or {}, settings)
+            if translation_bundles:
+                logger.info(
+                    f"Answer mode: query translation active "
+                    f"({len(translation_bundles)} language(s), {len(translation_seed)} seed nodes)")
+
+        # Translation pairs (#325): confirmed edges only, flag-gated (Task 9
+        # loader returns {} when off). Answer mode: a translation's chunks can
+        # never be legitimately cited (citations come from originals), so drop
+        # them before rerank. Cite mode consumes the same map at assembly.
+        translation_pairs = load_confirmed_pairs()
+        if request.mode == "answer" and translation_pairs:
+            before_tp = len(stage1_results)
+            stage1_results = [n for n in stage1_results
+                              if n.node.metadata.get("doc_id") not in translation_pairs]
+            logger.info(f"Answer mode: translation-pair filter ({before_tp} -> {len(stage1_results)})")
+
+        # Stage 1.6: THE facet application point — post-fusion, pre-rerank
+        # (design §4.5). Legacy params flow through the same path so there
+        # is exactly one filter behavior when understanding is active.
+        if understanding is not None:
+            from app.facet_filter import apply_facet_filters, legacy_request_facets
+            all_facets = understanding.facets + legacy_request_facets(request)
+            pre_facet = len(stage1_results)
+            stage1_results = apply_facet_filters(
+                stage1_results, all_facets, service_state.get("documents_metadata") or {}
+            )
+            logger.info(f"Stage 1.6 (Facet Filters): {pre_facet} → {len(stage1_results)} results")
+
         # Stage 2: Reranking (Bedrock Cohere Rerank — 0-1 relevance scores).
         # rerank_applied gates the cite floor/tiers downstream: they are
         # calibrated on the 0-1 relevance scale, and unreranked results carry
         # raw RRF scores (~0.008-0.03) that would all land below the floor.
         rerank_applied = False
-        if request.rerank and stage1_results:
+        rerank_window_ids = None
+        if request.rerank and (stage1_results or translation_seed):
             base_reranker = (service_state["reranker_answer"] if request.mode == "answer"
                             else service_state["reranker_cite"])
 
             if base_reranker:
+                # P2 displacement instrument: the EXACT candidate set the
+                # reranker saw. _select_candidates is pure — recomputing it
+                # here is race-free on the shared reranker singleton. Built
+                # lazily (only when something needs it) so stub rerankers
+                # without the method are never touched on the standard path.
+                # With translation seeds, the window is the union (design
+                # 2026-09-09 §3.3 — the seed UNIONs, nothing is displaced).
+                candidates = None
+                if translation_seed or translation_bundles or request.return_intermediate_results:
+                    candidates = base_reranker._select_candidates(
+                        stage1_results, settings.rerank_candidates)
+                    if translation_seed:
+                        candidates = _union_seed_candidates(candidates, translation_seed)
+                    if request.return_intermediate_results:
+                        rerank_window_ids = [n.node.node_id for n in candidates]
                 try:
                     stage2_start = time.time()
                     # BedrockReranker (and the e2e stub): per-call top_n, no
@@ -1043,13 +1729,23 @@ async def hybrid_query(request: QueryRequest):
                     # The rerank is a blocking boto3 round-trip (~0.5s) — run
                     # in a worker thread so the event loop stays responsive
                     # (d214f3f adapted to the Bedrock reranker).
-                    stage2_results = await asyncio.to_thread(
-                        base_reranker.postprocess_nodes,
-                        stage1_results, query_bundle, top_n=request.rerank_top_n
-                    )
+                    if translation_bundles:
+                        # Dual-query max-merge (design §3.4): score once per
+                        # query, keep each chunk's best score — zh evidence
+                        # rides its translated-query score, English evidence
+                        # its original-query score.
+                        stage2_results = await asyncio.to_thread(
+                            _rerank_with_translation_bundles,
+                            base_reranker, candidates, query_bundle,
+                            translation_bundles, top_n=request.rerank_top_n)
+                    else:
+                        stage2_results = await asyncio.to_thread(
+                            base_reranker.postprocess_nodes,
+                            stage1_results, query_bundle, top_n=request.rerank_top_n
+                        )
                     rerank_applied = True
                     stage2_elapsed = time.time() - stage2_start
-                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
+                    logger.info(f"Stage 2 (Reranking): {len(stage2_results)} results from {len(candidates) if translation_seed else len(stage1_results)} candidates in {stage2_elapsed:.1f}s")
                 except Exception as e:
                     logger.warning(f"Reranking failed: {e}, using Stage 1 results")
                     stage2_results = stage1_results
@@ -1069,7 +1765,9 @@ async def hybrid_query(request: QueryRequest):
             logger.info(f"Stage 2.1 (Page-1 Demotion): applied to answer mode")
 
         # Stage 2.5: Apply metadata filters (year, program, excluded keywords)
-        if (request.min_year or request.max_year or
+        # Skipped when understanding is active: the new Stage 1.6 facet point
+        # already applied these (design §4.5 — one application point).
+        if understanding is None and (request.min_year or request.max_year or
             request.excluded_keywords or request.required_program):
             pre_filter_count = len(stage2_results)
             stage2_results = apply_metadata_filters(
@@ -1083,12 +1781,48 @@ async def hybrid_query(request: QueryRequest):
 
         # Apply final filtering and limits - be more inclusive for cite mode
         if request.mode == "cite":
-            # Group chunks by document and take best scoring chunk per document
+            # Group chunks by document and take best scoring chunk per document.
+            # Translation pairs (#325): a hit on a confirmed translation is
+            # credited to its ORIGINAL. Originals win: when the original also
+            # matched, its own best chunk is shown; a translation-only hit is
+            # substituted via a COPIED node (legacy in-memory mode shares node
+            # objects across requests — never mutate doc_id/title in place).
             doc_groups = {}
+            translation_best = {}
             for node in stage2_results:
+                # Stale-flag hygiene for shared nodes (same reason as the
+                # relevance_tier pop below).
+                node.node.metadata.pop("has_english_translation", None)
+                node.node.metadata.pop("excerpt_from_translation", None)
                 doc_id = node.node.metadata.get("doc_id")
+                pair = translation_pairs.get(doc_id)
+                if pair is not None:
+                    canon = pair["original"]
+                    cur = translation_best.get(canon)
+                    if cur is None or node.score > cur.score:
+                        translation_best[canon] = node
+                    continue
                 if doc_id not in doc_groups or node.score > doc_groups[doc_id].score:
                     doc_groups[doc_id] = node
+
+            originals_of = {p["original"]: p for p in translation_pairs.values()}
+            for canon, tnode in translation_best.items():
+                pair = originals_of[canon]
+                if canon in doc_groups:
+                    doc_groups[canon].node.metadata["has_english_translation"] = True
+                    continue
+                if not pair["original_searchable"]:
+                    continue  # withdrawn original: the work is off the site
+                sub = TextNode(
+                    id_=tnode.node.node_id,
+                    text=tnode.node.text,
+                    metadata={**tnode.node.metadata,
+                              "doc_id": canon,
+                              "title": pair["original_title"],
+                              "has_english_translation": True,
+                              "excerpt_from_translation": True},
+                )
+                doc_groups[canon] = NodeWithScore(node=sub, score=tnode.score)
 
             # Floor + tiers are calibrated on the reranker's 0-1 relevance
             # scale — apply them only when reranking actually ran. Unreranked
@@ -1240,6 +1974,8 @@ async def hybrid_query(request: QueryRequest):
             "query": request.query,
             "mode": request.mode,
             "cite_doc_ids": request.cite_doc_ids,
+            "usage": usage_meter.summary(),
+            "query_understanding": understanding.model_dump() if understanding is not None else None,
             "debug": {
                 "service_version": "2.0.0",
                 "retrieval_method": "hybrid_fusion_rrf",
@@ -1263,6 +1999,22 @@ async def hybrid_query(request: QueryRequest):
                 },
                 "passage_ms": round((time.time() - passage_start) * 1000, 1)
                               if 'passage_start' in locals() else None,
+                "lane_ranks": (getattr(hybrid_retriever, "lane_ranks", None)
+                               if request.return_intermediate_results else None),
+                "understanding_ms": (understanding.timings.get("deterministic_ms")
+                                     if understanding is not None else None),
+                "facets_hard": (sum(1 for f in understanding.facets if f.action == "hard")
+                                if understanding is not None else None),
+                "suggestions": (len(understanding.suggestions)
+                                if understanding is not None else None),
+                "matched_tags_count": ({f: len(tags) for f, tags in understanding.matched_tags.items()}
+                                    if understanding is not None else None),
+                "lanes_degraded": (getattr(hybrid_retriever, "degraded_lanes", None)
+                                   if understanding is not None else None),
+                "fused_nodes": (fused_nodes
+                                if request.return_intermediate_results else None),
+                "rerank_window_ids": (rerank_window_ids
+                                      if request.return_intermediate_results else None),
                 "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,
@@ -1280,6 +2032,36 @@ async def hybrid_query(request: QueryRequest):
             response_data["bm25_results"] = format_intermediate_results(bm25_only_results) if bm25_only_results else []
             response_data["fusion_results"] = format_intermediate_results(stage1_results)
             response_data["reranked_results"] = format_intermediate_results(stage2_results) if 'stage2_results' in locals() else []
+
+        # Slice 6 (#356): corpus-coverage abstain gate. If the LLM sidecar
+        # extracted a core_topic and it's absent from the corpus vocabulary
+        # (titles/tags/aliases), WRI hasn't published on it — the partial-tier
+        # results are likely off-topic. Flag it; the UI renders the banner and
+        # still shows the docs (user stays in control). Failure-soft: no
+        # core_topic (LLM off/degraded) or DB error -> no flag (today's behavior).
+        # Workbench (2026-09-09): the decision details ride in debug.abstention
+        # so a false flag is a one-call repro.
+        abstention = {
+            "core_topic": None,
+            "present": True,
+            "matched_term": None,
+            "matched_surface": None,
+            "likely_off_topic": False,
+        }
+        if understanding is not None and understanding.core_topic:
+            decision = await asyncio.to_thread(
+                core_topic_in_corpus, understanding.core_topic
+            )
+            likely_off_topic = not decision["present"]
+            abstention = {
+                "core_topic": understanding.core_topic,
+                **decision,
+                "likely_off_topic": likely_off_topic,
+            }
+        else:
+            likely_off_topic = False
+        response_data["likely_off_topic"] = likely_off_topic
+        response_data["debug"]["abstention"] = abstention
 
         return QueryResponse(**response_data)
 
@@ -1478,3 +2260,5 @@ if __name__ == "__main__":
         reload=settings.debug,
         workers=settings.workers if not settings.debug else 1,
     )
+
+# cache-bust: force COPY app/ layer invalidation (2026-08-26)

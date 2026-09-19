@@ -19,6 +19,7 @@
         "name": "next"
       }
     ],
+    "types": ["jest", "node"],
     "paths": {
       "@/*": ["./src/*"]
     },
@@ -31,5 +32,13 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "evaluation"]
+  "exclude": [
+    "node_modules",
+    "evaluation",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
 }

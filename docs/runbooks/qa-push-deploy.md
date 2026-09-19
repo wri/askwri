@@ -49,7 +49,7 @@ All three are read by both `deploy-qa.yml` and `deploy-production.yml` and land 
 
 | GitHub secret | Terraform var | Feeds | Must contain |
 |---|---|---|---|
-| `INGESTION_WORKER_ENV` | `ingestion_worker_secret_env` | ingestion-worker task env | **NEW — create it.** JSON: `{"DATABASE_URL": "postgresql://…?sslmode=require", "OPENAI_API_KEY": "sk-…"}` |
+| `INGESTION_WORKER_ENV` | `ingestion_worker_secret_env` | ingestion-worker task env | **NEW — create it.** JSON: `{"DATABASE_URL": "postgresql://…?sslmode=require", "OPENAI_API_KEY": "sk-…"}`. Put non-secret taxonomy controls in `ingestion_worker_environment_variables` (Topic taxonomy rollout below). |
 | `ASKWRI_APP_ENV` | `askwri_app_secret_env` | Next.js task env | Existing JSON; **add** `SESSION_SECRET` (≥ 32 chars, generate with `openssl rand -hex 32`) and optionally `ADMIN_API_TOKEN` (machine-to-machine admin auth) |
 | `SEARCH_SERVICE_ENV` | `search_service_secret_env` | search-service task env | Verify it has `DATABASE_URL` and `RETRIEVAL_BACKEND=postgres`. A `KEYWORD_BACKEND` override (Step 5 fallback) also goes here |
 
@@ -368,6 +368,110 @@ aws ecs update-service --cluster askwri-app-qa-cluster \
 ```
 
 (Or `git revert` + push, which rebuilds and redeploys through the normal pipeline.)
+
+---
+
+## Topic taxonomy rollout (issue #323)
+
+Set these exact values in
+`terraform/environments/<env>.tfvars` under
+`ingestion_worker_environment_variables` unless a measured rollout calls for a
+different candidate or concurrency limit:
+
+```hcl
+"TAG_CANDIDATE_TOP_N"        = "20"
+"TAG_RECLASSIFY_CONCURRENCY" = "4"
+"TAG_EMBED_BATCH_SIZE"       = "100"
+"CLASSIFY_TOPIC_ONLY"        = "false"
+"RECLASSIFY_POLL_FIRST"      = "true"
+```
+
+Deploy and migrate before editors start taxonomy work. On each poll the worker
+runs topic-embedding maintenance before claiming any reclassification job, so
+new/renamed topics become candidates before classification. Keep the worker at
+one replica for the initial rollout. `SKIP LOCKED` prevents duplicate
+reclassification-job claims across threads or replicas, but the embedding sweep
+does not take an equivalent claim lock; multiple replicas can duplicate Bedrock
+embedding calls for the same pending topics.
+
+Cost-bearing admin actions require two separate steps. Opening Reclassify sends
+GET with `scope=all` or `tagId=<uuid>` and only estimates eligibility at $0.0008
+per document. Start sends the explicit POST and reports the actual enqueued
+count/cost/run ID. Cancel must send no POST. Retry sends only
+`{retryRunId:<uuid>}` and requeues error rows from that run; it is not a new
+full-corpus enqueue. Rebuild embeddings only flags rows for the worker and is
+audited separately.
+
+After deployment:
+
+1. Open `/admin/topics`; request an estimate, cancel, and confirm that no new
+   `reclassify_jobs` row exists. Then start one small tag-scoped run.
+2. Tail `/ecs/askwri-app-<env>-ingestion-worker` and confirm the embedding sweep
+   precedes reclassification claims, with no zero-candidate errors.
+3. Verify the run and its costs:
+   ```sql
+   SELECT run_id, status, count(*)
+   FROM reclassify_jobs
+   GROUP BY run_id, status
+   ORDER BY run_id, status;
+
+   SELECT action, entity_id, after, at
+   FROM audit_log
+   WHERE action IN ('tag_embeddings_rebuild', 'reclassify_enqueue', 'reclassify_run')
+   ORDER BY at DESC
+   LIMIT 20;
+   ```
+   Expect one `reclassify_run` audit after the final job becomes terminal; its
+   total/done/error counts and estimated cost must match the run's jobs.
+4. Force one scoped job to error only in a controlled QA check, use Retry, and
+   verify other runs and completed jobs are unchanged.
+
+Rollback is configuration-first: set `RECLASSIFY_POLL_FIRST=false` to disable
+reclassification polling in the worker, or reduce
+`TAG_RECLASSIFY_CONCURRENCY` while polling remains enabled; do not delete jobs
+or audits. Existing human/external assignments remain protected either way.
+
+---
+
+## Translation pairs rollout (issue #325)
+
+The `document_relations` table and worker suggestion hook ship inert — the table is
+empty and `translation_pairs_enabled` is OFF by default. Activating retrieval
+filtering is a separate, eval-gated ops step:
+
+1. **Deploy + migrate.** Push qa (`askwri-app-qa`, `askwri-app-qa-search-service`) and
+   run `npm run migration:run` against qa RDS (Step 2). Migration `1786579200000`
+   creates `document_relations`; nothing reads it yet.
+
+2. **Seed suggestions.** On the search-service task (or a shell with the venv +
+   `DATABASE_URL`), run the sweep:
+   ```bash
+   cd search-service && ./venv/bin/python -m scripts.sweep_translation_pairs            # dry run — review the candidate count
+   cd search-service && ./venv/bin/python -m scripts.sweep_translation_pairs --execute  # write suggested rows
+   ```
+   ~10 pairs land in the review queue. Idempotent — re-running after threshold
+   changes only surfaces new candidates.
+
+3. **Review queue.** Work `/admin/review` → "Translation suggestions": confirm or
+   reject each, flipping direction where the detected-language proposal is wrong.
+   The two #332 mislabeled pairs (stamped `zh`, text `en`) go to the zh reviewer —
+   her stamps are reviewed by her, not overwritten. Confirmed edges still change
+   nothing in retrieval while the flag is off.
+
+4. **Eval gate (the activation decision).** With the flag still off, run the
+   retrieval eval on the same harness:
+   ```bash
+   npm run eval:cite
+   ```
+   (The gen-1 `eval:answer-retrieval` script was deleted in the answer-eval
+   overhaul; the gen-2 answer harness lives in `evaluation/answer/`.)
+   Then re-run with `TRANSLATION_PAIRS_ENABLED=true` (export it for the eval
+   process) and compare. Enable the flag in the search-service task definition only
+   on acceptable deltas; #333 records the measured before/after.
+
+5. **Rollback.** Unset `translation_pairs_enabled` (or remove it from the task
+   definition). Retrieval reverts on the next query — no reindex, no data change.
+   Confirmed/rejected rows stay (they are the review memory).
 
 ---
 

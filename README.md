@@ -56,11 +56,8 @@ graph TB
 │   └── destroy.yml                 # Infrastructure teardown
 ├── docs/plans/                     # Design & implementation docs
 ├── evaluation/                     # Retrieval & synthesis eval framework
-│   ├── run-answer-retrieval-eval.ts
-│   ├── run-answer-synthesis-capture.ts
-│   ├── run-answer-synthesis-llm-eval.ts
+│   ├── answer/                     # Gen-2 answer-eval harness (capture/judge/score/compare)
 │   ├── run-cite-eval.ts
-│   ├── calibrate-answer-thresholds.ts
 │   ├── calibrate-cite-thresholds.ts
 │   ├── diagnostics/                # Eval diagnostic utilities
 │   └── lib/                        # Shared eval helpers

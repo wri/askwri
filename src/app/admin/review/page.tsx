@@ -8,6 +8,7 @@ import { actionButton } from '../lib/buttonStyles'
 import { StatusChip } from '../components/StatusChip'
 import { Tooltip } from '../components/Tooltip'
 import { Flash } from '../components/Flash'
+import { RelationsPanel } from '../components/RelationsPanel'
 
 interface QueueItem {
   id: string
@@ -30,6 +31,8 @@ interface CorpusHealth {
   docsMissingNativeSummary: number
   docsMissingTitleEn: number
   lowConfidenceDocs: number
+  pendingRelationSuggestions: number
+  confirmedTranslationPairs: number
   worker: {
     status: string
     queueDepth: number
@@ -335,6 +338,12 @@ const ReviewQueuePage = () => {
               >
                 Low confidence (&lt;0.7): {health.lowConfidenceDocs}
               </Text>
+              <Text style={{ fontSize: 13, color: '#444' }}>
+                Pending pair suggestions: {health.pendingRelationSuggestions}
+              </Text>
+              <Text style={{ fontSize: 13, color: '#444' }}>
+                Confirmed translation pairs: {health.confirmedTranslationPairs}
+              </Text>
             </Box>
           </div>
 
@@ -537,6 +546,10 @@ const ReviewQueuePage = () => {
         the worker to re-parse the PDF and re-run the pipeline (use this if the
         extraction was poor and the file may now parse better).
       </Text>
+      <Heading as='h2' size='md' mt={8} mb={2}>
+        Translation suggestions
+      </Heading>
+      <RelationsPanel />
     </Box>
   )
 }

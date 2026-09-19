@@ -44,6 +44,48 @@ _DENSE_SQL_TMPL = """
     LIMIT %(k)s
 """
 
+# Doc-scoped variant for the answer-mode translation seed (design
+# 2026-09-09 §3.3): everything downstream of the seed is selection-filtered
+# anyway, so scoping at the SQL level keeps the seed's k counting only the
+# documents the user picked.
+_DENSE_DOC_SCOPED_SQL_TMPL = """
+    SELECT dc.legacy_chunk_id, dc.text, dc.node_metadata,
+           1 - (dc.embedding::vector({dim}) <=> %(q)s) AS similarity
+    FROM document_chunks dc
+    JOIN documents d ON d.id = dc.document_id
+    WHERE d.status = 'searchable'
+      AND dc.embedding_model = %(model)s
+      AND d.external_id = ANY(%(doc_ids)s)
+    ORDER BY dc.embedding::vector({dim}) <=> %(q)s
+    LIMIT %(k)s
+"""
+
+
+def dense_retrieve_doc_scoped(embed_model, query_str: str, doc_ids, k: int) -> list:
+    """Dense retrieval restricted to the given documents' chunks.
+
+    The seed retrieval for answer-mode query translation: the translated
+    query's dense top-k WITHIN the selection (the answer-mode universe),
+    as NodeWithScore with cosine similarity — same shape and scale as the
+    main dense lane.
+    """
+    import numpy as np
+
+    model = get_settings().embedding_model
+    qvec = np.array(embed_model.get_query_embedding(query_str), dtype=np.float32)
+    doc_ids = list(dict.fromkeys(doc_ids))  # dedupe, order-preserving
+    with get_pool().connection() as conn:
+        conn.execute("SET LOCAL hnsw.ef_search = 1000")
+        rows = conn.execute(
+            _DENSE_DOC_SCOPED_SQL_TMPL.format(dim=EMBEDDING_DIMENSIONS[model]),
+            {"q": qvec, "model": model, "doc_ids": doc_ids, "k": k},
+        ).fetchall()
+    return [
+        NodeWithScore(node=TextNode(id_=legacy_id, text=text, metadata=meta),
+                      score=float(similarity))
+        for legacy_id, text, meta, similarity in rows
+    ]
+
 
 def load_nodes() -> List[TextNode]:
     """All searchable chunks as TextNodes (for the in-memory BM25 lane)."""
@@ -66,14 +108,25 @@ def load_document_texts() -> dict:
     return {ext: text for ext, text in rows}
 
 
+def _year_int(year_published, raw: dict):
+    """Facet-filter year: real column first, catalog string fallback."""
+    if year_published is not None:
+        return int(year_published)
+    try:
+        return int(str(raw.get("YEAR published", "")).strip())
+    except (ValueError, TypeError):
+        return None
+
+
 def load_documents_metadata() -> dict:
     """Mirror of the legacy documents_metadata dict (used by /stats and legacy endpoints)."""
     out = {}
     with get_pool().connection() as conn:
         rows = conn.execute(
-            "SELECT external_id, source_metadata FROM documents WHERE status = 'searchable'"
+            "SELECT external_id, source_metadata, language, article_type, year_published "
+            "FROM documents WHERE status = 'searchable'"
         ).fetchall()
-    for ext, src in rows:
+    for ext, src, language, article_type, year_published in rows:
         src = src or {}
         raw = src.get("metadata", {}) or {}
         out[ext] = {
@@ -86,6 +139,11 @@ def load_documents_metadata() -> dict:
             "program_series": raw.get("program_series", ""),
             "file_path": src.get("file_path", ""),
             "raw_metadata": raw,
+            # Query-understanding facet fields (design 2026-08-19 §4.5).
+            # Startup-hydrated: data edits need a restart to appear here.
+            "language": language,
+            "article_type": article_type,
+            "year_int": _year_int(year_published, raw),
         }
     return out
 

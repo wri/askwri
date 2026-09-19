@@ -1,4 +1,4 @@
 export interface QuerySuggestionsProps {
-  mode: 'cite' | 'answer'
+  mode: 'cite' | 'answer' | 'experts'
   onExampleClick: (example: string) => void
 }

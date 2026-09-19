@@ -28,6 +28,9 @@ const CitePanel = ({
   ops,
   alignment,
   alignLoading,
+  queryUnderstanding,
+  onRemoveFacet,
+  onApplySuggestion,
 }: {
   query: string
   docs: DocMeta[]
@@ -48,6 +51,12 @@ const CitePanel = ({
     _debugKeys?: string[]
   } | null
   alignLoading: boolean
+  queryUnderstanding?: {
+    facets: { facet: string; value: string; action: string; source: string }[]
+    suggestions: { type: string; text: string }[]
+  } | null
+  onRemoveFacet?: (chip: { facet: string; value: string }) => void
+  onApplySuggestion?: (text: string) => void
 }) => {
   const exportBibCsv = (selectedIds: string[]) => {
     exportCitationsCsv({
@@ -96,7 +105,9 @@ const CitePanel = ({
           // one and never a passage fallback when a summary exists (#306).
           short_summary: row?.shortSummary || row?.summary || summary,
           relevance: relevanceLabel,
-          how_relevant: whyMeta?.why || firstSentence(best?.snippet ?? ''),
+          // The LLM "why" from batch-relates; a passage sentence is not an
+          // explanation, so never fall back to the snippet (issue #359).
+          how_relevant: whyMeta?.why || 'Relevant supporting evidence.',
           download_url: url,
           relevance_score: docRel,
           row_number: idx + 1,
@@ -118,6 +129,9 @@ const CitePanel = ({
       alignment={alignment}
       alignLoading={alignLoading}
       onExportBib={exportBibCsv}
+      queryUnderstanding={queryUnderstanding}
+      onRemoveFacet={onRemoveFacet}
+      onApplySuggestion={onApplySuggestion}
     />
   )
 }

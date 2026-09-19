@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ANSWER_PRESET, CITE_PRESET } from '@/config/retrieval'
 import { extractPassage } from '@/app/utils/passage'
+import { FORWARDABLE_FIELDS } from '@/lib/llamaindex-client'
 
 const SEARCH_SERVICE_URL =
   process.env.SEARCH_SERVICE_URL || 'http://localhost:8000'
@@ -36,6 +37,11 @@ interface LlamaIndexResponse {
   query: string
   mode: string
   debug: Record<string, any>
+  /** Dollar cost of the request's paid API calls: {calls, total_usd}. */
+  usage?: Record<string, any> | null
+  query_understanding?: Record<string, unknown> | null
+  /** Slice 6 (#356): abstain flag — core topic absent from corpus. */
+  likely_off_topic?: boolean
 }
 
 export async function POST(req: NextRequest) {
@@ -50,8 +56,19 @@ export async function POST(req: NextRequest) {
       sparseTopK,
       rerankTopK,
       retrievalMode,
-      ...options
+      ...rest
     } = body
+
+    const unknown = Object.keys(rest).filter((k) => !FORWARDABLE_FIELDS.has(k))
+    if (unknown.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: `Unknown request field(s): ${unknown.join(', ')}` },
+        { status: 400 },
+      )
+    }
+    const options: Record<string, unknown> = {}
+    for (const k of Object.keys(rest)) options[k] = rest[k]
+
     const query = rawQuery?.trim()
 
     if (!query) {
@@ -217,7 +234,11 @@ export async function POST(req: NextRequest) {
       message: '',
       docs,
       sources: docs, // For compatibility
-      usage: null, // Retrieval-only: no LLM tokens consumed
+      usage: llamaIndexResponse.usage ?? null,
+      query_understanding: llamaIndexResponse.query_understanding ?? null,
+      // Slice 6 (#356): abstain flag — core topic absent from corpus; results
+      // likely off-topic. UI renders the banner + still shows the docs.
+      likely_off_topic: llamaIndexResponse.likely_off_topic ?? false,
       debug: {
         llamaindex: true,
         service_url: SEARCH_SERVICE_URL,

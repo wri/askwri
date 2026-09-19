@@ -21,9 +21,9 @@ const nextConfig = {
     // /api/import-documents batch — not done here to keep the OOM hotfix
     // scoped.
     proxyClientMaxBodySize: '105mb',
+    optimizePackageImports: ['react-icons'],
   },
   poweredByHeader: false,
-  optimizePackageImports: ['react-icons'],
   transpilePackages: ['jose'],
 
   // Environment variables that should be available at runtime

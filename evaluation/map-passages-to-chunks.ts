@@ -18,7 +18,6 @@
  */
 
 import * as fs from 'fs'
-import * as path from 'path'
 import {
   checkPythonService,
   callPythonService,
@@ -258,8 +257,15 @@ async function main() {
   const outputIdx = args.indexOf('--output')
   const remap = args.includes('--remap')
 
-  const defaultPath = path.join(__dirname, 'answer-golden-dataset.json')
-  const inputPath = inputIdx !== -1 ? args[inputIdx + 1] : defaultPath
+  // The old default (evaluation/answer-golden-dataset.json) was deleted by
+  // the answer-eval overhaul — the input must be named explicitly now.
+  if (inputIdx === -1 || !args[inputIdx + 1]) {
+    console.error(
+      'missing --input <golden-dataset.json> (the former default, evaluation/answer-golden-dataset.json, no longer exists)',
+    )
+    process.exit(2)
+  }
+  const inputPath = args[inputIdx + 1]
   const outputPath = outputIdx !== -1 ? args[outputIdx + 1] : inputPath // overwrite by default
 
   // Check service

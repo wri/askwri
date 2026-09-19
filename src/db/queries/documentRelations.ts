@@ -1,0 +1,214 @@
+import { AppDataSource } from '../data-source'
+
+export interface RelationDocSummary {
+  externalId: string
+  title: string | null
+  language: string | null
+}
+
+export interface RelationRow {
+  id: string
+  documentId: string
+  relatedDocumentId: string
+  relationType: string
+  status: string
+  source: string
+  confidence: number | null
+  signals: Record<string, unknown>
+  createdAt: string
+  reviewedBy: string | null
+  reviewedAt: string | null
+  translation: RelationDocSummary
+  original: RelationDocSummary
+}
+
+/** A confirm/flip/manual-create can violate one of two unique indexes. Returned
+ * as a typed value (not thrown) so the route can answer 409 instead of 500. */
+export type RelationConflictReason = 'already_confirmed' | 'pair_exists'
+export interface RelationConflict {
+  conflict: true
+  reason: RelationConflictReason
+}
+export type ReviewResult = RelationRow | null | RelationConflict
+export type ManualResult = RelationRow | RelationConflict
+
+const CONFLICT_MESSAGES: Record<RelationConflictReason, string> = {
+  already_confirmed: 'This document already has a confirmed translation pair.',
+  pair_exists:
+    'A relation row for this pair already exists (review it in the queue instead).',
+}
+
+export function conflictMessage(reason: RelationConflictReason): string {
+  return CONFLICT_MESSAGES[reason]
+}
+
+/** Map a TypeORM/pg constraint violation to a conflict reason, or null if the
+ * error is not one of ours (re-throw by the caller). */
+function classifyConflict(err: unknown): RelationConflictReason | null {
+  const e = err as {
+    driverError?: { constraint?: string }
+    constraint?: string
+  }
+  const constraint = e?.driverError?.constraint ?? e?.constraint
+  if (constraint === 'UQ_document_relations_confirmed')
+    return 'already_confirmed'
+  if (constraint === 'UQ_document_relations_pair') return 'pair_exists'
+  return null
+}
+
+const SELECT = `
+  SELECT r.id, r.document_id AS "documentId", r.related_document_id AS "relatedDocumentId",
+         r.relation_type AS "relationType", r.status, r.source,
+         r.confidence::float AS confidence, r.signals,
+         r.created_at AS "createdAt", r.reviewed_by AS "reviewedBy", r.reviewed_at AS "reviewedAt",
+         dt.external_id AS "tExternalId", COALESCE(dt.title_en, dt.title) AS "tTitle", dt.language AS "tLanguage",
+         do_.external_id AS "oExternalId", COALESCE(do_.title_en, do_.title) AS "oTitle", do_.language AS "oLanguage"
+    FROM document_relations r
+    JOIN documents dt ON dt.id = r.document_id
+    JOIN documents do_ ON do_.id = r.related_document_id`
+
+function toRow(r: any): RelationRow {
+  return {
+    id: r.id,
+    documentId: r.documentId,
+    relatedDocumentId: r.relatedDocumentId,
+    relationType: r.relationType,
+    status: r.status,
+    source: r.source,
+    confidence: r.confidence ?? null,
+    signals: r.signals ?? {},
+    createdAt: r.createdAt,
+    reviewedBy: r.reviewedBy,
+    reviewedAt: r.reviewedAt,
+    translation: {
+      externalId: r.tExternalId,
+      title: r.tTitle,
+      language: r.tLanguage,
+    },
+    original: {
+      externalId: r.oExternalId,
+      title: r.oTitle,
+      language: r.oLanguage,
+    },
+  }
+}
+
+async function audit(
+  relationId: string,
+  reviewer: string,
+  before: object,
+  after: object,
+) {
+  await AppDataSource.query(
+    `INSERT INTO audit_log (source, actor_user_id, action, entity_type, entity_id, before, after)
+     VALUES ('human', NULL, 'relation_review', 'document_relation', $1, $2, $3)`,
+    [
+      relationId,
+      JSON.stringify({ ...before, reviewer }),
+      JSON.stringify(after),
+    ],
+  )
+}
+
+export async function listRelations(status?: string): Promise<RelationRow[]> {
+  const where = status ? ` WHERE r.status = $1` : ''
+  const rows = await AppDataSource.query(
+    `${SELECT}${where} ORDER BY r.created_at DESC`,
+    status ? [status] : [],
+  )
+  return rows.map(toRow)
+}
+
+async function getRaw(id: string) {
+  const rows = await AppDataSource.query(
+    `SELECT id, document_id, related_document_id, status FROM document_relations WHERE id = $1`,
+    [id],
+  )
+  return rows[0] ?? null
+}
+
+export async function reviewRelation(
+  id: string,
+  action: 'confirm' | 'reject' | 'flip',
+  reviewer: string,
+): Promise<ReviewResult> {
+  const before = await getRaw(id)
+  if (!before) return null
+  try {
+    if (action === 'flip') {
+      await AppDataSource.query(
+        `UPDATE document_relations
+            SET document_id = related_document_id, related_document_id = document_id,
+                reviewed_by = $2, reviewed_at = now()
+          WHERE id = $1`,
+        [id, reviewer],
+      )
+    } else {
+      await AppDataSource.query(
+        `UPDATE document_relations
+            SET status = $2, reviewed_by = $3, reviewed_at = now()
+          WHERE id = $1`,
+        [id, action === 'confirm' ? 'confirmed' : 'rejected', reviewer],
+      )
+    }
+  } catch (err) {
+    const reason = classifyConflict(err)
+    if (reason) return { conflict: true, reason }
+    throw err
+  }
+  const after = await getRaw(id)
+  await audit(id, reviewer, before, after)
+  const rows = await AppDataSource.query(`${SELECT} WHERE r.id = $1`, [id])
+  return rows.length ? toRow(rows[0]) : null
+}
+
+export async function unlinkRelation(
+  id: string,
+  reviewer: string,
+): Promise<RelationRow | null> {
+  const before = await getRaw(id)
+  if (!before || before.status !== 'confirmed') return null
+  await AppDataSource.query(
+    `UPDATE document_relations SET status = 'rejected', reviewed_by = $2, reviewed_at = now()
+      WHERE id = $1`,
+    [id, reviewer],
+  )
+  const after = await getRaw(id)
+  await audit(id, reviewer, before, after)
+  const rows = await AppDataSource.query(`${SELECT} WHERE r.id = $1`, [id])
+  return rows.length ? toRow(rows[0]) : null
+}
+
+export async function createManualRelation(
+  translationDocId: string,
+  originalDocId: string,
+  reviewer: string,
+): Promise<ManualResult> {
+  let row: { id: string }
+  try {
+    const r = await AppDataSource.query(
+      `INSERT INTO document_relations
+         (document_id, related_document_id, source, status, reviewed_by, reviewed_at)
+       VALUES ($1, $2, 'human', 'confirmed', $3, now())
+       RETURNING id`,
+      [translationDocId, originalDocId, reviewer],
+    )
+    row = r[0]
+  } catch (err) {
+    const reason = classifyConflict(err)
+    if (reason) return { conflict: true, reason }
+    throw err
+  }
+  await audit(
+    row.id,
+    reviewer,
+    {},
+    {
+      status: 'confirmed',
+      document_id: translationDocId,
+      related_document_id: originalDocId,
+    },
+  )
+  const rows = await AppDataSource.query(`${SELECT} WHERE r.id = $1`, [row.id])
+  return toRow(rows[0])
+}

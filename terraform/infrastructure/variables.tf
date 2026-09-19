@@ -291,5 +291,5 @@ variable "intake_s3_prefix" {
 variable "worker_llm_model" {
   description = "LLM model name used by the ingestion worker for summaries and tagging"
   type        = string
-  default     = "gpt-5-mini"
+  default     = "gpt-5.6-luna"
 }

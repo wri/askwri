@@ -88,6 +88,12 @@ const setupFetchMock = (actionOverrides: Record<string, any> = {}) => {
         json: () => Promise.resolve(mockHealth),
       })
     }
+    if (url.startsWith('/api/admin/relations')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, relations: [] }),
+      })
+    }
     const overrideKey = Object.keys(actionOverrides).find((k) =>
       url.endsWith(k),
     )

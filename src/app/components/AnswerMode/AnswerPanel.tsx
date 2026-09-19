@@ -19,6 +19,7 @@ import { IoIosCopy, IoMdCheckmark } from 'react-icons/io'
 import { AiIcon } from '../icons/AiIcon'
 import { formatCO2, formatCost } from '../../utils/utils'
 import { AnswerPanelProps } from './types'
+import { citedDocCount, orderCitationItems } from './citations'
 import { FeedbackType, FeedbackSubmitted } from '../results/types'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
@@ -41,9 +42,8 @@ export const AnswerPanel = ({
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const numberOfUsedKnowledgeProducts = supportingDocs
-    ? new Set(supportingDocs.map((doc) => doc.doc_id)).size
-    : 0
+  const numberOfUsedKnowledgeProducts = citedDocCount(answer.inline)
+  const { indexByPassageId } = orderCitationItems(supportingDocs, answer.inline)
   // 0 = no feedbackState, 1 = positive, -1 = negative
   const [feedbackState, setFeedbackState] = useState<FeedbackType>(
     FeedbackType.None,
@@ -186,100 +186,89 @@ export const AnswerPanel = ({
           }}
         >
           {answer.paragraphs
-            ? (() => {
-                let globalCitationIdx = 0
-                return answer.paragraphs.map((paragraph, pIdx) => {
-                  let sentenceOffset = 0
-                  for (let p = 0; p < pIdx; p++) {
-                    sentenceOffset += answer.paragraphs![p].length
-                  }
-                  return (
-                    <Box key={pIdx} marginBottom='3'>
-                      {paragraph.map((sent, sIdx) => {
-                        const globalSentIdx = sentenceOffset + sIdx
-                        return (
-                          <Text as='span' key={sIdx}>
-                            {sent}{' '}
-                            {answer.inline?.[globalSentIdx]?.map(
-                              (c: any, j: number) => {
-                                const citationDisplay = `${globalSentIdx + 1}.${j + 1}`
-                                const citationPage = globalCitationIdx + 1
-                                const btn = (
-                                  <Button
-                                    key={j}
-                                    size='small'
-                                    variant='secondary'
-                                    style={{
-                                      fontSize: '9px',
-                                      minWidth: 0,
-                                      height: 'auto',
-                                      lineHeight: 1,
-                                      ...(supportingCitationsPage ===
-                                      citationPage
-                                        ? {
-                                            background: '#0A4298',
-                                            color: 'white',
-                                          }
-                                        : {}),
-                                    }}
-                                    title={`Citation ${globalSentIdx + 1}.${j + 1}`}
-                                    onClick={() =>
-                                      setSupportingCitationsPage?.(citationPage)
-                                    }
-                                  >
-                                    {citationDisplay}
-                                  </Button>
-                                )
-                                globalCitationIdx++
-                                return btn
-                              },
-                            )}{' '}
-                          </Text>
-                        )
-                      })}
-                    </Box>
-                  )
-                })
-              })()
-            : (() => {
-                let globalCitationIdx = 0
-                return answer.sentences.map((sent, i) => (
-                  <Text as='p' key={i} marginBottom='1' lineHeight='normal'>
-                    {sent}{' '}
-                    {answer.inline?.[i]?.map((c: any, j: number) => {
-                      const citationDisplay = `${i + 1}.${j + 1}`
-                      const citationPage = globalCitationIdx + 1
-                      const btn = (
-                        <Button
-                          key={j}
-                          size='small'
-                          variant='secondary'
-                          style={{
-                            fontSize: '9px',
-                            minWidth: 0,
-                            height: 'auto',
-                            lineHeight: 1,
-                            ...(supportingCitationsPage === citationPage
-                              ? {
-                                  background: '#0A4298',
-                                  color: 'white',
+            ? answer.paragraphs.map((paragraph, pIdx) => {
+                let sentenceOffset = 0
+                for (let p = 0; p < pIdx; p++) {
+                  sentenceOffset += answer.paragraphs![p].length
+                }
+                return (
+                  <Box key={pIdx} marginBottom='3'>
+                    {paragraph.map((sent, sIdx) => {
+                      const globalSentIdx = sentenceOffset + sIdx
+                      return (
+                        <Text as='span' key={sIdx}>
+                          {sent}{' '}
+                          {answer.inline?.[globalSentIdx]?.map((c, j) => {
+                            const citationDisplay = `${globalSentIdx + 1}.${j + 1}`
+                            const citationPage =
+                              (indexByPassageId[c.passage_id] ?? 0) + 1
+                            return (
+                              <Button
+                                key={j}
+                                size='small'
+                                variant='secondary'
+                                style={{
+                                  fontSize: '9px',
+                                  minWidth: 0,
+                                  height: 'auto',
+                                  lineHeight: 1,
+                                  ...(supportingCitationsPage === citationPage
+                                    ? {
+                                        background: '#0A4298',
+                                        color: 'white',
+                                      }
+                                    : {}),
+                                }}
+                                title={`Citation ${citationDisplay}`}
+                                onClick={() =>
+                                  setSupportingCitationsPage?.(citationPage)
                                 }
-                              : {}),
-                          }}
-                          title={`Citation ${i + 1}.${j + 1}`}
-                          onClick={() =>
-                            setSupportingCitationsPage?.(citationPage)
-                          }
-                        >
-                          {citationDisplay}
-                        </Button>
+                              >
+                                {citationDisplay}
+                              </Button>
+                            )
+                          })}{' '}
+                        </Text>
                       )
-                      globalCitationIdx++
-                      return btn
                     })}
-                  </Text>
-                ))
-              })()}
+                  </Box>
+                )
+              })
+            : answer.sentences.map((sent, i) => (
+                <Text as='p' key={i} marginBottom='1' lineHeight='normal'>
+                  {sent}{' '}
+                  {answer.inline?.[i]?.map((c, j) => {
+                    const citationDisplay = `${i + 1}.${j + 1}`
+                    const citationPage =
+                      (indexByPassageId[c.passage_id] ?? 0) + 1
+                    return (
+                      <Button
+                        key={j}
+                        size='small'
+                        variant='secondary'
+                        style={{
+                          fontSize: '9px',
+                          minWidth: 0,
+                          height: 'auto',
+                          lineHeight: 1,
+                          ...(supportingCitationsPage === citationPage
+                            ? {
+                                background: '#0A4298',
+                                color: 'white',
+                              }
+                            : {}),
+                        }}
+                        title={`Citation ${citationDisplay}`}
+                        onClick={() =>
+                          setSupportingCitationsPage?.(citationPage)
+                        }
+                      >
+                        {citationDisplay}
+                      </Button>
+                    )
+                  })}
+                </Text>
+              ))}
         </Box>
         <div
           style={{

@@ -34,7 +34,7 @@ The design doc (`docs/plans/2026-06-09-askwri-document-management-design.md`, §
 
 Per design §20 lean-core cut:
 
-- `works`/versioning/translation grouping — removed under "one paper = one original document" assumption.
+- `works`/versioning grouping — removed under "one paper = one original document" assumption; translation pairing reopened in §12 (issue #325).
 - `document_attributes` (typed attributes table) — deferred; categorical tags + fixed columns for now.
 - Tag-label localization (`tag_labels` table) — canonical English `value_id` only.
 - Authoritative-import precedence subtleties (dry-run diff, `source=external` overwrite protection) — tags seeded with `source='external'`, `status='accepted'`; overwrite precedence logic deferred to Phase 1.
@@ -246,10 +246,10 @@ queued → running → queued (next stage) → … → done | needs_review | err
 
 | Stage | What it does |
 |---|---|
-| **parse** | Dispatches on `PARSE_BACKEND` (multilingual-v3, 2026-07-22): `pypdf` (default — PDFReader/LlamaIndex text layer) or `mistral` (Mistral OCR markdown, per-page emission; parser page indices drive `page_boundaries`, fixing the zh page-attribution drift). Ratified parser for Phase C per the bake-off (`docs/plans/2026-07-22-parse-bakeoff-phase0-results.md`). Selected per-environment via worker env — qa runs `mistral` and its corpus is fully re-parsed (2026-07-23); the code default stays `pypdf` deliberately (see the parse-backend note above). Writes `document_texts` (`full_text`, `page_boundaries`). Sets document `status='processing'`. Falls back to title+summary text for CSV-imported docs with no associated file. If no text can be extracted at all, advances to `needs_review`. Also runs one structured-output LLM call that extracts `title`, `title_en`, `authors`, `doi`, `year_published`, `article_type`, `wri_primary_office`, each written under the `metadata_source` provenance guard (overwrite only when NULL/`llm`). Since issue #303 this stage owns the `title`/`title_en` pair: `title` is the native-language title **alone** and `title_en` the document's own English title when the cover carries one, else a translation — asking for a single "title" returned bilingual covers concatenated into both columns. Author names are transliterated to Latin script in the same call; native-script forms are not retained (a re-ingest re-extracts them). **Parse cache (issue #310 follow-up):** each write stamps `document_texts.parsed_content_hash` / `parse_backend` / `parse_model` (empty model for pypdf). On a later run, if all three match the document's current `content_hash` and the worker's current backend/model, the stage reuses the stored text and skips **both the S3 download and the OCR call**; metadata extraction and every downstream stage still run, so prompt-tuning re-ingests re-run the cheap stages only. Misses on NULL stamps (all pre-migration rows — that is what makes the migration behavior-neutral), NULL `content_hash` (CSV-era rows), changed bytes, a backend flip, or a change to the stamped `MISTRAL_OCR_MODEL` **string**. Two things the stamps deliberately do NOT track, both requiring `FORCE_REPARSE=true` (or a changed model string) to invalidate: a change to what the parse code *emits* under an unchanged backend (the 2026-07-22 per-page boundary fix is the precedent), and Mistral repointing the default `mistral-ocr-latest` alias — pin a dated model id per environment if you want that to invalidate on its own. `FORCE_REPARSE=true` bypasses the read path for a deliberate re-OCR. Making an existing corpus cache-eligible is a per-environment ops step (see `docs/runbooks/qa-push-deploy.md`), not a migration: the correct `parse_backend` value differs by environment. **Transport (2026-08-05):** the document is uploaded to Mistral file storage (`purpose='ocr'`) and referenced by a signed URL, then deleted after the call — it is NOT inlined as a base64 data URI. Base64 is 1.37x, so a 50MB PDF became a ~68MB request body, and it was never established whether the 50MB limit applies to the document or the body (i.e. whether the real raw ceiling was ~36MB). Uploading removes the question, verified against the live API, and drops peak per-parse memory by roughly two copies of the file. `scripts/batch_ocr.py` shares the same helper, so both transports submit documents identically. **Oversize shrink (issue #310 follow-up, mistral backend only):** Mistral OCR rejects files over 50MB (`MISTRAL_MAX_BYTES`). A PDF over that is passed through Ghostscript (raster images downsampled to 300 dpi — not the 150 dpi `/ebook` preset, which costs OCR legibility on small figure labels) and the **shrunk bytes are submitted to OCR only**; S3 and the app keep the original file. Ghostscript exit 0 is not trusted on its own — the output is re-read and rejected if it is empty, unreadable, or has fewer pages than the source (gs 10's repair path can silently drop pages, which would OCR clean and cache as complete). A shrunk parse stamps `parse_model` with a `+gs300` policy tag, so it is distinguishable from a full-resolution parse of the same bytes and **never hits the cache** — once the cap is raised, re-ingesting genuinely re-OCRs at full resolution rather than serving downsampled text forever. `WHERE parse_model LIKE '%+gs%'` finds every affected document. If `gs` is missing or fails outright, the stage raises with the sizes named and the job lands in the review queue. **If the shrink cannot get under the cap, the document is split on page ranges instead** (2..10 parts, each targeted at 90% of the limit), OCR'd part by part, and stitched back together with page indices rebased onto the whole document so citations keep pointing at the right page. This is lossless and exists because downsampling does nothing for a file whose size is page count rather than image resolution: the real 304-page `wri-india-nup-report.pdf` (59.2MB of already ~72dpi imagery) gave back 2.1MB at 300 dpi and 2.8MB at 150 dpi, while `/ebook` and `/screen` crashed outright; splitting it into 3 parts yields 37.2 / 19.3 / 2.7MB. Note the reachable lane: the admin upload route still rejects >50MB at the door (`MAX_FILE_BYTES`, deliberately unchanged), so today this path only fires for files dropped directly into the S3 intake prefix, which has no size cap. Raising the upload cap is a separate decision to make **after** the mechanism is proven on the 59MB `wri-india-nup-report.pdf`. |
+| **parse** | Dispatches on `PARSE_BACKEND` (multilingual-v3, 2026-07-22): `pypdf` (default — PDFReader/LlamaIndex text layer) or `mistral` (Mistral OCR markdown, per-page emission; parser page indices drive `page_boundaries`, fixing the zh page-attribution drift). Ratified parser for Phase C per the bake-off (`docs/plans/2026-07-22-parse-bakeoff-phase0-results.md`). Selected per-environment via worker env — qa runs `mistral` and its corpus is fully re-parsed (2026-07-23); the code default stays `pypdf` deliberately (see the parse-backend note above). Writes `document_texts` (`full_text`, `page_boundaries`). Sets document `status='processing'`. Falls back to title+summary text for CSV-imported docs with no associated file. If no text can be extracted at all, advances to `needs_review`. Also runs one structured-output LLM call that extracts `title`, `title_en`, `authors`, `doi`, `year_published`, `article_type`, `wri_primary_office`, each written under the `metadata_source` provenance guard (overwrite only when NULL/`llm`). Since issue #303 this stage owns the `title`/`title_en` pair: `title` is the native-language title **alone** and `title_en` the document's own English title when the cover carries one, else a translation — asking for a single "title" returned bilingual covers concatenated into both columns.<br><br>Author names are returned as structured family/given-name parts, transliterated to Latin script, and deterministically stored as `Family, Given` entries separated by semicolons; organization and single-name authors are preserved without an invented comma. `date_published` and `publication_title` are not parse-stage model fields. **Parse cache (issue #310 follow-up):** each write stamps `document_texts.parsed_content_hash` / `parse_backend` / `parse_model` (empty model for pypdf). On a later run, if all three match the document's current `content_hash` and the worker's current backend/model, the stage reuses the stored text and skips **both the S3 download and the OCR call**; metadata extraction and every downstream stage still run, so prompt-tuning re-ingests re-run the cheap stages only. Misses on NULL stamps (all pre-migration rows — that is what makes the migration behavior-neutral), NULL `content_hash` (CSV-era rows), changed bytes, a backend flip, or a change to the stamped `MISTRAL_OCR_MODEL` **string**. Two things the stamps deliberately do NOT track, both requiring `FORCE_REPARSE=true` (or a changed model string) to invalidate: a change to what the parse code *emits* under an unchanged backend (the 2026-07-22 per-page boundary fix is the precedent), and Mistral repointing the default `mistral-ocr-latest` alias — pin a dated model id per environment if you want that to invalidate on its own. `FORCE_REPARSE=true` bypasses the read path for a deliberate re-OCR. Making an existing corpus cache-eligible is a per-environment ops step (see `docs/runbooks/qa-push-deploy.md`), not a migration: the correct `parse_backend` value differs by environment. **Transport (2026-08-05):** the document is uploaded to Mistral file storage (`purpose='ocr'`) and referenced by a signed URL, then deleted after the call — it is NOT inlined as a base64 data URI. Base64 is 1.37x, so a 50MB PDF became a ~68MB request body, and it was never established whether the 50MB limit applies to the document or the body (i.e. whether the real raw ceiling was ~36MB). Uploading removes the question, verified against the live API, and drops peak per-parse memory by roughly two copies of the file. `scripts/batch_ocr.py` shares the same helper, so both transports submit documents identically. **Oversize shrink (issue #310 follow-up, mistral backend only):** Mistral OCR rejects files over 50MB (`MISTRAL_MAX_BYTES`). A PDF over that is passed through Ghostscript (raster images downsampled to 300 dpi — not the 150 dpi `/ebook` preset, which costs OCR legibility on small figure labels) and the **shrunk bytes are submitted to OCR only**; S3 and the app keep the original file. Ghostscript exit 0 is not trusted on its own — the output is re-read and rejected if it is empty, unreadable, or has fewer pages than the source (gs 10's repair path can silently drop pages, which would OCR clean and cache as complete). A shrunk parse stamps `parse_model` with a `+gs300` policy tag, so it is distinguishable from a full-resolution parse of the same bytes and **never hits the cache** — once the cap is raised, re-ingesting genuinely re-OCRs at full resolution rather than serving downsampled text forever. `WHERE parse_model LIKE '%+gs%'` finds every affected document. If `gs` is missing or fails outright, the stage raises with the sizes named and the job lands in the review queue. **If the shrink cannot get under the cap, the document is split on page ranges instead** (2..10 parts, each targeted at 90% of the limit), OCR'd part by part, and stitched back together with page indices rebased onto the whole document so citations keep pointing at the right page. This is lossless and exists because downsampling does nothing for a file whose size is page count rather than image resolution: the real 304-page `wri-india-nup-report.pdf` (59.2MB of already ~72dpi imagery) gave back 2.1MB at 300 dpi and 2.8MB at 150 dpi, while `/ebook` and `/screen` crashed outright; splitting it into 3 parts yields 37.2 / 19.3 / 2.7MB. Note the reachable lane: the admin upload route still rejects >50MB at the door (`MAX_FILE_BYTES`, deliberately unchanged), so today this path only fires for files dropped directly into the S3 intake prefix, which has no size cap. Raising the upload cap is a separate decision to make **after** the mechanism is proven on the 59MB `wri-india-nup-report.pdf`. |
 | **language** | langdetect; supported set: `{en, es, zh, pt, id}` (Indonesian added in Phase 1). Unsupported languages fall back to `en`. Long docs vote across head/middle/late windows (2026-07-22): WRI zh/es/pt reports open with English cover pages, and a head-only sample flipped `documents.language` to `en` on re-ingest. |
 | **summarize** | Generates native-language + English long/short summaries via `WORKER_LLM_MODEL` (default `gpt-5-mini`), `source='generated'`. Skips rows that already exist (including CSV-seeded `source='external'` rows). Also a **fallback** writer of `title_en`, for documents the parse extraction never reached (CSV rows with no PDF; extraction-call failures) — it fires only when `title_en` is still blank: English docs get `= title`, non-English docs an LLM translation. Provenance-guarded via `metadata_source->>'title_en'` (overwrite only when NULL/`llm`; never `human`/`external`). Since issue #303 the parse stage owns the `title`/`title_en` pair and refreshes both together on re-ingest, so they never drift. |
-| **classify** | LLM call constrained to the `tags` taxonomy v1 values. Writes `document_tags` with `source='llm'`; `status='accepted'` if `confidence ≥ TAG_CONFIDENCE_ACCEPT` (default 0.7), else `status='suggested'`. Never touches rows with `source='human'` or `source='external'`. |
+| **classify** | LLM classification uses embedded topic candidates plus the complete v1 vocabularies for the other facets. Topic results are corrective: after a successful call the worker deduplicates at most five selections, deletes stale LLM-owned topic assignments, and refreshes selected LLM confidence/status/model fields. It never updates or deletes `source='human'` or `source='external'` rows. `status='accepted'` when confidence ≥ `TAG_CONFIDENCE_ACCEPT` (default 0.7), otherwise `suggested`. |
 | **embed** | Phase 0-identical chunking *parameters* (SimpleNodeParser 400/80 + summary node, legacy chunk id format). Dense model is model-aware since multilingual-v3 B1: `EMBEDDING_MODEL` selects `cohere-embed-v4` (Bedrock, the default and post-2026-07-22-cutover state) or `text-embedding-3-small` (OpenAI, rollback path); rows record `embedding_model`/`dimension`. Note: chunk *metadata* diverges from the Phase-0 migration in title source (worker uses `Publication Title` fallback, matching `indexing.build_nodes`; the migration used `Article Title`), authors (worker stores full, not truncated to 100), and `file_path` (worker stores the CSV `file_path`, not `s3_key`). `corpus_order` appended after the current global max (advisory lock for concurrency). Re-ingest deletes prior chunks first. Chinese text and summaries are OpenCC t2s-normalized in chunks only (`document_texts` retains original); page boundaries are recomputed on the Simplified text to avoid OpenCC length-change drift. Also writes sparse keyword vectors under the frozen corpus stats (new tokens get `df=1`); a token_id headroom guard **warns at 80% of `SPARSE_DIM`** and raises a clear error at the cap (run `build_sparse_keyword.py` or migrate the dimension). **After any BULK re-ingest, `scripts/build_sparse_keyword.py` must be re-run before any threshold derivation**: the stage assigns brand-new tokens `lucene_idf(1, n_chunks)` from the FROZEN `keyword_corpus_stats`, so a bulk run leaves both `n_chunks`/`avgdl` and the new tokens' IDF drifted from the real corpus. (Phase D 2026-07-23: stats were stale at 30,435 vs an actual 27,878 until rebuilt; vocab grew 190,070 -> 233,936.) If `keyword_corpus_stats` is missing (backfill never ran), it writes `NULL` sparse with a warning. When `SPARSE_EN_HANDLES=true`, English handle text (title_en per chunk; English long summary on the summary chunk) is appended to the sparse tokenization string only for non-EN docs — dense content and stored text are untouched (see §5). |
 | **publish** | Computes `extraction_confidence = 0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` where density = `min(chars_per_page / QUALITY_MIN_CHARS_PER_PAGE, 1)` (`QUALITY_MIN_CHARS_PER_PAGE` default 200). Since issue #310 ingestion **never auto-publishes a new document**: it parks at `needs_review` regardless of score (the job additionally parks in the review state only when `< 0.7`, so extraction concerns stay distinguishable from routine pending review), and only the admin promote route flips it to `searchable`. Exception — **re-ingest of an already-promoted doc**: parse records the pre-ingest status on the job (`ingestion_jobs.prior_status`, first write per job wins), and publish restores `prior_status='searchable'` docs to `searchable` when the score passes 0.7 (so `reingest_all` doesn't unpublish the corpus); a restore fires the same best-effort `POST SEARCH_SERVICE_URL/reindex` (one retry on `409 already_running`) as the promote route, because the live doc's chunks changed. A degraded re-parse (`< 0.7`) refuses the restore and parks. Withdrawn docs are never touched. |
 
@@ -293,12 +293,24 @@ A review UI shipped in Phase 2; see §11 below.
 | `DOCUMENTS_S3_BUCKET` | — | S3 bucket for both intake and document storage |
 | `DOCUMENTS_S3_PREFIX` | — | S3 prefix for stored documents |
 | `TAG_CONFIDENCE_ACCEPT` | `0.7` | LLM tag confidence threshold for `accepted` vs `suggested` |
+| `TAG_CANDIDATE_TOP_N` | `20` | Nearest embedded v1 topic candidates offered to the classifier |
+| `TAG_RECLASSIFY_CONCURRENCY` | `4` | Maximum independently claimed reclassification jobs processed per poll tick |
+| `TAG_EMBED_BATCH_SIZE` | `100` | Topic embeddings processed per maintenance batch |
+| `CLASSIFY_TOPIC_ONLY` | `false` | Restrict an ordinary classify run to the topic facet; reclassification jobs are topic-only regardless |
+| `RECLASSIFY_POLL_FIRST` | `true` | Poll reclassification before ingestion after topic-embedding maintenance |
 | `QUALITY_MIN_CHARS_PER_PAGE` | `200` | Chars/page baseline for extraction_confidence density term |
 | `SPARSE_EN_HANDLES` | `false` | English handles into sparse weights for non-EN docs (embed stage; must match the backfill's setting — see §5) |
 | `SEARCH_SERVICE_URL` | — | Used by publish stage to trigger `/reindex` |
 | `OPENAI_API_KEY` | — | Required for summarize and embed stages |
 | `DATABASE_URL` | — | Postgres connection string |
 | `FORCE_REPARSE` | `false` | Bypass the parse cache and re-OCR every document (see the parse stage) |
+
+Every worker tick performs missing/stale topic-embedding maintenance before it
+claims reclassification jobs. With `RECLASSIFY_POLL_FIRST=true`, it then claims
+up to `TAG_RECLASSIFY_CONCURRENCY` jobs before checking ingestion. A failed
+embedding sweep is logged and isolated from ingestion, while a topic-only job
+with no usable candidate embeddings fails for retry instead of being marked
+done. `FOR UPDATE SKIP LOCKED` remains the arbiter across threads and replicas.
 
 ### 10.6b Bulk OCR via the Batch API (`scripts/batch_ocr.py`)
 
@@ -421,6 +433,12 @@ All APIs are under `/api/admin`:
 | `GET/POST /api/admin/tags` | List taxonomy values; add a new value |
 | `DELETE /api/admin/tags/[id]` | Delete unused tag (admin only) |
 | `PATCH /api/admin/tags/[id]` | Rename a tag value or facet (admin only) |
+| `GET/POST /api/admin/topics` | List the v1 topic taxonomy or create a topic |
+| `POST /api/admin/topics/import` | Preview/apply atomic topic CSV changes; optional reclassification is explicit |
+| `POST /api/admin/topics/[id]/merge` | Guarded topic merge with assignment precedence and scoped queueing |
+| `GET/POST /api/admin/topics/reclassify` | GET estimates eligible documents and cost; POST explicitly enqueues an all/scoped run or retries one run |
+| `GET /api/admin/topics/reclassify/status` | Recent run counts and bounded document-level errors |
+| `POST /api/admin/topics/embeddings/rebuild` | Mark missing/stale topic embeddings for worker maintenance |
 | `GET/POST /api/admin/collections` | List or create collections |
 | `PATCH /api/admin/collections/[id]` | Rename a collection (regenerates slug) |
 | `POST/DELETE /api/admin/collections/[id]/documents` | Add or remove documents from a collection |
@@ -451,4 +469,215 @@ The following items were not built in Phase 2 (owner unassigned):
 - Audit-history UI (the `audit_log` table is populated; no read surface in the UI)
 - Summary editing
 - Per-collection bulk operations
-- Taxonomy rename/merge and version bumps
+- Taxonomy version bumps
+
+### 11.9 Topic taxonomy operations
+
+The topic manager is scoped to `facet='topic'` and `taxonomy_version='v1'`.
+Reclassification is deliberately estimate-then-confirm: opening the dialog
+performs `GET /api/admin/topics/reclassify?scope=all` (or `?tagId=<uuid>`),
+which returns `{eligible, estCost}` without writing. Only the confirmed
+`POST` with `{scope:'all'}` or `{tagId:'<uuid>'}` creates jobs. The estimate
+uses $0.0008 per eligible document; the POST response reports the actual
+enqueued count, cost, and generated run ID, so a changed queue cannot hide
+behind the earlier estimate.
+
+Run retry is targeted: `POST {retryRunId:'<uuid>'}` resets only error jobs in
+that run, clears their errors and attempts, and preserves the run ID. Enqueue
+and retry write transaction-bound `reclassify_enqueue` audits. The last
+terminal job writes one system `reclassify_run` audit with total/done/error and
+estimated cost. Rebuild requests write `tag_embeddings_rebuild`; the Python
+worker remains the only writer of `tag_embeddings` rows.
+
+## 12. Translation pairs (issue #325)
+
+Some papers exist as both a non-English original and an official English translation,
+catalogued as unrelated documents. Both were indexed, so one paper could occupy two
+result slots and be cited twice. Translation pairs link the two so the **original is
+the only cited/counted identity**; the English translation is a rendition.
+
+### 12.1 Table and direction
+
+`document_relations` holds directed edges:
+
+| column | notes |
+|---|---|
+| `document_id` | FK → documents. The **translation** (rendition). |
+| `related_document_id` | FK → documents. The **original**. |
+| `relation_type` | `'translation_of'` (only value today). |
+| `status` | `'suggested'` \| `'confirmed'` \| `'rejected'`. |
+| `source` | `'system'` (worker) \| `'human'` (app tier). |
+| `confidence` | numeric, null for human-created rows. |
+| `signals` | jsonb — what fired, shown to the reviewer. |
+
+Direction is fixed: `document_id` = translation, `related_document_id` = original.
+"Original wins" reads straight off the edge. Constraints: unique undirected pair
+(`UQ_document_relations_pair` on LEAST/GREATEST), at most one confirmed
+`translation_of` per translation doc (`UQ_document_relations_confirmed`), no
+self-edges. Rejected rows persist as don't-re-suggest memory.
+
+### 12.2 Lifecycle and two-writer precedence
+
+Mirrors `document_tags`: the worker only INSERTs `source='system',
+status='suggested'` rows and never modifies human-touched rows. The app tier owns
+confirm/reject/flip/unlink/manual-create; every state change writes an `audit_log`
+row (`action='relation_review'`, `entity_type='document_relation'`).
+
+### 12.3 Suggestion generation
+
+Runs worker-side at the end of each doc's ingestion (`worker/stages/publish.py`
+calls `worker.relate.suggest_for_document`), comparing the new doc against every
+active doc. The same logic ships as a re-runnable sweep:
+`python -m scripts.sweep_translation_pairs` (dry-run default; `--execute` to write;
+`--limit N`). Idempotent — pairs with any existing relation row (any status) are
+skipped.
+
+Triggers (measured on qa 2026-08-13):
+
+1. **Primary:** normalized `title_en` fuzzy similarity ≥ `relation_title_threshold`
+   (0.75). Found all 10 known pairs.
+2. **Secondary:** summary-embedding cosine ≥ `relation_embed_threshold` (0.85) —
+   catches retitled near-duplicates. High bar: known pairs' embedding cosines span
+   only 0.63–0.76, below revised editions / country series at 0.85–0.95, so
+   embedding alone cannot distinguish a translation from a related-but-distinct doc.
+3. Embedding cosine and stamped-vs-detected language disagreement are recorded on
+   every suggestion as reviewer evidence, regardless of which trigger fired.
+
+No gate on language labels — the two #332 mislabeled pairs (stamped zh, text en) still
+fire. Proposed direction uses **detected text language**, not stamps; if both
+members read the same language, no direction is proposed (the human picks).
+
+### 12.4 Retrieval behavior (flag-gated, default OFF)
+
+Only `status='confirmed'` edges affect retrieval. All filtering is query-time (a
+join against confirmed edges) — no index or ingest changes, so confirm/unlink takes
+effect on the next query with no reindex. Gated on `translation_pairs_enabled`
+(Settings, default `False`); rollback is flag-off.
+
+- **Answer mode:** translation docs' chunks are dropped before rerank — passages
+  can only come from originals, so a pair cannot double-count. English queries
+  still reach non-English passages via the cross-lingual dense lane.
+- **Cite mode:** translation chunks stay in (the English full text helps find the
+  work). At assembly, a hit on a translation is credited to its original and the
+  pair collapses to one result — the original's identity and `title_en`. If only
+  the translation matched, its text is shown with `excerpt_from_translation` in
+  the result metadata. Response shape is unchanged; new keys
+  (`has_english_translation`, `excerpt_from_translation`) are inside the existing
+  `metadata` dict.
+
+Activation is eval-gated (#333): run `eval:cite` flag-off
+then flag-on on the same harness; enable only on acceptable deltas. (The
+gen-1 `eval:answer-retrieval` gate was deleted with the gen-1 answer eval.)
+
+### 12.5 DMS surfaces
+
+- **Review queue** (`/admin/review`, "Translation suggestions" section): pending
+  suggestions with both docs side by side, the signals that fired, and confirm /
+  reject / flip-direction actions. Confirmed rows show Unlink.
+- **Document detail page** (`/admin/documents/[id]`): a RelationsPanel showing the
+  doc's relations, a manual-link form, and an orphan warning when the doc is the
+  original of a confirmed edge (withdrawing it also removes its translation).
+- **Corpus health:** `pendingRelationSuggestions` and `confirmedTranslationPairs`
+  counts surface an unworked queue.
+
+### 12.6 Ownership
+
+Worker (Python) inserts `source='system', status='suggested'` rows only. App tier
+(Node) owns confirm/reject/flip/unlink/manual-create and the review UI. Same
+two-writer precedence as `document_tags`; the worker never touches human-reviewed
+rows.
+
+## Author name format (issue #411)
+
+`documents.authors` is a semicolon-delimited string; each person is
+`Family, Given` (e.g. `Mahendra, Anjali; Pai, Madhav`). The ingest worker
+writes this format; CSV imports may deliver any order.
+
+- **CSV imports** tidy comma spacing on arrival and mark values that still
+  contain a comma-less name with `metadata_source.authors_format =
+  'unverified'` — these are CSV-sourced (`external`) values the worker is
+  forbidden from rewriting, so they cannot self-heal. A later CSV import with
+  a fully comma'd value clears the flag, and so does a human editing authors
+  in the admin UI (the edit *is* the verification). The flag is written only
+  on the flat-CSV paths, which also assert `external` provenance: a legacy
+  JSON-blob import leaves provenance NULL, so its authors stay
+  worker-overwritable and need no marker.
+- **A spacing-only difference is not an overwrite.** If the stored value
+  differs from the CSV cell only in comma or separator whitespace, the import
+  skips the field rather than rewriting it — otherwise re-importing an
+  unchanged CSV over a corpus stored before tidying shipped would stamp
+  `external` provenance and enqueue a re-ingest for most of the corpus.
+  Cleaning up stored values is the repair script's job, below.
+- **Known limitation:** the field contract is semicolon-delimited. A value
+  that uses commas as the author separator (`Anjali Mahendra, Madhav Pai`)
+  parses as one person and is reported verified. No heuristic detects this
+  without false-positives on legitimate multi-token families
+  (`van der Berg, Jan`), so CSV sources that delimit authors with commas must
+  be fixed upstream.
+- **`scripts/repair-author-formats.ts`** repairs existing rows. It flips a
+  comma-less `Given Family` name to the `Family, Given` form only when a
+  comma'd spelling of the same person (strict key: family + full given name,
+  diacritic-folded) exists elsewhere in the corpus; unconfirmed external
+  names are left in place and flagged `unverified`; llm rows are flipped
+  under the same evidence rule (provenance stays `llm`, so a future re-ingest
+  supersedes the script's value). Human-edited rows are never touched. The
+  script is dry-run by default; `--apply` commits, writes one
+  `author_format_repair` audit row per changed document, and is idempotent.
+
+Run it (manual ops action — deploys nothing):
+
+    ./scripts/with-remote-env.sh qa         npm run repair:author-formats          # dry run
+    ./scripts/with-remote-env.sh qa         npm run repair:author-formats -- --apply
+    ./scripts/with-remote-env.sh production npm run repair:author-formats -- --apply
+
+Run the repair script **before** the next CSV re-import of the same corpus, so
+the stored values are already canonical and the import has nothing cosmetic to
+disagree with.
+
+Read the report top-down: op counts, then one line per document with each
+`before -> after` (ordered by `external_id`, so two runs diff cleanly).
+`DROPPED` lines mean a guard missed at write time — the document's authors or
+provenance changed between the plan and the write, usually a worker re-ingest
+or a concurrent import. The script exits non-zero when anything dropped; rerun
+the dry run to re-plan. Consumers that group by author must group on a key from
+`src/lib/authorFormat.ts`, never on the raw string. WHICH key depends on what a
+mistake costs, and the two are not interchangeable:
+
+- `canonicalAuthorKey()` reduces the given name to initials. Measured over the
+  460 unique author strings in the QA corpus that correctly merges four spelling
+  variants (`Welle, Ben`/`Benjamin`, `Jacquin, C`/`Céline`, and two accent
+  pairs) but also merges three pairs of **different researchers** —
+  `Chen, Yong`/`Chen, Yidan`, `Jiang, Hui`/`Jiang, Hongqiang`,
+  `López, Segundo`/`López, Sandra`. That is the right trade for an admin filter,
+  where a stray extra row is cheap to notice.
+- `/experts` ranks people, where a false merge invents a composite person and
+  floats them to the top of a list of named colleagues. It therefore folds
+  diacritics with this module's `foldToken()` and keeps the WHOLE given name
+  (`src/lib/experts/authorKey.ts`), accepting two conservative splits rather
+  than three false merges.
+
+**On `unverified`, be careful what you skip.** Measured on QA after the repair
+ran (2026-09-10): 10 of 201 searchable documents carry
+`authors_format='unverified'`, 191 carry no flag, and none are marked
+`verified` — the flag is stamped when an entry cannot be split, not cleared to
+a positive. Of those 10, **eight are flagged solely because their sole author is
+an organization** (`Coalition for Urban Transitions`), and the other two because
+one co-author is a bare single token (`Cheng`, `Burlacu`) alongside four or five
+perfectly well-formed names.
+
+So a document-level skip is the wrong instrument for a ranking: it would discard
+good evidence for correctly-named people because a co-author's name is a bare
+token, and it would re-solve a problem that is better handled per author.
+`/experts` therefore drops organizations from `people` entirely (keyword match,
+never word count) and marks an unsplittable personal name `unverified` on the
+author, showing the name as stored rather than guessing a key. Prefer the same
+shape — per author, not per document — unless your consumer genuinely needs the
+document-level flag.
+
+**The repair does not remove residual variants**, which is why the key logic
+still matters. It only flips a comma-less name when a comma'd sibling exists, so
+after it ran QA still holds `Castellanos, Sebastian` **and** `Sebastián`,
+`Hidalgo, Dario` and `Darío`, `Duarte, Lorenzo Hernandez` and `Hernández`,
+`Welle, Ben` and `Benjamin`, `Jacquin, C` and `Céline`, and
+`López, José Segundo` and `López, Segundo`. Comma-less entries fell from 122 to
+79 of 907 — the remainder are organizations and genuinely unsplittable names.

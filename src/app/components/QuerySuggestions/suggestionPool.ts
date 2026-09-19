@@ -22,14 +22,27 @@ export const ANSWER_MODE_SUGGESTION_POOL = [
   'How do we make housing more affordable in cities?',
 ]
 
+export const EXPERTS_MODE_SUGGESTION_POOL = [
+  'Electric school buses',
+  'Compact urban growth in India',
+  'Nature-based solutions in Brazilian cities',
+  'Land value capture',
+  'Zero-emission freight in China',
+  'Informal settlements and climate resilience',
+  'Bus rapid transit financing',
+  'Road safety for pedestrians',
+]
+
 export const getRandomSuggestions = (
   count = 3,
-  mode: 'cite' | 'answer' = 'cite',
+  mode: 'cite' | 'answer' | 'experts' = 'cite',
 ) => {
   const pool = [
     ...(mode === 'cite'
       ? CITE_MODE_SUGGESTION_POOL
-      : ANSWER_MODE_SUGGESTION_POOL),
+      : mode === 'experts'
+        ? EXPERTS_MODE_SUGGESTION_POOL
+        : ANSWER_MODE_SUGGESTION_POOL),
   ]
   const results: string[] = []
 

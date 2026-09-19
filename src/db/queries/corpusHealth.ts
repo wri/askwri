@@ -24,6 +24,10 @@ export interface CorpusHealth {
   docsMissingTitleEn: number
   /** Docs with extraction_confidence < 0.7 (low-confidence, may need review). */
   lowConfidenceDocs: number
+  /** Pending system-suggested translation pairs awaiting review (issue #325). */
+  pendingRelationSuggestions: number
+  /** Confirmed translation_of edges — pairs that affect retrieval when the flag is on (issue #325). */
+  confirmedTranslationPairs: number
   /** Worker liveness + queue state (reuses getWorkerHealth). */
   worker: WorkerHealth
 }
@@ -76,6 +80,17 @@ export async function getCorpusHealth(): Promise<CorpusHealth> {
 
   const worker = await getWorkerHealth()
 
+  const [relRow] = await AppDataSource.query(`
+    SELECT
+      count(*) FILTER (WHERE status = 'suggested')::int AS "pendingRelationSuggestions",
+      count(*) FILTER (WHERE status = 'confirmed' AND relation_type = 'translation_of')::int AS "confirmedTranslationPairs"
+    FROM document_relations
+  `)
+  const pendingRelationSuggestions: number =
+    relRow?.pendingRelationSuggestions ?? 0
+  const confirmedTranslationPairs: number =
+    relRow?.confirmedTranslationPairs ?? 0
+
   return {
     statusCounts,
     languageCounts,
@@ -83,6 +98,8 @@ export async function getCorpusHealth(): Promise<CorpusHealth> {
     docsMissingNativeSummary,
     docsMissingTitleEn,
     lowConfidenceDocs,
+    pendingRelationSuggestions,
+    confirmedTranslationPairs,
     worker,
   }
 }

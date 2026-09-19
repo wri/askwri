@@ -1,0 +1,15 @@
+{
+  "_comment": "Did-you-mean labeled set (spec §7). vocab = the fake corpus vocabulary for unit tests. Traps: real words absent from the corpus vocab must NOT be 'corrected'.",
+  "vocab": ["decarbonization", "micromobility", "hydrogen", "freight", "bogota", "curitiba", "walkability", "electrification", "resilience", "transit"],
+  "cases": [
+    {"q": "freight decarbonisation pathways", "expect": "freight decarbonization pathways"},
+    {"q": "micromobilty in latin america", "expect": "micromobility in latin america"},
+    {"q": "hydrogin buses", "expect": "hydrogen buses"},
+    {"q": "walkabillity and street design", "expect": "walkability and street design"},
+    {"q": "transit electrification in bogata", "expect": null},
+    {"q": "freight decarbonization pathways", "expect": null},
+    {"q": "zebra crossings", "expect": null},
+    {"q": "xylophone lessons", "expect": null},
+    {"q": "curitiba brt history", "expect": null}
+  ]
+}

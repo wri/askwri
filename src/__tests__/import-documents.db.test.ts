@@ -366,4 +366,133 @@ d('importDocuments() DB integration — new columns + validation + audit', () =>
     )
     expect(doc.title).toBe('Original') // NOT overwritten
   })
+
+  // --- authors_format flag invariant (issue #411 review: B2, M5, M8) ---
+
+  it('flat create with a comma-less author stamps authors_format alongside external provenance', async () => {
+    const flatRow: FlatImportRow = {
+      file_path: `${PREFIX}flag-create.pdf`,
+      external_id: `${PREFIX}flag-create`,
+      title: 'Flag Create',
+      authors: 'Anjali Mahendra',
+    }
+    await importDocuments([flatRow], { dryRun: false }, adminIdentity)
+
+    const [doc] = await AppDataSource.query(
+      `SELECT authors, metadata_source FROM documents WHERE external_id = $1`,
+      [`${PREFIX}flag-create`],
+    )
+    expect(doc.authors).toBe('Anjali Mahendra')
+    expect(doc.metadata_source.authors).toBe('external')
+    expect(doc.metadata_source.authors_format).toBe('unverified')
+  })
+
+  it('legacy create does NOT stamp authors_format (no external provenance to shield it)', async () => {
+    const row: ImportRow = {
+      file_path: `${PREFIX}legacy-noflag.pdf`,
+      metadata: {
+        'Article Title': 'Legacy No Flag',
+        languages: 'English',
+        'All authors': 'Anjali Mahendra',
+      },
+      summary: '',
+    }
+    await importDocuments([row], { dryRun: false }, adminIdentity)
+
+    const [doc] = await AppDataSource.query(
+      `SELECT authors, metadata_source FROM documents WHERE external_id = $1`,
+      [`${PREFIX}legacy-noflag`],
+    )
+    expect(doc.authors).toBe('Anjali Mahendra')
+    // Provenance stays NULL, so the worker may rewrite this on ingest and it
+    // self-heals. A flag here could never be cleared by anything.
+    expect(doc.metadata_source?.authors).toBeUndefined()
+    expect(doc.metadata_source?.authors_format).toBeUndefined()
+  })
+
+  it('flat overwrite with a verified author clears a stale authors_format flag', async () => {
+    const create: FlatImportRow = {
+      file_path: `${PREFIX}flag-clear.pdf`,
+      external_id: `${PREFIX}flag-clear`,
+      title: 'Flag Clear',
+      authors: 'Anjali Mahendra',
+    }
+    await importDocuments([create], { dryRun: false }, adminIdentity)
+
+    const fixed: FlatImportRow = {
+      file_path: `${PREFIX}flag-clear.pdf`,
+      external_id: `${PREFIX}flag-clear`,
+      title: 'Flag Clear',
+      authors: 'Mahendra, Anjali',
+    }
+    await importDocuments([fixed], { dryRun: false }, adminIdentity)
+
+    const [doc] = await AppDataSource.query(
+      `SELECT authors, metadata_source FROM documents WHERE external_id = $1`,
+      [`${PREFIX}flag-clear`],
+    )
+    expect(doc.authors).toBe('Mahendra, Anjali')
+    expect(doc.metadata_source.authors_format).toBeUndefined()
+  })
+
+  it('human-protected authors block both the value and the flag', async () => {
+    const create: FlatImportRow = {
+      file_path: `${PREFIX}flag-human.pdf`,
+      external_id: `${PREFIX}flag-human`,
+      title: 'Flag Human',
+      authors: 'Mahendra, Anjali',
+    }
+    await importDocuments([create], { dryRun: false }, adminIdentity)
+    await AppDataSource.query(
+      `UPDATE documents SET metadata_source = metadata_source || '{"authors":"human"}'::jsonb
+       WHERE external_id = $1`,
+      [`${PREFIX}flag-human`],
+    )
+
+    const clobber: FlatImportRow = {
+      file_path: `${PREFIX}flag-human.pdf`,
+      external_id: `${PREFIX}flag-human`,
+      title: 'Flag Human Retitled',
+      authors: 'Anjali Mahendra',
+    }
+    await importDocuments([clobber], { dryRun: false }, adminIdentity)
+
+    const [doc] = await AppDataSource.query(
+      `SELECT authors, title, metadata_source FROM documents WHERE external_id = $1`,
+      [`${PREFIX}flag-human`],
+    )
+    expect(doc.authors).toBe('Mahendra, Anjali') // protected
+    expect(doc.title).toBe('Flag Human Retitled') // unprotected field still written
+    expect(doc.metadata_source.authors_format).toBeUndefined()
+  })
+
+  it('re-importing an unchanged CSV does not rewrite authors for spacing alone', async () => {
+    const create: FlatImportRow = {
+      file_path: `${PREFIX}ws-noop.pdf`,
+      external_id: `${PREFIX}ws-noop`,
+      title: 'Whitespace Noop',
+      authors: 'Amos, Albert',
+    }
+    await importDocuments([create], { dryRun: false }, adminIdentity)
+    // Simulate a corpus row stored before tidying shipped.
+    await AppDataSource.query(
+      `UPDATE documents SET authors = 'Amos,Albert' WHERE external_id = $1`,
+      [`${PREFIX}ws-noop`],
+    )
+
+    const reimport: FlatImportRow = {
+      file_path: `${PREFIX}ws-noop.pdf`,
+      external_id: `${PREFIX}ws-noop`,
+      title: 'Whitespace Noop',
+      authors: 'Amos,Albert',
+    }
+    const result = await importDocuments(
+      [reimport],
+      { dryRun: true },
+      adminIdentity,
+    )
+    // A spacing-only difference must not present as an overwrite: applying it
+    // would stamp 'external' provenance and enqueue a re-ingest for cosmetics.
+    expect(result.decisions![0].action).toBe('skipped')
+  })
 })

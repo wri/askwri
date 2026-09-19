@@ -10,9 +10,8 @@
 # Steps (all incremental/resumable):
 #   1. Boot search-service (postgres mode) if not already healthy
 #   2. eval:cite          (checkpointed per query — safe to re-run)
-#   3. eval:answer-retrieval (checkpointed per query)
-#   4. non-English smoke set (rerank=false, ~2 min total)
-#   5. POST /reindex timing (steady-state, postgres mode)
+#   3. non-English smoke set (rerank=false, ~2 min total)
+#   4. POST /reindex timing (steady-state, postgres mode)
 #
 # Progress: tail -f evaluation/results/baseline-suite-<label>.log
 # A step that already completed writes its marker to the label's .state file
@@ -68,8 +67,7 @@ trap 'exit 143' TERM
 # state file (not its content) marks a run as started, so a resume after a
 # mid-run failure keeps its own checkpoints.
 if [ ! -e "$STATE" ]; then
-  rm -f "$REPO/evaluation/results/cite-eval-checkpoint.json" \
-        "$REPO/evaluation/results/answer-retrieval-checkpoint.json"
+  rm -f "$REPO/evaluation/results/cite-eval-checkpoint.json"
   echo "started" > "$STATE"
 fi
 
@@ -130,19 +128,7 @@ else
   fi
 fi
 
-# --- 3. answer retrieval eval ---
-if done_step answer; then
-  log "answer eval: already done, skipping"
-else
-  log "running eval:answer-retrieval (checkpointed)..."
-  if npx tsx evaluation/run-answer-retrieval-eval.ts; then
-    mark_step answer; log "answer eval: DONE"
-  else
-    log "answer eval FAILED (checkpoint preserved; re-run to resume)"; exit 1
-  fi
-fi
-
-# --- 4. non-English smoke set ---
+# --- 3. non-English smoke set ---
 if done_step smoke; then
   log "smoke set: already done, skipping"
 else
@@ -154,7 +140,7 @@ else
   fi
 fi
 
-# --- 5. /reindex steady-state timing ---
+# --- 4. /reindex steady-state timing ---
 if done_step reindex; then
   log "reindex timing: already done, skipping"
 else

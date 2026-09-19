@@ -1,6 +1,7 @@
 /* eslint-disable */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { isEnglishText } from '@/lib/ensure-english'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -72,14 +73,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, results: [] })
     }
 
-    // If no API key, return fallback for all docs
+    // If no API key, return fallback for all docs. A passage sentence is
+    // not a relevance explanation, so never echo the snippet (issue #359).
     if (!key) {
-      const results = docs.map((doc) => {
-        const snippet = String(doc?.snippet ?? '')
-        const fb =
-          snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
-        return { relates: fb, relation: 'indirect' as const }
-      })
+      const results = docs.map(() => ({
+        relates: 'Relevant supporting evidence.',
+        relation: 'indirect' as const,
+      }))
       return NextResponse.json({ ok: true, results })
     }
 
@@ -131,13 +131,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (!r.ok) {
-      // Fallback on API error
-      const results = docs.map((doc) => {
-        const snippet = String(doc?.snippet ?? '')
-        const fb =
-          snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
-        return { relates: fb, relation: 'indirect' as const }
-      })
+      // Fallback on API error: never echo a passage sentence as the
+      // "how is this relevant" explanation (issue #359).
+      const results = docs.map(() => ({
+        relates: 'Relevant supporting evidence.',
+        relation: 'indirect' as const,
+      }))
       return NextResponse.json({
         ok: true,
         results,
@@ -160,7 +159,14 @@ export async function POST(req: NextRequest) {
       // Pad with fallbacks if we got fewer results than docs
       const results = docs.map((doc, i) => {
         const item = parsed[i]
-        if (item && typeof item.relates === 'string' && item.relates.trim()) {
+        // Issue #387: the model sometimes mirrors Chinese passages despite the
+        // prompt rule — replace mirrored output with the English fallback.
+        if (
+          item &&
+          typeof item.relates === 'string' &&
+          item.relates.trim() &&
+          isEnglishText(item.relates)
+        ) {
           return {
             relates: item.relates.trim(),
             relation:
@@ -169,21 +175,19 @@ export async function POST(req: NextRequest) {
                 : ('indirect' as const),
           }
         }
-        const snippet = String(doc?.snippet ?? '')
-        const fb =
-          snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
-        return { relates: fb, relation: 'indirect' as const }
+        return {
+          relates: 'Relevant supporting evidence.',
+          relation: 'indirect' as const,
+        }
       })
       return NextResponse.json({ ok: true, results, usage: j?.usage })
     }
 
     // Parsing failed — return fallbacks
-    const results = docs.map((doc) => {
-      const snippet = String(doc?.snippet ?? '')
-      const fb =
-        snippet.split(/[.!?]\s/)[0]?.trim() || 'Relevant supporting evidence.'
-      return { relates: fb, relation: 'indirect' as const }
-    })
+    const results = docs.map(() => ({
+      relates: 'Relevant supporting evidence.',
+      relation: 'indirect' as const,
+    }))
     return NextResponse.json({ ok: true, results, debug: { parseError: true } })
   } catch (e: any) {
     return NextResponse.json({

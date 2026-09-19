@@ -5,3 +5,25 @@
     rgba(245, 191, 79, 0.3)
   );
 }
+
+/* The design-system footer is absolutely positioned, so it reserves no space of
+   its own: any page taller than the viewport gets its last content overlapped.
+   This reproduces on the landing page too and belongs in a fix to the shared
+   footer, not here — so this only stops THIS page shipping broken. The reserve
+   is responsive because the footer's links stack as the viewport narrows,
+   growing it from 57px to about 205px. */
+.experts-help-body {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 30px 24px 96px;
+}
+@media (max-width: 640px) {
+  .experts-help-body {
+    padding-bottom: 208px;
+  }
+}
+@media (max-width: 380px) {
+  .experts-help-body {
+    padding-bottom: 252px;
+  }
+}

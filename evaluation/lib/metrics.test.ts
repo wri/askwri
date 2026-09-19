@@ -1,4 +1,124 @@
-import { calculateChunkMetrics, assertChunkMetricsValid } from './metrics'
+import {
+  averagePrecision,
+  calculateChunkMetrics,
+  assertChunkMetricsValid,
+  chunkCoverage,
+  docCoverage,
+  latencySummary,
+} from './metrics'
+
+describe('averagePrecision', () => {
+  test('single expected doc at rank 1 scores 1', () => {
+    expect(averagePrecision(['a'], ['a', 'x', 'y'])).toBe(1)
+  })
+
+  test('single expected doc at rank 3 scores 1/3', () => {
+    expect(averagePrecision(['a'], ['x', 'y', 'a'])).toBeCloseTo(1 / 3)
+  })
+
+  test('expected doc never retrieved scores 0', () => {
+    expect(averagePrecision(['a'], ['x', 'y'])).toBe(0)
+  })
+
+  test('empty retrieved list scores 0', () => {
+    expect(averagePrecision(['a'], [])).toBe(0)
+  })
+
+  test('two expected docs at ranks 1 and 3 score (1/1 + 2/3) / 2', () => {
+    expect(averagePrecision(['a', 'b'], ['a', 'x', 'b'])).toBeCloseTo(5 / 6)
+  })
+
+  test('one of two expected docs found at rank 2 scores (1/2) / 2', () => {
+    expect(averagePrecision(['a', 'b'], ['x', 'a', 'y'])).toBeCloseTo(0.25)
+  })
+
+  test('a duplicate retrieved id earns credit only once', () => {
+    // Retrieved lists are deduped upstream, but the function must not let a
+    // repeat push AP above 1 if that ever regresses.
+    expect(averagePrecision(['a'], ['a', 'a'])).toBe(1)
+  })
+})
+
+// docCoverage exists so attainable recall can never be read alone: a document
+// dropped from the corpus raises attainable recall while lowering in_corpus,
+// and reporting both side by side makes that trade visible.
+
+describe('chunkCoverage', () => {
+  test('counts only the cases that carry passage ground truth', () => {
+    const cases = [
+      // migrated: 3 expected chunks, 1 in a document the corpus lacks, 2 found
+      {
+        expected_chunk_ids: ['a_chunk_1', 'a_chunk_2', 'b_chunk_9'],
+        chunks_missing_from_corpus: ['b_chunk_9'],
+        chunk_attainable_retrieved: 2,
+      },
+      // not yet migrated: contributes nothing at all, rather than a zero
+      {
+        expected_chunk_ids: [],
+        chunks_missing_from_corpus: [],
+        chunk_attainable_retrieved: null,
+      },
+    ]
+    expect(chunkCoverage(cases)).toEqual({
+      cases_scored: 1,
+      expected: 3,
+      in_corpus: 2,
+      retrieved: 2,
+    })
+  })
+
+  test('no cases yields all zeros', () => {
+    expect(chunkCoverage([])).toEqual({
+      cases_scored: 0,
+      expected: 0,
+      in_corpus: 0,
+      retrieved: 0,
+    })
+  })
+})
+
+describe('docCoverage', () => {
+  test('sums expected, in-corpus, and retrieved doc counts across cases', () => {
+    const cases = [
+      // 3 expected, 1 absent from the corpus, both attainable docs retrieved
+      {
+        expected_ids: ['a', 'b', 'c'],
+        missing_from_corpus: ['c'],
+        attainable_retrieved: 2,
+      },
+      // 2 expected, all in corpus, 1 retrieved
+      {
+        expected_ids: ['d', 'e'],
+        missing_from_corpus: [],
+        attainable_retrieved: 1,
+      },
+    ]
+    expect(docCoverage(cases)).toEqual({
+      expected: 5,
+      in_corpus: 4,
+      retrieved: 3,
+    })
+  })
+
+  test('a case with nothing attainable counts its expected docs but retrieves none', () => {
+    const cases = [
+      {
+        expected_ids: ['a', 'b'],
+        missing_from_corpus: ['a', 'b'],
+        attainable_retrieved: null,
+      },
+    ]
+    expect(docCoverage(cases)).toEqual({
+      expected: 2,
+      in_corpus: 0,
+      retrieved: 0,
+    })
+  })
+
+  test('no cases yields all zeros', () => {
+    expect(docCoverage([])).toEqual({ expected: 0, in_corpus: 0, retrieved: 0 })
+  })
+})
 
 // Regression tests for the adjacent-tolerance double-count bug: a single
 // retrieved chunk could be counted more than once (as an exact match AND as an
@@ -49,6 +169,34 @@ describe('calculateChunkMetrics adjacent-tolerance credit', () => {
     expect(m.adjacent_matches).toEqual(['doc_chunk_5'])
     expect(m.recall_with_adjacent).toBe(0.5)
     expect(m.precision_with_adjacent).toBe(0.5)
+  })
+})
+
+// Latency is summarized over successful cases only (the caller filters): a
+// timed-out case measures the timeout setting, not the system.
+
+describe('latencySummary', () => {
+  test('no values yields null — nothing was measurable', () => {
+    expect(latencySummary([])).toBeNull()
+  })
+
+  test('a single value is its own mean, p50, and p95', () => {
+    expect(latencySummary([1200])).toEqual({
+      mean_ms: 1200,
+      p50_ms: 1200,
+      p95_ms: 1200,
+    })
+  })
+
+  test('nearest-rank percentiles over an unsorted list', () => {
+    // Sorted: 100..1000. Nearest rank: p50 → ceil(0.5*10)=5th → 500,
+    // p95 → ceil(0.95*10)=10th → 1000.
+    const values = [300, 100, 900, 500, 700, 200, 1000, 400, 800, 600]
+    expect(latencySummary(values)).toEqual({
+      mean_ms: 550,
+      p50_ms: 500,
+      p95_ms: 1000,
+    })
   })
 })
 

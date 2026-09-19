@@ -1,0 +1,119 @@
+{
+  "timestamp": "2026-08-20T10:42:57",
+  "target": "http://127.0.0.1:3000",
+  "evalset": "evalset_cite_01.json",
+  "results": [
+    {
+      "id": "q1_land_value_capture",
+      "polarity": "positive",
+      "ap": 0.1424774056353004,
+      "a_recall": 0.6666666666666666,
+      "attainable": 6,
+      "hits": 4,
+      "expected": 6,
+      "missing": 0
+    },
+    {
+      "id": "q2_bangalore_geography",
+      "polarity": "positive",
+      "ap": 0.49907407407407406,
+      "a_recall": 0.8333333333333334,
+      "attainable": 6,
+      "hits": 5,
+      "expected": 6,
+      "missing": 0
+    },
+    {
+      "id": "q3_children_pollution",
+      "polarity": "positive",
+      "ap": 0.27729215229215226,
+      "a_recall": 0.8333333333333334,
+      "attainable": 6,
+      "hits": 5,
+      "expected": 6,
+      "missing": 0
+    },
+    {
+      "id": "q4_climate_brazil",
+      "polarity": "positive",
+      "ap": 0.71233164983165,
+      "a_recall": 1.0,
+      "attainable": 6,
+      "hits": 6,
+      "expected": 6,
+      "missing": 0
+    },
+    {
+      "id": "q5_micromobility",
+      "polarity": "positive",
+      "ap": 0.35686170554591606,
+      "a_recall": 0.6666666666666666,
+      "attainable": 12,
+      "hits": 8,
+      "expected": 12,
+      "missing": 0
+    },
+    {
+      "id": "q6_school_bus_health",
+      "polarity": "positive",
+      "ap": 0.8242630385487529,
+      "a_recall": 1.0,
+      "attainable": 7,
+      "hits": 7,
+      "expected": 7,
+      "missing": 0
+    },
+    {
+      "id": "q7_jakarta_housing",
+      "polarity": "positive",
+      "ap": 0.18925518925518925,
+      "a_recall": 1.0,
+      "attainable": 4,
+      "hits": 4,
+      "expected": 4,
+      "missing": 0
+    },
+    {
+      "id": "q8_hydrogen",
+      "polarity": "positive",
+      "ap": 0.24707602339181287,
+      "a_recall": 1.0,
+      "attainable": 3,
+      "hits": 3,
+      "expected": 3,
+      "missing": 0
+    },
+    {
+      "id": "q9_world_resources_report",
+      "polarity": "positive",
+      "ap": 0.7161912325995858,
+      "a_recall": 1.0,
+      "attainable": 16,
+      "hits": 16,
+      "expected": 16,
+      "missing": 0
+    },
+    {
+      "id": "q10_urban_finance_since_2020",
+      "polarity": "positive",
+      "ap": 0.09912280701754386,
+      "a_recall": 0.3,
+      "attainable": 10,
+      "hits": 3,
+      "expected": 10,
+      "missing": 0
+    },
+    {
+      "id": "q11_urban_finance_exclude_ebuses",
+      "polarity": "positive",
+      "ap": 0.02510822510822511,
+      "a_recall": 0.18181818181818182,
+      "attainable": 11,
+      "hits": 2,
+      "expected": 11,
+      "missing": 0
+    }
+  ],
+  "overall_map": 0.37173213666365473,
+  "overall_attainable_recall": 0.7710743801652893
+}

@@ -18,15 +18,7 @@ listener_rule_priority = 200
 # ECS Configuration
 container_port   = 3000
 container_cpu    = 256   # 0.25 vCPU
-# TEMPORARY (2026-08-06): raised 512 -> 2048 to get the Spanish transport batch
-# uploaded. At 512MB a 79MB PDF OOM-killed the task three times (exit 137,
-# "OutOfMemoryError", tasks 6a622d0/91712b0) — one upload holds the file in
-# memory up to 4x, and desired_count=1 makes every OOM a site-wide 502.
-# 2048 is the Fargate maximum for 256 CPU units.
-# DIAL BACK to 512 once the doc-upload push is done AND the per-request copies
-# are gone (proxy matcher fix: shipped; streaming upload in the route: not yet).
-# Reverting before the route streams to S3 re-opens the same OOM.
-container_memory = 2048  # 2 GB
+container_memory = 512   # 512 MB
 desired_count    = 1     # Lower for QA
 min_capacity     = 1
 max_capacity     = 1
@@ -59,7 +51,46 @@ search_service_environment_variables = {
   "LOG_LEVEL"   = "debug"
   "DEBUG"       = "true"
   "WORKERS"     = "1"
+
+  # Query-expansion lanes + retrieval tunings (issue #353, merged in #357).
+  # Turn the lanes ON in qa and apply the eval-gated knobs:
+  #   - QUERY_UNDERSTANDING_ENABLED / QUERY_EXPANSION_LANES_ENABLED: the P1/P2
+  #     flags gating the expansion lanes (topic_dense, geo_dense). OFF by
+  #     default in code; ON here so the lane work ships in qa.
+  #   - QUERY_UNDERSTANDING_LLM_ENABLED: P3 LLM sidecar (issue #362). Augments
+  #     the deterministic tier with query variants, LLM-grade facets (suggest
+  #     only in slice 1), intent, disambiguation. Dark by default; ON in qa for
+  #     the gate. Deterministic-first; failure-soft; one cached call per query.
+  #   - DEEP_RESCUE_MAX=10: 2nd-rerank up to 10 docs surfaced by a non-dense
+  #     lane that sit deep in fused order and miss the cap-2 window when
+  #     the lanes add diversity (d11/q11).
+  # Eval-gated live 2026-08-22: cite_02 MAP 74.1->76.3, aR 87.5->89.6;
+  # cite_01 MAP 37.6->37.1, aR 71.1->77.9; d3 AP 25->100. q1/q3/q8/q11
+  # remain below flag-off (irreducible single-knob tradeoffs, see #357).
+  # QA ONLY. production.tfvars is unchanged. Revert = remove these vars +
+  # redeploy.
+  "QUERY_UNDERSTANDING_ENABLED"      = "true"
+  "QUERY_EXPANSION_LANES_ENABLED"   = "true"
+  "QUERY_UNDERSTANDING_LLM_ENABLED" = "true"
+  # EXPANSION_FACETS: which tag facets get a semantic retrieval lane. Code
+  # default is topic-only (P2.5 byte-identical). Adding geography enables the
+  # geo_dense lane (issue #325 / geo-facet-wiring, embeddings backfilled to qa
+  # 2026-08-20 via #351). JSON-array form because pydantic-settings parses
+  # list[str] from env as JSON. QA ONLY; production.tfvars unchanged. Revert =
+  # remove the var + redeploy.
+  "EXPANSION_FACETS"                = "[\"topic\",\"geography\"]"
+  # EXPANSION_LANE_WEIGHT removed 5a: it was a dead knob (not read by code).
+  # Now wired as per-mode: cite_expansion_lane_weight=1.0 (recall-first) /
+  # answer_expansion_lane_weight=0.25 (precision-first), via config defaults.
+  # The EXPANSION_LANE_WEIGHT env var remains as an override for both if set.
+  "DEEP_RESCUE_MAX"                 = "10"
 }
+
+# Ingestion Worker LLM model: pin QA to the current small/fast classifier even
+# if the global default (variables.tf) is reverted. gpt-5.6-luna is the
+# cost tier of the newest (Feb 2026) GPT-5.6 line; supports structured
+# outputs via Chat Completions (required by worker/llm.py chat_json).
+worker_llm_model = "gpt-5.6-luna"
 
 # Ingestion Worker Environment Variables
 # SPARSE_EN_HANDLES must match the sparse-backfill operator's setting

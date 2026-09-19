@@ -704,6 +704,15 @@ resource "aws_ecs_task_definition" "search_service" {
             # which is read-only under readonlyRootFilesystem = true.
             name  = "HF_HUB_CACHE"
             value = "/tmp/askWRI_cache/hf_hub"
+          },
+          {
+            # Python block-buffers stdout/stderr in a non-TTY container, so
+            # log output (incl. caught exceptions from the dense/sparse lanes and
+            # the query embed path) is stuck in a 4KB buffer and invisible in
+            # CloudWatch. Unbuffer so the service's real failures surface.
+            # Same fix applied to the ingestion worker.
+            name  = "PYTHONUNBUFFERED"
+            value = "1"
           }
         ],
         [
@@ -998,6 +1007,14 @@ resource "aws_ecs_task_definition" "ingestion_worker" {
           {
             name  = "WORKER_LLM_MODEL"
             value = var.worker_llm_model
+          },
+          {
+            # Python block-buffers stdout/stderr in a non-TTY container, so
+            # log output (incl. caught exceptions from the embed/reclassify
+            # sweeps) is stuck in a 4KB buffer and invisible in CloudWatch.
+            # Unbuffer so the worker's real failures surface immediately.
+            name  = "PYTHONUNBUFFERED"
+            value = "1"
           }
         ],
         [

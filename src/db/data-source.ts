@@ -9,9 +9,13 @@ import { IngestionJob } from './entities/IngestionJob.entity'
 import { User } from './entities/User.entity'
 import { Tag } from './entities/Tag.entity'
 import { DocumentTag } from './entities/DocumentTag.entity'
+import { DocumentRelation } from './entities/DocumentRelation.entity'
 import { Collection } from './entities/Collection.entity'
 import { DocumentCollection } from './entities/DocumentCollection.entity'
 import { AuditLog } from './entities/AuditLog.entity'
+import { TagAlias } from './entities/TagAlias.entity'
+import { ReclassifyJob } from './entities/ReclassifyJob.entity'
+import { ExpertsModeQueryLogs } from './entities/ExpertsModeQueryLogs.entity'
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -32,9 +36,13 @@ export const AppDataSource = new DataSource({
     User,
     Tag,
     DocumentTag,
+    DocumentRelation,
     Collection,
     DocumentCollection,
     AuditLog,
+    TagAlias,
+    ReclassifyJob,
+    ExpertsModeQueryLogs,
   ],
   // DATABASE_SSL=false disables SSL for local dev databases (docker has no SSL);
   // default stays SSL-on for RDS.

@@ -1,10 +1,19 @@
-## AskWRI Evaluation System
+# AskWRI Evaluation System
 
-**Last Updated:** 2026-03-03
+**Last Updated:** 2026-09
 
 ## Quick Reference
 
-All eval commands are npm scripts. The hybrid service must be running first.
+**Against a deployed instance — no services to run:**
+```bash
+git submodule update --init                 # once per checkout, fetches the evalsets
+npm run eval:qa                             # every evalset vs QA (~1 min)
+```
+No search service, no database, no AWS credentials. See
+[Deployed-instance evals](#deployed-instance-evals) below.
+
+Every other command below runs against a LOCAL search service, which must be
+running first:
 
 ```bash
 # Prerequisites: start the search service
@@ -16,50 +25,92 @@ uvicorn app.main:app --port 8000            # starts Python service on :8000
 ```bash
 npm run eval:cite                           # Full eval (11 queries, ~8 min)
 npm run eval:report                         # Generate HTML report from latest results
+npm run eval:upload-cite                    # Publish the latest report for QA reviewers (/api/eval/review-cite)
 ```
 
-**Answer Mode:**
+**Answer Mode (gen-2 harness):**
 ```bash
-npm run eval:answer-retrieval               # Track 1: retrieval P/R/F1
-npm run eval:answer-report                  # Generate HTML report for answer evals
-
-# Legacy RAGAS-based synthesis eval (requires Python deps)
-pip install -r evaluation/requirements-eval.txt   # first time only
-npm run eval:answer-synthesis               # defaults to --mode isolated
-
-npm run eval:answer-full                    # runs retrieval then legacy synthesis
+npm run eval:answer-capture -- <evalset.json>
+npm run eval:answer-judge   -- --capture evaluation/answer/artifacts/capture-<label>.json
+npm run eval:answer-score   -- --capture ... --judged ...
+npm run eval:answer-compare -- <reportA.json> <reportB.json>
 ```
-
-**Golden Set Management:**
-```bash
-npm run eval:golden-retrieve                # query hybrid service for chunks
-npm run eval:golden-label                   # LLM labels each retrieved chunk
-npm run eval:golden-review                  # open review UI at :3001
-npm run eval:golden-assemble                # build final golden dataset from reviewed labels
-```
-
-**Synthesis Evaluation (Track 2 — Human-in-the-loop):**
-```bash
-npm run eval:synthesis-capture              # Stage 1: capture system outputs (needs hybrid + Next.js)
-npm run eval:synthesis-llm-eval             # Stage 2: LLM scoring (needs OPENAI_API_KEY)
-npm run eval:synthesis-prepare-review       # Merge into review format
-npm run eval:golden-review                  # Stage 3: open review UI at :3001/eval/review-synthesis
-npm run eval:synthesis-assemble             # Stage 4: write ground truth to golden dataset
-```
-
-**S3 Sync (QA Reviewer Workflow):**
-```bash
-npm run eval:upload                # push eval data to S3 for QA reviewers
-npm run eval:download              # pull reviewed data from S3
-```
+See [Answer Mode Evaluation](#answer-mode-evaluation) below. The gen-1 answer
+eval scripts, golden set, and review UIs were deleted (spec §3 of the
+answer-eval overhaul); git history has them.
 
 ## Prerequisites
 
 | Service | Required for | How to start |
 |---------|-------------|-------------|
-| Search service (`:8000`) | All evals, golden set generation | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8000` |
-| Next.js (`:3000`) | Answer synthesis capture | `npm run dev` (if running on another port, set `NEXTJS_SERVER_URL=http://localhost:<port>`) |
-| RAGAS Python deps | Legacy `eval:answer-synthesis` only | `pip install -r evaluation/requirements-eval.txt` |
+| Search service (`:8000`) | All evals except `eval:qa` | `cd search-service && source venv/bin/activate && uvicorn app.main:app --port 8000` |
+
+## Deployed-instance evals
+
+`npm run eval:qa` scores the generation-2 evalsets against a running AskWRI
+deployment through its public `/api/llamaindex` gateway. Nothing runs locally
+except the script, so there is no corpus to maintain and no credentials to hold.
+
+```bash
+git submodule update --init                        # once per checkout
+npm run eval:qa                                    # every set in the submodule
+EVAL_TARGET=https://other.example npm run eval:qa  # a different instance
+npx tsx evaluation/run-evalset.ts <path.json>      # one set
+```
+
+Without the submodule checked out there are no fixtures to run, and `eval:qa`
+exits telling you to run the `--init` above. A fresh clone of this repo does not
+fetch submodule contents; `git clone --recurse-submodules` does it in one step.
+
+**Fixtures** come from the `evaluation/eval-review` submodule, pinned by commit
+so a report always traces back to the ground truth that produced it. To take new
+sets from upstream:
+
+```bash
+git submodule update --remote evaluation/eval-review
+git commit evaluation/eval-review -m "chore(eval): bump evalset fixtures"
+```
+
+**Reading the output.** These sets key on `external_id`, which is exactly the
+`doc_id` the gateway returns, so every case is scored at document grain.
+Positive cases report two numbers:
+
+- **MAP (mean average precision)** measures ranking quality: where the expected
+  documents sit in the returned list. 100% means every expected doc is at the
+  top. Classic set precision is deliberately not reported — the sets label one
+  or two documents per query while cite mode returns 13-25, so it would only
+  measure list length (unlabeled results are not wrong, just unlabeled).
+- **Attainable recall** measures coverage against the expected documents that
+  exist in the target's corpus. 100% means retrieval found everything it could
+  have. Expected docs missing from the corpus are listed per run as corpus
+  gaps — a data request, not a retrieval bug — and a case whose expected docs
+  are all missing is reported unscored rather than as a zero.
+
+Negative cases ("Has WRI written about X?" where it hasn't) are scored as
+abstentions — did the target correctly return nothing — and reported apart from
+the positive means.
+
+**Chunk grain.** Where a case carries `retrieval_ground_truth.expected_passages`
+(the answer sets are being migrated to it cluster by cluster upstream), the same
+two numbers are also computed over `chunk_id`s — `cAP`/`cR` per case, `Chunk
+MAP`/`Chunk recall` for the set — and reported apart from the doc-grain means. A
+case without passage ground truth is unscored at this grain, never a zero, and
+`cases_chunk_scored` in the report says how much of the set the chunk numbers
+cover. Three things to hold when reading them:
+
+- **Chunk recall is capped by list length.** Answer mode returns 15 chunks
+  total; a case labelling 12 passages needs almost the whole list to score 100%.
+- **A chunk miss can be a document miss.** The passages come from the reviewed
+  source document only, so when retrieval returns that document's cross-lingual
+  twin instead, chunk recall is 0 by construction. Read `cR` against `aR`.
+- **`Chunk recall … allowing an adjacent chunk`** credits a neighbouring chunk
+  at half weight. A gap between it and plain chunk recall is chunk-boundary
+  drift; a set scoring near zero on both while doc grain stays healthy means the
+  fixture's chunk ids no longer match the target's index (re-ingestion), which
+  is a fixture refresh, not a retrieval regression.
+
+Retrieval params are deliberately not sent, so the target applies its own
+presets and the numbers reflect what users actually get.
 
 ## Cite Mode Evaluation
 
@@ -96,116 +147,286 @@ A query passes if **ALL** conditions are met:
 
 ## Answer Mode Evaluation
 
-Two-track evaluation matching the Answer mode pipeline (retrieval + synthesis).
+The gen-2 answer eval lives in `evaluation/answer/`. It replaces the gen-1
+machinery (retrieval P/R/F1 against a self-labeled golden set, the
+human-in-the-loop synthesis pipeline, and the review UIs), which was deleted.
 
-### Recent: Retrieval Precision Improvements (2026-03-21)
+### Stages and artifacts
 
-The answer mode pipeline was delivering ~61% precision at synthesis input — meaning ~4 out of 10 passages fed to GPT-5.4 were irrelevant. Broad research queries ("Are denser cities more sustainable?") were worst at 12-25% precision. Two changes were made:
-
-**Phase 1 — Retrieval parameter tuning.** Swept `alpha` (dense/sparse weight) across [0.5, 0.6, 0.65, 0.7]. Setting `alpha=0.65` (favoring semantic search over keyword matching) improved mean P@8 from 61.1% to 63.9%. RerankTopN had no effect — the reranker sees the same candidates regardless of pool size. The broken per-query normalized score threshold (0.75) was removed entirely.
-
-**Phase 2 — GPT-5.4-nano per-chunk relevance filter.** A nano model classifies each passage as strong/partial/weak before synthesis. Only strong and partial passages reach GPT-5.4. The filter also rates overall corpus coverage (good/limited/poor) for UI warnings. Coverage detection correctly flags queries with weak corpus material (e.g., ans_002, ans_007 flagged as "limited").
-
-Overall pipeline: Phase 1 improved retrieval precision from **61.1% → 63.9%**. Phase 2 (nano filter) showed 100% agreement with ground truth labels, but see caveats below.
-
-**Caveats and known limitations:**
-
-1. **Circular evaluation.** The nano filter (GPT-5.4-nano), ground truth labels (GPT-5.4-full), and synthesis evaluator (GPT-5.4) are all from the same model family. GPT-5.4 is both judge and defendant at every layer. The "100% filter precision" figure is expected given this circularity and does not independently validate the filter.
-
-2. **Doc-level aggregation inflates agreement.** Label aggregation uses MAX across chunks per document. Most docs in a 203-doc research corpus have at least one somewhat-relevant chunk for broad queries. The eval encountered zero "weak" docs — meaning it never tested the filter's ability to reject irrelevant material.
-
-3. **Synthesis quality regression.** Before/after synthesis comparison showed consistent regression across all 5 dimensions when the nano filter was active (faithfulness 0.811→0.800, completeness 0.889→0.867, conciseness 0.944→0.911, coherence 0.956→0.911, citation_accuracy 0.811→0.800). The nano filter is currently gated off (`USE_NANO_FILTER=false` by default) pending further investigation.
-
-4. **Alpha field name bug (fixed 2026-03-21).** The `alpha` parameter in `retrieval.ts` was being sent to the Python search service, but Python's `QueryRequest` model uses `dense_weight`/`sparse_weight`. Pydantic silently ignored the unknown field, meaning the Phase 1 alpha=0.65 improvement was never active in production until this fix. The calibration sweep script correctly used `dense_weight`/`sparse_weight`, so sweep results are valid.
-
-5. **What's missing.** An end-to-end synthesis comparison on the worst-performing queries (ans_002 at 25%, ans_006 at 25%) with a different evaluator model family would provide independent validation. Human-validated labels remain the gold standard — all results should be treated as provisional.
-
-**New eval scripts:**
-- `evaluation/sweep-answer-retrieval.ts` — alpha × rerankTopN precision sweep
-- `evaluation/eval-nano-filter.ts` — nano filter accuracy vs GPT-5.4 debiased labels
-- `evaluation/chart-answer-precision.py` — generate comparison charts
-
-**Design docs:**
-- `docs/superpowers/specs/2026-03-20-answer-retrieval-precision-design.md` — full design spec
-- `docs/plans/2026-02-20-answer-golden-set-generation-design.md` — chunk-first golden set pipeline
-- `docs/plans/2026-02-15-answer-retrieval-html-enhancement.md` — HTML report enhancements
-
-### Track 1: Retrieval (`npm run eval:answer-retrieval`)
-
-Evaluates whether hybrid retrieval finds the right passages for Answer mode.
-
-- Calls hybrid service with `mode=answer` using params from `ANSWER_PRESET` (in `src/config/retrieval`)
-- Compares at two granularities: **chunk-level** (with adjacent tolerance) and **doc-level**
-- Adjacent tolerance: chunk N+/-1 counts as a partial match
-
-### Track 2: Synthesis (Human-in-the-loop)
-
-Evaluates whether the LLM generates good answers given retrieved passages. Uses a 4-stage pipeline with LLM pre-evaluation and human review.
-
-**Stages:**
-1. `npm run eval:synthesis-capture` — Run end-to-end system, capture passages + synthesis for each test case
-2. `npm run eval:synthesis-llm-eval` — External LLM scores each synthesis on 5 dimensions (0-1)
-3. `npm run eval:golden-review` — Human reviewer adjusts scores via web UI at `:3001/eval/review-synthesis`
-4. `npm run eval:synthesis-assemble` — Write qualifying answers to golden dataset
-
-**Scoring dimensions:** faithfulness, completeness, conciseness, coherence, citation_accuracy
-
-**Evaluator model:** Configurable via `SYNTHESIS_EVAL_MODEL` env var (default: `gpt-5.4`). Thinking models (gpt-5*, o1*) are auto-detected for correct API params.
-
-**Design doc:** `docs/plans/2026-02-24-answer-synthesis-eval-design.md`
-
-**Calibration and re-labeling scripts:**
-- `evaluation/calibrate-answer-thresholds.ts` — sweeps logit thresholds against LLM labels; established that reranker scores overlap for answer mode (logit floor approach inactive)
-- `evaluation/relabel-answer-chunks.ts` — re-labeled all 900 chunks in `answer-labels-review.json` with GPT-5.4 using a debiased methodology (no scores shown in prompt, all 100 chunks included, shuffled order)
-- `evaluation/compare-synthesis-evals.ts` — compares before/after synthesis eval results (to be created)
-
-### Golden Dataset Generation
-
-The answer golden set is generated via a chunk-first pipeline that queries the live index and uses LLM-assisted labeling with human review.
-
-**Regenerating the golden set** (e.g., after re-chunking the index):
-
-```bash
-npm run eval:golden-retrieve    # query hybrid service
-npm run eval:golden-label       # LLM labels each chunk
-npm run eval:golden-review      # open review UI, validate labels
-npm run eval:golden-assemble    # build final golden dataset
+```
+capture  →  evaluation/answer/artifacts/capture-<label>.json   (API calls: retrieval + synthesis)
+judge    →  evaluation/answer/artifacts/judged-<label>.json    (API calls: judge only; resumable)
+score    →  evaluation/answer/artifacts/report-<label>.json    (no API calls; pure)
+compare  →  stdout                           (two reports, same fixture + passes)
 ```
 
-**Design doc:** `docs/plans/2026-02-20-answer-golden-set-generation-design.md`
+```bash
+npm run eval:answer-capture -- <evalset.json> [--selection-mode fixture-set|no-selection --passes N --knob k=v ...]
+npm run eval:answer-judge   -- --capture evaluation/answer/artifacts/capture-<label>.json
+npm run eval:answer-score   -- --capture evaluation/answer/artifacts/capture-<label>.json --judged evaluation/answer/artifacts/judged-<label>.json
+npm run eval:answer-compare -- <reportA.json> <reportB.json>
+```
 
-### Reviewer Guide
+Every artifact carries a provenance block: fixture commit (submodule SHA),
+target URL or local config snapshot, every injected knob, synthesis and judge
+models with base URLs, prompt hashes, pass count, and timestamp. Judge verdicts
+are keyed `(case, pass, item)` and carry the prompt hash and judge model.
 
-After running `npm run eval:golden-review`, open **http://localhost:3001/eval/review-labels** in your browser.
+Run every stage CLI from the repo root (the npm scripts do): `tsx` resolves
+the `@/` alias from the cwd's `tsconfig.json`, so from another directory the
+route imports silently load a different tree.
 
-**What you're looking at:** For each of 9 research questions, an LLM has labeled the top 30 retrieved text passages as Relevant, Partially Relevant, or Not Relevant. Your job is to check these labels and correct any mistakes.
+- **capture** records, per case per pass: retrieved chunk list with scores,
+  `chunk_id`, `doc_id`, `likely_off_topic`; `passages_sent`; the route's
+  debug block (`raw_model_json`); parsed sentences with cites; latency; cost
+  from usage fields. The artifact is checkpointed after every case. Preflight
+  aborts before any paid call when a doc or snippet is missing or the
+  synthesis probe (which carries the run's `model`/`base_url` knobs) falls
+  back; drop a blocking case with `--skip`. A pass whose route reply was an
+  infrastructure fallback (`no_api_key`, `api_error`, `exception`) is recorded
+  as an answer error and never judged or scored. The capture answers each
+  case within a selection (`--selection-mode`, above) and records it
+  top-level and per pass; a no-selection case whose cite query returns zero
+  docs is recorded as `unreachable` — no answer call, no error (see
+  [Selection modes and the two-step flow](#selection-modes-and-the-two-step-flow)).
+- **judge** reads a capture and writes verdicts. A partial `judged-*.json` is
+  resumed; only missing items run (an `unjudged` item from an aborted run is
+  retried, and so is any item judged by another model or prompt version).
+  The judged file is fingerprinted to its capture — re-capturing under the
+  same label and re-judging is refused rather than silently reusing stale
+  verdicts. Progress is written after every item, so Ctrl-C or a 401 abort
+  preserves it. `unreachable` passes are skipped — there is nothing to
+  judge. Exits 1 when every attempted item came back unjudged (a
+  misconfigured judge, e.g. a 4xx on every call).
+- **score** is a pure function `(fixture, capture, judged) → report` — no API
+  calls, byte-identical on re-run. `unjudged` items and retrieval/answer
+  errors are excluded from means and counted separately, never scored as
+  zero; the unsupported-claims count is always shown with the number of
+  judged passes it covers.
+- **compare** refuses runs with different fixture commits, pass counts, case
+  sets, target modes (gateway vs direct chunk text differ), or selection
+  modes (a hand-picked-set run and a top-20 run are not comparable), and
+  prints headline/draft block deltas followed by per-case deltas.
 
-**What the labels mean:**
-- **Relevant** — This passage contains information directly useful for answering the question. It would belong in a synthesized answer.
-- **Partially Relevant** — From a related document but this specific passage is tangential. It's context, not evidence.
-- **Not Relevant** — Not useful for answering the question.
+### Controls
 
-**How labels affect the evaluation:**
-- **Relevant** passages are expected at both chunk-level and doc-level (strictest match)
-- **Partially Relevant** passages are expected at doc-level only (the right document, not necessarily the right passage)
-- **Not Relevant** passages are excluded from expectations entirely
+Only `run-capture` uses the full flag set: `--only <case-id>` / `--skip
+<case-id>` (repeatable), `--limit N`, `--passes N` (default 1),
+`--selection-mode fixture-set|no-selection` (default `fixture-set`; see
+[Selection modes and the two-step flow](#selection-modes-and-the-two-step-flow)),
+`--label`
+(default: evalset basename sans `.json`), `--concurrency` (default 1),
+`--target URL` (default `EVAL_TARGET` or `https://qa.askwri-app.org`),
+`--timeout MS` (per `/api/answer` call; default 300000 — lunaroute-hosted
+synthesis is slow), `--knob key=value` (repeatable), `--direct-search URL` /
+`--direct-answer URL` (switch to local services instead of the deployed
+gateway). The other stage CLIs each have their own parser:
+- `run-judge` — `--capture`, `--label`, `--judge-model`, `--judge-base-url`,
+  `--judge-thinking` (gateway `reasoning_effort`:
+  none|minimal|low|medium|high|xhigh|max — unset sends no parameter;
+  a change re-judges, so artifacts never mix thinking levels; recorded in
+  provenance as `judge.reasoning_effort` and on every verdict). The decided
+  baseline judge (2026-09-09): `--judge-model glm-5.3 --judge-thinking max`
+  via lunaroute.
+  `--only`, `--concurrency`
+- `run-score` — `--capture`, `--judged`, `--label`, `--labels` (see
+  [Judge calibration against human labels](#judge-calibration-against-human-labels) below)
+- `run-compare` — two positional paths plus `--judged`/`--pairwise` mode,
+  `--label-a`/`--label-b`, `--judge-model`, `--judge-base-url`
 
-**What to focus on:**
-1. Start with questions that show an orange "needs review" badge — these have labels the LLM was uncertain about
-2. Expand each question section and review the flagged chunks first
-3. Read the passage text and ask: *"Would I include this in a synthesized answer to this question?"*
-   - **Yes** → click **Relevant**
-   - **It's from the right topic but this passage doesn't directly help** → click **Partial**
-   - **No** → click **Not Relevant**
-4. High-confidence labels (collapsed section) can be spot-checked but are usually correct
+### Judge-only runs are composition, not a flag
 
-**Tips:**
-- Click "Show full text" to see the complete passage — the default view is truncated
-- Every click autosaves immediately. You can close the browser and come back later.
-- The LLM tends to be conservative — many "Partially Relevant" passages may actually be "Relevant." When in doubt, lean toward Relevant.
-- A good answer-mode question typically has **15-30 relevant passages** across **1-8 different documents**
+There is no `--judge-only` mode. Judging a stored capture at zero synthesis cost
+is just `run-judge --capture <file>`, and agreement between two judge models is
+`run-compare --judged <judgedA.json> <judgedB.json>`. For A/B synthesis
+comparison there is also `run-compare --pairwise <captureA.json> <captureB.json>`
+(judge sees both answers in randomized order; reported as win rate with the
+order-swap check).
 
-**When you're done:** Let the dev team know, then run `npm run eval:golden-assemble` to rebuild the golden set from your reviewed labels.
+### Selection modes and the two-step flow
+
+Answer mode in the product is a two-step flow: the user searches in cite
+mode, optionally selects documents from the results, and answer mode
+retrieves only within the selected docs. The harness makes that selection
+an explicit, recorded dimension of a run:
+
+- **`fixture-set`** (default) — the case is answered within its evalset
+  `doc_set`. Tuning sweeps run here: the selection is constant, so knob
+  deltas attribute cleanly. Requires the evalset restructure (the `doc_sets`
+  field); without it, capture hard-errors pointing at that PR.
+- **`no-selection`** — the selection is derived the way the UI does when the
+  user picks nothing: a cite-mode query (`max_results: 40`, the client's
+  shape), capped at the top 20 docs. The realism mode — and it runs on the
+  current evalset unchanged, no `doc_sets` needed, so a baseline is possible
+  the moment this harness lands.
+
+The two modes' reports are not comparable (a no-selection case can fail at
+the cite stage for a reason that cannot exist under fixture-set), so
+`compare` and the pairwise mode refuse cross-mode diffs. Two
+no-selection-specific outcomes to know when reading a report:
+
+- **`unreachable`** — the cite query returned zero docs, so the product
+  would never reach answer mode (the results table, and its Ask button,
+  never appear). Recorded per pass, no answer call, no error: an abstention
+  (pass) for a negative case, a cite-stage failure for a positive one,
+  counted in its own header bucket.
+- **`rank_gaps`** — per case, how many expected passages the case's question
+  fails to surface even when the expected doc is looked up directly with
+  wide pools. This is the cross-lingual rank gap: an English question can
+  rank a zh executive-summary chunk below hundreds of same-doc chunks that
+  repeat the fact with variant wording. It is a measurement, never a
+  preflight failure — preflight checks that the expected passage *exists*
+  in the served corpus via a snippet-derived query, not whether this
+  question retrieves it.
+
+### Scoring dimensions (what the report means)
+
+`report-<label>.json` has three parts: a header (provenance — fixture commit,
+target, knobs, synthesis/judge models, `selection_mode`, cost, plus the
+`rank_gaps` and `unreachable_passes` diagnostics below), one block per
+fixture review tier — `headline` (expert-approved), `draft_block`,
+`rejected` — and a `per_case` array with the same metrics at case grain plus
+`per_pass` detail. Block numbers are macro-means: each case is scored first
+(its own passes averaged), then cases are averaged — passes are never pooled
+across cases. `n/a` on the console means no case had a value for the metric
+(nothing scored, or the metric does not apply) — never zero.
+
+**Retrieval** (positive cases; the universe is the chunks the model actually
+saw):
+
+- **evidence_coverage** (primary) — of the fixture's key facts, the share
+  whose supporting passage's text appears (normalized containment) in a
+  retrieved chunk of its own document or its translation twin. Facts with no
+  supporting passage or no snippet in the fixture leave the denominator and
+  are counted alongside as `facts_no_passage` / `facts_no_snippet` — read a
+  coverage mean together with those counts to know how much of the set it
+  actually measured.
+- **doc_map** — average precision over the expected documents, twin-collapsed
+  before ranking (a document and its translation are one source). Expected
+  docs the preflight proved missing from the corpus leave the denominator.
+- **attainable_recall** — of those same attainable expected docs, the share
+  retrieved at all. 100% means retrieval found everything findable; a low
+  value beside a high doc_map means the misses are total, not merely late.
+- **distinct_docs** — distinct twin-collapsed documents in the retrieved
+  list (breadth of the horizon).
+- **top_doc_share** — the most-represented document's share of the list
+  (concentration; a high value means one source dominated).
+- **chunk_id_hit_rate** (diagnostic) — exact `chunk_id` overlap between the
+  fixture's expected passages and the retrieved chunks. Healthy doc-grain
+  numbers beside low chunk-grain ones mean boundary drift, twin
+  substitution, or the right document ranked the wrong chunks — read it
+  against doc_map, never alone.
+- **selection_utilization** (two-step) — of the distinct documents in the
+  case's selection, the share that contributed at least one passage to what
+  the model saw: "picked but ignored" made visible. Undefined with no
+  selection. Structural ceiling when reading it: the model sees ≤
+  `max_passages` passages (15 for gpt-5 models at 800 chars since the
+  2026-09-10 default change — see
+  `evaluation/baselines/2026-09-10-answer-noselection-knobconfirm15x800-3pass-compare.md`;
+  6 otherwise), so a 20-document selection cannot exceed 15/20 at default
+  knobs. Printed on the
+  console like the other retrieval dimensions (`n/a` on a capture with no
+  selection), and carried in the JSON (`draft_block.retrieval` and
+  `per_case`).
+
+**Synthesis** (judged; an unjudged item leaves its mean and is counted in
+the header's `unjudged` block — never scored as zero):
+
+- **fact_recall_strict** — share of key facts the judge ruled fully stated.
+- **fact_recall_lenient** — fully stated plus partial.
+- **citation_precision** — over sentences citing at least one passage, the
+  share the judge found supported by the passages they cite. Zero-cite
+  sentences are deliberately excluded here — they are the
+  unsupported-claims lane's job.
+- **unsupported_claims** / **unsupported_rate** — judge-counted sentences no
+  passage supports, with the rate per sentence; the count is always shown
+  with the number of judged passes it covers
+  (`unsupported_claims_judged_passes`).
+
+**Compliance** (computed from the route reply, not judged):
+
+- **cites_valid** — every citation resolved to a passage actually sent.
+- **parsed_clean** — the route parsed the model reply without the
+  partial-extraction salvage path or an infrastructure fallback.
+- **all_english** — no Chinese sentences in an English answer.
+
+**Abstention** (negative cases) — the share of negative-case passes where
+the product correctly refused. The signal is the route's off-topic flag, its
+low-coverage warning, or an all-weak nano-filter result; `likely_off_topic`
+is corpus-level and computed pre-filter, so under `fixture-set` (a negative
+asked against a hand-picked set) it can be false and `low_coverage` is the
+signal instead — the report records both, and the interpretation depends on
+the mode. An `unreachable` negative stays in the denominator: never
+reaching answer mode IS the abstention. A positive unreachable pass is the
+opposite — a cite-stage failure, excluded from every mean, never scored as
+zero, and counted in the header's `unreachable_passes`
+(negative/positive).
+
+**Header diagnostics, recorded not gated:**
+
+- **rank_gaps** — per case, how many expected passages exist in the corpus
+  but the case's question fails to surface even when the expected document
+  is searched directly with wide pools. The cross-lingual rank gap: an
+  English question can rank a zh executive-summary chunk below hundreds of
+  same-document chunks that repeat the fact with variant wording.
+- **expected_doc_in_selection** (per case, `no-selection` mode) — whether
+  any expected document (or twin) made the top-20 selection. It separates
+  "retrieval never selected it" from "selected, but its chunks lost the
+  passage budget" when attainable_recall is 0.
+
+### Judge calibration against human labels
+
+`run-score --labels <path>` (repeatable; each path is a label file or a
+directory, from which only `labels-*.json` files are read — the evalset-review
+notebook's `annot-*.json` files share the same `review-output/` folder)
+attaches human review labels to the score report. Labels are produced by the
+eval-review repo's system-output notebook: a reviewer works through a stored
+capture and saves one `labels-<capture>-<case>-pass<N>-by-<reviewer>.json`
+file per case, pass, and reviewer (schema `answer-eval/human-labels@1`).
+Every label is validated against the capture — its recorded checksum must
+match, and every fact and sentence index must exist in that case and pass —
+so a label made from a different capture run is refused (exit 2, listing
+every rejection with its reason) rather than silently mixed into the report.
+The checksum is a sha256 over the capture's `cases` (plus its `selection`
+block, when the @2 capture carries one); the capture stage writes it into
+the artifact as `capture_fingerprint` so the notebook copies it
+rather than re-hashing (Python and Node format small floats differently, so
+a re-hash is not portable). Labels bind to either capture schema — `@1`
+(pre-selection) and `@2` (selection-bearing) both validate — but note the
+window: until the eval-review notebook's `@2` acceptance lands with the
+evalset PR, `@2` captures cannot be labeled, so calibration runs continue
+on `@1` captures.
+
+With labels, the report header changes: `judge: uncalibrated` becomes a
+calibration object (`calibrated`, label count, reviewers) and a
+`judge_agreement` block is added, while the console prints judge-vs-human
+agreement per verdict type — fact stated/partial/absent, sentence
+supported/unsupported, and the unsupported-claims count. The agreement
+measure mirrors the two-judge agreement mode: for each verdict type it is
+counted only where both the judge and the human produced a verdict
+(symmetric either-denominator); labeled items with no judged counterpart are
+counted as excluded, never scored. One carve-out: a sentence with no
+resolvable citation produces no judged `sentence_support` item at all (the
+judge covers it only through `unsupported_claims`), so a human verdict on
+such a sentence is never counted excluded — it joins only through the
+unsupported-claims tally. Reviewers are independent — all of them
+for the same case+pass join, each compared against the same judged verdicts —
+and the same reviewer's later file for the same case+pass wins (a corrected
+file supersedes their earlier one).
+
+Without `--labels` nothing changes: the report is byte-identical to a plain
+run. The fixture data enabling this (answer twins, negative cases,
+`review_status` fields) arrives with the eval-review submodule pin bump,
+separately.
+
+### Cost caveats
+
+Capture sums the gateway's `usage.total_usd` (the answer route reports no
+usage). Judge cost is tracked in provider token counts, **not dollars** —
+lunaroute pricing per token is unmeasured, so tokens are recorded and never
+converted. The judged artifact persists the accumulated totals (`usage`:
+prompt/completion tokens + judge call count), and the report header carries
+them as `cost.judge`; budget estimates still lack judge dollars.
 
 ---
 
@@ -219,7 +440,7 @@ After running `npm run eval:golden-review`, open **http://localhost:3001/eval/re
 ### Recall
 **What it measures:** Of all relevant documents, what % did we find?
 - **Formula:** True Positives / (True Positives + False Negatives)
-- **High recall = few false negatives** (user doesn't miss important docs)
+- **High recall = few false negatives** (user doesn't miss relevant docs)
 
 ### Common Tradeoffs
 - **Lower threshold** -> More docs -> Higher recall, lower precision
@@ -237,46 +458,20 @@ ls -lt evaluation/results/eval-report-*.json | head -1
 # View cite summary
 cat evaluation/results/eval-report-TIMESTAMP.json | jq '{precision: .overall_precision, recall: .overall_recall, passed: .test_cases_passed}'
 
-# Find latest answer retrieval report
-ls -lt evaluation/results/answer-retrieval-*.json | head -1
+# Answer-eval artifacts (gen-2 harness)
+ls -lt evaluation/answer/artifacts/
 ```
 
 ---
 
 ## QA Reviewer Access
 
-External reviewers access the evaluation UIs via the QA server — no local setup required.
+External reviewers access the cite report via the QA server — no local setup
+required. Publish it with `npm run eval:upload-cite` after `eval:cite`
+(needs `DOCUMENTS_S3_BUCKET` and AWS creds in `.env`).
 
 **Review URLs (QA):**
-- Label review: `http://<qa-alb>/api/eval/review-labels`
-- Synthesis review: `http://<qa-alb>/api/eval/review-synthesis`
 - Cite report: `http://<qa-alb>/api/eval/review-cite`
-
-**Local dev review server** (`npm run eval:golden-review` on `:3001`):
-- Label review: `http://localhost:3001/eval/review-labels`
-- Synthesis review: `http://localhost:3001/eval/review-synthesis`
-
-Note: The local dev server does not serve cite reports — use the QA server or view JSON directly.
-
-**Developer workflow:**
-```bash
-# 1. Run evals locally
-npm run eval:cite
-npm run eval:answer-retrieval
-npm run eval:synthesis-capture
-npm run eval:synthesis-llm-eval
-npm run eval:synthesis-prepare-review
-
-# 2. Upload data to S3 for reviewers (needs DOCUMENTS_S3_BUCKET and AWS creds in .env)
-npm run eval:upload
-
-# 3. After reviewer completes their work, pull data back
-npm run eval:download
-
-# 4. Continue with assembly
-npm run eval:golden-assemble
-npm run eval:synthesis-assemble
-```
 
 ---
 
@@ -290,41 +485,30 @@ evaluation/
 ├── lib/
 │   ├── types.ts                           # Shared type definitions
 │   ├── metrics.ts                         # P/R/F1 at set, URL, chunk, doc levels
-│   ├── service-client.ts                  # Hybrid service + answer API clients
-│   └── ragas_adapter.py                   # Golden set -> RAGAS format converter
+│   └── service-client.ts                  # Hybrid service + answer API clients
 │
 ├── # Cite Mode
 ├── golden-dataset.json                    # Cite mode: 11 queries, 64 expected docs
 ├── run-cite-eval.ts                       # Full evaluation runner (11 queries)
-├── generate-report.ts                     # HTML report generator for cite results
+├── generate-report.ts                      # HTML report generator for cite results
+├── upload-cite-report.ts                   # Publish latest cite report to S3 for QA reviewers
 │
-├── # Answer Mode — Evaluation
-├── answer-golden-dataset.json             # Answer mode: 9 test cases with synthesis ground truth
-├── run-answer-retrieval-eval.ts           # Track 1: passage/doc-level P/R/F1
-├── run-answer-synthesis-capture.ts        # Track 2 Stage 1: capture system outputs
-├── run-answer-synthesis-llm-eval.ts       # Track 2 Stage 2: LLM scoring (5 dimensions)
-├── prepare-synthesis-review.ts            # Track 2: merge capture + LLM eval for review
-├── assemble-synthesis-ground-truth.ts     # Track 2 Stage 4: write to golden dataset
-├── generate-answer-report.ts              # HTML report generator for answer evals
-├── run-answer-synthesis-eval.py           # Legacy: RAGAS-based synthesis eval
-├── run-answer-synthesis-wrapper.ts        # Legacy: TS wrapper for RAGAS eval
-├── requirements-eval.txt                  # Python deps for legacy RAGAS eval
-│
-├── # Answer Mode — Golden Set Pipeline
-├── answer-question-bank.json              # 9 human-written research questions
-├── generate-answer-golden-set.ts          # Chunk-first pipeline (retrieve/label/assemble)
-├── serve-label-review.ts                  # Label + synthesis review server (:3001, local dev)
-├── answer-labels-review.json              # LLM + human-reviewed chunk labels
-├── answer-retrieval-raw.json              # Raw retrieval results from golden set generation
-├── answer-synthesis-raw.json              # Stage 1 output: captured passages + synthesis
-├── answer-synthesis-llm-eval.json         # Stage 2 output: LLM scores per test case
-├── answer-synthesis-eval-final.json       # Stage 3 output: merged review-ready data
-├── upload-eval-to-s3.ts                   # Push eval data to S3 for QA reviewers
-├── download-eval-from-s3.ts              # Pull reviewed data from S3
+├── # Answer Mode — gen-2 harness
+├── answer/
+│   ├── run-capture.ts                     # Stage CLI: capture
+│   ├── run-judge.ts                       # Stage CLI: judge (resumable)
+│   ├── run-score.ts                       # Stage CLI: score (pure)
+│   ├── run-compare.ts                      # Stage CLI: compare / agreement / pairwise
+│   ├── cli.ts                             # Shared control parsing
+│   ├── capture.ts / judge.ts / score.ts / compare.ts   # Stage cores
+│   ├── fixture.ts / normalize.ts / http.ts / target.ts / preflight.ts
+│   ├── judge-client.ts / judge-prompts.ts / types.ts / test-server.ts
+│   ├── __tests__/                          # Harness tests
+│   └── artifacts/                          # Stage outputs (gitignored)
 │
 ├── # Diagnostics (ad-hoc debugging tools)
 ├── analyze-missing-docs.ts               # Analyze docs missing from retrieval
-├── check-golden-urls.ts                   # Validate golden dataset URLs
+├── check-golden-urls.ts                  # Validate golden dataset URLs
 ├── cite-recall-diagnostic.ts              # Detailed cite recall analysis
 ├── debug-retrieval.ts                     # Debug individual retrieval queries
 ├── diagnose-pre-filter-recall.ts          # Pre-filter stage recall analysis
@@ -338,14 +522,9 @@ evaluation/
 ├── diagnostics/
 │   └── diagnostic-runner.ts               # Generic diagnostic runner
 │
-├── # Legacy / superseded
-├── golden-dataset-updated.json            # Older version of cite golden dataset
-│
 └── results/                               # All eval output (gitignored)
     ├── eval-report-{timestamp}.json       # Cite mode results
     ├── eval-report-{timestamp}.html       # Cite mode HTML reports
-    ├── answer-retrieval-{timestamp}.json  # Answer retrieval results
-    ├── answer-retrieval-{timestamp}.html  # Answer retrieval HTML reports
     ├── diagnostic-{timestamp}.json        # Diagnostic output
     └── pre-filter-diagnostic-*.json       # Pre-filter diagnostic output
 ```
@@ -356,15 +535,8 @@ evaluation/
 src/
 ├── lib/
 │   ├── eval-storage.ts                    # S3/local eval file storage abstraction
-│   └── eval-html-templates.ts             # HTML templates for review UIs
+│   └── eval-html-templates.ts             # HTML template for the cite report UI
 └── app/api/eval/
-    ├── labels/route.ts                    # GET labels JSON
-    ├── labels/override/route.ts           # POST label override
-    ├── review-labels/route.ts             # GET label review HTML page
-    ├── synthesis-eval/route.ts            # GET synthesis eval JSON
-    ├── synthesis-eval/review/route.ts     # POST human eval update
-    ├── synthesis-raw/route.ts             # GET captured passages JSON
-    ├── review-synthesis/route.ts          # GET synthesis review HTML page
-    ├── cite-report/route.ts              # GET cite report JSON
-    └── review-cite/route.ts              # GET cite report HTML page
+    ├── cite-report/route.ts               # GET cite report JSON
+    └── review-cite/route.ts               # GET cite report HTML page
 ```

@@ -93,6 +93,13 @@ def run(document_id):
             return None  # job ends 'done', not parked in review for a withdrawn doc (NEW-P2-4)
         audit_system_event(conn, document_id, "lifecycle",
                            {"status": doc["status"]}, {"status": new_status})
+        try:
+            from worker import relate
+            n = relate.suggest_for_document(conn, document_id)
+            if n:
+                logger.info(f"{doc['external_id']}: {n} translation-pair suggestion(s) queued")
+        except Exception:  # noqa: BLE001 — suggestions are advisory, never a pipeline invariant
+            logger.warning(f"{doc['external_id']}: relation suggestions failed (non-fatal)", exc_info=True)
         if score < 0.7:
             logger.warning(f"{doc['external_id']}: confidence {score} -> needs_review (extraction concerns)")
             return "needs_review"

@@ -94,3 +94,10 @@ export function auditActor(identity: AdminIdentity): {
     ? { actorUserId: identity.userId, source: 'human' }
     : { actorUserId: null, source: 'system' }
 }
+
+/** Map an identity to a human-readable reviewer label for text audit columns
+ * (e.g. document_relations.reviewed_by). Token auth has no username. */
+export function identityName(identity: AdminIdentity | undefined): string {
+  if (!identity) return 'system'
+  return identity.kind === 'user' ? identity.username : 'api-token'
+}

@@ -6,7 +6,17 @@ import { Button, Navbar as WriNavbar } from '@worldresources/wri-design-systems'
 import { FiPlus } from 'react-icons/fi'
 import { WriLogoIcon } from '../icons/WriLogo'
 
-const Navbar = ({ query }: { query: string }) => {
+const Navbar = ({
+  query,
+  newSearchHref = '/',
+}: {
+  query: string
+  /** Where "New search" starts over. `/experts` is its own search surface
+   *  (spec §7), so sending its users to the research home would drop them out
+   *  of experts mode through the one control that most obviously means
+   *  "start again here". */
+  newSearchHref?: string
+}) => {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -36,7 +46,7 @@ const Navbar = ({ query }: { query: string }) => {
           key='new-search'
           variant='secondary'
           leftIcon={<FiPlus />}
-          onClick={() => router.push('/')}
+          onClick={() => router.push(newSearchHref)}
         >
           New search
         </Button>,
