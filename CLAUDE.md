@@ -25,9 +25,19 @@ per the runbook. Trap edge to know: docs-only pushes (`.md`, `docs/**`) deploy
 *nothing* on either branch, so a "safe-looking" main push can hide the fact that
 the next code push there ships straight to prod.
 
-Standing release checklist: `docs/runbooks/production-release.md` — pending-ops
-discovery commands to run at every release, plus the dated snapshot of what is
-still owed to production (migrations, data repairs).
+**Releasing to production? Read `docs/runbooks/production-release.md` first, start to
+finish.** It is the standing procedure: branch reconciliation, pending-ops discovery,
+the qa→prod data mirror, verification gates, rollback, and the items still owed. Its §0
+lists the five things that have actually bitten us — including that a green deploy
+workflow does not mean a successful deploy (assert the live image SHA), and that the
+ingestion worker does not pick up new images on its own. `production-release-2026-09-19.md`
+is the worked example with real measurements.
+
+Releases copy qa's finished data to production rather than re-ingesting:
+`./scripts/mirror-qa-to-production.sh` (dry-run by default; the dry run executes the real
+statements and rolls back) and `./scripts/fingerprint-corpus.sh <env> [<env>]` for
+per-object content checksums. Use the fingerprint, not `verify-corpus-parity.sh`, as the
+release gate — the latter compares counts and is blind to content divergence.
 
 This has bitten twice (PR #360 on 2026-08-25 and PR #395 on 2026-09-02 — both
 merged to `main` believing it was inert code-landing, both deployed production
@@ -57,6 +67,11 @@ section is leftover template text and does not describe this repo's release flow
   `docs/runbooks/local-testing.md`.
 - `./scripts/with-remote-env.sh <qa|production> <cmd>` — run any command against a
   deployed environment's RDS (host/creds read from that env's ECS task definition).
+- `./scripts/fingerprint-corpus.sh <env> [<env>]` — per-object content checksums; with two
+  environments it prints a verdict per object. This is the release parity gate.
+- `./scripts/mirror-qa-to-production.sh [--apply] [--only <table>]` — copy qa's finished
+  data to production with guards (never deletes a `human` tag row; requires
+  `--allow-external-deletes N` to touch an `external` one). Dry-run by default.
 - `./scripts/clone-corpus.sh <source> <target>` / `./scripts/verify-corpus-parity.sh
   <a> <b>` — mirror one environment's corpus into another and prove the result.
   Direction is an argument: qa → production seeded the 2026-08-07 cutover;
