@@ -98,8 +98,22 @@ for spec in "production:askwri-app-production-cluster:askwri-app-production-inge
   fi
 done
 
-pending=$(./scripts/with-remote-env.sh production npm run typeorm -- migration:show \
-            -d src/db/migration-data-source.ts 2>/dev/null | grep -c '^\[ \]' || true)
+# Fail CLOSED. If this check cannot run, that is a failure — not a pass. Discarding
+# stderr here would let an auth/network error read as "0 pending" and march on against
+# an unmigrated production, which is the false-green class §0 of the runbook exists to
+# warn about.
+if ! mig_out=$(./scripts/with-remote-env.sh production npm run typeorm -- migration:show \
+                 -d src/db/migration-data-source.ts 2>&1); then
+  echo "  FAIL could not read migration state from production:"
+  printf '%s\n' "$mig_out" | tail -5 | sed 's/^/       /'
+  exit 1
+fi
+if ! printf '%s' "$mig_out" | grep -q '^\[X\]'; then
+  echo "  FAIL migration:show returned no recognizable migration list — refusing to assume 0 pending:"
+  printf '%s\n' "$mig_out" | tail -5 | sed 's/^/       /'
+  exit 1
+fi
+pending=$(printf '%s' "$mig_out" | grep -c '^\[ \]' || true)
 if [ "${pending:-0}" -gt 0 ]; then
   echo "  FAIL production has $pending pending migration(s). Run them first."
   exit 1
@@ -238,6 +252,16 @@ create temp table s (id uuid, document_id uuid, related_document_id uuid, relati
 \\copy s from '$WORK/relations.csv' with (format csv)
 select 'source_rows', count(*)::text from s;
 select 'target_before', count(*)::text from document_relations;
+-- The 2026-09-19 target was empty, but this script is meant to be reused. A future
+-- production with locally-created relations would lose them to a blind delete — the
+-- same failure shape as H1 in the runbook.
+select 'target_rows_absent_from_qa', count(*)::text from document_relations r
+ where not exists (select 1 from s where s.id=r.id);
+do \$\$ declare n int; begin
+  select count(*) into n from document_relations r where not exists (select 1 from s where s.id=r.id);
+  if n <> 0 then raise exception
+    'GUARD: % production document_relations rows do not exist in qa and would be destroyed', n; end if;
+end \$\$;
 delete from document_relations;
 insert into document_relations (id, document_id, related_document_id, relation_type, status,
   source, confidence, signals, created_at, reviewed_by, reviewed_at)
@@ -314,13 +338,30 @@ do \$\$ declare n int; begin
   if n <> $ALLOW_EXT then raise exception
     'GUARD: % external rows would be deleted, --allow-external-deletes is $ALLOW_EXT', n; end if;
 end \$\$;
+-- Deletion is not the only way to destroy a human row. The upsert below rewrites
+-- source/confidence/model_version/status on every shared key, so a pair that is
+-- 'human' on production and 'llm' on qa would be silently demoted. CLAUDE.md:
+-- never modify a document_tags row with source='human'.
+select 'human_rows_qa_would_overwrite', count(*)::text from document_tags dt
+  join s on s.document_id=dt.document_id and s.tag_id=dt.tag_id
+ where dt.source='human' and s.source is distinct from 'human';
+do \$\$ declare n int; begin
+  select count(*) into n from document_tags dt
+    join s on s.document_id=dt.document_id and s.tag_id=dt.tag_id
+   where dt.source='human' and s.source is distinct from 'human';
+  if n <> 0 then raise exception
+    'GUARD: % production human rows would be overwritten with a non-human source', n; end if;
+end \$\$;
 delete from document_tags dt
  where not exists (select 1 from s where s.document_id=dt.document_id and s.tag_id=dt.tag_id);
 insert into document_tags (document_id, tag_id, source, confidence, model_version, status, created_at)
 select document_id, tag_id, source, confidence, model_version, status, created_at from s
 on conflict (document_id, tag_id) do update set source=excluded.source,
   confidence=excluded.confidence, model_version=excluded.model_version,
-  status=excluded.status, created_at=excluded.created_at;
+  status=excluded.status, created_at=excluded.created_at
+-- belt and braces: even if the guard above is ever removed, a human row can only be
+-- updated by another human row.
+where document_tags.source is distinct from 'human' or excluded.source = 'human';
 select 'target_after', count(*)::text from document_tags;
 select 'by_source', source||'='||count(*)::text from document_tags group by source order by 1;
 select 'rows_on_one_side_only', count(*)::text from (

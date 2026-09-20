@@ -69,7 +69,8 @@ SQL_POST_MIGRATION="
 select 'tags_full', count(*)::text,
        md5(string_agg(md5(t3.id::text||t3.facet||t3.value_id||t3.taxonomy_version||
                           coalesce(t3.parent_tag_id::text,'')||coalesce(t3.description,'')||
-                          t3.needs_reembed::text), '' order by t3.facet, t3.value_id)) from tags t3
+                          t3.needs_reembed::text),
+                      '' order by t3.facet, t3.value_id, t3.taxonomy_version)) from tags t3
 union all select 'tag_aliases', count(*)::text,
        md5(string_agg(md5(ta.tag_id::text||ta.alias), '' order by ta.tag_id, ta.alias))
   from tag_aliases ta
@@ -116,8 +117,30 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "# comparing $A vs $B @ $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-fingerprint_one "$A" > "$TMP/a.txt"
-fingerprint_one "$B" > "$TMP/b.txt"
+# `|| true` so a connection failure reaches the capture guard below, which explains
+# what went wrong, rather than being killed by `set -e` with no diagnostic. The guard
+# still refuses to grade an incomplete capture, so this does not weaken the gate.
+fingerprint_one "$A" > "$TMP/a.txt" 2>/dev/null || true
+fingerprint_one "$B" > "$TMP/b.txt" 2>/dev/null || true
+
+# A parity gate that can report MATCH with no data is the same false-green this script
+# exists to eliminate. psql errors are suppressed for readability, so an auth or network
+# failure yields an empty capture — which would otherwise iterate zero times and print
+# "all gated objects match". Refuse to grade an empty or short capture.
+for side in "$A:$TMP/a.txt" "$B:$TMP/b.txt"; do
+  envn="${side%%:*}"; f="${side#*:}"
+  if ! grep -q '^chunks|[0-9]' "$f"; then
+    echo "ERROR: could not capture a fingerprint for '$envn' — no 'chunks' row." >&2
+    echo "       This is a FAILURE, not a match. Check credentials and connectivity:" >&2
+    echo "         ./scripts/with-remote-env.sh $envn psql -X -c 'select 1'" >&2
+    exit 2
+  fi
+  n=$(grep -c '|' "$f" || true)
+  if [ "$n" -lt 8 ]; then
+    echo "ERROR: fingerprint for '$envn' has only $n objects — capture is incomplete." >&2
+    exit 2
+  fi
+done
 
 printf '\n%-16s %10s %10s  %-34s %-34s %s\n' OBJECT "${A:0:10}" "${B:0:10}" "DIGEST($A)" "DIGEST($B)" VERDICT
 mismatch=0
@@ -151,9 +174,17 @@ for e in "$A" "$B"; do
     -c "select token||'|'||df::text||'|'||round(idf::numeric,6)::text from keyword_vocab order by token" \
     2>/dev/null | grep -v '^→' | LC_ALL=C sort > "$TMP/v-$e.txt"
 done
+if [ ! -s "$TMP/v-$A.txt" ] || [ ! -s "$TMP/v-$B.txt" ]; then
+  echo "df/idf: *** could not read keyword_vocab from one or both environments — NOT verified ***"
+  exit 2
+fi
 shared=$(LC_ALL=C comm -12 <(cut -d'|' -f1 "$TMP/v-$A.txt") <(cut -d'|' -f1 "$TMP/v-$B.txt") | wc -l | tr -d ' ')
 same=$(LC_ALL=C comm -12 "$TMP/v-$A.txt" "$TMP/v-$B.txt" | wc -l | tr -d ' ')
 echo "shared tokens: $shared | identical df+idf: $same"
+if [ "$shared" -eq 0 ]; then
+  echo "df/idf: *** 0 shared tokens — that is not a pass, it means the capture is wrong ***"
+  exit 2
+fi
 [ "$shared" = "$same" ] && echo "df/idf: OK — no BM25 scoring skew" \
                         || echo "df/idf: *** $((shared-same)) shared tokens differ — investigate before copying sparse vectors ***"
 

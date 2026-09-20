@@ -210,8 +210,14 @@ that qa did not have. Nobody knew, because every previous comparison looked at s
 *counts* rather than the actual `(document_id, tag_id)` sets. Investigate before overriding.
 
 **Deleting an `external` row requires `--allow-external-deletes N`** and is a recorded
-exception to the CLAUDE.md write-ownership rule. Deleting a `human` row is never allowed and
-the script cannot be made to do it.
+exception to the CLAUDE.md write-ownership rule.
+
+**`human` rows are protected on both paths.** Deletion is the obvious one, but the upsert is
+the subtle one: it rewrites `source`/`confidence`/`model_version`/`status` on every shared
+key, so a pair that is `human` on production and `llm` on qa would be silently demoted. The
+script aborts if any shared key would have a production `human` row overwritten by a
+non-human source, *and* the `ON CONFLICT … WHERE` clause independently refuses the write.
+Neither can be satisfied by a flag.
 
 ### Step 3 — search vocabulary
 
