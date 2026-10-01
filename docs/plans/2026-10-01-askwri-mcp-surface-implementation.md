@@ -6,7 +6,7 @@
 
 **Architecture:** A new stateless route, `src/app/api/mcp/route.ts`, mounted with `mcp-handler` (which serves both the current MCP spec and 2025-era Streamable HTTP clients). It checks one shared key, calls our existing `/api/llamaindex` route handler in-process to search, formats the results as readable text, and writes one audit row per call.
 
-**Tech Stack:** Next.js 16 App Router (Node 24 in the image), TypeScript, Jest (jsdom default; `@jest-environment node` for route tests), `mcp-handler@^2`, `@modelcontextprotocol/server@^2`, `zod@^4`.
+**Tech Stack:** Next.js 16 App Router (Node 24 in the image), TypeScript, Jest (jsdom default; `@jest-environment node` for route tests), `mcp-handler@^2`, `@modelcontextprotocol/server@^2` (which requires `zod` v4 as its own peer).
 
 **Spec:** `docs/plans/2026-10-01-askwri-mcp-surface-design.md`
 
@@ -52,6 +52,9 @@ Failure modes the spec implies but no task's happy-path test exercises. Each lin
 ```bash
 npm install mcp-handler@^2 @modelcontextprotocol/server@^2 zod@^4
 ```
+
+`zod` v4 is a peer of `@modelcontextprotocol/server`, not of `mcp-handler` — but it is ours to
+install, since nothing else in this repo depends on it.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -260,6 +263,21 @@ function forwarded(): any {
 }
 
 describe('runSearchWri', () => {
+  // Premise check A10, and the most falsifiable claim in this plan: a Next.js route
+  // module can be imported and called from another server module. If this fails, stop
+  // and report — do not paper over it here. The fallback is in Step 3.
+  it('can call the existing route handler in-process', async () => {
+    const { POST } = await import('@/app/api/llamaindex/route')
+    const res = await POST(
+      new NextRequest('http://internal/api/llamaindex', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'q', mode: 'cite' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(res.status).toBe(200)
+  })
+
   it('returns the formatted text', async () => {
     const { runSearchWri } = await import('../mcp/search-tool')
     const text = await runSearchWri({ query: 'compact urban growth' }, { baseUrl: 'https://askwri.example' })
@@ -326,9 +344,20 @@ topic, say so rather than answering as if it were well covered.
 - `searchToolInputSchema` — a zod object: `query` (string, min 1), `year_from` / `year_to` (optional ints, 1900–2100, described as "only if the person named a year range"), `max_results` (optional int, 1 to 20).
 - `runSearchWri(args, ctx)` — imports `POST` from `@/app/api/llamaindex/route` (a plain function export; the repo's own route tests call it this way), builds a `NextRequest` for an internal URL like `http://internal/api/llamaindex` with body `{ query, mode: 'cite', max_results, min_year?, max_year? }`, calls it, parses the JSON, and returns `formatSearchResults(query, json, ctx.baseUrl)`. It never throws: any thrown error becomes the same readable "could not be reached" text.
 
-`mode: 'cite'` is required — the answer preset fetches far more documents than anyone needs here.
+`mode: 'cite'` is required, for two reasons: cite mode is the path the relevance tiers and the
+logit floor are calibrated on, and it returns fewer documents than answer mode (25 against 15 is
+the cap, and the candidate pools are 500 against 150) — so it is the cheaper and the
+better-grounded of the two. Cite mode also matches what the website shows, so a discrepancy
+between the two surfaces is a real bug rather than a preset difference.
 
 Clamp `max_results` to `MAX_MAX_RESULTS` before forwarding; never let a caller's number decide how much text we generate.
+
+**If the in-process import fails** (the test in Step 1), stop and report rather than inventing a
+workaround. The fallback: `runSearchWri` calls the internal search service directly
+(`SEARCH_SERVICE_URL` with the same options the route builds from `CITE_PRESET` in
+`src/config/retrieval.ts`) and formats from *that* response shape, which has `docs[].content`,
+`docs[].page` and `docs[].metadata` instead of the route's `kps[0].snippet` nesting. That
+changes Task 1's formatter input, so it is a decision for the operator, not a local patch.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -347,12 +376,19 @@ git commit -m "feat(mcp): search_wri tool — schema, description, in-process se
 ### Task 3: The MCP route and the shared key
 
 **Files:**
+- Create: `src/lib/mcp/key.ts`
 - Create: `src/app/api/mcp/route.ts`
 - Test: `src/__tests__/mcp-route.test.ts`
 
 **Interfaces:**
 - Consumes: `SEARCH_TOOL_NAME`, `SEARCH_TOOL_DESCRIPTION`, `searchToolInputSchema`, `runSearchWri` from Task 2.
-- Produces: `export { handler as GET, handler as POST }` from the route module, and an exported `isAuthorized(req: Request): boolean` so the key rule is testable on its own.
+- Produces: `isAuthorized(req: Request): boolean` in `src/lib/mcp/key.ts`, and `export { handler as GET, handler as POST }` from the route module.
+
+**The route module exports its handlers and nothing else.** A Next.js route module may only
+export the handler names (`GET`, `POST`, …) and segment config (`runtime`, `dynamic`, …); Next
+type-checks this during `next build` and fails on anything extra. That is why the key check lives
+in `src/lib/mcp/key.ts` and the formatter in `src/lib/mcp/search-results.ts`. Keep the test
+assertion on the route, where the behaviour is — just import the helper from the lib.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -500,9 +536,9 @@ Expected: FAIL — `Cannot find module '@/app/api/mcp/route'`
 
 Structure:
 
-1. `isAuthorized(req)` — true when `Authorization: Bearer <key>` matches `process.env.MCP_SHARED_KEY`, or when the `key` search parameter matches it. If `MCP_SHARED_KEY` is unset, return `false` for everything (an unset key must not mean an open door).
-2. If not authorized, return `401` with a readable plain-text body naming the key. Do this *before* building the MCP handler.
-3. Build the handler with `createMcpHandler`:
+1. `isAuthorized(req)` in `src/lib/mcp/key.ts` — true when `Authorization: Bearer <key>` matches `process.env.MCP_SHARED_KEY`, or when the `key` search parameter matches it. If `MCP_SHARED_KEY` is unset, return `false` for everything (an unset key must not mean an open door). Both forms are needed: the address form is the only one Claude Desktop and ChatGPT can use (spec §5), the credential form covers Cursor and anything else that takes a header.
+2. The route imports it; if not authorized, return `401` with a readable plain-text body naming the key. Do this *before* building the MCP handler.
+3. Build the handler with `createMcpHandler`. The request is **not** in scope when the tool is registered — the per-request origin arrives on the tool callback's second argument:
 
 ```ts
 const handler = createMcpHandler(
@@ -510,8 +546,15 @@ const handler = createMcpHandler(
     server.registerTool(
       SEARCH_TOOL_NAME,
       { title: 'Search the WRI corpus', description: SEARCH_TOOL_DESCRIPTION, inputSchema: searchToolInputSchema },
-      async (args) => ({
-        content: [{ type: 'text', text: await runSearchWri(args, { baseUrl: new URL(req.url).origin }) }],
+      async (args, ctx) => ({
+        content: [
+          {
+            type: 'text',
+            text: await runSearchWri(args, {
+              baseUrl: new URL(ctx.http?.req?.url ?? 'https://askwri.invalid').origin,
+            }),
+          },
+        ],
       }),
     )
   },
@@ -519,7 +562,7 @@ const handler = createMcpHandler(
 )
 ```
 
-The `baseUrl` for citations must come from the incoming request's own origin, not a constant — that is how the link matches whichever address the person actually connected to.
+The `baseUrl` for citations must come from the incoming request's own origin, not a constant — that is how the link matches whichever address the person actually connected to. The `ctx.http?.req` shape is from `@modelcontextprotocol/server` 2.x (`http?: { req?: Request, authInfo?: AuthInfo }`); confirm the field name against the installed package's types before trusting the fallback string above.
 
 4. `export { handler as GET, handler as POST }` (the package's documented Next.js mounting, `mcp-handler` README).
 5. `export const runtime = 'nodejs'` and `export const dynamic = 'force-dynamic'`.
@@ -568,10 +611,10 @@ import { NextRequest } from 'next/server'
 
 const ENV = { ...process.env }
 const KEY = 'test-shared-key'
-let logMock: jest.Mock
+let mockLog: jest.Mock
 
 jest.mock('@/db/queries/logAgentSearch', () => ({
-  logAgentSearch: (...args: unknown[]) => logMock(...args),
+  logAgentSearch: (...args: unknown[]) => mockLog(...args),
 }))
 
 function req(body: unknown) {
@@ -591,7 +634,7 @@ const CALL = {
 
 beforeEach(() => {
   jest.resetModules()
-  logMock = jest.fn().mockResolvedValue(undefined)
+  mockLog = jest.fn().mockResolvedValue(undefined)
   process.env = { ...ENV, MCP_SHARED_KEY: KEY, SEARCH_SERVICE_URL: 'http://search.test' }
   jest.spyOn(global, 'fetch').mockResolvedValue(
     new Response(
@@ -609,8 +652,8 @@ describe('call logging', () => {
   it('records the question, the count and the cost', async () => {
     const { POST } = await import('@/app/api/mcp/route')
     await POST(req(CALL))
-    expect(logMock).toHaveBeenCalledTimes(1)
-    expect(logMock.mock.calls[0][0]).toMatchObject({
+    expect(mockLog).toHaveBeenCalledTimes(1)
+    expect(mockLog.mock.calls[0][0]).toMatchObject({
       query: 'compact urban growth',
       resultCount: 0,
       costUsd: 0.002,
@@ -618,7 +661,7 @@ describe('call logging', () => {
   })
 
   it('still returns the result when logging fails', async () => {
-    logMock.mockRejectedValue(new Error('db down'))
+    mockLog.mockRejectedValue(new Error('db down'))
     const { POST } = await import('@/app/api/mcp/route')
     const res = await POST(req(CALL))
     expect(res.status).toBe(200)
@@ -743,5 +786,6 @@ git commit -m "docs(mcp): hand-check evidence — three questions against a real
 ## Self-Review Notes
 
 - **Spec coverage:** §2 the surface → Tasks 1–3; §3 (facts) → used as the ground truth for field names; §4 where the code goes → Task 3; §5 the key → Task 3 plus Task 5's ops note; §6 connecting → Task 5; §7 logging → Task 4; §8 proof → Tasks 1–4 tests plus Task 6; §9 open questions → settled in the plan (default 10 / ceiling 20, year limits exposed, description copy in Task 2); §10 not-built list → respected, nothing in the plan builds them.
-- **Types:** `formatSearchResults(query, llamaIndexJson, baseUrl)` in Task 1 == Task 2's call site; `SEARCH_TOOL_NAME` / `searchToolInputSchema` / `runSearchWri` names match between Tasks 2 and 3; `logAgentSearch(entry)` shape matches between Tasks 3 and 4.
+- **Types:** `formatSearchResults(query, llamaIndexJson, baseUrl)` in Task 1 == Task 2's call site; `SEARCH_TOOL_NAME` / `searchToolInputSchema` / `runSearchWri` names match between Tasks 2 and 3; `isAuthorized` is in `src/lib/mcp/key.ts` and never exported from the route module; `logAgentSearch(entry)` shape matches between Tasks 3 and 4.
+- **Corrections applied after the premise check (2026-10-01):** the route-module export rule, the per-request origin coming from `ctx.http?.req`, `mockLog` naming for the mocked module, the cite-mode justification, the `zod` peer location, and the in-process import labelled as the plan's most falsifiable premise with its own test and a stated fallback.
 - **Two deliberate deferrals inside the plan:** rate limiting (spec §9.1) is *not* in this plan — the audit rows in Task 4 give the cost signal, and a cap goes in when that shows abuse. The QA-open-or-internal question (spec §9.5) resolves to internal until the key is set, which Task 5 records.

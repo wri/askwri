@@ -114,8 +114,12 @@ Revisit when there is evidence people want our prose rather than their assistant
 | That PDF route is public, serves by document id, and 404s withdrawn documents | `src/app/api/pdf/[filename]/route.ts` |
 | A log table that fits, with a nullable "who" | `src/db/entities/AuditLog.entity.ts` (`actor_user_id` nullable, `before`/`after` jsonb) |
 
-**Corrected from the old capture:** it listed `has_english_translation` as available in the
-retrieval response (§3). It is not in this route's output. Not included.
+**On the old capture's field list:** it listed `has_english_translation` and `program_series`
+as available in the retrieval response. Both are there — but only inside a raw metadata blob
+(`meta: { raw: doc.metadata }`, `src/app/api/llamaindex/route.ts:205`), not as top-level fields.
+The blob is one of the things this surface drops (§2), so neither field is included here. The
+old capture was right at the level it was speaking at; an earlier revision of this document
+wrongly called it wrong.
 
 ---
 
@@ -124,41 +128,62 @@ retrieval response (§3). It is not in this route's output. Not included.
 A new route in the existing app: `src/app/api/mcp/route.ts`, Node runtime, stateless.
 
 - Same public origin as the site, so no new server, certificate, or network rule.
-- New dependency: the official TypeScript MCP SDK. Stateless POST handling is enough for a
-  tools-only server; no session or streaming machinery in v1.
-- **It calls our own `/api/llamaindex` over HTTP rather than refactoring that route's body into
-  a shared function.** One extra hop inside our own network, in exchange for not touching a
-  289-line route that serves the website. Upgrade path: extract the shared function when a
-  third caller appears.
+- New dependencies: `mcp-handler` (which mounts as a Next.js route export and serves both the
+  current MCP specification and 2025-era clients) and the server package it is built on,
+  `@modelcontextprotocol/server`, which requires `zod` v4. Stateless POST handling is enough for
+  a tools-only server; no session or streaming machinery in v1.
+- **The key check and the result formatter live in `src/lib/mcp/`, not in the route file.** A
+  Next.js route module may only export its handlers and segment config — anything else fails
+  the type check that runs during `next build`, and the build is the QA deploy gate.
+- **It reuses our own `/api/llamaindex` route handler in-process** — importing that module's
+  exported `POST` — rather than refetching over the network or refactoring a 289-line route that
+  serves the website. Caveat, found by the premise check and unresolved: whether a Next 16 route
+  module can be imported and called from another server module is unverified. The plan tests it
+  as its own case before building on it; if it fails, the fallback is to call the internal search
+  service directly using the same request preset.
 - The website's `/api/llamaindex` contract is not modified. The trimming happens in the new
-  route.
+  code.
 
 ---
 
 ## 5. The key
 
 - One secret string, held with our other secrets.
-- Accepted two ways: as a credential in the request, **or** as a parameter on the address.
-  Both, because some tools allow only a pasted address. The parameter ends up in logs and
-  browser history — accepted for an MVP, named here so it is not a surprise later.
+- **It travels in the address, and for the two tools that matter most that is the only option.**
+  Verified 2026-10-01: Claude Desktop's custom-connector screen takes a URL and, in advanced
+  settings, only OAuth client credentials — there is no field for a bearer token or custom
+  headers (an open issue on Anthropic's tracker is exactly this complaint). ChatGPT's
+  developer-mode apps support OAuth, no authentication, or a mix; also no static key. Cursor
+  accepts headers, so the credential form is a convenience for the rest, not the primary path.
+- Consequence, stated rather than discovered later: a key in a URL is visible in organizational
+  settings and travels by copy-paste. It is a weak gate, not a boundary. Tolerable only because
+  this surface is read-only and spends nothing but embeddings and reranking.
 - A wrong key gets a plain, readable refusal, so a person can distinguish "key is wrong" from
   "the service is down."
 - Separate keys for QA and production.
-- Rotating breaks every connected tool until each pastes the new one. That is the standing cost
+- Rotating breaks every connected tool until each updates its address. That is the standing cost
   of a single key shared by everyone.
 - No per-person identity, by decision. Consequence, stated plainly: we cannot attribute a
   question to a person, cannot cap one person's use, and cannot follow up with whoever asked.
+- **Correction to an earlier claim made while designing this:** adding a key later is not "a
+  small change where people paste it once" for Claude Desktop — that field does not exist. Per-
+  person identity there means OAuth, which is the real work. Choosing an open surface now does
+  not keep that door as cheap as it looked.
 
 ---
 
 ## 6. How someone connects
 
-They open their assistant's connector settings, add our address, paste the key. Nothing to
-install on their machine; the address is our normal site address plus a path.
+They open their assistant's connector settings, add our address with the key in it, and enable
+it. Nothing to install on their machine; the address is our normal site address plus a path.
+
+Claude reaches us from Anthropic's cloud rather than from the person's device, so the request
+the service receives does not come from their network. That rules out treating the source
+address as identity or as a usage limit.
 
 Honest limit: a few tools accept only locally installed tools rather than an address. Those
-need a small per-person bridge program. **Not built** — we write the note. Claude Desktop,
-ChatGPT, and Cursor all accept an address.
+need a small per-person bridge program (a third-party one exists — `mcp-remote`). **Not built**
+— we write the note. Claude Desktop, ChatGPT, and Cursor all accept an address.
 
 ---
 
