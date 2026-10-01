@@ -3,6 +3,16 @@
 **Status:** design approved in session. Not an implementation plan; the next step is a
 writing-plans pass over §4–§9.
 
+**Built and hand-checked (2026-10-01):** the surface exists — one read-only tool at
+`/api/mcp`, behind the shared key in §5 — and it was used from Claude Desktop against the
+real QA corpus. Evidence, including the defects found:
+`docs/plans/2026-10-01-mcp-hand-check.md`. How to connect an assistant:
+`docs/runbooks/askwri-mcp-connector.md`. Three things that document changes, listed here so
+this one is not read alone: the reply is bulkier than it should be (ten passages at roughly
+800 characters each); no document came back with authors, so no answer carried any; and the
+thin-corpus note in §2 is our sentence being repeated by the assistant, so if that sentence
+is wrong the assistant repeats our mistake confidently.
+
 **Continues:** `docs/plans/2026-08-13-agent-persona-design.md` (the agent-persona capture),
 which ended as a brainstorm with nothing built. This one narrows it to the smallest useful
 surface and settles the questions that capture left open.
@@ -255,7 +265,9 @@ Each with the signal that would change the decision.
 - **Citation ergonomics.** The old capture made a stable, human-resolvable link load-bearing
   (decision #11). Here the link exists and works, but the only thing keeping it attached to an
   answer is an instruction to a model. That is the weakest joint in this design, and it is named
-  rather than papered over.
+  rather than papered over. **First evidence, 2026-10-01:** the assistant kept every link, with
+  titles and page numbers, unprompted. One sample, one model, one day — weaker than it looks,
+  but the joint did hold where it was most likely to fail.
 - **Disposal.** Not applicable — nothing is proposed.
 
 ---

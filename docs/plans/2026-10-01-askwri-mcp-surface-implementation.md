@@ -10,6 +10,13 @@
 
 **Spec:** `docs/plans/2026-10-01-askwri-mcp-surface-design.md`
 
+**Status 2026-10-01:** Tasks 1–3 are complete, including the shared key, and verified: 24
+tests green, production build passes, `/api/mcp` registered, full suite unchanged against the
+base commit (26 pre-existing database failures, none added). Task 4 (call logging), Task 5
+(ops step — see below) and Task 6 remain. Task 6's hand-check was run early and out of order;
+its evidence is in `docs/plans/2026-10-01-mcp-hand-check.md`, and two defects it found (bulky
+replies, missing authors) are not yet fixed.
+
 **Filed in `docs/plans/` rather than `docs/superpowers/plans/`** to match repo convention (the design doc this implements is filed there too).
 
 ## Global Constraints
@@ -389,6 +396,10 @@ export the handler names (`GET`, `POST`, …) and segment config (`runtime`, `dy
 type-checks this during `next build` and fails on anything extra. That is why the key check lives
 in `src/lib/mcp/key.ts` and the formatter in `src/lib/mcp/search-results.ts`. Keep the test
 assertion on the route, where the behaviour is — just import the helper from the lib.
+
+**Built as written, with one addition:** the route's `GET` and `POST` are thin wrappers that
+check the key and then call the handler, rather than re-exporting it. One extra test covers the
+case where no key is configured at all — the door must be shut, not open.
 
 - [ ] **Step 1: Write the failing test**
 

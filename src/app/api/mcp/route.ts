@@ -1,4 +1,5 @@
 import { createMcpHandler } from 'mcp-handler'
+import { isAuthorized } from '@/lib/mcp/key'
 import {
   SEARCH_TOOL_DESCRIPTION,
   SEARCH_TOOL_NAME,
@@ -17,9 +18,6 @@ const FALLBACK_ORIGIN = 'https://askwri.invalid'
  *
  * The handler is mounted at `/api/mcp` and speaks both the current MCP
  * specification and 2025-era clients from the same entry point.
- *
- * NOTE: no shared-key check yet. Until it lands this route is ungated and must
- * not be exposed publicly.
  */
 const handler = createMcpHandler(
   (server) => {
@@ -54,4 +52,24 @@ function originOf(request: Request | undefined): string {
   }
 }
 
-export { handler as GET, handler as POST }
+/** Readable on purpose: "wrong key" must be distinguishable from "service down". */
+const NEEDS_KEY =
+  'This service needs a key. Add it as a credential (Authorization: Bearer <key>) or as a key parameter on the address (?key=<key>).'
+
+async function handle(request: Request): Promise<Response> {
+  if (!isAuthorized(request)) {
+    return new Response(NEEDS_KEY, {
+      status: 401,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    })
+  }
+  return handler(request)
+}
+
+export async function GET(request: Request): Promise<Response> {
+  return handle(request)
+}
+
+export async function POST(request: Request): Promise<Response> {
+  return handle(request)
+}
