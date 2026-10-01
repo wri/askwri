@@ -105,6 +105,45 @@ person cared enough to correct.
   `document_chunks` rather than re-embedded, which keeps Bedrock out of the
   harness.
 
+## What production actually does — read this before reading any result
+
+The worker attaches **0–5** topic tags per document, each with its own
+confidence. `document_tags.status` is `accepted` when confidence ≥
+`tag_confidence_accept` (0.7), otherwise `suggested`. The QA corpus averages
+~4.9 `source='llm'` topic rows per document, consistent with top-5.
+
+**The harness asks for a single label. That is a deliberate simplification, not
+the production task.** It exists only because the one scoreable gold set
+(`external`) is single-valued, so a tag *set* could not be scored against it.
+The consequence is not cosmetic: forcing one label manufactures
+hypernym/hyponym disagreements (`Pollution` vs `Air Pollution`) that a 0–5
+answer would simply absorb by returning both. Single-label agreement figures
+are therefore a **lower bound** on top-5 agreement, and should never be quoted
+as a prediction of top-5 behaviour.
+
+`choice` is single-select by construction, so the System One shape for top-5 is
+**one `noul` per candidate** — "does this tag apply?" — which is also what
+TypeSafe's own guidance recommends for labels that can apply together. It maps
+onto production better than `choice` does, because a `noul` returns P(yes) per
+tag, which is exactly the number the 0.7 accept/suggest threshold consumes.
+
+## Measured API limits
+
+Measured on the lunaroute gateway, 2026-10-01. These decide what shapes are
+possible at all, so they are recorded with the error that established them.
+
+| limit | value | evidence |
+|---|---|---|
+| `choice` options | **255** | kev-4b and djev both 400 at 300/500/757: `choice question "pick" has 757 options; the limit is 255` |
+| `questions` per request, `djev` | **32** | 400 at 40/60: `"questions" exceeds this model's max_questions of 32`. Exactly 32 also fails with a generic invalid-request error; 20 works |
+| `questions` per request, `kev-4b` | **> 60** | 60 `noul` questions accepted, 0.5s |
+| latency, 255-option `choice` | 0.8–1.0s | candidate sets can grow far beyond the current `tag_candidate_top_n = 20` at negligible cost |
+| latency, 20 `noul` questions | 0.4–0.6s | |
+
+`topic` has **757** tags and `geography` **201**, so neither fits in a single
+`choice`. System One can only ever do `topic` via retrieve-then-classify over a
+subset, or via `noul`-per-candidate.
+
 ## Adding a model variant
 
 Write one `pick` function in `systems.ts` and add it to `defaultSystems()`.

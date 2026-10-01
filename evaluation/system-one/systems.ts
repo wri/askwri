@@ -8,7 +8,12 @@
  * comparison is apples-to-apples by construction.
  */
 
-const TIMEOUT_MS = 120_000
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
+
+const TIMEOUT_MS = 300_000
 
 /** TypeSafe `choice` takes at most 255 options (their published limit). */
 const CHOICE_CAP = 255
@@ -45,13 +50,15 @@ export type System = {
   pick(ctx: PickCtx): Promise<Pick>
 }
 
-/** Candidate line as the classify stage renders it: `- label (aka: x; description)`. */
+/** Candidate line as the classify stage renders it. The label is quoted so a
+ * model cannot mistake the description for the value — unquoted, opus returned
+ * `"Public Finance (aka: urban finance, ..."` and the call had to be discarded. */
 function renderCandidate(c: Candidate): string {
   const details = [
     c.aliases.length ? `aka: ${c.aliases.join(', ')}` : '',
     c.description ?? '',
   ].filter(Boolean)
-  return `- ${c.label}${details.length ? ` (${details.join('; ')})` : ''}`
+  return `- "${c.label}"${details.length ? ` — ${details.join('; ')}` : ''}`
 }
 
 /**
@@ -117,14 +124,33 @@ export function systemOne(model: string, baseUrl?: string): System {
  * search-service/worker/llm.py `chat_json` (including its single retry with a
  * doubled token budget). Retry exhaustion or an out-of-enum value is recorded
  * as a failure rather than patched over — that failure rate is a real metric.
+ *
+ * `reasoningEffort` is provider-specific and materially changes the answer, so
+ * it is recorded in `note` and written into the artifact.
  */
-export function llm(model: string, baseUrl = 'https://api.openai.com/v1'): System {
+export function llm(
+  model: string,
+  opts: { baseUrl?: string; apiKey?: string; reasoningEffort?: string; maxTokens?: number } = {},
+): System {
+  const baseUrl = opts.baseUrl ?? 'https://api.openai.com/v1'
+  const keyEnv = opts.apiKey
+  // Production's chat_json defaults to 1500. A reasoning model spends its
+  // budget on reasoning first, so a tighter number starves the answer:
+  // deepseek with reasoning_effort=high returned finish_reason=length and empty
+  // content on 5 of 15 documents at 600.
+  const maxTokens = opts.maxTokens ?? 1500
   return {
     id: `llm:${model}`,
-    note: `json_schema — production worker/llm.py shape`,
+    note:
+      `${opts.baseUrl ?? 'api.openai.com'} — json_schema, production worker/llm.py shape` +
+      (opts.reasoningEffort ? `, reasoning_effort=${opts.reasoningEffort}` : ', provider default thinking'),
     async pick({ state, question, candidates }) {
-      const key = process.env.OPENAI_API_KEY
-      if (!key) throw new Error('OPENAI_API_KEY not set')
+      const key = keyEnv
+      if (!key) {
+        throw new Error(
+          `${opts.baseUrl ? 'lunaroute gateway (LUNAROUTE_API_KEY / SYSTEMONE_API_KEY)' : 'OPENAI_API_KEY'} not set`,
+        )
+      }
 
       const labels = candidates.map((c) => c.label)
       const schema = {
@@ -139,7 +165,10 @@ export function llm(model: string, baseUrl = 'https://api.openai.com/v1'): Syste
       const messages = [
         {
           role: 'system',
-          content: `${question} Return JSON: {"value": <one candidate value>, "confidence": <0..1>}.`,
+          content:
+            `${question} Return JSON: {"value": <one candidate value>, "confidence": <0..1>}. ` +
+            `"value" must be exactly the label text shown in quotes in the candidate list, with no ` +
+            `description or alias text appended.`,
         },
         { role: 'user', content: `${state}\n\nCandidates:\n${candidates.map(renderCandidate).join('\n')}` },
       ]
@@ -153,8 +182,9 @@ export function llm(model: string, baseUrl = 'https://api.openai.com/v1'): Syste
             headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
             body: JSON.stringify({
               model,
-              max_completion_tokens: 600 * attempt,
+              max_completion_tokens: maxTokens * attempt,
               messages,
+              ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
               response_format: {
                 type: 'json_schema',
                 json_schema: { name: 'result', strict: true, schema },
@@ -216,14 +246,104 @@ export function embeddingBaseline(): System {
   }
 }
 
+/**
+ * Claude on Bedrock, via the AWS CLI rather than a new SDK dependency.
+ *
+ * Anthropic models on Bedrock need a cross-region inference profile, not the
+ * bare model id, and thinking uses the newer `adaptive` + `output_config`
+ * shape. Structured output is instructed in the prompt and validated here — a
+ * parse failure loses a label, it does not corrupt one.
+ *
+ * ponytail: one `aws` process per call. Swap to @aws-sdk/client-bedrock-runtime
+ * if spawn overhead ever matters at this scale.
+ */
+export function bedrockClaude(model: string, effort = 'high'): System {
+  const region = process.env.BEDROCK_REGION ?? 'us-east-2'
+  return {
+    id: `bedrock:${model}`,
+    note: `bedrock ${region}, thinking=adaptive effort=${effort}`,
+    async pick({ state, question, candidates }) {
+      const labels = candidates.map((c) => c.label)
+      const user =
+        `${state}\n\nCandidates:\n${candidates.map(renderCandidate).join('\n')}\n\n` +
+        `Reply with JSON only, no prose: {"value": <one of the candidates>, "confidence": <0..1>}`
+
+      let stdout: string
+      try {
+        ;({ stdout } = await execFileAsync(
+          'aws',
+          [
+            'bedrock-runtime', 'converse',
+            '--region', region,
+            '--model-id', model,
+            '--system', JSON.stringify([{ text: question }]),
+            '--messages', JSON.stringify([{ role: 'user', content: [{ text: user }] }]),
+            '--inference-config', JSON.stringify({ maxTokens: 8000 }),
+            '--additional-model-request-fields',
+            JSON.stringify({ thinking: { type: 'adaptive' }, output_config: { effort } }),
+            '--query', 'output.message.content[-1].text',
+            '--output', 'text',
+          ],
+          { maxBuffer: 32 * 1024 * 1024, timeout: TIMEOUT_MS },
+        ))
+      } catch (e) {
+        return { label: null, confidence: null, error: `aws cli: ${String(e).slice(0, 300)}` }
+      }
+
+      // The answer may still arrive wrapped in prose or a fenced block.
+      const match = stdout.match(/\{[\s\S]*\}/)
+      if (!match) return { label: null, confidence: null, error: `no JSON in reply: ${stdout.slice(0, 120)}` }
+      try {
+        const parsed = JSON.parse(match[0])
+        if (!labels.includes(parsed.value)) {
+          return { label: null, confidence: null, error: `out-of-enum value: ${JSON.stringify(parsed.value)}` }
+        }
+        return {
+          label: parsed.value,
+          confidence: typeof parsed.confidence === 'number' ? parsed.confidence : null,
+        }
+      } catch {
+        return { label: null, confidence: null, error: `unparseable JSON: ${match[0].slice(0, 120)}` }
+      }
+    },
+  }
+}
+
 const DEFAULT_SYSTEMONE_MODELS = ['kev-4b', 'djev']
 const DEFAULT_LLM_MODELS = ['gpt-5.6-luna']
 
+const GATEWAY = process.env.LUNAROUTE_BASE_URL ?? 'https://gw.lunaroute.com/v1'
+const gatewayKey = () => process.env.LUNAROUTE_API_KEY || process.env.SYSTEMONE_API_KEY
+
 export function defaultSystems(): System[] {
   return [
-    ...DEFAULT_LLM_MODELS.map((m) => llm(m)),
+    ...DEFAULT_LLM_MODELS.map((m) => llm(m, { apiKey: process.env.OPENAI_API_KEY })),
     ...DEFAULT_SYSTEMONE_MODELS.map((m) => systemOne(m)),
     embeddingBaseline(),
+  ]
+}
+
+/**
+ * Candidate label generators for the consensus path.
+ *
+ * None of these is on the test bench — that is the whole point. A generator
+ * that is also being evaluated would make itself the winner by construction.
+ *
+ * Opus and Sonnet are the same family, so two of the four votes are correlated.
+ * They are both here on purpose: comparing their agreement rate against the
+ * cross-family rate measures that correlation instead of assuming it.
+ */
+export function defaultGenerators(): System[] {
+  return [
+    bedrockClaude('us.anthropic.claude-opus-5-5'),
+    bedrockClaude('us.anthropic.claude-sonnet-5-5'),
+    llm('glm-5.3', { baseUrl: GATEWAY, apiKey: gatewayKey(), maxTokens: 4000 }),
+    llm('deepseek-4.1-flash', {
+      baseUrl: GATEWAY,
+      apiKey: gatewayKey(),
+      reasoningEffort: 'high',
+      maxTokens: 4000,
+    }),
   ]
 }
 
@@ -233,8 +353,12 @@ export function systemsFromIds(ids: string[]): System[] {
     const [kind, ...rest] = id.split(':')
     const model = rest.join(':')
     if (kind === 'systemone') return systemOne(model)
-    if (kind === 'llm') return llm(model)
+    if (kind === 'llm') return llm(model, { apiKey: process.env.OPENAI_API_KEY })
+    if (kind === 'gw') return llm(model, { baseUrl: GATEWAY, apiKey: gatewayKey() })
+    if (kind === 'bedrock') return bedrockClaude(model)
     if (kind === 'embedding') return embeddingBaseline()
-    throw new Error(`unknown system id "${id}" (use systemone:<model>, llm:<model>, embedding)`)
+    throw new Error(
+      `unknown system id "${id}" (use systemone:<model>, llm:<model>, gw:<model>, bedrock:<profile>, embedding)`,
+    )
   })
 }
