@@ -309,6 +309,245 @@ export function bedrockClaude(model: string, effort = 'high'): System {
   }
 }
 
+/**
+ * Multi-label answer: P(this tag applies) for every candidate tag.
+ *
+ * Production attaches 0-5 tags per document with a per-tag confidence, so this
+ * — not single-select `choice` — is the shape that matches what would ship.
+ */
+export type MultiPick = {
+  scores: Record<string, number>
+  error?: string
+}
+
+export type MultiSystem = {
+  id: string
+  note: string
+  apply(state: string, candidates: Candidate[]): Promise<MultiPick>
+}
+
+/**
+ * One question per candidate tag. Identical text for every generator, so a
+ * difference in the answer is a difference in the model alone.
+ */
+function noulQuestion(c: Candidate): string {
+  const details = [
+    c.aliases.length ? `aka: ${c.aliases.join(', ')}` : '',
+    c.description ?? '',
+  ].filter(Boolean)
+  return (
+    `Does the topic tag "${c.label}"${details.length ? ` (${details.join('; ')})` : ''} ` +
+    `clearly apply to this document as one of its main topics? ` +
+    `Answer yes only if the document substantively addresses it.`
+  )
+}
+
+/** System One `noul` per candidate — the deployable shape for top-5 tagging. */
+export function systemOneNoul(model: string, baseUrl?: string): MultiSystem {
+  const base = baseUrl ?? process.env.SYSTEMONE_BASE_URL ?? 'https://gw.lunaroute.com/v1'
+  return {
+    id: `systemone:${model}`,
+    note: `${base} — noul per candidate`,
+    async apply(state, candidates) {
+      const key = process.env.SYSTEMONE_API_KEY ?? process.env.LUNAROUTE_API_KEY
+      if (!key) throw new Error('SYSTEMONE_API_KEY (or LUNAROUTE_API_KEY) not set')
+      // djev rejects >32 questions; kev-4b accepted 60. Fail loudly rather than truncate.
+      if (candidates.length > 32) {
+        return { scores: {}, error: `djev caps questions at 32; got ${candidates.length}` }
+      }
+      const questions: Record<string, unknown> = {}
+      candidates.forEach((c, i) => {
+        questions[`t${i}`] = { type: 'noul', instructions: noulQuestion(c) }
+      })
+
+      const res = await fetch(`${base}/systemone`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ state, model, questions }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      })
+      if (!res.ok) {
+        return { scores: {}, error: `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}` }
+      }
+      const answers = (await res.json())?.answers ?? {}
+      const scores: Record<string, number> = {}
+      candidates.forEach((c, i) => {
+        const a = answers[`t${i}`]
+        if (typeof a?.noul === 'number') scores[c.label] = a.noul
+      })
+      if (Object.keys(scores).length !== candidates.length) {
+        return { scores, error: `only ${Object.keys(scores).length}/${candidates.length} answered` }
+      }
+      return { scores }
+    },
+  }
+}
+
+/**
+ * The same per-tag question set, asked of an LLM in one call returning a
+ * probability per tag. Uniform with `systemOneNoul` so agreement is measured
+ * on like evidence.
+ */
+export function llmNoul(
+  model: string,
+  opts: { baseUrl?: string; apiKey?: string; reasoningEffort?: string; maxTokens?: number } = {},
+): MultiSystem {
+  const baseUrl = opts.baseUrl ?? 'https://api.openai.com/v1'
+  return {
+    id: `llm:${model}`,
+    note:
+      `${opts.baseUrl ?? 'api.openai.com'} — noul per candidate, one call` +
+      (opts.reasoningEffort ? `, reasoning_effort=${opts.reasoningEffort}` : ''),
+    async apply(state, candidates) {
+      const key = opts.apiKey
+      if (!key) throw new Error('API key not set')
+      const props: Record<string, unknown> = {}
+      for (const c of candidates) props[c.label] = { type: 'number' }
+      const schema = {
+        type: 'object',
+        additionalProperties: false,
+        properties: props,
+        required: candidates.map((c) => c.label),
+      }
+      const questions = candidates.map((c, i) => `${i + 1}. ${noulQuestion(c)}`).join('\n')
+      const messages = [
+        {
+          role: 'system',
+          content:
+            'For each numbered question, give the probability in [0,1] that it applies. ' +
+            'Return JSON keyed by the exact tag name in quotes, with a probability for every tag.',
+        },
+        { role: 'user', content: `${state}\n\nQuestions:\n${questions}` },
+      ]
+      let last: string | null = null
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        let res: Response
+        try {
+          res = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model,
+              max_completion_tokens: (opts.maxTokens ?? 1500) * attempt,
+              messages,
+              ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
+              response_format: {
+                type: 'json_schema',
+                json_schema: { name: 'result', strict: true, schema },
+              },
+            }),
+            signal: AbortSignal.timeout(TIMEOUT_MS),
+          })
+        } catch (e) {
+          last = `fetch failed: ${e}`
+          continue
+        }
+        if (!res.ok) {
+          last = `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`
+          continue
+        }
+        const choice = (await res.json())?.choices?.[0]
+        const content = choice?.message?.content
+        if (!content) {
+          last = `empty content (finish_reason=${choice?.finish_reason})`
+          continue
+        }
+        try {
+          const parsed = JSON.parse(content)
+          const scores: Record<string, number> = {}
+          for (const c of candidates) {
+            const v = parsed[c.label]
+            if (typeof v === 'number') scores[c.label] = v
+          }
+          if (Object.keys(scores).length !== candidates.length) {
+            last = `only ${Object.keys(scores).length}/${candidates.length} keys returned`
+            continue
+          }
+          return { scores }
+        } catch {
+          last = 'unparseable JSON'
+        }
+      }
+      return { scores: {}, error: last ?? 'failed' }
+    },
+  }
+}
+
+/** Bedrock Claude, same per-tag question set, one call. */
+export function bedrockNoul(model: string, effort = 'high'): MultiSystem {
+  const region = process.env.BEDROCK_REGION ?? 'us-east-2'
+  return {
+    id: `bedrock:${model}`,
+    note: `bedrock ${region}, noul per candidate, thinking=adaptive effort=${effort}`,
+    async apply(state, candidates) {
+      const questions = candidates.map((c, i) => `${i + 1}. ${noulQuestion(c)}`).join('\n')
+      const user =
+        `${state}\n\nQuestions:\n${questions}\n\n` +
+        'Reply with JSON only, keyed by the exact tag name in quotes, giving a probability in ' +
+        '[0,1] for every tag. No prose.'
+      let stdout: string
+      try {
+        ;({ stdout } = await execFileAsync(
+          'aws',
+          [
+            'bedrock-runtime', 'converse',
+            '--region', region,
+            '--model-id', model,
+            '--system',
+            JSON.stringify([
+              {
+                text:
+                  'For each numbered question, give the probability in [0,1] that it applies. ' +
+                  'Return a JSON object keyed by the exact tag names.',
+              },
+            ]),
+            '--messages', JSON.stringify([{ role: 'user', content: [{ text: user }] }]),
+            '--inference-config', JSON.stringify({ maxTokens: 12000 }),
+            '--additional-model-request-fields',
+            JSON.stringify({ thinking: { type: 'adaptive' }, output_config: { effort } }),
+            '--query', 'output.message.content[-1].text',
+            '--output', 'text',
+          ],
+          { maxBuffer: 32 * 1024 * 1024, timeout: TIMEOUT_MS },
+        ))
+      } catch (e) {
+        return { scores: {}, error: `aws cli: ${String(e).slice(0, 300)}` }
+      }
+      const match = stdout.match(/\{[\s\S]*\}/)
+      if (!match) return { scores: {}, error: `no JSON in reply: ${stdout.slice(0, 120)}` }
+      try {
+        const parsed = JSON.parse(match[0])
+        const scores: Record<string, number> = {}
+        for (const c of candidates) {
+          const v = parsed[c.label]
+          if (typeof v === 'number') scores[c.label] = v
+        }
+        if (!Object.keys(scores).length) {
+          return { scores: {}, error: `no tag keys in reply; got: ${match[0].slice(0, 300)}` }
+        }
+        return { scores }
+      } catch {
+        return { scores: {}, error: `unparseable JSON: ${match[0].slice(0, 120)}` }
+      }
+    },
+  }
+}
+
+/** The four generators in the uniform per-tag shape. */
+export function defaultMultiGenerators(): MultiSystem[] {
+  return [
+    bedrockNoul('us.anthropic.claude-opus-5-5'),
+    bedrockNoul('us.anthropic.claude-sonnet-5-5'),
+    llmNoul('glm-5.3', { baseUrl: GATEWAY, apiKey: gatewayKey(), maxTokens: 4000 }),
+    llmNoul('deepseek-4.1-flash', {
+      baseUrl: GATEWAY,
+      apiKey: gatewayKey(),
+      reasoningEffort: 'high',
+      maxTokens: 4000,
+    }),
+  ]
+}
+
 const DEFAULT_SYSTEMONE_MODELS = ['kev-4b', 'djev']
 const DEFAULT_LLM_MODELS = ['gpt-5.6-luna']
 

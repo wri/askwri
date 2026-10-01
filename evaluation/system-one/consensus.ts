@@ -18,7 +18,14 @@
  * AWS session for the Bedrock generators.
  */
 import { writeFileSync } from 'node:fs'
-import { defaultGenerators, systemsFromIds, type Pick, type System } from './systems'
+import {
+  defaultGenerators,
+  defaultMultiGenerators,
+  systemsFromIds,
+  type MultiPick,
+  type Pick,
+  type System,
+} from './systems'
 import { pool, loadRows, loadGold } from './dataset'
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -35,6 +42,11 @@ const LIMIT = arg('limit') ? Number(arg('limit')) : null
 const CONCURRENCY = Number(arg('concurrency', '4'))
 const GENERATORS = arg('generators')
 const INSTRUCTION = arg('instruction')
+const MODE = (arg('mode', 'choice') as 'choice' | 'noul')
+// Production accepts a tag at confidence >= tag_confidence_accept (0.7).
+const THRESHOLD = Number(arg('threshold', '0.7'))
+// Production attaches up to 5 tags per document.
+const TOP_K = Number(arg('top-k', '5'))
 const OUT =
   arg('out') ??
   `evaluation/system-one/silver-${new Date().toISOString().slice(0, 10)}-${FACET}-top${TOP_N}.jsonl`
@@ -79,7 +91,7 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
   return out
 }
 
-async function main() {
+async function mainChoice() {
   const rows = await loadRows({ facet: FACET, topN: TOP_N, limit: LIMIT, onlyWithGold: false })
   const goldMap = await loadGold(FACET)
   const goldDistinct = new Set(goldMap.values())
@@ -262,7 +274,201 @@ async function main() {
   console.log(`wrote ${OUT.replace(/\.jsonl$/, '.summary.json')}`)
 }
 
-main()
+// ── noul mode: per-tag probabilities, the shape production would deploy ────
+
+type NoulResult = {
+  document_id: string
+  title: string
+  gold: string | null
+  candidateLabels: string[]
+  scores: Record<string, MultiPick & { ms: number }>
+}
+
+/** Tags a generator judged to apply, at the accept threshold. */
+function acceptedSet(scores: Record<string, number> | undefined, labels: string[]): Set<string> {
+  const out = new Set<string>()
+  if (!scores) return out
+  for (const l of labels) if ((scores[l] ?? 0) >= THRESHOLD) out.add(l)
+  return out
+}
+
+/** The generator's own top-K by probability — production's "top 5 most relevant". */
+function topKSet(scores: Record<string, number> | undefined, labels: string[], k: number): Set<string> {
+  if (!scores) return new Set()
+  return new Set(
+    labels
+      .filter((l) => l in scores)
+      .sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0))
+      .slice(0, k),
+  )
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  const union = new Set([...a, ...b])
+  if (!union.size) return 1
+  let inter = 0
+  for (const x of a) if (b.has(x)) inter++
+  return inter / union.size
+}
+
+function mean(xs: number[]): number {
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0
+}
+
+async function mainNoul() {
+  const rows = await loadRows({ facet: FACET, topN: TOP_N, limit: LIMIT, onlyWithGold: false })
+  const generators = defaultMultiGenerators()
+  const ids = generators.map((g) => g.id)
+
+  console.log(`\nfacet=${FACET}  docs=${rows.length}  candidates=${rows[0]?.candidates.length ?? 0}`)
+  console.log(`mode=noul  accept threshold=${THRESHOLD}  top-k=${TOP_K}`)
+  console.log(`generators:`)
+  for (const g of generators) console.log(`   ${g.id.padEnd(38)} ${g.note}`)
+
+  const results = await mapPool(rows, CONCURRENCY, async (r): Promise<NoulResult> => {
+    const entries = await Promise.all(
+      generators.map(async (g) => {
+        const started = Date.now()
+        try {
+          const p = await g.apply(r.basis, r.candidates)
+          return [g.id, { ...p, ms: Date.now() - started }] as const
+        } catch (e) {
+          return [g.id, { scores: {}, error: String(e), ms: Date.now() - started }] as const
+        }
+      }),
+    )
+    return {
+      document_id: r.document_id,
+      title: r.title,
+      gold: r.gold,
+      candidateLabels: r.candidates.map((c) => c.label),
+      scores: Object.fromEntries(entries),
+    }
+  })
+
+  // ── failures ──────────────────────────────────────────────────────────────
+  console.log(`\nfailures`)
+  for (const id of ids) {
+    const bad = results.filter((r) => r.scores[id]?.error)
+    console.log(
+      `   ${id.padEnd(38)} ${bad.length}/${results.length}` +
+        (bad.length ? `   e.g. ${bad[0].scores[id].error!.slice(0, 80)}` : ''),
+    )
+  }
+
+  // ── set agreement at the accept threshold ────────────────────────────────
+  const setsAt = (r: NoulResult, id: string) => acceptedSet(r.scores[id]?.scores, r.candidateLabels)
+  const topsAt = (r: NoulResult, id: string) => topKSet(r.scores[id]?.scores, r.candidateLabels, TOP_K)
+
+  const score = (label: string, setOf: (r: NoulResult, id: string) => Set<string>) => {
+    const perGen = ids.map((id) => mean(results.map((r) => setOf(r, id).size)))
+    const exact = results.filter((r) => {
+      const sets = ids.map((id) => setOf(r, id))
+      return sets.every((s) => s.size === sets[0].size && [...s].every((x) => sets[0].has(x)))
+    }).length
+    const pairJ: number[] = []
+    for (let i = 0; i < ids.length; i++)
+      for (let j = i + 1; j < ids.length; j++)
+        pairJ.push(mean(results.map((r) => jaccard(setOf(r, ids[i]), setOf(r, ids[j])))))
+    console.log(`\n${label}`)
+    console.log(
+      `   sets per document:  ${perGen.map((n, i) => `${ids[i].split(':').pop()}=${n.toFixed(1)}`).join('  ')}`,
+    )
+    console.log(
+      `   identical set across all ${ids.length}:  ${exact}/${results.length}  ${((exact / results.length) * 100).toFixed(0)}%`,
+    )
+    console.log(`   mean pairwise Jaccard:            ${mean(pairJ).toFixed(3)}`)
+    return { exact, meanJaccard: mean(pairJ), meanSetSize: perGen }
+  }
+
+  const atThreshold = score(`sets at accept threshold ${THRESHOLD}`, setsAt)
+  const atTopK = score(`top-${TOP_K} by probability`, topsAt)
+
+  // ── per-tag binary agreement, and the family split on it ─────────────────
+  console.log(`\nper-tag binary agreement (all document x tag cells)`)
+  const yesRate = ids.map((id) => {
+    let yes = 0
+    let cells = 0
+    for (const r of results)
+      for (const l of r.candidateLabels) {
+        const s = r.scores[id]?.scores
+        if (!s || !(l in s)) continue
+        cells++
+        if (s[l] >= THRESHOLD) yes++
+      }
+    return cells ? yes / cells : 0
+  })
+  ids.forEach((id, i) =>
+    console.log(`   ${id.padEnd(38)} says yes to ${(yesRate[i] * 100).toFixed(1)}% of cells`),
+  )
+
+  const pairTable: Array<{ a: string; b: string; same: boolean; agree: number }> = []
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const cells: number[] = []
+      for (const r of results) {
+        const sa = r.scores[ids[i]]?.scores
+        const sb = r.scores[ids[j]]?.scores
+        for (const l of r.candidateLabels) {
+          if (!sa || !sb || !(l in sa) || !(l in sb)) continue
+          cells.push((sa[l] >= THRESHOLD) === (sb[l] >= THRESHOLD) ? 1 : 0)
+        }
+      }
+      pairTable.push({ a: ids[i], b: ids[j], same: family(ids[i]) === family(ids[j]), agree: mean(cells) })
+    }
+  }
+  console.log(`\npairwise binary agreement`)
+  for (const p of pairTable) {
+    console.log(
+      `   ${p.a.padEnd(38)} x ${p.b.padEnd(38)} ${(p.agree * 100).toFixed(1)}%${p.same ? '   [same family]' : ''}`,
+    )
+  }
+  const same = pairTable.filter((p) => p.same)
+  const cross = pairTable.filter((p) => !p.same)
+  console.log(
+    `\nfamily effect\n` +
+      `   same-family:  ${same.length ? (mean(same.map((p) => p.agree)) * 100).toFixed(1) : '—'}%\n` +
+      `   cross-family: ${cross.length ? (mean(cross.map((p) => p.agree)) * 100).toFixed(1) : '—'}%`,
+  )
+
+  // ── per document view for small batches ──────────────────────────────────
+  if (results.length <= 25) {
+    console.log(`\nper document (tags accepted at ${THRESHOLD})`)
+    for (const r of results) {
+      const sets = ids.map((id) => [...setsAt(r, id)].sort())
+      const allSame = sets.every((s) => JSON.stringify(s) === JSON.stringify(sets[0]))
+      console.log(`\n  ${r.title.slice(0, 66)}${allSame ? '   IDENTICAL' : ''}`)
+      ids.forEach((id, i) =>
+        console.log(`     ${id.split(':').pop()!.padEnd(26)} ${sets[i].join(' | ') || '—'}`),
+      )
+    }
+  }
+
+  const artifact = {
+    harness: 'evaluation/system-one/consensus',
+    mode: 'noul',
+    ranAt: new Date().toISOString(),
+    facet: FACET,
+    topN: TOP_N,
+    threshold: THRESHOLD,
+    topK: TOP_K,
+    documents: results.length,
+    candidatesPerDoc: rows[0]?.candidates.length ?? 0,
+    generators: generators.map((g) => ({ id: g.id, family: family(g.id), note: g.note })),
+    atThreshold,
+    atTopK,
+    yesRate,
+    pairTable,
+    results,
+  }
+  const out = OUT.replace(/\.jsonl$/, '') + '.noul.json'
+  writeFileSync(out, JSON.stringify(artifact, null, 2))
+  console.log(`\nwrote ${out}`)
+}
+
+const run = MODE === 'noul' ? mainNoul : mainChoice
+
+run()
   .catch((e) => {
     console.error(e)
     process.exit(1)
