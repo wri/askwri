@@ -17,6 +17,9 @@ const THIN_NOTE =
 const UNREACHABLE =
   'WRI corpus search could not be reached, so there are no passages to show.'
 
+/** The same sentence the tool uses when a call throws before a reply exists. */
+export const UNREACHABLE_TEXT = UNREACHABLE
+
 export function formatSearchResults(
   query: string,
   llamaIndexJson: unknown,
