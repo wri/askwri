@@ -187,6 +187,42 @@ The password is picked up automatically from `.env.local`.
 **Stopping them:** `pkill -f "next start -p 3000"` and `pkill -f "app.main"`.
 Both die on reboot.
 
+## What to send someone who is going to try it
+
+Copy the block below, fill in the two placeholders, and send it. It assumes the
+address is deployed and the password is set (see "Setting the password" above).
+
+> You can search WRI's published research from inside Claude.
+>
+> **Setup:** Claude Desktop → Settings → Connectors → Add custom connector →
+> paste this address (the password is in it):
+>
+> ```
+> https://<site-address>/api/mcp?key=<key>
+> ```
+>
+> Restart Claude.
+>
+> **Then ask it something like:**
+>
+> > Search WRI's published research for how cities are adapting to extreme heat.
+> > Give me the documents and page links you used.
+>
+> **Worth knowing:**
+>
+> - It returns WRI's own documents with page links. If an answer has no links, it
+>   is not using the corpus.
+> - When WRI has not published on a topic, it should say so instead of answering
+>   anyway. Tell me if it bluffs.
+> - This is an early test with one password shared by everyone. Please do not pass
+>   the address around.
+>
+> **What I would like to know:** was the answer useful, and did the links open the
+> right page?
+
+Send the first question above: it is known to work, so a failure there means the
+connection is broken rather than the topic being thin.
+
 ## What this does not do
 
 - **No written answers from us.** We return passages; the other assistant writes
