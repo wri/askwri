@@ -45,6 +45,7 @@ const TOP_N = Number(arg('top-n', '20'))
 const LIMIT = arg('limit') ? Number(arg('limit')) : null
 const CONCURRENCY = Number(arg('concurrency', '4'))
 const ONLY = arg('systems')
+const REPS = Number(arg('reps', '1'))
 const OUT =
   arg('out') ??
   `evaluation/system-one/results-${new Date().toISOString().slice(0, 10)}-${FACET}.json`
@@ -254,26 +255,35 @@ async function main() {
 
   const ctxOf = (r: Row): PickCtx => ({ state: r.basis, question: QUESTION, candidates: r.candidates })
 
-  const results = await mapPool(rows, CONCURRENCY, async (r): Promise<Record_> => {
-    const entries = await Promise.all(
-      active.map(async (s) => {
-        const started = Date.now()
-        try {
-          const pick = await s.pick(ctxOf(r))
-          return [s.id, { ...pick, ms: Date.now() - started }] as const
-        } catch (e) {
-          return [s.id, { label: null, confidence: null, error: String(e), ms: Date.now() - started }] as const
-        }
-      }),
-    )
-    return {
-      document_id: r.document_id,
-      title: r.title,
-      gold: r.gold,
-      goldInCandidates: r.candidates.some((c) => c.label === r.gold),
-      picks: Object.fromEntries(entries),
-    }
-  })
+  async function onePass(): Promise<Record_[]> {
+    return mapPool(rows, CONCURRENCY, async (r): Promise<Record_> => {
+      const entries = await Promise.all(
+        active.map(async (s) => {
+          const started = Date.now()
+          try {
+            const pick = await s.pick(ctxOf(r))
+            return [s.id, { ...pick, ms: Date.now() - started }] as const
+          } catch (e) {
+            return [s.id, { label: null, confidence: null, error: String(e), ms: Date.now() - started }] as const
+          }
+        }),
+      )
+      return {
+        document_id: r.document_id,
+        title: r.title,
+        gold: r.gold,
+        goldInCandidates: r.candidates.some((c) => c.label === r.gold),
+        picks: Object.fromEntries(entries),
+      }
+    })
+  }
+
+  // Each repetition is an independent sample per document, so scoring runs over
+  // documents × repetitions. Per-pass accuracy is kept separately: that spread,
+  // not the pooled mean, is what says whether a gap between systems is real.
+  const passes: Record_[][] = []
+  for (let i = 0; i < REPS; i++) passes.push(await onePass())
+  const results = passes.flat()
 
   const recall = results.filter((r) => r.goldInCandidates).length / results.length
   const scored = results.filter((r) => r.goldInCandidates)
@@ -297,6 +307,9 @@ async function main() {
         probs.reduce((acc, r) => acc + (r.picks[s.id].probabilities![r.gold] ?? 0), 0) / probs.length
       )
     })()
+    const perPass = passes.map(
+      (p) => p.filter((r) => r.picks[s.id].label === r.gold).length / p.length,
+    )
     return {
       id: s.id,
       note: s.note,
@@ -310,6 +323,9 @@ async function main() {
         : null,
       brier,
       goldMass,
+      perPass,
+      top1Min: Math.min(...perPass),
+      top1Max: Math.max(...perPass),
       meanMs: picks.reduce((a, p) => a + p.ms, 0) / picks.length,
     }
   })
@@ -343,7 +359,8 @@ async function main() {
   const pct = (x: number) => (x * 100).toFixed(1).padStart(5) + '%'
   const num = (x: number | null, d = 3) => (x === null ? '    —' : x.toFixed(d).padStart(6))
 
-  console.log(`\nfacet=${FACET}  docs=${results.length}  top-n=${TOP_N}  question="${QUESTION}"`)
+  console.log(`\nfacet=${FACET}  docs=${rows.length}  passes=${REPS}  top-n=${TOP_N}`)
+  console.log(`question="${QUESTION}"`)
   console.log(
     `gold = document_tags.source='external' (WRI metadata, one value per document)\n` +
       (embedded
@@ -363,6 +380,13 @@ async function main() {
     )
   }
 
+  if (REPS > 1) {
+    console.log(`\nper-pass top1 (each pass is an independent sample over all documents)`)
+    for (const s of summary) {
+      console.log(`${s.id.padEnd(28)} ${s.perPass.map((x) => pct(x)).join('  ')}`)
+    }
+  }
+
   for (const b of bins) {
     console.log(`\nreliability — ${b.id}`)
     console.log(`${'band'.padEnd(12)} ${'n'.padStart(4)} ${'meanConf'.padStart(9)} ${'accuracy'.padStart(9)}`)
@@ -379,6 +403,7 @@ async function main() {
     ranAt: new Date().toISOString(),
     facet: FACET,
     topN: TOP_N,
+    reps: REPS,
     question: QUESTION,
     candidateRecall: recall,
     systems: active.map((s) => ({ id: s.id, note: s.note })),
