@@ -135,6 +135,58 @@ distinguishable from "service is down".
 `~/Library/Logs/Claude/mcp-server-askwri.log`. If it is there and growing,
 Claude is talking to us. Startup problems say why there.
 
+## Running a copy on your own machine, against the real corpus
+
+The one-command local setup (`./scripts/local-bootstrap.sh`) needs a complete
+169-document corpus in `search-service/data`. If that is incomplete, the app and
+the search service can instead run on your machine and read QA's database, which
+already holds the corpus and its embeddings. Nothing is downloaded and Docker is
+not involved.
+
+The pattern is: export real AWS credentials, turn off the S3 substitute, and run
+the command inside the environment script that reads QA's database details from
+the deployed task definition.
+
+**The search service** (leave running):
+
+```bash
+./scripts/with-remote-env.sh qa bash -c '
+  eval "$(aws configure export-credentials --format env)"
+  export AWS_ENDPOINT_URL=
+  cd search-service
+  nohup ./venv/bin/python -m app.main > /tmp/askwri-search.log 2>&1 &
+'
+```
+
+**The app** (leave running), serving a build you have already made with
+`npx next build --webpack`:
+
+```bash
+./scripts/with-remote-env.sh qa bash -c '
+  eval "$(aws configure export-credentials --format env)"
+  export AWS_ENDPOINT_URL=
+  export SEARCH_SERVICE_URL=http://127.0.0.1:8000
+  export DOCUMENTS_S3_BUCKET=askwri-data
+  export DOCUMENTS_S3_PREFIX=documents/
+  nohup npx next start -p 3000 > /tmp/askwri-app.log 2>&1 &
+'
+```
+
+The password is picked up automatically from `.env.local`.
+
+**Two things that will bite you:**
+
+- `search-service/.env.local` holds made-up credentials for the local file-store
+  substitute, and loads them into the process. Real credentials must be exported
+  first or every retrieval call fails quietly while still returning 200. The
+  `eval` line above is that fix; check `/health` for `dense_lane: live` rather
+  than trusting a successful call.
+- `AWS_ENDPOINT_URL=` (empty) is set on purpose. It is what redirects those calls
+  to the substitute; an empty value means "use the real service".
+
+**Stopping them:** `pkill -f "next start -p 3000"` and `pkill -f "app.main"`.
+Both die on reboot.
+
 ## What this does not do
 
 - **No written answers from us.** We return passages; the other assistant writes
