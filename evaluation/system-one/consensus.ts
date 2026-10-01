@@ -92,10 +92,18 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 }
 
 async function mainChoice() {
-  const rows = await loadRows({ facet: FACET, topN: TOP_N, limit: LIMIT, onlyWithGold: false })
   const goldMap = await loadGold(FACET)
   const goldDistinct = new Set(goldMap.values())
   const goldUsable = goldDistinct.size >= 3
+  // When the facet has real gold, score only documents that HAVE it. A row
+  // without gold scores as a miss in every denominator otherwise: on office
+  // that silently deflated accuracy by ~18 points (65.9% vs the true 83.3%).
+  const rows = await loadRows({
+    facet: FACET,
+    topN: TOP_N,
+    limit: LIMIT,
+    onlyWithGold: goldUsable,
+  })
   // A facet with one gold value is a batch stamp, not a label set. Say so
   // rather than quietly reporting a meaningless accuracy.
   const goldNote = !goldMap.size
@@ -128,7 +136,9 @@ async function mainChoice() {
     return {
       document_id: r.document_id,
       title: r.title,
-      gold: r.gold,
+      // Gold comes from the map, not from r.gold: rows are loaded unrestricted
+      // so the consensus can run on facets that have no gold at all.
+      gold: goldMap.get(r.document_id) ?? null,
       picks: Object.fromEntries(entries),
     }
   })
@@ -198,10 +208,11 @@ async function mainChoice() {
           `(${right.length}/${results.length}${fails ? `, ${fails} failed` : ''})`,
       )
     }
-    const uRight = unanimous.filter((r) => usableOf(r)[0] === r.gold)
+    const uniq = unanimous.filter((r) => r.gold)
+    const uRight = uniq.filter((r) => usableOf(r)[0] === r.gold)
     console.log(
-      `   ${'UNANIMOUS label'.padEnd(38)} ${((uRight.length / results.length) * 100).toFixed(1).padStart(5)}%  ` +
-        `(${uRight.length}/${results.length})  ← what a unanimous silver label is worth`,
+      `   ${'UNANIMOUS label'.padEnd(38)} ${((uRight.length / uniq.length) * 100).toFixed(1).padStart(5)}%  ` +
+        `(${uRight.length}/${uniq.length})  ← what a unanimous silver label is worth`,
     )
   }
 
@@ -317,6 +328,9 @@ function mean(xs: number[]): number {
 
 async function mainNoul() {
   const rows = await loadRows({ facet: FACET, topN: TOP_N, limit: LIMIT, onlyWithGold: false })
+  // Gold is loaded regardless of onlyWithGold so every label row can carry it
+  // when the facet has real gold — that is what validates the label.
+  const goldMap = await loadGold(FACET)
   const generators = defaultMultiGenerators()
   const ids = generators.map((g) => g.id)
 
@@ -340,7 +354,7 @@ async function mainNoul() {
     return {
       document_id: r.document_id,
       title: r.title,
-      gold: r.gold,
+      gold: goldMap.get(r.document_id) ?? null,
       candidateLabels: r.candidates.map((c) => c.label),
       scores: Object.fromEntries(entries),
     }
@@ -464,6 +478,104 @@ async function mainNoul() {
   const out = OUT.replace(/\.jsonl$/, '') + '.noul.json'
   writeFileSync(out, JSON.stringify(artifact, null, 2))
   console.log(`\nwrote ${out}`)
+
+  // ── silver labels ─────────────────────────────────────────────────────────
+  // Documents where every generator answered. A partial answer set would make
+  // "unanimous" mean "the two that replied agreed", which is not the same thing.
+  const complete = results.filter((r) => ids.every((id) => !r.scores[id]?.error))
+  const skipped = results.length - complete.length
+  const majorityNeeded = Math.floor(ids.length / 2) + 1
+
+  const labelLines = complete.map((r) => {
+    const votes: Record<string, number> = {}
+    const probs: Record<string, number[]> = {}
+    const perGenerator: Record<string, string[]> = {}
+
+    for (const id of ids) {
+      const s = r.scores[id]?.scores
+      const accepted: string[] = []
+      if (s) {
+        for (const l of r.candidateLabels) {
+          if (!(l in s)) continue
+          ;(probs[l] ??= []).push(s[l])
+          if (s[l] >= THRESHOLD) {
+            votes[l] = (votes[l] ?? 0) + 1
+            accepted.push(l)
+          }
+        }
+      }
+      perGenerator[id] = accepted.sort()
+    }
+
+    const meanP = (l: string) => mean(probs[l] ?? [])
+    const agreed = Object.keys(votes).filter((l) => votes[l] >= majorityNeeded)
+    // Production attaches the TOP_K most relevant tags, so cap the label the
+    // same way rather than shipping however many cleared the threshold.
+    const silver = [...agreed].sort((a, b) => meanP(b) - meanP(a)).slice(0, TOP_K)
+    const core = Object.keys(votes).filter((l) => votes[l] === ids.length)
+    // Accepted by at least one generator but not a majority: the human queue.
+    const disputed = Object.keys(votes)
+      .filter((l) => votes[l] >= 1 && votes[l] < majorityNeeded)
+      .sort((a, b) => votes[b] - votes[a] || meanP(b) - meanP(a))
+
+    const sets = ids.map((id) => JSON.stringify(perGenerator[id]))
+    const agreement =
+      new Set(sets).size === 1
+        ? 'unanimous'
+        : silver.length
+          ? `majority-${Math.max(...silver.map((l) => votes[l]))}of${ids.length}`
+          : 'no-consensus'
+
+    return JSON.stringify({
+      document_id: r.document_id,
+      title: r.title,
+      facet: FACET,
+      // The label. Empty means the generators did not agree on a majority set.
+      silver_tags: silver,
+      unanimous_tags: core,
+      disputed_tags: disputed,
+      votes: Object.fromEntries(Object.entries(votes).sort((a, b) => b[1] - a[1])),
+      mean_probability: Object.fromEntries(
+        Object.keys(votes).map((l) => [l, Number(meanP(l).toFixed(4))]),
+      ),
+      per_generator: perGenerator,
+      agreement,
+      external_gold: r.gold,
+      // Everything needed to reproduce or distrust this label.
+      provenance: {
+        threshold: THRESHOLD,
+        top_k: TOP_K,
+        candidates_per_doc: r.candidateLabels.length,
+        majority_needed: majorityNeeded,
+        generators: generators.map((g) => ({ id: g.id, family: family(g.id), note: g.note })),
+        generated_at: new Date().toISOString(),
+        not_ground_truth: 'model consensus, not human labels',
+        validated_against: 'see results-*/office consensus run for the measured error rate',
+      },
+    })
+  })
+
+  const labelsOut = OUT.replace(/\.jsonl$/, '') + '.labels.jsonl'
+  writeFileSync(labelsOut, labelLines.join('\n') + '\n')
+
+  const withLabel = (() => {
+    let n = 0
+    for (const l of labelLines) if (JSON.parse(l).silver_tags.length) n++
+    return n
+  })()
+  const unanimous = labelLines.filter((l) => JSON.parse(l).agreement === 'unanimous').length
+  const contestedTags = labelLines.reduce(
+    (a, l) => a + JSON.parse(l).disputed_tags.length,
+    0,
+  )
+  console.log(
+    `\nsilver labels\n` +
+      `   documents with a label:      ${withLabel}/${complete.length}` +
+      (skipped ? `  (+${skipped} skipped: a generator failed, so agreement is undefined)` : '') +
+      `\n   sets identical across all ${ids.length}: ${unanimous}/${complete.length}` +
+      `\n   tags sent to the human queue: ${contestedTags}\n` +
+      `wrote ${labelsOut}`,
+  )
 }
 
 const run = MODE === 'noul' ? mainNoul : mainChoice

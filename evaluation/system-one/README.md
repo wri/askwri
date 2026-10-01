@@ -144,6 +144,41 @@ possible at all, so they are recorded with the error that established them.
 `choice`. System One can only ever do `topic` via retrieve-then-classify over a
 subset, or via `noul`-per-candidate.
 
+## Silver labels
+
+`consensus.ts` writes a label file next to its artifact:
+
+| mode | file | label |
+|---|---|---|
+| `choice` | `<out>.jsonl` | one plurality label per document |
+| `noul` | `<out>.labels.jsonl` | `silver_tags` (top-K that a majority accepted), plus `unanimous_tags`, `disputed_tags`, per-tag `votes`, `mean_probability`, and each generator's own set |
+
+Every row carries `provenance` — threshold, top-k, the generator list with each
+one's thinking setting, timestamp — and `not_ground_truth: 'model consensus, not
+human labels'`. Documents where any generator failed are **skipped**, because
+otherwise "unanimous" would mean "the two that replied agreed".
+
+**Validated against real gold, and it does not hold up.** On `office`, where gold
+exists, four generators spanning three families reach 80.7% when unanimous, while
+the best single generator reaches 82.0% alone. Consensus buys nothing, because the
+errors are correlated: all four fail the same way on the same ambiguous input.
+
+Treat these labels as a **prior for human review**, never as the reference for
+validating models. A 19% label error rate cannot referee the 1-3 point differences
+this harness exists to measure. Third time on this workstream that an unvalidated
+label source produced a conclusion that did not survive checking.
+
+## A trap when adding a facet
+
+Scoring documents that have **no gold** counts them as automatic misses. On
+`office` this silently deflated every accuracy figure by ~18 points (65.9%
+reported against a true 83.3%), because the corpus holds 206 documents and only
+167 have office gold.
+
+`consensus.ts` now restricts to gold-bearing documents whenever the facet has
+usable gold. If you add a facet, keep that behaviour: a null gold must never reach
+an accuracy denominator.
+
 ## Pointing at a self-hosted model
 
 `systemOne()` speaks the `/v1/systemone` contract, so a locally served model needs
@@ -220,6 +255,20 @@ subset can be routed without a human. djev is worse on both axes, and its
 confidence is non-monotone in the middle bins so it carries no usable ordering.
 
 Single facet, single corpus. Directional.
+
+### Consensus as a label source — `office`, 167 docs with real gold
+
+Four generators, single-label question:
+
+| System | accuracy |
+|---|---|
+| `opus-5.5` | 82.0% |
+| unanimous consensus (all four) | **80.7%** |
+| `sonnet-5.5` | 79.0% |
+| `glm-5.3` | 73.7% |
+| `deepseek-4.1-flash` | 71.3% |
+
+Agreement does not imply correctness. See "Silver labels" above.
 
 ### doc_type — 166 documents
 

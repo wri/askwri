@@ -346,6 +346,41 @@ silently change how many tags are accepted while the column name looks identical
 already states the right principle ("thresholds are DERIVED from a labeled set, never
 hand-picked"); these measurements are what make it non-negotiable.
 
+### 8.4 Validation of the silver-label method (`office`) — negative result
+
+The plan was to validate consensus silver labels on `office`, where real gold exists,
+*before* trusting them on `topic`. This is that validation: four generators, the
+single-label question, 167 documents carrying real gold.
+
+| Generator | accuracy |
+|---|---|
+| `opus-5.5` | 82.0% (137/167) |
+| **unanimous consensus (all four agree)** | **80.7% (109/135)** |
+| `sonnet-5.5` | 79.0% (132/167) |
+| `glm-5.3` | 73.7% (123/167, 5 failed) |
+| `deepseek-4.1-flash` | 71.3% (119/167) |
+
+**Consensus buys nothing over the best single model.** 80.7% is *worse* than `opus`
+alone at 82.0%, and only modestly better than `sonnet`. Four models spanning three
+independent families agreeing does not make the answer correct.
+
+The cause is correlated error: the generators agree on a wrong label 19% of the time,
+because they read the same ambiguous summary and fail the same way. On `office` that
+is the "WRI Global" default (46.7% of the corpus); on `topic` the analogous trap is the
+hypernym/hyponym pairs (`Pollution` / `Air Pollution`). Agreement is not evidence of
+correctness when the error is systematic and shared.
+
+**Consequence for the silver-label plan: it does not hold up.** A set at 80.7%
+correct carries a 19% error rate. The model differences this workstream is trying to
+measure are 1-3 points. Label error is roughly an order of magnitude larger than the
+signal, so any model comparison scored against those labels would be measuring label
+noise rather than models. Silver labels are usable as a *prior* — a starting point for
+human review — but not as the reference against which models are validated.
+
+Recording this because it is the third time on this workstream that an unvalidated
+label source produced a conclusion that did not survive checking. Validating before
+scaling is what caught it, at the cost of one 167-document run.
+
 ---
 
 ## 9. Findings about the taxonomy, independent of any model
@@ -393,9 +428,13 @@ rows in total and none of them are `topic`.
 4. **`djev` is dominated** on every axis measured and should not be pursued.
 5. **`topic` cannot be evaluated at all** until it has labels. Everything measured about it is
    agreement, which bounds nothing without knowing what correct looks like.
-6. **The 0.7 threshold must be re-derived per model** before any swap, because the scales are
+6. **Consensus silver labels are not ground truth.** Validated on `office`: unanimous
+   agreement reaches 80.7% where the best single generator reaches 82.0%, because errors
+   are correlated across models. A 19% label error rate cannot referee 1-3 point model
+   differences. Topic labels must be human (§8.4).
+7. **The 0.7 threshold must be re-derived per model** before any swap, because the scales are
    not comparable.
-7. **The harness is reusable and the contract-based design works** — a self-hosted model needs a
+8. **The harness is reusable and the contract-based design works** — a self-hosted model needs a
    URL, not code.
 
 ---
@@ -404,18 +443,19 @@ rows in total and none of them are `topic`.
 
 **Blocking.**
 
-- **Build a `topic` gold set.** The cheapest path is tagging ~40 documents in the admin UI,
-  which already writes `source='human'` rows at the right granularity. The alternative —
-  consensus silver labels from the generators — should only be trusted after validating the
-  method on `office`, where the labels can be checked against real gold. Do not skip that
-  validation: it is the only place the silver-label error rate can be measured.
+- **Build a `topic` gold set — by hand.** The silver-label shortcut was tested and does
+  not hold up (§8.4): consensus labels are ~81% correct, and that error rate is an order
+  of magnitude larger than the model differences being measured. Tagging ~40 documents in
+  the admin UI, which already writes `source='human'` rows at the right granularity, is the
+  only path that produces a usable reference.
 - **Re-derive `tag_confidence_accept` per model** against whatever labels exist, before any
   swap.
 
 **Unblocked and cheap.**
 
 - **Scale the topic agreement run** from 15 to 60-100 documents to confirm the breadth finding
-  and collect a larger sample of taxonomy collisions.
+  and collect a larger sample of taxonomy collisions. Agreement figures remain useful
+  (`consensus.ts --mode noul`); it is only their use as *labels* that failed.
 - **Put `kev-4b` and `djev` into the `noul` comparison** — `systemOneNoul()` is built and
   untested. The question is whether their per-tag probabilities threshold more stably than the
   frontier generators' do.
