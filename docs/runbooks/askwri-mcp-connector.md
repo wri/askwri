@@ -43,8 +43,13 @@ The password is the `MCP_SHARED_KEY` setting. It is presented one of two ways:
 
 ```
 credential:  Authorization: Bearer <key>
-in address:  https://<site-address>/api/mcp?key=<key>
+address:     https://<site-address>/api/mcp?key=<key>
 ```
+
+**Generate it with `openssl rand -hex 32`.** A key made only of `0-9a-f` needs no
+encoding when pasted into an address. Other characters can work, but a `&` or `#`
+would end the address early, and a `+` is the classic one that gets sent as a
+space by whatever reads the address on the way. Not worth the trouble.
 
 **Both forms exist because of a limit in the assistants themselves.** Claude
 Desktop's connector screen has no field for a credential — only OAuth client
@@ -176,6 +181,9 @@ The password is picked up automatically from `.env.local`.
 
 **Two things that will bite you:**
 
+- **The app is pointed at QA's live database, with write credentials.** Reading is
+  all this surface needs. Do not use that local copy for admin work: anything it
+  writes lands in QA's corpus and is copied into production on the next release.
 - `search-service/.env.local` holds made-up credentials for the local file-store
   substitute, and loads them into the process. Real credentials must be exported
   first or every retrieval call fails quietly while still returning 200. The

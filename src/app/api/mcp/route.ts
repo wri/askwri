@@ -46,10 +46,16 @@ const handler = createMcpHandler(
 /** The address the caller actually connected to, so citation links point back there. */
 function originOf(request: Request | undefined): string {
   try {
-    return request ? new URL(request.url).origin : FALLBACK_ORIGIN
+    if (request?.url) return new URL(request.url).origin
   } catch {
-    return FALLBACK_ORIGIN
+    // fall through to the warning below
   }
+  // Every link in this reply is about to be dead. That is worth a loud line: it
+  // means the deployment handed us no usable address.
+  console.warn(
+    `[MCP] no request address available — citation links will point at ${FALLBACK_ORIGIN}`,
+  )
+  return FALLBACK_ORIGIN
 }
 
 /** Readable on purpose: "wrong key" must be distinguishable from "service down". */
@@ -58,12 +64,26 @@ const NEEDS_KEY =
 
 async function handle(request: Request): Promise<Response> {
   if (!isAuthorized(request)) {
+    // One line so probing is visible in whatever log the deployment has. The
+    // value presented is never written down.
+    console.warn(
+      `[MCP] refused ${request.method} — no valid key presented (${requestPointer(request)})`,
+    )
     return new Response(NEEDS_KEY, {
       status: 401,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     })
   }
   return handler(request)
+}
+
+/** The address without its query string: enough to see the traffic, no key in it. */
+function requestPointer(request: Request): string {
+  try {
+    return new URL(request.url).pathname
+  } catch {
+    return 'unparseable-address'
+  }
 }
 
 export async function GET(request: Request): Promise<Response> {

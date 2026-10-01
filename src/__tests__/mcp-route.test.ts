@@ -130,6 +130,39 @@ describe('the shared key', () => {
     expect(res.status).toBe(200)
   })
 
+  // A base64 key contains '+' and '/'. '+' must survive the address form: the
+  // usual query-parameter reader turns it into a space, which fails auth in a
+  // way that looks like a wrong key rather than an encoding problem.
+  it('accepts a key containing plus and slash in the address', async () => {
+    const awkward = 'a+b/c=d'
+    process.env = { ...process.env, MCP_SHARED_KEY: awkward }
+    jest.resetModules()
+    const { POST } = await import('@/app/api/mcp/route')
+    // Both the encoded form and a raw paste, because an operator pasting the key
+    // into an address by hand sends the raw characters.
+    for (const inUrl of [encodeURIComponent(awkward), awkward]) {
+      const res = await POST(
+        new NextRequest(`http://localhost/api/mcp?key=${inUrl}`, {
+          method: 'POST',
+          body: JSON.stringify(INIT),
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+        }),
+      )
+      expect(res.status).toBe(200)
+    }
+  })
+
+  it('records a refusal, so probing is visible', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    await post(INIT, { authorization: 'Bearer nope' })
+    expect(warn).toHaveBeenCalled()
+    // The value presented is never written down.
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('nope')
+  })
+
   it('refuses everything when no key is configured at all', async () => {
     delete process.env.MCP_SHARED_KEY
     jest.resetModules()
@@ -150,6 +183,9 @@ describe('tools/call', () => {
   })
 
   it('lists exactly one tool', async () => {
+    // A real client initialises first; do the same so a stricter handler version
+    // cannot make this test pass by accident.
+    await post(INIT, AUTH)
     const res = await post(
       { jsonrpc: '2.0', id: 3, method: 'tools/list', params: {} },
       AUTH,

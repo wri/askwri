@@ -25,10 +25,20 @@ export function formatSearchResults(
   llamaIndexJson: unknown,
   baseUrl: string,
 ): string {
-  const json = (llamaIndexJson ?? {}) as Record<string, any>
-  if (json.ok === false) return UNREACHABLE
+  let json: Record<string, any>
+  try {
+    json = (llamaIndexJson ?? {}) as Record<string, any>
+    if (typeof json !== 'object' || Array.isArray(json))
+      throw new Error('not a reply')
+  } catch {
+    return UNREACHABLE
+  }
 
-  const docs: any[] = Array.isArray(json.docs) ? json.docs : []
+  // A reply we cannot recognise is a failure, not an empty corpus. Saying "no
+  // passages" here would blame the corpus for our own broken request.
+  if (json.ok === false || !Array.isArray(json.docs)) return UNREACHABLE
+
+  const docs: any[] = json.docs
   const lines: string[] = []
 
   if (json.likely_off_topic === true) {
@@ -72,7 +82,10 @@ function describe(doc: any, position: number, baseUrl: string): string[] {
 
   if (doc?.doc_id) {
     const link = `${baseUrl}/api/pdf/${doc.doc_id}.pdf`
-    out.push(page ? `   Page ${page} — ${link}#page=${page}` : `   ${link}`)
+    // Nullish, not truthy: a passage on page 0 keeps its anchor.
+    out.push(
+      page != null ? `   Page ${page} — ${link}#page=${page}` : `   ${link}`,
+    )
   }
 
   const authors = authorLine(doc?.authors)

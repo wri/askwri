@@ -65,7 +65,6 @@ Each result carries: title, quoted passage, page, link, relevance label, authors
 year.
 
 ## Two things found before any code was written
-
 A review whose only job was to attack the assumptions in the design and plan came
 back with seven errors, all caught on paper:
 
@@ -79,6 +78,14 @@ back with seven errors, all caught on paper:
 - Two claims about which fields exist in a reply, and which package requires
   which dependency, were wrong. One of them was me "correcting" the earlier
   document, when the earlier document had been right.
+
+A second review, this one an automatic one that reads every commit before a push
+is allowed, produced fifteen more items across all seven commits. All are either
+fixed or dismissed with evidence, in the commit that follows. The three that
+changed behaviour: a key containing `+` failed when pasted into an address; a
+reply that was not the shape we expected was reported as "the corpus has no
+answer" rather than as a failed request; and refusals were not logged, so
+probing the password would have been invisible.
 
 ## What using it actually showed
 
@@ -101,6 +108,11 @@ Full evidence in the hand-check document. In short:
 3. **The thin-corpus warning is our sentence being repeated.** It works, but we
    may be supplying the judgement rather than the assistant reaching it — and if
    our sentence is wrong, the assistant repeats our mistake confidently.
+
+A related trap when running a copy locally: retrieval can fail *quietly*, because
+retrieval falls back rather than erroring. A successful-looking reply is not
+proof the search ran properly — check that `/health` reports `dense_lane: live`
+before trusting any result. The recipe is in the connector runbook.
 
 ## Still open
 

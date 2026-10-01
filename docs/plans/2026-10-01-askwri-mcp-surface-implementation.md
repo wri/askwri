@@ -323,7 +323,15 @@ describe('runSearchWri', () => {
 })
 ```
 
-Correct the four test cases above as written — they are the assertions the implementation must satisfy, not a sketch.
+The six tests above are binding: implement to satisfy them unchanged. The first
+of them is the premise check described in Step 3.
+
+On `inputSchema`: pass the whole `z.object(...)`, not a bare shape of fields. The
+packaging this plan uses (`mcp-handler` 2.x on SDK v2) changed that from the
+older convention — "`inputSchema`/`argsSchema` take a full Standard Schema (e.g.
+`z.object({ ... })`) instead of a raw zod shape" (that package's README,
+"Migrating from 1.x"). Verified against the running tool: a `tools/list` call
+returns all four fields as `properties`.
 
 - [ ] **Step 2: Run the test to verify it fails**
 

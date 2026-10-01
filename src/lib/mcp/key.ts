@@ -34,10 +34,15 @@ function presentedKey(request: Request): string | null {
     const match = header.match(BEARER)
     if (match) return match[1].trim()
   }
+  // Read the address by hand rather than through searchParams: that reader turns
+  // a '+' into a space, so a key containing '+' would fail when pasted into an
+  // address — which is the form the assistants that matter can actually use.
+  const raw = /[?&]key=([^&]*)/.exec(request.url)?.[1]
+  if (raw === undefined) return null
   try {
-    return new URL(request.url).searchParams.get('key')
+    return decodeURIComponent(raw)
   } catch {
-    return null
+    return raw
   }
 }
 

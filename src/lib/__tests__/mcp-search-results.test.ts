@@ -97,8 +97,9 @@ describe('formatSearchResults', () => {
     expect(text).not.toMatch(/undefined|null|n\/a|NaN/)
   })
 
-  // Review Focus 1
-  it('keeps several passages from one document in ranked order', () => {
+  // Review Focus 1. The route emits one passage per document (`kps[0]`), so this
+  // covers the order documents arrive in, not multiple passages within one.
+  it('keeps documents in the order the search ranked them', () => {
     const text = formatSearchResults(
       'q',
       reply([
@@ -136,5 +137,24 @@ describe('formatSearchResults', () => {
   it('asks the search service to return nothing when it fails', () => {
     const text = formatSearchResults('q', { ok: false, error: 'boom' }, BASE)
     expect(text).toContain('could not be reached')
+  })
+
+  // Review: a reply that is not the shape we expect is a failure, not an empty
+  // corpus. Saying "no passages" there would blame the corpus for our problem.
+  it('treats a malformed reply as a failure, not an empty corpus', () => {
+    for (const malformed of ['<html>502</html>', {}, { error: 'nope' }, []]) {
+      const text = formatSearchResults('q', malformed, BASE)
+      expect(text).toContain('could not be reached')
+      expect(text).not.toContain('No passages')
+    }
+  })
+
+  it('keeps the page anchor when a passage is on page 0', () => {
+    const text = formatSearchResults(
+      'q',
+      reply([doc({ kps: [{ snippet: 's', page: 0 }] })]),
+      BASE,
+    )
+    expect(text).toContain('#page=0')
   })
 })
