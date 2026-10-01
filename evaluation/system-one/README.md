@@ -144,6 +144,36 @@ possible at all, so they are recorded with the error that established them.
 `choice`. System One can only ever do `topic` via retrieve-then-classify over a
 subset, or via `noul`-per-candidate.
 
+## Pointing at a self-hosted model
+
+`systemOne()` speaks the `/v1/systemone` contract, so a locally served model needs
+no code — only the base URL:
+
+```bash
+SYSTEMONE_BASE_URL=http://127.0.0.1:8010/v1 \
+  ./scripts/with-remote-env.sh qa npx tsx evaluation/system-one/run.ts \
+  --facet office --systems systemone:my-model
+```
+
+Verified against AWS Strands Decider 2B, which serves the identical contract.
+Two traps found while doing it:
+
+- **Apple Metal crashes under concurrent requests.** Serving a PyTorch model on
+  MPS with `--concurrency > 1` died with
+  `failed assertion _status < MTLCommandBufferStatusCommitted` in
+  `IOGPUMetalCommandBuffer`. Every in-flight request then failed in ~2ms with
+  `TypeError: fetch failed`, which reads like a harness bug and is not. Use
+  `--concurrency 1`.
+- **`causal_conv1d` missing** makes Qwen-family models fall back to a slow
+  reference kernel and emit a warning. Install it, or expect single-digit
+  seconds per call rather than tens of milliseconds.
+
+Cold start also matters: fetching and loading a 2B model took ~10 minutes, during
+which the port is closed. Poll it rather than concluding the server failed.
+
+See `docs/research/2026-10-01-system-one-decision-models.md` for the full
+findings — which call sites this class fits, what ground truth exists, and results.
+
 ## Adding a model variant
 
 Write one `pick` function in `systems.ts` and add it to `defaultSystems()`.
