@@ -14,7 +14,10 @@ function doc(over: Record<string, any> = {}) {
     relevance_tier: 'strong',
     score: 0.9137,
     kps: [
-      { snippet: 'Compact-growth policy shifted toward density bonuses.', page: 12 },
+      {
+        snippet: 'Compact-growth policy shifted toward density bonuses.',
+        page: 12,
+      },
     ],
     meta: { raw: { secret_internal_field: 'must not leak' } },
     ...over,
@@ -37,7 +40,11 @@ const BASE = 'https://askwri.example'
 
 describe('formatSearchResults', () => {
   it('names the query and counts the passages', () => {
-    const text = formatSearchResults('compact urban growth', reply([doc()]), BASE)
+    const text = formatSearchResults(
+      'compact urban growth',
+      reply([doc()]),
+      BASE,
+    )
     expect(text).toContain('compact urban growth')
     expect(text).toContain('1 passage')
   })
@@ -55,7 +62,9 @@ describe('formatSearchResults', () => {
 
   it('builds an absolute link to the page', () => {
     const text = formatSearchResults('q', reply([doc()]), BASE)
-    expect(text).toContain('https://askwri.example/api/pdf/DOC-1234.pdf#page=12')
+    expect(text).toContain(
+      'https://askwri.example/api/pdf/DOC-1234.pdf#page=12',
+    )
   })
 
   it('leaks none of the website plumbing', () => {

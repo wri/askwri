@@ -34,7 +34,9 @@ const handler = createMcpHandler(
         content: [
           {
             type: 'text',
-            text: await runSearchWri(args, { baseUrl: originOf(ctx?.http?.req) }),
+            text: await runSearchWri(args, {
+              baseUrl: originOf(ctx?.http?.req),
+            }),
           },
         ],
       }),

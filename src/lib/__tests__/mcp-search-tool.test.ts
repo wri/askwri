@@ -89,9 +89,8 @@ describe('runSearchWri', () => {
   })
 
   it('defaults to ten results and caps at twenty', async () => {
-    const { runSearchWri, DEFAULT_MAX_RESULTS, MAX_MAX_RESULTS } = await import(
-      '../mcp/search-tool'
-    )
+    const { runSearchWri, DEFAULT_MAX_RESULTS, MAX_MAX_RESULTS } =
+      await import('../mcp/search-tool')
     expect(DEFAULT_MAX_RESULTS).toBe(10)
     expect(MAX_MAX_RESULTS).toBe(20)
     await runSearchWri({ query: 'q' }, { baseUrl: 'https://x' })
@@ -101,7 +100,10 @@ describe('runSearchWri', () => {
   // Review Focus 6
   it('clamps an oversized request to the ceiling', async () => {
     const { runSearchWri } = await import('../mcp/search-tool')
-    await runSearchWri({ query: 'q', max_results: 500 }, { baseUrl: 'https://x' })
+    await runSearchWri(
+      { query: 'q', max_results: 500 },
+      { baseUrl: 'https://x' },
+    )
     expect(forwarded().max_results).toBe(20)
   })
 

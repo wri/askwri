@@ -30,14 +30,18 @@ export const searchToolInputSchema = z.object({
     .min(1900)
     .max(2100)
     .optional()
-    .describe('Earliest publication year. Set this only if the person named one.'),
+    .describe(
+      'Earliest publication year. Set this only if the person named one.',
+    ),
   year_to: z
     .number()
     .int()
     .min(1900)
     .max(2100)
     .optional()
-    .describe('Latest publication year. Set this only if the person named one.'),
+    .describe(
+      'Latest publication year. Set this only if the person named one.',
+    ),
   max_results: z
     .number()
     .int()
