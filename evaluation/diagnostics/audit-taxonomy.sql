@@ -49,8 +49,11 @@ HAVING count(*) > 1
 
 \echo
 \echo '=== 5. Near-duplicate pairs by cosine (topic) ======================='
-\echo 'Only 9 pairs exceed 0.85 across 286,146 — near-duplication is NOT the'
-\echo 'main problem; these are acronym and spelling variants.'
+\echo 'Near-duplication IS a problem, and an earlier claim that it was not'
+\echo 'rested on a 0.85 cut that returned only 9 pairs. That cut was too strict'
+\echo 'for a compressed embedding space in which Pollution/Air Pollution is 0.819.'
+\echo 'At 0.80 there are dozens, and they are genuine synonyms (Cycling/Biking,'
+\echo 'Farming/Agriculture, Renewable Energy/Clean Energy), not only acronyms.'
 WITH p AS (
   SELECT ta.value_id AS a, tb.value_id AS b, 1 - (ea.embedding <=> eb.embedding) AS cos
     FROM tag_embeddings ea

@@ -67,7 +67,7 @@ On this corpus the System One models are deterministic — kev-4b returned the
 identical accuracy on all five passes — so all the variance is the reasoning
 LLM's. Repeating is cheap for the System One side.
 
-## Ground truth, and its limits
+## Reference labels, and their limits
 
 Gold is `document_tags.source = 'external'`. **These are legacy labels, not verified
 truth.** They were force-applied across the founding corpus (then a single
@@ -214,7 +214,7 @@ Cold start also matters: fetching and loading a 2B model took ~10 minutes, durin
 which the port is closed. Poll it rather than concluding the server failed.
 
 See `docs/research/2026-10-01-system-one-decision-models.md` for the full
-findings — which call sites this class fits, what ground truth exists, and results.
+findings — which call sites this class fits, what reference labels exist, and results.
 
 ## Adding a model variant
 

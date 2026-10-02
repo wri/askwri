@@ -106,7 +106,14 @@ async function loadBasis(documentId: string): Promise<string | null> {
  * which keeps Bedrock out of the harness.
  *
  * Non-embedded facets: the whole v1 vocabulary, which is what production does
- * for them. `distance` is meaningless there and stays 0.
+ * for them — deliberately NOT limited by `topN`. Applying `LIMIT` here made the
+ * candidate set an alphabetical prefix of the vocabulary once a facet outgrew
+ * `--top-n`, which makes a late-sorting value structurally unreachable, and it
+ * made `--top-n` silently mean different things on embedded and non-embedded
+ * facets. Overflow is reported by the systems themselves rather than hidden.
+ * `distance` is null: there is no document vector to measure against. It must
+ * not be 0, which is a legitimate cosine distance and would read as a
+ * perfect match.
  */
 async function loadCandidates(
   documentId: string,
@@ -121,27 +128,34 @@ async function loadCandidates(
                        '{}'::text[]) AS aliases
          FROM tags t
         WHERE t.facet = $1 AND t.taxonomy_version = 'v1'
-        ORDER BY t.value_id
-        LIMIT $2`,
-      [facet, topN],
+        ORDER BY t.value_id`,
+      [facet],
     )
-    return rows.map((r) => ({ label: r.label, description: r.description, aliases: r.aliases ?? [], distance: 0 }))
+    return rows.map((r) => ({
+      label: r.label,
+      description: r.description,
+      aliases: r.aliases ?? [],
+      distance: null,
+    }))
   }
 
+  // CROSS JOIN, not a scalar subquery: a document with no summary-chunk
+  // embedding then yields zero candidates and gets skipped, instead of every
+  // tag coming back with a NULL distance that sorts arbitrarily and coerces to 0.
   const { rows } = await pool.query(
-    `WITH dv AS (
-       SELECT embedding FROM document_chunks
-        WHERE document_id = $1
-          AND unit_type = 'summary'
-          AND embedding_model = 'cohere-embed-v4'
-        LIMIT 1
-     )
-     SELECT t.value_id AS label,
+    `SELECT t.value_id AS label,
             t.description,
             COALESCE((SELECT array_agg(a.alias) FROM tag_aliases a WHERE a.tag_id = t.id),
                      '{}'::text[]) AS aliases,
-            te.embedding <=> (SELECT embedding FROM dv) AS distance
+            te.embedding <=> d.embedding AS distance
        FROM tag_embeddings te
+       CROSS JOIN (
+         SELECT embedding FROM document_chunks
+          WHERE document_id = $1
+            AND unit_type = 'summary'
+            AND embedding_model = 'cohere-embed-v4'
+          LIMIT 1
+       ) d
        JOIN tags t ON t.id = te.tag_id
       WHERE t.facet = $2
         AND t.taxonomy_version = 'v1'

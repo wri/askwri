@@ -22,8 +22,13 @@ export type Candidate = {
   label: string
   description: string | null
   aliases: string[]
-  /** cosine distance to the document vector from the summary chunk embedding */
-  distance: number
+  /**
+   * cosine distance to the document vector from the summary chunk embedding.
+   * **null** when the facet has no tag embeddings at all. Not 0 — 0 is a
+   * legitimate distance (identical vectors) and would otherwise read as a
+   * perfect match.
+   */
+  distance: number | null
 }
 
 /** A system's answer. `label: null` means it produced nothing usable. */
@@ -247,6 +252,40 @@ export function embeddingBaseline(): System {
 }
 
 /**
+ * First balanced `{...}` in a reply, preferring a bare JSON body.
+ *
+ * A greedy `\{[\s\S]*\}` spans from the first brace to the last, so any prose
+ * brace around the object breaks the parse. These replies arrive from a CLI that
+ * may prepend warnings, and losing a label to that is avoidable.
+ */
+function extractJsonObject(text: string): string | null {
+  const trimmed = text.trim()
+  if (trimmed.startsWith('{')) return trimmed
+  let start = -1
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') {
+      if (depth === 0) start = i
+      depth++
+    } else if (ch === '}') {
+      depth--
+      if (depth === 0 && start >= 0) return text.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
+/**
  * Claude on Bedrock, via the AWS CLI rather than a new SDK dependency.
  *
  * Anthropic models on Bedrock need a cross-region inference profile, not the
@@ -291,10 +330,10 @@ export function bedrockClaude(model: string, effort = 'high'): System {
       }
 
       // The answer may still arrive wrapped in prose or a fenced block.
-      const match = stdout.match(/\{[\s\S]*\}/)
-      if (!match) return { label: null, confidence: null, error: `no JSON in reply: ${stdout.slice(0, 120)}` }
+      const json = extractJsonObject(stdout)
+      if (!json) return { label: null, confidence: null, error: `no JSON in reply: ${stdout.slice(0, 120)}` }
       try {
-        const parsed = JSON.parse(match[0])
+        const parsed = JSON.parse(json)
         if (!labels.includes(parsed.value)) {
           return { label: null, confidence: null, error: `out-of-enum value: ${JSON.stringify(parsed.value)}` }
         }
@@ -303,7 +342,7 @@ export function bedrockClaude(model: string, effort = 'high'): System {
           confidence: typeof parsed.confidence === 'number' ? parsed.confidence : null,
         }
       } catch {
-        return { label: null, confidence: null, error: `unparseable JSON: ${match[0].slice(0, 120)}` }
+        return { label: null, confidence: null, error: `unparseable JSON: ${json.slice(0, 120)}` }
       }
     },
   }
@@ -386,10 +425,13 @@ export function systemOneNoul(
             signal: AbortSignal.timeout(TIMEOUT_MS),
           })
         } catch (e) {
-          return { scores, error: `batch failed: ${String(e).slice(0, 120)}` }
+          // Return nothing, not the batches that already succeeded: a partial
+          // score set would enter the agreement statistics as "this generator
+          // accepts only these", indistinguishable from a real answer.
+          return { scores: {}, error: `batch failed: ${String(e).slice(0, 120)}` }
         }
         if (!res.ok) {
-          return { scores, error: `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}` }
+          return { scores: {}, error: `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}` }
         }
         const answers = (await res.json())?.answers ?? {}
         batch.forEach((c, i) => {
@@ -434,15 +476,15 @@ export function cosineNoul(): MultiSystem {
     note: 'cosine similarity over tag embeddings — no model call',
     async apply(_state, candidates) {
       if (!candidates.length) return { scores: {}, error: 'no candidates' }
-      const embedded = candidates.filter((c) => c.distance !== 0).length
-      if (!embedded) {
-        return {
-          scores: {},
-          error: 'facet has no tag embeddings — cosine has nothing to rank',
-        }
+      // distance is null exactly when the facet is not embedded. Testing for 0
+      // instead would refuse an embedded facet whose candidates all happen to
+      // share a vector, and would score a real 0-distance candidate as a
+      // certain match.
+      if (candidates.some((c) => c.distance === null)) {
+        return { scores: {}, error: 'facet has no tag embeddings — cosine has nothing to rank' }
       }
       const scores: Record<string, number> = {}
-      for (const c of candidates) scores[c.label] = 1 - c.distance
+      for (const c of candidates) scores[c.label] = 1 - (c.distance as number)
       return { scores }
     },
   }
@@ -455,6 +497,7 @@ export function multiSystemsFromIds(ids: string[]): MultiSystem[] {
     const model = rest.join(':')
     if (kind === 'jev') return jev(model || undefined)
     if (kind === 'cosine') return cosineNoul()
+    if (!model) throw new Error(`"${id}" needs a model, e.g. ${kind}:<model>`)
     if (kind === 'systemone') return systemOneNoul(model)
     if (kind === 'bedrock') return bedrockNoul(model)
     if (kind === 'llm') return llmNoul(model, { apiKey: process.env.OPENAI_API_KEY })
@@ -597,21 +640,24 @@ export function bedrockNoul(model: string, effort = 'high'): MultiSystem {
       } catch (e) {
         return { scores: {}, error: `aws cli: ${String(e).slice(0, 300)}` }
       }
-      const match = stdout.match(/\{[\s\S]*\}/)
-      if (!match) return { scores: {}, error: `no JSON in reply: ${stdout.slice(0, 120)}` }
+      const json = extractJsonObject(stdout)
+      if (!json) return { scores: {}, error: `no JSON in reply: ${stdout.slice(0, 120)}` }
       try {
-        const parsed = JSON.parse(match[0])
+        const parsed = JSON.parse(json)
         const scores: Record<string, number> = {}
         for (const c of candidates) {
           const v = parsed[c.label]
           if (typeof v === 'number') scores[c.label] = v
         }
-        if (!Object.keys(scores).length) {
-          return { scores: {}, error: `no tag keys in reply; got: ${match[0].slice(0, 300)}` }
+        if (Object.keys(scores).length !== candidates.length) {
+          return {
+            scores: {},
+            error: `only ${Object.keys(scores).length}/${candidates.length} tag keys returned; got: ${json.slice(0, 200)}`,
+          }
         }
         return { scores }
       } catch {
-        return { scores: {}, error: `unparseable JSON: ${match[0].slice(0, 120)}` }
+        return { scores: {}, error: `unparseable JSON: ${json.slice(0, 120)}` }
       }
     },
   }

@@ -32,6 +32,7 @@ import {
   systemsFromIds,
 } from './systems'
 import { pool, type Row, loadGold, loadRows, assertUsableGold, facetHasEmbeddings } from './dataset'
+import { summariseSystems, reliabilityBins, type ScoredRow } from './scoring'
 
 // ── args ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,9 @@ const TOP_N = Number(arg('top-n', '20'))
 const LIMIT = arg('limit') ? Number(arg('limit')) : null
 const CONCURRENCY = Number(arg('concurrency', '4'))
 const ONLY = arg('systems')
-const REPS = Number(arg('reps', '1'))
+// Clamped: 0, negative or non-numeric values used to produce an empty pass list
+// and then NaN/Infinity throughout the report and the committed artifact.
+const REPS = Math.max(1, Math.floor(Number(arg('reps', '1')) || 1))
 const OUT =
   arg('out') ??
   `evaluation/system-one/results-${new Date().toISOString().slice(0, 10)}-${FACET}.json`
@@ -79,19 +82,18 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 
 // ── run ─────────────────────────────────────────────────────────────────────
 
-type Record_ = {
-  document_id: string
-  title: string
-  gold: string
-  goldInCandidates: boolean
-  picks: Record<string, Pick & { ms: number }>
-}
+type Record_ = ScoredRow
 
 async function main() {
   assertUsableGold(FACET, await loadGold(FACET))
 
   // Only documents that have gold can be scored, so restrict to those.
   const rows = await loadRows({ facet: FACET, topN: TOP_N, limit: LIMIT, onlyWithGold: true })
+  if (!rows.length) {
+    throw new Error(
+      `no scorable documents for facet '${FACET}' — all skipped (missing basis or candidate set)`,
+    )
+  }
 
   // The embedding baseline only means something when the facet is embedded.
   const embedded = await facetHasEmbeddings(FACET)
@@ -133,71 +135,9 @@ async function main() {
   const scored = results.filter((r) => r.goldInCandidates)
 
   // ── score ─────────────────────────────────────────────────────────────────
-  const summary = active.map((s) => {
-    const picks = results.map((r) => r.picks[s.id])
-    const correct = results.filter((r) => r.picks[s.id].label === r.gold)
-    const correctInRecall = scored.filter((r) => r.picks[s.id].label === r.gold)
-    const withConf = results.filter((r) => r.picks[s.id].confidence !== null)
-    const brier = withConf.length
-      ? withConf.reduce(
-          (acc, r) => acc + (r.picks[s.id].confidence! - (r.picks[s.id].label === r.gold ? 1 : 0)) ** 2,
-          0,
-        ) / withConf.length
-      : null
-    const goldMass = (() => {
-      const probs = results.filter((r) => r.picks[s.id].probabilities)
-      if (!probs.length) return null
-      return (
-        probs.reduce((acc, r) => acc + (r.picks[s.id].probabilities![r.gold] ?? 0), 0) / probs.length
-      )
-    })()
-    const perPass = passes.map(
-      (p) => p.filter((r) => r.picks[s.id].label === r.gold).length / p.length,
-    )
-    return {
-      id: s.id,
-      note: s.note,
-      n: results.length,
-      errors: picks.filter((p) => p.label === null).length,
-      top1: correct.length / results.length,
-      top1InRecall: scored.length ? correctInRecall.length / scored.length : 0,
-      accuracy: correct.length,
-      meanConf: withConf.length
-        ? withConf.reduce((a, r) => a + r.picks[s.id].confidence!, 0) / withConf.length
-        : null,
-      brier,
-      goldMass,
-      perPass,
-      top1Min: Math.min(...perPass),
-      top1Max: Math.max(...perPass),
-      meanMs: picks.reduce((a, p) => a + p.ms, 0) / picks.length,
-    }
-  })
+  const summary = summariseSystems({ systems: active, results, scored, passes })
 
-  // reliability bins over self-reported confidence
-  const bins = active
-    .filter((s) => results.some((r) => r.picks[s.id].confidence !== null))
-    .map((s) => {
-      const edges = [0, 0.5, 0.6, 0.7, 0.8, 0.9, 1.01]
-      const table = edges.slice(0, -1).map((lo, i) => {
-        const hi = edges[i + 1]
-        const inBin = results.filter((r) => {
-          const c = r.picks[s.id].confidence
-          return c !== null && c >= lo && c < hi
-        })
-        return {
-          band: `${lo.toFixed(2)}–${hi === 1.01 ? '1.00' : hi.toFixed(2)}`,
-          n: inBin.length,
-          meanConf: inBin.length
-            ? inBin.reduce((a, r) => a + r.picks[s.id].confidence!, 0) / inBin.length
-            : null,
-          accuracy: inBin.length
-            ? inBin.filter((r) => r.picks[s.id].label === r.gold).length / inBin.length
-            : null,
-        }
-      })
-      return { id: s.id, table }
-    })
+  const bins = reliabilityBins(active, results)
 
   // ── report ────────────────────────────────────────────────────────────────
   const pct = (x: number) => (x * 100).toFixed(1).padStart(5) + '%'

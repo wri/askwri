@@ -108,6 +108,9 @@ async function mainChoice() {
     limit: LIMIT,
     onlyWithGold: goldUsable,
   })
+  if (!rows.length) {
+    throw new Error(`no documents for facet '${FACET}' — all skipped (missing basis or candidate set)`)
+  }
   // A facet with one gold value is a batch stamp, not a label set. Say so
   // rather than quietly reporting a meaningless accuracy.
   const goldNote = !goldMap.size
@@ -155,11 +158,15 @@ async function mainChoice() {
     const u = usableOf(r)
     return u.length === ids.length && new Set(u).size === 1
   })
+  // Exactly one dissenter, and everyone answered. Written as `>= ids.length - 1`
+  // this became "at least 1 of 2 agree" with a two-generator run, which counts a
+  // 1-1 split as agreement.
   const majority3 = results.filter((r) => {
     const u = usableOf(r)
+    if (u.length !== ids.length) return false
     const counts = new Map<string, number>()
     for (const l of u) counts.set(l, (counts.get(l) ?? 0) + 1)
-    return Math.max(...counts.values()) >= ids.length - 1
+    return Math.max(...counts.values()) === ids.length - 1
   })
 
   console.log(
@@ -244,7 +251,12 @@ async function mainChoice() {
   }
 
   // ── write silver labels, with provenance ─────────────────────────────────
-  const lines = results.map((r) => {
+  // Only documents where every generator answered. A row built from the two
+  // models that replied would be written as a usable `majority-2of4` label,
+  // indistinguishable downstream from a real majority. The noul writer already
+  // skipped these; the choice writer did not.
+  const completeRows = results.filter((r) => usableOf(r).length === ids.length)
+  const lines = completeRows.map((r) => {
     const u = usableOf(r)
     const counts = new Map<string, number>()
     for (const l of u) counts.set(l, (counts.get(l) ?? 0) + 1)
@@ -266,6 +278,12 @@ async function mainChoice() {
     })
   })
   writeFileSync(OUT, lines.join('\n') + '\n')
+  if (completeRows.length < results.length) {
+    console.log(
+      `\n   ${results.length - completeRows.length} document(s) omitted from the label file: ` +
+        `a generator failed there, so agreement is undefined`,
+    )
+  }
 
   const artifact = {
     harness: 'evaluation/system-one/consensus',
@@ -274,6 +292,7 @@ async function mainChoice() {
     topN: TOP_N,
     question: QUESTION,
     documents: results.length,
+    documentsLabelled: completeRows.length,
     candidatesPerDoc: rows[0]?.candidates.length ?? 0,
     goldNote,
     generators: generators.map((g) => ({ id: g.id, family: family(g.id), note: g.note })),
@@ -332,6 +351,9 @@ function mean(xs: number[]): number {
 
 async function mainNoul() {
   const rows = await loadRows({ facet: FACET, topN: TOP_N, limit: LIMIT, onlyWithGold: false })
+  if (!rows.length) {
+    throw new Error(`no documents for facet '${FACET}' — all skipped (missing basis or candidate set)`)
+  }
   // The reference labels are loaded regardless of onlyWithGold so every label
   // row can carry them where the facet has them — that is what checks the label.
   const goldMap = await loadGold(FACET)
@@ -364,6 +386,15 @@ async function mainNoul() {
     }
   })
 
+  // Documents where every generator answered. Everything below aggregates over
+  // this set only: a failure or a half-scored batch would otherwise enter the
+  // agreement statistics as "this generator accepts nothing" — indistinguishable
+  // from a real answer — and would let "unanimous" mean "the two that replied
+  // agreed". The per-tag yes-rate and pair table skip missing cells already, so
+  // the two reporting paths used to disagree about the same failure.
+  const complete = results.filter((r) => ids.every((id) => !r.scores[id]?.error))
+  const skipped = results.length - complete.length
+
   // ── failures ──────────────────────────────────────────────────────────────
   console.log(`\nfailures`)
   for (const id of ids) {
@@ -379,21 +410,21 @@ async function mainNoul() {
   const topsAt = (r: NoulResult, id: string) => topKSet(r.scores[id]?.scores, r.candidateLabels, TOP_K)
 
   const score = (label: string, setOf: (r: NoulResult, id: string) => Set<string>) => {
-    const perGen = ids.map((id) => mean(results.map((r) => setOf(r, id).size)))
-    const exact = results.filter((r) => {
+    const perGen = ids.map((id) => mean(complete.map((r) => setOf(r, id).size)))
+    const exact = complete.filter((r) => {
       const sets = ids.map((id) => setOf(r, id))
       return sets.every((s) => s.size === sets[0].size && [...s].every((x) => sets[0].has(x)))
     }).length
     const pairJ: number[] = []
     for (let i = 0; i < ids.length; i++)
       for (let j = i + 1; j < ids.length; j++)
-        pairJ.push(mean(results.map((r) => jaccard(setOf(r, ids[i]), setOf(r, ids[j])))))
+        pairJ.push(mean(complete.map((r) => jaccard(setOf(r, ids[i]), setOf(r, ids[j])))))
     console.log(`\n${label}`)
     console.log(
       `   sets per document:  ${perGen.map((n, i) => `${ids[i].split(':').pop()}=${n.toFixed(1)}`).join('  ')}`,
     )
     console.log(
-      `   identical set across all ${ids.length}:  ${exact}/${results.length}  ${((exact / results.length) * 100).toFixed(0)}%`,
+      `   identical set across all ${ids.length}:  ${exact}/${complete.length}  ${((exact / complete.length) * 100).toFixed(0)}%`,
     )
     console.log(`   mean pairwise Jaccard:            ${mean(pairJ).toFixed(3)}`)
     return { exact, meanJaccard: mean(pairJ), meanSetSize: perGen }
@@ -402,12 +433,33 @@ async function mainNoul() {
   const atThreshold = score(`sets at accept threshold ${THRESHOLD}`, setsAt)
   const atTopK = score(`top-${TOP_K} by probability`, topsAt)
 
+  // ── agreed core vs union ────────────────────────────────────────────────
+  // Tags every generator accepts, as a share of the tags any of them raised.
+  // An earlier commit quoted 55/126 = 0.44 by hand; the harness did not compute
+  // it, so the artifact could not reproduce its own headline figure.
+  let coreTags = 0
+  let unionTags = 0
+  for (const r of complete) {
+    const sets = ids.map((id) => setsAt(r, id))
+    const union = new Set<string>()
+    for (const s of sets) for (const t of s) union.add(t)
+    for (const t of union) {
+      unionTags++
+      if (sets.every((s) => s.has(t))) coreTags++
+    }
+  }
+  console.log(
+    `\nagreed core vs union (accept threshold ${THRESHOLD})\n` +
+      `   tags all ${ids.length} accept: ${coreTags}   tags any accepts: ${unionTags}` +
+      (unionTags ? `   core/union = ${(coreTags / unionTags).toFixed(2)}` : ''),
+  )
+
   // ── per-tag binary agreement, and the family split on it ─────────────────
   console.log(`\nper-tag binary agreement (all document x tag cells)`)
   const yesRate = ids.map((id) => {
     let yes = 0
     let cells = 0
-    for (const r of results)
+    for (const r of complete)
       for (const l of r.candidateLabels) {
         const s = r.scores[id]?.scores
         if (!s || !(l in s)) continue
@@ -424,7 +476,7 @@ async function mainNoul() {
   for (let i = 0; i < ids.length; i++) {
     for (let j = i + 1; j < ids.length; j++) {
       const cells: number[] = []
-      for (const r of results) {
+      for (const r of complete) {
         const sa = r.scores[ids[i]]?.scores
         const sb = r.scores[ids[j]]?.scores
         for (const l of r.candidateLabels) {
@@ -471,6 +523,10 @@ async function mainNoul() {
     threshold: THRESHOLD,
     topK: TOP_K,
     documents: results.length,
+    documentsComplete: complete.length,
+    documentsSkipped: skipped,
+    agreedCoreTags: coreTags,
+    unionTags,
     candidatesPerDoc: rows[0]?.candidates.length ?? 0,
     generators: generators.map((g) => ({ id: g.id, family: family(g.id), note: g.note })),
     atThreshold,
@@ -484,10 +540,6 @@ async function mainNoul() {
   console.log(`\nwrote ${out}`)
 
   // ── silver labels ─────────────────────────────────────────────────────────
-  // Documents where every generator answered. A partial answer set would make
-  // "unanimous" mean "the two that replied agreed", which is not the same thing.
-  const complete = results.filter((r) => ids.every((id) => !r.scores[id]?.error))
-  const skipped = results.length - complete.length
   const majorityNeeded = Math.floor(ids.length / 2) + 1
 
   const labelLines = complete.map((r) => {
@@ -523,8 +575,11 @@ async function mainNoul() {
       .sort((a, b) => votes[b] - votes[a] || meanP(b) - meanP(a))
 
     const sets = ids.map((id) => JSON.stringify(perGenerator[id]))
+    // An all-empty set is not agreement: every generator accepting nothing is
+    // four models saying "no tag applies", which must not count as unanimity and
+    // inflate the agreement statistics.
     const agreement =
-      new Set(sets).size === 1
+      new Set(sets).size === 1 && silver.length
         ? 'unanimous'
         : silver.length
           ? `majority-${Math.max(...silver.map((l) => votes[l]))}of${ids.length}`

@@ -1,7 +1,7 @@
 # System One (Decision) Models — Evaluation of Fit in AskWRI
 
 **Date:** 2026-10-01
-**Status:** Research and measurement complete for the facets that have ground truth. No production change proposed or made.
+**Status:** Research and measurement complete for the facets whose legacy reference labels vary. **There is no verified ground truth in this corpus** — see §6. No production change proposed or made.
 **Branch / worktree:** `explore/system1-classification` at `.worktrees/system1-classification` (4 commits, local only, not pushed)
 **Harness:** `evaluation/system-one/` — see its `README.md` for operational detail
 **Relates to:** `docs/superpowers/specs/2026-08-17-issue-323-topic-taxonomy-design.md` (the classify stage and its 755-tag degradation note), `search-service/worker/stages/classify.py`
@@ -21,7 +21,7 @@ already in production.
 **The three findings that matter.**
 
 1. **Small open decision models are competitive but not better, on accuracy.** On the
-   one facet with real ground truth, `kev-4b` (a 4B open model) scores 77.8% against the
+   one facet whose legacy labels vary, `kev-4b` (a 4B open model) scores 77.8% against the
    production model's 78.1%. That is a tie, and the gap is smaller than the production
    model's own run-to-run variation. The newest OpenAI flagship, `gpt-6.1-sol`, leads at
    80.2%, which is about three documents out of 167.
@@ -33,7 +33,7 @@ already in production.
    a 10% error budget, `kev-4b` automates ~28% and the incumbent automates **zero.**
    This finding survived every later test, including against `gpt-6.1-sol`.
 
-3. **The blocker is ground truth, not models.** The facet this was really about —
+3. **The blocker is the absence of ground truth, not models.** The facet this was really about —
    `topic` — has no usable labels. Its `external` tags are a single portfolio stamp
    applied across an import batch, not a label set. So `topic` can only be measured for
    *agreement*, never for accuracy.
@@ -160,7 +160,7 @@ instrument — and it cannot be used to grade a model, since that would be circu
 | `systems.ts` | the model registry. Every competitor implements `pick` (single label) or `apply` (per-tag probabilities). |
 | `run.ts` | single-label head-to-head against gold, with `--reps` for run-to-run variance |
 | `consensus.ts` | multi-model agreement and silver labelling; `--mode noul` for the production shape |
-| `README.md` | how to run, how to add a variant, ground-truth traps, measured API limits, results |
+| `README.md` | how to run, how to add a variant, reference-label traps, measured API limits, results |
 
 **Design properties that earned their keep:**
 
@@ -333,7 +333,8 @@ catalogue attribute that the summary text does not state; picks scatter across `
 This is a bad input, not a bad model. It becomes measurable once the basis includes cover or
 front-matter text.
 
-`gpt-6.1-sol` reaching 40% where nothing else clears 24% is notable — it infers the series from
+`gpt-6.1-sol` reaching 40% where the next best is `kev-4b` at 24.1%, and nothing else clears
+25%, is notable — it infers the series from
 something the others miss — but the absolute levels mean nothing yet. Read the ordering only.
 
 ### 8.3 `topic` — agreement only, no accuracy possible
@@ -379,13 +380,20 @@ The plan was to validate consensus silver labels on `office`, where varied refer
 exist, *before* trusting them on `topic`. This is that validation: four generators, the
 single-label question, 167 documents.
 
-| Generator | accuracy |
+| Generator | agreement |
 |---|---|
 | `opus-5.5` | 82.0% (137/167) |
 | **unanimous consensus (all four agree)** | **80.7% (109/135)** |
 | `sonnet-5.5` | 79.0% (132/167) |
 | `glm-5.3` | 73.7% (123/167, 5 failed) |
 | `deepseek-4.1-flash` | 71.3% (119/167) |
+
+**The denominators differ between rows and must be read with care.** Per-generator
+rows use all 167 documents, so a failed call counts as a disagreement; the unanimous
+row uses only the 135 documents where all four answered, because a document cannot be
+unanimous without four answers. Comparing 80.7% (n=135) against 82.0% (n=167) is
+comparing figures over different document sets, and the failure set is small enough
+that the ordering could in principle move.
 
 **Consensus buys nothing over the best single model.** 80.7% is *worse* than `opus`
 alone at 82.0%, and only modestly better than `sonnet`. Four models spanning three
@@ -453,7 +461,9 @@ This again says the 0.7 threshold does not transfer between sources, now across 
 
 These came out of the same database and hold regardless of which model class is used.
 
-- **757 topic tags, all embedded**; geography 201, office 9, doc_type 8, program 1.
+- **757 topic tags, all embedded**; geography 201, office 9, doc_type 8, program 1. (Note
+  `doc_type` holds **8 tags in the vocabulary** but only **7 appear in the legacy gold** — §6's
+  table counts the latter. Both numbers are correct; they count different things.)
 - **`topic` is flat; `geography` is not.** 0 of 757 `topic` tags have a parent, but **194 of
   201** `geography` tags do. So the hierarchy machinery works and is in use — just not for
   topics. `topic` is flat while containing both hypernyms and hyponyms (`Pollution` *and*
@@ -527,7 +537,7 @@ rows in total and none of them are `topic`.
 
 ## 10. Conclusions
 
-1. **No model swap is justified on accuracy.** On the only facet with ground truth, a 4B open
+1. **No model swap is justified on accuracy.** On the only facet whose legacy labels vary, a 4B open
    decision model ties the production model and the newest flagship beats it by ~3 documents.
 2. **The confidence result is the real one, and it is about trust rather than speed or cost.**
    `kev-4b`'s probabilities support a working threshold; the incumbent's do not. At a 10% error
@@ -598,9 +608,18 @@ SYSTEMONE_BASE_URL=http://127.0.0.1:8010/v1 ./scripts/with-remote-env.sh qa \
   npx tsx evaluation/system-one/run.ts --facet office --systems systemone:my-model
 ```
 
-Committed artifacts in `evaluation/system-one/`: `results-2026-10-01-office-5reps.json`,
-`results-2026-10-01-doc_type.json`, `results-gpt6-2026-10-01-{office,doc_type}.json`,
-`topic-noul-15docs-2026-10-01.json`.
+Committed artifacts in `evaluation/system-one/`:
+
+| artifact | backs |
+|---|---|
+| `results-2026-10-01-office-5reps.json` | §8.1 five-pass table |
+| `results-2026-10-01-doc_type.json`, `results-gpt6-2026-10-01-{office,doc_type}.json` | §8.2 and the §8.1 gpt-6 rows |
+| `office-consensus-2026-10-01.{jsonl,summary.json}` | §8.4 validation |
+| `topic-choice-15docs-2026-10-01.json` | §8.3 single-label agreement figures (53% / 80%, 93% vs 68%) |
+| `topic-noul-15docs-2026-10-01.json`, `topic-jev-vs-cosine-20docs-2026-10-01.json` | §8.3 multi-label figures and §8.4b |
+
+An earlier version of this section listed only the `noul` artifact, leaving §8.3's
+single-label figures unreproducible from anything in the repo.
 
 ---
 
