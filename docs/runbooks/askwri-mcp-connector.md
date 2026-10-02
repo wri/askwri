@@ -113,11 +113,28 @@ key, so the key must be in the address.
 
 ## Setting the password
 
+**Use a different key for each environment.** The local one is a throwaway: never
+put it in a deployed environment. Never write the value into a document or commit
+it — this file records where the key lives, not what it is.
+
 - **Deployed:** the key reaches the app through the GitHub secret
   `ASKWRI_APP_ENV`, a JSON blob that terraform turns into container settings.
   Adding `MCP_SHARED_KEY` to that JSON and redeploying is all that is needed — no
   terraform change. Until it is added, the deployed endpoint refuses everything.
 - **Local:** put it in `.env.local` (gitignored). Never in `.env`.
+- **QA as of 2026-10-02: no key is set**, so the deployed endpoint refuses every
+  request. That is the intended state until someone sets one.
+
+### Where the key lives once it is set
+
+| Copy | Places |
+|---|---|
+| Your machine | `.env.local` (the setting), **and** inside the address in your assistant's config |
+| A deployed environment | the `ASKWRI_APP_ENV` GitHub secret, which terraform passes to the running app |
+
+Two places on a local machine is worth knowing: the app reads `.env.local`, the
+assistant reads the address. Change one without the other and the connection
+breaks with a "wrong key" message even though the key is right.
 
 ## Checking it works
 
