@@ -416,6 +416,37 @@ Recording this because it is the third time on this workstream that an unvalidat
 label source produced a conclusion that did not survive checking. Validating before
 scaling is what caught it, at the cost of one 167-document run.
 
+### 8.4b Hosted Jev versus cosine similarity (`topic`, 20 docs, full 757-tag vocabulary)
+
+Run before committing to an Opus relabel, to check whether a System One model beats the
+free baseline.
+
+| | result |
+|---|---|
+| Jev tags accepted at 0.7 | **30.8 per document** (min 11, max 57) |
+| cosine tags accepted at 0.7 | **0** — a similarity is not a probability |
+| mean top-5 Jaccard | 0.214 |
+| documents sharing no top-5 tag | 2 / 20 |
+| latency | 0.1–0.2s per request, 3 requests per document for 757 tags |
+
+Judged by hand on six documents, **Jev was better on two, cosine on two, and two were
+ties.** Jev caught `Degradation`/`EV Batteries` on an electric-bus technology paper where
+cosine wrongly said `Electric School Buses`; cosine caught `National Action Plans`/`UNFCCC`
+on an NDC paper where Jev gave generic `Climate Change`/`Policy`. For a free, zero-model
+baseline that is a strong showing, and consistent with plain BGE-small beating Jev on one
+JevBench suite.
+
+Two operational conclusions:
+
+1. **Jev is unusable at production's 0.7 threshold on this task.** At ~31 tags per
+   document its probability mass spreads across generic labels (`Policy`,
+   `Sustainability`, `Climate Change`), so only top-5-by-probability is usable, and even
+   that is diluted.
+2. **Cosine cannot be thresholded at all**, so it yields a ranking but no confidence — no
+   human queue, no automation.
+
+This again says the 0.7 threshold does not transfer between sources, now across a third.
+
 ---
 
 ## 9. Findings about the taxonomy, independent of any model
@@ -433,7 +464,14 @@ These came out of the same database and hold regardless of which model class is 
   `Public Transportation` / `Public Transit` (0.895), `Carbon Dioxide` / `CO2` (0.877),
   `GHG Accounting` / `Greenhouse Gas Accounting` (0.861), `Gender Equity` / `Gender Equality`
   (0.850).
-- **`Comuting` is a misspelled tag and `Commuting` does not exist.**
+- **Label defects beyond duplication.** Three tags carry **encoding damage** — U+FFFD
+  replacement characters where a real character was lost, and unrecoverable in the data:
+  `Escaz� Agreement` (was Escazú), `K�ppen Climate Classification` (was Köppen),
+  `United Nations Framework Convention on Climate Change�` (trailing). Three more are
+  plain misspellings: `Comuting` (and `Commuting` does not exist, so the concept has no
+  well-named tag), `Urban Envrionment`, `Battery Data Mangement`. Plus the case-only
+  duplicate `PCS` / `PCs`. Any classifier asked to choose among 757 tags inherits all of
+  this.
 - `embedded_text` for these tags is the bare label — no description or alias boilerplate
   diluting the vectors.
 

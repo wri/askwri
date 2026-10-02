@@ -342,45 +342,129 @@ function noulQuestion(c: Candidate): string {
   )
 }
 
-/** System One `noul` per candidate — the deployable shape for top-5 tagging. */
-export function systemOneNoul(model: string, baseUrl?: string): MultiSystem {
-  const base = baseUrl ?? process.env.SYSTEMONE_BASE_URL ?? 'https://gw.lunaroute.com/v1'
+/**
+ * System One `noul` per candidate — the deployable shape for top-5 tagging.
+ *
+ * Chunks the candidate set into requests of `maxQuestions`, because the servers
+ * disagree on how many questions they accept: djev caps at 32, kev-4b took 60,
+ * and hosted Jev took 255 (all measured 2026-10-01). Chunking is what makes a
+ * full-vocabulary run possible at all — `topic` has 757 tags.
+ */
+export function systemOneNoul(
+  model: string,
+  opts: {
+    baseUrl?: string
+    apiKey?: string
+    maxQuestions?: number
+    id?: string
+  } = {},
+): MultiSystem {
+  const base = opts.baseUrl ?? process.env.SYSTEMONE_BASE_URL ?? 'https://gw.lunaroute.com/v1'
+  const maxQuestions = opts.maxQuestions ?? 32
   return {
-    id: `systemone:${model}`,
-    note: `${base} — noul per candidate`,
+    id: opts.id ?? `systemone:${model}`,
+    note: `${base} — noul per candidate, ${maxQuestions} per request`,
     async apply(state, candidates) {
-      const key = process.env.SYSTEMONE_API_KEY ?? process.env.LUNAROUTE_API_KEY
-      if (!key) throw new Error('SYSTEMONE_API_KEY (or LUNAROUTE_API_KEY) not set')
-      // djev rejects >32 questions; kev-4b accepted 60. Fail loudly rather than truncate.
-      if (candidates.length > 32) {
-        return { scores: {}, error: `djev caps questions at 32; got ${candidates.length}` }
-      }
-      const questions: Record<string, unknown> = {}
-      candidates.forEach((c, i) => {
-        questions[`t${i}`] = { type: 'noul', instructions: noulQuestion(c) }
-      })
+      const key =
+        opts.apiKey ?? process.env.SYSTEMONE_API_KEY ?? process.env.LUNAROUTE_API_KEY
+      if (!key) throw new Error('no API key for ' + base)
 
-      const res = await fetch(`${base}/systemone`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ state, model, questions }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      })
-      if (!res.ok) {
-        return { scores: {}, error: `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}` }
-      }
-      const answers = (await res.json())?.answers ?? {}
       const scores: Record<string, number> = {}
-      candidates.forEach((c, i) => {
-        const a = answers[`t${i}`]
-        if (typeof a?.noul === 'number') scores[c.label] = a.noul
-      })
+      for (let start = 0; start < candidates.length; start += maxQuestions) {
+        const batch = candidates.slice(start, start + maxQuestions)
+        const questions: Record<string, unknown> = {}
+        batch.forEach((c, i) => {
+          questions[`t${i}`] = { type: 'noul', instructions: noulQuestion(c) }
+        })
+
+        let res: Response
+        try {
+          res = await fetch(`${base}/systemone`, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ state, model, questions }),
+            signal: AbortSignal.timeout(TIMEOUT_MS),
+          })
+        } catch (e) {
+          return { scores, error: `batch failed: ${String(e).slice(0, 120)}` }
+        }
+        if (!res.ok) {
+          return { scores, error: `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}` }
+        }
+        const answers = (await res.json())?.answers ?? {}
+        batch.forEach((c, i) => {
+          const a = answers[`t${i}`]
+          if (typeof a?.noul === 'number') scores[c.label] = a.noul
+        })
+      }
+
       if (Object.keys(scores).length !== candidates.length) {
         return { scores, error: `only ${Object.keys(scores).length}/${candidates.length} answered` }
       }
       return { scores }
     },
   }
+}
+
+/**
+ * Hosted Jev, TypeSafe's reference implementation.
+ *
+ * 255 questions per request measured; the whole 757-tag topic vocabulary is
+ * therefore 3 requests per document.
+ */
+export function jev(model = process.env.JEV_MODEL ?? 'jev-latest'): MultiSystem {
+  return systemOneNoul(model, {
+    baseUrl: process.env.TYPESAFE_BASE_URL ?? 'https://api.typesafe.ai/v1',
+    apiKey: process.env.TYPESAFE_API_KEY,
+    maxQuestions: 255,
+    id: `jev:${model}`,
+  })
+}
+
+/**
+ * Cosine similarity over the tag embeddings — no model call at all.
+ *
+ * The free floor: whatever retrieve-then-classify would pick before any model
+ * sees it. Only meaningful on an embedded facet; on a non-embedded one every
+ * candidate carries distance 0 and the scores say nothing.
+ */
+export function cosineNoul(): MultiSystem {
+  return {
+    id: 'cosine:cohere-embed-v4',
+    note: 'cosine similarity over tag embeddings — no model call',
+    async apply(_state, candidates) {
+      if (!candidates.length) return { scores: {}, error: 'no candidates' }
+      const embedded = candidates.filter((c) => c.distance !== 0).length
+      if (!embedded) {
+        return {
+          scores: {},
+          error: 'facet has no tag embeddings — cosine has nothing to rank',
+        }
+      }
+      const scores: Record<string, number> = {}
+      for (const c of candidates) scores[c.label] = 1 - c.distance
+      return { scores }
+    },
+  }
+}
+
+/** Multi-label systems by id, for `--generators` in noul mode. */
+export function multiSystemsFromIds(ids: string[]): MultiSystem[] {
+  return ids.map((id) => {
+    const [kind, ...rest] = id.split(':')
+    const model = rest.join(':')
+    if (kind === 'jev') return jev(model || undefined)
+    if (kind === 'cosine') return cosineNoul()
+    if (kind === 'systemone') return systemOneNoul(model)
+    if (kind === 'bedrock') return bedrockNoul(model)
+    if (kind === 'llm') return llmNoul(model, { apiKey: process.env.OPENAI_API_KEY })
+    if (kind === 'gw') {
+      return llmNoul(model, { baseUrl: GATEWAY, apiKey: gatewayKey(), maxTokens: 4000 })
+    }
+    throw new Error(
+      `unknown multi-system id "${id}" (use jev:<model>, cosine, systemone:<model>, bedrock:<profile>, llm:<model>, gw:<model>)`,
+    )
+  })
 }
 
 /**

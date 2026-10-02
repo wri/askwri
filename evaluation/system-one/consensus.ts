@@ -22,6 +22,7 @@ import { writeFileSync } from 'node:fs'
 import {
   defaultGenerators,
   defaultMultiGenerators,
+  multiSystemsFromIds,
   systemsFromIds,
   type MultiPick,
   type Pick,
@@ -52,7 +53,8 @@ const OUT =
   arg('out') ??
   `evaluation/system-one/silver-${new Date().toISOString().slice(0, 10)}-${FACET}-top${TOP_N}.jsonl`
 
-const generators: System[] = GENERATORS ? systemsFromIds(GENERATORS.split(',')) : defaultGenerators()
+// Built inside mainChoice: at module load the mode is unknown, and `--generators`
+// may name multi-label kinds (jev, cosine) that systemsFromIds does not handle.
 
 // Overridable via --instruction so question variants can be compared on the
 // identical documents. The default is deliberately silent about granularity —
@@ -93,6 +95,7 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 }
 
 async function mainChoice() {
+  const generators: System[] = GENERATORS ? systemsFromIds(GENERATORS.split(',')) : defaultGenerators()
   const goldMap = await loadGold(FACET)
   const goldDistinct = new Set(goldMap.values())
   const goldUsable = goldDistinct.size >= 3
@@ -332,7 +335,7 @@ async function mainNoul() {
   // The reference labels are loaded regardless of onlyWithGold so every label
   // row can carry them where the facet has them — that is what checks the label.
   const goldMap = await loadGold(FACET)
-  const generators = defaultMultiGenerators()
+  const generators = GENERATORS ? multiSystemsFromIds(GENERATORS.split(',')) : defaultMultiGenerators()
   const ids = generators.map((g) => g.id)
 
   console.log(`\nfacet=${FACET}  docs=${rows.length}  candidates=${rows[0]?.candidates.length ?? 0}`)
