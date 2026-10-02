@@ -2,7 +2,8 @@
  * Generator consensus — silver labels, and the validation of the method.
  *
  * Runs several strong models over the same documents and reports how much they
- * agree. Where the facet has real gold (`office`, `doc_type`) it also measures
+ * agree. Where the facet has varied legacy reference labels (`office`,
+ * `doc_type`) it also measures
  * each generator against it, which is the only way to know what a unanimous
  * label is actually worth.
  *
@@ -95,9 +96,9 @@ async function mainChoice() {
   const goldMap = await loadGold(FACET)
   const goldDistinct = new Set(goldMap.values())
   const goldUsable = goldDistinct.size >= 3
-  // When the facet has real gold, score only documents that HAVE it. A row
-  // without gold scores as a miss in every denominator otherwise: on office
-  // that silently deflated accuracy by ~18 points (65.9% vs the true 83.3%).
+  // When the facet has varying legacy labels, score only documents that HAVE
+  // one. A row without a label scores as a miss in every denominator otherwise:
+  // on office that silently deflated accuracy by ~18 points (65.9% vs 83.3%).
   const rows = await loadRows({
     facet: FACET,
     topN: TOP_N,
@@ -198,7 +199,7 @@ async function mainChoice() {
 
   // ── per-generator, against gold where gold is real ────────────────────────
   if (goldUsable) {
-    console.log(`\nper-generator accuracy vs gold (real gold on this facet)`)
+    console.log(`\nper-generator agreement vs the legacy reference labels`)
     for (const id of ids) {
       const answered = results.filter((r) => r.picks[id]?.label)
       const right = answered.filter((r) => r.picks[id].label === r.gold)
@@ -328,8 +329,8 @@ function mean(xs: number[]): number {
 
 async function mainNoul() {
   const rows = await loadRows({ facet: FACET, topN: TOP_N, limit: LIMIT, onlyWithGold: false })
-  // Gold is loaded regardless of onlyWithGold so every label row can carry it
-  // when the facet has real gold — that is what validates the label.
+  // The reference labels are loaded regardless of onlyWithGold so every label
+  // row can carry them where the facet has them — that is what checks the label.
   const goldMap = await loadGold(FACET)
   const generators = defaultMultiGenerators()
   const ids = generators.map((g) => g.id)

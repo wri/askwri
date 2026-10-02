@@ -180,26 +180,48 @@ instrument — and it cannot be used to grade a model, since that would be circu
 
 ---
 
-## 6. Ground truth: what exists, and three traps
+## 6. Ground truth: there isn't any
 
-The harness scores against `document_tags` where `source = 'external'` — tags imported from
-WRI's own metadata. What actually exists:
+The harness scores against `document_tags` where `source = 'external'`. **These are not
+verified labels.** They were force-applied across the founding corpus — then a single
+decarbonization-related collection — and carried over unchanged into today's
+206-document corpus. Nothing verified them and no intelligence produced them. They are
+legacy.
 
-| Facet | Distinct `external` values | Rows | Usable? |
+| Facet | Distinct `external` values | Rows | What it actually is |
 |---|---|---|---|
-| `office` | 9 (WRI Global 46.7%, India, China, México, US, Brasil, Colombia, Africa, Indonesia) | 167 | **Yes** |
-| `doc_type` | 7 (Working Paper 54.2%, Report, Technical Note, …) | 166 | **As a label set yes; as a *target* no — see §8.2** |
-| `topic` | **1** — "Transport decarbonization" | 146 | **No** |
-| `program` | **1** — "Cities" | 167 | **No** |
+| `office` | 9 (WRI Global 46.7%, India, China, México, US, Brasil, Colombia, Africa, Indonesia) | 167 | legacy assignment — varied, but unverified |
+| `doc_type` | 7 (Working Paper 54.2%, Report, Technical Note, …) | 166 | legacy assignment — varied, but unverified |
+| `topic` | **1** — "Transport decarbonization" | 146 | degenerate batch stamp |
+| `program` | **1** — "Cities" | 167 | degenerate batch stamp |
 
-`topic` and `program` are not label sets. They are a portfolio stamp smeared across an import
-batch: 146 unrelated documents (electric school buses, air-quality tooling, road safety,
-informal workers) all carry "Transport decarbonization". `source='human'` exists in the schema
-and the admin UI writes it, but there are **15 human rows total across 11 documents, and none
-of them are `topic`.**
+`topic` and `program` are visibly degenerate: one value each, smeared across a whole
+batch. 146 unrelated documents (electric school buses, air-quality tooling, road safety,
+informal workers) all carry "Transport decarbonization".
 
-**Three traps that produced wrong conclusions during this work, recorded so they are not
+**`office` and `doc_type` are therefore the best available reference, not ground truth.**
+Every figure in §8 should be read as *agreement with a legacy assignment*, not as
+correctness. Relative comparisons between models stay valid, because every model faces
+the same labels. Absolute levels do not mean what the word "accuracy" implies, and the
+residual error may be the legacy label being wrong rather than the model.
+
+Corroboration that the legacy column is only partly meaningful: on `office` every
+generator beats its majority-class baseline substantially (82% against 46.7%), so the
+column tracks reality for most documents. On `doc_type` every system falls *below* its
+majority baseline (40% at best against 54%) — which is what a legacy column that no
+longer tracks anything derivable looks like.
+
+`source='human'` exists in the schema and the admin UI writes it, but there are **15
+human rows total across 11 documents, and none of them are `topic`.**
+
+**Four traps that produced wrong conclusions during this work, recorded so they are not
 repeated.**
+
+0. **A column called `external` is not ground truth.** This document asserted "WRI's own
+   metadata" until the provenance was corrected: the values are a legacy force-applied
+   stamp with nothing verifying them. Anything scored against them measures *agreement*,
+   not correctness. Check provenance before calling labels authoritative — the column name
+   does not tell you.
 
 1. **A single-valued gold set reads as a model failure.** The first `topic` run scored every
    model at 6-9% and looked like a damning result. It was meaningless: the question asked four
@@ -237,7 +259,7 @@ recall is a real ceiling on `topic` (though it could not be measured, having no 
 
 ## 8. Results
 
-### 8.1 `office` — the only clean facet
+### 8.1 `office` — the only facet with varied reference labels
 
 167 documents, 9 classes, majority-class baseline **46.7%**, candidate recall 100%. Five
 passes for the first three systems, three for the last two.
@@ -348,9 +370,9 @@ hand-picked"); these measurements are what make it non-negotiable.
 
 ### 8.4 Validation of the silver-label method (`office`) — negative result
 
-The plan was to validate consensus silver labels on `office`, where real gold exists,
-*before* trusting them on `topic`. This is that validation: four generators, the
-single-label question, 167 documents carrying real gold.
+The plan was to validate consensus silver labels on `office`, where varied reference labels
+exist, *before* trusting them on `topic`. This is that validation: four generators, the
+single-label question, 167 documents.
 
 | Generator | accuracy |
 |---|---|
@@ -362,20 +384,28 @@ single-label question, 167 documents carrying real gold.
 
 **Consensus buys nothing over the best single model.** 80.7% is *worse* than `opus`
 alone at 82.0%, and only modestly better than `sonnet`. Four models spanning three
-independent families agreeing does not make the answer correct.
+independent families agreeing does not make the answer better.
 
-The cause is correlated error: the generators agree on a wrong label 19% of the time,
-because they read the same ambiguous summary and fail the same way. On `office` that
-is the "WRI Global" default (46.7% of the corpus); on `topic` the analogous trap is the
-hypernym/hyponym pairs (`Pollution` / `Air Pollution`). Agreement is not evidence of
-correctness when the error is systematic and shared.
+Note what the denominator is: every figure here is agreement with the **legacy
+column**, not correctness (§6). So the measurement is "consensus reproduces the
+legacy assignment no better than the best single generator does" — which is the
+comparison that matters, since all four models face the same labels.
 
-**Consequence for the silver-label plan: it does not hold up.** A set at 80.7%
-correct carries a 19% error rate. The model differences this workstream is trying to
-measure are 1-3 points. Label error is roughly an order of magnitude larger than the
-signal, so any model comparison scored against those labels would be measuring label
-noise rather than models. Silver labels are usable as a *prior* — a starting point for
-human review — but not as the reference against which models are validated.
+The cause is correlated error: the generators converge on the same answer 19% of the
+time where that answer disagrees with the reference, because they read the same
+ambiguous summary and fail the same way. On `office` that is the "WRI Global" default
+(46.7% of the corpus); on `topic` the analogous trap is the hypernym/hyponym pairs
+(`Pollution` / `Air Pollution`). Agreement is not evidence of correctness when the
+error is systematic and shared.
+
+**Consequence for the silver-label plan: it does not hold up.** A set that agrees with
+the reference 80.7% of the time disagrees 19% of the time — and that is measured
+against a legacy column, so its true error against reality could be worse. The model
+differences this workstream is trying to measure are 1-3 points. Label noise is
+roughly an order of magnitude larger than the signal, so any model comparison scored
+against those labels would be measuring the labels. Silver labels are usable as a
+*prior* — a starting point for human review — but not as the reference against which
+models are validated.
 
 Recording this because it is the third time on this workstream that an unvalidated
 label source produced a conclusion that did not survive checking. Validating before

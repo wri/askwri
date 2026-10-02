@@ -25,7 +25,14 @@ export type Row = {
   candidates: Candidate[]
 }
 
-/** The gold label per document: WRI's own imported metadata, one value each. */
+/**
+ * The reference label per document.
+ *
+ * NOT ground truth: these are legacy values force-applied across the founding
+ * corpus and never verified. Varied on `office`/`doc_type`, degenerate (one
+ * value) on `topic`/`program`. Scoring against them measures agreement with a
+ * legacy assignment, not correctness.
+ */
 export async function loadGold(facet: string): Promise<Map<string, string>> {
   const { rows } = await pool.query(
     `SELECT dt.document_id, t.value_id AS gold

@@ -69,15 +69,22 @@ LLM's. Repeating is cheap for the System One side.
 
 ## Ground truth, and its limits
 
-Gold is `document_tags.source = 'external'` — the tags imported from WRI's own
-metadata. Exactly one value per document per facet.
+Gold is `document_tags.source = 'external'`. **These are legacy labels, not verified
+truth.** They were force-applied across the founding corpus (then a single
+decarbonization-related collection) and carried over unchanged. Exactly one value
+per document per facet, and nothing checked any of them.
 
-| Facet | Distinct values | Usable? |
+| Facet | Distinct values | What it is |
 |---|---|---|
-| `office` | 9 | yes |
-| `doc_type` | 7 | yes, **but see the caveat** |
-| `topic` | **1** | no — one value, `Transport decarbonization`, smeared across a batch |
-| `program` | **1** | no — one value, `Cities` |
+| `office` | 9 | legacy assignment — varied, unverified |
+| `doc_type` | 7 | legacy assignment — varied, unverified; also not derivable from the input, see below |
+| `topic` | **1** | degenerate — `Transport decarbonization` smeared across a batch |
+| `program` | **1** | degenerate — `Cities` |
+
+Read every accuracy number here as **agreement with a legacy assignment**. Model
+comparisons against each other stay valid, since all of them face the same labels.
+Absolute levels do not mean correctness, and some of the residual error is probably
+the label being wrong rather than the model.
 
 `topic` and `program` are not label sets; they are a portfolio stamp applied to
 an import batch. The harness refuses to run on a facet with fewer than three
@@ -158,8 +165,8 @@ one's thinking setting, timestamp — and `not_ground_truth: 'model consensus, n
 human labels'`. Documents where any generator failed are **skipped**, because
 otherwise "unanimous" would mean "the two that replied agreed".
 
-**Validated against real gold, and it does not hold up.** On `office`, where gold
-exists, four generators spanning three families reach 80.7% when unanimous, while
+**Validated against varied reference labels, and it does not hold up.** On `office`,
+where the legacy column varies, four generators spanning three families reach 80.7% when unanimous, while
 the best single generator reaches 82.0% alone. Consensus buys nothing, because the
 errors are correlated: all four fail the same way on the same ambiguous input.
 
@@ -256,7 +263,7 @@ confidence is non-monotone in the middle bins so it carries no usable ordering.
 
 Single facet, single corpus. Directional.
 
-### Consensus as a label source — `office`, 167 docs with real gold
+### Consensus as a label source — `office`, 167 docs with reference labels
 
 Four generators, single-label question:
 

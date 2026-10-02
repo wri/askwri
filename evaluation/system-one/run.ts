@@ -1,10 +1,14 @@
 /**
  * System One eval harness — single-label classification against a facet's
- * authoritative `external` tags.
+ * legacy `external` tags.
  *
- * The gold set is the tag WRI's own metadata assigns to each document
- * (`document_tags.source = 'external'`, exactly one per document per facet).
- * It needs no labelling work and no LLM judge.
+ * The reference labels are whatever `document_tags.source = 'external'` holds
+ * (exactly one per document per facet). These are NOT ground truth: they were
+ * force-applied across the founding corpus and never verified. Varied on
+ * `office`/`doc_type`, degenerate on `topic`/`program`. Results measure
+ * agreement with a legacy assignment, not correctness — see README.md.
+ *
+ * Nothing here needs labelling work or an LLM judge.
  *
  * Every system sees the identical state (the document basis the worker uses),
  * the identical question, and the identical candidate set, so differences are
