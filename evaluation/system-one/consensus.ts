@@ -397,6 +397,14 @@ async function mainNoul() {
   // the two reporting paths used to disagree about the same failure.
   const complete = results.filter((r) => ids.every((id) => !r.scores[id]?.error))
   const skipped = results.length - complete.length
+  // Guarding rows.length is not enough: every generator can fail on every
+  // document, and then `exact / complete.length` is 0/0 and the report and
+  // artifact fill with NaN instead of failing.
+  if (!complete.length) {
+    throw new Error(
+      `every generator failed on all ${results.length} document(s) for facet '${FACET}' — nothing to aggregate`,
+    )
+  }
 
   // ── failures ──────────────────────────────────────────────────────────────
   console.log(`\nfailures`)
