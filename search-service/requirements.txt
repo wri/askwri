@@ -30,9 +30,9 @@ beautifulsoup4==4.15.0
     # via llama-index-readers-file
 bm25s==0.3.10
     # via llama-index-retrievers-bm25
-boto3==1.43.83
+boto3==1.43.104
     # via -r requirements.in
-botocore==1.43.83
+botocore==1.43.104
     # via
     #   boto3
     #   s3transfer
@@ -118,9 +118,9 @@ joblib==1.5.3
     # via nltk
 langdetect==1.0.9
     # via -r requirements.in
-llama-index==0.14.24
+llama-index==0.14.25
     # via -r requirements.in
-llama-index-core==0.14.24
+llama-index-core==0.14.25
     # via
     #   llama-index
     #   llama-index-embeddings-openai
@@ -133,9 +133,9 @@ llama-index-instrumentation==0.5.0
     # via llama-index-workflows
 llama-index-llms-openai==0.7.10
     # via llama-index
-llama-index-readers-file==0.6.0
+llama-index-readers-file==0.7.0
     # via -r requirements.in
-llama-index-retrievers-bm25==0.7.1
+llama-index-retrievers-bm25==0.8.0
     # via -r requirements.in
 llama-index-workflows==2.22.2
     # via llama-index-core
@@ -157,7 +157,7 @@ nltk==3.10.0
     # via
     #   llama-index
     #   llama-index-core
-numpy==2.5.2
+numpy==2.5.3
     # via
     #   -r requirements.in
     #   bm25s
@@ -190,9 +190,9 @@ propcache==0.5.2
     # via
     #   aiohttp
     #   yarl
-psycopg==3.3.4
+psycopg==3.3.6
     # via -r requirements.in
-psycopg-binary==3.3.4
+psycopg-binary==3.3.6
     # via psycopg
 psycopg-pool==3.3.1
     # via psycopg
@@ -304,7 +304,7 @@ urllib3==2.7.0
     # via
     #   botocore
     #   requests
-uvicorn==0.52.4
+uvicorn==0.54.0
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
