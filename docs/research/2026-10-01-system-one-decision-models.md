@@ -79,7 +79,7 @@ before that was understood (see §9, Corrections).
 
 | Model | Origin | Weights | Reachable from here | Cost |
 |---|---|---|---|---|
-| **Jev** | TypeSafe AI, launched 2026-09-15 | closed, hosted only | **No** — gated early access | $0.042 / MTok in, output free |
+| **Jev** | TypeSafe AI, launched 2026-09-15 | closed, hosted only | **Yes** — hosted, key verified | $0.042 / MTok in, output free |
 | **djev** | Maisa, on Google DiffusionGemma | Apache-2.0 local stack exists | **Yes** — lunaroute gateway | free via gateway |
 | **kev-4b** | Jared Palmer, LoRA + pointer head on Qwen3.5-4B | Apache-2.0 | **Yes** — lunaroute gateway | free via gateway |
 | **Kev 0.8B / 9B / 27B** | same project | Apache-2.0 | Not served; self-host available | self-host |
@@ -89,7 +89,12 @@ before that was understood (see §9, Corrections).
 Notes on each:
 
 - **Jev** is the original and consistently tops independent benchmarks on calibration. It is
-  closed and gated, so it is not testable here and not a dependency to build on.
+  closed and hosted, but reachable: a `TYPESAFE_API_KEY` is configured and `GET /v1/models`
+  returns `jev-latest` and `jev-preview`. Measured limits (2026-10-01): **255 `noul`
+  questions per request accepted**, `choice` hard-capped at 255 options, and every call in
+  the 20-255 range returned in **0.1-0.2s**. There is no 32-question cap here, unlike djev.
+  That makes the entire 757-tag `topic` vocabulary reachable as calibrated per-tag
+  probabilities in 3 requests per document, for roughly $0.12 of input across the corpus.
 - **djev** is the only candidate of this set with native image input. It is measurably the
   weakest of the reachable models on both accuracy and calibration (see §8).
 - **kev** is the interesting one: Apache-2.0, four sizes, trains on your own labelled
