@@ -158,21 +158,24 @@ async function mainChoice() {
     const u = usableOf(r)
     return u.length === ids.length && new Set(u).size === 1
   })
-  // Exactly one dissenter, and everyone answered. Written as `>= ids.length - 1`
-  // this became "at least 1 of 2 agree" with a two-generator run, which counts a
-  // 1-1 split as agreement.
-  const majority3 = results.filter((r) => {
+  // Strict majority of a full answer set. The threshold has to scale with the
+  // generator count, and two earlier attempts did not: `>= ids.length - 1`
+  // counted a 1-1 split as agreement with two generators, and `=== ids.length - 1`
+  // counted *only* disagreements. At two generators this means both must agree,
+  // at four it means three or more, which is what "all but one" was meant to say.
+  const majorityNeeded = Math.floor(ids.length / 2) + 1
+  const majorityAgree = results.filter((r) => {
     const u = usableOf(r)
     if (u.length !== ids.length) return false
     const counts = new Map<string, number>()
     for (const l of u) counts.set(l, (counts.get(l) ?? 0) + 1)
-    return Math.max(...counts.values()) === ids.length - 1
+    return Math.max(...counts.values()) >= majorityNeeded
   })
 
   console.log(
     `\nagreement\n` +
       `   unanimous (all ${ids.length}):      ${unanimous.length}/${results.length}  ${((unanimous.length / results.length) * 100).toFixed(0)}%\n` +
-      `   at least ${ids.length - 1} of ${ids.length} agree:  ${majority3.length}/${results.length}  ${((majority3.length / results.length) * 100).toFixed(0)}%`,
+      `   at least ${majorityNeeded} of ${ids.length} agree:  ${majorityAgree.length}/${results.length}  ${((majorityAgree.length / results.length) * 100).toFixed(0)}%`,
   )
 
   // pairwise agreement, and the same-family / cross-family split
@@ -297,7 +300,7 @@ async function mainChoice() {
     goldNote,
     generators: generators.map((g) => ({ id: g.id, family: family(g.id), note: g.note })),
     unanimous: unanimous.length,
-    agreeAllButOne: majority3.length,
+    agreeAllButOne: majorityAgree.length,
     sameFamilyAgreementPct: rate(sameFam),
     crossFamilyAgreementPct: rate(crossFam),
     pairs,

@@ -257,10 +257,12 @@ export function embeddingBaseline(): System {
  * A greedy `\{[\s\S]*\}` spans from the first brace to the last, so any prose
  * brace around the object breaks the parse. These replies arrive from a CLI that
  * may prepend warnings, and losing a label to that is avoidable.
+ *
+ * A stray `}` in prose is ignored rather than decrementing depth, which would
+ * leave depth negative and make every later `{` invisible — the same label loss
+ * by a different route.
  */
-function extractJsonObject(text: string): string | null {
-  const trimmed = text.trim()
-  if (trimmed.startsWith('{')) return trimmed
+export function extractJsonObject(text: string): string | null {
   let start = -1
   let depth = 0
   let inString = false
@@ -277,7 +279,7 @@ function extractJsonObject(text: string): string | null {
     else if (ch === '{') {
       if (depth === 0) start = i
       depth++
-    } else if (ch === '}') {
+    } else if (ch === '}' && depth > 0) {
       depth--
       if (depth === 0 && start >= 0) return text.slice(start, i + 1)
     }
