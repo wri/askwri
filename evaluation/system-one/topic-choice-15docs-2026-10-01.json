@@ -1,0 +1,487 @@
+{
+  "harness": "evaluation/system-one/consensus",
+  "ranAt": "2026-10-01T16:51:13.048Z",
+  "facet": "topic",
+  "topN": 20,
+  "question": "Which single topic value is this document's primary topic? Answer with exactly one of the candidate values.",
+  "documents": 15,
+  "candidatesPerDoc": 20,
+  "goldNote": "1 distinct value (Transport decarbonization) — a batch stamp, not scoreable",
+  "generators": [
+    {
+      "id": "bedrock:us.anthropic.claude-opus-5-5",
+      "family": "anthropic",
+      "note": "bedrock us-east-2, thinking=adaptive effort=high"
+    },
+    {
+      "id": "bedrock:us.anthropic.claude-sonnet-5-5",
+      "family": "anthropic",
+      "note": "bedrock us-east-2, thinking=adaptive effort=high"
+    },
+    {
+      "id": "llm:glm-5.3",
+      "family": "zhipu",
+      "note": "https://gw.lunaroute.com/v1 — json_schema, production worker/llm.py shape, provider default thinking"
+    },
+    {
+      "id": "llm:deepseek-4.1-flash",
+      "family": "deepseek",
+      "note": "https://gw.lunaroute.com/v1 — json_schema, production worker/llm.py shape, reasoning_effort=high"
+    }
+  ],
+  "unanimous": 8,
+  "agreeAllButOne": 12,
+  "sameFamilyAgreementPct": 93.33333333333333,
+  "crossFamilyAgreementPct": 68,
+  "pairs": [
+    {
+      "a": "bedrock:us.anthropic.claude-opus-5-5",
+      "b": "bedrock:us.anthropic.claude-sonnet-5-5",
+      "same": true,
+      "n": 15,
+      "agree": 14
+    },
+    {
+      "a": "bedrock:us.anthropic.claude-opus-5-5",
+      "b": "llm:glm-5.3",
+      "same": false,
+      "n": 15,
+      "agree": 10
+    },
+    {
+      "a": "bedrock:us.anthropic.claude-opus-5-5",
+      "b": "llm:deepseek-4.1-flash",
+      "same": false,
+      "n": 15,
+      "agree": 10
+    },
+    {
+      "a": "bedrock:us.anthropic.claude-sonnet-5-5",
+      "b": "llm:glm-5.3",
+      "same": false,
+      "n": 15,
+      "agree": 10
+    },
+    {
+      "a": "bedrock:us.anthropic.claude-sonnet-5-5",
+      "b": "llm:deepseek-4.1-flash",
+      "same": false,
+      "n": 15,
+      "agree": 10
+    },
+    {
+      "a": "llm:glm-5.3",
+      "b": "llm:deepseek-4.1-flash",
+      "same": false,
+      "n": 15,
+      "agree": 11
+    }
+  ],
+  "results": [
+    {
+      "document_id": "00a1741a-8ed1-4a42-b03d-7e9a9dc3a153",
+      "title": "Stronger NDCs With Cities, States, and Regions: Recommendations for National Governments",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Climate Governance",
+          "confidence": 0.6,
+          "ms": 5153
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Climate Governance",
+          "confidence": 0.5,
+          "ms": 2346
+        },
+        "llm:glm-5.3": {
+          "label": "UNFCCC",
+          "confidence": 0.45,
+          "ms": 106789
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Climate Governance",
+          "confidence": 0.86,
+          "ms": 2044
+        }
+      }
+    },
+    {
+      "document_id": "00be4a1d-33cc-4b56-a4d5-d15af0a5cc27",
+      "title": "驶向2035: 中国新能源重卡在区域与长途运输场景中的推广潜力研究",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Zero-Emission Trucks",
+          "confidence": 0.93,
+          "ms": 2826
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Zero-Emission Trucks",
+          "confidence": 0.93,
+          "ms": 1427
+        },
+        "llm:glm-5.3": {
+          "label": "Zero-Emission Trucks",
+          "confidence": 0.95,
+          "ms": 43158
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Zero-Emission Trucks",
+          "confidence": 0.96,
+          "ms": 717
+        }
+      }
+    },
+    {
+      "document_id": "011e3390-85a1-4169-9be8-4e8c5f28e95b",
+      "title": "Real-World Electric Bus Operation: Trend in Technology, Performance, Degradation, and Lifespan of Batteries",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "EV Batteries",
+          "confidence": 0.6,
+          "ms": 4588
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "EV Batteries",
+          "confidence": 0.62,
+          "ms": 2823
+        },
+        "llm:glm-5.3": {
+          "label": "EV Batteries",
+          "confidence": 0.85,
+          "ms": 198823
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "EV Batteries",
+          "confidence": 0.86,
+          "ms": 1188
+        }
+      }
+    },
+    {
+      "document_id": "01829576-ced9-45a7-83d4-4cf2deb3e9e2",
+      "title": "ImpactAr Tool: Valuing Air Quality Health Impacts of Urban Bus Fleet Changes in Brazil",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Air Pollution",
+          "confidence": 0.55,
+          "ms": 8579
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Air Pollution",
+          "confidence": 0.5,
+          "ms": 3588
+        },
+        "llm:glm-5.3": {
+          "label": "Pollution",
+          "confidence": 0.6,
+          "ms": 106794
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Air Pollution",
+          "confidence": 0.87,
+          "ms": 1213
+        }
+      }
+    },
+    {
+      "document_id": "0481cf8b-296c-4df2-b93b-c8d6d33140f3",
+      "title": "安全绿色出行设计指南",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Road Safety",
+          "confidence": 0.62,
+          "ms": 2590
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Road Safety",
+          "confidence": 0.6,
+          "ms": 1437
+        },
+        "llm:glm-5.3": {
+          "label": "Road Safety",
+          "confidence": 0.88,
+          "ms": 199169
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Road Safety",
+          "confidence": 0.72,
+          "ms": 2255
+        }
+      }
+    },
+    {
+      "document_id": "059d1c3b-da8f-414f-9e80-22126cb056a9",
+      "title": "Accelerating Innovation in Urban Service Delivery in Indian Cities: Lessons From TheCityFix Labs India",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Public-Private Partnerships",
+          "confidence": 0.45,
+          "ms": 6841
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Urban Infrastructure",
+          "confidence": 0.4,
+          "ms": 2147
+        },
+        "llm:glm-5.3": {
+          "label": "Urban Efficiency",
+          "confidence": 0.6,
+          "ms": 63216
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Urban Efficiency",
+          "confidence": 0.85,
+          "ms": 6845
+        }
+      }
+    },
+    {
+      "document_id": "082cb3af-36b5-498c-b327-21b7bd011e53",
+      "title": "拥堵收费和低排放区国际经验研究",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Congestion",
+          "confidence": 0.6,
+          "ms": 4458
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Congestion",
+          "confidence": 0.62,
+          "ms": 2435
+        },
+        "llm:glm-5.3": {
+          "label": "Congestion",
+          "confidence": 0.65,
+          "ms": 39113
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Urban Mobility",
+          "confidence": 0.72,
+          "ms": 34801
+        }
+      }
+    },
+    {
+      "document_id": "0a64a194-9ff0-47b5-bcf6-4e0aa5d81b36",
+      "title": "Dataset of U.S. School Bus Depots",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "School Buses",
+          "confidence": 0.55,
+          "ms": 5163
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "School Buses",
+          "confidence": 0.62,
+          "ms": 1838
+        },
+        "llm:glm-5.3": {
+          "label": "School Buses",
+          "confidence": 0.78,
+          "ms": 24717
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Electric School Buses",
+          "confidence": 0.88,
+          "ms": 1783
+        }
+      }
+    },
+    {
+      "document_id": "0a8a9a04-1e47-4820-8ac4-0e71a6a8875f",
+      "title": "Assessing Urban Road Networks Using Geospatial Metrics",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Urban Road Infrastructure",
+          "confidence": 0.6,
+          "ms": 2972
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Urban Road Infrastructure",
+          "confidence": 0.5,
+          "ms": 1734
+        },
+        "llm:glm-5.3": {
+          "label": "Urban Road Infrastructure",
+          "confidence": 0.65,
+          "ms": 28893
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Urban Road Infrastructure",
+          "confidence": 0.86,
+          "ms": 1384
+        }
+      }
+    },
+    {
+      "document_id": "0ae23d7a-5801-4bf2-95c4-a6e45311fae6",
+      "title": "Assessing Financing Challenges for Implementing the Large-scale Electric Bus Program in India",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Finance",
+          "confidence": 0.55,
+          "ms": 4613
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Finance",
+          "confidence": 0.4,
+          "ms": 2970
+        },
+        "llm:glm-5.3": {
+          "label": "Electric Mobility",
+          "confidence": 0.85,
+          "ms": 203053
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Electric Mobility",
+          "confidence": 0.78,
+          "ms": 7720
+        }
+      }
+    },
+    {
+      "document_id": "0d5ae93b-23bc-4abe-8507-f84b8cea3533",
+      "title": "Including the Excluded: Supporting Informal Workers for More Equal and Productive Cities in the Global South",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Employment",
+          "confidence": 0.45,
+          "ms": 5553
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Employment",
+          "confidence": 0.5,
+          "ms": 1159
+        },
+        "llm:glm-5.3": {
+          "label": "Employment",
+          "confidence": 0.62,
+          "ms": 202049
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Employment",
+          "confidence": 0.82,
+          "ms": 3122
+        }
+      }
+    },
+    {
+      "document_id": "0db92f06-9f6f-4659-bccf-f316038a1550",
+      "title": "青岛低碳和可持续交通发展战略研究",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Low-Carbon Transport",
+          "confidence": 0.62,
+          "ms": 2570
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Low-Carbon Transport",
+          "confidence": 0.6,
+          "ms": 2344
+        },
+        "llm:glm-5.3": {
+          "label": "Low-Carbon Transport",
+          "confidence": 0.88,
+          "ms": 20146
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Low-Carbon Transport",
+          "confidence": 0.92,
+          "ms": 1606
+        }
+      }
+    },
+    {
+      "document_id": "0e3a739a-bc93-4c8e-aab6-21f63443e5c9",
+      "title": "Techno-Economic Feasibility Analysis of Zero-Emission Trucks in Urban and Regional Delivery Use Cases: A Case Study of Guangdong Province, China",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Zero-Emission Trucks",
+          "confidence": 0.9,
+          "ms": 2525
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Zero-Emission Trucks",
+          "confidence": 0.86,
+          "ms": 2611
+        },
+        "llm:glm-5.3": {
+          "label": "Zero-Emission Trucks",
+          "confidence": 0.92,
+          "ms": 6124
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Zero-Emission Trucks",
+          "confidence": 0.92,
+          "ms": 1255
+        }
+      }
+    },
+    {
+      "document_id": "0e47113a-790b-49fc-b851-787d99b59807",
+      "title": "Scaling Up Investment for Sustainable Urban Infrastructure: A Guide to National and Subnational Reform",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Public Finance",
+          "confidence": 0.85,
+          "ms": 2472
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Public Finance",
+          "confidence": 0.62,
+          "ms": 1389
+        },
+        "llm:glm-5.3": {
+          "label": "Public Finance",
+          "confidence": 0.85,
+          "ms": 10366
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Public Finance",
+          "confidence": 0.95,
+          "ms": 1498
+        }
+      }
+    },
+    {
+      "document_id": "0eba8be5-2380-4a30-a066-6bc8b8f38ca8",
+      "title": "Demand Responsive Transit: Understanding Emerging Solutions",
+      "gold": null,
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "Shared Mobility",
+          "confidence": 0.55,
+          "ms": 4807
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "Shared Mobility",
+          "confidence": 0.55,
+          "ms": 2611
+        },
+        "llm:glm-5.3": {
+          "label": "Public Transit",
+          "confidence": 0.78,
+          "ms": 16762
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "Public Transit",
+          "confidence": 0.88,
+          "ms": 1348
+        }
+      }
+    }
+  ]
+}
