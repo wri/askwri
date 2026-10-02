@@ -454,24 +454,59 @@ This again says the 0.7 threshold does not transfer between sources, now across 
 These came out of the same database and hold regardless of which model class is used.
 
 - **757 topic tags, all embedded**; geography 201, office 9, doc_type 8, program 1.
-- **0 of 757 tags have a parent.** The `parent_tag_id` column exists (added by the issue-323
-  migration) but is unused, so the taxonomy is flat while containing both hypernyms and
-  hyponyms (`Pollution` *and* `Air Pollution`, `Congestion` *and* `Urban Mobility`). Asking for
-  "the single primary topic" is therefore under-specified.
-- **Near-duplication is *not* the problem.** Of 286,146 tag pairs, only **9** exceed 0.85 cosine
-  similarity, and 1 exceeds 0.95. They are acronym, case and spelling variants:
-  `PCS` / `PCs` (**cosine 1.000, case-only**), `Net Zero Emissions` / `Net Zero` (0.904),
-  `Public Transportation` / `Public Transit` (0.895), `Carbon Dioxide` / `CO2` (0.877),
-  `GHG Accounting` / `Greenhouse Gas Accounting` (0.861), `Gender Equity` / `Gender Equality`
-  (0.850).
+- **`topic` is flat; `geography` is not.** 0 of 757 `topic` tags have a parent, but **194 of
+  201** `geography` tags do. So the hierarchy machinery works and is in use — just not for
+  topics. `topic` is flat while containing both hypernyms and hyponyms (`Pollution` *and*
+  `Air Pollution`), which is why "the single primary topic" is under-specified there. An
+  earlier draft of this document said the taxonomy was flat, full stop; that was true only of
+  `topic`.
+- **Near-duplication is a real problem, not a marginal one.** An earlier draft claimed it was
+  not, on the basis of a 0.85 cosine cut that returned only 9 pairs. That cut was too strict:
+  `Pollution` / `Air Pollution` sits at 0.819, which shows how compressed this embedding space
+  is. At **0.80 there are 46 pairs** and they are genuine synonyms, not acronym variants:
+  `Cycling` / `Biking`, `Farming` / `Agriculture`, `Renewable Energy` / `Clean Energy`,
+  `Air Pollution` / `Air Quality`, `COVID-19` / `Coronavirus`, `Sustainable Development` /
+  `Sustainability`, `Nutrients` / `Nutrition`, `Human Health` / `Public Health`,
+  `GHG Emissions` / `Carbon Emissions`, `SO2` / `Sulfur Dioxide`, `Cropland` / `Farmlands`,
+  `Energy Efficiency` / `Fuel Efficiency`, and `Food Security` / `Food Insecurity` — those last
+  two arguably opposites sharing a near-identical vector.
 - **Label defects beyond duplication.** Three tags carry **encoding damage** — U+FFFD
   replacement characters where a real character was lost, and unrecoverable in the data:
   `Escaz� Agreement` (was Escazú), `K�ppen Climate Classification` (was Köppen),
   `United Nations Framework Convention on Climate Change�` (trailing). Three more are
   plain misspellings: `Comuting` (and `Commuting` does not exist, so the concept has no
   well-named tag), `Urban Envrionment`, `Battery Data Mangement`. Plus the case-only
-  duplicate `PCS` / `PCs`. Any classifier asked to choose among 757 tags inherits all of
-  this.
+  duplicate `PCS` / `PCs`.
+
+- **23 umbrella tags carry aliases that name their own sibling tags.** `Pollution` has the
+  aliases `air pollution`, `air quality` and `emissions` — and `Air Pollution`, `Air Quality`
+  and `Emissions` are each separate tags. `Climate Change` has `ghg`, `emissions`,
+  `decarbonization`, `carbon` against four sibling tags. Also `Policy` (`governance`,
+  `regulation`), `Health` (`safety`, `public health`), `Equity` (`social equity`,
+  `accessibility`, `environmental justice`), `Buses` (`brt`), `Micromobility`
+  (`shared mobility`), and 16 more. Retrieval embeds label **plus aliases**, so a document is
+  pulled toward both the umbrella and the specific tag at once. This is the mechanical cause of
+  the arbitrary single-label choices measured in §8.3 — not model behaviour.
+
+- **70 of 757 `topic` tags are 4 characters or fewer, nearly all acronyms** — `BESS`, `DAC`,
+  `DRE`, `EAE`, `EbA`, `EIM`, `FLR`, `FLW`, `GEM`, `GPP`, `HERs`, `IFM`, `LFIs`, `LIBs`, `LLA`,
+  `LTD`, `LUE`, `LVC`, `MPAs`, `NRT`, `NZE`, `O3`, `OSW`, `PLFs`, `PMCs`, `REE`, `RTO`, `SAF`,
+  `SBTF`, `SDG`, `SHSs`, `SIPs`, `SMEs`, `TIF`, `ToF`, `VCM`, `VGI`, `WASH`, `ZETs`. They have
+  **no description and mostly no aliases**, so the embedder sees `BESS` and the model sees
+  `BESS`. They are effectively unlabelable.
+
+- **No tag anywhere has a description**: 757/757 `topic`, 201/201 `geography`. And 740 of 757
+  `topic` tags have no aliases. The `description` column is entirely unused, so retrieval
+  embeds bare labels only.
+
+- **527 of 757 `topic` tags (70%) and 161 of 201 `geography` tags have never been attached to
+  any document.** A classifier choosing among 757 options is choosing among 757, of which most
+  have never applied to anything.
+
+- Whitespace and punctuation are clean (0 issues); capitalisation is consistent enough
+  (43 all-caps acronyms, 714 title case, 0 lower).
+
+- `program` has exactly **1** value, so that facet cannot discriminate at all.
 - `embedded_text` for these tags is the bare label — no description or alias boilerplate
   diluting the vectors.
 
