@@ -15,7 +15,7 @@
     "test": "jest",
     "test:ci": "jest --ci --coverage --runInBand",
     "search-service": "cd search-service && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt && ./venv/bin/python -m app.main",
-    "search-service:stop": "bash -c 'if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then kill $(lsof -t -i:8000) 2>/dev/null; echo \"\u2705 Search service stopped\"; else echo \"\u2139\ufe0f  Search service not running\"; fi'",
+    "search-service:stop": "bash -c 'if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then kill $(lsof -t -i:8000) 2>/dev/null; echo \"✅ Search service stopped\"; else echo \"ℹ️  Search service not running\"; fi'",
     "typeorm": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js ./node_modules/typeorm/cli.js",
     "migration:generate": "npm run typeorm -- migration:generate src/db/migrations/Migration -d src/db/migration-data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/db/migration-data-source.ts",
@@ -41,6 +41,7 @@
     "@aws-sdk/client-s3": "^3.997.0",
     "@chakra-ui/react": "^3.31.0",
     "@emotion/react": "^11.14.0",
+    "@modelcontextprotocol/server": "^2.2.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/dom": "^10.4.1",
     "@worldresources/wri-design-systems": "^2.188.0",
@@ -50,6 +51,7 @@
     "docx": "^9.5.1",
     "jose": "^6.2.3",
     "lightningcss": "^1.31.1",
+    "mcp-handler": "^2.2.0",
     "next": "^16.2.4",
     "openai": "^6.22.0",
     "pg": "^8.18.0",
@@ -59,7 +61,8 @@
     "react-icons": "^5.5.0",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.28",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

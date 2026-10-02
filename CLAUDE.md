@@ -104,6 +104,8 @@ Search-service: `RETRIEVAL_BACKEND` (`legacy`|`postgres`), `KEYWORD_BACKEND` (`s
 must match across backfill shell + worker env), `DOCUMENTS_LOCAL_DIR`, `CACHE_DIR`,
 S3 sync vars (`DOCUMENTS_S3_BUCKET`, `DOCUMENTS_S3_PREFIX`, `CACHE_S3_PREFIX`).
 Admin auth: `SESSION_SECRET` (>= 32 chars, required for `/admin`), `ADMIN_API_TOKEN` (optional bearer).
+Assistant-facing search: `MCP_SHARED_KEY` — the shared key for `/api/mcp`. Empty means
+that endpoint refuses everything. See `docs/runbooks/askwri-mcp-connector.md`.
 
 ## Local dev env files (no AWS)
 
