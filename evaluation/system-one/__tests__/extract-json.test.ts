@@ -41,4 +41,15 @@ describe('extractJsonObject', () => {
     expect(extractJsonObject('no json here')).toBeNull()
     expect(extractJsonObject('}{')).toBeNull()
   })
+
+  it('ignores an unbalanced quote in prose before the JSON', () => {
+    // Prose quotes used to flip the string state, after which the real object's
+    // `{` was skipped as string content and the label was lost.
+    expect(extractJsonObject('He said "key {\"value\":\"x\"}')).toBe('{"value":"x"}')
+  })
+
+  it('still reads braces inside a string when the quotes are balanced', () => {
+    expect(extractJsonObject('prefix {"a":"}","b":1}'))
+      .toBe('{"a":"}","b":1}')
+  })
 })

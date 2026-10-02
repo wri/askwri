@@ -275,7 +275,10 @@ export function extractJsonObject(text: string): string | null {
       else if (ch === '"') inString = false
       continue
     }
-    if (ch === '"') inString = true
+    // Quote state only matters inside an object. Prose quotes before the JSON
+    // would otherwise flip `inString` and make the real object's `{` look like
+    // string content — a third route to the same silent label loss.
+    if (ch === '"' && depth > 0) inString = true
     else if (ch === '{') {
       if (depth === 0) start = i
       depth++

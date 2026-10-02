@@ -300,7 +300,10 @@ async function mainChoice() {
     goldNote,
     generators: generators.map((g) => ({ id: g.id, family: family(g.id), note: g.note })),
     unanimous: unanimous.length,
-    agreeAllButOne: majorityAgree.length,
+    // Names the actual rule: a strict majority of a full answer set. At two
+    // generators that is 2-of-2, which `unanimous` already reports, so this is
+    // only informative at three or more.
+    agreementMajority: majorityAgree.length,
     sameFamilyAgreementPct: rate(sameFam),
     crossFamilyAgreementPct: rate(crossFam),
     pairs,
@@ -397,22 +400,26 @@ async function mainNoul() {
   // the two reporting paths used to disagree about the same failure.
   const complete = results.filter((r) => ids.every((id) => !r.scores[id]?.error))
   const skipped = results.length - complete.length
-  // Guarding rows.length is not enough: every generator can fail on every
-  // document, and then `exact / complete.length` is 0/0 and the report and
-  // artifact fill with NaN instead of failing.
-  if (!complete.length) {
-    throw new Error(
-      `every generator failed on all ${results.length} document(s) for facet '${FACET}' — nothing to aggregate`,
-    )
-  }
 
   // ── failures ──────────────────────────────────────────────────────────────
+  // Printed before the emptiness guard below: this breakdown is what an operator
+  // needs precisely when everything failed.
   console.log(`\nfailures`)
   for (const id of ids) {
     const bad = results.filter((r) => r.scores[id]?.error)
     console.log(
       `   ${id.padEnd(38)} ${bad.length}/${results.length}` +
         (bad.length ? `   e.g. ${bad[0].scores[id].error!.slice(0, 80)}` : ''),
+    )
+  }
+
+  // Guarding rows.length is not enough: every generator can fail on every
+  // document, and then `exact / complete.length` is 0/0 and the report and
+  // artifact fill with NaN instead of failing. Raised after the breakdown above
+  // so the per-generator errors are still on screen.
+  if (!complete.length) {
+    throw new Error(
+      `every generator failed on all ${results.length} document(s) for facet '${FACET}' — nothing to aggregate`,
     )
   }
 
