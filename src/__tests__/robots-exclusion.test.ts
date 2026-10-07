@@ -5,7 +5,7 @@ import { join } from 'path'
  * Crawler / AI-indexer exclusion controls.
  *
  * AskWRI must not be indexed by search engines or absorbed into LLM training
- * or retrieval corpora. Three layers, each covering a different failure mode:
+ * or retrieval corpora. Four layers, each covering a different failure mode:
  *
  *   1. /robots.txt (src/app/robots.ts) — convention for well-behaved crawlers,
  *      with AI bots named explicitly.

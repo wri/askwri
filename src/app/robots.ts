@@ -16,6 +16,15 @@ import type { MetadataRoute } from 'next'
  *
  * This is a convention, not enforcement: anything that ignores robots.txt
  * (or fetches raw URLs directly) is stopped by those two layers.
+ *
+ * Precedence note — blocking wins over de-indexing, deliberately. A crawler
+ * that honors `Disallow: /` never fetches the page, so it never sees the
+ * `noindex` carried in the header/meta; a URL already known to it (e.g. via an
+ * external link) can linger as a URL-only index entry. That trade is accepted:
+ * AskWRI's content is the thing being protected, and letting crawlers read
+ * every page just to collect a noindex signal would defeat the point. If
+ * active de-indexing of already-known URLs is ever wanted, flip `Disallow: /`
+ * to allow crawling and rely on the X-Robots-Tag/meta noindex alone.
  */
 export default function robots(): MetadataRoute.Robots {
   return {
