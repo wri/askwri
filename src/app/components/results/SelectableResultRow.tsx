@@ -125,21 +125,10 @@ export const SelectableResultRow = ({
         </Heading>
         <div>{rowData.year}</div>
         {rowData.language ? (
-          <div style={{ width: 'fit-content' }}>
-            <Tag label={rowData.language} variant='info-grey' />
+          <div style={{ paddingTop: '8px', width: 'fit-content' }}>
+            <Tag label={rowData.language} variant='info-grey' size='small' />
           </div>
         ) : null}
-        <div
-          style={{
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {rowData.author}
-        </div>
       </TableCell>
       <TableCell width='25%'>
         {docSummaryLoading?.[rowData.id.toString()] ? (
