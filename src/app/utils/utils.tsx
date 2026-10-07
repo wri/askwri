@@ -189,7 +189,13 @@ export function languageNameFromCode(code?: string): string {
     .trim()
     .toLowerCase()
   if (!normalized) return ''
-  return LANGUAGE_NAMES[normalized] ?? normalized.toUpperCase()
+  if (LANGUAGE_NAMES[normalized]) return LANGUAGE_NAMES[normalized]
+  // The DB `language` column mixes codes ("es") and names ("Spanish"); match
+  // names case-insensitively so "SPANISH"-style duplicates never render.
+  const byName = Object.values(LANGUAGE_NAMES).find(
+    (name) => name.toLowerCase() === normalized,
+  )
+  return byName ?? normalized.toUpperCase()
 }
 
 /** Badge label for a result row: the document's own language, from the

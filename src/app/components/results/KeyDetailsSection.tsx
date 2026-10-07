@@ -2,6 +2,8 @@ import { Text } from '@chakra-ui/react'
 import {
   getThemedBorderWidth,
   getThemedColor,
+  getThemedFontSize,
+  getThemedLineHeight,
 } from '@worldresources/wri-design-systems'
 import {
   MdBusiness,
