@@ -1,9 +1,13 @@
 import { Text } from '@chakra-ui/react'
-import { Button, getThemedColor } from '@worldresources/wri-design-systems'
+import {
+  Button,
+  getThemedColor,
+  getThemedFontSize,
+  getThemedLineHeight,
+} from '@worldresources/wri-design-systems'
 import { IoMdOpen } from 'react-icons/io'
 import { DocumentVersion } from '@/app/utils/documentVersions'
 import {
-  bodyTextStyle,
   sectionBoxStyle,
   sectionHeaderBarStyle,
   sectionHeaderTextStyle,
@@ -46,7 +50,8 @@ export const DocumentVersionsSection = ({
               style={{
                 color: getThemedColor('neutral', 900),
                 fontWeight: 700,
-                ...bodyTextStyle,
+                fontSize: getThemedFontSize(400),
+                lineHeight: getThemedLineHeight(600),
               }}
             >
               {version.language}

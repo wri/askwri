@@ -1,7 +1,10 @@
 import { Text } from '@chakra-ui/react'
-import { getThemedColor } from '@worldresources/wri-design-systems'
 import {
-  bodyTextStyle,
+  getThemedColor,
+  getThemedFontSize,
+  getThemedLineHeight,
+} from '@worldresources/wri-design-systems'
+import {
   sectionBoxStyle,
   sectionHeaderBarStyle,
   sectionHeaderTextStyle,
@@ -42,7 +45,8 @@ export const PdfPreviewSection = ({ downloadUrl }: PdfPreviewSectionProps) => (
             justifyContent: 'center',
             height: '100%',
             color: getThemedColor('neutral', 600),
-            ...bodyTextStyle,
+            fontSize: getThemedFontSize(400),
+            lineHeight: getThemedLineHeight(600),
           }}
         >
           No PDF available

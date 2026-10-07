@@ -11,12 +11,6 @@ export const sectionHeaderTextStyle = {
   fontWeight: 400,
 }
 
-export const bodyTextStyle = {
-  color: getThemedColor('neutral', 800),
-  fontSize: getThemedFontSize(400),
-  lineHeight: getThemedLineHeight(600),
-}
-
 export const secondaryTextStyle = {
   color: getThemedColor('neutral', 700),
   fontSize: getThemedFontSize(400),

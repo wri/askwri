@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { Text, Heading } from '@chakra-ui/react'
-import { Button, Tag } from '@worldresources/wri-design-systems'
+import {
+  Button,
+  Tag,
+  getThemedColor,
+  getThemedFontSize,
+  getThemedLineHeight,
+} from '@worldresources/wri-design-systems'
 import { AiIcon } from '../icons/AiIcon'
 import { DocumentPreviewModalContentProps } from './types'
 import { languageNameFromCode } from '@/app/utils/utils'
@@ -11,7 +17,6 @@ import {
   fetchDocumentVersions,
 } from '@/app/utils/documentVersions'
 import {
-  bodyTextStyle,
   sectionBoxStyle,
   sectionHeaderTextStyle,
   secondaryTextStyle,
@@ -100,7 +105,9 @@ export const DocumentPreviewModalContent = ({
         <Text
           style={{
             marginBottom: '8px',
-            ...bodyTextStyle,
+            color: getThemedColor('neutral', 800),
+            fontSize: getThemedFontSize(400),
+            lineHeight: getThemedLineHeight(600),
           }}
         >
           {rowData.short_summary || rowData.summary}

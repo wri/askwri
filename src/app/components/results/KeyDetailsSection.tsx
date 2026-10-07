@@ -12,7 +12,6 @@ import {
   MdPerson,
 } from 'react-icons/md'
 import {
-  bodyTextStyle,
   sectionBoxStyle,
   sectionHeaderBarStyle,
   sectionHeaderTextStyle,
@@ -83,8 +82,23 @@ export const KeyDetailsSection = ({
             }}
           >
             <div style={{ marginTop: '2px' }}>{item.icon}</div>
-            <Text style={bodyTextStyle}>{item.label}</Text>
-            <Text style={{ ...bodyTextStyle, wordBreak: 'break-word' }}>
+            <Text
+              style={{
+                color: getThemedColor('neutral', 800),
+                fontSize: getThemedFontSize(400),
+                lineHeight: getThemedLineHeight(600),
+              }}
+            >
+              {item.label}
+            </Text>
+            <Text
+              style={{
+                color: getThemedColor('neutral', 800),
+                fontSize: getThemedFontSize(400),
+                lineHeight: getThemedLineHeight(600),
+                wordBreak: 'break-word',
+              }}
+            >
               {item.value}
             </Text>
           </div>
