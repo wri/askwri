@@ -7,12 +7,15 @@ import type { MetadataRoute } from 'next'
  * covers the AI training/retrieval bots that ignore blanket rules or that
  * operators want to see named (GPTBot, ClaudeBot, Google-Extended, CCBot,
  * PerplexityBot, Bytespider, Amazonbot, Applebot-Extended, Meta-ExternalAgent,
- * Diffbot, and the common SEO scrapers). `Noarchive` and `Noimageindex` are
- * per-agent directives that some of these honor.
+ * Diffbot, and the common SEO scrapers).
+ *
+ * robots.txt only speaks allow/disallow/crawl-delay — the richer directives
+ * (noarchive, noimageindex, nosnippet) are carried instead by the
+ * `X-Robots-Tag` header in next.config.js and the site-wide `robots` metadata
+ * in layout.tsx, which is where crawlers that parse HTML or headers read them.
  *
  * This is a convention, not enforcement: anything that ignores robots.txt
- * (or fetches raw URLs directly) is stopped by the X-Robots-Tag headers in
- * next.config.js and the site-wide `robots: noindex` metadata in layout.tsx.
+ * (or fetches raw URLs directly) is stopped by those two layers.
  */
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -57,7 +60,5 @@ export default function robots(): MetadataRoute.Robots {
         disallow: '/',
       })),
     ],
-    // No sitemap: nothing here should be indexed.
-    sitemap: undefined,
   }
 }

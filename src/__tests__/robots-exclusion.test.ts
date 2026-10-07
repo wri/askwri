@@ -126,13 +126,23 @@ describe('crawler and AI-indexer exclusion controls', () => {
     })
 
     it('experts pages keep their own noindex meta', () => {
+      // Tolerant of quote style, attribute order, and whitespace — the
+      // contract is "a robots meta whose content includes noindex", not any
+      // particular JSX spelling.
+      const robotsMeta = /<meta\b[^>]*name=['"]robots['"][^>]*>/i
+      const contentOf = (tag: string) =>
+        /content=['"]([^'"]*)['"]/i.exec(tag)?.[1] ?? ''
       for (const page of [
         'app/experts/page.tsx',
         'app/experts/help/page.tsx',
       ]) {
-        expect(readSrc(...page.split('/'))).toMatch(
-          /<meta name='robots' content='noindex' \/>/,
+        const tags = readSrc(...page.split('/')).match(
+          new RegExp(robotsMeta.source, 'gi'),
         )
+        expect(tags).not.toBeNull()
+        expect(
+          tags!.map(contentOf).some((c) => c.toLowerCase().includes('noindex')),
+        ).toBe(true)
       }
     })
   })
