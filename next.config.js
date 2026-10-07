@@ -50,6 +50,15 @@ const nextConfig = {
             key: 'X-XSS-Protection',
             value: '1; mode=block',
           },
+          // Keep every crawler and AI/LLM indexer out. This header covers
+          // fetchers that ignore robots.txt (the /robots.txt route handles
+          // the well-behaved ones); `noai, noimageai` are the proposed
+          // directives for blocking AI training use of content.
+          {
+            key: 'X-Robots-Tag',
+            value:
+              'noindex, nofollow, noarchive, noimageindex, noai, noimageai',
+          },
         ],
       },
     ]
