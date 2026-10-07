@@ -174,7 +174,7 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
   }
 }
 
-const LANGUAGE_NAMES: Record<string, string> = {
+export const LANGUAGE_NAMES: Record<string, string> = {
   en: 'English',
   es: 'Spanish',
   pt: 'Portuguese',
@@ -182,6 +182,20 @@ const LANGUAGE_NAMES: Record<string, string> = {
   fr: 'French',
   id: 'Bahasa Indonesia',
   hi: 'Hindi',
+}
+
+export function languageNameFromCode(code?: string): string {
+  const normalized = String(code || '')
+    .trim()
+    .toLowerCase()
+  if (!normalized) return ''
+  if (LANGUAGE_NAMES[normalized]) return LANGUAGE_NAMES[normalized]
+  // The DB `language` column mixes codes ("es") and names ("Spanish"); match
+  // names case-insensitively so "SPANISH"-style duplicates never render.
+  const byName = Object.values(LANGUAGE_NAMES).find(
+    (name) => name.toLowerCase() === normalized,
+  )
+  return byName ?? normalized.toUpperCase()
 }
 
 /** Badge label for a result row: the document's own language, from the
@@ -196,7 +210,7 @@ export function languageLabel(row?: CatalogRow): string {
     .trim()
     .toLowerCase()
   if (!code || code === 'en') return ''
-  return LANGUAGE_NAMES[code] ?? code.toUpperCase()
+  return languageNameFromCode(code)
 }
 
 export function buildCatalogIndex(items: CatalogRow[]) {

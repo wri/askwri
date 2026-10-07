@@ -1,164 +1,156 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Text, Heading } from '@chakra-ui/react'
-import { Button, getThemedColor, Tag } from '@worldresources/wri-design-systems'
+import {
+  Button,
+  Tag,
+  getThemedColor,
+  getThemedFontSize,
+  getThemedLineHeight,
+} from '@worldresources/wri-design-systems'
 import { AiIcon } from '../icons/AiIcon'
 import { DocumentPreviewModalContentProps } from './types'
+import { languageNameFromCode } from '@/app/utils/utils'
+import {
+  DocumentVersion,
+  fetchDocumentVersions,
+} from '@/app/utils/documentVersions'
+import {
+  sectionBoxStyle,
+  sectionHeaderTextStyle,
+  secondaryTextStyle,
+} from './previewModalStyles'
+import { KeyDetailsSection } from './KeyDetailsSection'
+import { DocumentVersionsSection } from './DocumentVersionsSection'
+import { PdfPreviewSection } from './PdfPreviewSection'
 
 export const DocumentPreviewModalContent = ({
   rowData,
   onExportBib,
-}: DocumentPreviewModalContentProps) => (
-  // The design system renders Modal's body with `padding: 0`, so content has to
-  // inset itself. Without this the bordered panels below sit flush on the
-  // dialog's own border — their side borders merge with it and the panels read
-  // as edge-to-edge bands with no borders at all (#309).
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px',
-      padding: '16px',
-    }}
-  >
-    <div style={{ width: 'fit-content' }}>
-      <Tag
-        label={`${rowData.relevance} Relevance`}
-        variant={
-          rowData.relevance === 'Strong'
-            ? 'success'
-            : rowData.relevance === 'Partial'
-              ? 'warning'
-              : rowData.relevance === 'Weak'
-                ? 'info-grey'
-                : 'success'
-        }
-      />
-    </div>
-    <div>
-      <Heading size='2xl'>{rowData.publication_title}</Heading>
-    </div>
+}: DocumentPreviewModalContentProps) => {
+  const catalog = rowData.catalogRow
+  const currentLanguageLabel = languageNameFromCode(
+    String(rowData.language || catalog?.language || 'en'),
+  )
+  const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>(
+    [],
+  )
+  const originalLanguageLabel = documentVersions.find(
+    (v) => v.isOriginal,
+  )?.language
+  const allLanguages = [
+    ...new Set([
+      currentLanguageLabel,
+      ...documentVersions.map((v) => v.language),
+    ]),
+  ].filter(Boolean)
+  const languagesValue =
+    (originalLanguageLabel && documentVersions.length > 1
+      ? [
+          `${originalLanguageLabel} (original)`,
+          ...allLanguages.filter((l) => l !== originalLanguageLabel),
+        ]
+      : allLanguages
+    ).join(', ') || 'N/A'
 
-    <div>
-      <Text
-        textStyle='md'
-        style={{
-          marginBottom: '8px',
-        }}
-      >
-        {rowData.short_summary || rowData.summary}
-      </Text>
-      <Text
-        style={{
-          color: getThemedColor('neutral', 700),
-        }}
-      >
-        {rowData.author}
-      </Text>
-      <Text
-        style={{
-          color: getThemedColor('neutral', 700),
-        }}
-      >
-        {rowData.year}
-      </Text>
-    </div>
+  useEffect(() => {
+    let active = true
+
+    const loadVersions = async () => {
+      const versions = await fetchDocumentVersions(
+        rowData,
+        currentLanguageLabel,
+      )
+      if (active) {
+        setDocumentVersions(versions)
+      }
+    }
+
+    loadVersions()
+
+    return () => {
+      active = false
+    }
+  }, [catalog?.language, currentLanguageLabel, rowData])
+
+  return (
     <div
       style={{
-        border: `1px solid ${getThemedColor('neutral', 300)}`,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
         padding: '16px',
-        borderRadius: '4px',
       }}
     >
-      <Text
-        textStyle='md'
-        style={{
-          marginBottom: '8px',
-          color: getThemedColor('neutral', 800),
-        }}
-      >
-        <AiIcon /> How is this relevant?
-      </Text>
-      <Text
-        style={{
-          color: getThemedColor('neutral', 700),
-        }}
-      >
-        {rowData.how_relevant}
-      </Text>
-    </div>
+      <div style={{ width: 'fit-content' }}>
+        <Tag
+          label={`${rowData.relevance} Relevance`}
+          variant={
+            rowData.relevance === 'Strong'
+              ? 'success'
+              : rowData.relevance === 'Partial'
+                ? 'warning'
+                : rowData.relevance === 'Weak'
+                  ? 'info-grey'
+                  : 'success'
+          }
+        />
+      </div>
+      <div>
+        <Heading size='2xl'>{rowData.publication_title}</Heading>
+      </div>
 
-    <div
-      style={{
-        border: `1px solid ${getThemedColor('neutral', 300)}`,
-        borderRadius: '4px',
-      }}
-    >
-      <div
-        style={{
-          padding: '8px',
-          background: getThemedColor('neutral', 200),
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        PDF preview
-        <Button
-          variant='secondary'
-          size='small'
-          onClick={() => {
-            if (rowData.download_url) {
-              window.open(rowData.download_url, '_blank', 'noopener,noreferrer')
-            }
+      <div>
+        <Text
+          style={{
+            marginBottom: '8px',
+            color: getThemedColor('neutral', 800),
+            fontSize: getThemedFontSize(400),
+            lineHeight: getThemedLineHeight(600),
           }}
         >
-          Open Document
+          {rowData.short_summary || rowData.summary}
+        </Text>
+      </div>
+      <div style={{ ...sectionBoxStyle, padding: '16px' }}>
+        <Text
+          style={{
+            marginBottom: '8px',
+            ...sectionHeaderTextStyle,
+          }}
+        >
+          <AiIcon /> How is this relevant?
+        </Text>
+        <Text style={secondaryTextStyle}>{rowData.how_relevant}</Text>
+      </div>
+
+      <KeyDetailsSection
+        organizations={catalog?.office || 'WRI'}
+        publicationYear={rowData.year || catalog?.yearAccepted || 'N/A'}
+        languagesValue={languagesValue}
+        authors={
+          rowData.author ||
+          catalog?.allAuthors ||
+          rowData.fullDoc.authors?.join('; ') ||
+          'N/A'
+        }
+      />
+
+      <DocumentVersionsSection documentVersions={documentVersions} />
+
+      <PdfPreviewSection downloadUrl={rowData.download_url} />
+
+      <div>
+        <Button
+          variant='secondary'
+          onClick={() => {
+            onExportBib?.([rowData.id.toString()])
+          }}
+        >
+          Export citations (.csv)
         </Button>
       </div>
-      <div
-        style={{
-          width: '100%',
-          height: '500px',
-          padding: '12px',
-          overflow: 'hidden',
-        }}
-      >
-        {rowData.download_url ? (
-          <iframe
-            src={`${rowData.download_url}#page=1&view=FitH`}
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-            }}
-            title='PDF Preview'
-          />
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: getThemedColor('neutral', 600),
-            }}
-          >
-            No PDF available
-          </div>
-        )}
-      </div>
     </div>
-
-    <div>
-      <Button
-        variant='secondary'
-        onClick={() => {
-          onExportBib?.([rowData.id.toString()])
-        }}
-      >
-        Export citations (.csv)
-      </Button>
-    </div>
-  </div>
-)
+  )
+}

@@ -2,16 +2,9 @@
 
 import React from 'react'
 import { Tag } from '@worldresources/wri-design-systems'
+import { LANGUAGE_NAMES } from '@/app/utils/utils'
 
 export type FacetChip = { facet: string; value: string; label: string }
-
-const LANGUAGE_NAMES: Record<string, string> = {
-  es: 'Spanish',
-  pt: 'Portuguese',
-  zh: 'Chinese',
-  en: 'English',
-  id: 'Indonesian',
-}
 
 export function facetChipLabel(facet: string, value: string): string {
   if (facet === 'year_min') return `${value}–present`
