@@ -11,13 +11,14 @@ export type DocumentVersion = {
 export const ORIGINAL_LANGUAGE_NOTE =
   "This is the source publication's original language."
 export const TRANSLATION_LANGUAGE_NOTE =
-  'Official English translation published by the author.'
+  'Official translation published by the author.'
 
 export function getDocumentVersionFallback(
   rowData: any,
   currentLanguageLabel: string,
 ): DocumentVersion[] {
-  const url = rowData.download_url || rowData.fullDoc._url || rowData.fullDoc.url
+  const url =
+    rowData.download_url || rowData.fullDoc._url || rowData.fullDoc.url
   if (!url) return []
 
   return [
@@ -42,20 +43,21 @@ export async function fetchDocumentVersions(
 
     const payload = await res.json()
     const versions = Array.isArray(payload?.versions)
-      ? payload.versions.filter((v: any) => v?.url).map((v: any) => ({
-          language: languageNameFromCode(v.language) || 'Document',
-          url: v.url,
-          externalId: v.externalId,
-          isOriginal: !!v.isOriginal,
-        }))
+      ? payload.versions
+          .filter((v: any) => v?.url)
+          .map((v: any) => ({
+            language: languageNameFromCode(v.language) || 'Document',
+            url: v.url,
+            externalId: v.externalId,
+            isOriginal: !!v.isOriginal,
+          }))
       : []
 
     if (versions.length > 1) {
       for (const v of versions) {
-        v.description =
-          v.isOriginal
-            ? ORIGINAL_LANGUAGE_NOTE
-            : TRANSLATION_LANGUAGE_NOTE
+        v.description = v.isOriginal
+          ? ORIGINAL_LANGUAGE_NOTE
+          : TRANSLATION_LANGUAGE_NOTE
       }
     }
 

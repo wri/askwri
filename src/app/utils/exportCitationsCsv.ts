@@ -6,17 +6,8 @@ import {
   buildCatalogIndex,
   titleFrom,
   authorsFrom,
+  LANGUAGE_NAMES,
 } from './utils'
-
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: 'English',
-  es: 'Spanish',
-  pt: 'Portuguese',
-  zh: 'Chinese',
-  fr: 'French',
-  id: 'Bahasa Indonesia',
-  hi: 'Hindi',
-}
 
 /**
  * Build the citations CSV as a string. Extracted from exportCitationsCsv for
