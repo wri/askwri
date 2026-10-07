@@ -90,6 +90,7 @@ Thumbs.db
 # task briefs, review packages, progress ledger). Never committed.
 .pi-subagents/
 .superpowers/
+.jspace/
 
 # Git worktrees for isolated feature/bugfix work
 .worktrees/

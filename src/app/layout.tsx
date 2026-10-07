@@ -11,6 +11,22 @@ export const metadata: Metadata = {
   description:
     'Find relevant Knowledge Products for your research, identify insights, and export citations.',
   icons: { icon: '/favicon.ico' },
+  // Site-wide crawler exclusion. Belt to the X-Robots-Tag header in
+  // next.config.js and the /robots.txt route; covers clients that render the
+  // page but ignore response headers. Individual pages may only narrow this.
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      'max-snippet': -1,
+      'max-image-preview': 'none',
+      'max-video-preview': -1,
+    },
+  },
 }
 
 const RootLayout = ({ children }: { children: ReactNode }) => (

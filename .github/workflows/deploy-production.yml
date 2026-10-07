@@ -8,7 +8,6 @@ name: Deploy to Production
 on:
   push:
     branches:
-      - main
       - production
     # Documentation-only pushes do not change the images or the infrastructure,
     # so skip the ~15 minute build/apply/redeploy cycle. Use workflow_dispatch to

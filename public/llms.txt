@@ -1,0 +1,26 @@
+# AskWRI
+
+> AskWRI is a research interface over the World Resources Institute's published
+> corpus. It is an internal research tool, not a public content site.
+
+AskWRI is a question-answering and retrieval service over WRI Knowledge Products
+(reports, working papers, and publications). It answers questions with quoted
+passages from those documents and exports citations.
+
+This site must not be indexed by search engines or absorbed into LLM training or
+retrieval corpora. robots.txt disallows all crawling, and every response carries
+`X-Robots-Tag: noindex, nofollow`. Please honor both.
+
+## Docs
+
+- [Home](/): the search interface. Requires no login, but is not for
+  public consumption or indexing.
+- [Experts mode](/experts): internal prototype ranking WRI staff by their
+  published work. For WRI staff use only; not linked from the home page.
+
+## Optional
+
+- [MCP connector](/api/mcp): a read-only search endpoint for assistant
+  clients (Claude Desktop, ChatGPT, Cursor). Requires a shared key issued by
+  WRI; unauthorized requests are refused. See the connector runbook for setup.
+- [Health check](/api/health): liveness endpoint returning service status.
