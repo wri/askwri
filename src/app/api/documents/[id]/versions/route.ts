@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { initializeDatabase, AppDataSource } from '../../../../../db/data-source'
+import {
+  initializeDatabase,
+  AppDataSource,
+} from '../../../../../db/data-source'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,7 +16,10 @@ export async function GET(
     const externalId = decodeURIComponent(id)
 
     if (!externalId) {
-      return NextResponse.json({ ok: false, error: 'missing id' }, { status: 400 })
+      return NextResponse.json(
+        { ok: false, error: 'missing id' },
+        { status: 400 },
+      )
     }
 
     await initializeDatabase()
