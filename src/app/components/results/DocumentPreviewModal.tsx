@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Text, Heading } from '@chakra-ui/react'
 import {
   Button,
@@ -19,22 +20,18 @@ import {
 } from 'react-icons/md'
 import { DocumentPreviewModalContentProps } from './types'
 import { languageNameFromCode } from '@/app/utils/utils'
+import {
+  DocumentVersion,
+  fetchDocumentVersions,
+} from '@/app/utils/documentVersions'
 
 export const DocumentPreviewModalContent = ({
   rowData,
   onExportBib,
 }: DocumentPreviewModalContentProps) => {
   const catalog = rowData.catalogRow
-  const rawLanguages =
-    catalog?.languages?.length && catalog.languages[0]
-      ? catalog.languages
-      : [rowData.language || catalog?.language].filter(Boolean)
-  const languages = rawLanguages
-    .map((lang) => String(lang).trim().toLowerCase())
-    .filter(Boolean)
-  const uniqueLanguages = [...new Set(languages)]
-  const languageLabels = uniqueLanguages.map((lang) =>
-    languageNameFromCode(lang),
+  const currentLanguageLabel = languageNameFromCode(
+    String(rowData.language || catalog?.language || 'en'),
   )
   const publicationYear = rowData.year || catalog?.yearAccepted || 'N/A'
   const organizations = catalog?.office || 'WRI'
@@ -43,6 +40,47 @@ export const DocumentPreviewModalContent = ({
     catalog?.allAuthors ||
     rowData.fullDoc.authors?.join('; ') ||
     'N/A'
+  const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>(
+    [],
+  )
+  const originalLanguageLabel = documentVersions.find(
+    (v) => v.isOriginal,
+  )?.language
+  const allLanguages = [
+    ...new Set([
+      currentLanguageLabel,
+      ...documentVersions.map((v) => v.language),
+    ]),
+  ].filter(Boolean)
+  const languagesValue =
+    (originalLanguageLabel && documentVersions.length > 1
+      ? [
+          `${originalLanguageLabel} (original)`,
+          ...allLanguages.filter((l) => l !== originalLanguageLabel),
+        ]
+      : allLanguages
+    ).join(', ') || 'N/A'
+
+  useEffect(() => {
+    let active = true
+
+    const loadVersions = async () => {
+      const versions = await fetchDocumentVersions(
+        rowData,
+        currentLanguageLabel,
+      )
+      if (active) {
+        setDocumentVersions(versions)
+      }
+    }
+
+    loadVersions()
+
+    return () => {
+      active = false
+    }
+  }, [catalog?.language, currentLanguageLabel, rowData])
+
   const keyDetails = [
     {
       label: 'Organisation(s)',
@@ -56,7 +94,7 @@ export const DocumentPreviewModalContent = ({
     },
     {
       label: 'Language(s)',
-      value: languageLabels.join(', ') || 'N/A',
+      value: languagesValue,
       icon: <MdLanguage color={getThemedColor('secondary', 500)} />,
     },
     {
@@ -228,55 +266,60 @@ export const DocumentPreviewModalContent = ({
             gap: '12px',
           }}
         >
-          {(languageLabels.length ? languageLabels : ['N/A']).map(
-            (language) => (
-              <div
-                key={language}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                }}
-              >
+          {(documentVersions.length
+            ? documentVersions
+            : [{ language: 'N/A', url: '' }]
+          ).map((version) => (
+            <div
+              key={`${version.language}-${version.url || 'missing'}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+              }}
+            >
+              <div>
                 <Text
                   style={{
-                    color: getThemedColor('neutral', 800),
+                    color: getThemedColor('neutral', 900),
                     fontWeight: 700,
                     fontSize: getThemedFontSize(400),
                     lineHeight: getThemedLineHeight(600),
                   }}
                 >
-                  <span
+                  {version.language}
+                  {documentVersions.length > 1 &&
+                    version.isOriginal &&
+                    ' (original)'}
+                </Text>
+                {version.description && (
+                  <Text
                     style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '8px',
+                      color: getThemedColor('neutral', 800),
+                      fontSize: getThemedFontSize(400),
+                      lineHeight: getThemedLineHeight(600),
                     }}
                   >
-                    {language}
-                  </span>
-                </Text>
-                <Button
-                  variant='secondary'
-                  size='small'
-                  rightIcon={<IoMdOpen />}
-                  onClick={() => {
-                    if (rowData.download_url) {
-                      window.open(
-                        rowData.download_url,
-                        '_blank',
-                        'noopener,noreferrer',
-                      )
-                    }
-                  }}
-                  disabled={!rowData.download_url}
-                >
-                  Open document
-                </Button>
+                    {version.description}
+                  </Text>
+                )}
               </div>
-            ),
-          )}
+              <Button
+                variant='secondary'
+                size='small'
+                rightIcon={<IoMdOpen />}
+                onClick={() => {
+                  if (version.url) {
+                    window.open(version.url, '_blank', 'noopener,noreferrer')
+                  }
+                }}
+                disabled={!version.url}
+              >
+                Open document
+              </Button>
+            </div>
+          ))}
         </div>
       </div>
 

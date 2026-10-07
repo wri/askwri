@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, FC } from 'react'
+import { useEffect, useState, FC } from 'react'
 import { Heading, Spinner } from '@chakra-ui/react'
 import {
   TableRow,
@@ -14,6 +14,10 @@ import {
 import { IoIosCopy, IoMdCheckmark } from 'react-icons/io'
 import { FaThumbsDown, FaThumbsUp } from 'react-icons/fa6'
 import { chicagoFull } from '../../utils/utils'
+import {
+  DocumentVersion,
+  fetchDocumentVersions,
+} from '../../utils/documentVersions'
 import {
   SelectableResultRowProps,
   FeedbackType,
@@ -35,6 +39,17 @@ export const SelectableResultRow = ({
 }: SelectableResultRowProps) => {
   const [isHovered, setIsHovered] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [versions, setVersions] = useState<DocumentVersion[]>([])
+
+  useEffect(() => {
+    let active = true
+    fetchDocumentVersions(rowData, rowData.language || '').then((v) => {
+      if (active) setVersions(v)
+    })
+    return () => {
+      active = false
+    }
+  }, [rowData])
 
   // 0 = no feedbackState, 1 = positive, -1 = negative
   const [feedbackState, setFeedbackState] = useState<FeedbackType>(
@@ -89,6 +104,17 @@ export const SelectableResultRow = ({
     onCheckedChange(rowData, checked)
   }
 
+  const languageTagLabels = (() => {
+    if (versions.length <= 1) return rowData.language ? [rowData.language] : []
+    const original = versions.find((v) => v.isOriginal)
+    const names = [...new Set(versions.map((v) => v.language))]
+    if (!original) return names
+    return [
+      `${original.language} (original)`,
+      ...names.filter((n) => n !== original.language),
+    ]
+  })()
+
   return (
     <TableRow
       onMouseEnter={() => setIsHovered(true)}
@@ -124,9 +150,18 @@ export const SelectableResultRow = ({
           {rowData.publication_title}
         </Heading>
         <div>{rowData.year}</div>
-        {rowData.language ? (
-          <div style={{ paddingTop: '8px', width: 'fit-content' }}>
-            <Tag label={rowData.language} variant='info-grey' size='small' />
+        {languageTagLabels.length ? (
+          <div
+            style={{
+              paddingTop: '8px',
+              display: 'flex',
+              gap: '4px',
+              flexWrap: 'wrap',
+            }}
+          >
+            {languageTagLabels.map((label) => (
+              <Tag key={label} label={label} variant='info-grey' size='small' />
+            ))}
           </div>
         ) : null}
       </TableCell>
