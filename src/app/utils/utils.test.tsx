@@ -10,6 +10,7 @@ import {
   publisherFrom,
   chicagoFull,
 } from './utils'
+import { buildCitationsCsv } from './exportCitationsCsv'
 
 const zhItem = {
   file_id: '',
@@ -151,5 +152,50 @@ describe('field accessors', () => {
     expect(chicagoFull(doc(), row)).toBe(
       'Qiu, Shiyong; Liu, Daizong. "Smart Strategies for Private Vehicle Ownership in Chengdu". WRI China, 2011.',
     )
+  })
+})
+
+describe('buildCitationsCsv language versions', () => {
+  it('exports the selected version title and native summary', () => {
+    const spanishItem = {
+      ...zhItem,
+      file_name: 'spanish-report.pdf',
+      meta: {
+        ...zhItem.meta,
+        file_path: 'spanish-report.pdf',
+        dms: {
+          ...zhItem.meta.dms,
+          doc_id: 'spanish-report',
+          title: 'Informe sobre el clima',
+          title_en: 'Climate Report',
+          language: 'es',
+          languages: ['es'],
+          summary_en: 'Climate report summary.',
+          summary_native: 'Resumen del informe climático.',
+        },
+      },
+    }
+    const index = buildCatalogIndex([
+      normalizeCatalogRow(zhItem),
+      normalizeCatalogRow(spanishItem),
+    ])
+    const docs = [doc()]
+    const base = { docs, selectedIds: [docs[0].doc_id], index, docSummary: {} }
+
+    const originalCsv = buildCitationsCsv({
+      ...base,
+      language: 'Chinese',
+      versionExternalId: '2011_chengdu_0001',
+    })
+    const spanishCsv = buildCitationsCsv({
+      ...base,
+      language: 'Spanish',
+      versionExternalId: 'spanish-report',
+    })
+
+    expect(originalCsv).toContain('成都市小汽车拥有与使用政策战略研究')
+    expect(spanishCsv).toContain('Informe sobre el clima')
+    expect(spanishCsv).toContain('Resumen del informe climático.')
+    expect(spanishCsv).not.toContain('Long English summary.')
   })
 })
