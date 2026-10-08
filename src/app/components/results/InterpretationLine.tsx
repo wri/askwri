@@ -25,11 +25,15 @@ export const suggestedChips = (
   facets?: Facet[] | null,
   applied: FacetChip[] = [],
 ): FacetChip[] => {
-  const appliedKeys = new Set(applied.map((c) => `${c.facet}:${c.value}`))
+  // Keyed on the rendered label, not the raw value: the sidecar returns a
+  // language NAME ("Chinese") where the parser returns the code ("zh"), and
+  // both render as the same chip, so a value-only key would show it twice.
+  const appliedLabels = new Set(applied.map((c) => `${c.facet}:${c.label}`))
   return (facets ?? [])
     .filter(
       (f) =>
-        f.action === 'suggest' && !appliedKeys.has(`${f.facet}:${f.value}`),
+        f.action === 'suggest' &&
+        !appliedLabels.has(`${f.facet}:${facetChipLabel(f.facet, f.value)}`),
     )
     .map((f) => ({
       facet: f.facet,
