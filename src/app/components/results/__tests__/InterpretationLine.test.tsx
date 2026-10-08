@@ -107,4 +107,15 @@ describe('chip selection', () => {
       { facet: 'language', value: 'es', label: 'Spanish' },
     ])
   })
+
+  it('drops a suggestion that spells an applied chip a different way', () => {
+    // The sidecar returns the language NAME where the parser returns the CODE,
+    // and both render as "Chinese" — a value-keyed dedup missed this and the
+    // page showed the same chip as applied and suggested at once.
+    const mixed = [
+      { facet: 'language', value: 'zh', action: 'hard' },
+      { facet: 'language', value: 'Chinese', action: 'suggest' },
+    ]
+    expect(suggestedChips(mixed, appliedChips(mixed))).toEqual([])
+  })
 })
