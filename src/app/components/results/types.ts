@@ -92,7 +92,7 @@ export type ResultsPageProps = {
 export type DocumentPreviewModalContentProps = {
   rowData: RowData
   /** Exports citations for the given row ids. The optional `language` label
-   *  (e.g. "Spanish") selects which of the document's versions to cite. */
+   *  (e.g. "Spanish") selects the language-specific metadata to cite. */
   onExportBib?: (
     selectedIds: string[],
     language?: string,

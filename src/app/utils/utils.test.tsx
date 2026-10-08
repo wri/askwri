@@ -197,5 +197,6 @@ describe('buildCitationsCsv language versions', () => {
     expect(spanishCsv).toContain('Informe sobre el clima')
     expect(spanishCsv).toContain('Resumen del informe climático.')
     expect(spanishCsv).not.toContain('Long English summary.')
+    expect(spanishCsv).not.toContain('Citation language')
   })
 })

@@ -72,9 +72,19 @@ export const DocumentPreviewModalContent = ({
       : allLanguages.map((l) => ({ label: l, value: l }))
 
   const handleExport = (language?: string) => {
-    const version = documentVersions.find((item) => item.language === language)
-    onExportBib?.([rowData.id.toString()], language, version?.externalId)
+    const selectedVersion = documentVersions.find((version) => {
+      const versionLanguage = languageNameFromCode(version.language)
+      const selectedLanguage = languageNameFromCode(language)
+      return versionLanguage.toLowerCase() === selectedLanguage.toLowerCase()
+    })
+
+    onExportBib?.(
+      [rowData.id.toString()],
+      language,
+      selectedVersion?.externalId,
+    )
   }
+
   useEffect(() => {
     let active = true
 

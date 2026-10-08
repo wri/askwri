@@ -34,11 +34,9 @@ export function buildCitationsCsv({
   index: ReturnType<typeof buildCatalogIndex> | null
   docSummary: Record<string, string>
   origin?: string
-  /** When set, restricts the exported languages to this label and appends a
-   *  "Citation language" column, so a per-language download is explicit about
-   *  which of the document's versions it cites. */
+  /** The language selected in the dropdown. */
   language?: string
-  /** Catalog ID for the selected translation/original document version. */
+  /** Exact document version to match if the user chose a translated row. */
   versionExternalId?: string
 }): string {
   const headers = [
@@ -51,7 +49,6 @@ export function buildCitationsCsv({
     'URL',
     'WRI Office affiliation (primary)',
     'Summary',
-    ...(language ? ['Citation language'] : []),
   ]
 
   function formatDate(dateStr: string) {
@@ -80,10 +77,12 @@ export function buildCitationsCsv({
     selectedIds.includes(doc.doc_id),
   )
   const rows = selectedDocs.map((doc: DocMeta) => {
-    const versionRow = versionExternalId
-      ? index?.byDocId.get(versionExternalId)
-      : undefined
-    const row = versionRow || (index ? matchCatalogRow(doc, index) : undefined)
+    const defaultRow = index ? matchCatalogRow(doc, index) : undefined
+    const exactRow =
+      versionExternalId && index
+        ? index.byDocId.get(versionExternalId)
+        : undefined
+    const row = exactRow || defaultRow
     const selectedVersionMatchesLanguage =
       !!language &&
       !!row?.language &&
@@ -147,7 +146,6 @@ export function buildCitationsCsv({
       url,
       office,
       summary,
-      ...(language ? [language] : []),
     ]
       .map(csvEscape)
       .join(',')
@@ -168,9 +166,9 @@ export function exportCitationsCsv({
   selectedIds: string[]
   index: ReturnType<typeof buildCatalogIndex> | null
   docSummary: Record<string, string>
-  /** Optional citation language label (e.g. "Spanish"); when set, the CSV
-   *  carries a "Citation language" column and the filename is suffixed. */
+  /** Optional language label used to select the file and metadata. */
   language?: string
+  /** Exact document version this export should match. */
   versionExternalId?: string
 }) {
   const csvContent = buildCitationsCsv({
