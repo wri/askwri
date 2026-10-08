@@ -179,6 +179,7 @@ def test_matched_tags_populated_per_facet(monkeypatch):
         return []
 
     monkeypatch.setattr(ts, "nearby_tags", _stub)
+    monkeypatch.setattr(ts, "literal_tags", lambda query, facet: [])
     from app.config import Settings
     monkeypatch.setattr("app.config.get_settings",
                         lambda: Settings(expansion_facets=["topic", "geography"]))
@@ -189,6 +190,49 @@ def test_matched_tags_populated_per_facet(monkeypatch):
     assert u.matched_tags["topic"] == [("Climate Resilience", 0.92)]
     assert u.matched_tags["geography"] == [("Kenya", 0.88)]
     assert u.topic_tags == [("Climate Resilience", 0.92)]  # alias still works
+
+
+def test_literal_geography_matched_without_any_embedding(monkeypatch):
+    """A country the query spells out is matched even when the embedding lane
+    never runs. This is the exact case the cosine floor dropped: "electric buses
+    in India" missed India entirely while "India transport" found it at 0.40."""
+    import app.topic_sense as ts
+    from app.understanding import build_understanding
+
+    monkeypatch.setattr(ts, "_facet_values", lambda facet: ("India", "Kenya"))
+    from app.config import Settings
+    monkeypatch.setattr("app.config.get_settings",
+                        lambda: Settings(expansion_facets=["topic", "geography"]))
+    u = build_understanding(
+        "electric buses in India", explicit_facets=None, today_year=2026,
+        expansion_lanes=True, embed_model=None,
+    )
+    assert u.matched_tags["geography"] == [("India", 1.0)]
+    assert "matched_tags:geography" not in u.degraded
+
+
+def test_literal_geography_outranks_the_cosine_match(monkeypatch):
+    """A name in the query is certain; a diluted cosine for the same name must
+    not displace it (or duplicate it)."""
+    import app.topic_sense as ts
+    from app.understanding import build_understanding
+
+    class _Embed:
+        def get_query_embedding(self, query):
+            return [0.1] * 1536
+
+    monkeypatch.setattr(ts, "_facet_values", lambda facet: ("India", "Kenya"))
+    monkeypatch.setattr(
+        ts, "nearby_tags",
+        lambda emb, facet: [("Kenya", 0.34)] if facet == "geography" else [])
+    from app.config import Settings
+    monkeypatch.setattr("app.config.get_settings",
+                        lambda: Settings(expansion_facets=["topic", "geography"]))
+    u = build_understanding(
+        "electric buses in India and Kenya", explicit_facets=None, today_year=2026,
+        expansion_lanes=True, embed_model=_Embed(),
+    )
+    assert u.matched_tags["geography"] == [("India", 1.0), ("Kenya", 1.0)]
 
 
 def test_matched_tags_default_topic_only(monkeypatch):

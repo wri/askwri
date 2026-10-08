@@ -7,6 +7,8 @@ Bedrock calls in the normal path.
 Invariant 2: output is SUGGESTIONS ONLY (nearby_topic). Never facets.
 """
 import logging
+import re
+from functools import lru_cache
 
 import numpy as np
 
@@ -86,6 +88,65 @@ def facet_has_tag_embeddings(model: str, facet: str) -> bool:
 def filter_topics(rows, top_k: int, min_cosine: float):
     """Pure: threshold + limit. Split out so the policy is unit-testable."""
     return [(label, cos) for label, cos in rows if cos >= min_cosine][:top_k]
+
+
+# Deterministic literal names. The cosine match compares the WHOLE query to a
+# one-word tag label, so a country spelled out inside a normal question falls
+# under the floor and vanishes: "electric buses in India" misses India while
+# "India transport" finds it at 0.40. A literal mention is certain, so it is
+# added at cosine 1.0 and ranks ahead of the semantic matches. Same facet, same
+# downstream lane, no new flag.
+_VALUES_SQL = """
+    SELECT DISTINCT value_id FROM tags WHERE facet = %(facet)s
+"""
+
+
+@lru_cache(maxsize=8)
+def _facet_values(facet: str) -> tuple:
+    """The facet's value_id vocabulary, longest first, one cached SELECT per
+    facet. Raises on a DB error (the caller records the degradation)."""
+    from app.db import get_pool
+
+    with get_pool().connection() as conn:
+        rows = conn.execute(_VALUES_SQL, {"facet": facet}).fetchall()
+    return tuple(sorted((r[0] for r in rows), key=len, reverse=True))
+
+
+def match_literal_values(query: str, values) -> list:
+    """Pure: the value_ids this query spells out. Longest first, so a longer
+    name consumes its span and a nested one is not also emitted ("Papua New
+    Guinea" does not also yield "Guinea"). Non-word boundaries both sides, so
+    "India" never fires inside "Indian" and "Niger" not inside "Nigeria"."""
+    taken: list = []
+    out: list = []
+    for value in values:  # caller supplies these longest-first
+        m = re.search(rf"(?<!\w){re.escape(value)}(?!\w)", query, re.I)
+        if m is None:
+            continue
+        if any(start < m.end() and m.start() < end for start, end in taken):
+            continue
+        taken.append((m.start(), m.end()))
+        out.append((value, 1.0))
+    return out
+
+
+def literal_tags(query: str, facet: str) -> list:
+    """Literal [(value_id, 1.0)] matches for one facet."""
+    return match_literal_values(query, _facet_values(facet))
+
+
+def merge_matched(literal, semantic, top_k: int) -> list:
+    """Pure: literal matches first, then semantic, deduped by label, capped at
+    top_k — so an exact match can never be crowded out of the cap by a diluted
+    cosine match."""
+    seen = set()
+    out = []
+    for label, cosine in list(literal) + list(semantic):
+        if label in seen:
+            continue
+        seen.add(label)
+        out.append((label, cosine))
+    return out[:top_k]
 
 
 def nearby_tags(query_embedding, facet: str, top_k: int | None = None) -> list:

@@ -6,6 +6,38 @@ import { LANGUAGE_NAMES } from '@/app/utils/utils'
 
 export type FacetChip = { facet: string; value: string; label: string }
 
+type Facet = { facet: string; value: string; action: string }
+
+/** The facets the server actually applied, in chip form. */
+export const appliedChips = (facets?: Facet[] | null): FacetChip[] =>
+  (facets ?? [])
+    .filter((f) => f.action === 'hard')
+    .map((f) => ({
+      facet: f.facet,
+      value: f.value,
+      label: facetChipLabel(f.facet, f.value),
+    }))
+
+/** Suggested facets worth offering: the low-confidence tier the server never
+ * applies. A facet the applied chips already cover is dropped, because the
+ * sidecar routinely re-proposes what the parser already detected. */
+export const suggestedChips = (
+  facets?: Facet[] | null,
+  applied: FacetChip[] = [],
+): FacetChip[] => {
+  const appliedKeys = new Set(applied.map((c) => `${c.facet}:${c.value}`))
+  return (facets ?? [])
+    .filter(
+      (f) =>
+        f.action === 'suggest' && !appliedKeys.has(`${f.facet}:${f.value}`),
+    )
+    .map((f) => ({
+      facet: f.facet,
+      value: f.value,
+      label: facetChipLabel(f.facet, f.value),
+    }))
+}
+
 export function facetChipLabel(facet: string, value: string): string {
   if (facet === 'year_min') return `${value}–present`
   if (facet === 'year_max') return `up to ${value}`
@@ -17,16 +49,20 @@ export function facetChipLabel(facet: string, value: string): string {
 // here and removable in one click. If this line is empty, nothing filtered.
 export const InterpretationLine = ({
   chips,
+  suggested = [],
   suggestion,
   onRemoveChip,
+  onApplyChip,
   onApplySuggestion,
 }: {
   chips: FacetChip[]
+  suggested?: FacetChip[]
   suggestion: string | null
   onRemoveChip: (chip: FacetChip) => void
+  onApplyChip?: (chip: FacetChip) => void
   onApplySuggestion: (text: string) => void
 }) => {
-  if (chips.length === 0 && !suggestion) return null
+  if (chips.length === 0 && suggested.length === 0 && !suggestion) return null
   return (
     <div
       style={{
@@ -60,6 +96,28 @@ export const InterpretationLine = ({
             ✕
           </button>
         </span>
+      ))}
+      {suggested.length > 0 && (
+        <span style={{ fontSize: '14px', color: '#555' }}>Suggested:</span>
+      )}
+      {suggested.map((chip) => (
+        <button
+          key={`suggest:${chip.facet}:${chip.value}`}
+          aria-label={`Apply ${chip.label} filter`}
+          title='Not applied. Click to filter by this.'
+          onClick={() => onApplyChip?.(chip)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: 0,
+            background: 'none',
+            border: '1px dashed #9aa5b1',
+            borderRadius: '16px',
+            cursor: 'pointer',
+          }}
+        >
+          <Tag label={chip.label} variant='info-white' />
+        </button>
       ))}
       {suggestion && (
         <span style={{ fontSize: '14px' }}>

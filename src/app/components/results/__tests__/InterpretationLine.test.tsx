@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
-import { InterpretationLine, facetChipLabel } from '../InterpretationLine'
+import {
+  InterpretationLine,
+  facetChipLabel,
+  appliedChips,
+  suggestedChips,
+} from '../InterpretationLine'
 
 describe('facetChipLabel', () => {
   it('formats year and language facets for humans', () => {
@@ -56,5 +61,50 @@ describe('InterpretationLine', () => {
     )
     fireEvent.click(screen.getByText('freight decarbonization'))
     expect(onApply).toHaveBeenCalledWith('freight decarbonization')
+  })
+
+  it('offers a suggested facet and applies it on click, never removably', () => {
+    const onApplyChip = jest.fn()
+    const suggested = [
+      { facet: 'year_min', value: '2023', label: '2023–present' },
+    ]
+    render(
+      <ChakraProvider>
+        <InterpretationLine
+          chips={[]}
+          suggested={suggested}
+          suggestion={null}
+          onRemoveChip={jest.fn()}
+          onApplyChip={onApplyChip}
+          onApplySuggestion={jest.fn()}
+        />
+      </ChakraProvider>,
+    )
+    expect(screen.getByText('Suggested:')).toBeInTheDocument()
+    // A suggestion is not applied, so it must not offer removal.
+    expect(screen.queryByLabelText('Remove 2023–present filter')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Apply 2023–present filter'))
+    expect(onApplyChip).toHaveBeenCalledWith(suggested[0])
+  })
+})
+
+describe('chip selection', () => {
+  const facets = [
+    { facet: 'year_min', value: '2022', action: 'hard' },
+    { facet: 'year_min', value: '2022', action: 'suggest' },
+    { facet: 'language', value: 'es', action: 'suggest' },
+  ]
+
+  it('takes only applied facets as chips', () => {
+    expect(appliedChips(facets)).toEqual([
+      { facet: 'year_min', value: '2022', label: '2022–present' },
+    ])
+  })
+
+  it('drops a suggestion the applied chips already cover', () => {
+    const applied = appliedChips(facets)
+    expect(suggestedChips(facets, applied)).toEqual([
+      { facet: 'language', value: 'es', label: 'Spanish' },
+    ])
   })
 })

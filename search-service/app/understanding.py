@@ -12,6 +12,14 @@ from pydantic import BaseModel, Field, computed_field
 
 UNDERSTANDING_VERSION = 1
 
+# Facets whose vocabulary is mostly proper nouns, and therefore safe to match
+# literally in the query text. A country or continent the query spells out is
+# certain, and a substring check is exact, so it must not depend on a whole
+# query embedding clearing a cosine floor. Topic labels are excluded on purpose:
+# the embedding match already covers a verbatim mention, and a generic label
+# ("transportation") appearing in the query would over-add a lane.
+_LITERAL_FACETS = ("geography",)
+
 FACET_NAMES = ("year_min", "year_max", "language", "program", "excluded_keyword")
 
 
@@ -116,23 +124,40 @@ def build_understanding(
         except Exception:  # noqa: BLE001
             u.degraded.append("alias_expansion")
 
-        # P2.6 matched_tags — semantic query→tag match per facet (design §4.1).
-        # The query embedding is an LRU hit after stage 1 in the real path;
-        # tests stub embed_model. No embed_model ⇒ skip (flag-off-safe: no
-        # crash, no degraded entry). One attempt per facet, failure-soft (spec §5):
-        # a failing facet degrades to [] for that facet only.
-        if embed_model is not None:
-            try:
-                from app import topic_sense
-                from app.config import get_settings
-                facets = get_settings().expansion_facets
+        # P2.6 matched_tags — semantic query→tag match per facet (design §4.1),
+        # plus a deterministic literal pass: a country or name the query
+        # spells out is certain, so it must not depend on the embedding lane or
+        # its cosine floor. Literal matches are set first and the semantic pass
+        # merges behind them (topic_sense.merge_matched), so the embed call
+        # failing now costs the semantic matches only. One attempt per facet,
+        # failure-soft (spec §5): a failing facet degrades to [] for that facet
+        # alone.
+        try:
+            from app import topic_sense
+            from app.config import get_settings
+            s = get_settings()
+            for facet in s.expansion_facets:
+                if facet not in _LITERAL_FACETS:
+                    continue
+                try:
+                    u.matched_tags[facet] = topic_sense.literal_tags(query, facet)
+                except Exception:  # noqa: BLE001
+                    u.degraded.append(f"matched_tags:{facet}")
+
+            # The query embedding is an LRU hit after stage 1 in the real path;
+            # tests stub embed_model. No embed_model ⇒ literal matches only.
+            if embed_model is not None:
                 emb = embed_model.get_query_embedding(query)
-                for facet in facets:
+                for facet in s.expansion_facets:
                     try:
-                        u.matched_tags[facet] = topic_sense.nearby_tags(emb, facet)
+                        semantic = topic_sense.nearby_tags(emb, facet)
                     except Exception:  # noqa: BLE001
                         u.degraded.append(f"matched_tags:{facet}")
-            except Exception:  # noqa: BLE001 — embed call itself failed
-                u.degraded.append("matched_tags")
+                        continue
+                    u.matched_tags[facet] = topic_sense.merge_matched(
+                        u.matched_tags.get(facet, []), semantic,
+                        s.topic_sense_top_k)
+        except Exception:  # noqa: BLE001 — feature import, settings or embed failed
+            u.degraded.append("matched_tags")
 
     return u

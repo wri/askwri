@@ -76,6 +76,8 @@ export type ResultsPageProps = {
     suggestions: { type: string; text: string }[]
   } | null
   onRemoveFacet?: (chip: { facet: string; value: string }) => void
+  /** A suggested (low-confidence) facet the user clicked to apply. */
+  onApplyFacet?: (chip: { facet: string; value: string }) => void
   onApplySuggestion?: (text: string) => void
 }
 
