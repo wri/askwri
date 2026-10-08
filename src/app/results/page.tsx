@@ -13,7 +13,8 @@ import CitePanel from './CitePanel'
 import { EmptyStateTopics } from '@/app/components/results/EmptyStateTopics'
 import {
   InterpretationLine,
-  facetChipLabel,
+  appliedChips,
+  suggestedChips,
 } from '@/app/components/results/InterpretationLine'
 import {
   buildCatalogIndex,
@@ -264,6 +265,21 @@ const AskWriAppContent = () => {
       .map((f: any) => ({ facet: f.facet, value: f.value }))
     setUserFacets(remaining)
     runQuery(query, { facets: remaining })
+  }
+
+  // Suggested chip accepted (design §7, low-confidence tier): add it to the
+  // explicit facet set and re-query. Same shape as removal — explicit facets
+  // turn auto-detection off, and the value is part of the cache key.
+  const onApplyFacet = (chip: { facet: string; value: string }) => {
+    const currentHard = (understanding?.facets ?? []).filter(
+      (f: any) => f.action === 'hard',
+    )
+    const next = [
+      ...currentHard.map((f: any) => ({ facet: f.facet, value: f.value })),
+      { facet: chip.facet, value: chip.value },
+    ]
+    setUserFacets(next)
+    runQuery(query, { facets: next })
   }
 
   // Did-you-mean accept: re-search with the corrected text (new q = auto mode).
@@ -600,6 +616,7 @@ const AskWriAppContent = () => {
             alignLoading={alignLoading}
             queryUnderstanding={understanding}
             onRemoveFacet={onRemoveFacet}
+            onApplyFacet={onApplyFacet}
             onApplySuggestion={onApplySuggestion}
           />
         </>
@@ -614,23 +631,20 @@ const AskWriAppContent = () => {
     // out is exactly the one the user needs to be able to remove
     // (facet_filter.py Invariant 1).
     if (!retrievalLoading && searchCompleted && pageDocs.length === 0) {
+      const hardChips = appliedChips(understanding?.facets)
       return (
         <>
           <div style={{ padding: '0 2rem' }}>
             <InterpretationLine
-              chips={(understanding?.facets ?? [])
-                .filter((f: any) => f.action === 'hard')
-                .map((f: any) => ({
-                  facet: f.facet,
-                  value: f.value,
-                  label: facetChipLabel(f.facet, f.value),
-                }))}
+              chips={hardChips}
+              suggested={suggestedChips(understanding?.facets, hardChips)}
               suggestion={
                 (understanding?.suggestions ?? []).find(
                   (s: any) => s.type === 'spelling',
                 )?.text ?? null
               }
               onRemoveChip={onRemoveFacet}
+              onApplyChip={onApplyFacet}
               onApplySuggestion={onApplySuggestion}
             />
           </div>

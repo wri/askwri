@@ -30,6 +30,7 @@ const CitePanel = ({
   alignLoading,
   queryUnderstanding,
   onRemoveFacet,
+  onApplyFacet,
   onApplySuggestion,
 }: {
   query: string
@@ -56,6 +57,7 @@ const CitePanel = ({
     suggestions: { type: string; text: string }[]
   } | null
   onRemoveFacet?: (chip: { facet: string; value: string }) => void
+  onApplyFacet?: (chip: { facet: string; value: string }) => void
   onApplySuggestion?: (text: string) => void
 }) => {
   const exportBibCsv = (selectedIds: string[]) => {
@@ -131,6 +133,7 @@ const CitePanel = ({
       onExportBib={exportBibCsv}
       queryUnderstanding={queryUnderstanding}
       onRemoveFacet={onRemoveFacet}
+      onApplyFacet={onApplyFacet}
       onApplySuggestion={onApplySuggestion}
     />
   )
