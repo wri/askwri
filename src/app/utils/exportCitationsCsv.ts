@@ -7,6 +7,7 @@ import {
   titleFrom,
   authorsFrom,
   LANGUAGE_NAMES,
+  languageNameFromCode,
 } from './utils'
 
 /**
@@ -25,12 +26,20 @@ export function buildCitationsCsv({
   index,
   docSummary,
   origin = 'http://localhost',
+  language,
+  versionExternalId,
 }: {
   docs: DocMeta[]
   selectedIds: string[]
   index: ReturnType<typeof buildCatalogIndex> | null
   docSummary: Record<string, string>
   origin?: string
+  /** When set, restricts the exported languages to this label and appends a
+   *  "Citation language" column, so a per-language download is explicit about
+   *  which of the document's versions it cites. */
+  language?: string
+  /** Catalog ID for the selected translation/original document version. */
+  versionExternalId?: string
 }): string {
   const headers = [
     'Title (published title)',
@@ -42,6 +51,7 @@ export function buildCitationsCsv({
     'URL',
     'WRI Office affiliation (primary)',
     'Summary',
+    ...(language ? ['Citation language'] : []),
   ]
 
   function formatDate(dateStr: string) {
@@ -70,8 +80,19 @@ export function buildCitationsCsv({
     selectedIds.includes(doc.doc_id),
   )
   const rows = selectedDocs.map((doc: DocMeta) => {
-    const row = index ? matchCatalogRow(doc, index) : undefined
-    const title = titleFrom(doc, row)
+    const versionRow = versionExternalId
+      ? index?.byDocId.get(versionExternalId)
+      : undefined
+    const row = versionRow || (index ? matchCatalogRow(doc, index) : undefined)
+    const selectedVersionMatchesLanguage =
+      !!language &&
+      !!row?.language &&
+      languageNameFromCode(row.language).toLowerCase() ===
+        languageNameFromCode(language).toLowerCase()
+    const title =
+      selectedVersionMatchesLanguage && row?.nativeTitle
+        ? row.nativeTitle
+        : titleFrom(doc, row)
     const authors = authorsFrom(doc, row).join('; ')
     // documents.date_published first (row.dateAccepted carries it since the
     // DMS catalog landed); the CSV key remains a fallback for legacy rows.
@@ -110,6 +131,7 @@ export function buildCitationsCsv({
     // snippet. No artificial 240-char truncation — the long summary is
     // already a complete sentence.
     const summary =
+      (selectedVersionMatchesLanguage ? row?.nativeSummary : undefined) ||
       row?.summary ||
       docSummary[doc.doc_id] ||
       row?.shortSummary ||
@@ -125,6 +147,7 @@ export function buildCitationsCsv({
       url,
       office,
       summary,
+      ...(language ? [language] : []),
     ]
       .map(csvEscape)
       .join(',')
@@ -138,24 +161,47 @@ export function exportCitationsCsv({
   selectedIds,
   index,
   docSummary,
+  language,
+  versionExternalId,
 }: {
   docs: DocMeta[]
   selectedIds: string[]
   index: ReturnType<typeof buildCatalogIndex> | null
   docSummary: Record<string, string>
+  /** Optional citation language label (e.g. "Spanish"); when set, the CSV
+   *  carries a "Citation language" column and the filename is suffixed. */
+  language?: string
+  versionExternalId?: string
 }) {
   const csvContent = buildCitationsCsv({
     docs,
     selectedIds,
     index,
     docSummary,
+    language,
+    versionExternalId,
     origin: window.location.origin,
   })
   const blob = new Blob([csvContent], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'askwri-citations.csv'
+  a.download = language
+    ? `askwri-citations-${slugifyLanguage(language)}.csv`
+    : 'askwri-citations.csv'
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/** Lowercase, hyphenated filename fragment for a language label
+ *  ("Bahasa Indonesia" → "bahasa-indonesia", "Chinese (original)" → "chinese"). */
+function slugifyLanguage(label: string): string {
+  return (
+    label
+      .toLowerCase()
+      .replace(/\(.*?\)/g, '')
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'citations'
+  )
 }
