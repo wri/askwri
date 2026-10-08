@@ -28,6 +28,7 @@ export interface CatalogDmsMeta {
   language?: string | null
   languages?: string[] | null
   summary_en?: string | null
+  summary_native?: string | null
   short_summary_en?: string | null
 }
 
@@ -53,6 +54,7 @@ export interface CatalogRow {
   dateAccepted?: string
   office?: string
   summary?: string
+  nativeSummary?: string
   shortSummary?: string
   raw?: Record<string, any>
   fileName?: string
@@ -158,6 +160,7 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
       meta.wri_primary_office ||
       undefined,
     summary: dms.summary_en || r.meta?.summary || undefined,
+    nativeSummary: dms.summary_native || undefined,
     shortSummary:
       dms.short_summary_en ||
       r.meta?.short_summary ||

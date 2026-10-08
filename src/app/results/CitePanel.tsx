@@ -60,12 +60,18 @@ const CitePanel = ({
   onApplyFacet?: (chip: { facet: string; value: string }) => void
   onApplySuggestion?: (text: string) => void
 }) => {
-  const exportBibCsv = (selectedIds: string[]) => {
+  const exportBibCsv = (
+    selectedIds: string[],
+    language?: string,
+    versionExternalId?: string,
+  ) => {
     exportCitationsCsv({
       docs,
       selectedIds,
       index,
       docSummary,
+      language,
+      versionExternalId,
     })
   }
 

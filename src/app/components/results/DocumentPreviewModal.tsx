@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { Text, Heading } from '@chakra-ui/react'
 import {
   Button,
+  Menu,
   Tag,
   getThemedColor,
   getThemedFontSize,
   getThemedLineHeight,
 } from '@worldresources/wri-design-systems'
+import { FaChevronDown } from 'react-icons/fa'
 import { AiIcon } from '../icons/AiIcon'
 import { DocumentPreviewModalContentProps } from './types'
 import { languageNameFromCode } from '@/app/utils/utils'
@@ -53,6 +55,35 @@ export const DocumentPreviewModalContent = ({
         ]
       : allLanguages
     ).join(', ') || 'N/A'
+
+  // One export option per available language, mirroring `languagesValue`:
+  // the original version is labelled first and all other versions follow.
+  const languageOptions =
+    documentVersions.length > 1 && originalLanguageLabel
+      ? [
+          {
+            label: `${originalLanguageLabel} (original)`,
+            value: originalLanguageLabel,
+          },
+          ...allLanguages
+            .filter((l) => l !== originalLanguageLabel)
+            .map((l) => ({ label: l, value: l })),
+        ]
+      : allLanguages.map((l) => ({ label: l, value: l }))
+
+  const handleExport = (language?: string) => {
+    const selectedVersion = documentVersions.find((version) => {
+      const versionLanguage = languageNameFromCode(version.language)
+      const selectedLanguage = languageNameFromCode(language)
+      return versionLanguage.toLowerCase() === selectedLanguage.toLowerCase()
+    })
+
+    onExportBib?.(
+      [rowData.id.toString()],
+      language,
+      selectedVersion?.externalId,
+    )
+  }
 
   useEffect(() => {
     let active = true
@@ -142,14 +173,29 @@ export const DocumentPreviewModalContent = ({
       <PdfPreviewSection downloadUrl={rowData.download_url} />
 
       <div>
-        <Button
-          variant='secondary'
-          onClick={() => {
-            onExportBib?.([rowData.id.toString()])
-          }}
-        >
-          Export citations (.csv)
-        </Button>
+        {languageOptions.length > 1 ? (
+          <Menu
+            label='Export citations (.csv)'
+            items={languageOptions.map((option) => ({
+              label: option.label,
+              value: option.value,
+            }))}
+            onSelect={(value) => handleExport(value)}
+            menuWidth='content'
+            customTrigger={
+              <Button variant='secondary' rightIcon={<FaChevronDown />}>
+                Export citations (.csv)
+              </Button>
+            }
+          />
+        ) : (
+          <Button
+            variant='secondary'
+            onClick={() => handleExport(languageOptions[0]?.value)}
+          >
+            Export citations (.csv)
+          </Button>
+        )}
       </div>
     </div>
   )

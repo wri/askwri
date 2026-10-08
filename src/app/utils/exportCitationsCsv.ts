@@ -7,6 +7,7 @@ import {
   titleFrom,
   authorsFrom,
   LANGUAGE_NAMES,
+  languageNameFromCode,
 } from './utils'
 
 /**
@@ -25,12 +26,18 @@ export function buildCitationsCsv({
   index,
   docSummary,
   origin = 'http://localhost',
+  language,
+  versionExternalId,
 }: {
   docs: DocMeta[]
   selectedIds: string[]
   index: ReturnType<typeof buildCatalogIndex> | null
   docSummary: Record<string, string>
   origin?: string
+  /** The language selected in the dropdown. */
+  language?: string
+  /** Exact document version to match if the user chose a translated row. */
+  versionExternalId?: string
 }): string {
   const headers = [
     'Title (published title)',
@@ -70,8 +77,21 @@ export function buildCitationsCsv({
     selectedIds.includes(doc.doc_id),
   )
   const rows = selectedDocs.map((doc: DocMeta) => {
-    const row = index ? matchCatalogRow(doc, index) : undefined
-    const title = titleFrom(doc, row)
+    const defaultRow = index ? matchCatalogRow(doc, index) : undefined
+    const exactRow =
+      versionExternalId && index
+        ? index.byDocId.get(versionExternalId)
+        : undefined
+    const row = exactRow || defaultRow
+    const selectedVersionMatchesLanguage =
+      !!language &&
+      !!row?.language &&
+      languageNameFromCode(row.language).toLowerCase() ===
+        languageNameFromCode(language).toLowerCase()
+    const title =
+      selectedVersionMatchesLanguage && row?.nativeTitle
+        ? row.nativeTitle
+        : titleFrom(doc, row)
     const authors = authorsFrom(doc, row).join('; ')
     // documents.date_published first (row.dateAccepted carries it since the
     // DMS catalog landed); the CSV key remains a fallback for legacy rows.
@@ -110,6 +130,7 @@ export function buildCitationsCsv({
     // snippet. No artificial 240-char truncation — the long summary is
     // already a complete sentence.
     const summary =
+      (selectedVersionMatchesLanguage ? row?.nativeSummary : undefined) ||
       row?.summary ||
       docSummary[doc.doc_id] ||
       row?.shortSummary ||
@@ -138,24 +159,47 @@ export function exportCitationsCsv({
   selectedIds,
   index,
   docSummary,
+  language,
+  versionExternalId,
 }: {
   docs: DocMeta[]
   selectedIds: string[]
   index: ReturnType<typeof buildCatalogIndex> | null
   docSummary: Record<string, string>
+  /** Optional language label used to select the file and metadata. */
+  language?: string
+  /** Exact document version this export should match. */
+  versionExternalId?: string
 }) {
   const csvContent = buildCitationsCsv({
     docs,
     selectedIds,
     index,
     docSummary,
+    language,
+    versionExternalId,
     origin: window.location.origin,
   })
   const blob = new Blob([csvContent], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'askwri-citations.csv'
+  a.download = language
+    ? `askwri-citations-${slugifyLanguage(language)}.csv`
+    : 'askwri-citations.csv'
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/** Lowercase, hyphenated filename fragment for a language label
+ *  ("Bahasa Indonesia" → "bahasa-indonesia", "Chinese (original)" → "chinese"). */
+function slugifyLanguage(label: string): string {
+  return (
+    label
+      .toLowerCase()
+      .replace(/\(.*?\)/g, '')
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'citations'
+  )
 }
