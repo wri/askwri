@@ -68,7 +68,7 @@ export async function GET(
         )
         SELECT DISTINCT external_id AS "externalId",
                         language,
-                        COALESCE(url, '/api/pdf/' || external_id) AS url,
+                        COALESCE(url, '/api/pdf/' || external_id || '.pdf') AS url,
                         is_original AS "isOriginal"
         FROM related
         WHERE status = 'searchable'

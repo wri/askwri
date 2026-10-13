@@ -27,6 +27,25 @@ import {
 import { CitationCardProps } from './types'
 import { DocumentVersion } from '@/app/utils/documentVersions'
 
+// One request per document, shared across every citation card for the same doc.
+const versionsCache = new Map<string, Promise<DocumentVersion[]>>()
+
+const fetchDocumentVersions = (docId: string) => {
+  if (!versionsCache.has(docId)) {
+    versionsCache.set(
+      docId,
+      fetch(`/api/documents/${docId}/versions`)
+        .then((res) => res.json())
+        .then((j) => (j.ok && j.versions ? j.versions : []))
+        .catch((error) => {
+          console.error('Failed to fetch document versions:', error)
+          return []
+        }),
+    )
+  }
+  return versionsCache.get(docId)!
+}
+
 export const CitationCard = ({
   doc,
   kp,
@@ -69,20 +88,14 @@ export const CitationCard = ({
   const isTranslatable = Boolean(row?.language && row.language !== 'en')
 
   useEffect(() => {
-    const fetchDocumentVersions = async () => {
-      if (!doc.doc_id) return
-
-      try {
-        const res = await fetch(`/api/documents/${doc.doc_id}/versions`)
-        const j = await res.json()
-        if (j.ok && j.versions) {
-          setDocumentVersions(j.versions)
-        }
-      } catch (error) {
-        console.error('Failed to fetch document versions:', error)
-      }
+    if (!doc.doc_id) return
+    let active = true
+    fetchDocumentVersions(doc.doc_id).then((versions) => {
+      if (active) setDocumentVersions(versions)
+    })
+    return () => {
+      active = false
     }
-    fetchDocumentVersions()
   }, [doc.doc_id])
 
   const onTranslate = async () => {
