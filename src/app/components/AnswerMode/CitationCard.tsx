@@ -1,20 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Box, Text, Spinner } from '@chakra-ui/react'
-import { getThemedColor, Button, Tag } from '@worldresources/wri-design-systems'
+import {
+  getThemedColor,
+  getThemedFontSize,
+  Button,
+  Tag,
+  Menu,
+} from '@worldresources/wri-design-systems'
 import { IoIosCopy, IoMdCheckmark, IoMdOpen } from 'react-icons/io'
+import { MdTranslate } from 'react-icons/md'
+import { CgSpinner } from 'react-icons/cg'
 import { VscTriangleRight } from 'react-icons/vsc'
+import { FaChevronDown } from 'react-icons/fa'
 import { AiIcon } from '../icons/AiIcon'
 import {
   authorsFrom,
   chicagoFull,
+  languageNameFromCode,
   matchCatalogRow,
   publisherFrom,
   titleFrom,
   yearFrom,
 } from '../../utils/utils'
 import { CitationCardProps } from './types'
+import { DocumentVersion } from '@/app/utils/documentVersions'
 
 export const CitationCard = ({
   doc,
@@ -37,6 +48,9 @@ export const CitationCard = ({
   const [showTranslation, setShowTranslation] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [translateError, setTranslateError] = useState(false)
+  const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>(
+    [],
+  )
 
   const passageId = `${doc.doc_id}:${kp.passage_id}`
   const whyData = passageWhy[passageId]
@@ -53,6 +67,23 @@ export const CitationCard = ({
   // Short English summary — the long one is a wall of text in a side panel.
   const summary = row?.shortSummary || row?.summary
   const isTranslatable = Boolean(row?.language && row.language !== 'en')
+
+  useEffect(() => {
+    const fetchDocumentVersions = async () => {
+      if (!doc.doc_id) return
+
+      try {
+        const res = await fetch(`/api/documents/${doc.doc_id}/versions`)
+        const j = await res.json()
+        if (j.ok && j.versions) {
+          setDocumentVersions(j.versions)
+        }
+      } catch (error) {
+        console.error('Failed to fetch document versions:', error)
+      }
+    }
+    fetchDocumentVersions()
+  }, [doc.doc_id])
 
   const onTranslate = async () => {
     if (translation) {
@@ -127,6 +158,18 @@ export const CitationCard = ({
         {docTitle}
       </Text>
 
+      {row?.language && row.language !== 'en' && (
+        <Text
+          style={{
+            color: getThemedColor('neutral', 700),
+            fontSize: getThemedFontSize(300),
+          }}
+        >
+          Document reviewed in original source language (
+          {languageNameFromCode(row?.language)}).
+        </Text>
+      )}
+
       {/* Excerpt */}
       <Box>
         <Box display='flex' alignItems='center' gap='2'>
@@ -151,21 +194,23 @@ export const CitationCard = ({
             />
             {`Excerpt (Page ${kp.page ?? 1})`}
           </Text>
-          {expandedSnippet && isTranslatable && (
-            <Button
-              variant='borderless'
-              size='small'
-              onClick={onTranslate}
-              disabled={translating}
-            >
-              {translating
-                ? 'Translating…'
-                : showTranslation
-                  ? 'Show original'
-                  : 'Translate'}
-            </Button>
-          )}
         </Box>
+
+        {expandedSnippet && isTranslatable && (
+          <Button
+            variant='borderless'
+            size='small'
+            leftIcon={translating ? <CgSpinner /> : <MdTranslate />}
+            onClick={onTranslate}
+            disabled={translating}
+          >
+            {translating
+              ? 'Translating…'
+              : showTranslation
+                ? 'Show original'
+                : 'Translate to English (AI)'}
+          </Button>
+        )}
 
         <Text
           fontSize='sm'
@@ -182,11 +227,7 @@ export const CitationCard = ({
             </>
           )}
         </Text>
-        {expandedSnippet && showTranslation && translation && (
-          <Text fontSize='xs' color={getThemedColor('neutral', 700)}>
-            Translated to English by AI <AiIcon />
-          </Text>
-        )}
+
         {expandedSnippet && translateError && (
           <Text fontSize='xs' color={getThemedColor('error', 700)}>
             Translation unavailable — showing the original.
@@ -277,15 +318,44 @@ export const CitationCard = ({
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: '8px', padding: '8px 0px' }}>
-        <Button variant='secondary' size='small' leftIcon={<IoMdOpen />}>
-          <a
-            href={`api/pdf/${doc.doc_id}.pdf#page=${kp.page || 1}`}
-            target='_blank'
-            rel='noopener noreferrer'
-          >
-            Open document
-          </a>
-        </Button>
+        {documentVersions.length > 1 ? (
+          <Menu
+            label='Open document'
+            items={documentVersions.map((version) => ({
+              label: `${languageNameFromCode(version.language)}${version.isOriginal ? ' (original)' : ''}`,
+              value: version.url || '',
+            }))}
+            onSelect={(value) => {
+              if (value) {
+                window.open(value, '_blank', 'noopener,noreferrer')
+              }
+            }}
+            customTrigger={
+              <Button
+                variant='secondary'
+                size='small'
+                leftIcon={<IoMdOpen />}
+                rightIcon={<FaChevronDown />}
+                label={
+                  // font size fix as it was overriden by the Menu component
+                  <div style={{ fontSize: getThemedFontSize(200) }}>
+                    Open document
+                  </div>
+                }
+              />
+            }
+          />
+        ) : (
+          <Button variant='secondary' size='small' rightIcon={<IoMdOpen />}>
+            <a
+              href={`api/pdf/${doc.doc_id}.pdf#page=${kp.page || 1}`}
+              target='_blank'
+              rel='noopener,noreferrer'
+            >
+              Open document
+            </a>
+          </Button>
+        )}
         <Button
           variant='secondary'
           size='small'
@@ -301,7 +371,7 @@ export const CitationCard = ({
             setTimeout(() => setCopied(false), 1500)
           }}
         >
-          {copied ? 'Copied' : 'Copy passage'}
+          {copied ? 'Copied' : 'Copy excerpt & citation'}
         </Button>
       </div>
     </Box>
