@@ -337,7 +337,7 @@ export const CitationCard = ({
                 leftIcon={<IoMdOpen />}
                 rightIcon={<FaChevronDown />}
                 label={
-                  // font size fix as it was overriden by the Menu component
+                  // font size fix as it was overridden by the Menu component
                   <div style={{ fontSize: getThemedFontSize(200) }}>
                     Open document
                   </div>
