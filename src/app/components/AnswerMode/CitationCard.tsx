@@ -165,8 +165,7 @@ export const CitationCard = ({
             fontSize: getThemedFontSize(300),
           }}
         >
-          Document reviewed in original source language (
-          {languageNameFromCode(row?.language)}).
+          Document reviewed in {languageNameFromCode(row.language)}.
         </Text>
       )}
 
