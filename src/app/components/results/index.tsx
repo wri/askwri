@@ -18,6 +18,11 @@ import ResultsTable from './ResultsTable'
 import FilterPanel from './FilterPanel'
 import { formatCO2, formatCost } from '../../utils/utils'
 import { ResultsPageProps } from './types'
+import {
+  InterpretationLine,
+  appliedChips,
+  suggestedChips,
+} from './InterpretationLine'
 import '../../styles.css'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
@@ -31,8 +36,13 @@ const ResultsPage = ({
   ops,
   alignment,
   alignLoading,
+  queryUnderstanding,
+  onRemoveFacet,
+  onApplyFacet,
+  onApplySuggestion,
 }: ResultsPageProps) => {
   const tableData = data
+  const hardChips = appliedChips(queryUnderstanding?.facets)
   const router = useRouter()
   const searchParams = useSearchParams()
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -93,6 +103,21 @@ const ResultsPage = ({
           )}
         </div>
       </section>
+      {/* Interpretation line sits in the content column (design §3): aligned
+        with the Overview/results below, not full-width. */}
+      <div style={{ padding: '0 2rem', maxWidth: '800px' }}>
+        <InterpretationLine
+          chips={hardChips}
+          suggested={suggestedChips(queryUnderstanding?.facets, hardChips)}
+          suggestion={
+            queryUnderstanding?.suggestions?.find((s) => s.type === 'spelling')
+              ?.text ?? null
+          }
+          onRemoveChip={(chip) => onRemoveFacet?.(chip)}
+          onApplyChip={(chip) => onApplyFacet?.(chip)}
+          onApplySuggestion={(text) => onApplySuggestion?.(text)}
+        />
+      </div>
       <section style={{ padding: '0 2rem', maxWidth: '800px' }}>
         <div
           style={{
