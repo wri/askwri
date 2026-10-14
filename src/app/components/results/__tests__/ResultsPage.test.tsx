@@ -8,6 +8,12 @@ jest.mock('@/app/components/results/Navbar', () => ({
   default: () => <div />,
 }))
 
+// ResultsPage reads the URL (office filter) and pushes params on apply/remove.
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn() }),
+  useSearchParams: () => new URLSearchParams('q=hydrogen'),
+}))
+
 const props = (queryUnderstanding: any, onRemoveFacet = jest.fn()) => ({
   query: 'hydrogen since 2020',
   data: [],

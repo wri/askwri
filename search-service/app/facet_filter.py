@@ -6,13 +6,21 @@ rendered as a removable chip by the UI; Invariant 2: all hard facet types
 are human-verifiable metadata)."""
 from typing import List
 
+import unicodedata
+
 from app.understanding import Facet
 
 
-def _strip_accents(s: str) -> str:
-    import unicodedata
-
-    return unicodedata.normalize("NFD", s).replace("\u0301", "").replace("\u0300", "")
+def _normalize_office(s: str) -> str:
+    # Case-, accent- and whitespace-insensitive: the UI canonicalizes values
+    # ("WRI US" → "WRI Us", all accents stripped) while the corpus keeps its
+    # own spelling ("WRI México", "WRI US", stray double spaces).
+    stripped = "".join(
+        ch
+        for ch in unicodedata.normalize("NFD", s.casefold())
+        if not unicodedata.combining(ch)
+    )
+    return " ".join(stripped.split())
 
 
 def legacy_request_facets(request) -> List[Facet]:
@@ -96,12 +104,13 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
 
         # Office lives in raw_metadata (wri_primary_office); a doc with unknown
         # office is KEPT (exclude only on a positive mismatch), like language.
-        # Accent-insensitive: the corpus mixes "WRI México" and "WRI Mexico".
+        # Comparison is accent-, case- and whitespace-insensitive: the corpus
+        # mixes "WRI México"/"WRI Mexico" and "WRI US"/"WRI Us".
         # Multiple office facets are OR: keep docs matching any of them.
         if offices:
             doc_office = doc.get("office")
             if doc_office is not None and not any(
-                _strip_accents(doc_office) == _strip_accents(o) for o in offices
+                _normalize_office(doc_office) == _normalize_office(o) for o in offices
             ):
                 continue
 
