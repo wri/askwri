@@ -60,7 +60,7 @@ export interface FilterPanelProps {
   onApplyOffices: (offices: string[]) => void
 }
 
-const FilterPanel = ({
+export const FilterPanel = ({
   open,
   onClose,
   selectedOffices,
@@ -68,9 +68,6 @@ const FilterPanel = ({
 }: FilterPanelProps) => {
   const [languages, setLanguages] = useState<FilterOption[]>([])
   const [offices, setOffices] = useState<FilterOption[]>([])
-  // Checked offices are derived while the modal is closed (URL-driven) and
-  // owned by local state once the user edits the checkboxes inside it.
-  const [editedOffices, setEditedOffices] = useState<string[] | null>(null)
 
   useEffect(() => {
     getLanguageOptions().then(setLanguages)
@@ -78,6 +75,40 @@ const FilterPanel = ({
   }, [])
 
   if (!open) return null
+
+  // `editedOffices` lives inside the content so that it resets automatically
+  // when the modal closes (the content only mounts while open). Keeping it
+  // here would require an effect that calls setState on close, which triggers
+  // cascading renders.
+  return (
+    <FilterPanelContent
+      onClose={onClose}
+      selectedOffices={selectedOffices}
+      onApplyOffices={onApplyOffices}
+      languages={languages}
+      offices={offices}
+    />
+  )
+}
+
+interface FilterPanelContentProps {
+  onClose: () => void
+  selectedOffices: string[]
+  onApplyOffices: (offices: string[]) => void
+  languages: FilterOption[]
+  offices: FilterOption[]
+}
+
+const FilterPanelContent = ({
+  onClose,
+  selectedOffices,
+  onApplyOffices,
+  languages,
+  offices,
+}: FilterPanelContentProps) => {
+  // Checked offices are derived from the URL on mount (see `checkedOffices`
+  // below) and owned by local state once the user edits the checkboxes.
+  const [editedOffices, setEditedOffices] = useState<string[] | null>(null)
 
   // URL offices may be accented ("WRI México") while option values are not;
   // match accent-insensitively so the right checkboxes come pre-checked.
@@ -108,7 +139,7 @@ const FilterPanel = ({
 
   return (
     <Modal
-      open={open}
+      open
       onClose={onClose}
       size='medium'
       key={selectedOffices.join('|')}

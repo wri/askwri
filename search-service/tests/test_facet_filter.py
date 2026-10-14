@@ -164,6 +164,18 @@ def test_office_mismatch_still_excludes():
     assert out == []
 
 
+def test_office_multiple_facets_are_or():
+    # Two office chips keep docs matching EITHER (the FilterPanel is
+    # multi-select); a doc matching neither is dropped.
+    nodes = [_office_node("d-us"), _office_node("d-mx"), _office_node("d-br")]
+    out = apply_facet_filters(
+        nodes,
+        [_hard("office", "WRI Us"), _hard("office", "WRI Mexico")],
+        OFFICE_META,
+    )
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-us", "d-mx"]
+
+
 def test_office_kept_when_doc_has_no_office():
     nodes = [_office_node("mystery")]
     out = apply_facet_filters(nodes, [_hard("office", "WRI Mexico")], {})
