@@ -123,3 +123,60 @@ def test_legacy_request_facets_conversion():
 def test_legacy_request_facets_empty_request():
     req = SimpleNamespace(min_year=None, max_year=None, required_program=None, excluded_keywords=None)
     assert legacy_request_facets(req) == []
+
+
+OFFICE_META = {
+    "d-us": {"office": "WRI US", "year_int": 2023},
+    "d-mx": {"office": "WRI México", "year_int": 2023},
+    "d-br": {"office": "WRI  São   Paulo", "year_int": 2023},
+}
+
+
+def _office_node(doc_id):
+    n = MagicMock()
+    n.node.metadata = {"doc_id": doc_id, "program_series": "", "title": "t"}
+    n.node.text = "body"
+    return n
+
+
+def test_office_matches_across_case():
+    # The UI canonicalizes "WRI US" to "WRI Us"; the corpus keeps "WRI US".
+    nodes = [_office_node("d-us")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI Us")], OFFICE_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-us"]
+
+
+def test_office_matches_across_accents():
+    nodes = [_office_node("d-mx")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI Mexico")], OFFICE_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-mx"]
+
+
+def test_office_matches_across_whitespace():
+    nodes = [_office_node("d-br")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI São Paulo")], OFFICE_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-br"]
+
+
+def test_office_mismatch_still_excludes():
+    nodes = [_office_node("d-us"), _office_node("d-mx")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI Brazil")], OFFICE_META)
+    assert out == []
+
+
+def test_office_multiple_facets_are_or():
+    # Two office chips keep docs matching EITHER (the FilterPanel is
+    # multi-select); a doc matching neither is dropped.
+    nodes = [_office_node("d-us"), _office_node("d-mx"), _office_node("d-br")]
+    out = apply_facet_filters(
+        nodes,
+        [_hard("office", "WRI Us"), _hard("office", "WRI Mexico")],
+        OFFICE_META,
+    )
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-us", "d-mx"]
+
+
+def test_office_kept_when_doc_has_no_office():
+    nodes = [_office_node("mystery")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI Mexico")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["mystery"]

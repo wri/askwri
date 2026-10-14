@@ -19,6 +19,8 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/results',
   useSearchParams: () => ({
     get: (k: string) => (k === 'q' ? currentQ : null),
+    getAll: () => [],
+    toString: () => `q=${currentQ}`,
   }),
 }))
 

@@ -6,7 +6,21 @@ rendered as a removable chip by the UI; Invariant 2: all hard facet types
 are human-verifiable metadata)."""
 from typing import List
 
+import unicodedata
+
 from app.understanding import Facet
+
+
+def _normalize_office(s: str) -> str:
+    # Case-, accent- and whitespace-insensitive: the UI canonicalizes values
+    # ("WRI US" → "WRI Us", all accents stripped) while the corpus keeps its
+    # own spelling ("WRI México", "WRI US", stray double spaces).
+    stripped = "".join(
+        ch
+        for ch in unicodedata.normalize("NFD", s.casefold())
+        if not unicodedata.combining(ch)
+    )
+    return " ".join(stripped.split())
 
 
 def legacy_request_facets(request) -> List[Facet]:
@@ -29,6 +43,7 @@ def legacy_request_facets(request) -> List[Facet]:
 def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
     year_min = year_max = None
     language = program = None
+    offices = []
     excluded = []
     for f in facets:
         if f.action != "hard":
@@ -47,10 +62,12 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
             language = f.value
         elif f.facet == "program":
             program = f.value
+        elif f.facet == "office":
+            offices.append(f.value)
         elif f.facet == "excluded_keyword":
             excluded.append(f.value.lower())
 
-    if year_min is None and year_max is None and language is None and program is None and not excluded:
+    if year_min is None and year_max is None and language is None and program is None and not offices and not excluded:
         return nodes
 
     out = []
@@ -84,6 +101,18 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
 
         if program is not None and md.get("program_series", "") != program:
             continue
+
+        # Office lives in raw_metadata (wri_primary_office); a doc with unknown
+        # office is KEPT (exclude only on a positive mismatch), like language.
+        # Comparison is accent-, case- and whitespace-insensitive: the corpus
+        # mixes "WRI México"/"WRI Mexico" and "WRI US"/"WRI Us".
+        # Multiple office facets are OR: keep docs matching any of them.
+        if offices:
+            doc_office = doc.get("office")
+            if doc_office is not None and not any(
+                _normalize_office(doc_office) == _normalize_office(o) for o in offices
+            ):
+                continue
 
         if excluded:
             title = (md.get("title") or "").lower()

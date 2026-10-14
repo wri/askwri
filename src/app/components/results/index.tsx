@@ -1,6 +1,7 @@
 'use client'
 
-import { FC } from 'react'
+import { FC, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Heading, Box, List, Text, Spinner } from '@chakra-ui/react'
 import {
   Button,
@@ -14,6 +15,7 @@ import { AiFillThunderbolt } from 'react-icons/ai'
 import { AiIcon } from '../icons/AiIcon'
 import Navbar from './Navbar'
 import ResultsTable from './ResultsTable'
+import FilterPanel from './FilterPanel'
 import { formatCO2, formatCost } from '../../utils/utils'
 import { ResultsPageProps } from './types'
 import {
@@ -41,6 +43,17 @@ const ResultsPage = ({
 }: ResultsPageProps) => {
   const tableData = data
   const hardChips = appliedChips(queryUnderstanding?.facets)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const selectedOffices = searchParams?.getAll('office') ?? []
+
+  const applyOffices = (offices: string[]) => {
+    const params = new URLSearchParams(searchParams?.toString())
+    params.delete('office')
+    for (const office of offices) params.append('office', office)
+    router.push(`/results?${params.toString()}`)
+  }
 
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
@@ -160,6 +173,14 @@ const ResultsPage = ({
         docSummaryLoading={docSummaryLoading}
         docWhyLoading={docWhyLoading}
         onExportBib={onExportBib}
+        onOpenFilters={() => setFiltersOpen(true)}
+        filtersOpen={filtersOpen}
+      />
+      <FilterPanel
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        selectedOffices={selectedOffices}
+        onApplyOffices={applyOffices}
       />
     </main>
   )

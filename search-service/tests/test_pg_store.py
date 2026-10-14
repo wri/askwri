@@ -1,4 +1,5 @@
 import os
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -69,6 +70,26 @@ def test_dense_retrieval_returns_ranked_results(monkeypatch):
     scores = [r.score for r in results]
     assert scores == sorted(scores, reverse=True)
     assert all("doc_id" in r.node.metadata for r in results)
+
+
+def test_document_office_uses_relational_column(monkeypatch):
+    from app import pg_store
+
+    pool = MagicMock()
+    connection = pool.connection.return_value.__enter__.return_value
+    connection.execute.return_value.fetchall.return_value = [
+        ("china", {"metadata": {}}, "en", "report", 2015, "WRI China"),
+        ("india", {"metadata": {"wri_primary_office": "WRI Global"}},
+         "en", "report", 2024, "WRI India"),
+        ("unknown", {"metadata": {}}, "en", "report", 2024, None),
+    ]
+    monkeypatch.setattr(pg_store, "get_pool", lambda: pool)
+
+    metadata = pg_store.load_documents_metadata()
+
+    assert metadata["china"]["office"] == "WRI China"
+    assert metadata["india"]["office"] == "WRI India"
+    assert metadata["unknown"]["office"] is None
 
 
 def test_year_int_fallback_parsing():
