@@ -52,6 +52,8 @@ export type ResultsTableProps = {
     language?: string,
     versionExternalId?: string,
   ) => void
+  onOpenFilters?: () => void
+  filtersOpen?: boolean
 }
 
 export type ResultsPageProps = {

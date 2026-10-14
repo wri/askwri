@@ -70,6 +70,8 @@ const ResultsTable = ({
   docSummaryLoading = {},
   onToggleSelect,
   onExportBib,
+  onOpenFilters,
+  filtersOpen,
 }: ResultsTableProps) => {
   const totalItems = data.length
   const pageSize = PAGE_SIZE
@@ -171,6 +173,14 @@ const ResultsTable = ({
             borderTop: `1px solid ${getThemedColor('neutral', 300)}`,
           }}
         >
+          <Button
+            variant='secondary'
+            size='small'
+            label='Filters'
+            aria-label='Open filter panel'
+            aria-expanded={filtersOpen}
+            onClick={() => onOpenFilters?.()}
+          />
           <Button
             variant='primary'
             size='small'

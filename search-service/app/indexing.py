@@ -65,6 +65,7 @@ def load_csv_metadata(documents_local_dir: str) -> dict:
                 "summary": row.get('summary', '') if pd.notna(row.get('summary', '')) else '',
                 "subtag": metadata_raw.get('Sub-tag', '') if isinstance(metadata_raw.get('Sub-tag'), str) else '',
                 "program_series": metadata_raw.get('program_series', ''),  # Add program_series for filtering
+                "office": metadata_raw.get('wri_primary_office', ''),
                 "file_path": file_path,
                 "local_file": local_file_path,
                 "raw_metadata": metadata_raw

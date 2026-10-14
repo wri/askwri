@@ -1,6 +1,7 @@
 'use client'
 
-import { FC } from 'react'
+import { FC, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Heading, Box, List, Text, Spinner } from '@chakra-ui/react'
 import {
   Button,
@@ -14,13 +15,9 @@ import { AiFillThunderbolt } from 'react-icons/ai'
 import { AiIcon } from '../icons/AiIcon'
 import Navbar from './Navbar'
 import ResultsTable from './ResultsTable'
+import FilterPanel from './FilterPanel'
 import { formatCO2, formatCost } from '../../utils/utils'
 import { ResultsPageProps } from './types'
-import {
-  InterpretationLine,
-  appliedChips,
-  suggestedChips,
-} from './InterpretationLine'
 import '../../styles.css'
 
 const Tooltip = DS_Tooltip as FC<any> // temporary fix to resolve type issues with Tooltip component from wri-design-systems
@@ -34,13 +31,19 @@ const ResultsPage = ({
   ops,
   alignment,
   alignLoading,
-  queryUnderstanding,
-  onRemoveFacet,
-  onApplyFacet,
-  onApplySuggestion,
 }: ResultsPageProps) => {
   const tableData = data
-  const hardChips = appliedChips(queryUnderstanding?.facets)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const selectedOffices = searchParams?.getAll('office') ?? []
+
+  const applyOffices = (offices: string[]) => {
+    const params = new URLSearchParams(searchParams?.toString())
+    params.delete('office')
+    for (const office of offices) params.append('office', office)
+    router.push(`/results?${params.toString()}`)
+  }
 
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
@@ -90,21 +93,6 @@ const ResultsPage = ({
           )}
         </div>
       </section>
-      {/* Interpretation line sits in the content column (design §3): aligned
-        with the Overview/results below, not full-width. */}
-      <div style={{ padding: '0 2rem', maxWidth: '800px' }}>
-        <InterpretationLine
-          chips={hardChips}
-          suggested={suggestedChips(queryUnderstanding?.facets, hardChips)}
-          suggestion={
-            queryUnderstanding?.suggestions?.find((s) => s.type === 'spelling')
-              ?.text ?? null
-          }
-          onRemoveChip={(chip) => onRemoveFacet?.(chip)}
-          onApplyChip={(chip) => onApplyFacet?.(chip)}
-          onApplySuggestion={(text) => onApplySuggestion?.(text)}
-        />
-      </div>
       <section style={{ padding: '0 2rem', maxWidth: '800px' }}>
         <div
           style={{
@@ -160,6 +148,14 @@ const ResultsPage = ({
         docSummaryLoading={docSummaryLoading}
         docWhyLoading={docWhyLoading}
         onExportBib={onExportBib}
+        onOpenFilters={() => setFiltersOpen(true)}
+        filtersOpen={filtersOpen}
+      />
+      <FilterPanel
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        selectedOffices={selectedOffices}
+        onApplyOffices={applyOffices}
       />
     </main>
   )

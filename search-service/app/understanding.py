@@ -24,7 +24,7 @@ FACET_NAMES = ("year_min", "year_max", "language", "program", "excluded_keyword"
 
 
 class Facet(BaseModel):
-    facet: Literal["year_min", "year_max", "language", "program", "excluded_keyword"]
+    facet: Literal["year_min", "year_max", "language", "program", "office", "excluded_keyword"]
     value: str
     confidence: float = Field(ge=0.0, le=1.0)
     source: Literal["parser", "llm", "user"]

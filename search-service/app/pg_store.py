@@ -137,6 +137,7 @@ def load_documents_metadata() -> dict:
             "summary": src.get("summary", ""),
             "subtag": raw.get("Sub-tag", "") if isinstance(raw.get("Sub-tag"), str) else "",
             "program_series": raw.get("program_series", ""),
+            "office": raw.get("wri_primary_office", ""),
             "file_path": src.get("file_path", ""),
             "raw_metadata": raw,
             # Query-understanding facet fields (design 2026-08-19 §4.5).

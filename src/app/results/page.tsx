@@ -104,6 +104,12 @@ const AskWriAppContent = () => {
 
   const searchParams = useSearchParams()
   const searchQuery = searchParams?.get('q')?.trim() ?? ''
+  const urlOffices = searchParams?.getAll('office') ?? []
+  const officeFacets = urlOffices.map((office) => ({
+    facet: 'office',
+    value: office,
+  }))
+  const officeKey = JSON.stringify(urlOffices)
 
   async function doCite(
     q: string,
@@ -240,12 +246,12 @@ const AskWriAppContent = () => {
 
   useEffect(() => {
     if (!searchQuery) return
-    if (query.trim() === searchQuery) return
     setQuery(searchQuery)
-    setUserFacets(null) // new search = auto mode again (design §3)
-    setAutoSwitchedFrom(null) // new search = no auto-switch carried over
-    runQuery(searchQuery, { facets: null })
-  }, [searchQuery])
+    const facets = officeFacets.length ? officeFacets : null
+    setUserFacets(facets)
+    setAutoSwitchedFrom(null)
+    runQuery(searchQuery, { facets })
+  }, [searchQuery, officeKey])
 
   const pageDocs = useMemo(() => {
     if (!Array.isArray(supporting)) return []
@@ -256,7 +262,15 @@ const AskWriAppContent = () => {
   // and re-query. The remaining facets are passed to runQuery directly (state
   // updates are async) and become part of the cache key, so this never sends
   // the pre-removal facets and never serves the auto-mode cached result.
+  // Office chips live in the URL, so removing one rewrites the params instead.
   const onRemoveFacet = (chip: { facet: string; value: string }) => {
+    if (chip.facet === 'office') {
+      const params = new URLSearchParams(searchParams?.toString())
+      params.delete('office')
+      const qs = params.toString()
+      router.push(qs ? `/results?${qs}` : '/results')
+      return
+    }
     const currentHard = (understanding?.facets ?? []).filter(
       (f: any) => f.action === 'hard',
     )

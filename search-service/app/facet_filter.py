@@ -9,6 +9,12 @@ from typing import List
 from app.understanding import Facet
 
 
+def _strip_accents(s: str) -> str:
+    import unicodedata
+
+    return unicodedata.normalize("NFD", s).replace("\u0301", "").replace("\u0300", "")
+
+
 def legacy_request_facets(request) -> List[Facet]:
     out: List[Facet] = []
     if getattr(request, "min_year", None):
@@ -29,6 +35,7 @@ def legacy_request_facets(request) -> List[Facet]:
 def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
     year_min = year_max = None
     language = program = None
+    offices = []
     excluded = []
     for f in facets:
         if f.action != "hard":
@@ -47,10 +54,12 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
             language = f.value
         elif f.facet == "program":
             program = f.value
+        elif f.facet == "office":
+            offices.append(f.value)
         elif f.facet == "excluded_keyword":
             excluded.append(f.value.lower())
 
-    if year_min is None and year_max is None and language is None and program is None and not excluded:
+    if year_min is None and year_max is None and language is None and program is None and not offices and not excluded:
         return nodes
 
     out = []
@@ -84,6 +93,17 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
 
         if program is not None and md.get("program_series", "") != program:
             continue
+
+        # Office lives in raw_metadata (wri_primary_office); a doc with unknown
+        # office is KEPT (exclude only on a positive mismatch), like language.
+        # Accent-insensitive: the corpus mixes "WRI México" and "WRI Mexico".
+        # Multiple office facets are OR: keep docs matching any of them.
+        if offices:
+            doc_office = doc.get("office")
+            if doc_office is not None and not any(
+                _strip_accents(doc_office) == _strip_accents(o) for o in offices
+            ):
+                continue
 
         if excluded:
             title = (md.get("title") or "").lower()
