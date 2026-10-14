@@ -2,7 +2,7 @@ name: PR Agent
 
 on:
   # Use pull_request_target (not pull_request) so the workflow definition is
-  # always read from the BASE branch (main). With `pull_request`, GitHub runs
+  # always read from the PR's base branch (`qa` by default). With `pull_request`, GitHub runs
   # the workflow file from the PR's merge ref, which is only recomputed when the
   # PR branch is pushed to. A PR opened before a workflow change keeps running
   # the OLD workflow until it is rebased/updated.
