@@ -140,8 +140,10 @@ def load_work_languages() -> dict:
             """
         ).fetchall()
     for t_ext, t_lang, o_ext, o_lang in rows:
-        siblings.setdefault(t_ext, set()).add(o_lang)
-        siblings.setdefault(o_ext, set()).add(t_lang)
+        if o_lang is not None:
+            siblings.setdefault(t_ext, set()).add(o_lang)
+        if t_lang is not None:
+            siblings.setdefault(o_ext, set()).add(t_lang)
     return {ext: frozenset(langs) for ext, langs in siblings.items()}
 
 
