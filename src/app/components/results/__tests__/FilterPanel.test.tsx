@@ -28,7 +28,7 @@ const renderPanel = (overrides: Partial<FilterPanelProps> = {}) => {
     open: true,
     selectedOffices: [],
     selectedLanguages: [],
-    selectedDates: [],
+    selectedDates: ['', ''],
     onApply: jest.fn(),
     onClose: jest.fn(),
     ...overrides,
@@ -75,7 +75,11 @@ describe('FilterPanel office interactions', () => {
     expect(checkbox('China')).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith(['WRI China', 'WRI India'], [], [])
+    expect(onApply).toHaveBeenCalledWith(
+      ['WRI China', 'WRI India'],
+      [],
+      ['', ''],
+    )
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -87,7 +91,7 @@ describe('FilterPanel office interactions', () => {
     expect(checkbox('India')).not.toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], [])
+    expect(onApply).toHaveBeenCalledWith([], [], ['', ''])
   })
 
   it('clears applied offices and draft edits, then closes', async () => {
@@ -100,7 +104,7 @@ describe('FilterPanel office interactions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], [])
+    expect(onApply).toHaveBeenCalledWith([], [], ['', ''])
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -113,7 +117,7 @@ describe('FilterPanel office interactions', () => {
     await toggleOffice('Chinese')
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], ['es', 'zh'], [])
+    expect(onApply).toHaveBeenCalledWith([], ['es', 'zh'], ['', ''])
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -139,6 +143,82 @@ describe('FilterPanel office interactions', () => {
       ['es'],
       ['2020-06-01', '2020-06-30'],
     )
+  })
+
+  it('keeps an upper-bound-only range in the end slot on Apply', async () => {
+    const { onApply } = renderPanel({ selectedDates: ['', '2020-06-30'] })
+
+    expect(
+      screen.getByRole('textbox', { name: 'Publication start date' }),
+    ).toHaveValue('')
+    expect(
+      screen.getByRole('textbox', { name: 'Publication end date' }),
+    ).toHaveValue('2020-06-30')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    // Regression: filtering the missing start out of a compacted array moved
+    // the end date to index 0, so Apply rewrote date_max as date_min.
+    expect(onApply).toHaveBeenCalledWith([], [], ['', '2020-06-30'])
+  })
+
+  it('clears the upper bound when the end input is emptied', async () => {
+    const { onApply } = renderPanel({ selectedDates: ['', '2020-06-30'] })
+    await act(async () => {
+      const end = screen.getByRole('textbox', { name: 'Publication end date' })
+      fireEvent.change(end, { target: { value: '' } })
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledWith([], [], ['', ''])
+  })
+
+  it('never applies the hidden sentinel start', async () => {
+    const { onApply } = renderPanel({ selectedDates: ['', '2020-06-30'] })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    // The sentinel is scratch state for the picker only, never a real bound.
+    const [, , dates] = (onApply as jest.Mock).mock.calls[0]
+    expect(dates[0]).toBe('')
+  })
+
+  it('applies a lower-bound-only range in the start slot', async () => {
+    const { onApply } = renderPanel({ selectedDates: ['2020-06-01', ''] })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', ''])
+  })
+
+  // The sentinel is 1900-01-01, so keeping a date *before* it would let the
+  // picker derive a `min` below the sentinel and undo the point of the sentinel.
+  it('drops a pre-sentinel start bound on Apply', async () => {
+    const { onApply } = renderPanel({
+      selectedDates: ['1500-01-01', '2020-06-30'],
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledWith([], [], ['', '2020-06-30'])
+  })
+
+  it('drops a pre-sentinel end bound from the picker', async () => {
+    renderPanel({ selectedDates: ['', '1500-01-01'] })
+
+    expect(
+      screen.getByRole('textbox', { name: 'Publication end date' }),
+    ).toHaveValue('')
+  })
+
+  it('applies a start edited onto an upper-bound-only range', async () => {
+    const { onApply } = renderPanel({ selectedDates: ['', '2020-06-30'] })
+    await act(async () => {
+      const start = screen.getByRole('textbox', {
+        name: 'Publication start date',
+      })
+      fireEvent.change(start, { target: { value: '2020-06-01' } })
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', '2020-06-30'])
   })
 
   it('applies an edited publication date range as ISO dates', async () => {

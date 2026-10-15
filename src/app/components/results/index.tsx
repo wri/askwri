@@ -48,17 +48,19 @@ const ResultsPage = ({
   const [filtersOpen, setFiltersOpen] = useState(false)
   const selectedOffices = searchParams?.getAll('office') ?? []
   const selectedLanguages = searchParams?.getAll('language') ?? []
-  const selectedDates = [
-    searchParams?.get('date_min'),
-    searchParams?.get('date_max'),
-  ].filter((value): value is string => Boolean(value))
+  // Positional so a single applied bound keeps its place: a compacted array
+  // would slide date_max into slot 0 and Apply would rewrite it as date_min.
+  const selectedDates: [string, string] = [
+    searchParams?.get('date_min') ?? '',
+    searchParams?.get('date_max') ?? '',
+  ]
 
   // One navigation for both facets: two router.push calls in the same tick
   // race in the App Router and the second cancels the first.
   const applyFilters = (
     offices: string[],
     languages: string[],
-    dates: string[],
+    dates: [string, string],
   ) => {
     const params = new URLSearchParams(searchParams?.toString())
     params.delete('office')

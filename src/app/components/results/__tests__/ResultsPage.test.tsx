@@ -93,6 +93,82 @@ describe('results date filter navigation', () => {
     expect(routerPush).toHaveBeenCalledTimes(1)
     expect(routerPush).toHaveBeenCalledWith('/results?q=hydrogen')
   })
+
+  it('round-trips an upper-bound-only URL without rewriting date_max as date_min', async () => {
+    currentParams = 'q=hydrogen&date_max=2020-06-30'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    expect(
+      screen.getByRole('textbox', { name: 'Publication start date' }),
+    ).toHaveValue('')
+    expect(
+      screen.getByRole('textbox', { name: 'Publication end date' }),
+    ).toHaveValue('2020-06-30')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(routerPush).toHaveBeenCalledTimes(1)
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('date_min')).toBeNull()
+    expect(params.get('date_max')).toBe('2020-06-30')
+    expect(params.get('q')).toBe('hydrogen')
+  })
+
+  it('round-trips a lower-bound-only URL without rewriting date_min as date_max', async () => {
+    currentParams = 'q=hydrogen&date_min=2020-06-01'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(routerPush).toHaveBeenCalledTimes(1)
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('date_min')).toBe('2020-06-01')
+    expect(params.get('date_max')).toBeNull()
+  })
+
+  it('never writes the picker sentinel into the URL', async () => {
+    currentParams = 'q=hydrogen&date_max=2020-06-30'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('date_min')).toBeNull()
+    expect(params.get('date_max')).toBe('2020-06-30')
+  })
+
+  // A pre-1900 URL bound is dropped rather than applied: keeping it would push
+  // the picker's derived `min` below the sentinel that anchors that range.
+  it('drops a pre-sentinel URL date bound on Apply', async () => {
+    currentParams = 'q=hydrogen&date_min=1500-01-01&date_max=2020-06-30'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('date_min')).toBeNull()
+    expect(params.get('date_max')).toBe('2020-06-30')
+  })
 })
 
 describe('results component — interpretation line placement (design §3)', () => {

@@ -50,6 +50,16 @@ def test_publication_date_range_is_inclusive_and_falls_back_to_year():
     assert [node.node.metadata["doc_id"] for node in out] == ["start", "end", "year", "unknown"]
 
 
+def test_publication_date_falls_back_to_legacy_year():
+    # RETRIEVAL_BACKEND=legacy: load_csv_metadata supplies "year" only — no
+    # year_int, no date_published. A 2019 doc must still be excluded by
+    # date_min=2020-06-01, else every legacy doc reads as undated.
+    metadata = {"legacy-2019": {"year": "2019"}, "legacy-2021": {"year": "2021"}}
+    nodes = [_node(doc_id) for doc_id in metadata]
+    out = apply_facet_filters(nodes, [_hard("date_min", "2020-06-01")], metadata)
+    assert [n.node.metadata["doc_id"] for n in out] == ["legacy-2021"]
+
+
 def test_invalid_publication_date_is_ignored():
     nodes = [_node("doc")]
     assert apply_facet_filters(nodes, [_hard("date_min", "invalid")], {}) is nodes

@@ -91,11 +91,15 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
             published = doc.get("date_published")
             if published is not None:
                 earliest = latest = published
-            elif doc.get("year_int") is not None:
-                earliest = date(doc["year_int"], 1, 1)
-                latest = date(doc["year_int"], 12, 31)
             else:
-                earliest = latest = None
+                # year_int (postgres) or year (legacy CSV) — a doc with no
+                # year metadata at all stays undated and is KEPT.
+                try:
+                    y = int(doc.get("year_int") or doc.get("year"))
+                    earliest = date(y, 1, 1)
+                    latest = date(y, 12, 31)
+                except (ValueError, TypeError):
+                    earliest = latest = None
             if earliest is not None:
                 if date_min is not None and latest < date_min:
                     continue
