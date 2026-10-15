@@ -1,7 +1,9 @@
 # Building blocks and optional modules — design memo
 
 **Date:** 2026-10-15
-**Status:** exploration / decision memo. Nothing here is approved for build.
+**Status:** exploration / decision memo. Nothing here is approved for build — **this memo is
+the deliverable**. §8 and §9 describe the shape of a follow-on (a spike program or a
+tenant-onboarding runbook) if the owner chooses to proceed.
 **Audience:** whoever plans and runs the next tenant of AskWRI, plus the person who
 owns the product vision.
 
@@ -74,10 +76,12 @@ get them there are named and reusable — not a fork that drifts.
 
 | Concern | Where | Weight |
 |---|---|---|
-| Web app + admin UI | `src/` (Next.js App Router, TypeORM) | `src/app` 21.2k LOC, `src/db` 6.1k, `src/lib` 2.0k |
-| Retrieval | `search-service/app` (FastAPI) | 5.1k LOC, of which `main.py` **2,013 lines**, `app/routers/` is an empty dir |
-| Ingestion worker | `search-service/worker` | 3.1k LOC, stages: parse → language → summarize → classify → embed_tags → embed → relate → publish |
-| Eval + golden sets | `evaluation/` | 19.8k LOC; judgment data lives in a **separate repo** via submodule `evaluation/eval-review` → `gofenris/askwri-eval-review` |
+| Web app + admin UI | `src/` (Next.js App Router, TypeORM) | `src/app` 25.8k LOC, `src/db` 6.2k (68 files), `src/lib` 4.7k |
+| Retrieval | `search-service/app` (FastAPI) | 6.0k LOC, of which `main.py` is **2,264 lines**, `app/routers/` is an empty dir |
+| Ingestion worker | `search-service/worker` | 3.0k LOC, stages: parse → language → summarize → classify → embed_tags → embed → relate → publish |
+| Eval + golden sets | `evaluation/` | 20.0k LOC; judgment data lives in a **separate repo** via submodule `evaluation/eval-review` → `gofenris/askwri-eval-review` |
+
+(LOC measured on this branch, `docs/building-blocks-design` off `qa` @ `154c38d`.)
 | Infra | `terraform/` | 2.4k LOC (ECS/ALB/VPC/ECR/service discovery). **RDS is provisioned outside this repo.** |
 
 Hard constraints:
@@ -97,6 +101,11 @@ Hard constraints:
   production immediately. This memo's branch is `docs/building-blocks-design`, based on `qa`.
 - Local stack exists and works: `scripts/local-bootstrap.sh` + `docker-compose.local.yml`
   (pgvector Postgres + MinIO), 169 lines, idempotent.
+- **Deployment shape:** `terraform/environments/qa.tfvars` and `production.tfvars` target the
+  same RDS host and the same `project_name` (`askwri-app`), differing only by `DB_NAME`
+  (`qa` / `production`). So "another deployment" most plausibly means another logical
+  database plus another ECS service, not new infrastructure — unless a tenant is meant to
+  have its own account. See Q6.
 
 ## 4. What each driver actually needs
 
@@ -141,6 +150,13 @@ contract. A tenant's corpus must satisfy:
 - `document_summaries`, `tags` + `tag_aliases` + `document_tags` (with `source` precedence),
   `collections` + `document_collections` (carrying `language_policy` and
   `embedding_model_version` per collection), `ingestion_jobs`, `audit_log`, `users`
+
+**Call:** the keyword lane is an onboarding step, not an option. `KEYWORD_BACKEND` defaults
+to `sparse`, sparse-mode boot refuses to start against an unpopulated corpus, the lexicon is
+built by `search-service/scripts/build_sparse_keyword.py`, and `SPARSE_EN_HANDLES` must match
+between the backfill shell and the worker environment — deploy ordering is documented in
+`docs/runbooks/qa-push-deploy.md`. A tenant runbook that omits this yields an instance that
+will not boot.
 
 Corpus-shaped assumptions already in the code, each of which silently mis-serves a
 different corpus:
@@ -189,6 +205,12 @@ formalize the ones that exist; a *new source type* (HTML) is not just an adapter
 **Forecloses:** nothing. **Watch:** the interfaces are currently *named* for one format
 (`_parse_pdf_pypdf`, `_parse_pdf_mistral`), so formalizing means renaming and dispatching
 on source type rather than assuming PDF.
+**Call (tenant #2):** keep WRI's provider set — Bedrock `cohere-embed-v4` embed and
+`cohere.rerank-v3-5`, Mistral OCR as the parse fallback. Thresholds are model-specific
+(*"Re-derived 2026-07-23 on the all-Mistral / all-cohere qa corpus"* in
+`src/config/retrieval.ts`), so a fixed provider set keeps calibrated numbers comparable
+across tenants and avoids a re-embedding step. Swapping providers is S4's experiment,
+not tenant #2's scope.
 
 ### D. Capability modules over a published boundary
 New surfaces as separate callers/services of the core: MCP / retrieval API, expert finder,
@@ -216,7 +238,7 @@ So "extract a core" means choosing a cut:
   no versioning discipline.
 - **HTTP-cut:** the app stops touching the DB; read APIs are published for catalog,
   summaries, tags, collections. **Buys:** a clean, technology-neutral boundary; the app
-  becomes the first module. **Costs:** M–L (the 63-file `src/db` surface, plus contract
+  becomes the first module. **Costs:** M–L (the 68-file `src/db` surface, plus contract
   versioning and N+1/perf work). **Forecloses:** the cheap path — once published, the API
   is a promise.
 
@@ -311,7 +333,7 @@ Cheap experiments that turn guesses into evidence. Each has a kill criterion.
 
 | # | Spike | Method | Cost | Proves / falsifies |
 |---|---|---|---|---|
-| S1 | Config-only second deployment | Stand up tenant #2 with a sliced corpus, different branding, answer-mode default. No code refactor. Log every file touched. | Days | Which variation is really config. Kills "we need a plugin framework" fast if the touched-file list is ~zero |
+| S1 | Config-only second deployment | Stand up tenant #2 with a sliced corpus, different branding, answer-mode default. No code refactor. Log every file touched. **Call:** two variants — a synthetic dry run over a WRI slice (no corpus steward needed), then the real tenant. | Days | Which variation is really config. Kills "we need a plugin framework" fast if the touched-file list is ~zero |
 | S2 | Calibration portability | Re-derive cite thresholds on a small second corpus using the existing harness; compare to WRI defaults. | Days | Whether inherited thresholds actually mis-serve a different corpus — i.e., whether H is load-bearing or nice-to-have |
 | S3 | Non-PDF ingest + anchor feasibility | Take 20 blog posts end-to-end; count UI and contract surfaces that assume pages. | Days–weeks | Sizes the anchor decision. Falsifies "HTML is just a source adapter" |
 | S4 | Provider swap | Swap one provider (parser or embedder) end-to-end behind the existing env seam; write down what leaked. | Days | Whether the existing env-switch pattern generalizes into an interface without a framework |
@@ -321,6 +343,29 @@ Sequencing: S1 and S2 in parallel; S3 before any commitment to a non-paginated c
 S4 and S5 opportunistic.
 
 ## 10. Open questions — the product owner's to answer
+
+A plan cannot be sequenced around §8 until the first four of these are answered.
+
+**Q6. Where does tenant #2 actually run?** Today `qa.tfvars` and `production.tfvars` point
+at the same RDS host and differ only by `DB_NAME`. Is tenant #2 a third logical database plus
+another ECS service on existing infrastructure, or its own account and infrastructure? Days
+versus weeks — and it decides whether deploy work counts as part of "the core" (§2's
+anti-goal says deploy must not stay outside it).
+
+**Q7. Is there a named tenant #2 yet, and is it the blog-post corpus?** This is the only
+thing that puts the page-anchor work (§6-G; §7's "months to undo" entry) on the critical
+path now rather than later.
+
+**Q8. Where do a new corpus's judgments come from — who labels, how many queries?** H and S2
+assume a labeled query set for the tenant's corpus, and none exists:
+`evaluation/golden-dataset.json` and the `eval-review` submodule are WRI's. If that bootstrap
+is human labeling, H is L rather than M, and it consumes the eval capacity the vision doc
+calls the binding constraint.
+
+**Q9. What is the acceptance bar for "correct cited retrieval on that corpus," and who signs
+it off?** The plan needs a stop/go test rather than a qualitative goal.
+
+#### Already open
 
 **Q1. What does "docs configurability" mean?** Two readings: (a) the *document model* is
 configurable — doc types, metadata mapping, facets, anchors; (b) the *deployment
