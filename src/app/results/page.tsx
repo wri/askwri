@@ -279,7 +279,11 @@ const AskWriAppContent = () => {
       (chip.facet === 'language' && urlLanguages.includes(chip.value))
     if (urlOwned) {
       const params = new URLSearchParams(searchParams?.toString())
+      const remainingValues = params
+        .getAll(chip.facet)
+        .filter((value) => value !== chip.value)
       params.delete(chip.facet)
+      for (const value of remainingValues) params.append(chip.facet, value)
       const qs = params.toString()
       router.push(qs ? `/results?${qs}` : '/results')
       return
