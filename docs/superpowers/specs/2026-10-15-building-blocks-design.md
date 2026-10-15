@@ -34,7 +34,7 @@ Four drivers, all real, none yet bitten:
 |---|---|---|
 | D1 | A team wants its own AskWRI | Comms: PDFs **and blog posts**, mostly answer mode, own voice and branding |
 | D2 | A group wants to share with outsiders | A research group, own research PDFs, partners as readers |
-| D3 | We (and others) want to add capability fast | Expert finder, MCP / retrieval API |
+| D3 | We (and others) want to add capability fast | Expert finder and MCP / retrieval API — **both already added once, as app-tier modes** (see §3) |
 | D4 | Some of this should be open, some not | A basic core published, modules not — **decision deferred** |
 
 The partner's position on shape: a foundational core is required, modules optional; the
@@ -72,6 +72,13 @@ get them there are named and reusable — not a fork that drifts.
 - A fork that becomes permanent: no upgrade path, drift, and two codebases to maintain.
 - A "core" nobody else can run, because deploy, corpus, and calibration stayed outside it.
 
+**Unstated premise the premise audit surfaced, now made explicit:** that *threshold
+re-derivation is sufficient for correctness on a second corpus*. The memo promises "correct
+cited retrieval" and delivers calibration (H), while retrieval-quality work is an explicit
+non-goal — so if a second corpus fails for chunking, embedding, or vocabulary reasons rather
+than threshold reasons, H cannot satisfy the promise. S2 is the test, and §8 item 1 is gated
+on it.
+
 ## 3. As-built constraints a planner must respect
 
 | Concern | Where | Weight |
@@ -106,6 +113,14 @@ Hard constraints:
   (`qa` / `production`). So "another deployment" most plausibly means another logical
   database plus another ECS service, not new infrastructure — unless a tenant is meant to
   have its own account. See Q6.
+- **Two of the "future" capabilities already exist in tree, as app-tier modes.**
+  `src/app/api/mcp/route.ts` + `src/lib/mcp/*` (tool name `search_wri`, with tests) and
+  `src/app/api/experts/route.ts` (310 lines) + `src/app/experts/page.tsx` (696) +
+  `src/lib/experts/*` + `src/db/queries/expertsEvidence.ts`. Both were added inside the Next
+  app: they call `initializeDatabase()`, read the DB directly, and reuse `CITE_PRESET`. Their
+  delivered cost is the baseline any module proposal has to beat. See §6-D.
+- `src/db/schema.dbml` exists (41 lines, feedback tables only) — the seed of a schema-as-contract,
+  not yet one.
 
 ## 4. What each driver actually needs
 
@@ -116,7 +131,11 @@ Hard constraints:
 | D3 Modules | A client of the existing `/query` contract + data already stored | New caller, new endpoint | Small for MCP; medium for expert finder |
 | D4 OSS split | A boundary decision + hygiene on a proven core | Not architecture | Decision, deferrable |
 
-**The reframe that matters:** two different things are being called "modules."
+**The reframe that matters** — and it is now measured rather than theorised, because D3 was
+exercised twice without anyone calling the result a module: consider what actually happened
+when capability was added. A fourth mode and a tool surface, both bolted into a 25.8k-LOC
+app, both reading the DB, both reusing the cite preset. That is the cost to beat, and it is
+also evidence about where the integration point already is.
 
 - **Providers** you swap: source adapter, parser, embedder, reranker, LLM. Mechanical;
   needs interfaces. This is what an outsider adopting a core actually swaps. The repo
@@ -176,12 +195,19 @@ Each: what it is, what it buys, what it costs, what it forecloses. Sizes are
 order-of-magnitude from LOC/file counts, **not** from a build, and every one of them
 should be re-based by the spikes in §9.
 
+**Scale rubric** (added after the premise audit found §6 and §7 using two incommensurable
+scales): S = days; M = 1–3 weeks; L = 1–3 months; XL = a quarter or more. Those map to §7's
+Days / Weeks / Months. "M" in §6 and "Weeks" in §7 must be the same number, and where they
+were not (calibration) the entry has been repriced.
+
 ### A. Deployment profile (config-only, N deployments)
 One codebase, one branch, N deployments distinguished by config: branding, default mode,
 corpus slice, corpus-tuned thresholds.
 **Buys:** cheapest possible tenant #2; no architecture at all; proves which variation is
-genuinely data. **Costs:** S — one profile layer (the user-visible WRI strings in the
-chrome are only ~11 occurrences, concentrated in `layout.tsx`, `SiteFooter`, `Landing`);
+genuinely data. **Costs:** S — one profile layer is still the work, but the earlier "~11
+strings, concentrated in three files" was wrong (premise audit P24): user-visible brand
+strings run to dozens and reach `Landing`, `results`, `experts`, `admin/layout`, the
+answer-mode forms and citation export. It stays S because all of it is text;
 corpus slice needs a filter or a collection; thresholds need somewhere per-tenant to live
 (today they are env + `config.py` defaults). **Forecloses:** nothing. **Prerequisite for
 every other option** — you cannot design a module boundary you have not observed a
@@ -213,14 +239,21 @@ across tenants and avoids a re-embedding step. Swapping providers is S4's experi
 not tenant #2's scope.
 
 ### D. Capability modules over a published boundary
-New surfaces as separate callers/services of the core: MCP / retrieval API, expert finder,
-dossier, cite-check.
-**Buys:** the vision doc's whole H2/H3 capability list, with no core surgery. **Costs:**
-S for MCP (`/query` already exists and is contract-frozen — a server is a thin adapter);
-M for expert finder (data exists in author metadata + `audit_log`, but it needs an
-endpoint, a UI surface, and a privacy model — the vision doc makes public listing
-opt-in). **Forecloses:** nothing. **Note:** this is the cheapest place to start D3, and
-it does not need a plugin framework — it needs a stable HTTP contract, which exists.
+New surfaces as separate callers/services of the core. Two of the vision doc's H2/H3
+capabilities are no longer hypothetical:
+- **MCP / retrieval API — exists.** `src/app/api/mcp/route.ts` + `src/lib/mcp/*`; the tool
+  description carries the honest caveat *"The only lever we have on whether citations survive
+  into someone else's answer: an instruction. It is a request to a model, not a guarantee."*
+- **Expert finder — exists.** Experts mode as described in §3. It landed as a mode, not a
+  module: new route, new page, new `src/lib/experts/*`, a new query file, and a query log.
+
+So D3's real question is not "is this cheap to build" but **"is it worth extracting"** — and
+what extraction would even mean, given these surfaces read Postgres directly rather than
+calling a published API. **Buys:** the vision doc's capability list without core surgery;
+proof that the app tier is today's integration point. **Costs:** the cheapest version is
+none (leave them as modes); extraction is priced with §6-E, because it requires the boundary
+decision first. **Forecloses:** nothing. **Note:** no plugin framework is needed for either.
+**Privacy:** experts mode needs an opt-in story before any public surface (vision doc H3).
 
 ### E. Core extraction — and the boundary you cut at
 Three boundaries are already in use and they do not line up:
@@ -262,7 +295,11 @@ Two very different halves, and they should not be planned as one:
   cite mode's page-anchored offsets, and the UI. Blog posts have no pages. **This is the
   one change that reaches the core**, and the deeper version — a claim as the unit of
   retrieval (vision doc §4) — is the same generalization. **Costs:** M–L; the UI
-  assumption count is unmeasured and is the memo's biggest unknown. **Forecloses:**
+  assumption count is **measured: ~11 non-test `src/` files, ~6 render surfaces** — enumerable,
+  and it reaches further than citations (the MCP result formatter emits `Page N` and `#page=`
+  links too: `src/lib/mcp/search-results.ts`). So the anchor surface is wider than three loci
+  but smaller than assumed: **this no longer looks like an M–L reversal** under the additive
+  option ("HTML as a converted document with synthetic structure", §8 item 2). **Forecloses:**
   keeping the contract frozen: generalizing anchors means relaxing the repo rule
   "preserve `/query` exactly," which is a decision for the product owner, not a module.
 
@@ -271,7 +308,7 @@ Extract the corpus-dependent quality work into something a tenant can run on the
 documents: a golden-set/eval-set format, a threshold re-derivation run, a report that
 says "these defaults are yours now."
 **Buys:** the actual promise ("correct on your corpus"), and it is the module with real
-external consumers. **Costs:** M — the raw material exists (`evaluation/calibrate-cite-thresholds.ts`,
+external consumers. **Costs:** **L, not M** (premise audit, finding L3) — the raw material exists (`evaluation/calibrate-cite-thresholds.ts`,
 sweeps, golden-set generation, review UI) but is welded to WRI's corpus, and
 `eval-review` already proves the data-lives-elsewhere shape works. **Note:** its interface
 is *data*, not code — which makes it the cheapest module to publish and the one most
@@ -293,9 +330,9 @@ The partner's constraint is "don't paint ourselves into a corner." So classify b
 
 | Decision | Cost to undo | Locked by | Action now |
 |---|---|---|---|
-| Citation anchor = page | **Months** | `Passage.page` (frozen contract), `page_boundaries` DDL, cite-mode offsets, UI | Decide before Comms' blog posts; or make it replaceable behind an anchor abstraction |
+| Citation anchor = page | **Months** (if reversed; additive with synthetic structure is weeks) | `Passage.page` (frozen contract), `page_boundaries` DDL, cite-mode offsets, ~6 render surfaces, MCP output | Decide before Comms' blog posts; or make it replaceable behind an anchor abstraction |
 | Boundary for the core (schema vs HTTP) | Weeks–months | Whatever gets published; promises to callers | Defer; do not publish yet |
-| Calibration portability | Weeks | Nothing — it is additive | Do it early: tenant #2 needs it anyway |
+| Calibration portability | Weeks–months (L; gated on Q8) | Nothing — it is additive | Do it early: tenant #2 needs it anyway — but repriced, see Q8 |
 | Provider interfaces | Days–weeks | Nothing | Formalize opportunistically, one seam at a time |
 | Plugin framework | Weeks (plus permanent tax) | Every seam it exposes | Defer until 3 consumers |
 | Doc-model taxonomy/metadata config | Days | Nothing | Do when tenant #2 asks |
@@ -365,6 +402,11 @@ calls the binding constraint.
 **Q9. What is the acceptance bar for "correct cited retrieval on that corpus," and who signs
 it off?** The plan needs a stop/go test rather than a qualitative goal.
 
+**Q10. Is tenant #2 self-serve or hand-held?** P1 ("someone with a corpus runs their own")
+and P2 ("WRI or WRI-adjacent, with us in the room") are different products. §8 assumes
+hand-held; the word "someone" assumes self-serve, which is the stranger boundary that was
+deferred (Q5/§8's own change-condition).
+
 #### Already open
 
 **Q1. What does "docs configurability" mean?** Two readings: (a) the *document model* is
@@ -392,3 +434,33 @@ per-tenant config is stored and loaded, the calibration module's file/workflow f
 the MCP server's surface, the expert finder's privacy model, migration ordering, test
 strategy, and how each spike is instrumented. Also deliberately unspecified: module
 packaging mechanics and repository layout, which wait on §8's boundary decision.
+
+## 12. Premise audit — what changed, and what is still unstated
+
+An independent premise audit ran against this memo before handover. Repo-verifiable claims
+held: no tenancy (P8 — note the word `organizations` appears only inside the expert-finder
+feature, not as a tenancy concept), provider seams (P11), PDF-only intake (P13), the shared
+RDS host (P16). These were wrong or overstated and are corrected above:
+
+| Premise | Verdict | Correction |
+|---|---|---|
+| Expert finder and MCP are future work | **CONTRADICTED** | Both exist in tree as app-tier modes (§3, §6-D) |
+| Anchor UI count is unmeasured | **now measured** | ~11 files / ~6 render surfaces (§6-G) |
+| Brand strings ~11 | **CONTRADICTED** | Dozens, well beyond three files; the count is not evidence (§6-A) |
+| H costs M | **internally inconsistent** | L, and it consumes the binding constraint (§6-H, Q8) |
+| Calibration's interface is data, not code | **CONTRADICTED** | The *sets* are data; the harness is 20k LOC of code (§6-H) |
+| `visibility` is "written and never read" | **imprecise** | Defaulted, never read *or* written (§6-I) |
+| Judgment data sits outside the repo | **overstated** | Split: `evaluation/golden-dataset.json` is in-repo, the submodule is external (§3) |
+| The anchor is the *one* risky decision | **overstated** | §7 names two: the anchor and anything published |
+
+**Still unstated, and load-bearing** — these are not resolved by any answer in §10 and should
+be treated as the memo's remaining weak points:
+
+1. **Labor.** H, S2, S5 and the tenant runbook all draw on the same capacity the vision doc
+   calls the binding constraint. No premise about *available* capacity is stated anywhere.
+2. **Whether the second corpus's quality problem is real.** §4 asserts it; S2 tests it. Until
+   S2 runs, the memo's central claim is an assumption.
+3. **Whether anyone has asked.** D1–D4 are illustrations; Q7 concedes no named tenant.
+4. **N deployments multiply calibration.** Infrastructure is cheap; per-tenant calibration
+   spends the scarce resource. This is the real cost of the N-deployment answer to D2, which
+   §6-I understates.
