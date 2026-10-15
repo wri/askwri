@@ -10,6 +10,8 @@ import {
 
 describe('facetChipLabel', () => {
   it('formats year and language facets for humans', () => {
+    expect(facetChipLabel('date_min', '2020-06-01')).toBe('From 2020-06-01')
+    expect(facetChipLabel('date_max', '2020-06-30')).toBe('Until 2020-06-30')
     expect(facetChipLabel('year_min', '2022')).toBe('2022–present')
     expect(facetChipLabel('year_max', '2019')).toBe('up to 2019')
     expect(facetChipLabel('language', 'es')).toBe('Spanish')

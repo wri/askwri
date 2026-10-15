@@ -28,6 +28,7 @@ const renderPanel = (overrides: Partial<FilterPanelProps> = {}) => {
     open: true,
     selectedOffices: [],
     selectedLanguages: [],
+    selectedDates: [],
     onApply: jest.fn(),
     onClose: jest.fn(),
     ...overrides,
@@ -74,7 +75,7 @@ describe('FilterPanel office interactions', () => {
     expect(checkbox('China')).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith(['WRI China', 'WRI India'], [])
+    expect(onApply).toHaveBeenCalledWith(['WRI China', 'WRI India'], [], [])
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -86,19 +87,20 @@ describe('FilterPanel office interactions', () => {
     expect(checkbox('India')).not.toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [])
+    expect(onApply).toHaveBeenCalledWith([], [], [])
   })
 
   it('clears applied offices and draft edits, then closes', async () => {
     const { onApply, onClose } = renderPanel({
       selectedOffices: ['WRI India', 'WRI Mexico'],
+      selectedDates: ['2020-06-01', '2020-06-30'],
     })
     await waitFor(() => expect(checkbox('Mexico')).toBeChecked())
     await toggleOffice('China')
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [])
+    expect(onApply).toHaveBeenCalledWith([], [], [])
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -111,8 +113,57 @@ describe('FilterPanel office interactions', () => {
     await toggleOffice('Chinese')
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], ['es', 'zh'])
+    expect(onApply).toHaveBeenCalledWith([], ['es', 'zh'], [])
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('preselects URL dates and applies them with the other filters', async () => {
+    const { onApply } = renderPanel({
+      selectedOffices: ['WRI India'],
+      selectedLanguages: ['es'],
+      selectedDates: ['2020-06-01', '2020-06-30'],
+    })
+    await waitFor(() => expect(checkbox('India')).toBeChecked())
+    expect(
+      screen.getByRole('textbox', { name: 'Publication start date' }),
+    ).toHaveValue('2020-06-01')
+    expect(
+      screen.getByRole('textbox', { name: 'Publication end date' }),
+    ).toHaveValue('2020-06-30')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(onApply).toHaveBeenCalledWith(
+      ['WRI India'],
+      ['es'],
+      ['2020-06-01', '2020-06-30'],
+    )
+  })
+
+  it('applies an edited publication date range as ISO dates', async () => {
+    const { onApply, rerenderPanel } = renderPanel({
+      selectedDates: ['2020-06-01', '2020-06-30'],
+    })
+    await act(async () => {
+      const end = screen.getByRole('textbox', { name: 'Publication end date' })
+      fireEvent.change(end, { target: { value: '2020-07-31' } })
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', '2020-07-31'])
+
+    rerenderPanel({ open: false })
+    rerenderPanel({ open: true })
+    expect(
+      screen.getByRole('textbox', { name: 'Publication end date' }),
+    ).toHaveValue('2020-06-30')
+  })
+
+  it('ignores invalid URL dates when opening the picker', () => {
+    renderPanel({ selectedDates: ['not-a-date'] })
+    expect(
+      screen.getByRole('textbox', { name: 'Publication start date' }),
+    ).toHaveValue('')
   })
 
   it('discards canceled edits and uses the latest URL offices on reopening', async () => {

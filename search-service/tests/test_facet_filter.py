@@ -6,6 +6,7 @@ filter is set; program is exact-match on node metadata; excluded_keywords
 substring on title+text). Language has no legacy counterpart: unknown
 language is KEPT — exclusion requires a positive mismatch."""
 from types import SimpleNamespace
+from datetime import date
 from unittest.mock import MagicMock
 
 from app.facet_filter import apply_facet_filters, legacy_request_facets
@@ -30,6 +31,28 @@ DOCS_META = {
     "d-es-2019": {"language": "es", "article_type": "report", "year_int": 2019},
     "d-noyear": {"language": "en", "article_type": None, "year_int": None},
 }
+
+
+def test_publication_date_range_is_inclusive_and_falls_back_to_year():
+    metadata = {
+        "start": {"date_published": date(2020, 6, 1), "year_int": 2019},
+        "end": {"date_published": date(2020, 6, 30)},
+        "before": {"date_published": date(2020, 5, 31)},
+        "after": {"date_published": date(2020, 7, 1)},
+        "year": {"year_int": 2020},
+        "old": {"year_int": 2019},
+        "unknown": {},
+    }
+    nodes = [_node(doc_id) for doc_id in metadata]
+    out = apply_facet_filters(
+        nodes, [_hard("date_min", "2020-06-01"), _hard("date_max", "2020-06-30")], metadata,
+    )
+    assert [node.node.metadata["doc_id"] for node in out] == ["start", "end", "year", "unknown"]
+
+
+def test_invalid_publication_date_is_ignored():
+    nodes = [_node("doc")]
+    assert apply_facet_filters(nodes, [_hard("date_min", "invalid")], {}) is nodes
 
 
 def test_year_min_filters_on_docs_meta():

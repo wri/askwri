@@ -1,6 +1,6 @@
 'use client'
 
-import { Box, DatePicker, Flex, Heading } from '@chakra-ui/react'
+import { Box, DatePicker, Flex, Heading, parseDate } from '@chakra-ui/react'
 import {
   Button,
   CheckboxList,
@@ -59,8 +59,9 @@ export interface FilterPanelProps {
   selectedOffices: string[]
   /** Language codes currently applied (from the URL), pre-checked in the list. */
   selectedLanguages: string[]
+  selectedDates: string[]
   /** Single navigation for both facets — see index.tsx applyFilters. */
-  onApply: (offices: string[], languages: string[]) => void
+  onApply: (offices: string[], languages: string[], dates: string[]) => void
 }
 
 export const FilterPanel = ({
@@ -68,6 +69,7 @@ export const FilterPanel = ({
   onClose,
   selectedOffices,
   selectedLanguages,
+  selectedDates,
   onApply,
 }: FilterPanelProps) => {
   const [languages, setLanguages] = useState<FilterOption[]>([])
@@ -89,6 +91,7 @@ export const FilterPanel = ({
       onClose={onClose}
       selectedOffices={selectedOffices}
       selectedLanguages={selectedLanguages}
+      selectedDates={selectedDates}
       onApply={onApply}
       languages={languages}
       offices={offices}
@@ -100,7 +103,8 @@ interface FilterPanelContentProps {
   onClose: () => void
   selectedOffices: string[]
   selectedLanguages: string[]
-  onApply: (offices: string[], languages: string[]) => void
+  selectedDates: string[]
+  onApply: (offices: string[], languages: string[], dates: string[]) => void
   languages: FilterOption[]
   offices: FilterOption[]
 }
@@ -109,6 +113,7 @@ const FilterPanelContent = ({
   onClose,
   selectedOffices,
   selectedLanguages,
+  selectedDates,
   onApply,
   languages,
   offices,
@@ -117,6 +122,14 @@ const FilterPanelContent = ({
   // below) and owned by local state once the user edits the checkboxes.
   const [editedOffices, setEditedOffices] = useState<string[] | null>(null)
   const [editedLanguages, setEditedLanguages] = useState<string[] | null>(null)
+  const [editedDates, setEditedDates] = useState<string[] | null>(null)
+  const initialDates = selectedDates.flatMap((value) => {
+    try {
+      return [parseDate(value)]
+    } catch {
+      return []
+    }
+  })
 
   // URL offices may be accented ("WRI México") while option values are not;
   // match accent-insensitively so the right checkboxes come pre-checked.
@@ -147,8 +160,25 @@ const FilterPanelContent = ({
     )
   }
 
+  const handleDateChange = (index: number, value: string) => {
+    try {
+      const isoDate = value ? parseDate(value).toString() : ''
+      setEditedDates((previous) => {
+        const dates = [...(previous ?? selectedDates)]
+        dates[index] = isoDate
+        return dates
+      })
+    } catch {
+      return
+    }
+  }
+
   const handleApply = () => {
-    onApply(checkedOffices, editedLanguages ?? selectedLanguages)
+    onApply(
+      checkedOffices,
+      editedLanguages ?? selectedLanguages,
+      editedDates ?? selectedDates,
+    )
     onClose()
   }
 
@@ -169,11 +199,34 @@ const FilterPanelContent = ({
             <SectionTitle>Publication date</SectionTitle>
             <DatePicker.Root
               selectionMode='range'
+              locale='en-CA'
               aria-label='Publication date'
+              defaultValue={initialDates}
+              format={(date) => date.toString()}
+              parse={(value) => {
+                try {
+                  return parseDate(value)
+                } catch {
+                  return undefined
+                }
+              }}
+              onValueChange={({ value }) =>
+                setEditedDates(value.map((date) => date.toString()))
+              }
             >
               <DatePicker.Control>
-                <DatePicker.Input index={0} />
-                <DatePicker.Input index={1} />
+                <DatePicker.Input
+                  index={0}
+                  aria-label='Publication start date'
+                  placeholder='YYYY-MM-DD'
+                  onChange={(event) => handleDateChange(0, event.target.value)}
+                />
+                <DatePicker.Input
+                  index={1}
+                  aria-label='Publication end date'
+                  placeholder='YYYY-MM-DD'
+                  onChange={(event) => handleDateChange(1, event.target.value)}
+                />
                 <DatePicker.IndicatorGroup>
                   <DatePicker.Trigger aria-label='Open calendar'>
                     <LuCalendar />
@@ -243,7 +296,8 @@ const FilterPanelContent = ({
             onClick={() => {
               setEditedOffices([])
               setEditedLanguages([])
-              onApply([], [])
+              setEditedDates([])
+              onApply([], [], [])
               onClose()
             }}
           />

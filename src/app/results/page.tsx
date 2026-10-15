@@ -116,6 +116,12 @@ const AskWriAppContent = () => {
   }))
   const officeKey = JSON.stringify(urlOffices)
   const languageKey = JSON.stringify(urlLanguages)
+  const dateMin = searchParams?.get('date_min') ?? ''
+  const dateMax = searchParams?.get('date_max') ?? ''
+  const dateFacets = [
+    ...(dateMin ? [{ facet: 'date_min', value: dateMin }] : []),
+    ...(dateMax ? [{ facet: 'date_max', value: dateMax }] : []),
+  ]
 
   async function doCite(
     q: string,
@@ -253,12 +259,12 @@ const AskWriAppContent = () => {
   useEffect(() => {
     if (!searchQuery) return
     setQuery(searchQuery)
-    const facets = [...officeFacets, ...languageFacets]
+    const facets = [...officeFacets, ...languageFacets, ...dateFacets]
     const nextFacets = facets.length ? facets : null
     setUserFacets(nextFacets)
     setAutoSwitchedFrom(null)
     runQuery(searchQuery, { facets: nextFacets })
-  }, [searchQuery, officeKey, languageKey])
+  }, [searchQuery, officeKey, languageKey, dateMin, dateMax])
 
   const pageDocs = useMemo(() => {
     if (!Array.isArray(supporting)) return []
@@ -276,7 +282,9 @@ const AskWriAppContent = () => {
     // so they take the legacy path below.
     const urlOwned =
       (chip.facet === 'office' && urlOffices.includes(chip.value)) ||
-      (chip.facet === 'language' && urlLanguages.includes(chip.value))
+      (chip.facet === 'language' && urlLanguages.includes(chip.value)) ||
+      (chip.facet === 'date_min' && dateMin === chip.value) ||
+      (chip.facet === 'date_max' && dateMax === chip.value)
     if (urlOwned) {
       const params = new URLSearchParams(searchParams?.toString())
       const remainingValues = params
