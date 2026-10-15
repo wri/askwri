@@ -5,6 +5,8 @@ import { chatCiteLlamaIndex } from '@/lib/llamaindex-client'
 
 // Mutable search param so tests can drive ?q= and rerender.
 let currentQ: string | null = null
+let currentDateMin: string | null = null
+let currentDateMax: string | null = null
 const routerPush = jest.fn()
 
 jest.mock('next/navigation', () => ({
@@ -18,7 +20,12 @@ jest.mock('next/navigation', () => ({
   }),
   usePathname: () => '/results',
   useSearchParams: () => ({
-    get: (k: string) => (k === 'q' ? currentQ : null),
+    get: (k: string) => {
+      if (k === 'q') return currentQ
+      if (k === 'date_min') return currentDateMin
+      if (k === 'date_max') return currentDateMax
+      return null
+    },
     getAll: () => [],
     toString: () => `q=${currentQ}`,
   }),
@@ -105,6 +112,8 @@ const renderPage = (q: string) => {
 beforeEach(() => {
   jest.clearAllMocks()
   currentQ = null
+  currentDateMin = null
+  currentDateMax = null
   global.fetch = jest.fn((url: any) =>
     Promise.resolve({
       ok: true,
@@ -116,6 +125,36 @@ beforeEach(() => {
         ),
     }),
   ) as any
+})
+
+it('queries with URL date bounds and re-queries when the range changes', async () => {
+  currentDateMin = '2020-06-01'
+  currentDateMax = '2020-06-30'
+  mockCite.mockResolvedValue(citeResponse([doc('a')]))
+  const { rerender } = renderPage('cities')
+  await waitFor(() =>
+    expect(mockCite).toHaveBeenCalledWith('cities', {
+      facets: [
+        { facet: 'date_min', value: '2020-06-01' },
+        { facet: 'date_max', value: '2020-06-30' },
+      ],
+    }),
+  )
+
+  currentDateMax = '2020-07-31'
+  rerender(
+    <ChakraProvider>
+      <ResultsPage />
+    </ChakraProvider>,
+  )
+  await waitFor(() =>
+    expect(mockCite).toHaveBeenLastCalledWith('cities', {
+      facets: [
+        { facet: 'date_min', value: '2020-06-01' },
+        { facet: 'date_max', value: '2020-07-31' },
+      ],
+    }),
+  )
 })
 
 describe('results page — facet chips', () => {

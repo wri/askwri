@@ -153,10 +153,10 @@ def load_documents_metadata() -> dict:
     work_languages = load_work_languages()
     with get_pool().connection() as conn:
         rows = conn.execute(
-            "SELECT external_id, source_metadata, language, article_type, year_published, wri_primary_office "
+            "SELECT external_id, source_metadata, language, article_type, year_published, wri_primary_office, date_published "
             "FROM documents WHERE status = 'searchable'"
         ).fetchall()
-    for ext, src, language, article_type, year_published, office in rows:
+    for ext, src, language, article_type, year_published, office, date_published in rows:
         src = src or {}
         raw = src.get("metadata", {}) or {}
         out[ext] = {
@@ -178,6 +178,7 @@ def load_documents_metadata() -> dict:
             "work_languages": work_languages.get(ext) or frozenset(),
             "article_type": article_type,
             "year_int": _year_int(year_published, raw),
+            "date_published": date_published,
         }
     return out
 

@@ -43,6 +43,8 @@ export const suggestedChips = (
 }
 
 export function facetChipLabel(facet: string, value: string): string {
+  if (facet === 'date_min') return `From ${value}`
+  if (facet === 'date_max') return `Until ${value}`
   if (facet === 'year_min') return `${value}–present`
   if (facet === 'year_max') return `up to ${value}`
   if (facet === 'language') return LANGUAGE_NAMES[value] ?? value

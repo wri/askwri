@@ -5,6 +5,7 @@ Only action='hard' facets exclude (Invariant 1: every one of these is
 rendered as a removable chip by the UI; Invariant 2: all hard facet types
 are human-verifiable metadata)."""
 from typing import List
+from datetime import date
 
 import unicodedata
 
@@ -42,6 +43,7 @@ def legacy_request_facets(request) -> List[Facet]:
 
 def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
     year_min = year_max = None
+    date_min = date_max = None
     program = None
     languages = []
     offices = []
@@ -59,6 +61,15 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
                 year_max = int(f.value)
             except (ValueError, TypeError):
                 continue  # invalid chip value: drop the facet, never a 500
+        elif f.facet in ("date_min", "date_max"):
+            try:
+                bound = date.fromisoformat(f.value)
+            except (ValueError, TypeError):
+                continue
+            if f.facet == "date_min":
+                date_min = bound
+            else:
+                date_max = bound
         elif f.facet == "language":
             languages.append(f.value.casefold())
         elif f.facet == "program":
@@ -68,13 +79,32 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
         elif f.facet == "excluded_keyword":
             excluded.append(f.value.lower())
 
-    if year_min is None and year_max is None and program is None and not languages and not offices and not excluded:
+    if year_min is None and year_max is None and date_min is None and date_max is None and program is None and not languages and not offices and not excluded:
         return nodes
 
     out = []
     for nws in nodes:
         md = nws.node.metadata or {}
         doc = docs_meta.get(md.get("doc_id")) or {}
+
+        if date_min is not None or date_max is not None:
+            published = doc.get("date_published")
+            if published is not None:
+                earliest = latest = published
+            else:
+                # year_int (postgres) or year (legacy CSV) — a doc with no
+                # year metadata at all stays undated and is KEPT.
+                try:
+                    y = int(doc.get("year_int") or doc.get("year"))
+                    earliest = date(y, 1, 1)
+                    latest = date(y, 12, 31)
+                except (ValueError, TypeError):
+                    earliest = latest = None
+            if earliest is not None:
+                if date_min is not None and latest < date_min:
+                    continue
+                if date_max is not None and earliest > date_max:
+                    continue
 
         if year_min is not None or year_max is not None:
             year = doc.get("year_int")
