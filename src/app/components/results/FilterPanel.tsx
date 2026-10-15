@@ -57,14 +57,18 @@ export interface FilterPanelProps {
   onClose: () => void
   /** Office values currently applied (from the URL), pre-checked in the list. */
   selectedOffices: string[]
-  onApplyOffices: (offices: string[]) => void
+  /** Language codes currently applied (from the URL), pre-checked in the list. */
+  selectedLanguages: string[]
+  /** Single navigation for both facets — see index.tsx applyFilters. */
+  onApply: (offices: string[], languages: string[]) => void
 }
 
 export const FilterPanel = ({
   open,
   onClose,
   selectedOffices,
-  onApplyOffices,
+  selectedLanguages,
+  onApply,
 }: FilterPanelProps) => {
   const [languages, setLanguages] = useState<FilterOption[]>([])
   const [offices, setOffices] = useState<FilterOption[]>([])
@@ -84,7 +88,8 @@ export const FilterPanel = ({
     <FilterPanelContent
       onClose={onClose}
       selectedOffices={selectedOffices}
-      onApplyOffices={onApplyOffices}
+      selectedLanguages={selectedLanguages}
+      onApply={onApply}
       languages={languages}
       offices={offices}
     />
@@ -94,7 +99,8 @@ export const FilterPanel = ({
 interface FilterPanelContentProps {
   onClose: () => void
   selectedOffices: string[]
-  onApplyOffices: (offices: string[]) => void
+  selectedLanguages: string[]
+  onApply: (offices: string[], languages: string[]) => void
   languages: FilterOption[]
   offices: FilterOption[]
 }
@@ -102,13 +108,15 @@ interface FilterPanelContentProps {
 const FilterPanelContent = ({
   onClose,
   selectedOffices,
-  onApplyOffices,
+  selectedLanguages,
+  onApply,
   languages,
   offices,
 }: FilterPanelContentProps) => {
   // Checked offices are derived from the URL on mount (see `checkedOffices`
   // below) and owned by local state once the user edits the checkboxes.
   const [editedOffices, setEditedOffices] = useState<string[] | null>(null)
+  const [editedLanguages, setEditedLanguages] = useState<string[] | null>(null)
 
   // URL offices may be accented ("WRI México") while option values are not;
   // match accent-insensitively so the right checkboxes come pre-checked.
@@ -132,8 +140,15 @@ const FilterPanelContent = ({
     setEditedOffices(selected.map((o) => o.value))
   }
 
+  const handleLanguageChange = (checked: Record<string, boolean>) => {
+    // Language checkbox names are the ISO codes themselves.
+    setEditedLanguages(
+      languages.filter((l) => checked[l.name]).map((l) => l.value),
+    )
+  }
+
   const handleApply = () => {
-    onApplyOffices(checkedOffices)
+    onApply(checkedOffices, editedLanguages ?? selectedLanguages)
     onClose()
   }
 
@@ -196,6 +211,10 @@ const FilterPanelContent = ({
             <CheckboxList
               label=''
               checkboxes={languages}
+              defaultValues={languages
+                .filter((l) => selectedLanguages.includes(l.value))
+                .map((l) => l.name)}
+              onCheckedChange={handleLanguageChange}
               hideCheckedCounter
               hideExpandToggle
             />
@@ -223,7 +242,8 @@ const FilterPanelContent = ({
             label='Clear all'
             onClick={() => {
               setEditedOffices([])
-              onApplyOffices([])
+              setEditedLanguages([])
+              onApply([], [])
               onClose()
             }}
           />

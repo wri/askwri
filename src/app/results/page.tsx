@@ -109,7 +109,13 @@ const AskWriAppContent = () => {
     facet: 'office',
     value: office,
   }))
+  const urlLanguages = searchParams?.getAll('language') ?? []
+  const languageFacets = urlLanguages.map((language) => ({
+    facet: 'language',
+    value: language,
+  }))
   const officeKey = JSON.stringify(urlOffices)
+  const languageKey = JSON.stringify(urlLanguages)
 
   async function doCite(
     q: string,
@@ -247,11 +253,12 @@ const AskWriAppContent = () => {
   useEffect(() => {
     if (!searchQuery) return
     setQuery(searchQuery)
-    const facets = officeFacets.length ? officeFacets : null
-    setUserFacets(facets)
+    const facets = [...officeFacets, ...languageFacets]
+    const nextFacets = facets.length ? facets : null
+    setUserFacets(nextFacets)
     setAutoSwitchedFrom(null)
-    runQuery(searchQuery, { facets })
-  }, [searchQuery, officeKey])
+    runQuery(searchQuery, { facets: nextFacets })
+  }, [searchQuery, officeKey, languageKey])
 
   const pageDocs = useMemo(() => {
     if (!Array.isArray(supporting)) return []
@@ -264,9 +271,19 @@ const AskWriAppContent = () => {
   // the pre-removal facets and never serves the auto-mode cached result.
   // Office chips live in the URL, so removing one rewrites the params instead.
   const onRemoveFacet = (chip: { facet: string; value: string }) => {
-    if (chip.facet === 'office') {
+    // URL-owned facets (FilterPanel apply) rewrite the params; parser-detected
+    // chips with the same facet type live in understanding state, not the URL,
+    // so they take the legacy path below.
+    const urlOwned =
+      (chip.facet === 'office' && urlOffices.includes(chip.value)) ||
+      (chip.facet === 'language' && urlLanguages.includes(chip.value))
+    if (urlOwned) {
       const params = new URLSearchParams(searchParams?.toString())
-      params.delete('office')
+      const remainingValues = params
+        .getAll(chip.facet)
+        .filter((value) => value !== chip.value)
+      params.delete(chip.facet)
+      for (const value of remainingValues) params.append(chip.facet, value)
       const qs = params.toString()
       router.push(qs ? `/results?${qs}` : '/results')
       return
