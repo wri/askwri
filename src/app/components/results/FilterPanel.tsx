@@ -142,7 +142,9 @@ const FilterPanelContent = ({
 
   const handleLanguageChange = (checked: Record<string, boolean>) => {
     // Language checkbox names are the ISO codes themselves.
-    setEditedLanguages(languages.filter((l) => checked[l.name]).map((l) => l.value))
+    setEditedLanguages(
+      languages.filter((l) => checked[l.name]).map((l) => l.value),
+    )
   }
 
   const handleApply = () => {

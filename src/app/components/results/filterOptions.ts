@@ -18,17 +18,21 @@ export async function getLanguageOptions(): Promise<FilterOption[]> {
   const { catalog } = await getCatalog()
   const byCode = new Map<string, string>()
   for (const row of catalog) {
-    const code = String(row.language ?? '').trim().toLowerCase()
+    const code = String(row.language ?? '')
+      .trim()
+      .toLowerCase()
     if (!code) continue
     if (!byCode.has(code)) byCode.set(code, languageNameFromCode(code))
   }
-  return [...byCode.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([code, name]) => ({
-    // Value is the ISO code: the URL and the backend language column use
-    // codes ('es'), while the checkbox label shows the full name ('Spanish').
-    name: code,
-    value: code,
-    children: name,
-  }))
+  return [...byCode.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([code, name]) => ({
+      // Value is the ISO code: the URL and the backend language column use
+      // codes ('es'), while the checkbox label shows the full name ('Spanish').
+      name: code,
+      value: code,
+      children: name,
+    }))
 }
 
 export async function getOfficeOptions(): Promise<FilterOption[]> {
