@@ -135,6 +135,8 @@ def load_work_languages() -> dict:
             JOIN documents do_ ON do_.id = r.related_document_id
             WHERE r.status = 'confirmed'
               AND r.relation_type = 'translation_of'
+              AND dt.status = 'searchable'
+              AND do_.status = 'searchable'
             """
         ).fetchall()
     for t_ext, t_lang, o_ext, o_lang in rows:
