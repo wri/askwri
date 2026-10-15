@@ -73,6 +73,18 @@ def test_language_filters_on_docs_meta():
     assert [n.node.metadata["doc_id"] for n in out] == ["d-es-2019"]
 
 
+def test_language_multiple_facets_are_or():
+    # Two language chips keep docs in EITHER language (the FilterPanel is
+    # multi-select); values are ISO codes compared case-insensitively.
+    nodes = [_node("d-en-2023"), _node("d-es-2019")]
+    out = apply_facet_filters(
+        nodes,
+        [_hard("language", "en"), _hard("language", "ES")],
+        DOCS_META,
+    )
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-en-2023", "d-es-2019"]
+
+
 def test_language_filter_keeps_docs_without_language_metadata():
     # The relational language column is only hydrated on the postgres backend;
     # a doc with unknown language must be KEPT (conservative posture), not
@@ -179,4 +191,48 @@ def test_office_multiple_facets_are_or():
 def test_office_kept_when_doc_has_no_office():
     nodes = [_office_node("mystery")]
     out = apply_facet_filters(nodes, [_hard("office", "WRI Mexico")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["mystery"]
+
+
+WORK_LANG_META = {
+    # en translation whose work also has an es original sibling
+    "d-en": {"language": "en", "work_languages": frozenset({"es"})},
+    # es original whose work also has an en translation sibling
+    "d-es": {"language": "es", "work_languages": frozenset({"en"})},
+    # monolingual doc, no siblings
+    "d-fr": {"language": "fr", "work_languages": frozenset()},
+}
+
+
+def test_language_matches_work_sibling_language():
+    # A bilingual work is two rows: filtering language=en keeps BOTH the en
+    # row and its es-original sibling (the work covers en either way).
+    nodes = [_node("d-en"), _node("d-es"), _node("d-fr")]
+    out = apply_facet_filters(nodes, [_hard("language", "en")], WORK_LANG_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-en", "d-es"]
+
+
+def test_language_work_match_is_symmetric():
+    # Same from the es side: filtering es keeps the es original AND its en
+    # translation sibling.
+    nodes = [_node("d-en"), _node("d-es"), _node("d-fr")]
+    out = apply_facet_filters(nodes, [_hard("language", "es")], WORK_LANG_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-en", "d-es"]
+
+
+def test_language_no_work_match_excludes():
+    # A monolingual fr doc matches neither en nor es: excluded.
+    nodes = [_node("d-fr")]
+    out = apply_facet_filters(
+        nodes,
+        [_hard("language", "en"), _hard("language", "es")],
+        WORK_LANG_META,
+    )
+    assert out == []
+
+
+def test_language_kept_when_doc_has_no_language_metadata():
+    # Unknown language is still KEPT (conservative posture), siblings or not.
+    nodes = [_node("mystery")]
+    out = apply_facet_filters(nodes, [_hard("language", "es")], {})
     assert [n.node.metadata["doc_id"] for n in out] == ["mystery"]

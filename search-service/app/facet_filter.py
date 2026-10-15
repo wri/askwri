@@ -42,7 +42,8 @@ def legacy_request_facets(request) -> List[Facet]:
 
 def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
     year_min = year_max = None
-    language = program = None
+    program = None
+    languages = []
     offices = []
     excluded = []
     for f in facets:
@@ -59,7 +60,7 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
             except (ValueError, TypeError):
                 continue  # invalid chip value: drop the facet, never a 500
         elif f.facet == "language":
-            language = f.value
+            languages.append(f.value.casefold())
         elif f.facet == "program":
             program = f.value
         elif f.facet == "office":
@@ -67,7 +68,7 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
         elif f.facet == "excluded_keyword":
             excluded.append(f.value.lower())
 
-    if year_min is None and year_max is None and language is None and program is None and not offices and not excluded:
+    if year_min is None and year_max is None and program is None and not languages and not offices and not excluded:
         return nodes
 
     out = []
@@ -94,9 +95,19 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
 
         # Language is only hydrated on the postgres backend; a doc with
         # unknown language is KEPT (exclude only on a positive mismatch).
-        if language is not None:
+        # Multiple language facets are OR (the FilterPanel is multi-select);
+        # values are ISO codes, compared case-insensitively. Matching is
+        # WORK-level: a bilingual work (es original + en translation) is two
+        # document rows, and either row matches when either language is
+        # selected — mirroring the versions the doc card shows.
+        if languages:
             doc_language = doc.get("language")
-            if doc_language is not None and doc_language != language:
+            work_languages = doc.get("work_languages") or frozenset()
+            doc_matches = doc_language is not None and (
+                doc_language.casefold() in languages
+                or any(l.casefold() in languages for l in work_languages)
+            )
+            if doc_language is not None and not doc_matches:
                 continue
 
         if program is not None and md.get("program_series", "") != program:

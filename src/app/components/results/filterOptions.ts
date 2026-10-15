@@ -16,14 +16,17 @@ const normalizeOffice = (office: string): string =>
 
 export async function getLanguageOptions(): Promise<FilterOption[]> {
   const { catalog } = await getCatalog()
-  const names = new Set<string>()
+  const byCode = new Map<string, string>()
   for (const row of catalog) {
-    const name = languageNameFromCode(row.language)
-    if (name) names.add(name)
+    const code = String(row.language ?? '').trim().toLowerCase()
+    if (!code) continue
+    if (!byCode.has(code)) byCode.set(code, languageNameFromCode(code))
   }
-  return [...names].sort().map((name) => ({
-    name: name.toLowerCase().replace(/\s+/g, '-'),
-    value: name.toLowerCase(),
+  return [...byCode.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([code, name]) => ({
+    // Value is the ISO code: the URL and the backend language column use
+    // codes ('es'), while the checkbox label shows the full name ('Spanish').
+    name: code,
+    value: code,
     children: name,
   }))
 }

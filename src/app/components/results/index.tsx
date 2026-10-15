@@ -47,11 +47,16 @@ const ResultsPage = ({
   const searchParams = useSearchParams()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const selectedOffices = searchParams?.getAll('office') ?? []
+  const selectedLanguages = searchParams?.getAll('language') ?? []
 
-  const applyOffices = (offices: string[]) => {
+  // One navigation for both facets: two router.push calls in the same tick
+  // race in the App Router and the second cancels the first.
+  const applyFilters = (offices: string[], languages: string[]) => {
     const params = new URLSearchParams(searchParams?.toString())
     params.delete('office')
     for (const office of offices) params.append('office', office)
+    params.delete('language')
+    for (const language of languages) params.append('language', language)
     router.push(`/results?${params.toString()}`)
   }
 
@@ -180,7 +185,8 @@ const ResultsPage = ({
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         selectedOffices={selectedOffices}
-        onApplyOffices={applyOffices}
+        selectedLanguages={selectedLanguages}
+        onApply={applyFilters}
       />
     </main>
   )

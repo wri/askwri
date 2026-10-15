@@ -3,7 +3,11 @@ import ChakraProvider from '@/app/Providers/ChakraProvider'
 import FilterPanel, { type FilterPanelProps } from '../FilterPanel'
 
 jest.mock('../filterOptions', () => ({
-  getLanguageOptions: jest.fn().mockResolvedValue([]),
+  getLanguageOptions: jest.fn().mockResolvedValue([
+    { name: 'en', value: 'en', children: 'English' },
+    { name: 'es', value: 'es', children: 'Spanish' },
+    { name: 'zh', value: 'zh', children: 'Chinese' },
+  ]),
   getOfficeOptions: jest.fn().mockResolvedValue([
     { name: 'wri-china', value: 'WRI China', children: 'China' },
     { name: 'wri-india', value: 'WRI India', children: 'India' },
@@ -23,8 +27,9 @@ const renderPanel = (overrides: Partial<FilterPanelProps> = {}) => {
   const props: FilterPanelProps = {
     open: true,
     selectedOffices: [],
+    selectedLanguages: [],
+    onApply: jest.fn(),
     onClose: jest.fn(),
-    onApplyOffices: jest.fn(),
     ...overrides,
   }
   const ui = (nextProps: FilterPanelProps) => (
@@ -60,7 +65,7 @@ describe('FilterPanel office interactions', () => {
   })
 
   it('applies multiple offices and closes', async () => {
-    const { onApplyOffices, onClose } = renderPanel({
+    const { onApply, onClose } = renderPanel({
       selectedOffices: ['WRI India'],
     })
     await waitFor(() => expect(checkbox('India')).toBeChecked())
@@ -69,23 +74,23 @@ describe('FilterPanel office interactions', () => {
     expect(checkbox('China')).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApplyOffices).toHaveBeenCalledWith(['WRI China', 'WRI India'])
+    expect(onApply).toHaveBeenCalledWith(['WRI China', 'WRI India'], [])
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('applies an empty selection after unchecking the last office', async () => {
-    const { onApplyOffices } = renderPanel({ selectedOffices: ['WRI India'] })
+    const { onApply } = renderPanel({ selectedOffices: ['WRI India'] })
     await waitFor(() => expect(checkbox('India')).toBeChecked())
 
     await toggleOffice('India')
     expect(checkbox('India')).not.toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApplyOffices).toHaveBeenCalledWith([])
+    expect(onApply).toHaveBeenCalledWith([], [])
   })
 
   it('clears applied offices and draft edits, then closes', async () => {
-    const { onApplyOffices, onClose } = renderPanel({
+    const { onApply, onClose } = renderPanel({
       selectedOffices: ['WRI India', 'WRI Mexico'],
     })
     await waitFor(() => expect(checkbox('Mexico')).toBeChecked())
@@ -93,12 +98,25 @@ describe('FilterPanel office interactions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
 
-    expect(onApplyOffices).toHaveBeenCalledWith([])
+    expect(onApply).toHaveBeenCalledWith([], [])
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('preselects URL languages and applies multiple codes', async () => {
+    const { onApply, onClose } = renderPanel({
+      selectedLanguages: ['es'],
+    })
+    await waitFor(() => expect(checkbox('Spanish')).toBeChecked())
+
+    await toggleOffice('Chinese')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledWith([], ['es', 'zh'])
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('discards canceled edits and uses the latest URL offices on reopening', async () => {
-    const { onApplyOffices, onClose, rerenderPanel } = renderPanel({
+    const { onApply, onClose, rerenderPanel } = renderPanel({
       selectedOffices: ['WRI India'],
     })
     await waitFor(() => expect(checkbox('India')).toBeChecked())
@@ -107,7 +125,7 @@ describe('FilterPanel office interactions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /close/i }))
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
-    expect(onApplyOffices).not.toHaveBeenCalled()
+    expect(onApply).not.toHaveBeenCalled()
     rerenderPanel({ open: false })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
