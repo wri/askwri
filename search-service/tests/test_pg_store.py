@@ -125,6 +125,23 @@ def test_work_languages_cover_translation_siblings(monkeypatch):
     assert metadata["solo"]["work_languages"] == frozenset()
 
 
+def test_work_languages_ignores_null_sibling_languages(monkeypatch):
+    from app import pg_store
+
+    pool = MagicMock()
+    connection = pool.connection.return_value.__enter__.return_value
+    connection.execute.return_value.fetchall.side_effect = [
+        # A confirmed translation pair whose language column is NULL on one side.
+        [("work-en", "en", "work-null", None)],
+        [],
+    ]
+    monkeypatch.setattr(pg_store, "get_pool", lambda: pool)
+
+    # Must not raise; the NULL side contributes no language to either work.
+    metadata = pg_store.load_documents_metadata()
+    assert metadata == {}
+
+
 def test_year_int_fallback_parsing():
     from app.pg_store import _year_int
 
