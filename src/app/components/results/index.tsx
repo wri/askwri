@@ -54,13 +54,17 @@ const ResultsPage = ({
     searchParams?.get('date_min') ?? '',
     searchParams?.get('date_max') ?? '',
   ]
+  // Relevance is computed after rerank (Stage 3), so it is not a server facet:
+  // it is filtered here, client-side, over the rows already returned.
+  const selectedRelevance = searchParams?.get('relevance') ?? ''
 
-  // One navigation for both facets: two router.push calls in the same tick
+  // One navigation for all facets: two router.push calls in the same tick
   // race in the App Router and the second cancels the first.
   const applyFilters = (
     offices: string[],
     languages: string[],
     dates: [string, string],
+    relevance: string,
   ) => {
     const params = new URLSearchParams(searchParams?.toString())
     params.delete('office')
@@ -71,8 +75,18 @@ const ResultsPage = ({
     params.delete('date_max')
     if (dates[0]) params.set('date_min', dates[0])
     if (dates[1]) params.set('date_max', dates[1])
+    if (relevance) params.set('relevance', relevance)
+    else params.delete('relevance')
     router.push(`/results?${params.toString()}`)
   }
+
+  // Rows whose relevance fell back to a bare score (no rerank tier) never
+  // match a tier filter — selecting one shows only tiered results.
+  const filteredData = selectedRelevance
+    ? tableData.filter(
+        (row) => row.relevance.toLowerCase() === selectedRelevance,
+      )
+    : tableData
 
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
@@ -187,8 +201,13 @@ const ResultsPage = ({
         )}
       </section>
       <ResultsTable
+        // Changing the tier remounts the table: ResultsTable keeps its page
+        // and selected rows across data changes, so from page 2 a smaller
+        // filtered set would slice to empty with pagination hidden, and
+        // previously selected (now excluded) rows would stay exportable.
+        key={selectedRelevance}
         query={query}
-        data={tableData}
+        data={filteredData}
         docSummaryLoading={docSummaryLoading}
         docWhyLoading={docWhyLoading}
         onExportBib={onExportBib}
@@ -201,6 +220,7 @@ const ResultsPage = ({
         selectedOffices={selectedOffices}
         selectedLanguages={selectedLanguages}
         selectedDates={selectedDates}
+        selectedRelevance={selectedRelevance}
         onApply={applyFilters}
       />
     </main>

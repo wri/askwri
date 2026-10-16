@@ -61,11 +61,14 @@ export interface FilterPanelProps {
   selectedLanguages: string[]
   /** `[start, end]` from the URL; '' for a bound that is not applied. */
   selectedDates: [string, string]
-  /** Single navigation for both facets — see index.tsx applyFilters. */
+  /** Relevance tier currently applied (from the URL); '' when none. */
+  selectedRelevance: string
+  /** Single navigation for all facets — see index.tsx applyFilters. */
   onApply: (
     offices: string[],
     languages: string[],
     dates: [string, string],
+    relevance: string,
   ) => void
 }
 
@@ -75,6 +78,7 @@ export const FilterPanel = ({
   selectedOffices,
   selectedLanguages,
   selectedDates,
+  selectedRelevance,
   onApply,
 }: FilterPanelProps) => {
   const [languages, setLanguages] = useState<FilterOption[]>([])
@@ -97,6 +101,7 @@ export const FilterPanel = ({
       selectedOffices={selectedOffices}
       selectedLanguages={selectedLanguages}
       selectedDates={selectedDates}
+      selectedRelevance={selectedRelevance}
       onApply={onApply}
       languages={languages}
       offices={offices}
@@ -109,10 +114,12 @@ interface FilterPanelContentProps {
   selectedOffices: string[]
   selectedLanguages: string[]
   selectedDates: [string, string]
+  selectedRelevance: string
   onApply: (
     offices: string[],
     languages: string[],
     dates: [string, string],
+    relevance: string,
   ) => void
   languages: FilterOption[]
   offices: FilterOption[]
@@ -123,6 +130,7 @@ const FilterPanelContent = ({
   selectedOffices,
   selectedLanguages,
   selectedDates,
+  selectedRelevance,
   onApply,
   languages,
   offices,
@@ -132,6 +140,7 @@ const FilterPanelContent = ({
   const [editedOffices, setEditedOffices] = useState<string[] | null>(null)
   const [editedLanguages, setEditedLanguages] = useState<string[] | null>(null)
   const [editedDates, setEditedDates] = useState<[string, string] | null>(null)
+  const [editedRelevance, setEditedRelevance] = useState<string | null>(null)
   const startInputRef = useRef<HTMLInputElement>(null)
 
   // The picker clamps the calendar to its first/last date and renders a lone
@@ -242,6 +251,7 @@ const FilterPanelContent = ({
       (editedDates ?? selectedDates).map((value) =>
         value >= SENTINEL ? value : '',
       ) as [string, string],
+      editedRelevance ?? selectedRelevance,
     )
     onClose()
   }
@@ -320,6 +330,12 @@ const FilterPanelContent = ({
               label=''
               placeholder='Please select'
               items={relevanceItems}
+              value={
+                (editedRelevance ?? selectedRelevance)
+                  ? [editedRelevance ?? selectedRelevance]
+                  : []
+              }
+              onChange={(values) => setEditedRelevance(values[0] ?? '')}
             />
           </FilterSection>
           <FilterSection>
@@ -360,7 +376,8 @@ const FilterPanelContent = ({
               setEditedOffices([])
               setEditedLanguages([])
               setEditedDates(['', ''])
-              onApply([], [], ['', ''])
+              setEditedRelevance('')
+              onApply([], [], ['', ''], '')
               onClose()
             }}
           />

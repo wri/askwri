@@ -29,6 +29,7 @@ const renderPanel = (overrides: Partial<FilterPanelProps> = {}) => {
     selectedOffices: [],
     selectedLanguages: [],
     selectedDates: ['', ''],
+    selectedRelevance: '',
     onApply: jest.fn(),
     onClose: jest.fn(),
     ...overrides,
@@ -79,6 +80,7 @@ describe('FilterPanel office interactions', () => {
       ['WRI China', 'WRI India'],
       [],
       ['', ''],
+      '',
     )
     expect(onClose).toHaveBeenCalledTimes(1)
   })
@@ -91,7 +93,7 @@ describe('FilterPanel office interactions', () => {
     expect(checkbox('India')).not.toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], ['', ''])
+    expect(onApply).toHaveBeenCalledWith([], [], ['', ''], '')
   })
 
   it('clears applied offices and draft edits, then closes', async () => {
@@ -104,7 +106,7 @@ describe('FilterPanel office interactions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], ['', ''])
+    expect(onApply).toHaveBeenCalledWith([], [], ['', ''], '')
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -117,7 +119,7 @@ describe('FilterPanel office interactions', () => {
     await toggleOffice('Chinese')
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], ['es', 'zh'], ['', ''])
+    expect(onApply).toHaveBeenCalledWith([], ['es', 'zh'], ['', ''], '')
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -142,6 +144,7 @@ describe('FilterPanel office interactions', () => {
       ['WRI India'],
       ['es'],
       ['2020-06-01', '2020-06-30'],
+      '',
     )
   })
 
@@ -159,7 +162,7 @@ describe('FilterPanel office interactions', () => {
 
     // Regression: filtering the missing start out of a compacted array moved
     // the end date to index 0, so Apply rewrote date_max as date_min.
-    expect(onApply).toHaveBeenCalledWith([], [], ['', '2020-06-30'])
+    expect(onApply).toHaveBeenCalledWith([], [], ['', '2020-06-30'], '')
   })
 
   it('clears the upper bound when the end input is emptied', async () => {
@@ -170,7 +173,7 @@ describe('FilterPanel office interactions', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], ['', ''])
+    expect(onApply).toHaveBeenCalledWith([], [], ['', ''], '')
   })
 
   it('never applies the hidden sentinel start', async () => {
@@ -186,7 +189,7 @@ describe('FilterPanel office interactions', () => {
     const { onApply } = renderPanel({ selectedDates: ['2020-06-01', ''] })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', ''])
+    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', ''], '')
   })
 
   // The sentinel is 1900-01-01, so keeping a date *before* it would let the
@@ -197,7 +200,7 @@ describe('FilterPanel office interactions', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], ['', '2020-06-30'])
+    expect(onApply).toHaveBeenCalledWith([], [], ['', '2020-06-30'], '')
   })
 
   it('drops a pre-sentinel end bound from the picker', async () => {
@@ -218,7 +221,12 @@ describe('FilterPanel office interactions', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', '2020-06-30'])
+    expect(onApply).toHaveBeenCalledWith(
+      [],
+      [],
+      ['2020-06-01', '2020-06-30'],
+      '',
+    )
   })
 
   it('applies an edited publication date range as ISO dates', async () => {
@@ -230,7 +238,12 @@ describe('FilterPanel office interactions', () => {
       fireEvent.change(end, { target: { value: '2020-07-31' } })
     })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
-    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', '2020-07-31'])
+    expect(onApply).toHaveBeenCalledWith(
+      [],
+      [],
+      ['2020-06-01', '2020-07-31'],
+      '',
+    )
 
     rerenderPanel({ open: false })
     rerenderPanel({ open: true })
@@ -269,5 +282,59 @@ describe('FilterPanel office interactions', () => {
     await waitFor(() => expect(checkbox('Mexico')).toBeChecked())
     expect(checkbox('India')).not.toBeChecked()
     expect(checkbox('China')).not.toBeChecked()
+  })
+
+  it('applies a selected relevance tier alongside the other filters', async () => {
+    const { onApply, onClose } = renderPanel({
+      selectedOffices: ['WRI India'],
+      selectedDates: ['2020-06-01', ''],
+    })
+    await waitFor(() => expect(checkbox('India')).toBeChecked())
+
+    // Zag's Select only wires change events through its hidden native
+    // <select> in jsdom; the styled trigger/items don't respond to clicks.
+    await act(async () => {
+      fireEvent.change(document.querySelector('select[aria-hidden="true"]')!, {
+        target: { value: 'strong' },
+      })
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledWith(
+      ['WRI India'],
+      [],
+      ['2020-06-01', ''],
+      'strong',
+    )
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('preselects the URL relevance tier and applies a changed one', async () => {
+    const { onApply } = renderPanel({ selectedRelevance: 'strong' })
+
+    expect(
+      screen.getByRole('combobox', { name: 'Select input' }),
+    ).toHaveTextContent('Strong')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledWith([], [], ['', ''], 'strong')
+  })
+
+  it('clears the relevance draft when reopening the panel', async () => {
+    const { onApply, rerenderPanel } = renderPanel({
+      selectedRelevance: 'strong',
+    })
+    expect(
+      screen.getByRole('combobox', { name: 'Select input' }),
+    ).toHaveTextContent('Strong')
+
+    rerenderPanel({ open: false })
+    rerenderPanel({ open: true, selectedRelevance: '' })
+    expect(
+      screen.getByRole('combobox', { name: 'Select input' }),
+    ).toHaveTextContent('Please select')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(onApply).toHaveBeenCalledWith([], [], ['', ''], '')
   })
 })

@@ -53,7 +53,7 @@ const props = (queryUnderstanding: any, onRemoveFacet = jest.fn()) => ({
 describe('results date filter navigation', () => {
   it('applies dates alongside offices and languages in one navigation', async () => {
     currentParams =
-      'q=hydrogen&office=WRI+India&language=en&language=es&date_min=2020-06-01&date_max=2020-06-30&tracking=1'
+      'q=hydrogen&office=WRI+India&language=en&language=es&date_min=2020-06-01&date_max=2020-06-30&relevance=strong&tracking=1'
     render(
       <ChakraProvider>
         <ResultsPage {...props({ facets: [] })} />
@@ -73,12 +73,13 @@ describe('results date filter navigation', () => {
     expect(params.getAll('language')).toEqual(['en', 'es'])
     expect(params.get('date_min')).toBe('2020-06-01')
     expect(params.get('date_max')).toBe('2020-06-30')
+    expect(params.get('relevance')).toBe('strong')
     expect(params.get('tracking')).toBe('1')
   })
 
   it('clears dates and other filters without removing the query', async () => {
     currentParams =
-      'q=hydrogen&office=WRI+India&language=es&date_min=2020-06-01&date_max=2020-06-30'
+      'q=hydrogen&office=WRI+India&language=es&date_min=2020-06-01&date_max=2020-06-30&relevance=weak'
     render(
       <ChakraProvider>
         <ResultsPage {...props({ facets: [] })} />
@@ -92,6 +93,29 @@ describe('results date filter navigation', () => {
 
     expect(routerPush).toHaveBeenCalledTimes(1)
     expect(routerPush).toHaveBeenCalledWith('/results?q=hydrogen')
+  })
+
+  it('filters rows client-side by the URL relevance tier', () => {
+    currentParams = 'q=hydrogen&relevance=strong'
+    render(
+      <ChakraProvider>
+        <ResultsPage
+          {...props({ facets: [] })}
+          data={
+            [
+              // fullDoc keeps SelectableResultRow's versions effect from
+              // hitting the `fullDoc._url` fallback outside its try/catch.
+              { id: 'a', relevance: 'Strong', fullDoc: {} },
+              { id: 'b', relevance: 'Weak', fullDoc: {} },
+              { id: 'c', relevance: '0.85', fullDoc: {} },
+            ] as any
+          }
+        />
+      </ChakraProvider>,
+    )
+    expect(screen.getByText('Strong')).toBeInTheDocument()
+    expect(screen.queryByText('Weak')).not.toBeInTheDocument()
+    expect(screen.queryByText('0.85')).not.toBeInTheDocument()
   })
 
   it('round-trips an upper-bound-only URL without rewriting date_max as date_min', async () => {
