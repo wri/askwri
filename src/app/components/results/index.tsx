@@ -201,6 +201,11 @@ const ResultsPage = ({
         )}
       </section>
       <ResultsTable
+        // Changing the tier remounts the table: ResultsTable keeps its page
+        // and selected rows across data changes, so from page 2 a smaller
+        // filtered set would slice to empty with pagination hidden, and
+        // previously selected (now excluded) rows would stay exportable.
+        key={selectedRelevance}
         query={query}
         data={filteredData}
         docSummaryLoading={docSummaryLoading}

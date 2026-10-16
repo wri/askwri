@@ -221,7 +221,12 @@ describe('FilterPanel office interactions', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', '2020-06-30'], '')
+    expect(onApply).toHaveBeenCalledWith(
+      [],
+      [],
+      ['2020-06-01', '2020-06-30'],
+      '',
+    )
   })
 
   it('applies an edited publication date range as ISO dates', async () => {
@@ -233,7 +238,12 @@ describe('FilterPanel office interactions', () => {
       fireEvent.change(end, { target: { value: '2020-07-31' } })
     })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
-    expect(onApply).toHaveBeenCalledWith([], [], ['2020-06-01', '2020-07-31'], '')
+    expect(onApply).toHaveBeenCalledWith(
+      [],
+      [],
+      ['2020-06-01', '2020-07-31'],
+      '',
+    )
 
     rerenderPanel({ open: false })
     rerenderPanel({ open: true })
@@ -284,10 +294,9 @@ describe('FilterPanel office interactions', () => {
     // Zag's Select only wires change events through its hidden native
     // <select> in jsdom; the styled trigger/items don't respond to clicks.
     await act(async () => {
-      fireEvent.change(
-        document.querySelector('select[aria-hidden="true"]')!,
-        { target: { value: 'strong' } },
-      )
+      fireEvent.change(document.querySelector('select[aria-hidden="true"]')!, {
+        target: { value: 'strong' },
+      })
     })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 

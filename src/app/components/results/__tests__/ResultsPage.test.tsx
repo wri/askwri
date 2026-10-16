@@ -103,9 +103,11 @@ describe('results date filter navigation', () => {
           {...props({ facets: [] })}
           data={
             [
-              { id: 'a', relevance: 'Strong' },
-              { id: 'b', relevance: 'Weak' },
-              { id: 'c', relevance: '0.85' },
+              // fullDoc keeps SelectableResultRow's versions effect from
+              // hitting the `fullDoc._url` fallback outside its try/catch.
+              { id: 'a', relevance: 'Strong', fullDoc: {} },
+              { id: 'b', relevance: 'Weak', fullDoc: {} },
+              { id: 'c', relevance: '0.85', fullDoc: {} },
             ] as any
           }
         />
