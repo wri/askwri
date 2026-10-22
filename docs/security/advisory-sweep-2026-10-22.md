@@ -203,6 +203,19 @@ Two structural fixes fell out of the above, both worth keeping:
 | `pytest tests/` (in `python:3.12-slim`) | 445 passed, 213 skipped, 4 failed — all four are `test_probe_rerank_isolation.py` requiring `DATABASE_URL` from `scripts/with-remote-env.sh qa` (a guard, not a version error) |
 | apk + RDS-bundle download in `node:24-alpine` | both succeed with verification enabled |
 
+Two claims in this doc are checks, not recollections — re-run them:
+
+- **The MCP guard is load-bearing.** Delete the `maxToolInputElements:` line from
+  `src/app/api/mcp/route.ts` and `npx jest src/__tests__/mcp-route.test.ts` fails
+  on `refuses arguments over the element limit and still runs under it` (the
+  over-limit call reaches the tool). Restore the line and it passes. The refusal
+  the SDK returns is verbatim `arguments contain more than the maximum of 1000
+  elements` with `isError: true`, which the test asserts.
+- **The action pin is a release, not a stray commit.**
+  `git ls-remote --tags https://github.com/the-pr-agent/pr-agent v0.48.0` returns
+  `981344be2755e303df501e18e3f60b848a188a80 refs/tags/v0.48.0`. It is a
+  lightweight tag, so that ref *is* the commit the workflow pins.
+
 Not run here: the DB-backed suites (`npm run test:db`), the cite/QA evals, and a
 container build of either image end to end — all need the local stack or AWS.
 

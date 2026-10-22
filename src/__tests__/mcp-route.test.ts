@@ -220,13 +220,18 @@ describe('tools/call', () => {
 
     const under = await post(call(4, 900), AUTH)
     expect(await under.text()).toContain('Cities at the Crossroads')
-    expect(global.fetch).toHaveBeenCalled()
+    // Exactly one: a stale call count from an earlier case must not be able to
+    // satisfy this.
+    expect(global.fetch).toHaveBeenCalledTimes(1)
 
     ;(global.fetch as jest.Mock).mockClear()
     const over = await post(call(5, 1001), AUTH)
     const overBody = await over.text()
-    expect(overBody).not.toContain('Cities at the Crossroads')
-    expect(overBody).toMatch(/limit|element/i)
+    // The SDK's own words, so this cannot pass on some other failure.
+    expect(overBody).toContain(
+      'arguments contain more than the maximum of 1000 elements',
+    )
+    expect(overBody).toContain('"isError":true')
     // The refusal happens while parsing, so nothing was searched.
     expect(global.fetch).not.toHaveBeenCalled()
   })
