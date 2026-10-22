@@ -48,17 +48,45 @@ const ResultsPage = ({
   const [filtersOpen, setFiltersOpen] = useState(false)
   const selectedOffices = searchParams?.getAll('office') ?? []
   const selectedLanguages = searchParams?.getAll('language') ?? []
+  // Positional so a single applied bound keeps its place: a compacted array
+  // would slide date_max into slot 0 and Apply would rewrite it as date_min.
+  const selectedDates: [string, string] = [
+    searchParams?.get('date_min') ?? '',
+    searchParams?.get('date_max') ?? '',
+  ]
+  // Relevance is computed after rerank (Stage 3), so it is not a server facet:
+  // it is filtered here, client-side, over the rows already returned.
+  const selectedRelevance = searchParams?.get('relevance') ?? ''
 
-  // One navigation for both facets: two router.push calls in the same tick
+  // One navigation for all facets: two router.push calls in the same tick
   // race in the App Router and the second cancels the first.
-  const applyFilters = (offices: string[], languages: string[]) => {
+  const applyFilters = (
+    offices: string[],
+    languages: string[],
+    dates: [string, string],
+    relevance: string,
+  ) => {
     const params = new URLSearchParams(searchParams?.toString())
     params.delete('office')
     for (const office of offices) params.append('office', office)
     params.delete('language')
     for (const language of languages) params.append('language', language)
+    params.delete('date_min')
+    params.delete('date_max')
+    if (dates[0]) params.set('date_min', dates[0])
+    if (dates[1]) params.set('date_max', dates[1])
+    if (relevance) params.set('relevance', relevance)
+    else params.delete('relevance')
     router.push(`/results?${params.toString()}`)
   }
+
+  // Rows whose relevance fell back to a bare score (no rerank tier) never
+  // match a tier filter — selecting one shows only tiered results.
+  const filteredData = selectedRelevance
+    ? tableData.filter(
+        (row) => row.relevance.toLowerCase() === selectedRelevance,
+      )
+    : tableData
 
   return (
     <main className='gradient-background' style={{ paddingBottom: '57px' }}>
@@ -173,8 +201,13 @@ const ResultsPage = ({
         )}
       </section>
       <ResultsTable
+        // Changing the tier remounts the table: ResultsTable keeps its page
+        // and selected rows across data changes, so from page 2 a smaller
+        // filtered set would slice to empty with pagination hidden, and
+        // previously selected (now excluded) rows would stay exportable.
+        key={selectedRelevance}
         query={query}
-        data={tableData}
+        data={filteredData}
         docSummaryLoading={docSummaryLoading}
         docWhyLoading={docWhyLoading}
         onExportBib={onExportBib}
@@ -186,6 +219,8 @@ const ResultsPage = ({
         onClose={() => setFiltersOpen(false)}
         selectedOffices={selectedOffices}
         selectedLanguages={selectedLanguages}
+        selectedDates={selectedDates}
+        selectedRelevance={selectedRelevance}
         onApply={applyFilters}
       />
     </main>

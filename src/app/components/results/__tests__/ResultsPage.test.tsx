@@ -1,6 +1,21 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
 import ResultsPage from '@/app/components/results'
+
+let currentParams = 'q=hydrogen'
+const routerPush = jest.fn()
+
+jest.mock('../filterOptions', () => ({
+  getLanguageOptions: jest.fn().mockResolvedValue([
+    { name: 'en', value: 'en', children: 'English' },
+    { name: 'es', value: 'es', children: 'Spanish' },
+  ]),
+  getOfficeOptions: jest
+    .fn()
+    .mockResolvedValue([
+      { name: 'wri-india', value: 'WRI India', children: 'India' },
+    ]),
+}))
 
 // Navbar pulls styles/fonts that aren't needed for this render; stub it.
 jest.mock('@/app/components/results/Navbar', () => ({
@@ -10,9 +25,14 @@ jest.mock('@/app/components/results/Navbar', () => ({
 
 // ResultsPage reads the URL (office filter) and pushes params on apply/remove.
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
-  useSearchParams: () => new URLSearchParams('q=hydrogen'),
+  useRouter: () => ({ push: routerPush }),
+  useSearchParams: () => new URLSearchParams(currentParams),
 }))
+
+beforeEach(() => {
+  currentParams = 'q=hydrogen'
+  routerPush.mockClear()
+})
 
 const props = (queryUnderstanding: any, onRemoveFacet = jest.fn()) => ({
   query: 'hydrogen since 2020',
@@ -28,6 +48,151 @@ const props = (queryUnderstanding: any, onRemoveFacet = jest.fn()) => ({
   queryUnderstanding,
   onRemoveFacet,
   onApplySuggestion: jest.fn(),
+})
+
+describe('results date filter navigation', () => {
+  it('applies dates alongside offices and languages in one navigation', async () => {
+    currentParams =
+      'q=hydrogen&office=WRI+India&language=en&language=es&date_min=2020-06-01&date_max=2020-06-30&relevance=strong&tracking=1'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'India' })).toBeChecked(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(routerPush).toHaveBeenCalledTimes(1)
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('q')).toBe('hydrogen')
+    expect(params.getAll('office')).toEqual(['WRI India'])
+    expect(params.getAll('language')).toEqual(['en', 'es'])
+    expect(params.get('date_min')).toBe('2020-06-01')
+    expect(params.get('date_max')).toBe('2020-06-30')
+    expect(params.get('relevance')).toBe('strong')
+    expect(params.get('tracking')).toBe('1')
+  })
+
+  it('clears dates and other filters without removing the query', async () => {
+    currentParams =
+      'q=hydrogen&office=WRI+India&language=es&date_min=2020-06-01&date_max=2020-06-30&relevance=weak'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'India' })).toBeChecked(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+
+    expect(routerPush).toHaveBeenCalledTimes(1)
+    expect(routerPush).toHaveBeenCalledWith('/results?q=hydrogen')
+  })
+
+  it('filters rows client-side by the URL relevance tier', () => {
+    currentParams = 'q=hydrogen&relevance=strong'
+    render(
+      <ChakraProvider>
+        <ResultsPage
+          {...props({ facets: [] })}
+          data={
+            [
+              // fullDoc keeps SelectableResultRow's versions effect from
+              // hitting the `fullDoc._url` fallback outside its try/catch.
+              { id: 'a', relevance: 'Strong', fullDoc: {} },
+              { id: 'b', relevance: 'Weak', fullDoc: {} },
+              { id: 'c', relevance: '0.85', fullDoc: {} },
+            ] as any
+          }
+        />
+      </ChakraProvider>,
+    )
+    expect(screen.getByText('Strong')).toBeInTheDocument()
+    expect(screen.queryByText('Weak')).not.toBeInTheDocument()
+    expect(screen.queryByText('0.85')).not.toBeInTheDocument()
+  })
+
+  it('round-trips an upper-bound-only URL without rewriting date_max as date_min', async () => {
+    currentParams = 'q=hydrogen&date_max=2020-06-30'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    expect(
+      screen.getByRole('textbox', { name: 'Publication start date' }),
+    ).toHaveValue('')
+    expect(
+      screen.getByRole('textbox', { name: 'Publication end date' }),
+    ).toHaveValue('2020-06-30')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(routerPush).toHaveBeenCalledTimes(1)
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('date_min')).toBeNull()
+    expect(params.get('date_max')).toBe('2020-06-30')
+    expect(params.get('q')).toBe('hydrogen')
+  })
+
+  it('round-trips a lower-bound-only URL without rewriting date_min as date_max', async () => {
+    currentParams = 'q=hydrogen&date_min=2020-06-01'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(routerPush).toHaveBeenCalledTimes(1)
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('date_min')).toBe('2020-06-01')
+    expect(params.get('date_max')).toBeNull()
+  })
+
+  it('never writes the picker sentinel into the URL', async () => {
+    currentParams = 'q=hydrogen&date_max=2020-06-30'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('date_min')).toBeNull()
+    expect(params.get('date_max')).toBe('2020-06-30')
+  })
+
+  // A pre-1900 URL bound is dropped rather than applied: keeping it would push
+  // the picker's derived `min` below the sentinel that anchors that range.
+  it('drops a pre-sentinel URL date bound on Apply', async () => {
+    currentParams = 'q=hydrogen&date_min=1500-01-01&date_max=2020-06-30'
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} />
+      </ChakraProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open filter panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    const params = new URL(routerPush.mock.calls[0][0], 'http://localhost')
+      .searchParams
+    expect(params.get('date_min')).toBeNull()
+    expect(params.get('date_max')).toBe('2020-06-30')
+  })
 })
 
 describe('results component — interpretation line placement (design §3)', () => {
