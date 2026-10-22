@@ -92,7 +92,10 @@ jobs:
         # with repository secrets and write access to PRs, so a mutable ref means
         # upstream main takes effect here unreviewed, immediately. Bump the SHA
         # deliberately (or let Dependabot's github-actions ecosystem do it).
-        uses: the-pr-agent/pr-agent@b1e75b56580b33f048ce9f6cb8bd5e1050097f24 # main @ 2026-10-22
+        # v0.48.0 (2026-10-16), the newest upstream release tag at the time of
+        # the 2026-10-22 advisory sweep. The tag is what makes the SHA legible;
+        # the SHA is what makes the pin immutable.
+        uses: the-pr-agent/pr-agent@981344be2755e303df501e18e3f60b848a188a80 # v0.48.0
         env:
           # Public GitHub repos do not incur GitHub Actions charges, and
           # the PR-Agent project itself is open source. Model API usage still

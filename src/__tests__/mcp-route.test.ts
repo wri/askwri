@@ -194,4 +194,40 @@ describe('tools/call', () => {
     expect(body).toContain('search_wri')
     expect(body.match(/"inputSchema"/g)?.length).toBe(1)
   })
+
+  // CVE-2026-111768: one request inside the body limit must not grow the tool
+  // payload without bound. The SDK counts array elements and object keys in
+  // `arguments`, but only when `maxToolInputElements` is set — and `mcp-handler`
+  // forwards it to `new McpServer(...)` through an options spread without naming
+  // it in its own types. So this asserts the boundary, in both directions: a
+  // call under the limit still reaches the search service, one over it is
+  // refused before the tool runs. Without the "under" half this would pass on
+  // any rejection at all, including a typo that never reaches the SDK.
+  it('refuses arguments over the element limit and still runs under it', async () => {
+    await post(INIT, AUTH)
+    const call = (id: number, elements: number) => ({
+      jsonrpc: '2.0',
+      id,
+      method: 'tools/call',
+      params: {
+        name: 'search_wri',
+        arguments: {
+          query: 'compact urban growth',
+          filler: Array.from({ length: elements }, (_, i) => i),
+        },
+      },
+    })
+
+    const under = await post(call(4, 900), AUTH)
+    expect(await under.text()).toContain('Cities at the Crossroads')
+    expect(global.fetch).toHaveBeenCalled()
+
+    ;(global.fetch as jest.Mock).mockClear()
+    const over = await post(call(5, 1001), AUTH)
+    const overBody = await over.text()
+    expect(overBody).not.toContain('Cities at the Crossroads')
+    expect(overBody).toMatch(/limit|element/i)
+    // The refusal happens while parsing, so nothing was searched.
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
 })

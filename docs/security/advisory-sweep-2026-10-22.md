@@ -10,9 +10,9 @@ Branch: `fix/advisory-sweep` (off `qa` @ `154c38d`).
 
 | Rung | Command |
 |---|---|
-| npm, all deps | `npm audit --json` → `.sweep/npm-audit-all.json` |
-| npm, runtime only | `npm audit --omit=dev --json` → `.sweep/npm-audit-prod.json` |
-| pip, deploy pins | `docker run --rm -v "$PWD:/w" -w /w python:3.12-slim sh -c 'pip install pip-audit && pip-audit -f json -r requirements.txt'` → `.sweep/pip-audit.json` (run in `search-service/`) |
+| npm, all deps | `npm audit --json` (npm 11.19.0) → `.sweep/npm-audit-all.json` |
+| npm, runtime only | `npm audit --omit=dev --json` (npm 11.19.0) → `.sweep/npm-audit-prod.json` |
+| pip, deploy pins | `docker run --rm -v "$PWD:/w" -w /w python:3.12-slim sh -c 'pip install pip-audit && pip-audit -f json -r requirements.txt'` (pip-audit 2.10.1, run in `search-service/`) → `.sweep/pip-audit.json` |
 | Base images / runtime | `node:24-alpine`, `python:3.12-slim` (floating tags), local node 24.21.0 / py 3.12.12 |
 | Terraform | `hashicorp/aws 5.100.0` (`terraform/infrastructure/.terraform.lock.hcl`) |
 | Actions | `.github/workflows/*.yml` `uses:` refs |
@@ -118,15 +118,17 @@ drops). All the same day's `requirements.txt` regeneration.
 ## Non-advisory findings
 
 **N1. CI runs an unpinned third-party action with repo secrets.**
-`.github/workflows/pr-agent.yml:96` uses `the-pr-agent/pr-agent@main` on
+`.github/workflows/pr-agent.yml:96` used `the-pr-agent/pr-agent@main` on
 `pull_request_target` with `OPENROUTER_API_KEY` and `pull-requests: write`. A
 mutable branch ref means upstream `main` runs unreviewed, immediately, with those
-secrets. The file's own comment acknowledges it. Pin to a SHA:
-`the-pr-agent/pr-agent@b1e75b56580b33f048ce9f6cb8bd5e1050097f24` (upstream
-`main` at 2026-10-22T16:11Z) and let Dependabot bump it monthly.
+secrets. The file's own comment acknowledged it. Resolved by pinning the commit of
+the newest upstream release tag: `the-pr-agent/pr-agent@981344be2755…`
+(`v0.48.0`, 2026-10-16). The tag is what makes the SHA checkable; the SHA is what
+makes the pin immutable. Verified via the GitHub tags API on 2026-10-22 — upstream
+`main` was `b1e75b56…` at that moment, six days ahead of the tagged release.
 
-**N2. Both Dockerfiles disable transport integrity checks.**
-Root `Dockerfile`:
+**N2. The root Dockerfile disables transport integrity checks.**
+`Dockerfile`:
 `apk add --no-cache --no-check-certificate curl aws-cli ca-certificates` turns off
 apk signature verification, and
 `curl -fsSk https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`
@@ -134,6 +136,9 @@ turns off TLS verification for the RDS CA bundle — the artifact that decides w
 database certificates the app trusts. An on-path attacker can substitute a rogue
 bundle and intercept RDS TLS. Drop `--no-check-certificate` and `-k`; if apk
 signature checks were failing in the build, that is the thing to fix.
+
+`search-service/Dockerfile` has neither flag — it installs from Debian packages and
+fetches nothing over the network with verification disabled.
 
 **N3. Base images float; nothing re-scans them.**
 `node:24-alpine`, `python:3.12-slim` are tags, not digests. ECR has
@@ -154,12 +159,12 @@ fixes, so those advisories stay open indefinitely unless someone opts in.
 | P1 `next` (critical Image Optimization RCE + SSRF + SSG/ISR cache poisoning + Server Action DoS) | `next` 16.3.6 → **16.4.2**, `eslint-config-next` + `@next/eslint-plugin-next` moved with it | `npm audit --omit=dev` clean, `npx next build --webpack` green |
 | P1 `sharp` librsvg RCE | 0.35.4 → **0.35.5** (via override; it is an optional dep of `next`) | `npm ls sharp` |
 | P1 `pypdf` (24 advisories, parsed on the ingestion path) | 6.14.2 → **6.21.2** | `pip-audit` clean, pytest |
-| P2 MCP (`GHSA-46jr-4wx8-v453` etc.) | `mcp-handler` 2.2.0 → **2.3.0**, `@modelcontextprotocol/server` 2.2.0 → **2.3.1**, plus `maxToolInputElements: 1_000` on the handler (`route.ts`) — the upgrade alone does not enable the guard | `tsc` via `next build` |
+| P2 MCP (`GHSA-46jr-4wx8-v453` etc.) | `mcp-handler` 2.2.0 → **2.3.0**, `@modelcontextprotocol/server` 2.2.0 → **2.3.1**, plus `maxToolInputElements: 1_000` on the handler (`route.ts`) — the upgrade alone does not enable the guard | `mcp-route.test.ts` drives 900 elements (reaches the service) and 1001 (refused, no fetch). Fails with the option removed, passes with it. |
 | P2 `pillow` (35), `nltk` (35) | **13.0.0**, **3.10.4** | `pip-audit` clean |
 | P3 `brace-expansion` (6), `source-map-js`, `baseline-browser-mapping`, `browserslist` | npm `overrides` + `npm update`; `brace-expansion` floored per major line (1.x/2.x/5.x — they are API-incompatible) | `npm audit`, lint, 92 jest suites |
 | P3 `csv-parse` | 6.2.1 → **7.0.3** (the vulnerable `columns` path is what `evaluation/diagnostics/*` uses) | lint |
 | P4 `aiohttp`, `urllib3`, `multidict`, `banks`, `tinytag`, `certifi` | security floors in `requirements.in`, pinned by `compile-requirements.sh` | `pip-audit` clean |
-| N1 unpinned PR-Agent action | `@main` → `@b1e75b56…` (upstream main at 2026-10-22) | YAML diff |
+| N1 unpinned PR-Agent action | `@main` → `@981344be2755…` (`v0.48.0`, 2026-10-16) | YAML diff |
 | N2 Dockerfile transport integrity | dropped `apk --no-check-certificate` and `curl -k` | ran both commands in `node:24-alpine`: apk verifies, bundle downloads 114 certs |
 
 Two structural fixes fell out of the above, both worth keeping:
@@ -193,7 +198,7 @@ Two structural fixes fell out of the above, both worth keeping:
 | `npm audit` | 38 left (33 high, 5 moderate), every one dev toolchain, all propagated from two advisories with no published fix (see Residual) |
 | `pip-audit -r requirements.txt -r requirements-dev.txt` (in `python:3.12-slim`) | **No known vulnerabilities found** (was 110 across 9 packages) |
 | `npm run lint` | 0 errors, 18 pre-existing warnings |
-| `npm test` | 92 suites, 1030 tests passed |
+| `npm test` | 92 suites, 1031 tests passed |
 | `npx next build --webpack` | green |
 | `pytest tests/` (in `python:3.12-slim`) | 445 passed, 213 skipped, 4 failed — all four are `test_probe_rerank_isolation.py` requiring `DATABASE_URL` from `scripts/with-remote-env.sh qa` (a guard, not a version error) |
 | apk + RDS-bundle download in `node:24-alpine` | both succeed with verification enabled |
@@ -209,5 +214,9 @@ infra ones in [Residual](#residual-not-fixed-with-reasons).
 
 ## Reproduction
 
-The commands in [Method](#method) reproduce every number here. Raw JSON was kept
-in `.sweep/` while working and is not committed.
+The commands in [Method](#method) reproduce every number here: the audit
+toolchain versions are named, the advisory detail was read on **2026-10-22**, and
+the packages were pinned in `package-lock.json`, `requirements.txt` and the two
+Dockerfiles, so a later run differs only where advisories or pins moved. Raw JSON
+was kept in `.sweep/` while working and is not committed — the summary tables above
+are the record, and they are what a reviewer can diff against a fresh run.
