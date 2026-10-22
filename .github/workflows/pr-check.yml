@@ -154,6 +154,9 @@ jobs:
           python - <<'PY'
           import pathlib, llama_index.core
           cache = pathlib.Path(llama_index.core.__file__).parent / "_static" / "nltk_cache"
+          # Fail here, where the cause is obvious, rather than as a LookupError
+          # inside the suite, if llama-index ever moves the bundled data.
+          assert cache.is_dir(), f"no bundled NLTK data at {cache}"
           for p in [cache, *cache.rglob("*")]:
               if p.exists():
                   p.chmod(p.stat().st_mode & ~0o022)
