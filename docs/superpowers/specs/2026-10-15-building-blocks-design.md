@@ -25,7 +25,7 @@ assume it exists.**
 | **Corpus store** | documents, their text, chunks, a vector per chunk | `documents`, `document_texts`, `document_chunks`, `keyword_vocab` — the last two are raw SQL, no entity | nothing structural; per-tenant field sets are the mechanism problem in §3 |
 | **Ingestion** | source in, rows out, dimensions populated | worker stages: parse → language → summarize → classify → embed_tags → embed → relate → publish | PDF-only intake (`intake_s3.py` globs `*.pdf`); no source-type abstraction |
 | **Retrieval** | question in, ranked passages out | `/query` (dense + sparse + RRF + Bedrock rerank), frozen contract | nothing; this is the part that works |
-| **Read surface** | results out, citable, consumable by the app or anyone else | `/query` over HTTP; MCP route for outside callers (shared key, fail-closed) | no surface for *metadata*: dimensions can't be read, filtered or aggregated by a caller |
+| **Read surface** | results out, citable, consumable by the app or anyone else | `/query` over HTTP. The MCP route is a **block**, not part of this surface — see `2026-10-15-block-switches-design.md` §4 | no surface for *metadata*: dimensions can't be read, filtered or aggregated by a caller |
 | **Label review** | system takes a first pass, humans correct, human never overwritten | retrieve-then-classify over embedded names; precedence via `document_tags.source` | it is welded to WRI's taxonomy workflow, not usable against a stranger's vocabulary |
 
 **Deliberately outside the minimum:** answer mode and synthesis, alignment, feedback logs,
