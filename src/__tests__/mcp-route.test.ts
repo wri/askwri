@@ -218,10 +218,11 @@ describe('tools/call', () => {
       },
     })
 
+    // Cleared before the under-limit call as well, so the count below cannot
+    // depend on what an earlier case left behind.
+    ;(global.fetch as jest.Mock).mockClear()
     const under = await post(call(4, 900), AUTH)
     expect(await under.text()).toContain('Cities at the Crossroads')
-    // Exactly one: a stale call count from an earlier case must not be able to
-    // satisfy this.
     expect(global.fetch).toHaveBeenCalledTimes(1)
 
     ;(global.fetch as jest.Mock).mockClear()
