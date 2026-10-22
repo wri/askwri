@@ -206,12 +206,13 @@ Two structural fixes fell out of the above, both worth keeping:
 Two claims in this doc are checks rather than recollections. Both were run on
 **2026-10-22** and the results are recorded here.
 
-**The MCP guard is load-bearing.** Remove the `maxToolInputElements:` line from
-`src/app/api/mcp/route.ts` and run `npx jest src/__tests__/mcp-route.test.ts`: it
-fails — `1 failed, 10 passed, 11 total`, the over-limit call reaching the tool.
-Put the line back and the file is green — `11 passed, 11 total`. The refusal the
-SDK returns, which the test asserts, is verbatim `arguments contain more than the
-maximum of 1000 elements` with `isError: true`.
+**The MCP guard is load-bearing.** `npx jest src/__tests__/mcp-route.test.ts`
+covers it: the case sends 900 elements (the search runs, once) and 1001 (refused
+with the SDK's own `arguments contain more than the maximum of 1000 elements` and
+`isError: true`, nothing searched). Deleting the `maxToolInputElements:` line from
+`src/app/api/mcp/route.ts` makes that case fail — `1 failed, 10 passed, 11 total`
+on 2026-10-22. That is why the line is there, and why the test exists: without
+either, the mitigation is a silent no-op.
 
 **The action pin is a release, not a stray commit.** Run on 2026-10-22:
 
