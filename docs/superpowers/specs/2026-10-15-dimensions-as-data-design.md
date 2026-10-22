@@ -216,6 +216,9 @@ One authenticated read endpoint, modelled on `src/app/api/mcp/route.ts` (shared 
 This is the surface a group's own page or tool reads to build a visualisation. It is deliberately
 read-only and dimension-shaped, not a general query engine.
 
+**Sketch only.** This surface has never had a design of its own — it is the next design step
+(`2026-10-15-building-blocks-design.md` §10), and the endpoints above are a shape, not a decision.
+
 **Two surfaces, two audiences.** The app's chip panel is unauthenticated browser code and uses
 the catalog path (§4.5); the endpoints above are key-protected. So a group's taxonomy is exposed
 to the public web exactly to the extent its chips are — a product decision, not a default that

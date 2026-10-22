@@ -157,14 +157,23 @@ because "its interface is data" was false — the harness is code, and the real 
 It also measured the citation-anchor surface, which the earlier draft called unmeasured. The
 audit's remaining unstated premises are §7 above.
 
-## 10. Open questions
+## 10. Open questions, and the next design step
 
-- **Taxonomy richness:** flat values, values with synonyms, or hierarchy? Undecided.
-- **How a group attaches its own page or tool:** inside the app, outside it, or both — the owner
-  said "either," which means the read surface is the common requirement and the in-app path is
-  the open one.
+**Before going much further: design the metadata read surface.** `/api/dimensions*` is sketched in
+`2026-10-15-dimensions-as-data-design.md` §4.6 but has never had a design of its own, and it is the
+piece a group's own module — a chart, a D3 view, an outside tool — actually attaches to. The block
+list and the switches can continue without it; anything past them cannot.
+
+Still open:
+
+- **How a group attaches its own page or tool:** inside the app, outside it, or both — the owner said
+  "either," so the read surface is the common requirement and the in-app path is the open one.
 - **Who signs quality per taxonomy**, given risk 1.
-- **Whether declared dimensions ride on the existing tag tables** or get their own structure.
+
+Resolved since this record was written: dimensions ride the existing tag tables (they already *are*
+ the dimension model), taxonomy richness is flat values plus synonyms with hierarchy stored but not
+rolled up, and the block register is settled at 14 blocks, 5 core
+(`2026-10-15-block-switches-design.md` §8).
 
 ## 11. Left to the builder
 
