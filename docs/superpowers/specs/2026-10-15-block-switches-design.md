@@ -129,7 +129,10 @@ Dimensions are the opposite case and stay in the database.
 | `src/app/admin/review`, `/api/admin/review-queue`, `/api/admin/documents/[id]/tags` | `label-review` (core) | Human correction is core. |
 | `/api/admin/topics*`, `classify`/`embed_tags` stages, tag taxonomy admin | `tagging` (additional) | Machine labelling and taxonomy depth, not review. |
 | `/api/translate` | `multilingual` | — |
-| `alignment`, feedback routes | `answer` | They exist to serve answer mode; `/api/alignment` is called from both modes and this is the one place "hidden" over-reaches — noted, accepted, because leaving alignment on with answer off serves nothing. |
+| cite feedback and cite query-log routes | `retrieval` (core) | Cite *is* core (§8): the trust layer — floors, tiers, caps, grouping — is the product's promise, not a block. |
+| `/api/answer-mode-feedback`, `/api/answer-mode-query-logs` | `answer` | They exist to serve answer mode. |
+| `alignment` | `answer` | Called from both modes; the one place hiding over-reaches — noted, accepted, because alignment without answer mode serves nothing. |
+| "why relates" chips (`/api/batch-relates`, `/api/batch-why`) | `relations` | An LLM enrichment with cost and latency, genuinely optional. |
 
 ## 5. Acceptance tests
 
@@ -155,14 +158,25 @@ The exact register entry shape; how `main.py`'s direct route registration become
 the test harness for the ownership and cross-tier checks; whether `DISABLED_BLOCKS` reaches the app
 as a Docker build arg or a generated file.
 
-## 8. Open for the owner
+## 8. Settled after the cite question
 
-**The block names and the core/additional split.** They become public vocabulary — config, docs, and
-any later handover — so they are worth settling now. Proposed core: `corpus`, `ingestion`,
-`retrieval`, `read-api`, `label-review`. Proposed additional: `answer`, `cite-presentation`,
-`experts`, `mcp`, `multilingual`, `query-understanding`, `tagging`, `relations`, `collections`,
-`eval`, `judgment-capture`.
+**Cite is core, not a block.** Floors, tiers, per-document caps and grouping are a trust mechanism —
+the product vision's whole premise is that the plausible wrong answer is the enemy, and an unfiltered
+passage list produces exactly that. So `cite-presentation` is not a block: its parts fold into core
+`retrieval`, and the core's results view keeps relevance labels and page links.
 
-Two of those names are weak and worth changing if they will be used: `cite-presentation` describes a
-layer, not a capability, and `judgment-capture` has no runtime surface at all (it is vocabulary and
-ownership only, attached as `none`).
+**"Why relates" chips are not cite.** They move to `relations` — an LLM enrichment with cost and
+latency, optional.
+
+**`judgment-capture` is dropped** as a block. Feedback and query-log routes are machinery serving a
+capability rather than a capability anyone switches; they are claimed by the block that uses them
+(§4). Keeping a block with no runtime surface in the list would have made the register look
+arbitrary on its first day.
+
+**Final register — 14 blocks, 5 core:**
+
+- core: `corpus`, `ingestion`, `retrieval`, `read-api`, `label-review`
+- additional: `answer`, `experts`, `mcp`, `multilingual`, `query-understanding`, `tagging`,
+  `relations`, `collections`, `eval`
+
+Names are settled and can go into config, docs and any handover vocabulary.
