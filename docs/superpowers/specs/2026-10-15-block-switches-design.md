@@ -1,120 +1,168 @@
 # Block switches — design
 
 **Date:** 2026-10-15
-**Status:** design. Nothing here is approved for build.
+**Status:** design, revised after a builder check. Nothing here is approved for build.
 **Builds on:** `2026-10-15-building-blocks-design.md` §4 (the labelling discipline). The owner chose
 to design this next, out of the two options offered.
 
 ## 1. Problem
 
-"Answer mode is a block" is a word, not a thing. To hide answer mode today you have to know it is a
-mode string in `search-service/app/main.py`, a preset in `src/config/retrieval.ts`, a modal in
-`src/app/components/AnswerMode/`, and a feedback route at `src/app/api/answer-mode-feedback/` — and
-then find every place that renders or calls them. There is no list of blocks and no single switch.
+"Answer mode is a block" is a word, not a thing. Hiding answer mode today means knowing that it is
+not a route at all:
 
-The consequence is the one the exploration record names: the team can never hand a block over,
-because there is nothing to hand over that a recipient could switch.
+- a **mode value** inside `/query` — `mode: str = "cite"  # "answer" or "cite"` (`main.py:148`),
+  branched on seven times through the handler
+- a preset (`ANSWER_PRESET`) in `src/config/retrieval.ts`
+- a component tree under `src/app/components/AnswerMode/`
+- entries in `Landing/index.tsx:172`, `results/page.tsx:30`,
+  `components/results/ResultsTable.tsx:256`, `QuerySuggestions/suggestionPool.ts:38`
+- five app routes: `/api/answer`, `/api/alignment`, `/api/answer-mode-feedback`,
+  `/api/answer-mode-query-logs`, and half of `/api/batch-why`
+
+There is no list of blocks and no single switch, so the team can never hand a block over: there is
+nothing a recipient could switch.
+
+**The structural finding that shapes this design: blocks do not all attach the same way.** Some own
+routes. Some are a value on a shared route, or a branch inside one. Some are worker stages. Some are
+only a surface. Some have no runtime presence at all. A register that can only name route paths
+cannot express answer mode — which is why the first draft of this document was wrong.
 
 ## 2. What exists
 
 | Tier | Gating today |
 |---|---|
-| Server (Python) | seven scattered booleans in `search-service/app/config.py`: `translation_pairs_enabled`, `query_translation_enabled`, `query_understanding_enabled`, `query_expansion_lanes_enabled`, `query_understanding_llm_enabled`, `answer_translation_enabled`, `classify_topic_only` |
-| Worker | one: `classify_topic_only` |
-| App (Next.js) | **none**. `NEXT_PUBLIC_ENVIRONMENT` is the only public env var, and it is not a feature gate |
+| Server (Python) | seven *gating* booleans out of thirteen in `config.py`: `translation_pairs_enabled`, `query_translation_enabled`, `query_understanding_enabled`, `query_expansion_lanes_enabled`, `query_understanding_llm_enabled`, `answer_translation_enabled`, `classify_topic_only` |
+| Worker | one (`classify_topic_only`), plus behaviour gates that belong to blocks: `force_reparse`, `parse_backend`, `reclassify_poll_first` |
+| App (Next.js) | **no public feature-flag mechanism**. `NEXT_PUBLIC_ENVIRONMENT` is the only public var and it is baked at build time. There are real gates, but they are private and ad hoc: `USE_NANO_FILTER` (`src/app/api/answer/route.ts:22`), `MCP_SHARED_KEY` (fail-closed) |
+| Server routing | `main.py` registers routes directly; `app/routers/` exists and is empty — there is no router layer to unregister from |
 
-So the mechanism is not half-built — it is built for some server-side tunables and absent everywhere
-else. Every block that has a UI half currently cannot be hidden at all.
+So the mechanism is not half-built. It exists for a handful of server tunables and nowhere else, and
+every block with a UI half currently cannot be hidden at all.
 
 ## 3. Design
 
 ### 3.1 One switch, additive
 
-A single environment variable, `DISABLED_BLOCKS`, holding a comma-separated list of block names.
-Unset means everything on, which keeps every existing deployment byte-for-byte unchanged and makes
-misconfiguration fail toward "nothing disappeared".
+One environment variable, `DISABLED_BLOCKS`, comma-separated block names. Unset means everything as
+today — every existing deployment keeps behaving identically, including the seven booleans that
+default `False`. Deliberately not `ENABLED_BLOCKS`: an allowlist turns an unset variable into an
+empty product.
 
-Deliberately **not** `ENABLED_BLOCKS`: an allowlist turns an unset variable into an empty product.
-
-Read in both tiers: `search-service/app/config.py` for the server and worker, and the app's own env
-read (deploy sets both; the app additionally exposes the resulting list to client components so
-surfaces can be hidden before render).
+**Block enablement is orthogonal to tunables.** Turning a block on never turns a feature on; the
+block's own switches inside it keep their own defaults.
 
 ### 3.2 The register
 
-One declared list, one file per tier, same names: `BLOCKS` in
-`search-service/app/blocks.py` and `src/config/blocks.ts`. Each entry declares:
+One declared list per tier, same names: `BLOCKS` in `search-service/app/blocks.py` and
+`src/config/blocks.ts`.
 
 | Field | Meaning |
 |---|---|
-| `name` | lowercase, stable, used in `DISABLED_BLOCKS` and in every tier |
+| `name` | lowercase, stable, used in `DISABLED_BLOCKS` and in both tiers |
 | `kind` | `core` or `additional` |
-| `requires` | names of blocks this one needs; enabling a block whose requirement is disabled is a startup error |
-| `routes` | server or app route paths this block owns |
-| `stages` | worker stages it adds, if any |
-| `surfaces` | app components/pages that must not render |
-| `config_keys` | the block's own tunables, so they are read only when it is enabled |
+| `requires` | blocks this one needs; enabling a block whose requirement is disabled is a boot error |
+| `attach` | how the block reaches the system — see §3.3 |
+| `routes` | route paths it owns, if any |
+| `modes` | values it contributes to a shared route, e.g. `answer` on `/query` |
+| `stages` | worker stages it adds |
+| `surfaces` | app components and pages that must not render (admin included) |
+| `config_keys` | its tunables, so they are read only when the block is enabled |
 
-The two registers are checked against each other by a test that fails on a name present in one tier
-and missing from the other. That test is the thing that stops the list rotting.
+**Two register rules, and they are what stop it rotting:**
 
-Seeded from the exploration record: the five core blocks are `corpus`, `ingestion`, `retrieval`,
-`read-api`, `label-review`; the additional ones are `answer`, `cite-presentation`, `experts`, `mcp`,
-`multilingual`, `query-understanding`, `tagging`, `relations`, `collections`, `eval`,
-`judgment-capture`.
+1. **Exactly one owner per route.** A route with no owner, or two, fails a test. Co-ownership is not
+   expressible, which is the point: it forces a decision on the dual-candidate routes in §4.
+2. **Coverage is declarative, enforcement is lazy.** Every route, stage and surface is *claimed*,
+   because a claim is one line in a file. Enforcement is only exercised for the block an instance
+   actually disables. This is what keeps an exhaustive register from becoming a 100-route gating
+   project.
 
-### 3.3 What "hidden" means, per tier
+A cross-tier test fails if a block name exists in one register and not the other.
 
-- **Server routes:** a disabled block's routes are not registered. A caller gets 404, not an empty
-  list.
-- **Worker stages:** a disabled block's stages are not scheduled; the pipeline runs without them.
-- **App surfaces:** not rendered, and the entry point (button, chip, nav item, suggestion) is absent
-  rather than disabled-looking.
-- **Config keys:** a disabled block's tunables are not read, so a stale value in an instance's env
-  cannot affect behaviour.
+### 3.3 What "hidden" means, per attachment kind
 
-**Call: hidden means refused.** Hiding a block removes its routes rather than 404-ing a live handler,
-so a hidden block is genuinely absent to a caller, not merely invisible. Without this, "hidden" is a
-UI convention that any script can walk around.
+| `attach` | Hiding means | Observable result |
+|---|---|---|
+| `routes` | route is not registered | 404 |
+| `modes` | the core route **refuses the mode value** | 400, with the block named |
+| `stages` | stage is not scheduled | pipeline runs without it |
+| `surfaces` | component does not render, entry point absent | nothing to click |
+| `none` | nothing is enforced | name and ownership only |
 
-**Call: core blocks cannot be disabled.** Attempting it is a startup error. The minimum viable
-product is the product; a configuration that disables the corpus store has no meaningful behaviour to
-define.
+**Call: the mode refusal is not a contract change.** `QueryRequest` and `QueryResponse` keep their
+exact shape; a disabled block's mode value simply joins the set of requests the service rejects. The
+repo rule about preserving `/query` is about the wire contract, and refusing a request does not
+alter it. `/api/llamaindex`, the shared app gateway, carries the same guard, since it proxies both
+modes.
 
-**Call: the register lives in code, not the database.** Unlike dimensions, a block is code — its
-entries can only be correct if they match the routes and components that actually exist, so the
-compiler and the tests should be able to see them.
+**Call: hidden means refused on the server.** A hidden block is absent to a caller, not merely
+unrendered. Without that, "hidden" is a UI convention any script walks around.
 
-### 3.4 Dependency errors fail loud
+**Call: enforcement lives at runtime on the server; the app's gate is cosmetic.** The app bakes its
+list at build time, matching the existing `Dockerfile`/`next.config.js` precedent, so a running
+instance's surfaces cannot be flipped without a rebuild. That is acceptable precisely because the
+server is the enforcement point — a stale app shows nothing a caller can use.
 
-Disabling `retrieval` while enabling `answer` must fail at startup with both names, not produce an
-answer mode over nothing. Dependencies are declared per block and checked once, at boot.
+**Call: a disabled block's tunables are ignored silently**, never a boot failure. Disabling a block
+must be a safe ops action; a stale `QUERY_UNDERSTANDING_ENABLED=true` in an environment (as qa has
+today) must not take a deploy down. Only structural mistakes are loud (§3.4).
 
-## 4. Acceptance tests
+### 3.4 Loud failures
 
-1. Set `DISABLED_BLOCKS=answer` on a running instance: the answer route returns 404, the modal and
-   its entry point do not render, and cite mode is unaffected.
-2. Set `DISABLED_BLOCKS=retrieval`: startup fails, naming `retrieval` as core.
-3. Set `DISABLED_BLOCKS=retrieval` with `answer` enabled: startup fails, naming both and the
-   dependency.
-4. Add a block name to one tier's register only: the cross-tier test fails.
-5. Unset `DISABLED_BLOCKS`: every route, stage and surface an instance has today is present,
-   unchanged.
+- Disabling a `core` block → boot error naming it.
+- Disabling a block that another enabled block `requires` → boot error naming both (e.g. `retrieval`
+  off with `answer` on).
+- A route claimed twice, or claimed by nobody → test failure.
 
-## 5. What this design is not
+**Call: the register lives in code, not the database.** A block is code; its entries are only
+correct if they match routes and components that exist, so the compiler and the tests must see them.
+Dimensions are the opposite case and stay in the database.
 
-It does not make blocks separable — the code still ships, as the owner chose ("present but hidden").
-It is not a plugin registry, and modules are not discovered at runtime. It does not change the
-`/query` contract. It does not touch dimensions, taxonomy, or classification.
+## 4. Ownership assignments (my calls, from the builder check)
 
-## 6. Left to the builder
+| Contested item | Owned by | Why |
+|---|---|---|
+| `/api/mcp` | `mcp` (additional) | This amends the exploration record's read-surface row, which listed the MCP route under the core read surface. The core read surface is `/query`; MCP is a block and must be hideable. |
+| `/api/llamaindex` | `retrieval` (core) | It is the shared gateway for both modes; it carries the mode guard rather than being owned by `answer`. |
+| `translation_pairs_*` | `multilingual` | Cross-lingual sibling linking. |
+| `relate.py`, `relation_*_threshold` | `relations` | Document-to-document linking, unrelated to language. |
+| `src/app/admin/review`, `/api/admin/review-queue`, `/api/admin/documents/[id]/tags` | `label-review` (core) | Human correction is core. |
+| `/api/admin/topics*`, `classify`/`embed_tags` stages, tag taxonomy admin | `tagging` (additional) | Machine labelling and taxonomy depth, not review. |
+| `/api/translate` | `multilingual` | — |
+| `alignment`, feedback routes | `answer` | They exist to serve answer mode; `/api/alignment` is called from both modes and this is the one place "hidden" over-reaches — noted, accepted, because leaving alignment on with answer off serves nothing. |
 
-The exact shape of the register entries, how the app passes the disabled list to client components,
-whether route registration is dynamic or checked at request time, the test harness for the
-cross-tier check, and the naming of the individual route/component fields.
+## 5. Acceptance tests
 
-## 7. Open for the owner
+1. `DISABLED_BLOCKS=answer`: `POST /query` with `mode:"answer"` → **400 naming `answer`**; `mode:"cite"`
+   → unchanged results; `/api/answer` → 404; no answer entry point renders.
+2. `DISABLED_BLOCKS=retrieval` → boot fails, naming `retrieval` as core.
+3. `DISABLED_BLOCKS=retrieval` with `answer` enabled → boot fails, naming both.
+4. A route claimed by two blocks, or by none → test fails.
+5. A block in one register but not the other → test fails.
+6. Unset `DISABLED_BLOCKS` → every route, stage and surface present and unchanged, including the
+   seven booleans that default `False`.
 
-One question only: **the block names and the core/additional split** in §3.2 are my reading of the
-exploration record. The names become public vocabulary — they appear in config, in docs and in any
-later handover — so they are worth renaming now rather than after use.
+## 6. What this design is not
+
+Not separability — the code still ships, as the owner chose ("present but hidden"). Not a plugin
+registry; nothing is discovered at runtime. No `/query` wire-contract change. Nothing about
+dimensions, taxonomy or classification.
+
+## 7. Left to the builder
+
+The exact register entry shape; how `main.py`'s direct route registration becomes unregisterable
+(router extraction or a request-time guard); how the app passes its baked list to client components;
+the test harness for the ownership and cross-tier checks; whether `DISABLED_BLOCKS` reaches the app
+as a Docker build arg or a generated file.
+
+## 8. Open for the owner
+
+**The block names and the core/additional split.** They become public vocabulary — config, docs, and
+any later handover — so they are worth settling now. Proposed core: `corpus`, `ingestion`,
+`retrieval`, `read-api`, `label-review`. Proposed additional: `answer`, `cite-presentation`,
+`experts`, `mcp`, `multilingual`, `query-understanding`, `tagging`, `relations`, `collections`,
+`eval`, `judgment-capture`.
+
+Two of those names are weak and worth changing if they will be used: `cite-presentation` describes a
+layer, not a capability, and `judgment-capture` has no runtime surface at all (it is vocabulary and
+ownership only, attached as `none`).
