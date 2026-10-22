@@ -204,12 +204,12 @@ Two structural fixes fell out of the above, both worth keeping:
 | apk + RDS-bundle download in `node:24-alpine` | both succeed with verification enabled |
 
 Two claims in this doc are checks rather than recollections. Both were run on
-**2026-10-22**; the observed output is below, so a re-run can be diffed against it.
+**2026-10-22** and the results are recorded here.
 
-**The MCP guard is load-bearing.** Verified on 2026-10-22: with the
-`maxToolInputElements:` line removed from `src/app/api/mcp/route.ts`, the new case
+**The MCP guard is load-bearing.** Remove the `maxToolInputElements:` line from
+`src/app/api/mcp/route.ts` and run `npx jest src/__tests__/mcp-route.test.ts`: it
 fails — `1 failed, 10 passed, 11 total`, the over-limit call reaching the tool.
-With the line restored the file is green — `11 passed, 11 total`. The refusal the
+Put the line back and the file is green — `11 passed, 11 total`. The refusal the
 SDK returns, which the test asserts, is verbatim `arguments contain more than the
 maximum of 1000 elements` with `isError: true`.
 
