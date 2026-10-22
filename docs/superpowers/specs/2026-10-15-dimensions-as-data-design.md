@@ -2,7 +2,8 @@
 
 **Date:** 2026-10-15
 **Status:** design for the one mechanism identified in
-`2026-10-15-building-blocks-design.md` §3. Nothing here is approved for build.
+`2026-10-15-building-blocks-design.md` §3. The owner has taken the decisions in §5 and §8, including
+the quality decision in §4.3.1. Not yet approved for build.
 **Builds on:** that record's conclusion (five core blocks; one missing mechanism; one discipline).
 
 ## 1. Problem and scope
@@ -99,8 +100,9 @@ Admin CRUD over `facets`, plus taxonomy values written into `tags` and synonyms 
 `facet, value_id, label, description, parent`), and the existing admin route patterns for
 single-item CRUD. No new editor paradigm.
 
-**Rule:** declaring a dimension never requires a migration. That is the whole point, so it is the
-acceptance test for this section.
+**Rule:** declaring a dimension never requires code or a migration — it requires configuration and
+a classification run. That is the precise form of "no code", and it is the acceptance test for
+this section.
 
 ### 4.3 Populating values
 
@@ -125,6 +127,37 @@ multi-valued dimension. **Call:** rows that are live for filtering and counts ar
 declared dimension, which `documents.source_metadata` key (or org-supplied column) supplies its
 value. Mapping is registry data, so a new dimension needs no code. Dimensions with no mapping are
 classified rather than read.
+
+### 4.3.1 Per-dimension classification config
+
+**Owner's decision: tuned quality, not a rough first pass.** A declared dimension is expected to be
+classifiable as well as filterable, so the configuration that is hardcoded today becomes registry
+data.
+
+The classifier has two lanes today, and only one of them is quality-grade:
+
+- **retrieve-then-classify** — candidate values retrieved from an embedded shortlist, with a
+  per-facet prompt and cap. Gated by `EMBEDDED_FACETS = ("topic", "geography")` and
+  `_FACET_CONFIG[facet]` in `search-service/worker/stages/classify.py:26-56`.
+- **full-enum** — every remaining facet shares one unbounded prompt with no per-dimension
+  control (`classify.py:259-291`).
+
+Design changes:
+
+1. `facets` grows classification columns: `candidate_retrieval boolean` (replacing membership in
+   `EMBEDDED_FACETS`), `classify_prompt text`, `classify_max_items int`, `classify_max_tokens int`.
+2. The classifier reads that config from the registry instead of the hardcoded dict, so adding a
+   quality-grade dimension is a row plus a form, not a code edit.
+3. Embedding a dimension's values into `tag_embeddings` becomes an admin-triggered job rather than
+   a side effect of `EMBEDDED_FACETS` membership (`embed_tags.py:110-113`). Declaring a tuned
+   dimension therefore queues a build; it does not require a deploy.
+4. The full-enum lane survives as the fallback for dimensions declared without config. It is no
+   longer the supported path for anything that matters.
+
+**Not automated.** No prompt or cap is inferred. A human writes the dimension's prompt and picks
+its cap; the system does not tune itself (§6).
+
+**Cost consequence:** this is the bulk of the project. The estimate moves to the top of L.
 
 ### 4.4 Filtering — inside the frozen contract
 
@@ -204,12 +237,16 @@ falls out of the implementation.
 6. **Taxonomy versioning is vestigial** — re-upload replaces in place (§4.4, §6).
 7. **Filtering is `accepted`-only**, and declared dimensions must pre-filter rather than
    post-filter (§4.3, §4.4).
+8. **Classification quality is tuned per dimension** (owner's call, §4.3.1): config lives in the
+   registry, the embedding build becomes an admin job, and the full-enum lane is a fallback rather
+   than the supported path.
 
 ## 6. Explicitly not this design
 
 Answer mode, expert mode, MCP's search surface, collections, relations, the eval and calibration
 lane, block labelling/refactoring, tenancy, packaging, any `/query` contract change, taxonomy
-multi-versioning, and hierarchy roll-up filtering.
+multi-versioning, hierarchy roll-up filtering, and any automatic tuning of a dimension's prompt or
+cap.
 
 ## 7. What is left to the builder
 
@@ -217,31 +254,28 @@ Route and schema naming, the taxonomy upload file format, the exact mapping decl
 the in-process cache's TTL and invalidation, whether the generic filter path needs a materialized
 view at corpus scale, the admin UI's arrangement, migration ordering, and test strategy.
 
-## 8. Open questions for the owner
+## 8. Decisions and open questions
 
-**Q1 (biggest).** A newly declared dimension's values are populated by the classifier, and the
-classifier has two lanes:
-- the **full-enum lane** picks up any facet automatically (it builds a vocabulary from every
-  `tags` row outside `EMBEDDED_FACETS`) — free, but one unbounded prompt over all values, with no
-  per-dimension prompt, cap or candidate retrieval;
-- the **retrieve-then-classify lane** gives real per-dimension quality but requires membership in
-  `EMBEDDED_FACETS = ("topic", "geography")`, a hardcoded per-facet prompt/cap config
-  (`classify.py:26-56`), and a `tag_embeddings` build.
+**Q1 — answered (owner).** Tuned per-dimension quality, not a rough generic pass. Every declared
+dimension is expected to carry classification config; the full-enum lane remains only as a
+fallback. See §4.3.1 for what that moves into the registry, and note the cost consequence: this is
+the bulk of the project.
 
-So "declaring a dimension needs no code" is true for storage and filtering, and **false for
-quality**: the good lane is closed in code. Which does the acceptance test have to prove — a
-dimension that is merely filterable (days), or one classified at WRI quality (the bulk of the
-project)?
+**Q2 — my call.** The acceptance test uses one placeholder dimension that exists in no code today
+("intervention type" over a small document set), so the test can fail against something real. Swap
+in the owner's own dimension name when one exists.
 
-**Q2.** Which dimension proves the mechanism? Without a named one, the acceptance tests default to
-WRI's existing vocabulary and Q1 never has a case to fail against.
+**Q3 — my call.** The cross-tab read (`counts?group_by=`) is out of the first cut. One dimension's
+values and counts are what a first visualisation needs; a two-dimensional grid needs a different
+index and can follow.
 
-**Q3.** Is the cross-tab read (`counts?group_by=`) in the first cut? A visualisation of one
-dimension needs values and counts only; a grid needs the cross-tab, which is a different index and
-materially more work.
+**Q4 — my call.** Org-supplied labels (`source='external'`) stay out of the first cut. The
+precedence ladder is defined and the import path is additive, so the top rung can ship later
+without rework — but until it does, "system classifies, humans correct" is the whole story.
 
-**Q4.** Does the document import path carry org-supplied labels (`source='external'`) in this cut?
-§4.3 ranks it top of the ladder; leaving it out means shipping the ladder's top rung unimplemented.
+**Still open, and only the owner can answer:** which real dimension is the first acceptance case
+(Q2's placeholder is a stand-in), and whether the first cut ships against a real group's corpus or
+a seeded test set.
 
 ## 9. What the builder check changed
 
