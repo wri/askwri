@@ -88,12 +88,11 @@ jobs:
 
       - name: Run PR Agent review
         if: steps.reviewable.outputs.has_reviewable == 'true'
-        # Tracks the tip of the-pr-agent/pr-agent's main branch instead of a
-        # pinned commit SHA. Note: because this job runs on pull_request_target
-        # with access to repository secrets, a mutable branch ref means upstream
-        # main changes take effect immediately without review — pin a SHA if
-        # that risk is unacceptable.
-        uses: the-pr-agent/pr-agent@main
+        # Pinned to a commit, not `@main`. This job runs on pull_request_target
+        # with repository secrets and write access to PRs, so a mutable ref means
+        # upstream main takes effect here unreviewed, immediately. Bump the SHA
+        # deliberately (or let Dependabot's github-actions ecosystem do it).
+        uses: the-pr-agent/pr-agent@b1e75b56580b33f048ce9f6cb8bd5e1050097f24 # main @ 2026-10-22
         env:
           # Public GitHub repos do not incur GitHub Actions charges, and
           # the PR-Agent project itself is open source. Model API usage still

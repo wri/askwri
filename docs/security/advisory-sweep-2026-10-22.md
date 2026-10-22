@@ -1,8 +1,8 @@
 # Advisory sweep — 2026-10-22
 
-Proactive CVE/advisory pass over everything this repo pins (bugfix-evidence Gate 3).
-Report only: **nothing was upgraded here.** Upgrades are their own PRs — see
-[Fix tranches](#fix-tranches).
+Proactive CVE/advisory pass over everything this repo pins (bugfix-evidence Gate 3),
+plus the remediation for every finding it raised. See
+[What this branch changed](#what-this-branch-changed) for the diff and the evidence.
 
 Branch: `fix/advisory-sweep` (off `qa` @ `154c38d`).
 
@@ -147,22 +147,67 @@ deploy. Digest-pin both images and add a scheduled rebuild/scan.
 cadence. That is fine for noise, but `pillow` and `csv-parse` only have major
 fixes, so those advisories stay open indefinitely unless someone opts in.
 
-## Fix tranches
+## What this branch changed
 
-1. **Tranche A (this branch, same day):** `next@16.4.2` (pulls `sharp@0.35.5`),
-   `mcp-handler@2.3.0` + `@modelcontextprotocol/server@2.3.0` +
-   `maxToolInputElements`, regenerate `requirements.txt` (clears pypdf, aiohttp,
-   urllib3, multidict, banks, tinytag, certifi, nltk), pin the PR-Agent action to
-   a SHA, drop `-k`/`--no-check-certificate`. Verify with `npm run lint`,
-   `npm test`, `npx next build --webpack`, `npm run test:python`.
-2. **Tranche B (separate PR):** `pillow@13`, `csv-parse@7`, and npm `overrides`
-   for the transitive `@tiptap/core`, `prosemirror-view`, `source-map-js`,
-   `brace-expansion`, `baseline-browser-mapping` bumps — these need per-package
-   verification (design-system pin, postcss/minimatch chains).
-3. **Tranche C (infra):** digest-pinned base images, scheduled ECR re-scan,
-   Dependabot exception for security-relevant majors.
+| Finding | Change | Verified by |
+|---|---|---|
+| P1 `next` (critical Image Optimization RCE + SSRF + SSG/ISR cache poisoning + Server Action DoS) | `next` 16.3.6 → **16.4.2**, `eslint-config-next` + `@next/eslint-plugin-next` moved with it | `npm audit --omit=dev` clean, `npx next build --webpack` green |
+| P1 `sharp` librsvg RCE | 0.35.4 → **0.35.5** (via override; it is an optional dep of `next`) | `npm ls sharp` |
+| P1 `pypdf` (24 advisories, parsed on the ingestion path) | 6.14.2 → **6.21.2** | `pip-audit` clean, pytest |
+| P2 MCP (`GHSA-46jr-4wx8-v453` etc.) | `mcp-handler` 2.2.0 → **2.3.0**, `@modelcontextprotocol/server` 2.2.0 → **2.3.1**, plus `maxToolInputElements: 1_000` on the handler (`route.ts`) — the upgrade alone does not enable the guard | `tsc` via `next build` |
+| P2 `pillow` (35), `nltk` (35) | **13.0.0**, **3.10.4** | `pip-audit` clean |
+| P3 `brace-expansion` (6), `source-map-js`, `baseline-browser-mapping`, `browserslist` | npm `overrides` + `npm update`; `brace-expansion` floored per major line (1.x/2.x/5.x — they are API-incompatible) | `npm audit`, lint, 92 jest suites |
+| P3 `csv-parse` | 6.2.1 → **7.0.3** (the vulnerable `columns` path is what `evaluation/diagnostics/*` uses) | lint |
+| P4 `aiohttp`, `urllib3`, `multidict`, `banks`, `tinytag`, `certifi` | security floors in `requirements.in`, pinned by `compile-requirements.sh` | `pip-audit` clean |
+| N1 unpinned PR-Agent action | `@main` → `@b1e75b56…` (upstream main at 2026-10-22) | YAML diff |
+| N2 Dockerfile transport integrity | dropped `apk --no-check-certificate` and `curl -k` | ran both commands in `node:24-alpine`: apk verifies, bundle downloads 114 certs |
+
+Two structural fixes fell out of the above, both worth keeping:
+
+- `requirements-dev.in` now pulls `-r requirements.in` **and** `-c requirements.txt`.
+  The two lockfiles are compiled independently, so they could pin different
+  versions of one package — which is exactly what happened mid-remediation
+  (`urllib3` 2.8.0 vs 2.7.0, then `anyio` 4.14.2 vs 4.15.1) and what CI's second
+  `pip install` rejects. Constraints make that impossible.
+- The floors in `requirements.in` are named, commented, transitive-only deps.
+  `pip-compile` keeps whatever the previous resolution chose, so an advisory in a
+  transitive dep only moves if the `.in` names it; the comment says when to drop
+  each one.
+
+## Residual (not fixed, with reasons)
+
+| Left open | Why |
+|---|---|
+| `js-yaml@3.15.2` (dev, `@istanbuljs/load-nyc-config` → istanbul → jest coverage) | No 3.x fix exists — the advisory's only patched line is 4.x, and `load-nyc-config@1.1.0` (latest) requires `^3.13.1`. Dev-only, parses the repo's own config. |
+| `braces` / `micromatch` / `fast-glob` (dev, via `@next/eslint-plugin-next`) | `GHSA-vfj7-8cjw-p6xm` covers `*` — no patched version was published. Has to wait upstream. With the `js-yaml@3` chain these two advisories account for all 38 remaining entries and every "high". |
+| `sprintf-js` (dev, via `argparse` ← `js-yaml@3` ← istanbul) | Same root as the `js-yaml@3` row; goes away when that one can. |
+| jest 29 → 30 | Considered and **reverted**. It fixes no advisory of its own: the jest tree was flagged only through `js-yaml@3` (which jest 30 still pulls) and `braces`. It also upgrades jsdom 20 → 26, where `window.location` is spec-compliantly unforgeable, and two admin suites that stub it to assert a 401 redirect fail. Making them pass means either weakening the assertions or moving 17 `window.location.href` call sites onto a mockable seam — neither belongs in a security sweep. |
+| N3 base-image digests / re-scan | Digest-pinning trades automatic base updates for reproducibility and does nothing about images already pushed; scheduled re-scan is ECR **registry-level** (account-wide blast radius), not a per-repo Terraform change. Needs an infra decision. |
+| N4 Dependabot `semver-major` ignore | Editing that file re-runs every ecosystem immediately (its own header warns: 19 PRs last time), and Dependabot has no per-dependency un-ignore. Needs a deliberate change, not a drive-by. |
+
+## Verification (run on this branch, 2026-10-22)
+
+| Check | Result |
+|---|---|
+| `npm audit --omit=dev` | **0** (was 9: 1 critical, 6 high, 2 moderate) |
+| `npm audit` | 38 left (33 high, 5 moderate), every one dev toolchain, all propagated from two advisories with no published fix (see Residual) |
+| `pip-audit -r requirements.txt -r requirements-dev.txt` (in `python:3.12-slim`) | **No known vulnerabilities found** (was 110 across 9 packages) |
+| `npm run lint` | 0 errors, 18 pre-existing warnings |
+| `npm test` | 92 suites, 1030 tests passed |
+| `npx next build --webpack` | green |
+| `pytest tests/` (in `python:3.12-slim`) | 445 passed, 213 skipped, 4 failed — all four are `test_probe_rerank_isolation.py` requiring `DATABASE_URL` from `scripts/with-remote-env.sh qa` (a guard, not a version error) |
+| apk + RDS-bundle download in `node:24-alpine` | both succeed with verification enabled |
+
+Not run here: the DB-backed suites (`npm run test:db`), the cite/QA evals, and a
+container build of either image end to end — all need the local stack or AWS.
+
+## Deferred
+
+`pillow@13` (major), `csv-parse@7` (major), the npm `overrides` and the
+`@tiptap` family all landed here, so the only deliberately deferred items are the
+infra ones in [Residual](#residual-not-fixed-with-reasons).
 
 ## Reproduction
 
-`.sweep/` in the worktree holds the raw `npm audit` and `pip-audit` JSON used
-above (untracked; regenerate with the commands in [Method](#method)).
+The commands in [Method](#method) reproduce every number here. Raw JSON was kept
+in `.sweep/` while working and is not committed.
