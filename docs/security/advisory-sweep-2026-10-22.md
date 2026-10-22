@@ -215,7 +215,9 @@ $ npx jest src/__tests__/mcp-route.test.ts
   ✕ refuses arguments over the element limit and still runs under it (28 ms)
   Tests:       1 failed, 10 passed, 11 total
 
-# option restored
+# put it back; the tree must be clean again before the green run
+$ git checkout -- src/app/api/mcp/route.ts
+$ git diff --stat            # no output
 $ npx jest src/__tests__/mcp-route.test.ts
   Tests:       11 passed, 11 total
 ```
