@@ -142,6 +142,24 @@ jobs:
         working-directory: search-service
         run: pip install -r requirements-dev.txt
 
+      # nltk >= 3.10.4 refuses to read NLTK data from a directory that anyone but
+      # its owner can write, because such a file could have been planted. GitHub's
+      # setup-python toolcache installs site-packages group-writable, so
+      # llama-index's bundled nltk_cache (punkt, stopwords) is rejected and
+      # SentenceSplitter raises LookupError. The deployed image is unaffected: pip
+      # installs there as root and site-packages ends up 0755, which is why this
+      # is a CI-only step instead of a Dockerfile change.
+      - name: Make the bundled NLTK data private to its owner
+        run: |
+          python - <<'PY'
+          import pathlib, llama_index.core
+          cache = pathlib.Path(llama_index.core.__file__).parent / "_static" / "nltk_cache"
+          for p in [cache, *cache.rglob("*")]:
+              if p.exists():
+                  p.chmod(p.stat().st_mode & ~0o022)
+          print(f"go-w on {cache}")
+          PY
+
       # Ghostscript: worker/stages/parse.py shells out to `gs` to shrink PDFs
       # over Mistral OCR's 50MB limit. Without it the shrink tests in
       # test_parse_backend.py skip, which would hide a broken shrink path.

@@ -174,6 +174,13 @@ Two structural fixes fell out of the above, both worth keeping:
   versions of one package — which is exactly what happened mid-remediation
   (`urllib3` 2.8.0 vs 2.7.0, then `anyio` 4.14.2 vs 4.15.1) and what CI's second
   `pip install` rejects. Constraints make that impossible.
+- `nltk` 3.10.4 added a check that refuses to read NLTK data from a directory
+  writable by anyone but its owner, and GitHub's setup-python toolcache makes
+  site-packages group-writable — so llama-index's bundled `nltk_cache` (punkt,
+  stopwords) was rejected and `SentenceSplitter` raised `LookupError`. `pr-check.yml`
+  now makes that directory private before the suite runs. The deployed image is
+  unaffected (pip installs as root, site-packages is 0755); that was checked by
+  running the same tests as uid 1000 against a root install.
 - The floors in `requirements.in` are named, commented, transitive-only deps.
   `pip-compile` keeps whatever the previous resolution chose, so an advisory in a
   transitive dep only moves if the `.in` names it; the comment says when to drop
