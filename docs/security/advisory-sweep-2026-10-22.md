@@ -206,28 +206,14 @@ Two structural fixes fell out of the above, both worth keeping:
 Two claims in this doc are checks rather than recollections. Both were run on
 **2026-10-22**; the observed output is below, so a re-run can be diffed against it.
 
-**The MCP guard is load-bearing.** Delete the `maxToolInputElements:` line from
-`src/app/api/mcp/route.ts`, run the suite, restore it, run again:
+**The MCP guard is load-bearing.** Verified on 2026-10-22: with the
+`maxToolInputElements:` line removed from `src/app/api/mcp/route.ts`, the new case
+fails — `1 failed, 10 passed, 11 total`, the over-limit call reaching the tool.
+With the line restored the file is green — `11 passed, 11 total`. The refusal the
+SDK returns, which the test asserts, is verbatim `arguments contain more than the
+maximum of 1000 elements` with `isError: true`.
 
-```
-$ cp src/app/api/mcp/route.ts /tmp/route.ts.bak   # restore point for this edit only
-$ perl -0pi -e 's/\n\s*maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS,//' src/app/api/mcp/route.ts
-$ npx jest src/__tests__/mcp-route.test.ts
-  ✕ refuses arguments over the element limit and still runs under it (28 ms)
-  Tests:       1 failed, 10 passed, 11 total
-
-$ cp /tmp/route.ts.bak src/app/api/mcp/route.ts   # undoes this edit, nothing else
-$ npx jest src/__tests__/mcp-route.test.ts
-  Tests:       11 passed, 11 total
-```
-
-Restoring from a copy rather than `git checkout` is deliberate: `git checkout`
-would discard any other uncommitted work in `route.ts`.
-
-The refusal the SDK returns, which the test asserts, is verbatim
-`arguments contain more than the maximum of 1000 elements` with `isError: true`.
-
-**The action pin is a release, not a stray commit.**
+**The action pin is a release, not a stray commit.** Run on 2026-10-22:
 
 ```
 $ git ls-remote --tags https://github.com/the-pr-agent/pr-agent v0.48.0
