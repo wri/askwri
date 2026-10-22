@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-    "node": ">=24.0.0"
+    "node": "24.22.1"
   },
   "scripts": {
     "dev": "next dev",
@@ -95,5 +95,9 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "undici": "^8.4.1"
+  },
+  "allowScripts": {
+    "@worldresources/wri-design-systems": true,
+    "unrs-resolver": true
   }
 }
