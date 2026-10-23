@@ -1,10 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import ChakraProvider from '@/app/Providers/ChakraProvider'
-import { InterpretationLine, facetChipLabel } from '../InterpretationLine'
+import {
+  InterpretationLine,
+  facetChipLabel,
+  appliedChips,
+  suggestedChips,
+} from '../InterpretationLine'
 
 describe('facetChipLabel', () => {
   it('formats year and language facets for humans', () => {
+    expect(facetChipLabel('date_min', '2020-06-01')).toBe('From 2020-06-01')
+    expect(facetChipLabel('date_max', '2020-06-30')).toBe('Until 2020-06-30')
     expect(facetChipLabel('year_min', '2022')).toBe('2022–present')
     expect(facetChipLabel('year_max', '2019')).toBe('up to 2019')
     expect(facetChipLabel('language', 'es')).toBe('Spanish')
@@ -56,5 +63,61 @@ describe('InterpretationLine', () => {
     )
     fireEvent.click(screen.getByText('freight decarbonization'))
     expect(onApply).toHaveBeenCalledWith('freight decarbonization')
+  })
+
+  it('offers a suggested facet and applies it on click, never removably', () => {
+    const onApplyChip = jest.fn()
+    const suggested = [
+      { facet: 'year_min', value: '2023', label: '2023–present' },
+    ]
+    render(
+      <ChakraProvider>
+        <InterpretationLine
+          chips={[]}
+          suggested={suggested}
+          suggestion={null}
+          onRemoveChip={jest.fn()}
+          onApplyChip={onApplyChip}
+          onApplySuggestion={jest.fn()}
+        />
+      </ChakraProvider>,
+    )
+    expect(screen.getByText('Suggested:')).toBeInTheDocument()
+    // A suggestion is not applied, so it must not offer removal.
+    expect(screen.queryByLabelText('Remove 2023–present filter')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Apply 2023–present filter'))
+    expect(onApplyChip).toHaveBeenCalledWith(suggested[0])
+  })
+})
+
+describe('chip selection', () => {
+  const facets = [
+    { facet: 'year_min', value: '2022', action: 'hard' },
+    { facet: 'year_min', value: '2022', action: 'suggest' },
+    { facet: 'language', value: 'es', action: 'suggest' },
+  ]
+
+  it('takes only applied facets as chips', () => {
+    expect(appliedChips(facets)).toEqual([
+      { facet: 'year_min', value: '2022', label: '2022–present' },
+    ])
+  })
+
+  it('drops a suggestion the applied chips already cover', () => {
+    const applied = appliedChips(facets)
+    expect(suggestedChips(facets, applied)).toEqual([
+      { facet: 'language', value: 'es', label: 'Spanish' },
+    ])
+  })
+
+  it('drops a suggestion that spells an applied chip a different way', () => {
+    // The sidecar returns the language NAME where the parser returns the CODE,
+    // and both render as "Chinese" — a value-keyed dedup missed this and the
+    // page showed the same chip as applied and suggested at once.
+    const mixed = [
+      { facet: 'language', value: 'zh', action: 'hard' },
+      { facet: 'language', value: 'Chinese', action: 'suggest' },
+    ]
+    expect(suggestedChips(mixed, appliedChips(mixed))).toEqual([])
   })
 })

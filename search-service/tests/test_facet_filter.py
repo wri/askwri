@@ -6,6 +6,7 @@ filter is set; program is exact-match on node metadata; excluded_keywords
 substring on title+text). Language has no legacy counterpart: unknown
 language is KEPT — exclusion requires a positive mismatch."""
 from types import SimpleNamespace
+from datetime import date
 from unittest.mock import MagicMock
 
 from app.facet_filter import apply_facet_filters, legacy_request_facets
@@ -30,6 +31,38 @@ DOCS_META = {
     "d-es-2019": {"language": "es", "article_type": "report", "year_int": 2019},
     "d-noyear": {"language": "en", "article_type": None, "year_int": None},
 }
+
+
+def test_publication_date_range_is_inclusive_and_falls_back_to_year():
+    metadata = {
+        "start": {"date_published": date(2020, 6, 1), "year_int": 2019},
+        "end": {"date_published": date(2020, 6, 30)},
+        "before": {"date_published": date(2020, 5, 31)},
+        "after": {"date_published": date(2020, 7, 1)},
+        "year": {"year_int": 2020},
+        "old": {"year_int": 2019},
+        "unknown": {},
+    }
+    nodes = [_node(doc_id) for doc_id in metadata]
+    out = apply_facet_filters(
+        nodes, [_hard("date_min", "2020-06-01"), _hard("date_max", "2020-06-30")], metadata,
+    )
+    assert [node.node.metadata["doc_id"] for node in out] == ["start", "end", "year", "unknown"]
+
+
+def test_publication_date_falls_back_to_legacy_year():
+    # RETRIEVAL_BACKEND=legacy: load_csv_metadata supplies "year" only — no
+    # year_int, no date_published. A 2019 doc must still be excluded by
+    # date_min=2020-06-01, else every legacy doc reads as undated.
+    metadata = {"legacy-2019": {"year": "2019"}, "legacy-2021": {"year": "2021"}}
+    nodes = [_node(doc_id) for doc_id in metadata]
+    out = apply_facet_filters(nodes, [_hard("date_min", "2020-06-01")], metadata)
+    assert [n.node.metadata["doc_id"] for n in out] == ["legacy-2021"]
+
+
+def test_invalid_publication_date_is_ignored():
+    nodes = [_node("doc")]
+    assert apply_facet_filters(nodes, [_hard("date_min", "invalid")], {}) is nodes
 
 
 def test_year_min_filters_on_docs_meta():
@@ -71,6 +104,18 @@ def test_language_filters_on_docs_meta():
     nodes = [_node("d-en-2023"), _node("d-es-2019")]
     out = apply_facet_filters(nodes, [_hard("language", "es")], DOCS_META)
     assert [n.node.metadata["doc_id"] for n in out] == ["d-es-2019"]
+
+
+def test_language_multiple_facets_are_or():
+    # Two language chips keep docs in EITHER language (the FilterPanel is
+    # multi-select); values are ISO codes compared case-insensitively.
+    nodes = [_node("d-en-2023"), _node("d-es-2019")]
+    out = apply_facet_filters(
+        nodes,
+        [_hard("language", "en"), _hard("language", "ES")],
+        DOCS_META,
+    )
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-en-2023", "d-es-2019"]
 
 
 def test_language_filter_keeps_docs_without_language_metadata():
@@ -123,3 +168,104 @@ def test_legacy_request_facets_conversion():
 def test_legacy_request_facets_empty_request():
     req = SimpleNamespace(min_year=None, max_year=None, required_program=None, excluded_keywords=None)
     assert legacy_request_facets(req) == []
+
+
+OFFICE_META = {
+    "d-us": {"office": "WRI US", "year_int": 2023},
+    "d-mx": {"office": "WRI México", "year_int": 2023},
+    "d-br": {"office": "WRI  São   Paulo", "year_int": 2023},
+}
+
+
+def _office_node(doc_id):
+    n = MagicMock()
+    n.node.metadata = {"doc_id": doc_id, "program_series": "", "title": "t"}
+    n.node.text = "body"
+    return n
+
+
+def test_office_matches_across_case():
+    # The UI canonicalizes "WRI US" to "WRI Us"; the corpus keeps "WRI US".
+    nodes = [_office_node("d-us")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI Us")], OFFICE_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-us"]
+
+
+def test_office_matches_across_accents():
+    nodes = [_office_node("d-mx")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI Mexico")], OFFICE_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-mx"]
+
+
+def test_office_matches_across_whitespace():
+    nodes = [_office_node("d-br")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI São Paulo")], OFFICE_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-br"]
+
+
+def test_office_mismatch_still_excludes():
+    nodes = [_office_node("d-us"), _office_node("d-mx")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI Brazil")], OFFICE_META)
+    assert out == []
+
+
+def test_office_multiple_facets_are_or():
+    # Two office chips keep docs matching EITHER (the FilterPanel is
+    # multi-select); a doc matching neither is dropped.
+    nodes = [_office_node("d-us"), _office_node("d-mx"), _office_node("d-br")]
+    out = apply_facet_filters(
+        nodes,
+        [_hard("office", "WRI Us"), _hard("office", "WRI Mexico")],
+        OFFICE_META,
+    )
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-us", "d-mx"]
+
+
+def test_office_kept_when_doc_has_no_office():
+    nodes = [_office_node("mystery")]
+    out = apply_facet_filters(nodes, [_hard("office", "WRI Mexico")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["mystery"]
+
+
+WORK_LANG_META = {
+    # en translation whose work also has an es original sibling
+    "d-en": {"language": "en", "work_languages": frozenset({"es"})},
+    # es original whose work also has an en translation sibling
+    "d-es": {"language": "es", "work_languages": frozenset({"en"})},
+    # monolingual doc, no siblings
+    "d-fr": {"language": "fr", "work_languages": frozenset()},
+}
+
+
+def test_language_matches_work_sibling_language():
+    # A bilingual work is two rows: filtering language=en keeps BOTH the en
+    # row and its es-original sibling (the work covers en either way).
+    nodes = [_node("d-en"), _node("d-es"), _node("d-fr")]
+    out = apply_facet_filters(nodes, [_hard("language", "en")], WORK_LANG_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-en", "d-es"]
+
+
+def test_language_work_match_is_symmetric():
+    # Same from the es side: filtering es keeps the es original AND its en
+    # translation sibling.
+    nodes = [_node("d-en"), _node("d-es"), _node("d-fr")]
+    out = apply_facet_filters(nodes, [_hard("language", "es")], WORK_LANG_META)
+    assert [n.node.metadata["doc_id"] for n in out] == ["d-en", "d-es"]
+
+
+def test_language_no_work_match_excludes():
+    # A monolingual fr doc matches neither en nor es: excluded.
+    nodes = [_node("d-fr")]
+    out = apply_facet_filters(
+        nodes,
+        [_hard("language", "en"), _hard("language", "es")],
+        WORK_LANG_META,
+    )
+    assert out == []
+
+
+def test_language_kept_when_doc_has_no_language_metadata():
+    # Unknown language is still KEPT (conservative posture), siblings or not.
+    nodes = [_node("mystery")]
+    out = apply_facet_filters(nodes, [_hard("language", "es")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["mystery"]

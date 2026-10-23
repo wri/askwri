@@ -47,7 +47,13 @@ export type ResultsTableProps = {
   docWhyLoading?: Record<string, boolean>
   docSummaryLoading?: Record<string, boolean>
   onToggleSelect?: (id: string, v: boolean) => void
-  onExportBib?: (selectedIds: string[]) => void
+  onExportBib?: (
+    selectedIds: string[],
+    language?: string,
+    versionExternalId?: string,
+  ) => void
+  onOpenFilters?: () => void
+  filtersOpen?: boolean
 }
 
 export type ResultsPageProps = {
@@ -55,7 +61,11 @@ export type ResultsPageProps = {
   query: string
   docSummaryLoading?: Record<string, boolean>
   docWhyLoading?: Record<string, boolean>
-  onExportBib?: (selectedIds: string[]) => void
+  onExportBib?: (
+    selectedIds: string[],
+    language?: string,
+    versionExternalId?: string,
+  ) => void
   ops: {
     index_version: string
     prompt_version: string
@@ -76,12 +86,20 @@ export type ResultsPageProps = {
     suggestions: { type: string; text: string }[]
   } | null
   onRemoveFacet?: (chip: { facet: string; value: string }) => void
+  /** A suggested (low-confidence) facet the user clicked to apply. */
+  onApplyFacet?: (chip: { facet: string; value: string }) => void
   onApplySuggestion?: (text: string) => void
 }
 
 export type DocumentPreviewModalContentProps = {
   rowData: RowData
-  onExportBib?: (selectedIds: string[]) => void
+  /** Exports citations for the given row ids. The optional `language` label
+   *  (e.g. "Spanish") selects the language-specific metadata to cite. */
+  onExportBib?: (
+    selectedIds: string[],
+    language?: string,
+    versionExternalId?: string,
+  ) => void
 }
 
 export enum FeedbackType {

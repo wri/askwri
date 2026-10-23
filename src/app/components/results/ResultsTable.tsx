@@ -70,6 +70,8 @@ const ResultsTable = ({
   docSummaryLoading = {},
   onToggleSelect,
   onExportBib,
+  onOpenFilters,
+  filtersOpen,
 }: ResultsTableProps) => {
   const totalItems = data.length
   const pageSize = PAGE_SIZE
@@ -172,6 +174,14 @@ const ResultsTable = ({
           }}
         >
           <Button
+            variant='secondary'
+            size='small'
+            label='Filters'
+            aria-label='Open filter panel'
+            aria-expanded={filtersOpen}
+            onClick={() => onOpenFilters?.()}
+          />
+          <Button
             variant='primary'
             size='small'
             leftIcon={<MdChat />}
@@ -195,24 +205,29 @@ const ResultsTable = ({
           onAllItemsSelected={onAllItemsSelected}
           selectable
           onPageChange={setCurrentPage}
-          pagination={{
-            totalItems,
-            currentPage,
-            pageSize,
-            showItemCount: false,
-          }}
+          pagination={
+            totalItems > 20
+              ? {
+                  totalItems,
+                  currentPage,
+                  pageSize,
+                  showItemCount: false,
+                }
+              : undefined
+          }
         />
-        <Text
-          style={{
-            position: 'relative',
-            top: -45,
-            padding: 20,
-            width: '150px',
-            color: getThemedColor('neutral', 700),
-          }}
-        >
-          {pageSize} per page
-        </Text>
+        {totalItems > 20 && (
+          <Text
+            style={{
+              position: 'relative',
+              padding: 20,
+              width: '150px',
+              color: getThemedColor('neutral', 700),
+            }}
+          >
+            {pageSize} per page
+          </Text>
+        )}
       </div>
       <ExportActionBar
         selectedCount={selectedRows.length}

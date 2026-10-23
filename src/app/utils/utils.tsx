@@ -28,6 +28,7 @@ export interface CatalogDmsMeta {
   language?: string | null
   languages?: string[] | null
   summary_en?: string | null
+  summary_native?: string | null
   short_summary_en?: string | null
 }
 
@@ -53,6 +54,7 @@ export interface CatalogRow {
   dateAccepted?: string
   office?: string
   summary?: string
+  nativeSummary?: string
   shortSummary?: string
   raw?: Record<string, any>
   fileName?: string
@@ -158,6 +160,7 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
       meta.wri_primary_office ||
       undefined,
     summary: dms.summary_en || r.meta?.summary || undefined,
+    nativeSummary: dms.summary_native || undefined,
     shortSummary:
       dms.short_summary_en ||
       r.meta?.short_summary ||
@@ -174,7 +177,7 @@ export function normalizeCatalogRow(r: RawCatalogInput): CatalogRow {
   }
 }
 
-const LANGUAGE_NAMES: Record<string, string> = {
+export const LANGUAGE_NAMES: Record<string, string> = {
   en: 'English',
   es: 'Spanish',
   pt: 'Portuguese',
@@ -182,6 +185,14 @@ const LANGUAGE_NAMES: Record<string, string> = {
   fr: 'French',
   id: 'Bahasa Indonesia',
   hi: 'Hindi',
+}
+
+export function languageNameFromCode(code?: string): string {
+  const normalized = String(code || '')
+    .trim()
+    .toLowerCase()
+  if (!normalized) return ''
+  return LANGUAGE_NAMES[normalized] ?? normalized.toUpperCase()
 }
 
 /** Badge label for a result row: the document's own language, from the
@@ -196,7 +207,7 @@ export function languageLabel(row?: CatalogRow): string {
     .trim()
     .toLowerCase()
   if (!code || code === 'en') return ''
-  return LANGUAGE_NAMES[code] ?? code.toUpperCase()
+  return languageNameFromCode(code)
 }
 
 export function buildCatalogIndex(items: CatalogRow[]) {

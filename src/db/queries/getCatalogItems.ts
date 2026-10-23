@@ -29,6 +29,7 @@ export interface CatalogDms {
   language: string | null
   languages: string[] | null
   summary_en: string
+  summary_native: string | null
   short_summary_en: string
 }
 
@@ -49,6 +50,7 @@ export interface CatalogDocRow {
   wri_primary_office: string | null
   doi: string | null
   summary_en: string | null
+  summary_native: string | null
   short_summary_en: string | null
 }
 
@@ -80,6 +82,7 @@ export function mapDocumentToCatalogItem(doc: CatalogDocRow): CatalogItem {
     language: doc.language,
     languages: doc.languages,
     summary_en: summaryEn,
+    summary_native: doc.summary_native || null,
     short_summary_en: shortSummaryEn,
   }
   return {
@@ -103,12 +106,19 @@ const CATALOG_SQL = `
          d.year_published, d.publication_title, d.article_type,
          d.wri_primary_office, d.doi,
          s_long.text  AS summary_en,
+         s_native.text AS summary_native,
          s_short.text AS short_summary_en
   FROM documents d
   LEFT JOIN document_summaries s_long
     ON s_long.document_id = d.id AND s_long.language = 'en' AND s_long.kind = 'long'
   LEFT JOIN document_summaries s_short
     ON s_short.document_id = d.id AND s_short.language = 'en' AND s_short.kind = 'short'
+  LEFT JOIN LATERAL (
+    SELECT text
+    FROM document_summaries
+    WHERE document_id = d.id AND language = d.language AND kind = 'long'
+    LIMIT 1
+  ) s_native ON true
   WHERE d.status = 'searchable'
   ORDER BY d.external_id ASC
 `

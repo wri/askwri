@@ -1,4 +1,6 @@
 import os
+from datetime import date
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -69,6 +71,58 @@ def test_dense_retrieval_returns_ranked_results(monkeypatch):
     scores = [r.score for r in results]
     assert scores == sorted(scores, reverse=True)
     assert all("doc_id" in r.node.metadata for r in results)
+
+
+def test_document_office_uses_relational_column(monkeypatch):
+    from app import pg_store
+
+    pool = MagicMock()
+    connection = pool.connection.return_value.__enter__.return_value
+    # First fetchall: work-languages pairs; second: documents metadata.
+    connection.execute.return_value.fetchall.side_effect = [
+        [],  # no confirmed translation pairs
+        [
+            ("china", {"metadata": {}}, "en", "report", 2015, "WRI China", date(2015, 6, 1)),
+            ("india", {"metadata": {"wri_primary_office": "WRI Global"}},
+             "en", "report", 2024, "WRI India", None),
+            ("unknown", {"metadata": {}}, "en", "report", 2024, None, None),
+        ],
+    ]
+    monkeypatch.setattr(pg_store, "get_pool", lambda: pool)
+
+    metadata = pg_store.load_documents_metadata()
+
+    assert metadata["china"]["office"] == "WRI China"
+    assert metadata["india"]["office"] == "WRI India"
+    assert metadata["unknown"]["office"] is None
+    assert metadata["china"]["date_published"] == date(2015, 6, 1)
+    assert metadata["india"]["date_published"] is None
+    # No siblings: every work_languages set is empty.
+    assert all(m["work_languages"] == frozenset() for m in metadata.values())
+
+
+def test_work_languages_cover_translation_siblings(monkeypatch):
+    from app import pg_store
+
+    pool = MagicMock()
+    connection = pool.connection.return_value.__enter__.return_value
+    connection.execute.return_value.fetchall.side_effect = [
+        # translation_of: en translation <-> es original
+        [("work-en", "en", "work-es", "es")],
+        [
+            ("work-en", {"metadata": {}}, "en", "report", 2025, "WRI Colombia", None),
+            ("work-es", {"metadata": {}}, "es", "report", 2025, "WRI Colombia", None),
+            ("solo", {"metadata": {}}, "fr", "report", 2024, "WRI Global", None),
+        ],
+    ]
+    monkeypatch.setattr(pg_store, "get_pool", lambda: pool)
+
+    metadata = pg_store.load_documents_metadata()
+
+    # Each sibling's work covers BOTH languages; an unpaired doc covers none.
+    assert metadata["work-en"]["work_languages"] == frozenset({"es"})
+    assert metadata["work-es"]["work_languages"] == frozenset({"en"})
+    assert metadata["solo"]["work_languages"] == frozenset()
 
 
 def test_year_int_fallback_parsing():

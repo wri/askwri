@@ -21,6 +21,18 @@
     {"q": "publications in english on flooding", "facets": [{"facet": "language", "value": "en"}]},
     {"q": "in indonesian, transport safety work", "facets": [{"facet": "language", "value": "id"}]},
 
+    {"q": "Economic benefits of transit-oriented development between 2023 and now", "facets": [{"facet": "year_min", "value": "2023"}]},
+    {"q": "economic benefits of TOD 2023 to now", "facets": [{"facet": "year_min", "value": "2023"}]},
+    {"q": "research on TOD from 2023 onward", "facets": [{"facet": "year_min", "value": "2023"}]},
+    {"q": "TOD 2023 and later", "facets": [{"facet": "year_min", "value": "2023"}]},
+    {"q": "charging infrastructure 2021-present", "facets": [{"facet": "year_min", "value": "2021"}]},
+    {"q": "reports from 2020", "facets": [{"facet": "year_min", "value": "2020"}]},
+    {"q": "publications from 2020 on charging infrastructure", "facets": [{"facet": "year_min", "value": "2020"}]},
+    {"q": "post-2018 studies on bus electrification", "facets": [{"facet": "year_min", "value": "2018"}]},
+    {"q": "pre-2018 studies on bus electrification", "facets": [{"facet": "year_max", "value": "2018"}]},
+    {"q": "studies on air quality 2018 and earlier", "facets": [{"facet": "year_max", "value": "2018"}]},
+    {"q": "materials 2019 and before on freight", "facets": [{"facet": "year_max", "value": "2019"}]},
+
     {"q": "net zero by 2050 pathways", "facets": []},
     {"q": "2030 emission reduction targets for cities", "facets": []},
     {"q": "what must cities do before 2030 to decarbonize", "facets": []},
@@ -39,6 +51,8 @@
     {"q": "how did ridership change in 2019 and 2021", "facets": []},
     {"q": "compare emissions 2015 to 2018 levels", "facets": []},
     {"q": "bus rapid transit", "facets": []},
-    {"q": "cost of 100 km of bike lanes", "facets": []}
+    {"q": "cost of 100 km of bike lanes", "facets": []},
+    {"q": "between 2023 and 2030 targets for cities", "facets": []},
+    {"q": "projections from 2023 to 2035 for freight", "facets": []}
   ]
 }

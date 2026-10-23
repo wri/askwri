@@ -13,7 +13,8 @@ import CitePanel from './CitePanel'
 import { EmptyStateTopics } from '@/app/components/results/EmptyStateTopics'
 import {
   InterpretationLine,
-  facetChipLabel,
+  appliedChips,
+  suggestedChips,
 } from '@/app/components/results/InterpretationLine'
 import {
   buildCatalogIndex,
@@ -103,6 +104,24 @@ const AskWriAppContent = () => {
 
   const searchParams = useSearchParams()
   const searchQuery = searchParams?.get('q')?.trim() ?? ''
+  const urlOffices = searchParams?.getAll('office') ?? []
+  const officeFacets = urlOffices.map((office) => ({
+    facet: 'office',
+    value: office,
+  }))
+  const urlLanguages = searchParams?.getAll('language') ?? []
+  const languageFacets = urlLanguages.map((language) => ({
+    facet: 'language',
+    value: language,
+  }))
+  const officeKey = JSON.stringify(urlOffices)
+  const languageKey = JSON.stringify(urlLanguages)
+  const dateMin = searchParams?.get('date_min') ?? ''
+  const dateMax = searchParams?.get('date_max') ?? ''
+  const dateFacets = [
+    ...(dateMin ? [{ facet: 'date_min', value: dateMin }] : []),
+    ...(dateMax ? [{ facet: 'date_max', value: dateMax }] : []),
+  ]
 
   async function doCite(
     q: string,
@@ -239,12 +258,13 @@ const AskWriAppContent = () => {
 
   useEffect(() => {
     if (!searchQuery) return
-    if (query.trim() === searchQuery) return
     setQuery(searchQuery)
-    setUserFacets(null) // new search = auto mode again (design §3)
-    setAutoSwitchedFrom(null) // new search = no auto-switch carried over
-    runQuery(searchQuery, { facets: null })
-  }, [searchQuery])
+    const facets = [...officeFacets, ...languageFacets, ...dateFacets]
+    const nextFacets = facets.length ? facets : null
+    setUserFacets(nextFacets)
+    setAutoSwitchedFrom(null)
+    runQuery(searchQuery, { facets: nextFacets })
+  }, [searchQuery, officeKey, languageKey, dateMin, dateMax])
 
   const pageDocs = useMemo(() => {
     if (!Array.isArray(supporting)) return []
@@ -255,7 +275,27 @@ const AskWriAppContent = () => {
   // and re-query. The remaining facets are passed to runQuery directly (state
   // updates are async) and become part of the cache key, so this never sends
   // the pre-removal facets and never serves the auto-mode cached result.
+  // Office chips live in the URL, so removing one rewrites the params instead.
   const onRemoveFacet = (chip: { facet: string; value: string }) => {
+    // URL-owned facets (FilterPanel apply) rewrite the params; parser-detected
+    // chips with the same facet type live in understanding state, not the URL,
+    // so they take the legacy path below.
+    const urlOwned =
+      (chip.facet === 'office' && urlOffices.includes(chip.value)) ||
+      (chip.facet === 'language' && urlLanguages.includes(chip.value)) ||
+      (chip.facet === 'date_min' && dateMin === chip.value) ||
+      (chip.facet === 'date_max' && dateMax === chip.value)
+    if (urlOwned) {
+      const params = new URLSearchParams(searchParams?.toString())
+      const remainingValues = params
+        .getAll(chip.facet)
+        .filter((value) => value !== chip.value)
+      params.delete(chip.facet)
+      for (const value of remainingValues) params.append(chip.facet, value)
+      const qs = params.toString()
+      router.push(qs ? `/results?${qs}` : '/results')
+      return
+    }
     const currentHard = (understanding?.facets ?? []).filter(
       (f: any) => f.action === 'hard',
     )
@@ -264,6 +304,21 @@ const AskWriAppContent = () => {
       .map((f: any) => ({ facet: f.facet, value: f.value }))
     setUserFacets(remaining)
     runQuery(query, { facets: remaining })
+  }
+
+  // Suggested chip accepted (design §7, low-confidence tier): add it to the
+  // explicit facet set and re-query. Same shape as removal — explicit facets
+  // turn auto-detection off, and the value is part of the cache key.
+  const onApplyFacet = (chip: { facet: string; value: string }) => {
+    const currentHard = (understanding?.facets ?? []).filter(
+      (f: any) => f.action === 'hard',
+    )
+    const next = [
+      ...currentHard.map((f: any) => ({ facet: f.facet, value: f.value })),
+      { facet: chip.facet, value: chip.value },
+    ]
+    setUserFacets(next)
+    runQuery(query, { facets: next })
   }
 
   // Did-you-mean accept: re-search with the corrected text (new q = auto mode).
@@ -600,6 +655,7 @@ const AskWriAppContent = () => {
             alignLoading={alignLoading}
             queryUnderstanding={understanding}
             onRemoveFacet={onRemoveFacet}
+            onApplyFacet={onApplyFacet}
             onApplySuggestion={onApplySuggestion}
           />
         </>
@@ -614,23 +670,20 @@ const AskWriAppContent = () => {
     // out is exactly the one the user needs to be able to remove
     // (facet_filter.py Invariant 1).
     if (!retrievalLoading && searchCompleted && pageDocs.length === 0) {
+      const hardChips = appliedChips(understanding?.facets)
       return (
         <>
           <div style={{ padding: '0 2rem' }}>
             <InterpretationLine
-              chips={(understanding?.facets ?? [])
-                .filter((f: any) => f.action === 'hard')
-                .map((f: any) => ({
-                  facet: f.facet,
-                  value: f.value,
-                  label: facetChipLabel(f.facet, f.value),
-                }))}
+              chips={hardChips}
+              suggested={suggestedChips(understanding?.facets, hardChips)}
               suggestion={
                 (understanding?.suggestions ?? []).find(
                   (s: any) => s.type === 'spelling',
                 )?.text ?? null
               }
               onRemoveChip={onRemoveFacet}
+              onApplyChip={onApplyFacet}
               onApplySuggestion={onApplySuggestion}
             />
           </div>

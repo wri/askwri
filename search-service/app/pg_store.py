@@ -118,15 +118,45 @@ def _year_int(year_published, raw: dict):
         return None
 
 
+def load_work_languages() -> dict:
+    """{external_id: frozenset(language codes)} covering each doc's WORK —
+    its own language plus every confirmed translation sibling's. A bilingual
+    work (es original + en translation) is two document rows; the language
+    facet must match either row when either language is selected, mirroring
+    the versions the UI shows on the doc card."""
+    siblings: dict[str, set] = {}
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT dt.external_id, dt.language,
+                   do_.external_id, do_.language
+            FROM document_relations r
+            JOIN documents dt ON dt.id = r.document_id
+            JOIN documents do_ ON do_.id = r.related_document_id
+            WHERE r.status = 'confirmed'
+              AND r.relation_type = 'translation_of'
+              AND dt.status = 'searchable'
+              AND do_.status = 'searchable'
+            """
+        ).fetchall()
+    for t_ext, t_lang, o_ext, o_lang in rows:
+        if o_lang is not None:
+            siblings.setdefault(t_ext, set()).add(o_lang)
+        if t_lang is not None:
+            siblings.setdefault(o_ext, set()).add(t_lang)
+    return {ext: frozenset(langs) for ext, langs in siblings.items()}
+
+
 def load_documents_metadata() -> dict:
     """Mirror of the legacy documents_metadata dict (used by /stats and legacy endpoints)."""
     out = {}
+    work_languages = load_work_languages()
     with get_pool().connection() as conn:
         rows = conn.execute(
-            "SELECT external_id, source_metadata, language, article_type, year_published "
+            "SELECT external_id, source_metadata, language, article_type, year_published, wri_primary_office, date_published "
             "FROM documents WHERE status = 'searchable'"
         ).fetchall()
-    for ext, src, language, article_type, year_published in rows:
+    for ext, src, language, article_type, year_published, office, date_published in rows:
         src = src or {}
         raw = src.get("metadata", {}) or {}
         out[ext] = {
@@ -137,13 +167,18 @@ def load_documents_metadata() -> dict:
             "summary": src.get("summary", ""),
             "subtag": raw.get("Sub-tag", "") if isinstance(raw.get("Sub-tag"), str) else "",
             "program_series": raw.get("program_series", ""),
+            "office": office,
             "file_path": src.get("file_path", ""),
             "raw_metadata": raw,
             # Query-understanding facet fields (design 2026-08-19 §4.5).
             # Startup-hydrated: data edits need a restart to appear here.
             "language": language,
+            # Work-level languages (self + translation siblings) for the
+            # language facet: a bilingual work matches either language.
+            "work_languages": work_languages.get(ext) or frozenset(),
             "article_type": article_type,
             "year_int": _year_int(year_published, raw),
+            "date_published": date_published,
         }
     return out
 
