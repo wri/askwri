@@ -525,11 +525,19 @@ const AskWriAppContent = () => {
     queryCache,
     retrievalLoading,
     activeCacheKey,
+    index,
+    catalogSettled,
   ])
 
-  // Auto-run alignment after retrieval completes
+  // Auto-run alignment after retrieval completes.
+  // Gate on catalogSettled: without the catalog the alignment prompt has no
+  // language metadata, and the result would be cached for 5 minutes with
+  // only English labels (copilot review 2026-10-23). A failed catalog fetch
+  // (catalogSettled=true, index=null) still runs — degraded, no language
+  // info — rather than never show an overview at all.
   useEffect(() => {
     if (
+      catalogSettled &&
       !retrievalLoading &&
       supporting.length > 0 &&
       query.trim() &&
@@ -545,6 +553,8 @@ const AskWriAppContent = () => {
     alignLoading,
     supporting.length,
     query,
+    catalogSettled,
+    index,
     runAlignmentAfterResults,
   ])
 
