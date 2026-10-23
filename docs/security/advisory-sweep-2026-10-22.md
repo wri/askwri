@@ -124,11 +124,18 @@ mutable branch ref means upstream `main` runs unreviewed, immediately, with thos
 secrets. The file's own comment acknowledged it. Resolved by pinning the release
 tag `the-pr-agent/pr-agent@v0.48.0` — landed in #457, kept here.
 
-A tag is still mutable, so a full commit SHA would be strictly safer. That was
-tried in this branch and reverted on review: Dependabot keeps tags current but its
-updates for SHA-pinned actions are unreliable (dependabot-core#14716, #7912), and
-leaving the upgrades with Dependabot was the maintainer's call. Recorded here
-because the reasoning matters more than the verdict.
+A tag is still mutable, so a full commit SHA is strictly safer. That was tried in
+this branch and reverted on review: Dependabot keeps tags current but its updates
+for SHA-pinned actions are unreliable (dependabot-core#14716, #7912), and leaving
+the upgrades with Dependabot is the repo owner's call.
+
+**This is an accepted risk, not a closed one.** Whoever can move the upstream
+`v0.48.0` tag can change the code that runs here with `OPENROUTER_API_KEY` and
+`pull-requests: write`, with no diff in this repo. Accepted on PR #459 on
+2026-10-22 in exchange for Dependabot-managed upgrades. Two things would restore
+an immutable pin later, if the trade ever stops looking worth it: pin
+`981344be2755e303df501e18e3f60b848a188a80 # v0.48.0` and bump it by hand, or keep
+the tag and check it still resolves to that commit on a schedule.
 
 **N2. The root Dockerfile disables transport integrity checks.**
 `Dockerfile`:
