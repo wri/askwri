@@ -117,15 +117,18 @@ drops). All the same day's `requirements.txt` regeneration.
 
 ## Non-advisory findings
 
-**N1. CI runs an unpinned third-party action with repo secrets.**
-`.github/workflows/pr-agent.yml:96` used `the-pr-agent/pr-agent@main` on
+**N1. CI ran an unpinned third-party action with repo secrets.**
+`.github/workflows/pr-agent.yml` used `the-pr-agent/pr-agent@main` on
 `pull_request_target` with `OPENROUTER_API_KEY` and `pull-requests: write`. A
 mutable branch ref means upstream `main` runs unreviewed, immediately, with those
-secrets. The file's own comment acknowledged it. Resolved by pinning the commit of
-the newest upstream release tag: `the-pr-agent/pr-agent@981344be2755…`
-(`v0.48.0`, 2026-10-16). The tag is what makes the SHA checkable; the SHA is what
-makes the pin immutable. Verified via the GitHub tags API on 2026-10-22 — upstream
-`main` was `b1e75b56…` at that moment, six days ahead of the tagged release.
+secrets. The file's own comment acknowledged it. Resolved by pinning the release
+tag `the-pr-agent/pr-agent@v0.48.0` — landed in #457, kept here.
+
+A tag is still mutable, so a full commit SHA would be strictly safer. That was
+tried in this branch and reverted on review: Dependabot keeps tags current but its
+updates for SHA-pinned actions are unreliable (dependabot-core#14716, #7912), and
+leaving the upgrades with Dependabot was the maintainer's call. Recorded here
+because the reasoning matters more than the verdict.
 
 **N2. The root Dockerfile disables transport integrity checks.**
 `Dockerfile`:
@@ -164,7 +167,7 @@ fixes, so those advisories stay open indefinitely unless someone opts in.
 | P3 `brace-expansion` (6), `source-map-js`, `baseline-browser-mapping`, `browserslist` | npm `overrides` + `npm update`; `brace-expansion` floored per major line (1.x/2.x/5.x — they are API-incompatible) | `npm audit`, lint, 92 jest suites |
 | P3 `csv-parse` | 6.2.1 → **7.0.3** (the vulnerable `columns` path is what `evaluation/diagnostics/*` uses) | lint |
 | P4 `aiohttp`, `urllib3`, `multidict`, `banks`, `tinytag`, `certifi` | security floors in `requirements.in`, pinned by `compile-requirements.sh` | `pip-audit` clean |
-| N1 unpinned PR-Agent action | `@main` → `@981344be2755…` (`v0.48.0`, 2026-10-16) | YAML diff |
+| N1 unpinned PR-Agent action | `@main` → `@v0.48.0` (a release tag; Dependabot keeps it current) | YAML diff |
 | N2 Dockerfile transport integrity | dropped `apk --no-check-certificate` and `curl -k` | ran both commands in `node:24-alpine`: apk verifies, bundle downloads 114 certs |
 
 Two structural fixes fell out of the above, both worth keeping:
@@ -210,8 +213,8 @@ Two structural fixes fell out of the above, both worth keeping:
 | `pytest tests/` (in `python:3.12-slim`) | 445 passed, 213 skipped, 4 failed — all four are `test_probe_rerank_isolation.py` requiring `DATABASE_URL` from `scripts/with-remote-env.sh qa` (a guard, not a version error) |
 | apk + RDS-bundle download in `node:24-alpine` | both succeed with verification enabled |
 
-Two claims in this doc are checks rather than recollections. Both were run on
-**2026-10-22** and the results are recorded here.
+One claim in this doc is a check rather than a recollection. It was run on
+**2026-10-22** and the result is recorded here.
 
 **The MCP guard is load-bearing.** `npx jest src/__tests__/mcp-route.test.ts`
 covers it: the case sends 900 elements (the search runs, once) and 1001 (refused
@@ -220,15 +223,6 @@ with the SDK's own `arguments contain more than the maximum of 1000 elements` an
 `src/app/api/mcp/route.ts` makes that case fail — `1 failed, 10 passed, 11 total`
 on 2026-10-22. That is why the line is there, and why the test exists: without
 either, the mitigation is a silent no-op.
-
-**The action pin is a release, not a stray commit.** Run on 2026-10-22:
-
-```
-$ git ls-remote --tags https://github.com/the-pr-agent/pr-agent v0.48.0
-981344be2755e303df501e18e3f60b848a188a80	refs/tags/v0.48.0
-```
-
-It is a lightweight tag, so that ref *is* the commit the workflow pins.
 
 Not run here: the DB-backed suites (`npm run test:db`), the cite/QA evals, and a
 container build of either image end to end — all need the local stack or AWS.

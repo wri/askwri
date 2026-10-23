@@ -138,15 +138,18 @@ jobs:
 
       - name: Run PR Agent review
         if: steps.reviewable.outputs.has_reviewable == 'true'
-        # Pinned to the v0.48.0 release commit. the-pr-agent/pr-agent is the new
-        # home of the former qodo-ai/pr-agent. A tag on its own is mutable, so
-        # this names the tag's commit: the SHA keeps the ref immutable, the tag
-        # keeps upgrades explicit and readable. Bump both together.
+        # Pinned to the v0.48.0 release tag, not @main: this job runs on
+        # pull_request_target with repository secrets and write access to PRs, so
+        # a branch ref meant an unreviewed upstream change took effect here
+        # immediately. the-pr-agent/pr-agent is the new home of the former
+        # qodo-ai/pr-agent.
         #
-        # This job runs on pull_request_target with repository secrets and write
-        # access to PRs, so an unreviewed upstream change must not be able to
-        # take effect here.
-        uses: the-pr-agent/pr-agent@981344be2755e303df501e18e3f60b848a188a80 # v0.48.0
+        # A tag is less tamper-proof than a full commit SHA (tags are mutable).
+        # The SHA was tried and dropped: Dependabot handles tags cleanly but its
+        # updates for SHA-pinned actions are unreliable (dependabot-core#14716,
+        # #7912), and keeping upgrades with Dependabot was the call on this repo.
+        # Bump the tag deliberately when upgrading.
+        uses: the-pr-agent/pr-agent@v0.48.0
         env:
           # Public GitHub repos do not incur GitHub Actions charges, and
           # the PR-Agent project itself is open source. Model API usage still
