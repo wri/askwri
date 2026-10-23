@@ -415,7 +415,7 @@ const AskWriAppContent = () => {
       }
       setAlignLoading(true)
 
-      const resultsSummaryForAlignment = buildAlignmentSummary(q, docs)
+      const resultsSummaryForAlignment = buildAlignmentSummary(q, docs, index)
 
       const r = await fetch('/api/alignment', {
         method: 'POST',
