@@ -6,8 +6,10 @@
 #
 aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.14.3
-    # via llama-index-core
+aiohttp==3.14.5
+    # via
+    #   -r requirements.in
+    #   llama-index-core
 aiosignal==1.4.0
     # via aiohttp
 aiosqlite==0.22.1
@@ -24,8 +26,10 @@ anyio==4.14.2
     #   watchfiles
 attrs==26.1.0
     # via aiohttp
-banks==2.4.5
-    # via llama-index-core
+banks==2.5.1
+    # via
+    #   -r requirements.in
+    #   llama-index-core
 beautifulsoup4==4.15.0
     # via llama-index-readers-file
 bm25s==0.3.10
@@ -36,7 +40,7 @@ botocore==1.43.104
     # via
     #   boto3
     #   s3transfer
-certifi==2026.7.22
+certifi==2026.10.19
     # via
     #   -r requirements.in
     #   httpcore
@@ -143,8 +147,9 @@ markupsafe==3.0.3
     # via jinja2
 marshmallow==3.26.2
     # via dataclasses-json
-multidict==6.7.1
+multidict==7.1.0
     # via
+    #   -r requirements.in
     #   aiohttp
     #   yarl
 mypy-extensions==1.1.0
@@ -153,8 +158,9 @@ nest-asyncio==1.6.0
     # via llama-index-core
 networkx==3.6.1
     # via llama-index-core
-nltk==3.10.0
+nltk==3.10.4
     # via
+    #   -r requirements.in
     #   llama-index
     #   llama-index-core
 numpy==2.5.3
@@ -180,8 +186,10 @@ pandas==2.3.3
     #   llama-index-readers-file
 pgvector==0.5.0
     # via -r requirements.in
-pillow==12.3.0
-    # via llama-index-core
+pillow==13.0.0
+    # via
+    #   -r requirements.in
+    #   llama-index-core
 platformdirs==4.11.0
     # via
     #   banks
@@ -210,8 +218,10 @@ pydantic-core==2.46.5
     # via pydantic
 pydantic-settings==2.15.0
     # via -r requirements.in
-pypdf==6.14.2
-    # via llama-index-readers-file
+pypdf==6.21.2
+    # via
+    #   -r requirements.in
+    #   llama-index-readers-file
 pystemmer==2.2.0.3
     # via llama-index-retrievers-bm25
 python-dateutil==2.9.0.post0
@@ -264,8 +274,10 @@ tenacity==9.1.4
     # via llama-index-core
 tiktoken==0.13.0
     # via llama-index-core
-tinytag==2.2.1
-    # via llama-index-core
+tinytag==2.3.2
+    # via
+    #   -r requirements.in
+    #   llama-index-core
 tqdm==4.70.0
     # via
     #   llama-index-core
@@ -300,8 +312,9 @@ typing-inspection==0.4.2
     #   pydantic-settings
 tzdata==2026.3
     # via pandas
-urllib3==2.7.0
+urllib3==2.8.0
     # via
+    #   -r requirements.in
     #   botocore
     #   requests
 uvicorn==0.54.0
@@ -316,7 +329,7 @@ wrapt==2.3.0
     # via
     #   deprecated
     #   llama-index-core
-yarl==1.24.5
+yarl==1.25.1
     # via aiohttp
 
 # The following packages are considered to be unsafe in a requirements file:

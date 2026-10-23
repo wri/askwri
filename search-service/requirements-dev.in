@@ -1,14 +1,17 @@
 # SOURCE file — edit this, never requirements-dev.txt.
 # Regenerate with ./scripts/compile-requirements.sh (see requirements.in).
+#
+# Pulls the runtime set in, and pins every shared package to the exact version
+# requirements.txt names. Without the `-c` line each file is resolved on its
+# own, which is how requirements.txt came to pin urllib3 2.8.0 while this one
+# pinned 2.7.0 — and CI's second `pip install` (which installs both) failed.
+# The script compiles requirements.txt first for exactly this reason.
+-r requirements.in
+-c requirements.txt
+
 pytest>=9.1.1
 pytest-cov>=7.1.0
 pytest-asyncio>=1.4.0
-
-# Builds the raster-PDF fixture for the oversized-PDF shrink tests
-# (test_parse_backend.py). Present today only as a transitive dep of
-# llama-index-core in requirements.txt; declared here so a llama-index bump
-# that drops it turns into a resolver change, not a test collection error.
-pillow
 
 # Local-dev only: lets boto3 resolve the AWS CLI `aws login` session
 # credentials (provider=login, auto-refreshing) so long-running Bedrock

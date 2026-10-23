@@ -24,11 +24,16 @@ FROM node:24-alpine AS runner
 
 WORKDIR /app
 
-# Install curl for health checks, AWS CLI for S3 sync, and ca-certificates
-RUN apk add --no-cache --no-check-certificate curl aws-cli ca-certificates
+# Install curl for health checks, AWS CLI for S3 sync, and ca-certificates.
+# Signature verification stays ON in both commands below: `apk
+# --no-check-certificate` and `curl -k` were here historically and would let an
+# on-path attacker swap the RDS CA bundle for one they control, which is the
+# artifact that decides which database certificates this app trusts. Verified
+# against node:24-alpine on 2026-10-22 — the flags are not needed.
+RUN apk add --no-cache curl aws-cli ca-certificates
 
 # Download AWS RDS combined CA bundle so TLS connections to RDS are trusted
-RUN curl -fsSk https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+RUN curl -fsS https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
       -o /app/aws-rds-global-bundle.pem
 
 ENV NODE_EXTRA_CA_CERTS=/app/aws-rds-global-bundle.pem

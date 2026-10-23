@@ -1,4 +1,5 @@
 import { createMcpHandler } from 'mcp-handler'
+import type { McpHandlerOptions } from 'mcp-handler'
 import { isAuthorized } from '@/lib/mcp/key'
 import {
   SEARCH_TOOL_DESCRIPTION,
@@ -12,6 +13,14 @@ export const dynamic = 'force-dynamic'
 
 /** Only used if a client somehow arrives without a usable request URL. */
 const FALLBACK_ORIGIN = 'https://askwri.invalid'
+
+/**
+ * Largest combined array-element/object-key count a single `tools/call` may
+ * carry. The SDK's own guard (CVE-2026-111768): unset means no limit, and one
+ * request inside the body limit can then exhaust the task's heap. A search
+ * query needs a handful of elements.
+ */
+const MAX_TOOL_INPUT_ELEMENTS = 1_000
 
 /**
  * The tool surface: one read-only tool. Nothing here writes to AskWRI.
@@ -40,7 +49,13 @@ const handler = createMcpHandler(
       }),
     )
   },
-  { serverInfo: { name: 'askwri', version: '1.0.0' } },
+  {
+    serverInfo: { name: 'askwri', version: '1.0.0' },
+    // mcp-handler spreads options it does not know straight into
+    // `new McpServer(serverInfo, options)`, which is where the SDK reads this;
+    // it is absent from mcp-handler's own types until it re-exports them.
+    maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS,
+  } as McpHandlerOptions & { maxToolInputElements: number },
 )
 
 /** The address the caller actually connected to, so citation links point back there. */
