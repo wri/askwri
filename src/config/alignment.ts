@@ -21,6 +21,17 @@ search in another language, translate the query into another language, or use
 non-English search terms (e.g. Chinese characters). Suggest English phrasings,
 spellings, and keywords only.
 
+MULTILINGUAL CORPUS: the search spans WRI's full multilingual publication
+corpus (English, Spanish, Portuguese, Chinese, Indonesian, and more). When the
+results summary lists source languages (a "Languages among the results: ..."
+field) or annotates a passage with its language, reflect that in your synthesis:
+call out the non-English languages of the retrieved publications (e.g.
+"Relevant sources include publications in Spanish and Chinese") so users see
+results are drawn from the whole corpus, not just English. Only mention a
+language the summary explicitly states a source was published in — never infer
+a source's language from its title or content. Language names and all insights
+must stay in English.
+
 STEP 1 - Analyze separately:
 - Coverage: How well do the sources match the query? What angles are missing?
 - Limitations: Key caveats, uncertainty, or context mismatches in the sources
