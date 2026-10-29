@@ -9,13 +9,13 @@ import {
   Tag,
   Textarea,
   Toast,
-  AlertBanner,
+  InlineMessage,
 } from '@worldresources/wri-design-systems'
 import { FaArrowRightLong } from 'react-icons/fa6'
 import { WriLogoIcon } from '../components/icons/WriLogo'
 import { AIResearchModal } from '../components/AnswerMode/AIResearchModal'
 import QuerySuggestions from '../components/QuerySuggestions'
-
+import { IoIosWarning } from 'react-icons/io'
 import '../styles.css'
 
 const Landing = () => {
@@ -46,15 +46,16 @@ const Landing = () => {
         alignItems: 'center',
       }}
     >
-      <AlertBanner title='For WRI staff use only' variant='warning'>
-        <div style={{ textAlign: 'left' }}>
-          This tool is under testing and intended for WRI employees only, not
-          for external use. It is currently limited to a selection of Knowledge
-          Products published by WRI Cities program. <br />
-          Results are generated using AI and may occasionally be incomplete or
-          inaccurate.
-        </div>
-      </AlertBanner>
+      <InlineMessage
+        icon={<IoIosWarning />}
+        variant='warning'
+        label='For WRI staff use only'
+        size='full-width'
+        caption='            This tool is under testing and intended for WRI employees only, not
+            for external use. It is currently limited to Knowledge Products
+            published by WRI Cities program in Bahasa Indonesian, Chinese,
+            English and Spanish.'
+      />
 
       <section>
         <div

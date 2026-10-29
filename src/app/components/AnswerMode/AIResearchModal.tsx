@@ -388,10 +388,9 @@ export const AIResearchModal = ({
       content={
         <div style={{ margin: '-10px' }}>
           <div>
-            <AlertBanner
-              title='This feature is an early release and under evaluation. Output quality may vary and should be treated as exploratory.'
-              variant='warning'
-            />
+            <AlertBanner variant='warning'>
+              <div>For WRI staff use only</div>
+            </AlertBanner>
           </div>
           {renderContent()}
         </div>
