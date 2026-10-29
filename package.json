@@ -44,7 +44,7 @@
     "@modelcontextprotocol/server": "^2.2.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/dom": "^10.4.1",
-    "@worldresources/wri-design-systems": "^2.188.0",
+    "@worldresources/wri-design-systems": "^2.212.1",
     "bcryptjs": "^3.0.3",
     "csv-parse": "^6.1.0",
     "d3-force": "^3.0.0",

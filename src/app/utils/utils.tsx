@@ -206,7 +206,7 @@ export function languageLabel(row?: CatalogRow): string {
   const code = String(row?.language ?? '')
     .trim()
     .toLowerCase()
-  if (!code || code === 'en') return ''
+  if (!code) return ''
   return languageNameFromCode(code)
 }
 

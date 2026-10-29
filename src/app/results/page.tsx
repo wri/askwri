@@ -27,6 +27,7 @@ import {
   calculateEmbeddingCost,
 } from '../utils/utils'
 import { getCatalog } from '@/lib/catalog-cache'
+import { InlineMessage } from '@worldresources/wri-design-systems'
 import { Assessment, Ops } from '../components/AnswerMode/types'
 
 /* ---------- component ---------- */
@@ -636,21 +637,14 @@ const AskWriAppContent = () => {
             </p>
           )}
           {likelyOffTopic && (
-            <p
-              style={{
-                fontSize: '14px',
-                marginTop: '4px',
-                padding: '0 2rem',
-                maxWidth: '800px',
-                color: '#8a6d3b',
-                background: '#fcf8e3',
-                border: '1px solid #faebcc',
-                borderRadius: '4px',
-              }}
-            >
-              No strong matches for “{query}” — WRI hasn’t published on this
-              topic; the results below are likely off-topic.
-            </p>
+            <InlineMessage
+              icon=''
+              variant='warning'
+              label=''
+              size='full-width'
+              caption={`No strong matches for “${query}” — WRI hasn’t published on this
+                topic; the results below are likely off-topic.`}
+            />
           )}
           <CitePanel
             query={query}
