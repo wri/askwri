@@ -196,8 +196,9 @@ export function languageNameFromCode(code?: string): string {
 }
 
 /** Badge label for a result row: the document's own language, from the
- *  document-management `language` column. Empty for English (and for rows with
- *  no DMS record) — the badge renders only when it informs.
+ *  document-management `language` column. English included — the badge is shown
+ *  for every language. Empty only when the row carries no language at all
+ *  (no DMS record), so the badge is omitted rather than rendered blank.
  *
  *  It deliberately ignores the legacy CSV `languages` field, which is stale:
  *  three English documents in the corpus carry `languages='Chinese'` there,
