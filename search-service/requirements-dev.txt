@@ -4,26 +4,358 @@
 #
 #    pip-compile --output-file=requirements-dev.txt --strip-extras requirements-dev.in
 #
+aiohappyeyeballs==2.7.1
+    # via
+    #   -c requirements.txt
+    #   aiohttp
+aiohttp==3.14.5
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-core
+aiosignal==1.4.0
+    # via
+    #   -c requirements.txt
+    #   aiohttp
+aiosqlite==0.22.1
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+annotated-doc==0.0.5
+    # via
+    #   -c requirements.txt
+    #   fastapi
+annotated-types==0.8.0
+    # via
+    #   -c requirements.txt
+    #   pydantic
+anyio==4.14.2
+    # via
+    #   -c requirements.txt
+    #   httpx
+    #   openai
+    #   starlette
+    #   watchfiles
+attrs==26.1.0
+    # via
+    #   -c requirements.txt
+    #   aiohttp
 awscrt==0.36.0
     # via botocore
+banks==2.5.1
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-core
+beautifulsoup4==4.15.0
+    # via
+    #   -c requirements.txt
+    #   llama-index-readers-file
+bm25s==0.3.10
+    # via
+    #   -c requirements.txt
+    #   llama-index-retrievers-bm25
+boto3==1.43.104
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
 botocore==1.43.104
-    # via -r requirements-dev.in
+    # via
+    #   -c requirements.txt
+    #   -r requirements-dev.in
+    #   boto3
+    #   s3transfer
+certifi==2026.10.19
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   httpcore
+    #   httpx
+    #   requests
+charset-normalizer==3.4.9
+    # via
+    #   -c requirements.txt
+    #   requests
+click==8.4.2
+    # via
+    #   -c requirements.txt
+    #   nltk
+    #   uvicorn
+colorama==0.4.6
+    # via
+    #   -c requirements.txt
+    #   griffecli
 coverage==7.15.2
     # via pytest-cov
+dataclasses-json==0.6.7
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+defusedxml==0.7.1
+    # via
+    #   -c requirements.txt
+    #   llama-index-readers-file
+    #   nltk
+deprecated==1.3.1
+    # via
+    #   -c requirements.txt
+    #   banks
+    #   llama-index-core
+    #   llama-index-instrumentation
+dirtyjson==1.0.8
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+distro==1.9.0
+    # via
+    #   -c requirements.txt
+    #   openai
+fastapi==0.141.1
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+filetype==1.2.0
+    # via
+    #   -c requirements.txt
+    #   banks
+    #   llama-index-core
+frozenlist==1.8.0
+    # via
+    #   -c requirements.txt
+    #   aiohttp
+    #   aiosignal
+fsspec==2026.6.0
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+greenlet==3.5.4
+    # via
+    #   -c requirements.txt
+    #   sqlalchemy
+griffe==2.1.0
+    # via
+    #   -c requirements.txt
+    #   banks
+griffecli==2.1.0
+    # via
+    #   -c requirements.txt
+    #   griffe
+griffelib==2.1.0
+    # via
+    #   -c requirements.txt
+    #   griffe
+    #   griffecli
+h11==0.16.0
+    # via
+    #   -c requirements.txt
+    #   httpcore
+    #   uvicorn
+httpcore==1.0.9
+    # via
+    #   -c requirements.txt
+    #   httpx
+httptools==0.8.0
+    # via
+    #   -c requirements.txt
+    #   uvicorn
+httpx==0.28.1
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-core
+    #   openai
+idna==3.18
+    # via
+    #   -c requirements.txt
+    #   anyio
+    #   httpx
+    #   requests
+    #   yarl
 iniconfig==2.3.0
     # via pytest
+jinja2==3.1.6
+    # via
+    #   -c requirements.txt
+    #   banks
+jiter==0.16.0
+    # via
+    #   -c requirements.txt
+    #   openai
 jmespath==1.1.0
-    # via botocore
+    # via
+    #   -c requirements.txt
+    #   boto3
+    #   botocore
+joblib==1.5.3
+    # via
+    #   -c requirements.txt
+    #   nltk
+langdetect==1.0.9
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+llama-index==0.14.25
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+llama-index-core==0.14.25
+    # via
+    #   -c requirements.txt
+    #   llama-index
+    #   llama-index-embeddings-openai
+    #   llama-index-llms-openai
+    #   llama-index-readers-file
+    #   llama-index-retrievers-bm25
+llama-index-embeddings-openai==0.6.0
+    # via
+    #   -c requirements.txt
+    #   llama-index
+llama-index-instrumentation==0.5.0
+    # via
+    #   -c requirements.txt
+    #   llama-index-workflows
+llama-index-llms-openai==0.7.10
+    # via
+    #   -c requirements.txt
+    #   llama-index
+llama-index-readers-file==0.7.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+llama-index-retrievers-bm25==0.8.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+llama-index-workflows==2.22.2
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+markupsafe==3.0.3
+    # via
+    #   -c requirements.txt
+    #   jinja2
+marshmallow==3.26.2
+    # via
+    #   -c requirements.txt
+    #   dataclasses-json
+multidict==7.1.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   aiohttp
+    #   yarl
+mypy-extensions==1.1.0
+    # via
+    #   -c requirements.txt
+    #   typing-inspect
+nest-asyncio==1.6.0
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+networkx==3.6.1
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+nltk==3.10.4
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index
+    #   llama-index-core
+numpy==2.5.3
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   bm25s
+    #   llama-index-core
+    #   pandas
+    #   rank-bm25
+    #   scipy
+openai==2.54.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-embeddings-openai
+    #   llama-index-llms-openai
+opencc-python-reimplemented==0.1.7
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
 packaging==26.2
-    # via pytest
-pillow==12.3.0
-    # via -r requirements-dev.in
+    # via
+    #   -c requirements.txt
+    #   marshmallow
+    #   pytest
+pandas==2.3.3
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-readers-file
+pgvector==0.5.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+pillow==13.0.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-core
+platformdirs==4.11.0
+    # via
+    #   -c requirements.txt
+    #   banks
+    #   llama-index-core
 pluggy==1.6.0
     # via
     #   pytest
     #   pytest-cov
+propcache==0.5.2
+    # via
+    #   -c requirements.txt
+    #   aiohttp
+    #   yarl
+psycopg==3.3.6
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+psycopg-binary==3.3.6
+    # via
+    #   -c requirements.txt
+    #   psycopg
+psycopg-pool==3.3.1
+    # via
+    #   -c requirements.txt
+    #   psycopg
+pydantic==2.13.5
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   banks
+    #   fastapi
+    #   llama-index-core
+    #   llama-index-instrumentation
+    #   llama-index-workflows
+    #   openai
+    #   pydantic-settings
+pydantic-core==2.46.5
+    # via
+    #   -c requirements.txt
+    #   pydantic
+pydantic-settings==2.15.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
 pygments==2.20.0
     # via pytest
+pypdf==6.21.2
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-readers-file
+pystemmer==2.2.0.3
+    # via
+    #   -c requirements.txt
+    #   llama-index-retrievers-bm25
 pytest==9.1.1
     # via
     #   -r requirements-dev.in
@@ -34,10 +366,162 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
     # via -r requirements-dev.in
 python-dateutil==2.9.0.post0
-    # via botocore
+    # via
+    #   -c requirements.txt
+    #   botocore
+    #   pandas
+python-dotenv==1.2.3
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   pydantic-settings
+    #   uvicorn
+python-multipart==0.0.32
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+pytz==2026.3.post1
+    # via
+    #   -c requirements.txt
+    #   pandas
+pyyaml==6.0.3
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+    #   uvicorn
+rank-bm25==0.2.2
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+regex==2026.7.19
+    # via
+    #   -c requirements.txt
+    #   nltk
+    #   tiktoken
+requests==2.34.2
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-core
+    #   tiktoken
+s3transfer==0.19.2
+    # via
+    #   -c requirements.txt
+    #   boto3
+scipy==1.18.1
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
 six==1.17.0
-    # via python-dateutil
+    # via
+    #   -c requirements.txt
+    #   langdetect
+    #   python-dateutil
+sniffio==1.3.1
+    # via
+    #   -c requirements.txt
+    #   openai
+soupsieve==2.9.1
+    # via
+    #   -c requirements.txt
+    #   beautifulsoup4
+sqlalchemy==2.0.51
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+starlette==1.3.1
+    # via
+    #   -c requirements.txt
+    #   fastapi
+striprtf==0.0.26
+    # via
+    #   -c requirements.txt
+    #   llama-index-readers-file
+tenacity==9.1.4
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+tiktoken==0.13.0
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+tinytag==2.3.2
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   llama-index-core
+tqdm==4.70.0
+    # via
+    #   -c requirements.txt
+    #   llama-index-core
+    #   nltk
+    #   openai
 typing-extensions==4.16.0
-    # via pytest-asyncio
-urllib3==2.7.0
-    # via botocore
+    # via
+    #   -c requirements.txt
+    #   aiohttp
+    #   aiosignal
+    #   anyio
+    #   beautifulsoup4
+    #   fastapi
+    #   llama-index-core
+    #   llama-index-workflows
+    #   openai
+    #   psycopg
+    #   psycopg-pool
+    #   pydantic
+    #   pydantic-core
+    #   pytest-asyncio
+    #   sqlalchemy
+    #   starlette
+    #   typing-inspect
+    #   typing-inspection
+typing-inspect==0.9.0
+    # via
+    #   -c requirements.txt
+    #   dataclasses-json
+    #   llama-index-core
+typing-inspection==0.4.2
+    # via
+    #   -c requirements.txt
+    #   fastapi
+    #   pydantic
+    #   pydantic-settings
+tzdata==2026.3
+    # via
+    #   -c requirements.txt
+    #   pandas
+urllib3==2.8.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+    #   botocore
+    #   requests
+uvicorn==0.54.0
+    # via
+    #   -c requirements.txt
+    #   -r requirements.in
+uvloop==0.22.1
+    # via
+    #   -c requirements.txt
+    #   uvicorn
+watchfiles==1.2.0
+    # via
+    #   -c requirements.txt
+    #   uvicorn
+websockets==16.1.1
+    # via
+    #   -c requirements.txt
+    #   uvicorn
+wrapt==2.3.0
+    # via
+    #   -c requirements.txt
+    #   deprecated
+    #   llama-index-core
+yarl==1.25.1
+    # via
+    #   -c requirements.txt
+    #   aiohttp
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools
