@@ -240,7 +240,8 @@ const ExpertsPageContent = () => {
       <meta name='robots' content='noindex' />
       <Navbar query={q} newSearchHref='/experts' />
       <main style={{ paddingTop: 64 }}>
-        <AlertBanner title='For WRI staff use only' variant='warning'>
+        <AlertBanner variant='warning'>
+          <div>For WRI staff use only</div>
           <div style={{ textAlign: 'left' }}>
             Experts mode is an internal prototype. It ranks people by their
             published WRI work only; it has no contact details and no review or
