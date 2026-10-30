@@ -196,8 +196,9 @@ export function languageNameFromCode(code?: string): string {
 }
 
 /** Badge label for a result row: the document's own language, from the
- *  document-management `language` column. Empty for English (and for rows with
- *  no DMS record) — the badge renders only when it informs.
+ *  document-management `language` column. English included — the badge is shown
+ *  for every language. Empty only when the row carries no language at all
+ *  (no DMS record), so the badge is omitted rather than rendered blank.
  *
  *  It deliberately ignores the legacy CSV `languages` field, which is stale:
  *  three English documents in the corpus carry `languages='Chinese'` there,
@@ -206,7 +207,7 @@ export function languageLabel(row?: CatalogRow): string {
   const code = String(row?.language ?? '')
     .trim()
     .toLowerCase()
-  if (!code || code === 'en') return ''
+  if (!code) return ''
   return languageNameFromCode(code)
 }
 
@@ -317,7 +318,15 @@ export const chicagoFull = (doc: DocMeta, row?: CatalogRow) => {
   return `${authors}. ${title}. ${publisher}, ${year}.`
 }
 
-export function buildAlignmentSummary(query: string, docs: any[]) {
+export function buildAlignmentSummary(
+  query: string,
+  docs: any[],
+  index?: {
+    byBase: Map<string, CatalogRow>
+    bySlug: Map<string, CatalogRow>
+    byDocId?: Map<string, CatalogRow>
+  } | null,
+) {
   const reviewedCount = docs.length
   const highlyRelevant = docs.filter((d) => d.score >= 0.8).length
   const moderatelyRelevant = docs.filter(
@@ -328,14 +337,45 @@ export function buildAlignmentSummary(query: string, docs: any[]) {
     .sort((a, b) => (b.score || 0) - (a.score || 0))
     .slice(0, 5)
 
+  // Language of each retrieved publication, from the document-management
+  // catalog (the search service does not carry the language on chunks).
+  // English is omitted — the overview only needs to surface the non-English
+  // sources that prove retrieval spans the multilingual corpus.
+  const languages = [
+    ...new Set(
+      docs
+        .map((d) => (index ? matchCatalogRow(d, index)?.language : undefined))
+        .filter(
+          (code): code is string =>
+            Boolean(code) && String(code).trim().toLowerCase() !== 'en',
+        )
+        .map((code) => String(code).trim().toLowerCase()),
+    ),
+  ]
+  const languageList = languages.map(languageNameFromCode).filter(Boolean)
+
   const passages = topDocs
-    .map(
-      (d, i) =>
-        `${i + 1}. ${d.title || d.doc_id || 'Untitled'} (relevance: ${d.score?.toFixed(2) ?? 'N/A'})`,
-    )
+    .map((d, i) => {
+      const language = index ? matchCatalogRow(d, index)?.language : undefined
+      const tag =
+        language && String(language).trim().toLowerCase() !== 'en'
+          ? ` [${languageNameFromCode(language)}]`
+          : ''
+      // Real passage snippet so the alignment model sees the actual content
+      // (e.g. Spanish, Chinese, Portuguese) rather than inferring language
+      // from metadata alone.
+      const bestSnippet = [...(d.kps || [])]
+        .sort((a: any, b: any) => (b.kp_relevance || 0) - (a.kp_relevance || 0))
+        .map((k: any) => k.snippet || '')
+        .find(Boolean)
+      const excerpt = bestSnippet
+        ? ` excerpt: "${bestSnippet.slice(0, 200)}"`
+        : ''
+      return `${i + 1}. ${d.title || d.doc_id || 'Untitled'} (relevance: ${d.score?.toFixed(2) ?? 'N/A'})${tag}${excerpt}`
+    })
     .join(' ')
 
-  const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}. Sample passages: ${passages}`
+  const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}.${languageList.length ? ` Languages among the results: ${languageList.join(', ')}.` : ''} Sample passages: ${passages}`
 
   return resultsSummaryForAlignment
 }
