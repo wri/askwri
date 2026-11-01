@@ -1,8 +1,8 @@
 # SOURCE file — edit this, never requirements-dev.txt.
 # Regenerate with ./scripts/compile-requirements.sh (see requirements.in).
-pytest>=9.1.1
+pytest>=9.2.0
 pytest-cov>=7.1.0
-pytest-asyncio>=1.4.0
+pytest-asyncio>=1.4.1
 
 # Builds the raster-PDF fixture for the oversized-PDF shrink tests
 # (test_parse_backend.py). Present today only as a transitive dep of
