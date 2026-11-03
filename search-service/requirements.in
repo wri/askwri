@@ -41,6 +41,6 @@ psycopg[binary,pool]>=3.3.6
 pgvector>=0.5.1
 
 # Phase 1 ingestion worker
-boto3>=1.43.122
+boto3>=1.43.123
 langdetect>=1.0.9
 opencc-python-reimplemented>=0.1.7
