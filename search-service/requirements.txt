@@ -30,9 +30,9 @@ beautifulsoup4==4.15.0
     # via llama-index-readers-file
 bm25s==0.3.10
     # via llama-index-retrievers-bm25
-boto3==1.43.122
+boto3==1.43.123
     # via -r requirements.in
-botocore==1.43.122
+botocore==1.43.123
     # via
     #   boto3
     #   s3transfer
