@@ -51,10 +51,7 @@ const Landing = () => {
         variant='warning'
         label='For WRI staff use only'
         size='full-width'
-        caption='            This tool is under testing and intended for WRI employees only, not
-            for external use. It is currently limited to Knowledge Products
-            published by WRI Cities program in Bahasa Indonesian, Chinese,
-            English and Spanish.'
+        caption='This tool is being tested and is intended for WRI employees only, not for external use. It is currently limited to Knowledge Products published by the Cities program, in Bahasa Indonesian, Chinese, English and Spanish.'
       />
 
       <section>
