@@ -8,12 +8,12 @@
 #   ./scripts/compile-requirements.sh
 #
 # Core FastAPI and dependencies
-fastapi>=0.141.1,<1.0.0
+fastapi>=0.162.0,<1.0.0
 uvicorn[standard]>=0.54.0,<1.0.0
-pydantic>=2.13.5,<3.0.0
-pydantic-settings>=2.15.0,<3.0.0
+pydantic>=2.14.2,<3.0.0
+pydantic-settings>=2.16.2,<3.0.0
 python-multipart>=0.0.32,<0.1.0
-python-dotenv>=1.2.3
+python-dotenv>=1.2.4
 
 # Core LlamaIndex - using latest versions
 llama-index>=0.14.25
@@ -28,19 +28,19 @@ rank-bm25>=0.2.2
 # Data processing (scipy is a direct dep of the sparse-lane scripts —
 # scripts/build_sparse_keyword.py — not just a transitive of removed models)
 pandas>=2.3.3
-numpy>=2.5.3
+numpy>=2.5.4
 scipy>=1.18.1
 
 # HTTP client
 httpx>=0.28.1,<1.0.0
 requests>=2.34.2
-certifi>=2023.11.17
+certifi>=2026.10.23
 
 # Postgres / pgvector (system of record for chunks + embeddings)
 psycopg[binary,pool]>=3.3.6
-pgvector>=0.5.0
+pgvector>=0.5.1
 
 # Phase 1 ingestion worker
-boto3>=1.43.104
+boto3>=1.43.122
 langdetect>=1.0.9
 opencc-python-reimplemented>=0.1.7

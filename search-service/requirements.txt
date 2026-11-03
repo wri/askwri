@@ -30,13 +30,13 @@ beautifulsoup4==4.15.0
     # via llama-index-readers-file
 bm25s==0.3.10
     # via llama-index-retrievers-bm25
-boto3==1.43.104
+boto3==1.43.122
     # via -r requirements.in
-botocore==1.43.104
+botocore==1.43.122
     # via
     #   boto3
     #   s3transfer
-certifi==2026.7.22
+certifi==2026.10.23
     # via
     #   -r requirements.in
     #   httpcore
@@ -65,7 +65,7 @@ dirtyjson==1.0.8
     # via llama-index-core
 distro==1.9.0
     # via openai
-fastapi==0.141.1
+fastapi==0.162.0
     # via -r requirements.in
 filetype==1.2.0
     # via
@@ -157,7 +157,7 @@ nltk==3.10.0
     # via
     #   llama-index
     #   llama-index-core
-numpy==2.5.3
+numpy==2.5.4
     # via
     #   -r requirements.in
     #   bm25s
@@ -172,13 +172,15 @@ openai==2.54.0
     #   llama-index-llms-openai
 opencc-python-reimplemented==0.1.7
     # via -r requirements.in
+opentelemetry-api==1.45.2
+    # via fastapi
 packaging==26.2
     # via marshmallow
 pandas==2.3.3
     # via
     #   -r requirements.in
     #   llama-index-readers-file
-pgvector==0.5.0
+pgvector==0.5.1
     # via -r requirements.in
 pillow==12.3.0
     # via llama-index-core
@@ -196,7 +198,7 @@ psycopg-binary==3.3.6
     # via psycopg
 psycopg-pool==3.3.1
     # via psycopg
-pydantic==2.13.5
+pydantic==2.14.2
     # via
     #   -r requirements.in
     #   banks
@@ -206,9 +208,9 @@ pydantic==2.13.5
     #   llama-index-workflows
     #   openai
     #   pydantic-settings
-pydantic-core==2.46.5
+pydantic-core==2.50.2
     # via pydantic
-pydantic-settings==2.15.0
+pydantic-settings==2.16.2
     # via -r requirements.in
 pypdf==6.14.2
     # via llama-index-readers-file
@@ -218,7 +220,7 @@ python-dateutil==2.9.0.post0
     # via
     #   botocore
     #   pandas
-python-dotenv==1.2.3
+python-dotenv==1.2.4
     # via
     #   -r requirements.in
     #   pydantic-settings
@@ -281,10 +283,12 @@ typing-extensions==4.16.0
     #   llama-index-core
     #   llama-index-workflows
     #   openai
+    #   opentelemetry-api
     #   psycopg
     #   psycopg-pool
     #   pydantic
     #   pydantic-core
+    #   pydantic-settings
     #   sqlalchemy
     #   starlette
     #   typing-inspect
@@ -293,7 +297,7 @@ typing-inspect==0.9.0
     # via
     #   dataclasses-json
     #   llama-index-core
-typing-inspection==0.4.2
+typing-inspection==0.4.4
     # via
     #   fastapi
     #   pydantic
