@@ -56,8 +56,8 @@
 set -euo pipefail
 
 # TypeORM's CLI colors its output via cli-highlight/chalk, wrapping the [X] markers in
-# ANSI escapes, while the migration precondition below anchors a grep on ^[X]. chalk
-# honors both variables, so children emit plain text.
+# ANSI escapes, while the migration precondition below anchors a grep on ^[X].
+# Verified against this CLI: either variable alone yields 27 plain [X] lines, 0 escapes.
 export NO_COLOR=1 FORCE_COLOR=0
 
 APPLY=0
@@ -89,12 +89,28 @@ psql_qa()   { ./scripts/with-remote-env.sh qa         psql -X -t -A -F'|' -v ON_
 
 # ---------------------------------------------------------------- preconditions
 echo "--- preconditions ---"
+# The helper cannot vouch for itself: compare the copy we are about to source, from
+# the repo root so a subdirectory run cannot skip it.
+_top=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -n "$_top" ] && git -C "$_top" rev-parse --verify --quiet origin/qa >/dev/null 2>&1; then
+  _exp=$(git -C "$_top" rev-parse origin/qa:scripts/lib/release-preflight.sh 2>/dev/null || true)
+  _act=$(git -C "$_top" hash-object --path=scripts/lib/release-preflight.sh -- scripts/lib/release-preflight.sh 2>/dev/null || true)
+  if [ -n "$_exp" ] && [ "$_exp" != "$_act" ]; then
+    if [ "$APPLY" = "1" ]; then
+      echo "  FAIL scripts/lib/release-preflight.sh differs from origin/qa — update it before running"
+      exit 1
+    fi
+    echo "  WARN scripts/lib/release-preflight.sh differs from origin/qa (read-only continues)"
+  fi
+fi
 # psql is required here and in fingerprint-corpus.sh, but not by every with-remote-env.sh
 # caller (it also runs npm/node commands), so the check lives where the dependency is.
 if ! command -v psql >/dev/null 2>&1; then
   echo "  FAIL psql not found on PATH — install a PostgreSQL client (brew install libpq) and add its bin to PATH"
-  exit 1
+  exit 2
 fi
+. "$(dirname "$0")/lib/release-preflight.sh"
+require_current_release_tool "$APPLY" scripts/mirror-qa-to-production.sh scripts/with-remote-env.sh
 for spec in "production:askwri-app-production-cluster:askwri-app-production-ingestion-worker" \
             "qa:askwri-app-qa-cluster:askwri-app-qa-ingestion-worker"; do
   envn="${spec%%:*}"; rest="${spec#*:}"; cluster="${rest%%:*}"; svc="${rest#*:}"

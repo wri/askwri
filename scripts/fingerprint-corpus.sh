@@ -41,6 +41,18 @@ if ! command -v psql >/dev/null 2>&1; then
   echo "ERROR: psql not found on PATH — install a PostgreSQL client (brew install libpq) and add its bin to PATH" >&2
   exit 2
 fi
+# The helper cannot vouch for itself: compare the copy we are about to source, from
+# the repo root so a subdirectory run cannot skip it.
+_top=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -n "$_top" ] && git -C "$_top" rev-parse --verify --quiet origin/qa >/dev/null 2>&1; then
+  _exp=$(git -C "$_top" rev-parse origin/qa:scripts/lib/release-preflight.sh 2>/dev/null || true)
+  _act=$(git -C "$_top" hash-object --path=scripts/lib/release-preflight.sh -- scripts/lib/release-preflight.sh 2>/dev/null || true)
+  if [ -n "$_exp" ] && [ "$_exp" != "$_act" ]; then
+    echo "  WARN scripts/lib/release-preflight.sh differs from origin/qa (read-only continues)"
+  fi
+fi
+. "$(dirname "$0")/lib/release-preflight.sh"
+require_current_release_tool 0 scripts/fingerprint-corpus.sh scripts/with-remote-env.sh
 
 SQL="
 select 'chunks', count(*)::text,
