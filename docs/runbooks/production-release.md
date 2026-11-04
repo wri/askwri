@@ -201,6 +201,12 @@ its own plan doc.
 ./scripts/mirror-qa-to-production.sh --apply           # commit
 ```
 
+Both release scripts (`mirror-qa-to-production.sh`, `fingerprint-corpus.sh`) compare
+themselves with `origin/qa` before running: a copy that differs is warned on a read-only
+run and refused under `--apply`. Pull before mirroring rather than working around it.
+The check covers those scripts and `with-remote-env.sh`; migrations and `src/` are not
+compared, so keep the checkout on `qa` anyway.
+
 The dry run executes the actual statements inside a transaction and rolls back, so its
 counts and guard results are exact rather than predictions. Read them before applying.
 
