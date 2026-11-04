@@ -36,6 +36,12 @@
 #
 set -euo pipefail
 
+# Fail with the real cause instead of a connection error when the client is absent.
+if ! command -v psql >/dev/null 2>&1; then
+  echo "ERROR: psql not found on PATH — install a PostgreSQL client (brew install libpq) and add its bin to PATH" >&2
+  exit 2
+fi
+
 SQL="
 select 'chunks', count(*)::text,
        md5(string_agg(md5(coalesce(text,'')||coalesce(sparse::text,'')||
