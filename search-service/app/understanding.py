@@ -77,6 +77,19 @@ def lanes_active(settings, request) -> bool:
     )
 
 
+def user_facets(specs) -> list[Facet]:
+    """Explicit chip state as hard user facets. An invalid chip is dropped,
+    never fatal — shared by build_understanding and the flag-off /query path."""
+    out: list[Facet] = []
+    for spec in specs or []:
+        try:
+            out.append(Facet(facet=spec.facet, value=spec.value,
+                             confidence=1.0, source="user", action="hard"))
+        except Exception:  # noqa: BLE001 — invalid chip dropped, not fatal
+            continue
+    return out
+
+
 def build_understanding(
     query: str, explicit_facets, today_year: int, expansion_lanes: bool = False,
     embed_model=None,
@@ -91,15 +104,9 @@ def build_understanding(
     u = QueryUnderstanding()
 
     if explicit_facets is not None:
-        for spec in explicit_facets:
-            try:
-                u.facets.append(
-                    Facet(facet=spec.facet, value=spec.value,
-                          confidence=1.0, source="user", action="hard")
-                )
-            except Exception:  # noqa: BLE001 — invalid chip dropped, not fatal
-                if "explicit_facets" not in u.degraded:
-                    u.degraded.append("explicit_facets")
+        u.facets.extend(user_facets(explicit_facets))
+        if len(u.facets) < len(explicit_facets):
+            u.degraded.append("explicit_facets")
     else:
         try:
             from app import facet_parsers
