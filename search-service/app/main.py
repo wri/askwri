@@ -91,7 +91,7 @@ from app import usage_meter
 from app.bedrock_rerank import BedrockReranker
 from app.config import get_settings
 from app.translation_pairs import load_confirmed_pairs
-from app.understanding import build_understanding, lanes_active, understanding_active, Suggestion
+from app.understanding import build_understanding, lanes_active, understanding_active, user_facets, Suggestion
 
 settings = get_settings()
 
@@ -1695,6 +1695,17 @@ async def hybrid_query(request: QueryRequest):
                 stage1_results, all_facets, service_state.get("documents_metadata") or {}
             )
             logger.info(f"Stage 1.6 (Facet Filters): {pre_facet} → {len(stage1_results)} results")
+        elif request.facets:
+            # Explicit chips are user input, not inferred understanding: apply
+            # them with understanding off too (production runs that way), at the
+            # same point with the same semantics. Legacy params stay in Stage 2.5.
+            from app.facet_filter import apply_facet_filters
+            pre_facet = len(stage1_results)
+            stage1_results = apply_facet_filters(
+                stage1_results, user_facets(request.facets),
+                service_state.get("documents_metadata") or {}
+            )
+            logger.info(f"Stage 1.6 (Explicit Facets, flag off): {pre_facet} → {len(stage1_results)} results")
 
         # Stage 2: Reranking (Bedrock Cohere Rerank — 0-1 relevance scores).
         # rerank_applied gates the cite floor/tiers downstream: they are
