@@ -111,7 +111,7 @@ internally — ranked below pypdf for that reason, not because the count is smal
 ### P4 — patch-level, transitive, low
 
 `aiohttp 3.14.3→3.14.5`, `urllib3 2.7.0→2.8.0`, `multidict 6.7.1→6.9.1`,
-`banks 2.4.5→2.5.1`, `tinytag 2.2.1→2.3.2`, `certifi 2026.7.22→2026.10.19`
+`banks 2.4.5→2.5.1`, `tinytag 2.2.1→2.3.2`, `certifi 2026.7.22→2026.10.23`
 (the pinned bundle still trusts `emSign ECC Root CA - G3`, which current certifi
 drops). All the same day's `requirements.txt` regeneration.
 
@@ -121,21 +121,20 @@ drops). All the same day's `requirements.txt` regeneration.
 `.github/workflows/pr-agent.yml` used `the-pr-agent/pr-agent@main` on
 `pull_request_target` with `OPENROUTER_API_KEY` and `pull-requests: write`. A
 mutable branch ref means upstream `main` runs unreviewed, immediately, with those
-secrets. The file's own comment acknowledged it. Resolved by pinning the release
-tag `the-pr-agent/pr-agent@v0.48.0` — landed in #457, kept here.
+secrets. The file's own comment acknowledged it. This branch pinned the release
+tag `the-pr-agent/pr-agent@v0.48.0`.
 
-A tag is still mutable, so a full commit SHA is strictly safer. That was tried in
-this branch and reverted on review: Dependabot keeps tags current but its updates
-for SHA-pinned actions are unreliable (dependabot-core#14716, #7912), and leaving
-the upgrades with Dependabot is the repo owner's call.
+That pin was superseded on `qa` (0a95743, 2026-11-09): the inline job is gone and
+`pr-agent.yml` is now a shim calling the org's central
+`wri/.github/.github/workflows/pr-agent-core.yml@main`. The third-party ref is no
+longer in this repo at all, so the tag — and its mutability — came out with it,
+and the merged branch keeps the shim rather than the pin.
 
-**This is an accepted risk, not a closed one.** Whoever can move the upstream
-`v0.48.0` tag can change the code that runs here with `OPENROUTER_API_KEY` and
-`pull-requests: write`, with no diff in this repo. Accepted on PR #459 on
-2026-10-22 in exchange for Dependabot-managed upgrades. Two things would restore
-an immutable pin later, if the trade ever stops looking worth it: pin
-`981344be2755e303df501e18e3f60b848a188a80 # v0.48.0` and bump it by hand, or keep
-the tag and check it still resolves to that commit on a schedule.
+**What is left is a different risk, not none.** The central workflow is itself
+called at `@main`, so anyone who can push to `wri/.github` can change the code
+that runs here with `OPENROUTER_PR_AGENT` and `pull-requests: write`, with no
+diff in this repo. Closing that means pinning a SHA inside `wri/.github`, which is
+not this repo's call.
 
 **N2. The root Dockerfile disables transport integrity checks.**
 `Dockerfile`:
@@ -174,7 +173,7 @@ fixes, so those advisories stay open indefinitely unless someone opts in.
 | P3 `brace-expansion` (6), `source-map-js`, `baseline-browser-mapping`, `browserslist` | npm `overrides` + `npm update`; `brace-expansion` floored per major line (1.x/2.x/5.x — they are API-incompatible) | `npm audit`, lint, 92 jest suites |
 | P3 `csv-parse` | 6.2.1 → **7.0.3** (the vulnerable `columns` path is what `evaluation/diagnostics/*` uses) | lint |
 | P4 `aiohttp`, `urllib3`, `multidict`, `banks`, `tinytag`, `certifi` | security floors in `requirements.in`, pinned by `compile-requirements.sh` | `pip-audit` clean |
-| N1 unpinned PR-Agent action | `@main` → `@v0.48.0` (a release tag; Dependabot keeps it current) | YAML diff |
+| N1 unpinned PR-Agent action | third party removed: `qa` replaced the inline action with a call to the org's `wri/.github` central workflow, which supersedes this branch's `@v0.48.0` tag pin | YAML diff |
 | N2 Dockerfile transport integrity | dropped `apk --no-check-certificate` and `curl -k` | ran both commands in `node:24-alpine`: apk verifies, bundle downloads 114 certs |
 
 Two structural fixes fell out of the above, both worth keeping:
@@ -222,6 +221,12 @@ Two structural fixes fell out of the above, both worth keeping:
 
 One claim in this doc is a check rather than a recollection. It was run on
 **2026-10-22** and the result is recorded here.
+
+Re-run on the merged tree (**2026-11-11**, npm 11.19.1), `npm audit --omit=dev`
+reports 4 — `zod` (high, a direct dep whose fix is inside its own `^4.6.5`
+range), plus `glob`/`minimatch` pulled in by `typeorm`, both moderate. These were
+published after this sweep and are present on `qa` too (39 there), so they are new
+work rather than a regression from the merge.
 
 **The MCP guard is load-bearing.** `npx jest src/__tests__/mcp-route.test.ts`
 covers it: the case sends 900 elements (the search runs, once) and 1001 (refused

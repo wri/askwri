@@ -20,10 +20,10 @@
 #   * Each table is its own transaction, so a failure is contained and re-runnable.
 #
 # THE GUARDS, AND WHY EACH EXISTS
-#   geography cascade  DELETE FROM tags WHERE facet='geography' cascades to document_tags.
-#                      If any document_tags row references a geography tag, the delete
-#                      would silently destroy real assignments, including protected
-#                      external/human rows. Must be 0.
+#   geography cascade  The taxonomy step prunes only geography tags that qa's own export
+#                      no longer contains (an identical taxonomy deletes nothing). A
+#                      document_tags row still referencing one of THOSE would be cascaded
+#                      away, including protected external/human rows. Must be 0.
 #   human rows         No document_tags row with source='human' may be deleted, ever.
 #                      (CLAUDE.md write-ownership.) On 2026-09-19 this guard is what
 #                      proved the 65-row deletion was safe.
@@ -55,6 +55,11 @@
 #
 set -euo pipefail
 
+# TypeORM's CLI colors its output via cli-highlight/chalk, wrapping the [X] markers in
+# ANSI escapes, while the migration precondition below anchors a grep on ^[X].
+# Verified against this CLI: either variable alone yields 27 plain [X] lines, 0 escapes.
+export NO_COLOR=1 FORCE_COLOR=0
+
 APPLY=0
 ONLY=""
 ALLOW_EXT=0
@@ -84,6 +89,28 @@ psql_qa()   { ./scripts/with-remote-env.sh qa         psql -X -t -A -F'|' -v ON_
 
 # ---------------------------------------------------------------- preconditions
 echo "--- preconditions ---"
+# The helper cannot vouch for itself: compare the copy we are about to source, from
+# the repo root so a subdirectory run cannot skip it.
+_top=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -n "$_top" ] && git -C "$_top" rev-parse --verify --quiet origin/qa >/dev/null 2>&1; then
+  _exp=$(git -C "$_top" rev-parse origin/qa:scripts/lib/release-preflight.sh 2>/dev/null || true)
+  _act=$(git -C "$_top" hash-object --path=scripts/lib/release-preflight.sh -- scripts/lib/release-preflight.sh 2>/dev/null || true)
+  if [ -n "$_exp" ] && [ "$_exp" != "$_act" ]; then
+    if [ "$APPLY" = "1" ]; then
+      echo "  FAIL scripts/lib/release-preflight.sh differs from origin/qa — update it before running"
+      exit 1
+    fi
+    echo "  WARN scripts/lib/release-preflight.sh differs from origin/qa (read-only continues)"
+  fi
+fi
+# psql is required here and in fingerprint-corpus.sh, but not by every with-remote-env.sh
+# caller (it also runs npm/node commands), so the check lives where the dependency is.
+if ! command -v psql >/dev/null 2>&1; then
+  echo "  FAIL psql not found on PATH — install a PostgreSQL client (brew install libpq) and add its bin to PATH"
+  exit 2
+fi
+. "$(dirname "$0")/lib/release-preflight.sh"
+require_current_release_tool "$APPLY" scripts/mirror-qa-to-production.sh scripts/with-remote-env.sh
 for spec in "production:askwri-app-production-cluster:askwri-app-production-ingestion-worker" \
             "qa:askwri-app-qa-cluster:askwri-app-qa-ingestion-worker"; do
   envn="${spec%%:*}"; rest="${spec#*:}"; cluster="${rest%%:*}"; svc="${rest#*:}"
@@ -274,17 +301,21 @@ $END"
 # ---------------------------------------------------------------- taxonomy
 want tags && run_step taxonomy "
 begin;
-do \$\$ declare n int; begin
-  select count(*) into n from document_tags dt join tags t on t.id=dt.tag_id
-   where t.facet='geography';
-  if n <> 0 then raise exception
-    'GUARD: % document_tags reference geography tags; the DELETE would cascade them away', n; end if;
-end \$\$;
-select 'tags_before', count(*)::text from tags;
-delete from tags where facet='geography' and taxonomy_version='v1';
 create temp table s (id uuid primary key, facet text, value_id text, taxonomy_version text,
   parent_tag_id uuid, description text, needs_reembed boolean);
 \\copy s from '$WORK/tags.csv' with (format csv)
+-- Prune only geography tags qa no longer has. Deleting one that survives the upsert is
+-- churn that cascades document_tags assignments for nothing.
+do \$\$ declare n int; begin
+  select count(*) into n from document_tags dt join tags t on t.id=dt.tag_id
+   where t.facet='geography' and t.taxonomy_version='v1'
+     and not exists (select 1 from s where s.id=t.id);
+  if n <> 0 then raise exception
+    'GUARD: % document_tags reference geography tags qa no longer has; the DELETE would cascade them away', n; end if;
+end \$\$;
+select 'tags_before', count(*)::text from tags;
+delete from tags t where t.facet='geography' and t.taxonomy_version='v1'
+  and not exists (select 1 from s where s.id=t.id);
 do \$\$ declare n int; begin
   select count(*) into n from tags t where not exists (select 1 from s where s.id=t.id);
   if n <> 0 then raise exception 'GUARD: % production tags absent from qa would be orphaned', n; end if;

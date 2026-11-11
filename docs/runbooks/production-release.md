@@ -201,6 +201,12 @@ its own plan doc.
 ./scripts/mirror-qa-to-production.sh --apply           # commit
 ```
 
+Both release scripts (`mirror-qa-to-production.sh`, `fingerprint-corpus.sh`) compare
+themselves with `origin/qa` before running: a copy that differs is warned on a read-only
+run and refused under `--apply`. Pull before mirroring rather than working around it.
+The check covers those scripts and `with-remote-env.sh`; migrations and `src/` are not
+compared, so keep the checkout on `qa` anyway.
+
 The dry run executes the actual statements inside a transaction and rolls back, so its
 counts and guard results are exact rather than predictions. Read them before applying.
 
@@ -208,6 +214,10 @@ counts and guard results are exact rather than predictions. Read them before app
 guard expected 1 prod-only row and found 65 — 64 LLM classifications production had made
 that qa did not have. Nobody knew, because every previous comparison looked at source-bucket
 *counts* rather than the actual `(document_id, tag_id)` sets. Investigate before overriding.
+
+The taxonomy guard is narrow: it prunes only geography tags that qa's own export no longer
+contains, so an identical taxonomy deletes nothing and trips nothing. If it does trip, a
+production `document_tags` assignment genuinely has no qa counterpart.
 
 **Deleting an `external` row requires `--allow-external-deletes N`** and is a recorded
 exception to the CLAUDE.md write-ownership rule.
@@ -440,6 +450,13 @@ rather than a side effect.
 - **Root-cause the worker's task-definition pinning.** Needs `terraform plan` /
   `terraform state show` against `production.backend.hcl`. Until it is understood, §8's
   manual repoint is load-bearing every release.
+- **Production carries 10 cherry-picked commits** (`0f27a3e` plus nine dependabot bumps)
+  that are patch-identical to `qa` commits but are not ancestors of `qa`. Since the
+  2026-11-04 merge made `qa` an ancestor of `production`, `git cherry` can no longer prove
+  the equivalence (nothing is left on qa's side to match against), so §1's plain
+  `--no-merges` check stays non-empty. Use the content diff instead: `git diff --stat
+  origin/production origin/qa` must list only paths the release intends to change. Anything
+  else is a real divergence, not cherry-pick noise.
 - **`main` is still a live downgrade trigger.** Either fast-forward it to the release commit
   (fires one more deploy, deliberately) or add a required reviewer to the `production` GitHub
   Environment. The Environment currently has `protection_rules: []` and the `production`

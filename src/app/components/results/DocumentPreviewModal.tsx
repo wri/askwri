@@ -32,9 +32,8 @@ export const DocumentPreviewModalContent = ({
   onExportBib,
 }: DocumentPreviewModalContentProps) => {
   const catalog = rowData.catalogRow
-  const currentLanguageLabel = languageNameFromCode(
-    String(rowData.language || catalog?.language || 'en'),
-  )
+  const currentLanguageLabel =
+    rowData.language || languageNameFromCode(catalog?.language || 'en')
   const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>(
     [],
   )

@@ -32,6 +32,7 @@ annotated-types==0.8.0
 anyio==4.14.2
     # via
     #   -c requirements.txt
+    #   fastapi
     #   httpx
     #   openai
     #   starlette
@@ -40,7 +41,7 @@ attrs==26.1.0
     # via
     #   -c requirements.txt
     #   aiohttp
-awscrt==0.36.0
+awscrt==0.38.0
     # via botocore
 banks==2.5.1
     # via
@@ -55,17 +56,17 @@ bm25s==0.3.10
     # via
     #   -c requirements.txt
     #   llama-index-retrievers-bm25
-boto3==1.43.104
+boto3==1.44.0
     # via
     #   -c requirements.txt
     #   -r requirements.in
-botocore==1.43.104
+botocore==1.44.0
     # via
     #   -c requirements.txt
     #   -r requirements-dev.in
     #   boto3
     #   s3transfer
-certifi==2026.10.19
+certifi==2026.10.23
     # via
     #   -c requirements.txt
     #   -r requirements.in
@@ -110,7 +111,7 @@ distro==1.9.0
     # via
     #   -c requirements.txt
     #   openai
-fastapi==0.141.1
+fastapi==0.162.4
     # via
     #   -c requirements.txt
     #   -r requirements.in
@@ -262,7 +263,7 @@ nltk==3.10.4
     #   -r requirements.in
     #   llama-index
     #   llama-index-core
-numpy==2.5.3
+numpy==2.5.4
     # via
     #   -c requirements.txt
     #   -r requirements.in
@@ -281,6 +282,10 @@ opencc-python-reimplemented==0.1.7
     # via
     #   -c requirements.txt
     #   -r requirements.in
+opentelemetry-api==1.45.2
+    # via
+    #   -c requirements.txt
+    #   fastapi
 packaging==26.2
     # via
     #   -c requirements.txt
@@ -291,7 +296,7 @@ pandas==2.3.3
     #   -c requirements.txt
     #   -r requirements.in
     #   llama-index-readers-file
-pgvector==0.5.0
+pgvector==0.5.1
     # via
     #   -c requirements.txt
     #   -r requirements.in
@@ -326,7 +331,7 @@ psycopg-pool==3.3.1
     # via
     #   -c requirements.txt
     #   psycopg
-pydantic==2.13.5
+pydantic==2.14.3
     # via
     #   -c requirements.txt
     #   -r requirements.in
@@ -337,11 +342,11 @@ pydantic==2.13.5
     #   llama-index-workflows
     #   openai
     #   pydantic-settings
-pydantic-core==2.46.5
+pydantic-core==2.50.4
     # via
     #   -c requirements.txt
     #   pydantic
-pydantic-settings==2.15.0
+pydantic-settings==2.16.2
     # via
     #   -c requirements.txt
     #   -r requirements.in
@@ -356,12 +361,12 @@ pystemmer==2.2.0.3
     # via
     #   -c requirements.txt
     #   llama-index-retrievers-bm25
-pytest==9.1.1
+pytest==9.2.0
     # via
     #   -r requirements-dev.in
     #   pytest-asyncio
     #   pytest-cov
-pytest-asyncio==1.4.0
+pytest-asyncio==1.4.1.post1
     # via -r requirements-dev.in
 pytest-cov==7.1.0
     # via -r requirements-dev.in
@@ -370,7 +375,7 @@ python-dateutil==2.9.0.post0
     #   -c requirements.txt
     #   botocore
     #   pandas
-python-dotenv==1.2.3
+python-dotenv==1.2.4
     # via
     #   -c requirements.txt
     #   -r requirements.in
@@ -467,10 +472,12 @@ typing-extensions==4.16.0
     #   llama-index-core
     #   llama-index-workflows
     #   openai
+    #   opentelemetry-api
     #   psycopg
     #   psycopg-pool
     #   pydantic
     #   pydantic-core
+    #   pydantic-settings
     #   pytest-asyncio
     #   sqlalchemy
     #   starlette
@@ -481,7 +488,7 @@ typing-inspect==0.9.0
     #   -c requirements.txt
     #   dataclasses-json
     #   llama-index-core
-typing-inspection==0.4.2
+typing-inspection==0.4.5
     # via
     #   -c requirements.txt
     #   fastapi

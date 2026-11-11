@@ -50,22 +50,23 @@ const doc = (overrides: Partial<DocMeta> = {}): DocMeta =>
   }) as DocMeta
 
 describe('languageLabel', () => {
-  it('returns empty for English or missing', () => {
+  it('returns empty only when the row has no language', () => {
     expect(languageLabel(undefined)).toBe('')
     expect(languageLabel({})).toBe('')
-    expect(languageLabel({ language: 'en' })).toBe('')
   })
-  it('names the document language for non-English documents', () => {
+  it('names the document language, English included', () => {
+    expect(languageLabel({ language: 'en' })).toBe('English')
     expect(languageLabel({ language: 'es' })).toBe('Spanish')
     expect(languageLabel({ language: 'zh' })).toBe('Chinese')
     expect(languageLabel({ language: 'pt' })).toBe('Portuguese')
   })
   it('ignores the stale CSV languages field', () => {
     // Three English docs in the corpus carry languages='Chinese' in the CSV,
-    // which is what made English-only docs render a Chinese badge (#306).
+    // which is what made English-only docs render a Chinese badge (#306). The
+    // DMS `language` column wins, so this stays English.
     expect(
       languageLabel({ language: 'en', raw: { languages: 'Chinese' } }),
-    ).toBe('')
+    ).toBe('English')
   })
   it('falls back to the uppercased code for unmapped languages', () => {
     expect(languageLabel({ language: 'sw' })).toBe('SW')
