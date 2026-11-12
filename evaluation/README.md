@@ -135,8 +135,9 @@ that look like dead models. The token comes from `--token` or
 
 **`--stage freeze` needs no token.** Freezing sends no model override — it is one
 cite retrieval per case and no route call at all — so the token is required for the
-sweep stage only. Any flag the tool does not know is an error rather than a silent
-default.
+sweep stage only. Flags are written `--flag value`: an unknown `--`-prefixed token
+is an error rather than a silent default, but anything without the double dash
+(`-stage sweep`) is not a flag to this parser and is ignored.
 
 Two stages, because the frozen retrieval is the reusable half:
 
