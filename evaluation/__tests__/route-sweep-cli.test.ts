@@ -7,6 +7,7 @@ import {
   evalsetPath,
   freezeNote,
   frozenSetPath,
+  frozenTargetWarning,
   parseSweepArgs,
   selectCases,
 } from '../run-route-sweep'
@@ -276,5 +277,29 @@ describe('frozenSetPath', () => {
     expect(frozenSetPath('smoke')).toBe(
       'evaluation/results/route-freeze-smoke.json',
     )
+  })
+})
+
+describe('frozenTargetWarning', () => {
+  it('says nothing when the documents and the sweep name one host', () => {
+    // A trailing slash is normalized away by the parser, so neither side may be
+    // compared raw.
+    expect(
+      frozenTargetWarning(
+        { target: 'https://qa.askwri-app.org' },
+        'https://qa.askwri-app.org/',
+      ),
+    ).toBeUndefined()
+  })
+
+  it('names both hosts when --stage sweep targets another', () => {
+    const warning = frozenTargetWarning(
+      { target: 'https://qa.askwri-app.org' },
+      'https://sweep.example',
+    )
+
+    expect(warning).toBeDefined()
+    expect(warning).toContain('https://qa.askwri-app.org')
+    expect(warning).toContain('https://sweep.example')
   })
 })
