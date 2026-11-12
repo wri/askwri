@@ -57,8 +57,7 @@ function mockReply(content: string, status = 200) {
   fetchMock.mockImplementation(async () => chatReply(content, status))
 }
 
-// A failing call is retried twice (tools, json_object), so the interesting body
-// is the last one sent.
+// The interesting body is the last one sent.
 function sentBody(): any {
   const call = fetchMock.mock.calls[fetchMock.mock.calls.length - 1]
   return JSON.parse(call[1].body)
