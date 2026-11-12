@@ -250,18 +250,37 @@ export function selectCases(
   })
 }
 
+/**
+ * The frozen set's note about how its cases were chosen. The pinned set has no
+ * reviewed tier, and a reader must not believe these cases were reviewed. The
+ * wording follows what the selection actually was: `--ids` can name a subset
+ * that is not a prefix of the file, so "the first N in file order" is false for
+ * it and must not be written into the artifact this tool exists to make
+ * trustworthy.
+ */
+export function freezeNote(
+  evalset: string,
+  loaded: LoadedEvalset,
+  ids?: string[],
+): string | undefined {
+  if (loaded.expert_approved_only) return undefined
+  const count = loaded.cases.length
+  const selection = ids
+    ? `the ${count} case${count === 1 ? '' : 's'} named by --ids ` +
+      `${count === 1 ? 'was' : 'were'} used`
+    : `the first ${count} in file order were used`
+  return `no expert_approved case in ${evalset}; ${selection}`
+}
+
 /** Freeze stage: one cite retrieval per case, written for the sweep to read. */
 async function runFreezeStage(opts: SweepOptions): Promise<FrozenSet> {
   const file = frozenSetPath(opts.label)
   const path = evalsetPath(opts.evalset)
   const loaded = selectCases(opts)
   const evalset = basename(path)
-  // The pinned set has no reviewed tier, and a reader must not believe these
-  // cases were reviewed. Carried in the frozen set and printed here, because
-  // the sweep artifact's header has no field for it.
-  const evalsetNote = loaded.expert_approved_only
-    ? undefined
-    : `no expert_approved case in ${evalset}; the first ${loaded.cases.length} in file order were used`
+  // Carried in the frozen set and printed here, because the sweep artifact's
+  // header has no field for it.
+  const evalsetNote = freezeNote(evalset, loaded, opts.ids)
 
   // A freeze at an existing label replaces that set, which is what --stage all
   // means: the retrieval is refetched, not reused. Said before the retrieval is

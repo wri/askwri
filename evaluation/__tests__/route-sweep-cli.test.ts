@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 import {
   evalsetPath,
+  freezeNote,
   frozenSetPath,
   parseSweepArgs,
   selectCases,
@@ -225,6 +226,33 @@ describe('selectCases', () => {
     )
 
     expect(loaded.cases.map((c) => c.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('freezeNote', () => {
+  const loaded = (ids: string[], expert_approved_only = false) => ({
+    cases: ids.map((id) => ({ id, question: `question for ${id}` })),
+    expert_approved_only,
+  })
+
+  it('says the first N in file order were used without --ids', () => {
+    expect(freezeNote('set.json', loaded(['a', 'b']))).toBe(
+      'no expert_approved case in set.json; the first 2 in file order were used',
+    )
+  })
+
+  // `--ids c,a` selects [a, c] from [a, b, c]: a prefix claim would be false.
+  it('says the cases named by --ids were used when --ids was given', () => {
+    expect(freezeNote('set.json', loaded(['a', 'c']), ['c', 'a'])).toBe(
+      'no expert_approved case in set.json; the 2 cases named by --ids were used',
+    )
+    expect(freezeNote('set.json', loaded(['c']), ['c'])).toBe(
+      'no expert_approved case in set.json; the 1 case named by --ids was used',
+    )
+  })
+
+  it('says nothing when the selection was the reviewed tier', () => {
+    expect(freezeNote('set.json', loaded(['b'], true), ['b'])).toBeUndefined()
   })
 })
 
