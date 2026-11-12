@@ -1,5 +1,14 @@
 /** @jest-environment node */
-import { evalsetPath, frozenSetPath, parseSweepArgs } from '../run-route-sweep'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import {
+  evalsetPath,
+  frozenSetPath,
+  parseSweepArgs,
+  selectCases,
+} from '../run-route-sweep'
 
 const MODELS = ['--model-a', 'gpt-5.4-nano', '--model-b', 'gpt-5.6-luna']
 const TOKEN = ['--token', 'eval-token']
@@ -16,8 +25,15 @@ const argv = (...extra: string[]): string[] => [
 
 const labels = (...extra: string[]): string[] => ['--label', 'smoke', ...extra]
 
+let tempDir: string
+
 beforeEach(() => {
   delete process.env.EVAL_MODEL_OVERRIDE_TOKEN
+  tempDir = mkdtempSync(join(tmpdir(), 'route-sweep-cli-'))
+})
+
+afterEach(() => {
+  rmSync(tempDir, { recursive: true, force: true })
 })
 
 afterAll(() => {
@@ -142,6 +158,73 @@ describe('parseSweepArgs', () => {
 
   it('rejects a flag with no value', () => {
     expect(() => parseSweepArgs(argv('--limit'))).toThrow(/--limit/)
+  })
+
+  it('rejects a flag it does not know instead of falling back to a default', () => {
+    // An ignored token takes a default with it, and the default stage refetches
+    // and overwrites the frozen set the operator meant to replay.
+    expect(() => parseSweepArgs(argv('--limt', '3'))).toThrow(/--limt/)
+    expect(() => parseSweepArgs(argv('--stage=sweep'))).toThrow(/--stage=sweep/)
+  })
+
+  it('reads --ids as the cases to run', () => {
+    expect(parseSweepArgs(argv('--ids', 'q1, q3')).ids).toEqual(['q1', 'q3'])
+    expect(parseSweepArgs(argv()).ids).toBeUndefined()
+  })
+
+  it('does not cut a named id list down to the default limit', () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `q${i}`)
+
+    expect(parseSweepArgs(argv('--ids', ids.join(','))).limit).toBe(12)
+    // An explicit --limit still wins over the list length.
+    expect(
+      parseSweepArgs(argv('--ids', 'q1,q2,q3', '--limit', '1')).limit,
+    ).toBe(1)
+  })
+
+  it('rejects an --ids value holding no case id', () => {
+    expect(() => parseSweepArgs(argv('--ids', ' , '))).toThrow(/--ids/)
+  })
+})
+
+describe('selectCases', () => {
+  const writeEvalset = (ids: string[]): string => {
+    const path = join(tempDir, 'set.json')
+    writeFileSync(
+      path,
+      JSON.stringify({
+        test_cases: ids.map((id) => ({ id, question: `question for ${id}` })),
+      }),
+    )
+    return path
+  }
+
+  it('selects exactly the cases --ids names', () => {
+    const set = writeEvalset(['a', 'b', 'c'])
+
+    const loaded = selectCases(
+      parseSweepArgs(argv('--evalset', set, '--ids', 'c,a')),
+    )
+
+    expect(loaded.cases.map((c) => c.id)).toEqual(['a', 'c'])
+  })
+
+  it('fails naming the id the evalset does not have', () => {
+    const set = writeEvalset(['a', 'b'])
+
+    expect(() =>
+      selectCases(parseSweepArgs(argv('--evalset', set, '--ids', 'a,nope'))),
+    ).toThrow(/nope/)
+  })
+
+  it('takes the first --limit cases in file order without --ids', () => {
+    const set = writeEvalset(['a', 'b', 'c'])
+
+    const loaded = selectCases(
+      parseSweepArgs(argv('--evalset', set, '--limit', '2')),
+    )
+
+    expect(loaded.cases.map((c) => c.id)).toEqual(['a', 'b'])
   })
 })
 

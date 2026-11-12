@@ -125,12 +125,18 @@ npm run eval:routes -- --label smoke --model-a gpt-5.4-nano --model-b gpt-5.6-lu
 
 Defaults: `--stage all`, `--limit 10`, `--concurrency 2`, `--timeout-ms 120000`,
 `--target https://qa.askwri-app.org`, `--evalset evalset_answer_02` (first N cases in
-file order — the pinned set has no reviewed tier, and the run says so).
+file order — the pinned set has no reviewed tier, and the run says so); `--ids q1,q3`
+selects exactly those cases instead of the first N.
 `--label` and both models are required, and the two models must differ: the tool
 never compares a model with itself. `--timeout-ms` cannot exceed 300000, the ALB
 `idle_timeout` — a longer deadline only converts slow calls into client timeouts
 that look like dead models. The token comes from `--token` or
 `EVAL_MODEL_OVERRIDE_TOKEN`; without it every override is refused with a 400.
+
+**`--stage freeze` needs no token.** Freezing sends no model override — it is one
+cite retrieval per case and no route call at all — so the token is required for the
+sweep stage only. Any flag the tool does not know is an error rather than a silent
+default.
 
 Two stages, because the frozen retrieval is the reusable half:
 

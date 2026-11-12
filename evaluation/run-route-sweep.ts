@@ -18,8 +18,9 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { checkCall } from './route-sweep/checks'
+import { checkCall, inputCount } from './route-sweep/checks'
 import { freezeCases, loadEvalset } from './route-sweep/freeze'
+import type { LoadedEvalset } from './route-sweep/freeze'
 import { fetchCatalogIndex } from './route-sweep/payloads'
 import { artifactPath, renderMarkdown } from './route-sweep/report'
 import { resolveCodeVersion, runSweep } from './route-sweep/sweep'
@@ -75,6 +76,9 @@ export type SweepOptions = {
   stage: 'freeze' | 'sweep' | 'all'
   label: string
   evalset: string
+  /** The exact cases to run, from `--ids`; `--limit` caps how many when both
+   * are given. */
+  ids?: string[]
   limit: number
   models: [string, string]
   target: string
@@ -82,6 +86,24 @@ export type SweepOptions = {
   timeoutMs: number
   token?: string
 }
+
+/** Every flag this parser reads. Anything else beginning with `--` is refused
+ * rather than skipped: an ignored token falls back to a default, and the default
+ * for `--stage` is `all`, which refetches and overwrites the frozen set an
+ * operator who mistyped `--stage sweep` meant to replay. */
+const KNOWN_FLAGS = new Set([
+  '--stage',
+  '--label',
+  '--evalset',
+  '--ids',
+  '--limit',
+  '--model-a',
+  '--model-b',
+  '--concurrency',
+  '--timeout-ms',
+  '--target',
+  '--token',
+])
 
 /**
  * Parses and validates the command line. Every rule that would otherwise be
@@ -92,6 +114,14 @@ export type SweepOptions = {
  * sends no override, and refusing it for a missing token would be wrong.
  */
 export function parseSweepArgs(argv: string[]): SweepOptions {
+  for (const token of argv) {
+    if (token.startsWith('--') && !KNOWN_FLAGS.has(token)) {
+      throw new Error(
+        `unknown flag ${token}: known flags are ${[...KNOWN_FLAGS].join(', ')}`,
+      )
+    }
+  }
+
   const flag = (name: string): string | undefined => {
     const at = argv.indexOf(name)
     if (at === -1) return undefined
@@ -160,11 +190,16 @@ export function parseSweepArgs(argv: string[]): SweepOptions {
     )
   }
 
+  const ids = caseIds(flag('--ids'))
+
   return {
     stage,
     label,
     evalset: flag('--evalset') ?? DEFAULT_EVALSET,
-    limit: count('--limit', 10),
+    ids,
+    // Naming cases with `--ids` replaces the first-N selection, so the default
+    // ten must not silently cut a longer named list down to ten.
+    limit: count('--limit', ids ? ids.length : 10),
     models: [modelA, modelB],
     // Trailing slashes would double up in every URL built from the target.
     target: (flag('--target') ?? QA_TARGET).replace(/\/+$/, ''),
@@ -172,6 +207,20 @@ export function parseSweepArgs(argv: string[]): SweepOptions {
     timeoutMs,
     token,
   }
+}
+
+/** `--ids a,b,c`: the exact cases to run. Surrounding spaces are dropped so a
+ * comma-separated list can be read at a glance. */
+function caseIds(raw: string | undefined): string[] | undefined {
+  if (raw === undefined) return undefined
+  const ids = raw
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id !== '')
+  if (ids.length === 0) {
+    throw new Error('--ids needs at least one case id, comma-separated')
+  }
+  return ids
 }
 
 /** The frozen set is an input to the sweep, not a published artifact, so it
@@ -190,11 +239,22 @@ export function evalsetPath(evalset: string): string {
   )
 }
 
+/** The cases a run selects from `--evalset`, `--ids` and `--limit`, split out
+ * so the selection rule is exercised without paying for a freeze. */
+export function selectCases(
+  opts: Pick<SweepOptions, 'evalset' | 'ids' | 'limit'>,
+): LoadedEvalset {
+  return loadEvalset(evalsetPath(opts.evalset), {
+    limit: opts.limit,
+    ids: opts.ids,
+  })
+}
+
 /** Freeze stage: one cite retrieval per case, written for the sweep to read. */
 async function runFreezeStage(opts: SweepOptions): Promise<FrozenSet> {
   const file = frozenSetPath(opts.label)
   const path = evalsetPath(opts.evalset)
-  const loaded = loadEvalset(path, { limit: opts.limit })
+  const loaded = selectCases(opts)
   const evalset = basename(path)
   // The pinned set has no reviewed tier, and a reader must not believe these
   // cases were reviewed. Carried in the frozen set and printed here, because
@@ -202,6 +262,16 @@ async function runFreezeStage(opts: SweepOptions): Promise<FrozenSet> {
   const evalsetNote = loaded.expert_approved_only
     ? undefined
     : `no expert_approved case in ${evalset}; the first ${loaded.cases.length} in file order were used`
+
+  // A freeze at an existing label replaces that set, which is what --stage all
+  // means: the retrieval is refetched, not reused. Said before the retrieval is
+  // paid for — not after — so an operator who meant `--stage sweep` can stop
+  // instead of buying a new set over the one they were replaying.
+  if (existsSync(file)) {
+    console.log(
+      `overwriting the frozen set at ${file}: the retrieval is refetched, not reused`,
+    )
+  }
 
   console.log(
     `freezing ${loaded.cases.length} cases from ${evalset} at ${opts.target}`,
@@ -217,10 +287,6 @@ async function runFreezeStage(opts: SweepOptions): Promise<FrozenSet> {
     evalsetNote,
   })
 
-  // A freeze at an existing label replaces that set, which is what --stage all
-  // means: the retrieval is refetched, not reused. Say so rather than letting
-  // the file change under whoever froze it last.
-  if (existsSync(file)) console.log(`overwriting the frozen set at ${file}`)
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify(set, null, 2))
 
@@ -249,20 +315,6 @@ function readFrozenSet(label: string): FrozenSet {
 }
 
 /**
- * The input count `checkCall` requires: the payload's array length for the
- * array routes, 1 for the single-output ones. Read from the request, never the
- * response — a response cannot say how many inputs it dropped. The readout
- * derives the same number per call in `report.ts`.
- */
-function inputCountOf(call: CallResult): number {
-  if (call.route === 'alignment' || call.route === 'translate') return 1
-  const list = (call.request as Record<string, unknown> | null)?.[
-    call.route === 'batch-why' ? 'passages' : 'docs'
-  ]
-  return Array.isArray(list) ? list.length : 0
-}
-
-/**
  * Prints what the operator needs while the run is still warm: whether it
  * worked, and which calls did not. The readout stays the authority — it holds
  * every verdict and both outputs — but a sweep whose console says nothing sends
@@ -272,7 +324,7 @@ function printChecks(calls: CallResult[]): void {
   const failed = calls
     .map((call) => ({
       call,
-      ...checkCall(call, call.model, inputCountOf(call)),
+      ...checkCall(call, call.model, inputCount(call.route, call.request)),
     }))
     .filter((v) => !v.ok)
 

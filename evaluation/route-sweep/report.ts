@@ -12,7 +12,7 @@
  * no env — the CLI owns the date and the file writes, so a report can be
  * regenerated from a stored artifact without touching the live target.
  */
-import { checkCall } from './checks'
+import { checkCall, inputCount } from './checks'
 import type { CallResult, RouteName, SweepArtifact } from './types'
 
 /** The order a reader expects the routes in, matching the sweep's own. */
@@ -30,22 +30,6 @@ const OUTPUT_FIELD: Record<RouteName, string> = {
   'batch-relates': 'results[].relates',
   alignment: 'assessment.insights[]',
   translate: 'translation',
-}
-
-/**
- * How many outputs the response had to contain: the payload's array length for
- * the array routes, 1 for the single-output ones. Read from the request, never
- * from the response — a response cannot say how many inputs it dropped.
- *
- * An unreadable array counts as 0, which `checkCall` reports as a failure; the
- * alternative would be to skip the length check on exactly the malformed
- * payloads it exists to catch.
- */
-function inputCount(route: RouteName, request: unknown): number {
-  if (route === 'translate' || route === 'alignment') return 1
-  const field = route === 'batch-why' ? 'passages' : 'docs'
-  const list = (request as Record<string, unknown> | null)?.[field]
-  return Array.isArray(list) ? list.length : 0
 }
 
 /**
@@ -148,10 +132,11 @@ function headerLines(a: SweepArtifact, failedCount: number): string[] {
 type Verdict = { call: CallResult; ok: boolean; failures: string[] }
 
 /**
- * One call's mechanical verdict. The only place `checkCall` is invoked, because
- * the expected model and the input count are exactly the two arguments a second
- * caller would get subtly wrong: the model is the one the call requested (the
- * sweep records it from the job), and the input count comes from the request.
+ * One call's mechanical verdict. `checkCall` is invoked here and by the CLI's
+ * console summary, so neither side derives the two arguments that matter for
+ * itself: the expected model is the one the call requested (the sweep records
+ * it from the job), and the input count comes from `inputCount` in `checks.ts`,
+ * which owns that rule for both callers.
  */
 function verdictOf(call: CallResult): Verdict {
   const check = checkCall(

@@ -56,15 +56,36 @@ function extractOutputs(route: RouteName, body: any): Extracted {
 }
 
 /**
+ * How many outputs the response had to contain: the payload's array length for
+ * the array routes, 1 for the single-output ones. Read from the request, never
+ * from the response — a response cannot say how many inputs it dropped.
+ *
+ * An unreadable array counts as 0, which `checkCall` reports as a failure; the
+ * alternative would be to skip the length check on exactly the malformed
+ * payloads it exists to catch.
+ *
+ * Exported because `checkCall` has two callers — the readout and the CLI's
+ * console summary — and neither may derive this itself: a second spelling that
+ * drifted could print `checks: 0 of N calls failed` above a readout that marks
+ * failures, which is the clean-looking run this whole tool exists to prevent.
+ */
+export function inputCount(route: RouteName, request: unknown): number {
+  if (route === 'translate' || route === 'alignment') return 1
+  const field = route === 'batch-why' ? 'passages' : 'docs'
+  const list = (request as Record<string, unknown> | null)?.[field]
+  return Array.isArray(list) ? list.length : 0
+}
+
+/**
  * Decides whether one recorded call is evidence.
  *
- * `inputCount` is what the response had to contain: the payload's array length
- * for the array routes, 1 for alignment and translate. Zero is a failure on
- * purpose — a case whose retrieval returned nothing cannot evidence anything
- * about a model, and a check that let it pass would report a clean run over
- * cases that were never run. For the two single-output routes the count can
- * only ever match, which is the point: they answer once, so the failure they
- * can actually have is a missing shape, reported by `extractOutputs`.
+ * `inputCount` is what the response had to contain, from `inputCount` above.
+ * Zero is a failure on purpose — a case whose retrieval returned nothing cannot
+ * evidence anything about a model, and a check that let it pass would report a
+ * clean run over cases that were never run. For the two single-output routes
+ * the count can only ever match, which is the point: they answer once, so the
+ * failure they can actually have is a missing shape, reported by
+ * `extractOutputs`.
  */
 export function checkCall(
   r: CallResult,

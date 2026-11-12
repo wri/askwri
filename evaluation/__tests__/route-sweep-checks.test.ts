@@ -5,7 +5,7 @@
 jest.mock('node:child_process', () => ({ execFileSync: jest.fn() }))
 
 import { execFileSync } from 'node:child_process'
-import { checkCall } from '../route-sweep/checks'
+import { checkCall, inputCount } from '../route-sweep/checks'
 import { resolveCodeVersion, runSweep } from '../route-sweep/sweep'
 import type { CallResult, FrozenCase } from '../route-sweep/types'
 
@@ -97,6 +97,27 @@ const sweepArgs = (overrides: Record<string, unknown> = {}) => ({
   timeoutMs: 5000,
   concurrency: 1,
   ...overrides,
+})
+
+describe('inputCount', () => {
+  // The rule `checkCall` takes as its third argument, exported so the readout
+  // and the CLI's console summary cannot each spell it out and drift apart.
+  it('counts the payload array an array route was sent', () => {
+    expect(
+      inputCount('batch-why', { query: 'q', passages: [{}, {}, {}] }),
+    ).toBe(3)
+    expect(inputCount('batch-relates', { query: 'q', docs: [{}, {}] })).toBe(2)
+  })
+
+  it('counts 1 for the single-output routes, whatever the request holds', () => {
+    expect(inputCount('alignment', { query: 'q', resultsSummary: 's' })).toBe(1)
+    expect(inputCount('translate', { text: '在测算新能源重卡' })).toBe(1)
+  })
+
+  it('counts 0 when the array is missing or unreadable, which fails the call', () => {
+    expect(inputCount('batch-why', { passages: 'not an array' })).toBe(0)
+    expect(inputCount('batch-relates', null)).toBe(0)
+  })
 })
 
 describe('checkCall', () => {
