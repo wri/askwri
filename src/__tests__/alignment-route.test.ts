@@ -5,7 +5,9 @@
  * so each test asserts on what would have been sent to the model and on the
  * `provenance` block that says whether a model produced the assessment at all —
  * this route answers 200 `ok: true` on every failure, including the sanitizer's
- * substitution of the canned insight.
+ * substitution of the canned insight. `resolveAlignmentConfig` lives in
+ * `src/lib/alignment-config.ts` — a `route.ts` may export routes only — and its
+ * tests are here because the route is the sole consumer.
  */
 import { NextRequest } from 'next/server'
 
@@ -64,7 +66,7 @@ function sentBody(): any {
 }
 
 async function configFor(model: string) {
-  const { resolveAlignmentConfig } = await import('@/app/api/alignment/route')
+  const { resolveAlignmentConfig } = await import('@/lib/alignment-config')
   return resolveAlignmentConfig(model)
 }
 
@@ -122,7 +124,7 @@ describe('resolveAlignmentConfig', () => {
   it('reads the timeout and cap env at call time, not at import time', async () => {
     // Imported before the env is set: a module-scope const would have frozen the
     // defaults and this test would see 20000 / the configured cap ignored.
-    const { resolveAlignmentConfig } = await import('@/app/api/alignment/route')
+    const { resolveAlignmentConfig } = await import('@/lib/alignment-config')
     process.env.ALIGNMENT_TIMEOUT_MS_MAIN = '33000'
     process.env.OPENAI_MAX_TOKENS = '1200'
     const cfg = resolveAlignmentConfig('gpt-4o-mini')
