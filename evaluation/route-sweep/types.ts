@@ -17,6 +17,14 @@ export type FrozenCase = {
   doc_count: number
 }
 
+/** What the readout needs to say which cases never ran: `runSweep` skips a case
+ * whose frozen retrieval returned nothing, so a case with no calls is absent
+ * from `calls[]` entirely and would otherwise read as a case nobody selected.
+ * The frozen retrieval is left out on purpose — `calls[]` already records the
+ * request each call actually sent, and embedding every case's documents would
+ * turn the artifact's header into retrieval payload nobody reads. */
+export type CaseRoster = { id: string; question: string; doc_count: number }
+
 export type FrozenSet = {
   label: string
   target: string
@@ -47,5 +55,9 @@ export type SweepArtifact = {
   code_version: string | null
   max_results: number
   submodule_commit: string
+  /** Optional: an artifact written before the roster existed, or by a caller
+   * that did not freeze a set, still renders — it just says nothing about
+   * cases that never ran rather than inventing them. */
+  cases?: CaseRoster[]
   calls: CallResult[]
 }
