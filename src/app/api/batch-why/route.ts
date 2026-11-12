@@ -270,7 +270,7 @@ Rules:
       // a passage the model never answered (padding) or one whose mirrored
       // output the English guard replaced (issue #387: the model sometimes
       // mirrors Chinese passages despite the prompt rule). `written` counts the
-      // explanations that came from the model at all.
+      // explanations returned as the model's own text.
       let sanitized = false
       let written = 0
       const explanations = passages.map((_p: any, i: number) => {
@@ -280,11 +280,11 @@ Rules:
           sanitized = true
           return { why: CANNED_WHY, relation: 'indirect' as const }
         }
-        written += 1
         if (!isEnglishText(why)) {
           sanitized = true
           return { why: CANNED_WHY, relation: 'indirect' as const }
         }
+        written += 1
         return exp
       })
 
@@ -303,14 +303,19 @@ Rules:
 
       // "[]" parses, and an all-substituted answer covers every passage with
       // canned text: neither carries a single word the model wrote, so report
-      // it as the parse failure it is rather than as model output.
+      // it as the parse failure it is rather than as model output. `sanitized`
+      // rides along whatever substituted, so the replacement stays visible on
+      // this path instead of only the `produced: false` it caused.
       if (written === 0) {
         return NextResponse.json({
           ok: true,
           explanations,
           usage: data.usage,
-          debug: { parseError: true },
-          provenance: provenance(model, false, 'parse_error'),
+          debug: { parseError: true, rawContent: content.slice(0, 200) },
+          provenance: {
+            ...provenance(model, false, 'parse_error'),
+            ...(sanitized ? { sanitized: true } : {}),
+          },
         })
       }
 

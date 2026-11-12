@@ -255,7 +255,41 @@ describe('POST /api/batch-why — provenance marks every path that produced noth
       model: 'gpt-5-mini',
       produced: false,
       fallback_reason: 'parse_error',
+      // The padding that emptied `written` is still reported as a substitution.
+      sanitized: true,
     })
+    // The success path's raw content is not lost when the answer is all padding.
+    expect(json.debug).toEqual({ parseError: true, rawContent: '[]' })
+  })
+
+  it('reports sanitized true when every explanation is mirrored', async () => {
+    fetchMock.mockResolvedValue(
+      chatReply(
+        JSON.stringify([
+          { why: '该文件概述了树冠降温的证据。', relation: 'direct' },
+          { why: '白色屋顶反射太阳辐射。', relation: 'direct' },
+        ]),
+      ),
+    )
+    const { status, json } = await post({
+      query: 'How do cities cool streets?',
+      passages: PASSAGES,
+    })
+    expect(status).toBe(200)
+    // Every row was replaced by the English fallback, so no explanation here is
+    // the model's own text even though the model returned an array of answers.
+    expect(json.explanations.map((exp: any) => exp.why)).toEqual([
+      CANNED.why,
+      CANNED.why,
+    ])
+    expect(json.provenance).toEqual({
+      model: 'gpt-5-mini',
+      produced: false,
+      fallback_reason: 'parse_error',
+      sanitized: true,
+    })
+    expect(json.debug.parseError).toBe(true)
+    expect(json.debug.rawContent).toContain('该文件概述了树冠降温的证据。')
   })
 
   it('reports sanitized true when the English guard replaces a mirrored explanation', async () => {
