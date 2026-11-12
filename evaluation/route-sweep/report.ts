@@ -1,6 +1,6 @@
 /**
- * Report stage: the artifact becomes the two files a person reads — the JSON
- * record and a markdown side-by-side.
+ * Report stage: turns a sweep artifact into the readout a person reads — the
+ * markdown side-by-side, and the path its JSON twin is written to.
  *
  * Two rules shape this module. The mechanical summary comes first, before any
  * model output, because the first question a reader has is "is this run broken",
