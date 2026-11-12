@@ -365,12 +365,35 @@ function printChecks(calls: CallResult[]): void {
   }
 }
 
+/**
+ * The warning for a frozen set retrieved somewhere other than where the sweep is
+ * running, or undefined when the two agree. `--stage freeze` and `--stage sweep
+ * --target` are separate commands, so the documents being swept can come from a
+ * host that is no longer the one named: said before the calls are paid for, and
+ * recorded in the artifact as `frozen_target`.
+ */
+export function frozenTargetWarning(
+  frozen: Pick<FrozenSet, 'target'>,
+  target: string,
+): string | undefined {
+  const frozenAt = frozen.target.replace(/\/+$/, '')
+  const sweeping = target.replace(/\/+$/, '')
+  if (frozenAt === sweeping) return undefined
+  return (
+    `warning: the frozen documents came from ${frozenAt} but this sweep runs ` +
+    `at ${sweeping}: no row here measures ${sweeping}'s own retrieval`
+  )
+}
+
 /** Sweep stage: both models on every route over the frozen cases, then the two
  * output files. */
 async function runSweepStage(
   opts: SweepOptions & { token: string },
   frozen: FrozenSet,
 ): Promise<void> {
+  const mismatch = frozenTargetWarning(frozen, opts.target)
+  if (mismatch) console.log(mismatch)
+
   // One catalog fetch for the whole run: it only enriches the payloads (titles,
   // authors, the alignment summary's language list), and a failed lookup is
   // recorded as absent rather than ending a run.
@@ -413,6 +436,13 @@ async function runSweepStage(
     code_version: codeVersion,
     max_results: frozen.max_results,
     submodule_commit: frozen.submodule_commit,
+    // The frozen set is gitignored, so what it was built from survives only if
+    // it is copied here: a committed baseline must say which evalset produced
+    // it, whether that set had a reviewed tier, and where its documents came
+    // from.
+    evalset: frozen.evalset,
+    ...(frozen.evalsetNote ? { evalset_note: frozen.evalsetNote } : {}),
+    frozen_target: frozen.target,
     // The roster, so a case the sweep skipped is visible as skipped rather than
     // as a case nobody selected.
     cases: frozen.cases.map((c) => ({

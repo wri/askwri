@@ -55,6 +55,15 @@ export type SweepArtifact = {
   code_version: string | null
   max_results: number
   submodule_commit: string
+  /** The evalset the frozen retrieval came from, and the note saying whether it
+   * had a reviewed tier. The frozen set itself is gitignored, so without these
+   * a committed baseline cannot say which cases produced it. */
+  evalset?: string
+  evalset_note?: string
+  /** The host the documents were retrieved from, which is not necessarily the
+   * one swept: `--stage freeze` and `--stage sweep --target` are separate
+   * commands. Present so a mismatch is recorded, not only warned about. */
+  frozen_target?: string
   /** Optional: an artifact written before the roster existed, or by a caller
    * that did not freeze a set, still renders — it just says nothing about
    * cases that never ran rather than inventing them. */

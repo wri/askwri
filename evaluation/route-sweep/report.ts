@@ -23,6 +23,10 @@ const ROUTE_ORDER: RouteName[] = [
   'translate',
 ]
 
+/** The caveat shown on a row the route's sanitizer rewrote. Not a failure —
+ * a model did answer — but some of the text underneath is not its own. */
+const SANITIZED_MARKER = 'sanitized: some text was substituted'
+
 /** The field carrying the human-visible text, per route — the same shapes
  * `checkCall` reads, named here so a missing one can say which. */
 const OUTPUT_FIELD: Record<RouteName, string> = {
@@ -62,6 +66,10 @@ function renderOutputs(route: RouteName, response: unknown): string[] {
  * model produced the text. The verdict itself comes from `checkCall`; this only
  * labels the output shown underneath it, since the canned-string failure modes
  * answer 200 with plausible text.
+ *
+ * `sanitized` is deliberately not decided here: a sanitized call did produce
+ * text, so it passes the check, and the caveat rides on the model's own line
+ * (`SANITIZED_MARKER`) rather than turning a pass into a failure.
  */
 function notEvidence(r: CallResult): string | null {
   if (r.error) return `call failed: ${r.error}`
@@ -112,19 +120,39 @@ function skippedLines(a: SweepArtifact): string[] {
 }
 
 function headerLines(a: SweepArtifact, failedCount: number): string[] {
-  return [
-    `# Route model sweep: ${a.label}`,
-    '',
+  const facts = [
     `- target: ${a.target}`,
+    // Only when the documents came from somewhere else: a line repeating the
+    // target on every run would be noise, and its absence is what says the two
+    // commands named one host.
+    a.frozen_target && a.frozen_target !== a.target
+      ? `- documents frozen at: ${a.frozen_target}`
+      : null,
     `- models: ${a.models[0]} vs ${a.models[1]}`,
     `- max_results: ${a.max_results}`,
     `- submodule commit: ${a.submodule_commit}`,
+    // The frozen set is gitignored, so these two lines are the only record a
+    // committed baseline carries of which cases it ran and whether they were
+    // reviewed.
+    a.evalset ? `- evalset: ${a.evalset}` : null,
+    a.evalset_note ? `- evalset note: ${a.evalset_note}` : null,
     // `unknown` sits in this line, not in a footnote: a sweep that cannot say
     // which build answered must never read as a check on a deployed change.
     `- code version: ${a.code_version ?? 'unknown'}`,
     a.calls.length === 0
       ? '- checks: no calls recorded'
       : `- checks: ${failedCount} of ${a.calls.length} calls failed`,
+  ].filter((line): line is string => line !== null)
+
+  return [
+    `# Route model sweep: ${a.label}`,
+    '',
+    ...facts,
+    '',
+    // The spec requires the readout to state this: every case in the pinned set
+    // is non-English, so a clean run says nothing about English input.
+    'No English control case: every case is non-English, so a regression that ' +
+      'appears only on English input would not show here.',
     '',
   ]
 }
@@ -203,12 +231,15 @@ function caseLines(
 
   for (const call of calls) {
     const reason = notEvidence(call)
-    lines.push(
-      '',
-      `**${call.model}** (${call.latency_ms} ms)${
-        reason ? ` — NOT EVIDENCE: ${reason}` : ''
-      }`,
-    )
+    // `alignment`'s sanitizer and the batch routes' padding answer with text the
+    // model did not write while still reporting `produced: true`, so without
+    // this the substituted sentence reads as model prose under a ✓.
+    const notes = [
+      reason ? `NOT EVIDENCE: ${reason}` : null,
+      call.provenance?.sanitized === true ? SANITIZED_MARKER : null,
+    ].filter((note): note is string => note !== null)
+    const heading = `**${call.model}** (${call.latency_ms} ms)`
+    lines.push('', notes.length ? `${heading} — ${notes.join(' — ')}` : heading)
     const outputs = renderOutputs(route, call.response)
     if (!call.error) {
       // A call that never returned says so on its own line above; adding "the

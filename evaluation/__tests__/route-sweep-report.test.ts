@@ -48,6 +48,30 @@ const translateCall = (
   ...over,
 })
 
+/** Alignment is the route whose sanitizer replaces the visible insights with one
+ * canned sentence while still reporting `produced: true`. */
+const alignmentCall = (
+  model: string,
+  insights: string[],
+  over: Partial<CallResult> = {},
+): CallResult => ({
+  route: 'alignment',
+  case_id: 'q1',
+  model,
+  request: { query: QUESTION, resultsSummary: 'Results for: anything' },
+  response: {
+    ok: true,
+    assessment: { insights, alignment: 'Moderate' },
+    provenance: { model, produced: true },
+  },
+  provenance: { model, produced: true },
+  latency_ms: 900,
+  ...over,
+})
+
+const CANNED_INSIGHT =
+  'Unable to assess alignment. Try providing more sources or refining your query.'
+
 const artifact = (
   calls: CallResult[],
   over: Partial<SweepArtifact> = {},
@@ -181,6 +205,71 @@ describe('renderMarkdown', () => {
 
     // The canned text is still shown, so the reader sees what would ship.
     expect(md).toContain('Substituted.')
+  })
+
+  it('marks a sanitized row as substituted, without failing its check', () => {
+    const md = renderMarkdown(
+      artifact([
+        alignmentCall(MODEL_A, [CANNED_INSIGHT], {
+          provenance: { model: MODEL_A, produced: true, sanitized: true },
+        }),
+        alignmentCall(MODEL_B, ['A real insight.']),
+      ]),
+    )
+
+    const sanitizedRow = lineWith(md, `**${MODEL_A}**`)
+    expect(sanitizedRow).toContain('sanitized: some text was substituted')
+    // A caveat, not a failure: `produced` is true, so the check still passes.
+    expect(sanitizedRow).not.toContain('NOT EVIDENCE')
+    expect(lineWith(md, '**check:**')).toContain(`✓ ${MODEL_A}`)
+    expect(md).toContain('All 2 calls passed the mechanical checks.')
+
+    // The clean row carries no caveat, or the marker would say nothing.
+    expect(lineWith(md, `**${MODEL_B}**`)).not.toContain('sanitized')
+  })
+
+  it('records the evalset, its review-tier note and the missing English control in the header', () => {
+    const md = renderMarkdown(
+      artifact([whyCall(MODEL_A, ['a1']), whyCall(MODEL_B, ['b1'])], {
+        evalset: 'evalset_answer_02.json',
+        evalset_note:
+          'no expert_approved case in evalset_answer_02.json; the first 10 in file order were used',
+      }),
+    )
+
+    const header = md.slice(0, md.indexOf('## batch-why'))
+    expect(lineWith(md, '- evalset:')).toContain('evalset_answer_02.json')
+    expect(header).toContain('no expert_approved case')
+    expect(header).toContain(
+      'No English control case: every case is non-English, so a regression ' +
+        'that appears only on English input would not show here.',
+    )
+  })
+
+  it('names where the documents were frozen only when it is not the swept host', () => {
+    const sameHost = renderMarkdown(
+      artifact([whyCall(MODEL_A, ['a1'])], {
+        frozen_target: 'https://qa.askwrimvp.test',
+      }),
+    )
+    expect(sameHost).not.toContain('documents frozen at')
+
+    const otherHost = renderMarkdown(
+      artifact([whyCall(MODEL_A, ['a1'])], {
+        frozen_target: 'https://elsewhere.askwrimvp.test',
+      }),
+    )
+    const header = otherHost.slice(0, otherHost.indexOf('## batch-why'))
+    expect(header).toContain(
+      'documents frozen at: https://elsewhere.askwrimvp.test',
+    )
+    expect(header).toContain('target: https://qa.askwrimvp.test')
+  })
+
+  it('says nothing about the evalset when the artifact does not record one', () => {
+    const md = renderMarkdown(artifact([whyCall(MODEL_A, ['a1'])]))
+
+    expect(md).not.toContain('- evalset')
   })
 
   it('shows both models for a case on one screen worth of lines', () => {
