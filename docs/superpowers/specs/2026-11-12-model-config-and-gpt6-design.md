@@ -55,8 +55,9 @@ a migration can miss.
 
 - Model ids are `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`. `gpt-6-sol` is
   deliberately excluded. No mini/nano suffix exists in this family.
-- **`temperature`, `top_p`, `logprobs` are rejected when reasoning effort ≠ `none`.** We stop
-  sending `temperature` entirely.
+- **`temperature`, `top_p`, `logprobs` are rejected when reasoning effort ≠ `none`.** So a task
+  switched to a GPT-6 model stops sending `temperature`. That happens with the model swap, not
+  with the refactor.
 - **`none` effort is unsupported on Astra and 6.1-Sol**; supported on Terra and Luna.
 - Tool calling on Chat Completions needs `reasoning_effort: "none"` (6-Sol/Luna) or the Responses API.
   **`/api/alignment` has a `tools` rung in its recovery ladder** (`route.ts:556-557`, the
@@ -102,6 +103,21 @@ code-shaped, not config-shaped. It carries two amendments from the premise audit
 
 ## Design
 
+### 0. Refactor versus migration — the line this design must not blur
+
+Three things are bundled in the phrase "move to GPT-6", and they must happen in this order
+because each is safe only after the previous one:
+
+| | Changes | Proves itself by |
+|---|---|---|
+| **Refactor** | where model ids and request parameters come from — nothing else | the request bytes sent upstream are unchanged |
+| **Probe** | nothing; it only observes | a recorded matrix of accept / reject, usable / unusable, latency, reasoning-token share |
+| **Migration** | the model a task runs, its effort, and (only then) the parameter changes that family forces | a per-task capture with zero fallbacks and a human read of the side-by-side |
+
+Anything that changes what we send belongs to migration, however convenient it would be to do it
+while the refactor is open. Conflating them is how a "refactor" silently becomes a model change
+that nobody gated.
+
 ### 1. The registry (`src/config/models.ts`)
 
 ```ts
@@ -113,22 +129,23 @@ type ModelSpec = {
   contextTokens: number          // 1_050_000
   maxOutputTokens: number        // 128_000
   supportsEffortNone: boolean    // false for astra, 6.1-sol
-  // Reasoning models reject temperature when effort !== 'none'; we never send it.
+  // Reasoning models reject temperature when effort is not none; dropped at migration time.
   price: { inputPer1M: number; outputPer1M: number; cachedInputPer1M: number }
 }
 ```
 
 A second table maps tasks to a model, an effort and the budgets that used to be derived from
-`isGpt5`:
+`isGpt5`. In the refactor stage, `effort` is declared but **not sent**, and the budget fields
+carry the formulas the routes already use rather than one number each:
 
 ```ts
-type TaskSpec = {
+interface TaskSpec {
   model: ModelId
-  effort: 'none' | 'low' | 'medium' | 'high'
-  maxOutputTokens?: number
-  maxPassages?: number     // answer synthesis only
-  passageChars?: number    // answer synthesis only
-  timeoutMs?: { main: number; repair: number }   // routes that budget attempts
+  effort: Effort                    // declared now, sent only when the model is switched
+  budget: (input: { passages?: number; documents?: number; attempt?: 'primary' | 'repair' }) => number
+  maxPassages?: number              // answer synthesis only
+  passageChars?: number             // answer synthesis only
+  timeouts?: { baseMainMs: number; baseRepairMs: number }   // bases; scaing + clamps stay in code
 }
 ```
 
@@ -158,43 +175,56 @@ still legal. Putting `maxPassages`/`passageChars` on the task makes that impossi
 | Query understanding LLM | `gpt-6-luna` | `none` |
 | Eval judge | `gpt-6-astra` | `medium` |
 
-Per-task `maxOutputTokens` is seeded from today's effective caps (including the
-`OPENAI_MAX_TOKENS=1200` that currently caps everything in the task definition) and reviewed
-once in the PR diff — the point is that the cap belongs to the task, not to a global env var
-that happens to exist.
+Per-task output budgets are **not** one number each. Today they are formulas: answer
+`max(2000, OPENAI_MAX_TOKENS)` for the GPT-5 class; translate 2 000; prefilter 500; why
+`min(200 + 80 × passages, 3000)`; relates `max(1000, 120 × documents)`; alignment 4 000 primary
+and 5 000 repair. Those formulas move into the registry as formulas. Collapsing them to a
+scalar per task would change the smallest budgets and the largest, in opposite directions.
+
+(A correction: `OPENAI_MAX_TOKENS=1200` does **not** cap everything. For the GPT-5 class each
+route raises it — answer to at least 2 000, alignment to 4 000/5 000 — so treating 1 200 as the
+ceiling would cut real budgets. The env var's only universal effect is on the non-GPT-5 branch.)
 
 ### 3. Request construction
 
-`isGpt5` disappears rather than being renamed. Nothing string-matches a model family any more:
+`isGpt5` disappears rather than being renamed. Nothing string-matches a model family any more —
+but **the parameters each request carries do not change at the same time as the model does.**
+Two separate steps:
 
-- Every call sends `max_completion_tokens` (all four models are reasoning models).
-- `temperature`, `top_p`, `logprobs` are never sent **on a registry model**.
-- `reasoning_effort` comes from the task's `TaskSpec.effort`.
-- `resolveRouteModel(req, body, task)` returns `{ model, effort, maxOutputTokens, timeouts }`
-  from the registry; the token-gated per-request override from `feat/route-model-sweep` still
-  wins when the sweep supplies one, and an overridden model's effort comes from its own
-  `ModelSpec` (so an override to Astra with effort `none` fails at boot, not as an API 400).
+**At refactor time (no behaviour change):** each route asks a request-profile builder for its
+parameters, given the task, the attempt (`primary` | `repair`) and the input size. The builder
+returns the same numbers, temperatures and omitted fields the route sends today.
+`reasoning_effort` returns `undefined` and is not sent, because today's payload builders omit it
+and adding it — even at a provider default — is a behavioural change.
 
-**The closed value space applies to task resolution, not to every caller.** Three surfaces
+**At migration time (deliberate, measured):** for a task switched to a GPT-6 model —
+
+- `max_completion_tokens` instead of `max_tokens`;
+- `temperature` dropped, since the family rejects it when effort ≠ `none`;
+- `reasoning_effort` supplied from the task's `TaskSpec.effort`;
+- the passage budget from `TaskSpec`, so a candidate cannot silently inherit the smaller one.
+
+The per-request override from `feat/route-model-sweep` still wins when the sweep supplies one.
+Effort is a property of the **task**, not of the model, so an override inherits the task's
+effort; an override naming a model that cannot run that effort is a request-time error, not a
+boot-time one — the route is already running.
+
+**The closed value space applies to task resolution, not to every caller.** Surfaces that
 intentionally accept a model id the registry does not know:
 
 - `/api/answer` reads `body.model` + `body.base_url` (`answer-synthesis.ts:30`) — the answer
   eval harness's cross-provider candidate flow depends on it.
-- `evaluation/answer/judge-client.ts` takes `--judge-model`, default `glm-5.2-vision`, and
-  carries its own `/^gpt-5/i` mirror (`:104-106`) that sends `max_tokens` + `temperature: 0`
-  to non-GPT candidates by design.
+- `evaluation/answer/judge-client.ts` takes `--judge-model`, default `glm-5.2-vision`.
 - The route-sweep override.
 
-So `isGpt5` is replaced by one explicit function with two arms, not by string matching:
-
-```ts
-paramsFor(model: string): RequestParams   // registry hit → registry spec
-                                          // otherwise   → evalCompatParams
-```
-
-`evalCompatParams` is the unchanged legacy profile (`max_tokens`, `temperature: 0`), which
-keeps GLM judge behaviour and the eval harness's resume-comparability intact. It is documented
-as the eval-only arm, so nobody mistakes it for a supported production path.
+So the builder is one function, but the **fallback profile is per caller, not one blanket
+arm**: the judge's non-GPT arm is `max_tokens` + `temperature: 0`, while each route's
+configured temperature differs (answer 0.3, translate 0.2, prefilter 0.1, relates and
+alignment configured, batch-why 0.3 and its GPT-4o arm uses `max_completion_tokens`). Merging
+them into a single "legacy profile" would change several real requests. The eval arm is
+documented as unsupported in production; a comment does not enforce that, so it is validated
+where the caller is known — the judge is the only production-adjacent caller and it does not
+run in the request path.
 
 ### 4. Consumers that stop keeping their own copy
 
@@ -205,7 +235,7 @@ as the eval-only arm, so nobody mistakes it for a supported production path.
 | `src/db/queries/topicsAdmin.ts` | hardcoded per-doc cost from a 5.6-luna price | derived from the registry |
 | `src/app/utils/utils.tsx` | hardcodes `openai/text-embedding-3-small` for the cost estimate | **the active embedder**, so the figure stops being wrong as well as unsourced |
 | `src/lib/alignment-protocol`-adjacent ladder | `json_schema → tools → json_object` | `json_schema → json_object` (see Constraints) |
-| `evaluation/answer/judge-client.ts` | own `/^gpt-5/i` mirror | `paramsFor()` — registry arm for GPT-6, `evalCompatParams` for GLM candidates |
+| `evaluation/answer/judge-client.ts` | own `/^gpt-5/i` mirror | `requestProfile()` — its own non-GPT arm, unchanged |
 | 5 route files + `answer-synthesis.ts` + `chat-completions.ts` | their own consts and `isGpt5` | `resolveModel(task)` |
 
 The `openai/` prefix on cost keys is currently load-bearing — `alignment` stamps
@@ -252,14 +282,18 @@ Both are registry fields of one entry, not two entries.
 
 ### 7. Access probe
 
-`scripts/probe-models.ts`: for each registered model, one request in **each task's real shape**
-— `json_schema` strict at the task's effort, `json_object`, plain completion, the translate
-body — printing ✓/✗ per model per shape. A trivial completion would not prove the thing we
-depend on: that the model accepts the structured-output request we actually send at that
-effort. Run against QA before the mapping is trusted, and whenever a model id changes.
+`scripts/probe-models.ts`: for each **named call profile** — `answer`, `prefilter`, `why`,
+`relates`, `translate`, and alignment's three attempts (`schema`, `tools`, `json_object`) — at
+the effort that job is actually planned to run at, one request with the body that profile really
+sends. Reports two separate verdicts: did the API accept it, and is the output usable (non-empty,
+complete, `finish_reason` not `length`, and parseable into the shape the route expects). A
+trivial completion would prove none of that — and note the answer route sends **no**
+`response_format` at all (it asks for JSON in the prompt), so a probe built around
+`response_format` would be testing a request we never make.
 
-This probe is also the pre-trust answer to "do we have GPT-6 access", and after deploy it is
-how we learn the real latency numbers that re-seed the timeouts.
+The default run is the intended matrix (task × candidate × effort), not every pairwise
+combination, and it exits non-zero when a required case fails so it can gate a release. One
+timing sample is an observation, not a latency baseline.
 
 ### 8. Caching and batching
 
@@ -326,8 +360,10 @@ incumbent's; and a human read of the side-by-side showing no regression on what 
 
 ## Calls I made, for checking
 
-- **`temperature` is removed everywhere** rather than kept on `none`-effort tasks. It is legal
-  there, but nothing needs it, and one fewer knob is one fewer way to send an illegal request.
+- **`temperature` is dropped at migration time**, not at refactor time. It is legal on
+  `none`-effort tasks but nothing needs it, and one fewer knob is one fewer way to send an
+  illegal request. Keeping the two steps separate is what lets the refactor claim identical
+  requests.
 - **Effort lives on the task, not the model**, because the same model can be used at different
   efforts and the legality differs per model.
 - **The legacy embedder leaves the worker but stays in the registry** as `active: false`. Zero
@@ -339,9 +375,10 @@ incumbent's; and a human read of the side-by-side showing no regression on what 
   means a worker model change now needs a deploy. That is the trade for having one place.
 - **Unknown model = throw**, in `costs.ts` as well as in resolution. The current silent
   fallback to gpt-4o-mini pricing is how a cost dashboard goes quietly wrong.
-- **The levers are renamed** (`MODEL_<TASK>`) instead of reusing `OPENAI_MODEL*`, so the stale
-  values in the deployed secret blob become inert and the release needs no coordinated
-  repo-external step.
+- **The levers are renamed at migration time** (`MODEL_<TASK>`) instead of reusing
+  `OPENAI_MODEL*`, so the stale values in the deployed secret blob become inert and a release
+  needs no coordinated repo-external step. The refactor stage introduces no lever at all and
+  leaves today's precedence untouched.
 - **The `tools` rung is deleted from alignment's recovery ladder** rather than kept as a rung
   that cannot succeed at `medium` effort on Chat Completions.
 - **Eval-only callers keep an explicit legacy param arm** instead of the registry rejecting
@@ -359,10 +396,14 @@ incumbent's; and a human read of the side-by-side showing no regression on what 
 ## Known limits
 
 - **The probe cannot prove production access** if the keys ever diverge; it proves the org.
-- **Timeouts are provisional.** The seeded ladders are the GPT-5 ones; no GPT-6 latency exists
-  in this repo yet, and a wrong-low value turns a slow call into a plausible canned answer.
-- **The `evalCompatParams` arm is a documented hole in the closed value space.** It exists so
-  GLM judge candidates keep working; it is not a production path, and nothing enforces that.
+- **Timeouts are provisional.** The seeded ladders are the GPT-5 bases scaled by prompt size;
+  no GPT-6 latency exists in this repo yet, and a wrong-low value turns a slow call into a
+  plausible canned answer. Moving the bases into a table must not move the scaling with them —
+  the 40 s / 25 s values are starting points that the code already scales and clamps to 60 s /
+  50 s.
+- **The per-caller eval fallback is a documented hole in the closed value space.** It exists so
+  the GLM judge and cross-provider candidates keep working; it is not a production path, and a
+  comment does not enforce that.
 - **A model change now needs a merge and a deploy**, except through the validated env lever.
   That is the accepted cost of reviewability.
 - **Prices are list prices** from OpenAI's pricing page; a contract rate would need a field.
