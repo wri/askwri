@@ -54,8 +54,10 @@ export type ProfileId =
 
 export interface ProbeProfile {
   id: ProfileId
-  /** The actual messages/schema/tools this attempt sends, built by the caller. */
-  body: (model: string, effort: 'none' | 'low' | 'medium' | 'high') => Record<string, unknown>
+  /** The actual messages/schema/tools this attempt sends, built by the caller.
+   *  The ceiling comes in as an argument so the probe controls the budget, and the
+   *  profile controls everything else — one owner per decision. */
+  body: (args: { model: string; effort: Effort; budget: number }) => Record<string, unknown>
   /** Required shape of a usable reply. */
   expect: 'json_object' | 'text'
   /** Passages/documents the profile was built from, for the record. */
@@ -200,12 +202,26 @@ git commit -m "feat(scripts): probe the candidate models with our real request p
 
 ```ts
 // src/config/models.ts
+export type Effort = 'none' | 'low' | 'medium' | 'high'
+
 export type ModelId =            // incumbents AND candidates are known models
-  | 'gpt-5.4-mini' | 'gpt-5.4-nano' | 'gpt-5-mini'      // incumbents, still assigned below
+  | 'gpt-4o-mini' | 'gpt-5-mini' | 'gpt-5.4' | 'gpt-5.4-nano'   // incumbents, still assigned below
   | 'gpt-6-astra' | 'gpt-6.1-sol' | 'gpt-6.1-terra' | 'gpt-6-luna'
 
 export const MODELS: Record<ModelId, ModelSpec>   // capability + price; price unused this stage
-export const ASSIGNMENT: Record<TaskId, ModelId>  // today's production model per task
+
+/** Each task's CURRENT CODE DEFAULT — not the value production runs.
+ *  Production overrides these through OPENAI_MODEL*, and that precedence is
+ *  untouched in this stage (invariant 8). Using the deployed values here would
+ *  change what a locally-run or env-less deployment sends, which is exactly what
+ *  this stage promises not to do. */
+export const ASSIGNMENT: Record<TaskId, ModelId>
+// answer → 'gpt-5.4'        (answer-synthesis.ts:3)
+// prefilter → 'gpt-5.4-nano' (answer/route.ts:21)
+// why → 'gpt-4o-mini'        (batch-why/route.ts)
+// relates → 'gpt-4o-mini'    (batch-relates/route.ts)
+// alignment → 'gpt-5-mini'   (alignment-config.ts)
+// translate → 'gpt-5-mini'   (translate/route.ts)
 
 // src/lib/request-profile.ts
 export function requestProfile(args: {
@@ -264,8 +280,9 @@ Expected: PASS. These lock current behaviour before anything moves. State in the
 
 ```ts
 it('every assigned task names a known model')          // assignment ⊆ models
-it('registers the incumbent models as known')          // gpt-5.4-mini, gpt-5.4-nano, gpt-5-mini
-it('declares the candidates as known but unassigned')  // the four gpt-6 ids appear in MODELS, not in ASSIGNMENT
+it('registers every incumbent code default as a known model')  // gpt-4o-mini, gpt-5-mini, gpt-5.4, gpt-5.4-nano
+it('assigns each task its current code default')               // the table in the Interfaces block
+it('declares the candidates as known but unassigned')          // the four gpt-6 ids appear in MODELS, not in ASSIGNMENT
 it('records capability without asserting it is used')  // supportsEffortNone only; no price assertions this stage
 ```
 

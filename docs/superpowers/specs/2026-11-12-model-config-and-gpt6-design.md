@@ -228,6 +228,10 @@ run in the request path.
 
 ### 4. Consumers that stop keeping their own copy
 
+Only the request path is in the refactor stage. The two cost/energy rows below are the same
+change in kind but carry their own risk (they change what the UI reports), so they are their
+own chore — done before any model is switched, but not inside the byte-equality promise.
+
 | File | Today | After |
 |---|---|---|
 | `src/config/costs.ts` | own price map keyed `openai/…`, unknown → gpt-4o-mini rate | prices from the registry; unknown model throws |
