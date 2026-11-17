@@ -123,6 +123,58 @@ it('never throws, and a timeout reports ok=false', async () => {
   expect(r.ok).toBe(false)
 })
 
+it('reports ok=false when the body never arrives before the timeout', async () => {
+  const r = await probeProfile({
+    profile: profiles['translate'],
+    model: 'gpt-6-luna',
+    effort: 'none',
+    budget: 2000,
+    apiKey: 'k',
+    timeoutMs: 5,
+    fetchImpl: (async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: () => new Promise(() => {}),
+      }) as any) as any,
+  })
+  expect(r.ok).toBe(false)
+})
+
+it('reads a tool call before prose, so a forced tool_choice reply stays usable', async () => {
+  const r = await probeProfile({
+    profile: profiles['alignment.tools'],
+    model: 'gpt-6.1-terra',
+    effort: 'medium',
+    budget: 4000,
+    apiKey: 'k',
+    fetchImpl: (async () =>
+      reply({
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: {
+              content: 'Sure!',
+              tool_calls: [
+                {
+                  function: {
+                    name: 'set_assessment',
+                    arguments: JSON.stringify({
+                      insights: ['a', 'b'],
+                      alignment: 'High',
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usage: {},
+      })) as any,
+  })
+  expect(r).toMatchObject({ ok: true, usable: true })
+})
+
 it('a profile supplies its own body verbatim', () => {
   const body = profiles['answer'].body({
     model: 'gpt-6.1-sol',

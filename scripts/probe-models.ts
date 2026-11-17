@@ -78,12 +78,13 @@ const endpoint = () =>
     '',
   )
 
-/** The reply text, from `content` or from the tools rung's function arguments. */
+/** The reply text. The alignment route reads a function call before prose, so a
+ *  forced-`tool_choice` answer that also carries content is still the tool's. */
 function replyText(choice: any): string {
   const msg = choice?.message ?? {}
-  if (typeof msg.content === 'string' && msg.content.trim()) return msg.content
   const args = msg.tool_calls?.[0]?.function?.arguments
-  return typeof args === 'string' ? args : ''
+  if (typeof args === 'string' && args.trim()) return args
+  return typeof msg.content === 'string' ? msg.content : ''
 }
 
 /** The routes accept bare JSON and JSON inside a markdown fence or prose. */
@@ -128,14 +129,16 @@ export async function probeProfile(args: {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     // Raced, not just aborted: a fetch implementation may ignore the signal.
+    // The body read is inside the race too, so a reply that never arrives cannot
+    // outlive the timeout.
     const expired = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         ctrl.abort()
         reject(new Error(`timeout after ${timeoutMs}ms`))
       }, timeoutMs)
     })
-    const res = await Promise.race([
-      fetchImpl(`${endpoint()}/chat/completions`, {
+    const call = (async () => {
+      const res = await fetchImpl(`${endpoint()}/chat/completions`, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${apiKey}`,
@@ -143,10 +146,11 @@ export async function probeProfile(args: {
         },
         body: JSON.stringify(profile.body({ model, effort, budget })),
         signal: ctrl.signal,
-      }),
-      expired,
-    ])
-    const json: any = await res.json().catch(() => null)
+      })
+      const json: any = await res.json().catch(() => null)
+      return { res, json }
+    })()
+    const { res, json } = await Promise.race([call, expired])
     const choice = json?.choices?.[0] ?? {}
     const usage = json?.usage ?? {}
     const text = replyText(choice)
