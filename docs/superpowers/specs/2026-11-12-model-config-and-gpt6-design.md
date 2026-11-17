@@ -1,7 +1,9 @@
 # Model config: one registry, GPT-6 class models — design
 
 **Date:** 2026-11-12
-**Status:** approved 2026-11-12
+**Status:** approved 2026-11-12, then revised after an external (Astra) review the same day; the
+revised version is the approved one. Implementation runs as a separate SDD session — see
+`docs/superpowers/handoffs/2026-11-12-model-registry-sdd-handoff.md`.
 **Scope:** replace every OpenAI model in the app tier and the ingestion pipeline with the
 GPT-6 class, and collapse model configuration into one reviewable place per service.
 
