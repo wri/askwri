@@ -45,9 +45,9 @@ Per design §20 lean-core cut:
 
 ---
 
-## 3. Schema — the 11 tables
+## 3. Schema — Phase 0's 11 tables
 
-Migration history (all TypeORM raw-SQL under `src/db/migrations/`): `1781280000000` (initial 11 tables), `1781290000000` (`corpus_order` column + index), `1781300000000` (open-job unique index + FK cascade), `1781310000000` (keyword-lane tables), `1781320000000` (authors/url/date_published columns, title/summary data fixes, content-hash dedup index, drops dead `abstract`), `1781330000000` (`metadata_source` provenance), `1781340000000` (`metadata_source` key normalization).
+Phase 0 migration history (TypeORM raw-SQL under `src/db/migrations/`): `1781280000000` (initial 11 tables), `1781290000000` (`corpus_order` column + index), `1781300000000` (open-job unique index + FK cascade), `1781310000000` (keyword-lane tables), `1781320000000` (authors/url/date_published columns, title/summary data fixes, content-hash dedup index, drops dead `abstract`), `1781330000000` (`metadata_source` provenance), `1781340000000` (`metadata_source` key normalization). That is not the whole set — 27 migrations exist; run `ls src/db/migrations/` for the authoritative list. Tables added after Phase 0 are covered where they are used rather than here: keyword lane `keyword_vocab`/`keyword_corpus_stats` (§5), `document_relations` (§12), and the topic-taxonomy set `tag_aliases`/`tag_embeddings`/`reclassify_jobs` plus the `tags` extensions (`parent_tag_id`, `description`, `needs_reembed`, migration `1787160000000`) in [admin-guide.md](admin-guide.md) §2.1. `search_vocab` (migration `1787480000000`) is query-expansion support — Python-owned, retrieval workstream, not DMS metadata.
 
 ### Write ownership rule
 
@@ -59,10 +59,10 @@ Migration history (all TypeORM raw-SQL under `src/db/migrations/`): `17812800000
 
 | Table | Purpose | Key columns | Written by |
 |---|---|---|---|
-| `documents` | One row per document. System of record. | `id` (uuid PK), `external_id` (unique, legacy doc_id), `s3_key`, `title`, `language`, `languages[]`, `status`, `source_metadata` (jsonb) | App tier |
-| `document_texts` | Full extracted text per document (for query-time passage context). | `document_id` (PK, FK → documents), `full_text`, `page_boundaries` (jsonb), `char_count`, parse-cache stamps `parsed_content_hash` / `parse_backend` / `parse_model` (nullable; see the parse stage) | Python migration script |
-| `document_summaries` | Per-language summaries (long/short). | `(document_id, language, kind)` composite PK, `text`, `source` | Python migration script |
-| `document_chunks` | Retrieval units (text chunks + embeddings). One row per chunk or summary node. | `id` (uuid PK), `document_id` (FK), `legacy_chunk_id` (unique, e.g. `2021_doc_chunk_0`), `chunk_index`, `unit_type` (`text`\|`summary`), `text`, `node_metadata` (jsonb, full legacy metadata verbatim), `embedding` (vector), `embedding_model`, `dimension`, `sparse` (sparsevec — BM25 impact vectors, the live keyword lane; populated by `scripts/build_sparse_keyword.py` backfill and the worker embed stage), `corpus_order` | Python migration script |
+| `documents` | One row per document. System of record. | `id` (uuid PK), `external_id` (unique, legacy doc_id), `s3_key`, `title`, `language`, `languages[]`, `status`, `source_metadata` (jsonb) — full column-by-column inventory in §13 | App tier + ingestion worker (two writer) |
+| `document_texts` | Full extracted text per document (for query-time passage context). | `document_id` (PK, FK → documents), `full_text`, `page_boundaries` (jsonb), `char_count`, parse-cache stamps `parsed_content_hash` / `parse_backend` / `parse_model` (nullable; see the parse stage) | Worker (parse stage, `batch_ocr.py`) |
+| `document_summaries` | Per-language summaries (long/short). | `(document_id, language, kind)` composite PK, `text`, `source`, `model_version` | Migration script (CSV seed) + worker (summarize stage) |
+| `document_chunks` | Retrieval units (text chunks + embeddings). One row per chunk or summary node. | `id` (uuid PK), `document_id` (FK), `legacy_chunk_id` (unique, e.g. `2021_doc_chunk_0`), `chunk_index`, `unit_type` (`text`\|`summary`), `text`, `node_metadata` (jsonb, full legacy metadata verbatim), `embedding` (vector), `embedding_model`, `dimension`, `sparse` (sparsevec — BM25 impact vectors, the live keyword lane; populated by `scripts/build_sparse_keyword.py` backfill and the worker embed stage), `corpus_order` | Worker (embed stage) + backfill scripts |
 | `tags` | Controlled vocabulary. Taxonomy v1. | `id` (uuid PK), `facet`, `value_id`, `taxonomy_version` | App tier / migration script |
 | `document_tags` | Many-to-many docs↔tags with provenance. | `(document_id, tag_id)` composite PK, `source`, `confidence`, `status` | App tier / migration script |
 | `collections` | Curatorial containers. | `id`, `name`, `slug` (unique), `language_policy` (jsonb), `embedding_model_version` | App tier / migration script |
@@ -76,6 +76,7 @@ Notable DDL details:
 - HNSW indexes on `document_chunks.embedding` — two partial indexes, one per model (`WHERE embedding_model = 'text-embedding-3-small'` and, since migration `1783454000000`, `WHERE embedding_model = 'cohere-embed-v4'`) so both models coexist through the embed cutover window; `ef_search` set to 1000 at query time for near-exact recall at this corpus size. Migration `1784815300000` retires the 3-small index, but **conditionally**: it drops only where the corpus holds zero `text-embedding-3-small` rows and otherwise no-ops with a `NOTICE`. qa completed the cohere cutover 2026-07-23 and drops it; production has NOT cut over and keeps it, since an unconditional drop there would strip the index serving its live dense lane. Re-running after the production cutover completes the retirement.
 - Index on `document_chunks.corpus_order` for efficient ordered boot load.
 - No entity maps `document_chunks` or `document_texts` — vector columns are not TypeORM-native; DDL lives in the migration only.
+- `document_chunks` declares `unit_number`, `section_path`, `caption` and `structured` (all nullable). Nothing writes them — they were speculative columns in the initial migration, always NULL. `page` and `node_metadata` carry the real per-chunk locality.
 
 ---
 
@@ -115,7 +116,7 @@ Both backends serve the same frozen `/query` contract (`QueryRequest`/`QueryResp
 
 `CATALOG_SOURCE=postgres` (app tier, the default) switches `/api/catalog` from reading the CSV to reading Postgres.
 
-**Catalog payload (issues #305/#306, 2026-07-29).** Each item keeps the legacy CSV envelope `{file_path, metadata: <json string>, summary}` for backward compatibility, and adds `meta.dms` — the first-class `documents` columns (`title`, `title_en`, `authors`, `year_published`, `date_published`, `publication_title`, `article_type`, `wri_primary_office`, `doi`, `url`, `language`, `languages`) plus the English `long`/`short` rows from `document_summaries`. **`meta.dms` is authoritative; `meta.metadata` is a frozen import artefact.** The research UI reads it through `normalizeCatalogRow` → `CatalogRow` in `src/app/utils/utils.tsx`, and `buildCatalogIndex` keys documents by `external_id` so `matchCatalogRow` matches `/query`'s `metadata.doc_id` exactly instead of guessing from filenames and titles.
+**Catalog payload (issues #305/#306, 2026-07-29).** Each item keeps the legacy CSV envelope `{file_path, metadata: <json string>, summary}` for backward compatibility, and adds `meta.dms` — 16 keys (`src/db/queries/getCatalogItems.ts`): `doc_id` (= `external_id`), the twelve first-class `documents` columns (`title`, `title_en`, `authors`, `year_published`, `date_published`, `publication_title`, `article_type`, `wri_primary_office`, `doi`, `url`, `language`, `languages`), and three summary fields — `summary_en`, `summary_native`, `short_summary_en` from `document_summaries`, with `meta.summary`/`short_summary` (CSV) as fallback. See §13.8 for which surface to read when. **`meta.dms` is authoritative; `meta.metadata` is a CSV-import artefact that ingest never maintains.** The research UI reads it through `normalizeCatalogRow` → `CatalogRow` in `src/app/utils/utils.tsx`, and `buildCatalogIndex` keys documents by `external_id` so `matchCatalogRow` matches `/query`'s `metadata.doc_id` exactly instead of guessing from filenames and titles.
 
 This matters because `document_chunks.node_metadata` — and therefore every field `/query` returns — is built from `source_metadata` at embed time (`worker/stages/embed.py`). For worker-ingested documents that jsonb is sparse or absent, which is why the UI rendered "Unknown author", blank years and blank summaries; and where it does exist it is stale (pre-#303 bilingual titles, and three English documents whose CSV `languages` says `Chinese`). Any new UI metadata field must come from `meta.dms`, never from `meta.metadata` and never from the `/query` chunk metadata. `meta.dms.url` is deliberately NOT wired into `urlFrom` — it is the publication's landing page, while the Open-document and preview-iframe consumers need the in-app `/api/pdf` route.
 
@@ -147,7 +148,7 @@ Seeded by `search-service/scripts/migrate_csv_to_postgres.py` from the legacy CS
 
 All seeded tags have `source='external'`, `status='accepted'`, `confidence=1.0`, `taxonomy_version='v1'`. Tag values are the raw CSV strings (not normalized). Deduplication is by `(facet, value_id, taxonomy_version)` unique constraint; one tag row per unique value, shared across documents.
 
-Phase 1 will add LLM-based classification and may normalize/re-seed tag values.
+**Two facets are not CSV-seeded** and are absent from the table above: `topic` is now a curated tree with aliases and descriptions (seeded from the WRI keyword file, managed in the admin UI — [admin-guide.md](admin-guide.md) §2), and `geography` (7 continents + 195 countries as a `parent_tag_id` tree, migration `1787251200000`) is classify-only. Canonical facet list and the `topic`/`geography` retrieve-then-classify split: `src/app/admin/tags/page.tsx:23` and `search-service/worker/stages/embed_tags.py` (`EMBEDDED_FACETS`). Phase 1 did ship LLM classification (`source='llm'`, §10.4); tag values are still not normalized.
 
 ---
 
@@ -155,7 +156,7 @@ Phase 1 will add LLM-based classification and may normalize/re-seed tag values.
 
 ### Language coverage
 
-The corpus contains 169 documents. Language distribution from the migration (as mapped by `LANGUAGE_MAP` in the migration script):
+At migration time (2026-06) the corpus was 169 documents — it has grown since (201 searchable on QA as of 2026-09-10, see the author-format section), so treat the counts below as a snapshot of the CSV import, not a live figure. Language distribution from the migration (as mapped by `LANGUAGE_MAP` in the migration script):
 
 | Language | Code | Count |
 |---|---|---|
@@ -363,7 +364,7 @@ cd search-service && ./venv/bin/python -m scripts.batch_ocr --resume-job <id> --
 
 ### 10.7 Taxonomy human-gate note
 
-Taxonomy v1 is the raw 18 CSV values seeded in Phase 0. A domain owner should curate facets and values before auto-tags are fully trusted in production. Until that curation happens, the `TAG_CONFIDENCE_ACCEPT=0.7` threshold governs which LLM tags are `accepted` vs `suggested`. `suggested` tags are stored but excluded from the default retrieval tag filter.
+Taxonomy v1 started as the raw 18 CSV values seeded in Phase 0 (the `topic` facet is now a managed tree — [admin-guide.md](admin-guide.md) §2, and `geography` sits alongside it). A domain owner should curate facets and values before auto-tags are fully trusted in production. Until that curation happens, the `TAG_CONFIDENCE_ACCEPT=0.7` threshold governs which LLM tags are `accepted` vs `suggested`. `suggested` tags are stored but excluded from the default retrieval tag filter.
 
 ### 10.8 Deploy
 
@@ -586,6 +587,196 @@ Worker (Python) inserts `source='system', status='suggested'` rows only. App tie
 (Node) owns confirm/reject/flip/unlink/manual-create and the review UI. Same
 two-writer precedence as `document_tags`; the worker never touches human-reviewed
 rows.
+
+## 13. Metadata inventory
+
+Every metadata field the DMS collects, where it comes from, and who may write it.
+The rest of this doc explains *behaviour*; this is the lookup table. Sources of
+truth, in order: `src/db/migrations/` (DDL), `src/db/entities/Document.entity.ts`
+(columns), `src/lib/metadataProvenance.ts` (provenance keys),
+`search-service/worker/stages/*` (what ingest writes).
+
+### 13.1 `documents` — the system of record
+
+**Bibliographic fields** (the twelve in catalog `meta.dms`, §13.8):
+
+| Column | Written by | Provenance guard | Admin-editable |
+|---|---|---|---|
+| `title` | parse (LLM); CSV import; admin. S3 intake seeds the filename stem until parse overwrites it | yes | yes |
+| `title_en` | parse (LLM, same call as `title`); summarize (fallback only, when still blank); CSV import; admin | yes | yes |
+| `authors` | parse (LLM, `Family, Given` semicolon-delimited, Latin-script); CSV import (tidied — see *Author name format* below); admin | yes | yes |
+| `doi` | parse (DOI regex over the text wins over the LLM); CSV import; admin | yes | yes |
+| `year_published` | parse (LLM); CSV import; admin | yes | yes |
+| `article_type` | parse (LLM); CSV import; admin | yes | yes |
+| `wri_primary_office` | parse (LLM); CSV import; admin. Also seeds the `office` tag facet (§6) | yes | yes |
+| `publication_title` | CSV import; admin. **Never extracted from the PDF** | n/a (no LLM writer) | yes |
+| `url` | CSV import; admin. **Never extracted from the PDF** | n/a | yes |
+| `date_published` | CSV import; admin. **Never extracted from the PDF** | n/a | yes |
+| `language` | language stage (langdetect, head/middle/late voting); CSV import; admin | **no** — the stage overwrites unconditionally (see §13.10) | yes |
+| `languages` (text[]) | language stage (merges detected into the existing set, never shrinks); CSV import | **no** | no |
+
+**Operational fields:**
+
+| Column | Written by | Notes |
+|---|---|---|
+| `id` | DB default (`uuid_generate_v4`) | uuid PK |
+| `external_id` | S3 intake (filename stem); CSV import (`external_id` column, else derived from `file_path`) | unique; this is the legacy `doc_id` and `/query`'s `metadata.doc_id` |
+| `s3_key` | S3 intake (`DOCUMENTS_S3_PREFIX` + filename); CSV import | not the CSV `file_path` — that lives in `source_metadata` |
+| `content_hash` | S3 intake only (SHA-256 of the bytes); CSV-imported rows keep it NULL | unique partial index; drives intake dedup and the parse cache (a NULL hash is always a cache miss) |
+| `status` | `draft` (intake) → `processing` (parse) → `needs_review` (publish) → `searchable` (admin promote, or publish restore for a re-ingested previously-searchable doc); `withdrawn` (admin only, never overwritten by the worker) | §10.5 |
+| `extraction_confidence` | publish stage only: `0.4·density + 0.3·(language supported) + 0.3·(chunks>0)` | numeric 0–1 |
+| `source_metadata` | CSV import only; never written by the worker | §13.3 |
+| `metadata_source` | import (`external`), admin (`human`), parse/summarize (`llm`) | §13.2 |
+| `created_at`, `updated_at` | DB | every worker stage that updates `documents` sets `updated_at = now()` explicitly |
+
+### 13.2 `documents.metadata_source` — provenance
+
+A jsonb map `{ <snake_case column>: 'human' | 'external' | 'llm' }`. A missing key
+means "no recorded provenance" and is treated as overwritable. Canonical key set
+(`src/lib/metadataProvenance.ts`, `PROVENANCE_KEY`):
+
+`title`, `title_en`, `doi`, `language`, `languages`, `year_published`,
+`publication_title`, `article_type`, `wri_primary_office`, `authors`, `url`,
+`date_published`.
+
+One key rides the same map without being a column: **`authors_format`** — set to
+`'unverified'` by CSV import when an author name had no comma, cleared by a human
+authors edit (see the author-format appendix). Node writers must key through
+`PROVENANCE_KEY`; the Python worker writes snake_case column names directly.
+
+| Value | Meaning | Overwritten by the worker? |
+|---|---|---|
+| absent | Nothing recorded — CSV-era rows, or a field never written | **yes** |
+| `external` | Imported from CSV | no; a later CSV import may change it |
+| `llm` | AI-extracted | **yes** — re-ingest is self-correcting |
+| `human` | Edited in the admin UI | never |
+
+The guard is implemented in exactly two places: the parse stage's
+`WHERE metadata_source->>'<field>' IS NULL OR = 'llm'` on each of its seven
+extracted fields (plus the pypdf-embedded-metadata fallback for `title`/
+`authors`), and the summarize stage's `title_en` fallback. Every overwrite that
+changes a value also writes an `audit_log` row with a real before/after.
+
+### 13.3 `documents.source_metadata` — the frozen import artefact
+
+Shape: `{ file_path, summary, metadata: { …raw CSV keys… } }`, written by
+`POST /api/import-documents` and never by the worker. The flat-CSV path rewrites
+it on every import (that format is overwrite-mode); the legacy JSON-blob path
+only fills it when it is still NULL. Either way it is never refreshed from the
+PDF.
+
+CSV key → column, for the legacy JSON-blob import (`mapRowToDocument`):
+
+| CSV key | Column |
+|---|---|
+| `Publication Title` | `title` (preferred) and `publication_title` |
+| `Article Title` | `title` (fallback when `Publication Title` is junk) |
+| `All authors` | `authors` |
+| `DOI` | `doi` |
+| `YEAR published` | `year_published` |
+| `article_type` | `article_type` |
+| `wri_primary_office` | `wri_primary_office` (and the `office` facet) |
+| `URL` | `url` |
+| `Date published` | `date_published` (`MM/DD/YYYY`) |
+| `languages` | `language` + `languages` via `LANGUAGE_MAP` |
+| `summary` / `short_summary` | `document_summaries` seed rows |
+| `wri_programs`, `Sub-tag` | `program` / `topic` tag facets (§6) |
+
+The flat-CSV path accepts the snake_case column names directly, with the five
+legacy human names above (`Article Title`, `Publication Title`, `All authors`,
+`YEAR published`, `Date published`) as aliases; it also round-trips a synthesized
+`metadata` map so `source_metadata` always has the same shape.
+
+**Treat it as read-only history.** It is stale wherever the worker has since
+extracted better values, and absent for every worker-ingested document (S3 intake
+writes no `source_metadata` at all). Its only live consumers are the catalog's
+back-compat `meta.metadata` string and `worker/stages/embed.py`, which reads it to
+build chunk metadata (§13.6) — which is why `/query` metadata stays stale for
+worker-ingested docs. New UI fields read `meta.dms`.
+
+### 13.4 `document_summaries` — summary metadata
+
+| Column | Values |
+|---|---|
+| `document_id`, `language`, `kind` | composite PK; `language` is a code (`en`, `zh`, `es`, `pt`, `id`), `kind` ∈ `long` \| `short` |
+| `text` | the summary |
+| `source` | `generated` (worker summarize), `external` (CSV seed), `human` (admin edit — protected from the worker) |
+| `model_version` | `WORKER_LLM_MODEL` at generation time (NULL for CSV-seeded rows) |
+
+No TypeORM entity — the app reads it in raw SQL (`getCatalogItems.ts`,
+`documentsAdmin.ts`); the worker is the only writer of `generated` rows.
+
+### 13.5 `document_texts` — parse artefacts
+
+| Column | Written by |
+|---|---|
+| `full_text`, `page_boundaries` (jsonb array), `char_count` | parse stage / `batch_ocr.py` |
+| `parsed_content_hash`, `parse_backend`, `parse_model` | parse stage — the cache stamps; a `+gs300` suffix marks a Ghostscript-shrunk OCR (see the parse row in §10.4) |
+
+### 13.6 `document_chunks.node_metadata` — what `/query` returns
+
+Built at embed time from `source_metadata`, not from the `documents` columns. Per
+text chunk: `doc_id`, `title`, `authors` (full), `year`, `subtag`,
+`program_series`, `url`, `file_path`, `chunk_id`, `chunk_index`, `total_chunks`,
+`page`, `chunk_start_pos`, `prev_chunk_id`, `next_chunk_id`. The summary node has
+the same keys plus `is_summary_node: true`, `chunk_index: -1`, `page: 1`.
+
+Consequences worth remembering: `title` prefers `Publication Title` over the
+`title` column, `url` falls back through `Source URL`/`URL`/`Attribution URL`, and
+for a worker-ingested document (no `source_metadata`) `authors`, `year`, `url` and
+`subtag` come back **empty**. Keep this strict column list when adding a field.
+
+### 13.7 Tags — facet metadata on a document
+
+`document_tags`: `(document_id, tag_id)` PK, `source` ∈ `human` \| `external` \|
+`llm`, `status` ∈ `accepted` \| `suggested` \| `rejected`, `confidence` (numeric,
+LLM rows), `model_version`, `created_at`. `tags`: `facet`, `value_id`,
+`taxonomy_version`, plus `parent_tag_id`/`description`/`needs_reembed` (topic
+taxonomy, admin-guide §2.1). Facets: `program`, `office`, `topic`, `doc_type`,
+`geography`.
+
+The worker writes `source='llm'` rows only and never touches `human`/`external`
+rows; accepting or rejecting a suggestion flips `source` to `human` (§11.6).
+
+The `office` and `program` facets duplicate `documents.wri_primary_office` (and
+`source_metadata.metadata.wri_programs`) as tag rows — that duplication is
+intentional history, not a second source of truth: the column is authoritative.
+
+### 13.8 Which surface to read
+
+| Surface | Contents | Use it when |
+|---|---|---|
+| catalog `meta.dms` | 16 keys, §5 | any research-UI field — this is the authoritative one |
+| `documents` (admin detail) | all 22 columns | admin/ops work, exports |
+| `/query` result `metadata` | `node_metadata`, §13.6 | citation rendering only — never for catalog fields |
+| catalog `meta.metadata` | raw `source_metadata.metadata` JSON string | back-compat only |
+
+### 13.9 Not collected
+
+Fields that look like they should be here and are not: `abstract` (dropped in
+migration `1781320000000`; live summaries are `document_summaries`), any
+page/section structure beyond `page` (`unit_number`, `section_path`, `caption`,
+`structured` are declared but never written), keywords/`wri_programs` beyond the
+`program` facet, and author affiliation or ORCID. `document_attributes` — the
+generic typed-attribute table that would hold them — stays deferred (design §20).
+
+### 13.10 Known gaps in the metadata pipeline
+
+Four asymmetries, stated so they don't read as bugs later:
+
+1. **`language` is not provenance-guarded.** The language stage overwrites it on
+every ingest; a `human` stamp on `language` is ignored there and is read only by
+`worker/relate.py` when choosing translation direction. An admin language fix does
+not survive a re-ingest.
+2. **No PDF extractor for `publication_title`, `date_published`, `url`.** A
+document ingested from a PDF alone (S3 intake) has all three NULL until a CSV
+import or a human fills them in.
+3. **`authors` is Latin-only by construction** — the extraction call transliterates
+and the native-script spelling is not retained.
+4. **`node_metadata` is built from `source_metadata`, not from the columns**, so
+`/query` metadata never benefits from a worker extraction (§13.6).
+
+---
 
 ## Author name format (issue #411)
 
