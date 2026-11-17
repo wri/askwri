@@ -13,6 +13,7 @@ import {
 } from '@/config/alignment'
 import { resolveAlignmentConfig } from '@/lib/alignment-config'
 import { isEnglishText } from '@/lib/ensure-english'
+import { requestProfile, wireParams } from '@/lib/request-profile'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
@@ -32,11 +33,6 @@ const FALLBACK_MODEL = (
 const BASE_URL = (
   process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
 ).replace(/\/$/, '')
-
-// The model-derived parameters live in `src/lib/alignment-config.ts`: this file
-// may export routes only, and Next's generated type guard fails the build over
-// any other export.
-type AlignmentConfig = ReturnType<typeof resolveAlignmentConfig>
 
 // This route answers 200 with a canned assessment on every failure, so
 // `produced: false` is what keeps a response no model authored from reading as
@@ -353,17 +349,10 @@ async function chatOnce(
 }
 
 /* ------------- Param router ------------- */
-// Both read the request's own config: which parameters a model accepts depends
-// on the model actually being asked, not on the route's default.
-function applyCap(body: any, cap: number, cfg: AlignmentConfig) {
-  if (cfg.isGpt5) body.max_completion_tokens = cap
-  else body.max_tokens = cap
-}
-function maybeTemperature(body: any, cfg: AlignmentConfig) {
-  if (!cfg.isGpt5 && Number.isFinite(cfg.temperature)) {
-    body.temperature = cfg.temperature
-  }
-}
+// Which parameters a model accepts depends on the model actually being
+// asked, not on the route's default: the token cap and the temperature come
+// from requestProfile as the exact wire fields, spread where today's
+// mutators inserted them so the body's key order is unchanged.
 
 /* ------------- Schema & Tools ------------- */
 const ALIGNMENT_SCHEMA = {
@@ -435,6 +424,18 @@ export async function POST(req: NextRequest) {
     }
     model = resolved.model
     const cfg = resolveAlignmentConfig(model)
+    const primary = requestProfile({
+      task: 'alignment',
+      model,
+      attempt: 'primary',
+      input: {},
+    })
+    const repair = requestProfile({
+      task: 'alignment',
+      model,
+      attempt: 'repair',
+      input: {},
+    })
 
     if (!query)
       return NextResponse.json(
@@ -471,11 +472,12 @@ export async function POST(req: NextRequest) {
     const userStr = resultsSummary
 
     const approxToks = estimateTokens(sys.length, userStr.length)
-    // Increase timeouts for GPT-5 models which are slower
-    const TIMEOUT_MAIN_MS = cfg.isGpt5
+    // Increase timeouts for GPT-5 models which are slower: the bases are
+    // scaled per request and clamped here, in the route.
+    const TIMEOUT_MAIN_MS = cfg.gpt5Class
       ? Math.min(60000, cfg.mainMs * 2 + approxToks * 15)
       : Math.min(35000, cfg.mainMs + approxToks * 12)
-    const TIMEOUT_REPAIR_MS = cfg.isGpt5
+    const TIMEOUT_REPAIR_MS = cfg.gpt5Class
       ? Math.min(50000, cfg.repairMs * 2 + approxToks * 12)
       : Math.min(30000, cfg.repairMs + approxToks * 10)
 
@@ -493,9 +495,8 @@ export async function POST(req: NextRequest) {
         { role: 'user', content: userStr },
       ],
       response_format: { type: 'json_schema', json_schema: ALIGNMENT_SCHEMA },
+      ...wireParams(primary),
     }
-    applyCap(bodySchema, cfg.mainMax, cfg)
-    maybeTemperature(bodySchema, cfg)
     let t
     try {
       t = await chatOnce(apiKey, bodySchema, TIMEOUT_MAIN_MS, 'json_schema')
@@ -555,9 +556,8 @@ export async function POST(req: NextRequest) {
         ],
         tools: TOOL_DEF,
         tool_choice: { type: 'function', function: { name: 'set_assessment' } },
+        ...wireParams(primary),
       }
-      applyCap(bodyTools, cfg.mainMax, cfg)
-      maybeTemperature(bodyTools, cfg)
       try {
         t = await chatOnce(apiKey, bodyTools, TIMEOUT_MAIN_MS, 'tools')
       } catch (err: any) {
@@ -602,9 +602,8 @@ export async function POST(req: NextRequest) {
         { role: 'user', content: userStr },
       ],
       response_format: { type: 'json_object' },
+      ...wireParams(repair),
     }
-    applyCap(bodyObject, cfg.repairMax, cfg)
-    maybeTemperature(bodyObject, cfg)
     try {
       t = await chatOnce(apiKey, bodyObject, TIMEOUT_REPAIR_MS, 'json_object')
     } catch (err: any) {

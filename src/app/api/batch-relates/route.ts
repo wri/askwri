@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isEnglishText } from '@/lib/ensure-english'
+import { requestProfile, wireParams } from '@/lib/request-profile'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
@@ -15,7 +16,6 @@ const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL ??
   'gpt-4o-mini'
 ).trim()
-const TEMP = Number(process.env.OPENAI_TEMPERATURE ?? 0.2)
 
 // This route answers 200 with canned sentences on every failure, so
 // `produced: false` is what keeps a response no model authored from reading as
@@ -148,9 +148,12 @@ export async function POST(req: NextRequest) {
     // Token allocation: ~100 tokens per doc for output. GPT-5 spends reasoning
     // tokens out of the same budget, so it gets the larger floor — sized from the
     // model actually being asked, not the route's default.
-    const outputTokens = resolved.isGpt5
-      ? Math.max(1000, docs.length * 120)
-      : Math.min(docs.length * 120, 4000)
+    const profile = requestProfile({
+      task: 'relates',
+      model,
+      attempt: 'primary',
+      input: { documents: docs.length },
+    })
 
     const payload: any = {
       model,
@@ -158,9 +161,7 @@ export async function POST(req: NextRequest) {
         { role: 'system', content: SYS },
         { role: 'user', content: userContent },
       ],
-      ...(resolved.isGpt5
-        ? { max_completion_tokens: outputTokens }
-        : { max_tokens: outputTokens, temperature: TEMP }),
+      ...wireParams(profile),
     }
 
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
