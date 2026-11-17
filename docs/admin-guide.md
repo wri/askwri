@@ -21,25 +21,30 @@ Three tiers share one RDS Postgres:
 
 | Tier | Stack | Owns (writes) |
 |---|---|---|
-| Web app + admin | `src/` (Next.js 16 App Router, TypeORM 0.3) | `documents`, `document_summaries`, `tags`, `tag_aliases`, `document_tags`, `collections`, `document_collections`, `ingestion_jobs`, `reclassify_jobs`, `users`, `audit_log` |
-| Retrieval + ingestion worker | `search-service/` (FastAPI + LlamaIndex, Python 3.12) | `document_chunks`, `document_texts`, `keyword_vocab`, `tag_embeddings` (pgvector, raw SQL — no TypeORM entity) |
+| Web app + admin | `src/` (Next.js 16 App Router, TypeORM 0.3) | `documents`, `document_summaries` (seed/edited rows), `tags`, `tag_aliases`, `document_tags`, `collections`, `document_collections`, `ingestion_jobs`, `reclassify_jobs`, `users`, `audit_log` |
+| Retrieval + ingestion worker | `search-service/` (FastAPI + LlamaIndex, Python 3.12) | `document_chunks`, `document_texts`, `document_summaries` (generated rows), `keyword_vocab`, `search_vocab`, `tag_embeddings` (pgvector, raw SQL — no TypeORM entity) |
 | Eval harness | `evaluation/` (tsx) | read-only over the public QA gateway |
 
 **Two-writer boundary (per CLAUDE.md):** the app tier never calls Bedrock and
 never writes `tag_embeddings`; the worker never uses the app's TypeORM
-entities. Tables with two writers (`documents`, `document_tags`,
-`ingestion_jobs`, `audit_log`) are coordinated by precedence invariants — the
-worker writes `document_tags` only with `source='llm'`; `human`/`external` rows
-are protected and never overwritten by automation.
+entities. Tables with two writers (`documents`, `document_summaries`,
+`document_tags`, `ingestion_jobs`, `audit_log`) are coordinated by precedence
+invariants — the worker writes `document_tags` only with `source='llm'`;
+`human`/`external` rows are protected and never overwritten by automation.
+Field-level metadata provenance (`documents.metadata_source`) and the full
+column-by-column inventory: [document-management.md](document-management.md) §13.
 
 ---
 
 ## 2. Tags, topics, and the taxonomy
 
 Tags are the controlled vocabulary, partitioned into facets: `program`,
-`office`, `topic`, `document_type`. Every tag row carries a `taxonomy_version`
+`office`, `topic`, `doc_type`, `geography` (`src/app/admin/tags/page.tsx`,
+`src/db/queries/tagsAdmin.ts`). Every tag row carries a `taxonomy_version`
 (currently `v1`); the Topic facet is the first to get a full management surface
-(issue #323).
+(issue #323). `topic` and `geography` are classified retrieve-then-classify off
+embedded candidates; `program`, `office` and `doc_type` use the full-enum path
+(`search-service/worker/stages/classify.py`).
 
 ### 2.1 Data model
 
@@ -60,7 +65,8 @@ Tags are the controlled vocabulary, partitioned into facets: `program`,
   (`reclassify_jobs_one_open_per_doc`, `status IN ('queued','running')`) makes
   enqueue idempotent — one open job per document.
 - **`document_tags`** — assignments; `source` ∈ `{human, external, llm}`,
-  `status` ∈ `{accepted, suggested}`.
+  `status` ∈ `{accepted, suggested, rejected}`, `confidence` (numeric, LLM
+  rows), `model_version`.
 
 Migration `1787160000000-TopicTaxonomy.ts` creates all of the above. See §4
 for the deploy caveat that just bit QA.
@@ -246,7 +252,9 @@ checkout.
 
 ## 6. See also
 
-- [document-management.md](document-management.md) — Phases 0–2 as-built.
+- [document-management.md](document-management.md) — Phases 0–2 as-built;
+  §13 is the metadata inventory (every field ingest collects, its provenance
+  and its writers).
 - [runbooks/qa-push-deploy.md](runbooks/qa-push-deploy.md) — deploy ordering.
 - [runbooks/local-testing.md](runbooks/local-testing.md) — local stack.
 - [runbooks/phase0-cutover.md](runbooks/phase0-cutover.md) — RDS preflight.
