@@ -76,7 +76,6 @@ export function requestProfile(args: {
   input: {
     passages?: number // why
     documents?: number // relates
-    approxTokens?: number // alignment's timeout ladder, which stays in the route this stage
   }
 }): RequestProfile {
   const { task, model, attempt, input } = args

@@ -163,7 +163,7 @@ describe('POST /api/alignment — the timeout ladder scales the bases and clamps
   }
 
   const approxToks = (summary: string) =>
-    Math.ceil((ALIGNMENT_SYSTEM_PROMPT.length + summary.trim().length) / 4)
+    Math.ceil((ALIGNMENT_SYSTEM_PROMPT.length + summary.length) / 4)
 
   it('a small non-GPT-5 prompt gets the base scaled by the prompt, not the bare base', async () => {
     process.env.OPENAI_MODEL = 'gpt-4o-mini'

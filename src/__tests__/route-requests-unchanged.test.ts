@@ -612,6 +612,42 @@ describe('POST /api/batch-why — raw request bytes', () => {
       whyBody('o1-mini', TWO_PASSAGES, { max_completion_tokens: 360 }, true),
     ])
   })
+
+  it('an unregistered non-o1/non-gpt-4o id via the eval override: today\u2019s final else arm (max_tokens + 0.3)', async () => {
+    // Captured on the pre-change tree (27543fe): the fallback arm inside
+    // requestProfile must keep reproducing these bytes for ids the registry
+    // does not know.
+    process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
+    await post(
+      'batch-why',
+      { query: WHY_QUERY, passages: TWO_PASSAGES, model: 'glm-5.2-vision' },
+      { 'x-eval-token': 'secret' },
+    )
+    expectRawBodies([
+      whyBody('glm-5.2-vision', TWO_PASSAGES, {
+        max_tokens: 360,
+        temperature: 0.3,
+      }),
+    ])
+  })
+
+  it('a registered gpt-6 candidate via the eval override: the registry path pins the same arm', async () => {
+    // Captured on the pre-change tree (27543fe), where gpt-6-luna was just an
+    // unregistered id: the registry's candidate capability must keep these
+    // bytes identical now that the id is known.
+    process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
+    await post(
+      'batch-why',
+      { query: WHY_QUERY, passages: TWO_PASSAGES, model: 'gpt-6-luna' },
+      { 'x-eval-token': 'secret' },
+    )
+    expectRawBodies([
+      whyBody('gpt-6-luna', TWO_PASSAGES, {
+        max_tokens: 360,
+        temperature: 0.3,
+      }),
+    ])
+  })
 })
 
 /* ---------------- POST /api/batch-relates ---------------- */
