@@ -22,8 +22,8 @@ rewritten from. Every finding it lists is either fixed here or the reason it is 
 - **The bar is the gate.** Per job: probe ✓ at that job's effort; a sweep with zero failed checks on
   that job's routes and zero substitutions; every output length matching the input count; p95 under 60%
   of that job's configured deadline; cost within 20% of the incumbent's; a human read of the readout.
-- **Nothing may flip before Task 4 lands.** Cost figures from the old tables are numbers about a
-  different model.
+- **Nothing may flip before Tasks 4 and 4b land.** Cost figures from the old tables are numbers about a
+  different model. Task 4b landed in `c8529c3`; it is a precondition, not a step to repeat.
 - **Run gates with `.env` moved aside** (`mv .env /tmp/x && … && mv /tmp/x .env`): with it present the DB
   suites stop skipping and fail against RDS. CI has no `.env`. Exception: `npm run probe:models` reads it.
 - **`npx next build --webpack` fails once** with Next's own `SecurityFatalError` and passes on retry. Never
@@ -339,8 +339,8 @@ git commit -m "docs(evaluation): first live route sweep on QA, incumbents"
 
 ### Task 6: Flip one job at a time
 
-Five flips, in this order, each its own PR. Requirements per flip: Tasks 2–3 deployed to QA, and the
-job's own sweep clean.
+Five flips, in this order, each its own PR. Requirements per flip: Tasks 2–3 and 4b deployed to QA, and
+the job's own sweep clean.
 
 **The gate, per flip (all three parts recorded in the PR):**
 
