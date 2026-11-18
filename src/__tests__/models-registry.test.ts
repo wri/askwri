@@ -179,9 +179,11 @@ describe('the reasoning arm (design §3)', () => {
   })
 
   it('takes the effort the design maps to the task, not one the caller picks', () => {
+    // `low`, not the design's `medium`: operator ruling 2026-11-18, latency first.
+    // Probed: effort moved alignment latency far less than the model did.
     expect(profile('alignment', 'gpt-6.1-terra')).toMatchObject({
       maxCompletionTokens: 4000,
-      reasoningEffort: 'medium',
+      reasoningEffort: 'low',
     })
     expect(profile('why', 'gpt-6-luna')).toMatchObject({
       reasoningEffort: 'none',

@@ -200,7 +200,9 @@ export const TASK_EFFORT: Record<TaskId, Effort> = {
   prefilter: 'none',
   why: 'none',
   relates: 'none',
-  alignment: 'medium',
+  // `low`, not the design's `medium` (operator ruling 2026-11-18, latency first):
+  // probed on Luna and Terra, effort moved alignment latency less than the model did.
+  alignment: 'low',
   translate: 'none',
 }
 
