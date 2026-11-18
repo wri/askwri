@@ -105,10 +105,13 @@ describe('POST /api/answer — defaults reproduce current behaviour', () => {
       })
       expect(out.ok).toBe(true)
       expect(out.passages_sent).toHaveLength(15)
+      // `low` plus the fast tier (operator ruling 2026-11-18, latency first). The
+      // tier reaching the body proves SynthesisConfig carries it from the profile.
       expect(sentBody()).toMatchObject({
         model: 'gpt-6.1-sol',
-        reasoning_effort: 'medium',
+        reasoning_effort: 'low',
         max_completion_tokens: 2000,
+        service_tier: 'fast',
       })
       expect(sentBody().temperature).toBeUndefined()
     },

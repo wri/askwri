@@ -170,7 +170,7 @@ function answerBody(
   sys: string,
   count: number,
   chars: number,
-  params: Record<string, number>,
+  params: Record<string, number | string>,
 ) {
   return JSON.stringify({
     model,
@@ -208,9 +208,16 @@ function nanoUser(count: number, chars: number) {
   return `Question: What?\n\nPassages (presented in random order):\n${entries.join('\n\n')}`
 }
 
+// The default answer arm (flip 5): gpt-6.1-terra at low effort on the fast tier.
+const TERRA_ANSWER = {
+  reasoning_effort: 'low',
+  max_completion_tokens: 2000,
+  service_tier: 'fast',
+}
+
 function nanoBody(
   model: string,
-  params: Record<string, number>,
+  params: Record<string, number | string>,
   count = 8,
   chars = 800,
 ) {
@@ -451,13 +458,9 @@ function translateBody(model: string, params: Record<string, number>) {
 /* ---------------- POST /api/answer ---------------- */
 
 describe('POST /api/answer — raw request bytes', () => {
-  it('default arm (prefilter off): one gpt-5.4-mini call, 15×800 evidence budget', async () => {
+  it('default arm (prefilter off): one gpt-6.1-terra call, 15×800 evidence budget', async () => {
     await post('answer', { query: 'What?', docs: docs(8) })
-    expectRawBodies([
-      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
-        max_completion_tokens: 2000,
-      }),
-    ])
+    expectRawBodies([answerBody('gpt-6.1-terra', SYS_V2, 8, 800, TERRA_ANSWER)])
   })
 
   it('16 documents are capped at the 15-passage default budget', async () => {
@@ -475,20 +478,12 @@ describe('POST /api/answer — raw request bytes', () => {
       docs: docs(8),
       prompt_version: 'v1',
     })
-    expectRawBodies([
-      answerBody('gpt-5.4-mini', SYS_V1, 8, 800, {
-        max_completion_tokens: 2000,
-      }),
-    ])
+    expectRawBodies([answerBody('gpt-6.1-terra', SYS_V1, 8, 800, TERRA_ANSWER)])
   })
 
   it('an explicit max_passages override shrinks the evidence list', async () => {
     await post('answer', { query: 'What?', docs: docs(8), max_passages: 3 })
-    expectRawBodies([
-      answerBody('gpt-5.4-mini', SYS_V2, 3, 800, {
-        max_completion_tokens: 2000,
-      }),
-    ])
+    expectRawBodies([answerBody('gpt-6.1-terra', SYS_V2, 3, 800, TERRA_ANSWER)])
   })
 
   it('the non-GPT-5 arm via body.model: 6×350 evidence, max_tokens + temperature', async () => {
@@ -512,7 +507,7 @@ describe('POST /api/answer — raw request bytes', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0.999999999)
     fetchMock.mockImplementation(async (_url: unknown, init: RequestInit) => {
       const body = JSON.parse(init.body as string)
-      return body.model === 'gpt-5.4-nano'
+      return body.model === 'gpt-6-luna'
         ? chatReply(
             JSON.stringify({
               relevance: Array.from({ length: 8 }, (_, i) => ({
@@ -526,10 +521,11 @@ describe('POST /api/answer — raw request bytes', () => {
     })
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
-      nanoBody('gpt-5.4-nano', { max_completion_tokens: 500 }),
-      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
-        max_completion_tokens: 2000,
+      nanoBody('gpt-6-luna', {
+        reasoning_effort: 'none',
+        max_completion_tokens: 500,
       }),
+      answerBody('gpt-6.1-terra', SYS_V2, 8, 800, TERRA_ANSWER),
     ])
   })
 
@@ -538,16 +534,17 @@ describe('POST /api/answer — raw request bytes', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0.999999999)
     fetchMock.mockImplementation(async (_url: unknown, init: RequestInit) => {
       const body = JSON.parse(init.body as string)
-      return body.model === 'gpt-5.4-nano'
+      return body.model === 'gpt-6-luna'
         ? chatReply('upstream error', 500)
         : chatReply(JSON.stringify({ sentences: [{ text: 'A.', cites: [1] }] }))
     })
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
-      nanoBody('gpt-5.4-nano', { max_completion_tokens: 500 }),
-      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
-        max_completion_tokens: 2000,
+      nanoBody('gpt-6-luna', {
+        reasoning_effort: 'none',
+        max_completion_tokens: 500,
       }),
+      answerBody('gpt-6.1-terra', SYS_V2, 8, 800, TERRA_ANSWER),
     ])
   })
 
@@ -572,9 +569,7 @@ describe('POST /api/answer — raw request bytes', () => {
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
       nanoBody('gpt-4o-mini', { max_tokens: 500, temperature: 0.1 }),
-      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
-        max_completion_tokens: 2000,
-      }),
+      answerBody('gpt-6.1-terra', SYS_V2, 8, 800, TERRA_ANSWER),
     ])
   })
 })

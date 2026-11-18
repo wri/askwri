@@ -35,8 +35,8 @@ describe('model registry', () => {
     // Measured 2026-11-18 on image 6ad67fc, one unoverridden request per route.
     // A flip edits one row here and its route's line in ASSIGNMENT, together.
     expect(ASSIGNMENT).toEqual({
-      answer: 'gpt-5.4-mini',
-      prefilter: 'gpt-5.4-nano', // unobservable while USE_NANO_FILTER is off
+      answer: 'gpt-6.1-terra', // flip 5: low effort, fast tier; fastest in the answer read (2.1 s), precise cites
+      prefilter: 'gpt-6-luna', // off the retired 5.4 id; unobservable while USE_NANO_FILTER is off
       why: 'gpt-6-luna', // flip 2: p95 6.5 s with fast mode, 0 of 10 failed
       relates: 'gpt-6-luna', // flip 3: p95 7.1 s, 0 of 10 failed
       alignment: 'gpt-6.1-terra', // flip 4: p95 3.3 s with fast mode at low, parity with luna, sharper
@@ -189,11 +189,14 @@ describe('the reasoning arm (design §3)', () => {
   it('keeps the answer evidence budget for a candidate, never the smaller arm', () => {
     // The failure this exists to prevent: a GPT-6 id matching no family branch
     // and inheriting 6 passages x 350 chars — a sixth of the evidence.
+    // `low` with the fast tier (operator ruling 2026-11-18, latency first): the
+    // answer read showed effort bought nothing on this fixture.
     expect(profile('answer', 'gpt-6.1-sol')).toEqual({
       maxCompletionTokens: 2000,
       maxPassages: 15,
       passageChars: 800,
-      reasoningEffort: 'medium',
+      reasoningEffort: 'low',
+      serviceTier: 'fast',
     })
   })
 
@@ -206,10 +209,11 @@ describe('the reasoning arm (design §3)', () => {
   // Fast mode (operator ruling 2026-11-18, latency first): probed on luna and
   // terra, it cut batch-why 30-54% and alignment 18-48%. Only the reasoning arm
   // sends it: the incumbents were never probed with a service_tier.
-  it('puts fast mode on the wire for batch-why and alignment candidates', () => {
+  it('puts fast mode on the wire for batch-why, alignment and answer candidates', () => {
     for (const [task, model] of [
       ['why', 'gpt-6-luna'],
       ['alignment', 'gpt-6.1-terra'],
+      ['answer', 'gpt-6.1-terra'],
     ] as const) {
       expect(wireParams(profile(task, model))).toMatchObject({
         service_tier: 'fast',
@@ -218,7 +222,7 @@ describe('the reasoning arm (design §3)', () => {
   })
 
   it('leaves fast mode off the tasks it was not asked for', () => {
-    for (const task of ['translate', 'relates', 'answer', 'prefilter']) {
+    for (const task of ['translate', 'relates', 'prefilter']) {
       expect(wireParams(profile(task, 'gpt-6-luna'))).not.toHaveProperty(
         'service_tier',
       )
@@ -226,7 +230,7 @@ describe('the reasoning arm (design §3)', () => {
   })
 
   it('never sends fast mode to an incumbent, whatever the task', () => {
-    for (const task of ['why', 'alignment']) {
+    for (const task of ['why', 'alignment', 'answer']) {
       expect(wireParams(profile(task, 'gpt-5.4-nano'))).not.toHaveProperty(
         'service_tier',
       )

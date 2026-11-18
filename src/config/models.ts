@@ -170,8 +170,8 @@ export const ASSIGNMENT: Record<TaskId, ModelId> = {
   // Measured, not read off the code: `handoffs/2026-11-18-qa-baseline-models.md`
   // records one unoverridden request per route against QA image 6ad67fc. Five of
   // these rows used to hold a code default that production never ran.
-  answer: 'gpt-5.4-mini',
-  prefilter: 'gpt-5.4-nano', // unobservable: USE_NANO_FILTER is off on QA
+  answer: 'gpt-6.1-terra', // flip 5, 2026-11-18: low effort, fast tier
+  prefilter: 'gpt-6-luna', // off the retired 5.4 id; unobservable: USE_NANO_FILTER is off on QA
   why: 'gpt-6-luna', // flip 2, 2026-11-18
   relates: 'gpt-6-luna', // flip 3, 2026-11-18
   alignment: 'gpt-6.1-terra', // flip 4, 2026-11-18: at low effort with fast mode
@@ -196,7 +196,9 @@ export function canRunEffort(model: string, effort: Effort): boolean {
 /** The effort each task runs at when its model is a reasoning model (design §2).
  *  Effort belongs to the TASK: an override inherits it rather than choosing one. */
 export const TASK_EFFORT: Record<TaskId, Effort> = {
-  answer: 'medium',
+  // `low`, not the design's `medium` (operator ruling 2026-11-18, latency first):
+  // on the answer read, effort bought no precision, and `medium` cost latency.
+  answer: 'low',
   prefilter: 'none',
   why: 'none',
   relates: 'none',
@@ -213,6 +215,8 @@ export const TASK_EFFORT: Record<TaskId, Effort> = {
 export const TASK_SERVICE_TIER: Partial<Record<TaskId, 'fast'>> = {
   why: 'fast',
   alignment: 'fast',
+  // Probed on the answer shape: terra 6.8 s -> 2.1 s, sol 7.0 s -> 3.3 s.
+  answer: 'fast',
 }
 
 /** The evidence budget, also the task's (design §1). Answer synthesis only: a
