@@ -1,5 +1,6 @@
 import { DocMeta, LlamaCloudDebug } from '@/lib/llamacloud'
 import { estimateCostUSD } from '@/config/costs'
+import { EMBEDDERS } from '@/config/models'
 import { estimateEnergyGCO2e } from '@/config/energy'
 import { Usage } from '../components/AnswerMode/types'
 
@@ -391,11 +392,13 @@ export const calculateEmbeddingCost = (
   // Only count the small embedding cost; alignment LLM cost is added later.
   const citeEmbeddingTokens = debug?.estimated_embedding_tokens ?? 50
   const citeEmbeddingCost =
+    // The embedder that actually writes rows, priced from the registry. This used
+    // to price an OpenAI model that no row here has ever been written by.
     estimateCostUSD({
-      model: 'openai/text-embedding-3-small',
+      model: EMBEDDERS.active,
       prompt_tokens: citeEmbeddingTokens,
       completion_tokens: 0,
-    }) ?? 0.001
+    }) ?? 0
   const citeEmbeddingEnergy =
     estimateEnergyGCO2e({
       model: 'text-embedding-3-small',

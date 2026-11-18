@@ -1,3 +1,5 @@
+import { MODELS, type ModelId } from '@/config/models'
+
 /**
  * Rough, configurable energy estimator for LLM calls (in gCO₂e).
  *
@@ -61,40 +63,46 @@ function strFromEnv(name: string, def: string): string {
 const DEFAULT_PROMPT_JPT = numFromEnv('ENERGY_JPT_PROMPT_DEFAULT', 1.0)
 const DEFAULT_COMPLETION_JPT = numFromEnv('ENERGY_JPT_COMPLETION_DEFAULT', 2.0)
 
-// --- Model-specific defaults (tune with real telemetry) ---
-// Keys are normalized (uppercased, non-alphanumeric -> underscores).
-const MODEL_DEFAULTS: Record<string, Factors> = {
-  // GPT‑5 class (Blackwell/B200-era): ~1.6× better perf/W than H100 mid-case
-  GPT_5: {
+// --- Tier defaults (tune with real telemetry) ---
+// Keyed by the registry's `tier` (design §4), so a model change moves the factors
+// with the model instead of silently keeping the last hardcoded family's.
+const TIER_FACTORS: Record<string, Factors> = {
+  // Flagship (GPT‑5 class, Blackwell/B200-era): ~1.6× better perf/W than H100
+  flagship: {
     promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_5', 0.6),
     completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_5', 1.4),
   },
 
-  // GPT‑4‑class (H100-era)
-  GPT_4O: {
+  // Balanced (GPT‑4‑class, H100-era)
+  balanced: {
     promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_4O', 1.0),
     completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_4O', 2.2),
   },
 
-  // Minis (~7–12B)
-  GPT_5_MINI: {
+  // Fast (minis, ~7–12B)
+  fast: {
     promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_5_MINI', 0.3),
     completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_5_MINI', 0.6),
   },
 
-  GPT_4O_MINI: {
+  // Volume
+  volume: {
     promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_4O_MINI', 0.35),
     completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_4O_MINI', 0.7),
   },
 }
 
-function normalizeModelKey(model: string): string {
-  return (model || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')
+function normalizeModelKey(v: string): string {
+  return (v || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')
 }
 
 function factorsForModel(model: string): Factors {
-  const key = normalizeModelKey(model || '')
-  if (key && MODEL_DEFAULTS[key]) return MODEL_DEFAULTS[key]
+  // Registry tier first: alignment stamps its usage `openai/<id>`.
+  const id = (model || '').replace(/^openai\//, '')
+  const tier = Object.prototype.hasOwnProperty.call(MODELS, id)
+    ? MODELS[id as ModelId].tier
+    : undefined
+  if (tier && TIER_FACTORS[tier]) return TIER_FACTORS[tier]
   return {
     promptJpt: DEFAULT_PROMPT_JPT,
     completionJpt: DEFAULT_COMPLETION_JPT,

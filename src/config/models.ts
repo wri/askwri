@@ -23,7 +23,11 @@ export type ModelId =
   | 'gpt-6.1-terra'
   | 'gpt-6-luna'
 
+export type ModelTier = 'flagship' | 'balanced' | 'fast' | 'volume'
+
 export interface ModelSpec {
+  /** Cost/energy class. `energy.ts` keys its factors on this (design §4). */
+  tier: ModelTier
   capability: {
     /** The gpt-5 completions contract: max_completion_tokens, no temperature,
      *  the gpt-5 budget and timeout ladders. Exactly today's /^gpt-5/i arm. */
@@ -47,6 +51,7 @@ export interface ModelSpec {
 
 export const MODELS: Record<ModelId, ModelSpec> = {
   'gpt-4o-mini': {
+    tier: 'fast',
     capability: {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
@@ -56,6 +61,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     price: { inputPer1M: 0.15, outputPer1M: 0.6 },
   },
   'gpt-5-mini': {
+    tier: 'fast',
     capability: {
       gpt5Class: true,
       acceptsMaxCompletionTokens: true,
@@ -65,6 +71,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     price: { inputPer1M: 0.25, outputPer1M: 2.0 },
   },
   'gpt-5.4': {
+    tier: 'flagship',
     capability: {
       gpt5Class: true,
       acceptsMaxCompletionTokens: true,
@@ -75,6 +82,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     // gpt-5-mini/gpt-5-nano); the pricing chore fills it in.
   },
   'gpt-5.4-mini': {
+    tier: 'balanced',
     capability: {
       gpt5Class: true,
       acceptsMaxCompletionTokens: true,
@@ -85,6 +93,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     price: { inputPer1M: 0.75, outputPer1M: 4.5 },
   },
   'gpt-5.4-nano': {
+    tier: 'volume',
     capability: {
       gpt5Class: true,
       acceptsMaxCompletionTokens: true,
@@ -99,6 +108,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
   // eval sweep naming one sends the same bytes as before the registry
   // existed. The swap stage re-seeds capability from probe evidence.
   'gpt-6-astra': {
+    tier: 'flagship',
     capability: {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
@@ -108,6 +118,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     price: { inputPer1M: 10, outputPer1M: 50 },
   },
   'gpt-6.1-sol': {
+    tier: 'flagship',
     capability: {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
@@ -117,6 +128,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     price: { inputPer1M: 2, outputPer1M: 10 },
   },
   'gpt-6.1-terra': {
+    tier: 'balanced',
     capability: {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
@@ -126,6 +138,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     price: { inputPer1M: 1, outputPer1M: 5 },
   },
   'gpt-6-luna': {
+    tier: 'volume',
     capability: {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
@@ -135,6 +148,21 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     price: { inputPer1M: 0.1, outputPer1M: 0.5 },
   },
 }
+
+/** The embedding models this repo can write rows with. Separate from `MODELS`
+ *  because an embedder is priced and called differently: no output tokens, no
+ *  effort, and one id per provider. `cohere-embed-v4` is the per-row value in
+ *  `document_chunks.embedding_model`; the Bedrock call takes `cohere.embed-v4:0`. */
+export const EMBEDDERS = {
+  active: 'cohere-embed-v4',
+  table: {
+    'cohere-embed-v4': {
+      bedrockId: 'cohere.embed-v4:0',
+      // Sourced 2026-11-18: Bedrock Embed V4 input, $0.12 per 1M tokens.
+      inputPer1M: 0.12,
+    },
+  },
+} as const
 
 /** Each task's model. Nothing in the app tier reads an env var for the model id
  *  any more: a lever may override a row here, and `resolveModel` validates it. */

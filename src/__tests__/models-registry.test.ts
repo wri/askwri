@@ -1,8 +1,16 @@
 /** @jest-environment node */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { ASSIGNMENT, MODELS, resolveModel, type ModelId } from '@/config/models'
+import {
+  ASSIGNMENT,
+  EMBEDDERS,
+  MODELS,
+  resolveModel,
+  type ModelId,
+} from '@/config/models'
 import { requestProfile } from '@/lib/request-profile'
+import { estimateCostUSD } from '@/config/costs'
+import { EST_PER_DOC_COST } from '@/db/queries/topicsAdmin'
 
 /**
  * The registry's contract: every assigned task names a known, priced model — and
@@ -215,4 +223,60 @@ describe('the reasoning arm (design §3)', () => {
       ).toEqual({ maxCompletionTokens: budget, reasoningEffort: 'none' })
     },
   )
+})
+
+describe('cost and energy read the registry (Task 4b)', () => {
+  it('gives every model a tier', () => {
+    for (const [id, spec] of Object.entries(MODELS)) {
+      expect({ id, tier: spec.tier }).toMatchObject({
+        id,
+        tier: expect.stringMatching(/^(flagship|balanced|fast|volume)$/),
+      })
+    }
+  })
+
+  it('prices a registry model at the registry rate', () => {
+    expect(
+      estimateCostUSD({
+        model: 'gpt-6-luna',
+        prompt_tokens: 1_000_000,
+        completion_tokens: 1_000_000,
+      }),
+    ).toBeCloseTo(0.6, 6)
+  })
+
+  it('accepts the openai/ prefix alignment stamps', () => {
+    expect(
+      estimateCostUSD({
+        model: 'openai/gpt-5.4-nano',
+        prompt_tokens: 1_000_000,
+        completion_tokens: 0,
+      }),
+    ).toBeCloseTo(0.2, 6)
+  })
+
+  it('throws on an unregistered model rather than pricing gpt-4o-mini', () => {
+    expect(() =>
+      estimateCostUSD({ model: 'gpt-9-imaginary', prompt_tokens: 10 }),
+    ).toThrow(/unknown model gpt-9-imaginary/)
+  })
+
+  it('prices the active embedder', () => {
+    expect(
+      estimateCostUSD({
+        model: EMBEDDERS.active,
+        prompt_tokens: 1_000_000,
+        completion_tokens: 0,
+      }),
+    ).toBeCloseTo(0.12, 6)
+  })
+
+  it('derives the per-document estimate from the worker model, not a literal', () => {
+    const price = MODELS['gpt-6-luna'].price!
+    expect(EST_PER_DOC_COST).toBeCloseTo(
+      (2000 / 1_000_000) * price.inputPer1M +
+        (100 / 1_000_000) * price.outputPer1M,
+      6,
+    )
+  })
 })

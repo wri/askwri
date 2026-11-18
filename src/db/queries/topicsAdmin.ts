@@ -1,3 +1,4 @@
+import { MODELS } from '@/config/models'
 import { AppDataSource } from '../data-source'
 import { writeAudit } from './audit'
 import type { AdminIdentity } from '../../lib/auth/identity'
@@ -570,7 +571,15 @@ export async function mergeTags(
 
 // --- Task 5: reclassify enqueue + status + cost estimate ---
 
-export const EST_PER_DOC_COST = 0.0002 // gpt-5.6-luna per-doc classify (spec §5.5); ~2000 in-tok * $0.05/1M + ~100 out-tok * $1.20/1M, rounded up
+// Per-document classify+tally, from the registry price of the model the worker is
+// assigned (design §2: worker summaries and tagging run on this id). Token
+// assumptions are the ones this figure has always used: ~2000 in, ~100 out.
+const WORKER_MODEL = 'gpt-6-luna' as const
+const WORKER_PRICE = MODELS[WORKER_MODEL].price!
+export const EST_PER_DOC_COST = +(
+  (2000 / 1_000_000) * WORKER_PRICE.inputPer1M +
+  (100 / 1_000_000) * WORKER_PRICE.outputPer1M
+).toFixed(6)
 
 function estimateCost(documentCount: number): number {
   return +(documentCount * EST_PER_DOC_COST).toFixed(4)
