@@ -289,7 +289,7 @@ A review UI shipped in Phase 2; see §11 below.
 | `WORKER_POLL_SECONDS` | `10` | Seconds between intake sweeps when running in continuous mode |
 | `WORKER_MAX_ATTEMPTS` | `3` | Max stage attempts before job status → `error` |
 | `WORKER_REAP_MINUTES` | `15` | Stale-job reaper threshold: `running` jobs idle longer than this are requeued |
-| `INTAKE_S3_PREFIX` | `intake/` | S3 prefix the worker watches for new PDFs |
+| `INTAKE_S3_PREFIX` | `intake/` | S3 prefix the worker watches for new PDFs, and the upload route writes to. Deployed envs share one bucket, so each sets its own, non-overlapping value in its tfvars on both app and worker (production `intake/`, qa `qa-intake/`); a worker takes every file under its prefix |
 | `INTAKE_LOCAL_DIR` | — | Local directory for intake in dev mode (e.g. `./intake`) |
 | `DOCUMENTS_S3_BUCKET` | — | S3 bucket for both intake and document storage |
 | `DOCUMENTS_S3_PREFIX` | — | S3 prefix for stored documents |
