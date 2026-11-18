@@ -412,11 +412,23 @@ export function acceptanceGate(a: SweepArtifact): {
     const mine = rows.filter((r) => r.route === route)
     const [a1, b1] = mine
     if (!a1 || !b1 || a1.costUsd === null || b1.costUsd === null) continue
-    if (a1.costUsd === 0) continue
+    if (a1.costUsd === 0) {
+      // "Within 20% of the incumbent's" cannot be computed against zero, and a
+      // skipped clause reads as a met one (roborev job 932).
+      if (b1.costUsd > 0) {
+        reasons.push(
+          `incumbent cost is zero on ${route}, so the 20% bar cannot be computed`,
+        )
+      }
+      continue
+    }
     const pct = ((b1.costUsd - a1.costUsd) / a1.costUsd) * 100
+    // Symmetric on purpose: the bar says "within 20%", so a candidate far
+    // cheaper is as much a change as one far dearer. Worded neutrally, because
+    // "candidate over incumbent" would read as dearer when the sign is negative.
     if (Math.abs(pct) > 20) {
       reasons.push(
-        `${b1.model} is ${pct > 0 ? '+' : ''}${pct.toFixed(1)}% over ${a1.model} on ${route}: the bar allows 20%`,
+        `${b1.model} is ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% vs ${a1.model} on ${route}: the bar allows ±20%`,
       )
     }
   }

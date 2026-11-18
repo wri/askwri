@@ -565,7 +565,21 @@ describe('acceptanceGate — a clean mechanical run is not a passed bar', () => 
       pair([priced(NANO, 1_000_000), priced(MINI, 3_000_000)], [NANO, MINI]),
     )
     expect(gate.ok).toBe(false)
-    expect(gate.reasons.join(' ')).toMatch(/\+.*% over/i)
+    expect(gate.reasons.join(' ')).toMatch(/\+1025\.0% vs .*allows ±20%/i)
+  })
+
+  it('fails when the incumbent cost is zero, so the bar cannot be computed', () => {
+    // roborev job 932: a zero baseline used to skip the clause entirely and let
+    // any candidate through. "Within 20% of the incumbent's" is unanswerable at 0.
+    const zero = withUsage(whyCall(NANO, ['a', 'b']), {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+    })
+    const gate = acceptanceGate(
+      pair([zero, priced(MINI, 1_000_000)], [NANO, MINI]),
+    )
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(/incumbent cost is zero/i)
   })
 
   it('passes when every row is priced and the pair is within 20%', () => {

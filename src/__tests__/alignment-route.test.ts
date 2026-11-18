@@ -179,6 +179,9 @@ describe('POST /api/alignment — the timeout ladder scales the bases and clamps
     expect(expected).toBeLessThan(35000)
   })
 
+  // This pins WHICH ladder an override takes, not its scaling: on the gpt-5 path
+  // the clamp binds for any prompt (40000*2 is already past 60000), so the token
+  // term cannot show up in the assertion. The scaling has its own non-GPT-5 test.
   it('gives an override the ladder of the model it will actually call', async () => {
     // Whole-branch review, finding 7: a pre-flip sweep must measure the candidate
     // under the deadline the task will run with AFTER the flip, and after the flip
