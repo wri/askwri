@@ -568,6 +568,18 @@ describe('acceptanceGate — a clean mechanical run is not a passed bar', () => 
     expect(gate.reasons.join(' ')).toMatch(/\+1025\.0% vs .*allows ±20%/i)
   })
 
+  it('fails when a route ran one model but not the other', () => {
+    // roborev job 931: summarise() skips a pair with no calls, so a candidate that
+    // never ran on a route the incumbent ran was silently not compared.
+    const gate = acceptanceGate(
+      pair([priced(NANO, 1_000_000), translateCall(MINI, 'b')], [NANO, MINI]),
+    )
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(
+      /no calls for batch-why \/ gpt-5\.4-mini/i,
+    )
+  })
+
   it('fails when the incumbent cost is zero, so the bar cannot be computed', () => {
     // roborev job 932: a zero baseline used to skip the clause entirely and let
     // any candidate through. "Within 20% of the incumbent's" is unanswerable at 0.

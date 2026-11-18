@@ -262,6 +262,36 @@ git commit -m "feat(models): registry prices, and p95 and cost in the sweep read
 
 ---
 
+### Task 4b: The cost and energy consumers read the registry
+
+Split out of Task 4 on 2026-11-18 (whole-branch review, gpt-6.1-sol, finding 5). Task 4 named these four
+files and none were touched: `costs.ts` still prices every unknown model at `gpt-4o-mini`'s rate, which
+now includes both assigned incumbents, so every cost figure the app shows for them is wrong.
+
+**Files:**
+- Modify: `src/config/models.ts` (an embedder entry with its price; a `tier` on every model),
+  `src/config/costs.ts` (prices from the registry, `<id>` or `openai/<id>`, **throw** on unknown),
+  `src/config/energy.ts` (factors keyed by registry `tier`, no env fallback),
+  `src/db/queries/topicsAdmin.ts` (per-document cost from the model that writes summaries),
+  `src/app/utils/utils.tsx` (the active embedder, not `text-embedding-3-small`)
+- Test: `src/__tests__/models-registry.test.ts`
+
+**Interfaces:**
+- Produces: `estimateCostUSD(usage)` throws on an unregistered model instead of defaulting.
+
+- [ ] **Step 1: Source the two missing registry facts.** The embedder id the search service writes
+  (`cohere-embed-v4`, per `docs/model-inventory-and-migration.md`) with its price, and a `tier` for each
+  model (design §1: flagship / balanced / fast / volume). Prices are list prices, with the lookup date in
+  the comment; if one cannot be sourced, leave it absent so the gate blocks rather than guessing.
+- [ ] **Step 2: Write the failing tests** — a registry model priced at the registry rate; `openai/` prefix
+  accepted; unknown model throws; a tier exists for every model; a document priced at the worker model.
+- [ ] **Step 3: Run them, implement, run them again.** Gates from Task 2 Step 5.
+- [ ] **Step 4: Commit** — `feat(models): cost and energy read the registry, and an unknown model throws`.
+
+**This blocks Task 6.** Design §4: the accounting must be sourced before any model is switched.
+
+---
+
 ### Task 5: The first live sweep
 
 **Files:** `evaluation/baselines/<date>-route-sweep-routes-v1.{json,md}` (written by the tool, committed).

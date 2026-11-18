@@ -401,6 +401,18 @@ export function acceptanceGate(a: SweepArtifact): {
 } {
   const reasons: string[] = []
   const rows = summarise(a)
+  // A pair with no calls never becomes a row, so the loops below would skip it and
+  // report the clause as met (roborev job 931). Any route that ran at all must have
+  // run both models, or there is nothing to compare.
+  for (const route of new Set(rows.map((r) => r.route))) {
+    for (const model of a.models) {
+      if (!rows.some((r) => r.route === route && r.model === model)) {
+        reasons.push(
+          `no calls for ${route} / ${model}: the pair cannot be compared`,
+        )
+      }
+    }
+  }
   for (const row of rows) {
     if (row.costUsd === null) {
       reasons.push(
