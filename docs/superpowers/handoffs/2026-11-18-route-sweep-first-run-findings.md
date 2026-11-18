@@ -70,6 +70,31 @@ indicated; the route now records `finish_reason` (`b2a6229`) and names a cut-off
 recurrence is distinguishable on the next sweep. Caveat: the probe prints `usable`, not `finish_reason`
 itself, and the failing 6-passage shape was not run.
 
+## Second sweep: incumbent vs the candidate, 2026-11-18
+
+After #489 deployed (live image `24338bd`, verified; one unoverridden request per route matched the
+baseline model table). `--model-a gpt-5.4-nano --model-b gpt-6-luna`, same frozen set. Artifact
+`evaluation/baselines/2026-11-18-route-sweep-routes-v1.{json,md}`; the first run is kept beside it as
+`…-routes-v1-nano-vs-mini.{json,md}`.
+
+| Route | nano p95 / cost | luna p95 / cost | Luna failed |
+|---|---|---|---|
+| batch-why | 8.6 s / $0.0125 | 10.7 s / $0.0045 (-64%) | 0 of 10 |
+| batch-relates | 6.0 s / $0.0101 | 6.3 s / $0.0044 (-57%) | 0 of 10 |
+| alignment | 2.4 s / $0.0044 | 5.6 s / $0.0028 (-38%) | 1 of 10 (sanitized, q6) |
+| translate | 2.6 s / unmeasured | 3.2 s / unmeasured | 0 of 10 |
+
+- Luna ran clean on the three routes it is the planned candidate for (why, relates, translate). The
+  alignment substitution is informational: alignment's planned candidate is Terra.
+- The incumbent's own `batch-why` substituted text on q6 (the failure class this work started from).
+- **The gate failed three cost lines because Luna is cheaper.** The bar reads "within 20% of the
+  incumbent's" (spec line 354); the implementation is symmetric. A saving is not a regression, and the
+  incumbent is retired, so this wants an operator decision on the bar, not a quiet code change.
+- **Translate cost was unmeasured** because the route dropped `usage`. Fixed in `45123dd`; it needs a QA
+  deploy before a sweep can price translate.
+- `batch-why` has no client deadline, so the p95-under-60%-of-deadline clause is unevaluable there.
+  Luna's p95 is 2 s above nano's.
+
 ## Where the sequence stands
 
 Task 5's gate is **not passed** and the plan says a failed gate stops the sequence rather than

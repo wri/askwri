@@ -109,6 +109,32 @@ describe('POST /api/translate — model resolution', () => {
   })
 })
 
+describe('POST /api/translate — usage', () => {
+  it('passes the provider usage through, so a sweep can price the call', async () => {
+    const usage = {
+      prompt_tokens: 120,
+      completion_tokens: 30,
+      total_tokens: 150,
+    }
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ finish_reason: 'stop', message: { content: 'Hello' } }],
+          usage,
+        }),
+        { status: 200 },
+      ),
+    )
+    const { json } = await post({ text: 'Hola' })
+    expect(json.usage).toEqual(usage)
+  })
+
+  it('omits usage when the provider sends none', async () => {
+    const { json } = await post({ text: 'Hola' })
+    expect(json).not.toHaveProperty('usage')
+  })
+})
+
 describe('POST /api/translate — provenance marks every path that produced nothing', () => {
   it('reports the missing-text path as not produced', async () => {
     const { status, json } = await post({ text: '   ' })

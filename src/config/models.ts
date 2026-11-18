@@ -200,8 +200,19 @@ export const TASK_EFFORT: Record<TaskId, Effort> = {
   prefilter: 'none',
   why: 'none',
   relates: 'none',
-  alignment: 'medium',
+  // `low`, not the design's `medium` (operator ruling 2026-11-18, latency first):
+  // probed on Luna and Terra, effort moved alignment latency less than the model did.
+  alignment: 'low',
   translate: 'none',
+}
+
+/** Tasks that ask for the provider's fast tier (`service_tier: "fast"`), sent
+ *  only on the reasoning arm. Operator ruling 2026-11-18, latency first: probed on
+ *  gpt-6-luna and gpt-6.1-terra it cut batch-why 30-54% and alignment 18-48%, at a
+ *  per-token premium this repo does not yet price. The other tasks are unprobed. */
+export const TASK_SERVICE_TIER: Partial<Record<TaskId, 'fast'>> = {
+  why: 'fast',
+  alignment: 'fast',
 }
 
 /** The evidence budget, also the task's (design §1). Answer synthesis only: a
