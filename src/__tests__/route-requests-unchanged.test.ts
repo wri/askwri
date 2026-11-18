@@ -643,10 +643,19 @@ describe('POST /api/batch-why — raw request bytes', () => {
     ])
   })
 
-  it('a registered gpt-6 candidate via the eval override: the registry path pins the same arm', async () => {
-    // Captured on the pre-change tree (27543fe), where gpt-6-luna was just an
-    // unregistered id: the registry's candidate capability must keep these
-    // bytes identical now that the id is known.
+  it('a registered gpt-6 candidate via the eval override: max_completion_tokens, not max_tokens', async () => {
+    // This body is NOT a behaviour promise, and it was wrong to pin it as one. No
+    // task is assigned a candidate, so the only thing that sends this arm is the
+    // route sweep's override. The pre-change capture (27543fe) had `max_tokens`
+    // because gpt-6-luna was then an unregistered id falling through to the
+    // legacy arm — and the singleton that kept those bytes identical was a
+    // registry entry claiming the GPT-6 class rejects max_completion_tokens, which
+    // is false: `npm run probe:models` sends max_completion_tokens at the task's
+    // effort and every GPT-6 case came back accepted and usable. A reasoning
+    // family is the one place max_tokens is most likely to be refused.
+    //
+    // Temperature still rides along because no reasoning_effort is sent in this
+    // stage; dropping it belongs to the migration arm that supplies the effort.
     process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
     await post(
       'batch-why',
@@ -655,7 +664,7 @@ describe('POST /api/batch-why — raw request bytes', () => {
     )
     expectRawBodies([
       whyBody('gpt-6-luna', TWO_PASSAGES, {
-        max_tokens: 360,
+        max_completion_tokens: 360,
         temperature: 0.3,
       }),
     ])

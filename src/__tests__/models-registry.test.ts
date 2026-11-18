@@ -59,5 +59,17 @@ describe('model registry', () => {
     expect(MODELS['gpt-6.1-terra'].capability.supportsEffortNone).toBe(true)
     expect(MODELS['gpt-6-luna'].capability.supportsEffortNone).toBe(true)
     expect(MODELS['gpt-5-mini'].capability.supportsEffortNone).toBe(true)
+    // acceptsMaxCompletionTokens is a provider fact, and the probe is the evidence:
+    // it sends max_completion_tokens at the task's effort and every GPT-6 case came
+    // back accepted and usable. Claiming false here sent max_tokens to a family that
+    // rejects it, which is how a candidate sweep reads as a capability failure.
+    for (const id of [
+      'gpt-6-astra',
+      'gpt-6.1-sol',
+      'gpt-6.1-terra',
+      'gpt-6-luna',
+    ] as const) {
+      expect(MODELS[id].capability.acceptsMaxCompletionTokens).toBe(true)
+    }
   })
 })

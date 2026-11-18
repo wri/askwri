@@ -27,9 +27,10 @@ export interface ModelSpec {
     /** The gpt-5 completions contract: max_completion_tokens, no temperature,
      *  the gpt-5 budget and timeout ladders. Exactly today's /^gpt-5/i arm. */
     gpt5Class: boolean
-    /** Accepts the max_completion_tokens parameter (gpt-4o onward). Only
-     *  batch-why sends it to a non-gpt-5 model; every other route sends
-     *  max_tokens. */
+    /** Accepts the max_completion_tokens parameter: gpt-4o onward, and the whole
+     *  GPT-6 class — `npm run probe:models` sends it at the task's effort and got
+     *  an accepted, usable reply on every GPT-6 case. An id that does not accept
+     *  it gets max_tokens instead. */
     acceptsMaxCompletionTokens: boolean
     /** effort:'none' is supported — declared now, first sent at migration. */
     supportsEffortNone: boolean
@@ -79,7 +80,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
   'gpt-6-astra': {
     capability: {
       gpt5Class: false,
-      acceptsMaxCompletionTokens: false,
+      acceptsMaxCompletionTokens: true,
       supportsEffortNone: false,
     },
     price: { inputPer1M: 10, outputPer1M: 50 },
@@ -87,7 +88,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
   'gpt-6.1-sol': {
     capability: {
       gpt5Class: false,
-      acceptsMaxCompletionTokens: false,
+      acceptsMaxCompletionTokens: true,
       supportsEffortNone: false,
     },
     price: { inputPer1M: 2, outputPer1M: 10 },
@@ -95,7 +96,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
   'gpt-6.1-terra': {
     capability: {
       gpt5Class: false,
-      acceptsMaxCompletionTokens: false,
+      acceptsMaxCompletionTokens: true,
       supportsEffortNone: true,
     },
     price: { inputPer1M: 1, outputPer1M: 5 },
@@ -103,7 +104,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
   'gpt-6-luna': {
     capability: {
       gpt5Class: false,
-      acceptsMaxCompletionTokens: false,
+      acceptsMaxCompletionTokens: true,
       supportsEffortNone: true,
     },
     price: { inputPer1M: 0.1, outputPer1M: 0.5 },
