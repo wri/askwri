@@ -11,8 +11,13 @@
 // 400s and the route answers canned text as if nothing were wrong.
 import { modelCapability } from '@/lib/request-profile'
 
-export function resolveAlignmentConfig(model: string) {
-  const gpt5Class = modelCapability(model).gpt5Class
+export function resolveAlignmentConfig(
+  model: string,
+  /** The model the TASK is assigned: timeouts belong to the task (design §1),
+   *  so an override swaps the model called, not the deadline it is budgeted at. */
+  capabilityFrom: string = model,
+) {
+  const gpt5Class = modelCapability(capabilityFrom).gpt5Class
 
   // Timeout bases (scaled per request and clamped in the route) - GPT-5
   // needs longer timeouts.

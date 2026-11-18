@@ -400,7 +400,7 @@ export async function POST(req: NextRequest) {
 
     // Resolved before any other check, and refused rather than ignored: a sweep
     // that thinks it ran two models must not run one twice.
-    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL, 'alignment')
     if (!resolved.ok) {
       return NextResponse.json(
         {
@@ -416,7 +416,7 @@ export async function POST(req: NextRequest) {
       )
     }
     model = resolved.model
-    const cfg = resolveAlignmentConfig(model)
+    const cfg = resolveAlignmentConfig(model, resolveModel('alignment'))
     const primary = requestProfile({
       task: 'alignment',
       model,

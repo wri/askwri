@@ -68,3 +68,31 @@ it('resolves a non-gpt-5 name', () => {
     ),
   ).toEqual({ ok: true, model: 'o4-mini' })
 })
+
+it('refuses an override that cannot run the task effort', () => {
+  process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
+  // translate runs at effort 'none', and 6.1-Sol does not support it (design §Constraints).
+  expect(
+    resolveRouteModel(
+      req({ 'x-eval-token': 'secret' }),
+      { model: 'gpt-6.1-sol' },
+      'gpt-5.4-mini',
+      'translate',
+    ),
+  ).toEqual({
+    ok: false,
+    error: 'model gpt-6.1-sol cannot run the none effort this task uses',
+  })
+})
+
+it('allows an override that can run the task effort', () => {
+  process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
+  expect(
+    resolveRouteModel(
+      req({ 'x-eval-token': 'secret' }),
+      { model: 'gpt-6-luna' },
+      'gpt-5.4-mini',
+      'translate',
+    ),
+  ).toEqual({ ok: true, model: 'gpt-6-luna' })
+})

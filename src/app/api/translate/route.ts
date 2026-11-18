@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as { text?: string; model?: string }
     const source = String(body?.text ?? '').trim()
 
-    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL, 'translate')
     if (!resolved.ok) {
       return NextResponse.json(
         {

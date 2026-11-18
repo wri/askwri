@@ -13,7 +13,14 @@ import {
   ALIGNMENT_MAX_TOKENS as CFG_MAX_TOKENS,
   ALIGNMENT_TEMPERATURE as CFG_TEMPERATURE,
 } from '@/config/alignment'
-import { MODELS, type Effort, type ModelId, type TaskId } from '@/config/models'
+import {
+  MODELS,
+  TASK_EFFORT,
+  TASK_EVIDENCE,
+  type Effort,
+  type ModelId,
+  type TaskId,
+} from '@/config/models'
 
 export interface RequestProfile {
   /** The max_completion_tokens parameter (gpt-5-class models). */
@@ -78,10 +85,47 @@ export function requestProfile(args: {
     documents?: number // relates
   }
 }): RequestProfile {
-  const { task, model, attempt, input } = args
+  const { task, model } = args
+  const profile = profileFor(args)
+  const s = spec(model)
+  // A reasoning model takes max_completion_tokens at the TASK's effort and no
+  // temperature (the family rejects it while effort != none), and takes its
+  // evidence budget from the task so a candidate cannot inherit the smaller
+  // non-GPT-5 arm's 6 x 350.
+  if (s?.capability.reasoning) {
+    const arm: RequestProfile = {
+      maxCompletionTokens: profile.maxCompletionTokens ?? profile.maxTokens,
+      reasoningEffort: TASK_EFFORT[task],
+    }
+    const evidence = TASK_EVIDENCE[task]
+    if (evidence) Object.assign(arm, evidence)
+    return arm
+  }
+  return profile
+}
+
+/** Which budget arm a task's formulas take: today's GPT-5 class, plus the GPT-6
+ *  class, which takes the same per-task budgets at an explicit effort. */
+function largeBudgetArm(model: ModelId | string): boolean {
+  const s = spec(model)
+  return s ? s.capability.gpt5Class || s.capability.reasoning : GPT5.test(model)
+}
+
+/** Each task's arm as it stands today, keyed on the model actually being asked. */
+function profileFor({
+  task,
+  model,
+  attempt,
+  input,
+}: {
+  task: TaskId
+  model: ModelId | string
+  attempt: 'primary' | 'repair'
+  input: { passages?: number; documents?: number }
+}): RequestProfile {
   switch (task) {
     case 'answer': {
-      if (modelCapability(model).gpt5Class) {
+      if (largeBudgetArm(model)) {
         const envMax = Number(process.env.OPENAI_MAX_TOKENS || 2000)
         return {
           maxCompletionTokens: Math.max(2000, envMax),
@@ -98,7 +142,7 @@ export function requestProfile(args: {
     }
     case 'prefilter':
       // answer/route.ts's nano relevance filter: a fixed 500 either way.
-      return modelCapability(model).gpt5Class
+      return largeBudgetArm(model)
         ? { maxCompletionTokens: 500 }
         : { maxTokens: 500, temperature: 0.1 }
     case 'why': {
@@ -128,7 +172,7 @@ export function requestProfile(args: {
     }
     case 'relates': {
       const documents = input.documents ?? 0
-      if (modelCapability(model).gpt5Class) {
+      if (largeBudgetArm(model)) {
         // GPT-5 spends reasoning tokens out of the same budget, so it gets
         // the larger floor.
         return { maxCompletionTokens: Math.max(1000, documents * 120) }
@@ -141,11 +185,11 @@ export function requestProfile(args: {
     case 'translate':
       // A passage is capped at 800 chars upstream; the translation can run
       // longer, and GPT-5 spends reasoning tokens out of the same budget.
-      return modelCapability(model).gpt5Class
+      return largeBudgetArm(model)
         ? { maxCompletionTokens: 2000 }
         : { maxTokens: 1200, temperature: 0.2 }
     case 'alignment': {
-      if (modelCapability(model).gpt5Class) {
+      if (largeBudgetArm(model)) {
         // GPT-5 reasoning token usage needs the larger caps.
         return { maxCompletionTokens: attempt === 'primary' ? 4000 : 5000 }
       }

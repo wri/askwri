@@ -179,6 +179,25 @@ describe('POST /api/alignment — the timeout ladder scales the bases and clamps
     expect(expected).toBeLessThan(35000)
   })
 
+  it('keeps the task ladder when an override names a candidate', async () => {
+    // Timeouts belong to the task (design §1): an override swaps the model the
+    // call goes to, not the deadline the task is budgeted at.
+    process.env.MODEL_ALIGNMENT = 'gpt-4o-mini'
+    process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
+    const delays = spyDeadlines()
+    await post(
+      {
+        query: 'How do cities cool streets?',
+        resultsSummary: 'Short summary.',
+        // gpt-5-class, unlike the task's model: its own ladder would be 40000.
+        model: 'gpt-5.4-mini',
+      },
+      { 'x-eval-token': 'secret' },
+    )
+    const expected = Math.min(35000, 20000 + approxToks('Short summary.') * 12)
+    expect(delays).toEqual([expected])
+  })
+
   it('a large non-GPT-5 prompt clamps every attempt at 35000/30000', async () => {
     process.env.MODEL_ALIGNMENT = 'gpt-4o-mini'
     const delays = spyDeadlines()

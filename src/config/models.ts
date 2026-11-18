@@ -35,6 +35,10 @@ export interface ModelSpec {
     acceptsMaxCompletionTokens: boolean
     /** effort:'none' is supported — declared now, first sent at migration. */
     supportsEffortNone: boolean
+    /** The GPT-6 class: takes `reasoning_effort`, and rejects `temperature`
+     *  whenever the effort is not `none`. False for every incumbent, which
+     *  keeps stage 1's "no effort field" promise for today's requests. */
+    reasoning: boolean
   }
   /** $ per 1M tokens. Read by the pricing chore; asserted by no test this
    *  stage. Omitted where this repo holds no sourced price. */
@@ -47,6 +51,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: false,
+      reasoning: false,
     },
     price: { inputPer1M: 0.15, outputPer1M: 0.6 },
   },
@@ -55,6 +60,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: true,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: true,
+      reasoning: false,
     },
     price: { inputPer1M: 0.25, outputPer1M: 2.0 },
   },
@@ -63,6 +69,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: true,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: true,
+      reasoning: false,
     },
     // No sourced price for this id exists in this repo (costs.ts prices
     // gpt-5-mini/gpt-5-nano); the pricing chore fills it in.
@@ -72,6 +79,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: true,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: true,
+      reasoning: false,
     },
   },
   'gpt-5.4-nano': {
@@ -79,6 +87,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: true,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: true,
+      reasoning: false,
     },
   },
   // Candidates: known but unassigned. Their capability mirrors what today's
@@ -90,6 +99,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: false,
+      reasoning: true,
     },
     price: { inputPer1M: 10, outputPer1M: 50 },
   },
@@ -98,6 +108,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: false,
+      reasoning: true,
     },
     price: { inputPer1M: 2, outputPer1M: 10 },
   },
@@ -106,6 +117,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: true,
+      reasoning: true,
     },
     price: { inputPer1M: 1, outputPer1M: 5 },
   },
@@ -114,6 +126,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       gpt5Class: false,
       acceptsMaxCompletionTokens: true,
       supportsEffortNone: true,
+      reasoning: true,
     },
     price: { inputPer1M: 0.1, outputPer1M: 0.5 },
   },
@@ -131,6 +144,25 @@ export const ASSIGNMENT: Record<TaskId, ModelId> = {
   relates: 'gpt-5.4-nano',
   alignment: 'gpt-5.4-nano',
   translate: 'gpt-5.4-mini',
+}
+
+/** The effort each task runs at when its model is a reasoning model (design §2).
+ *  Effort belongs to the TASK: an override inherits it rather than choosing one. */
+export const TASK_EFFORT: Record<TaskId, Effort> = {
+  answer: 'medium',
+  prefilter: 'none',
+  why: 'none',
+  relates: 'none',
+  alignment: 'medium',
+  translate: 'none',
+}
+
+/** The evidence budget, also the task's (design §1). Answer synthesis only: a
+ *  candidate must not inherit the smaller non-GPT-5 arm's 6 x 350. */
+export const TASK_EVIDENCE: Partial<
+  Record<TaskId, { maxPassages: number; passageChars: number }>
+> = {
+  answer: { maxPassages: 15, passageChars: 800 },
 }
 
 /** The lever each task can be backed out through, renamed on purpose: the stale

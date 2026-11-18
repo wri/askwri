@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     const { query, passages, mode } = body
 
-    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL, 'why')
     if (!resolved.ok) {
       return NextResponse.json(
         {

@@ -650,7 +650,7 @@ describe('POST /api/batch-why — raw request bytes', () => {
     ])
   })
 
-  it('a registered gpt-6 candidate via the eval override: max_completion_tokens, not max_tokens', async () => {
+  it('a registered gpt-6 candidate via the eval override: max_completion_tokens at the task effort, no temperature', async () => {
     // This body is NOT a behaviour promise, and it was wrong to pin it as one. No
     // task is assigned a candidate, so the only thing that sends this arm is the
     // route sweep's override. The pre-change capture (27543fe) had `max_tokens`
@@ -661,8 +661,8 @@ describe('POST /api/batch-why — raw request bytes', () => {
     // effort and every GPT-6 case came back accepted and usable. A reasoning
     // family is the one place max_tokens is most likely to be refused.
     //
-    // Temperature still rides along because no reasoning_effort is sent in this
-    // stage; dropping it belongs to the migration arm that supplies the effort.
+    // The reasoning arm landed since: the task's effort now rides along, so the
+    // family's temperature rejection applies and the field is gone.
     process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
     await post(
       'batch-why',
@@ -670,10 +670,7 @@ describe('POST /api/batch-why — raw request bytes', () => {
       { 'x-eval-token': 'secret' },
     )
     expectRawBodies([
-      whyBody('gpt-6-luna', TWO_PASSAGES, {
-        max_completion_tokens: 360,
-        temperature: 0.3,
-      }),
+      whyBody('gpt-6-luna', TWO_PASSAGES, { max_completion_tokens: 360 }),
     ])
   })
 })

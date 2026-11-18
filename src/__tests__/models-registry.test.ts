@@ -2,6 +2,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ASSIGNMENT, MODELS, resolveModel, type ModelId } from '@/config/models'
+import { requestProfile } from '@/lib/request-profile'
 
 /**
  * The registry's contract: every assigned task names a known, priced model — and
@@ -131,5 +132,44 @@ describe('model registry', () => {
     ] as const) {
       expect(MODELS[id].capability.acceptsMaxCompletionTokens).toBe(true)
     }
+  })
+})
+
+describe('the reasoning arm (design §3)', () => {
+  const profile = (task: any, model: string) =>
+    requestProfile({ task, model, attempt: 'primary', input: {} })
+
+  it('sends max_completion_tokens at the task effort, and no temperature', () => {
+    expect(profile('translate', 'gpt-6-luna')).toEqual({
+      maxCompletionTokens: 2000,
+      reasoningEffort: 'none',
+    })
+  })
+
+  it('takes the effort the design maps to the task, not one the caller picks', () => {
+    expect(profile('alignment', 'gpt-6.1-terra')).toMatchObject({
+      maxCompletionTokens: 4000,
+      reasoningEffort: 'medium',
+    })
+    expect(profile('why', 'gpt-6-luna')).toMatchObject({
+      reasoningEffort: 'none',
+    })
+  })
+
+  it('keeps the answer evidence budget for a candidate, never the smaller arm', () => {
+    // The failure this exists to prevent: a GPT-6 id matching no family branch
+    // and inheriting 6 passages x 350 chars — a sixth of the evidence.
+    expect(profile('answer', 'gpt-6.1-sol')).toEqual({
+      maxCompletionTokens: 2000,
+      maxPassages: 15,
+      passageChars: 800,
+      reasoningEffort: 'medium',
+    })
+  })
+
+  it('adds no effort field for an incumbent', () => {
+    expect(profile('translate', 'gpt-5.4-mini')).toEqual({
+      maxCompletionTokens: 2000,
+    })
   })
 })

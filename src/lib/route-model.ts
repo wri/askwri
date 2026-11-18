@@ -3,6 +3,8 @@
 // request's x-eval-token does not match it, so production cannot be swept by accident.
 // Which request parameters the resolved model takes is decided by
 // `requestProfile`, not by the name.
+import { MODELS, TASK_EFFORT, type ModelId, type TaskId } from '@/config/models'
+
 export type RouteProvenance = {
   model: string
   produced: boolean
@@ -14,6 +16,9 @@ export function resolveRouteModel(
   req: Request,
   body: unknown,
   fallback: string,
+  /** When given, an override that cannot run this task's effort is refused —
+   *  the route is already running, so this is a request-time error (400). */
+  task?: TaskId,
 ): { ok: true; model: string } | { ok: false; error: string } {
   const requested = (body as { model?: unknown } | null | undefined)?.model
   const model = typeof requested === 'string' ? requested.trim() : ''
@@ -25,6 +30,25 @@ export function resolveRouteModel(
   if (!token) return { ok: false, error: 'model override not enabled' }
   if (req.headers.get('x-eval-token') !== token) {
     return { ok: false, error: 'invalid eval token' }
+  }
+
+  if (task) {
+    const effort = TASK_EFFORT[task]
+    const known = Object.prototype.hasOwnProperty.call(MODELS, model)
+      ? MODELS[model as ModelId]
+      : undefined
+    // An unregistered id keeps its documented hole: the eval-only callers send
+    // ids the registry does not own, and their arms are the callers' business.
+    if (
+      known?.capability.reasoning &&
+      effort === 'none' &&
+      !known.capability.supportsEffortNone
+    ) {
+      return {
+        ok: false,
+        error: `model ${model} cannot run the ${effort} effort this task uses`,
+      }
+    }
   }
 
   return { ok: true, model }

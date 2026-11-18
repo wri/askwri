@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     }
     const { query, docs } = body
 
-    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL, 'relates')
     if (!resolved.ok) {
       return NextResponse.json(
         {
