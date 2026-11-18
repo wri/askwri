@@ -56,15 +56,17 @@ const DEFAULT_TIMEOUT_MS = 120_000
 const MAX_TIMEOUT_MS = 300_000
 
 /**
- * The migration formulas' outputs at the fixture input sizes — not the arms
- * today's routes would choose for these model ids. The probe sends the
- * migration-shaped body (`reasoning_effort` + `max_completion_tokens`), so a
- * non-GPT-5 candidate gets the formula's ceiling here where its route arm today
- * would cap lower (relates 720 not 1000, translate 1200 not 2000, answer 1500
- * not 2000 at these fixtures). Re-derive at the swap stage: why
- * `min(200 + 80×passages, 3000)`, answer `max(2000, OPENAI_MAX_TOKENS)`,
- * relates `max(1000, 120×documents)`, alignment 4000 primary / 5000 repair,
- * prefilter 500, translate 2000.
+ * The spec's post-migration ceilings, evaluated at this file's fixture input
+ * sizes: answer `max(2000, OPENAI_MAX_TOKENS)` = 2000; prefilter 500; why
+ * `min(200 + 80×25, 3000)` = 2200 (25 passages); relates `max(1000, 120×6)`
+ * = 1000 (6 documents); alignment 4000 primary / 5000 repair; translate 2000.
+ *
+ * These are the ceilings we are migrating TO, not what today's routes would
+ * send for these ids: every candidate is non-GPT-5, so today's arms would
+ * send answer 1500, relates 720, translate 1200, alignment 1000/1500. The
+ * probe sends the migration-shaped body (`reasoning_effort` +
+ * `max_completion_tokens`), so its budget must be the target one. Re-derive
+ * at the swap stage.
  */
 const BUDGET: Record<ProfileId, number> = {
   answer: 2000,
