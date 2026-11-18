@@ -152,6 +152,9 @@ export async function POST(req: NextRequest) {
       ok: true,
       translation,
       model,
+      // Passed through so a sweep can price the call; absent when the provider
+      // reports none, which the cost gate then treats as unmeasured.
+      usage: j?.usage,
       provenance: provenance(model, true),
     })
   } catch (error: any) {
