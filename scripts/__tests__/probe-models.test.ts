@@ -193,3 +193,47 @@ it('a profile supplies its own body verbatim', () => {
   )
   expect(profiles['why'].inputCount).toBe(25)
 })
+
+describe('probe shape verdict', () => {
+  // A parsable reply is not a usable one. These two are the false-pass paths an
+  // external review found: `{}` for an array-shaped profile, and a bare array for
+  // a field-shaped one.
+  it('rejects an object reply for an array-shaped profile', async () => {
+    const r = await probeProfile({
+      profile: profiles.why,
+      model: 'gpt-6-luna',
+      effort: 'none',
+      budget: 3000,
+      apiKey: 'k',
+      fetchImpl: (async () =>
+        reply({
+          choices: [{ finish_reason: 'stop', message: { content: '{}' } }],
+          usage: {},
+        })) as any,
+    })
+    expect(r.usable).toBe(false)
+    expect(r.shapeProblems).toContain('reply is not a JSON array')
+  })
+
+  it('rejects an array reply for a field-shaped profile', async () => {
+    const r = await probeProfile({
+      profile: profiles.answer,
+      model: 'gpt-6.1-sol',
+      effort: 'medium',
+      budget: 2000,
+      apiKey: 'k',
+      fetchImpl: (async () =>
+        reply({
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { content: '[{"sentences":[]}]' },
+            },
+          ],
+          usage: {},
+        })) as any,
+    })
+    expect(r.usable).toBe(false)
+    expect(r.shapeProblems).toContain('reply is not a JSON object')
+  })
+})

@@ -101,10 +101,14 @@ function replyText(choice: any): string {
   return typeof msg.content === 'string' ? msg.content : ''
 }
 
-/** The routes accept bare JSON and JSON inside a markdown fence or prose. */
 /**
  * What a usable reply of this profile must contain, beyond parsing. Returns the
  * problems; empty means the reply is shaped like something the caller can read.
+ *
+ * The shape the profile declares decides what is acceptable, in both directions:
+ * an array-shaped profile (why, relates) must NOT accept an object, and a
+ * field-shaped profile (answer, prefilter, alignment) must NOT accept an array.
+ * Getting that wrong reopens the `{}` hole from the other side.
  */
 function shapeOf(parsed: any, profile: ProbeProfile): string[] {
   if (profile.expect === 'text') {
@@ -112,21 +116,27 @@ function shapeOf(parsed: any, profile: ProbeProfile): string[] {
       ? []
       : ['reply is not text']
   }
-  if (Array.isArray(parsed)) {
-    const min = profile.minItems ?? 1
-    return parsed.length >= min
+
+  if (profile.minItems !== undefined) {
+    if (!Array.isArray(parsed)) return ['reply is not a JSON array']
+    return parsed.length >= profile.minItems
       ? []
-      : [`reply has ${parsed.length} item(s), expected at least ${min}`]
+      : [
+          `reply has ${parsed.length} item(s), expected at least ${profile.minItems}`,
+        ]
   }
-  if (typeof parsed !== 'object' || parsed === null) {
+
+  const fields = profile.requiredFields ?? []
+  if (Array.isArray(parsed) || typeof parsed !== 'object' || parsed === null) {
     return ['reply is not a JSON object']
   }
-  const missing = (profile.requiredFields ?? []).filter((f) => !(f in parsed))
+  const missing = fields.filter((f) => !(f in parsed))
   return missing.length === 0
     ? []
     : [`reply is missing required field(s): ${missing.join(', ')}`]
 }
 
+/** The routes accept bare JSON and JSON inside a markdown fence or prose. */
 function replyJson(text: string): any {
   try {
     return JSON.parse(text)
