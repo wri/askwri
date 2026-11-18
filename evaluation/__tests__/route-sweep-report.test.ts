@@ -546,6 +546,63 @@ describe('summarise — the bar’s two numbers', () => {
       6,
     )
   })
+
+  // Fast mode (service_tier "fast") bills exactly 2x the Standard rate on every
+  // GPT-6 id (developers.openai.com/api/docs/pricing, 2026-11-18). The sweep's
+  // request is not the wire body, so whether a route ran fast is read from the
+  // same profile the route uses.
+  const lunaArtifact = (calls: CallResult[]): SweepArtifact => ({
+    ...artifactOf(calls),
+    models: ['gpt-6-luna', MODEL_A],
+  })
+
+  it('prices a fast-mode route at 2x the list rate', () => {
+    const call = withUsage(whyCall('gpt-6-luna', ['a']), {
+      prompt_tokens: 1_000_000,
+      completion_tokens: 0,
+    })
+    const [row] = summarise(lunaArtifact([call]))
+    expect(row.fast).toBe(true)
+    expect(row.costUsd).toBeCloseTo(0.2, 6) // $0.10 x 2
+  })
+
+  it('prices a route that does not ask for fast mode at the list rate', () => {
+    const call = withUsage(translateCall('gpt-6-luna', 'hello'), {
+      prompt_tokens: 1_000_000,
+      completion_tokens: 0,
+    })
+    const [row] = summarise(lunaArtifact([call]))
+    expect(row.fast).toBe(false)
+    expect(row.costUsd).toBeCloseTo(0.1, 6)
+  })
+
+  it('never marks an incumbent as fast, whatever the route', () => {
+    const call = withUsage(whyCall(MODEL_A, ['a']), {
+      prompt_tokens: 1_000_000,
+      completion_tokens: 0,
+    })
+    expect(summarise(artifactOf([call]))[0].fast).toBe(false)
+  })
+
+  it('says what the cost figure is a total of, per call, and when it is fast-priced', () => {
+    const calls = ['q1', 'q2'].map((id) =>
+      withUsage(whyCall('gpt-6-luna', ['a'], { case_id: id }), {
+        prompt_tokens: 1_000_000,
+        completion_tokens: 0,
+      }),
+    )
+    const md = renderMarkdown(lunaArtifact(calls))
+    expect(md).toContain('cost $0.4 for 2 calls ($0.2 per call)')
+    expect(md).toContain('fast mode priced at 2x list')
+  })
+
+  it('does not mention fast mode on a row that did not run it', () => {
+    const call = withUsage(whyCall(MODEL_A, ['a']), {
+      prompt_tokens: 1_000_000,
+      completion_tokens: 0,
+    })
+    expect(renderMarkdown(artifactOf([call]))).not.toContain('fast mode')
+  })
 })
 
 describe('acceptanceGate — a clean mechanical run is not a passed bar', () => {

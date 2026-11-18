@@ -115,6 +115,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       supportsEffortNone: false,
       reasoning: true,
     },
+    // Sourced 2026-11-18: developers.openai.com/api/docs/pricing — Standard, short context
     price: { inputPer1M: 10, outputPer1M: 50 },
   },
   'gpt-6.1-sol': {
@@ -125,6 +126,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       supportsEffortNone: false,
       reasoning: true,
     },
+    // Sourced 2026-11-18: developers.openai.com/api/docs/pricing — Standard, short context
     price: { inputPer1M: 2, outputPer1M: 10 },
   },
   'gpt-6.1-terra': {
@@ -135,6 +137,7 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       supportsEffortNone: true,
       reasoning: true,
     },
+    // Sourced 2026-11-18: developers.openai.com/api/docs/pricing — Standard, short context
     price: { inputPer1M: 1, outputPer1M: 5 },
   },
   'gpt-6-luna': {
@@ -145,9 +148,16 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       supportsEffortNone: true,
       reasoning: true,
     },
+    // Sourced 2026-11-18: developers.openai.com/api/docs/pricing — Standard, short context
     price: { inputPer1M: 0.1, outputPer1M: 0.5 },
   },
 }
+
+/** What a request sent with `service_tier: "fast"` costs, against the prices above.
+ *  Sourced 2026-11-18: the same pricing page lists every GPT-6 id's Fast short-context
+ *  input and output rate at exactly 2x its Standard rate. Cached input is not
+ *  modelled anywhere in this repo (it is billed lower, so costs here run high). */
+export const FAST_TIER_PRICE_MULTIPLIER = 2
 
 /** The embedding models this repo can write rows with. Separate from `MODELS`
  *  because an embedder is priced and called differently: no output tokens, no

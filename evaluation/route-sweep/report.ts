@@ -14,7 +14,36 @@
  */
 import { checkCall, inputCount } from './checks'
 import type { CallResult, RouteName, SweepArtifact } from './types'
-import { MODELS, type ModelId } from '@/config/models'
+import {
+  FAST_TIER_PRICE_MULTIPLIER,
+  MODELS,
+  type ModelId,
+  type TaskId,
+} from '@/config/models'
+import { requestProfile } from '@/lib/request-profile'
+
+/** The registry task each swept route runs as. */
+const ROUTE_TASK: Record<RouteName, TaskId> = {
+  'batch-why': 'why',
+  'batch-relates': 'relates',
+  alignment: 'alignment',
+  translate: 'translate',
+}
+
+/** Whether the route sends `service_tier: "fast"` for this model. The artifact's
+ *  `request` is the sweep's payload, not the wire body, so this asks the same
+ *  profile the route builds its body from. It describes the code this checkout
+ *  runs, which is the deployed code when the sweep targets a fresh deploy. */
+function runsFast(route: RouteName, model: string): boolean {
+  return (
+    requestProfile({
+      task: ROUTE_TASK[route],
+      model,
+      attempt: 'primary',
+      input: {},
+    }).serviceTier === 'fast'
+  )
+}
 
 /** The order a reader expects the routes in, matching the sweep's own. */
 const ROUTE_ORDER: RouteName[] = [
@@ -336,8 +365,12 @@ export type RouteSummary = {
   failed: number
   /** Nearest-rank p95; null only when there were no calls at all. */
   p95Ms: number | null
-  /** Null when any call/attempt lacks complete usage, or there is no price. */
+  /** TOTAL for all `calls` on this row, not per call. Null when any call/attempt
+   *  lacks complete usage, or there is no price. Priced at the Fast rate when the
+   *  route ran fast (see `fast`). */
   costUsd: number | null
+  /** The route sent the fast tier, so `costUsd` carries the fast multiplier. */
+  fast: boolean
 }
 
 /**
@@ -358,6 +391,8 @@ export function summarise(a: SweepArtifact): RouteSummary[] {
       ).length
       const latencies = calls.map((c) => c.latency_ms).sort((x, y) => x - y)
       const price = priceOf(model)
+      const fast = runsFast(route, model)
+      const rate = fast ? FAST_TIER_PRICE_MULTIPLIER : 1
       const usages = calls.map(billedTokens)
       const billable = usages.flatMap((usage) => usage ?? [])
       const costUsd =
@@ -366,8 +401,9 @@ export function summarise(a: SweepArtifact): RouteSummary[] {
               .reduce(
                 (sum, t) =>
                   sum +
-                  (t.input / 1_000_000) * price.inputPer1M +
-                  (t.output / 1_000_000) * price.outputPer1M,
+                  rate *
+                    ((t.input / 1_000_000) * price.inputPer1M +
+                      (t.output / 1_000_000) * price.outputPer1M),
                 0,
               )
               .toFixed(6)
@@ -380,6 +416,7 @@ export function summarise(a: SweepArtifact): RouteSummary[] {
         // Nearest rank: the smallest sample at or above the 95th percentile.
         p95Ms: latencies[Math.ceil(0.95 * latencies.length) - 1] ?? null,
         costUsd,
+        fast,
       })
     }
   }
@@ -464,7 +501,15 @@ function acceptanceLines(a: SweepArtifact): string[] {
     if (!mine.length) continue
     lines.push(`### ${route}`)
     for (const r of mine) {
-      const cost = r.costUsd === null ? 'cost unmeasured' : `cost $${r.costUsd}`
+      // A total, labelled as one: `cost $0.04` beside `n=10` reads as the price of
+      // a job, and it is the price of ten.
+      const cost =
+        r.costUsd === null
+          ? 'cost unmeasured'
+          : `cost $${r.costUsd} for ${r.calls} calls ($${+(r.costUsd / r.calls).toFixed(6)} per call)` +
+            (r.fast
+              ? `, fast mode priced at ${FAST_TIER_PRICE_MULTIPLIER}x list`
+              : '')
       lines.push(
         // Plain, not bold: the case rows above already head a line with
         // `**model**`, and a second one makes every "the row for this model"

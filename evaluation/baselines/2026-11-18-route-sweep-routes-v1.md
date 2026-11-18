@@ -1,926 +1,919 @@
 # Route model sweep: routes-v1
 
 - target: https://qa.askwri-app.org
-- models: gpt-5.4-nano vs gpt-6-luna
+- models: gpt-6-luna vs gpt-6.1-terra
 - max_results: 40
 - submodule commit: 1dcbeabc909073c4141e8088cce8b7fef6de243a
 - evalset: evalset_answer_02.json
 - evalset note: no expert_approved case in evalset_answer_02.json; the first 10 in file order were used
-- code version: sha256:e308f1eeacf521992361fd14fc3c45a52d9894335c71c7878ca2c8052b57bb6f
-- checks: 2 of 80 calls failed
+- code version: sha256:2e6bc1b2f5f570a6ea6940595e8f5983e2909f6fb4cc8eb665a61989b1ca814b
+- checks: 0 of 80 calls failed
 
 No English control case: every case is non-English, so a regression that appears only on English input would not show here.
 
 ## Mechanical checks
 
-Failed calls:
-- batch-why / q6_bikeshare-co2-reduction / gpt-5.4-nano: response contains substituted text (provenance.sanitized), so part of it is not model output
-- alignment / q6_bikeshare-co2-reduction / gpt-6-luna: response contains substituted text (provenance.sanitized), so part of it is not model output
+All 80 calls passed the mechanical checks.
 
 ## Acceptance numbers
 
 ### batch-why
-- gpt-5.4-nano — calls 10, failed 1, p95 8618 ms (n=10), cost $0.012503
-- gpt-6-luna — calls 10, failed 0, p95 10714 ms (n=10), cost $0.004503
-- cost of gpt-6-luna vs gpt-5.4-nano: -64.0%
+- gpt-6-luna — calls 10, failed 0, p95 5891 ms (n=10), cost $0.008689 for 10 calls ($0.000869 per call), fast mode priced at 2x list
+- gpt-6.1-terra — calls 10, failed 0, p95 8025 ms (n=10), cost $0.079918 for 10 calls ($0.007992 per call), fast mode priced at 2x list
+- p95 of gpt-6.1-terra vs gpt-6-luna: +36.2% (5891 ms to 8025 ms)
+- cost of gpt-6.1-terra vs gpt-6-luna: +819.8%
 
 ### batch-relates
-- gpt-5.4-nano — calls 10, failed 0, p95 6036 ms (n=10), cost $0.010127
-- gpt-6-luna — calls 10, failed 0, p95 6311 ms (n=10), cost $0.004377
-- cost of gpt-6-luna vs gpt-5.4-nano: -56.8%
+- gpt-6-luna — calls 10, failed 0, p95 7329 ms (n=10), cost $0.004347 for 10 calls ($0.000435 per call)
+- gpt-6.1-terra — calls 10, failed 0, p95 12886 ms (n=10), cost $0.043229 for 10 calls ($0.004323 per call)
+- p95 of gpt-6.1-terra vs gpt-6-luna: +75.8% (7329 ms to 12886 ms)
+- cost of gpt-6.1-terra vs gpt-6-luna: +894.5%
 
 ### alignment
-- gpt-5.4-nano — calls 10, failed 0, p95 2357 ms (n=10), cost $0.004448
-- gpt-6-luna — calls 10, failed 1, p95 5627 ms (n=10), cost $0.002758
-- cost of gpt-6-luna vs gpt-5.4-nano: -38.0%
+- gpt-6-luna — calls 10, failed 0, p95 3075 ms (n=10), cost $0.004704 for 10 calls ($0.00047 per call), fast mode priced at 2x list
+- gpt-6.1-terra — calls 10, failed 0, p95 4250 ms (n=10), cost $0.036776 for 10 calls ($0.003678 per call), fast mode priced at 2x list
+- p95 of gpt-6.1-terra vs gpt-6-luna: +38.2% (3075 ms to 4250 ms)
+- cost of gpt-6.1-terra vs gpt-6-luna: +681.8%
 
 ### translate
-- gpt-5.4-nano — calls 10, failed 0, p95 2634 ms (n=10), cost unmeasured
-- gpt-6-luna — calls 10, failed 0, p95 3168 ms (n=10), cost unmeasured
+- gpt-6-luna — calls 10, failed 0, p95 3130 ms (n=10), cost $0.001458 for 10 calls ($0.000146 per call)
+- gpt-6.1-terra — calls 10, failed 0, p95 8983 ms (n=10), cost $0.014755 for 10 calls ($0.001476 per call)
+- p95 of gpt-6.1-terra vs gpt-6-luna: +187.0% (3130 ms to 8983 ms)
+- cost of gpt-6.1-terra vs gpt-6-luna: +912.0%
 
 ## batch-why
 
 ### q1_zero-emission-heavy-duty-trucks: What is the projected market penetration rate of new energy heavy-duty trucks in China through 2035?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2086 ms)
-1. This passage directly reports the estimated penetration rate range for zero-emission heavy-duty trucks in China through future model years, including a specific statement about penetration by 2030 under a no-policy scenario (and the study spans to 2035). This is the closest explicit market-penetration data relevant to the query’s “through 2035” timeframe.
-2. This passage provides technical definitions and context for modeling variables (e.g., annual vehicle kilometers traveled) used in assessing adoption and penetration of battery electric trucks. While it does not state a penetration rate itself, it supports understanding how the projected penetration is calculated.
-3. This passage discusses WRI projections and strategy options for China’s road transport sector but does not provide the projected market penetration rate for new energy heavy-duty trucks through 2035. It is relevant only as contextual background on decarbonization projections and measures.
+**gpt-6-luna** (1681 ms)
+1. This report directly evaluates zero-emission heavy-duty truck adoption in China through 2035 and gives projected penetration rates by freight scenario, including a 2030 range for regional delivery under the no-policy scenario.
+2. This passage provides vehicle-use assumptions and abbreviations from the same analysis, but does not state projected market penetration rates.
+3. This passage concerns broader strategies for decarbonizing China's road transport, offering related context but no specific heavy-duty truck penetration projection through 2035.
 
-**gpt-6-luna** (2978 ms)
-1. This passage directly addresses zero-emission heavy-duty truck adoption in China through 2035 and reports projected penetration rates for regional and long-haul freight scenarios, including figures for 2030 under a no-policy scenario. The excerpt does not show the full 2035 projections, but it identifies the relevant forecast.
-2. This passage lists technical assumptions such as annual vehicle kilometers traveled and charging terminology, which may inform the modeling behind heavy-duty truck projections but does not state market penetration rates.
-3. This passage discusses broader strategies for decarbonizing China’s road transport sector, providing related policy context but no specific heavy-duty truck penetration projection through 2035.
+**gpt-6.1-terra** (2776 ms)
+1. The passage explicitly assesses the adoption potential of zero-emission heavy-duty trucks in China through 2035 and gives a projected 2030 penetration range of 2%–17% for regional delivery under a no-policy scenario.
+2. The passage provides annual distance assumptions and terminology for the truck analysis, offering modeling context but no projected market penetration rate.
+3. The passage discusses projections and measures to improve road freight efficiency in China, providing related decarbonization context but no heavy-duty truck penetration forecast.
 
 ### q2_bev-diesel-truck-tco-china: How does total cost of ownership compare between battery electric and diesel heavy-duty trucks in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (7008 ms)
-1. This case study directly analyzes techno-economic feasibility of zero-emission battery-electric trucks in China, which typically includes cost comparisons relevant to total cost of ownership versus diesel in practice.
-2. The passage points to a study on evaluating electric vehicle costs and benefits in China, which can provide cost inputs (and comparisons) needed to estimate TCO differences between electric and diesel heavy-duty trucks.
-3. It explicitly cites a work focused on total cost of ownership for heavy trucks in China comparing battery-electric, fuel cell electric, and diesel trucks—exactly the comparison the query asks for.
-4. This passage is from a policy-focused report on accelerating zero-emission heavy-duty truck adoption in China; such reports often discuss cost and feasibility considerations that inform TCO comparisons even if not fully enumerated here.
-5. Like Passage 4, this is from the same policy/report context and relates to modeling and market behavior that can affect adoption economics and therefore TCO comparisons between ZETs and diesel.
-6. This passage discusses barriers and challenges for BEVs and hydrogen fuel cell vehicles in commercialization, which can influence the real-world costs and costs drivers that would be reflected in TCO relative to diesel.
-7. It references carbon-neutrality pathway comparisons for China’s road transport, which may include cost or scenario assumptions affecting relative economic performance of electrified options versus diesel, including heavy-duty.
-8. This Shenzhen port logistics study is about transportation and distribution systems and could include cost/emissions implications for freight modes, but it is not specifically about comparing battery-electric vs diesel heavy-duty truck TCO.
-9. This provides a vehicle fleet model documentation for Guangdong, useful for estimating vehicle stock, usage, emissions, and energy use—key inputs to TCO modeling—though it does not directly report the TCO comparison results.
-10. It explicitly states that pure electric heavy trucks can reach TCO parity with traditional fuel trucks under ideal 1:1 replacement, and it presents a figure comparing total owning cost components (purchase, taxes, operating, maintenance, insurance, roads) across heavy truck types.
-11. This passage defines TCO and includes an explicit table comparing technologies (with sources/author calculations) in the context of feasibility analysis, which would support a battery-electric vs diesel heavy-duty TCO comparison.
-12. It contains a table listing BEV and FCEV options by vehicle duty class (including heavy-duty), which can support constructing or interpreting TCO comparisons, but it does not itself provide the cost comparison outcome in the excerpt.
-13. Although focused on transit buses, this passage describes a tool that compares diesel and battery electric options across fleets, offering methodological relevance for how to compute TCO differences (even if not heavy-duty trucks).
-14. It references prior studies showing electrics (e.g., e-buses) can be cheaper overall than diesel counterparts, providing background on typical TCO directionality that could motivate expectations for heavy-duty trucks, though not China truck-specific.
-15. This passage discusses a TCO analysis framework and long-term battery degradation impacts for e-buses, which is relevant to how TCO comparisons between electric and diesel trucks should account for lifecycle costs, even if it is not heavy-duty.
-16. It is a methodology guide for transport emissions and social cost assessment, which may support TCO-like welfare calculations or cost components, but it does not directly compare battery-electric vs diesel heavy-duty truck ownership costs.
-17. It explicitly links electric bus adoption to reduced cost of ownership versus emissions, indicating that TCO is a core metric in such comparisons, though again it is bus-specific rather than China heavy-duty trucks.
-18. This is about electrifying school buses in the US and focuses on policy scenarios rather than China heavy-duty truck TCO comparisons, so it offers limited relevance to the specific query.
-19. This tool is explicitly designed to compare a zero-emission truck (ZET) and an internal combustion (diesel/ICE) truck across financial metrics like payback—directly aligned with comparing economic feasibility and TCO-related outcomes, though it is stated for India.
-20. It provides an explanation/definition of TCO for auto-rickshaws rather than heavy-duty trucks in China; it can be methodologically relevant but does not answer the battery-electric vs diesel heavy-duty truck TCO comparison.
+**gpt-6-luna** (5891 ms)
+1. The cited study directly compares the total cost of ownership of battery-electric, fuel-cell, and diesel heavy trucks in China, making it directly relevant to the requested comparison.
+2. This passage cites research on electric-vehicle costs and benefits in China, which may provide broader cost context, but it does not itself give a heavy-truck TCO comparison.
+3. The cited report explicitly analyzes TCO for battery-electric and diesel heavy trucks in China, directly matching the query.
+4. The passage is a bibliography listing work on truck markets and plug-in vehicle choice; it provides research context but no China-specific electric-versus-diesel truck TCO results.
+5. It references vehicle-market and consumer-choice research, which is related background but does not state comparative TCO findings for Chinese heavy-duty trucks.
+6. The passage discusses adoption barriers for battery-electric and fuel-cell vehicles, offering general context about zero-emission technologies rather than a truck TCO comparison in China.
+7. This citation concerns low-carbon transition pathways in China, a broader policy context that does not directly report heavy-truck TCO comparisons.
+8. The passage describes a low-carbon transportation study for a Shenzhen port, but the excerpt does not provide a battery-electric versus diesel heavy-truck cost comparison.
+9. The cited vehicle-fleet model documents estimates of vehicle use, emissions, and energy consumption in China; it may support cost analysis but gives no direct TCO comparison here.
+10. This passage reports that, under ideal one-for-one replacement, some types of battery-electric heavy trucks in Beijing can reach TCO parity with diesel trucks, directly addressing the comparison.
+11. The passage identifies a table comparing heavy-duty truck TCO, but the excerpt only supplies definitions and does not show whether electric or diesel trucks cost less.
+12. This passage concerns vehicle technology categories in Hong Kong, not comparative ownership costs for battery-electric and diesel heavy trucks in China.
+13. The tool compares battery-electric and conventional bus costs across several regions, including China, but it concerns transit buses rather than heavy-duty trucks.
+14. It summarizes TCO findings for electric buses, not heavy-duty trucks, and the cited evidence is not a China-specific truck comparison.
+15. This passage discusses TCO analysis and battery degradation for electric buses, which is related to cost methodology but does not answer the truck comparison.
+16. The excerpt presents transport cost-assessment data without establishing a comparison between battery-electric and diesel heavy trucks in China.
+17. It describes ownership-cost benefits for electric buses in a city-specific case, offering general context but not a Chinese heavy-truck comparison.
+18. This passage concerns U.S. school-bus electrification policy and does not provide relevant TCO evidence for Chinese heavy-duty trucks.
+19. The tool compares zero-emission and diesel trucks, but its stated audience and context are India rather than China, so it offers related methodology rather than a direct answer.
+20. This passage explains TCO for electric auto-rickshaws in Indian cities, a different vehicle class and country from the one in the query.
 
-**gpt-6-luna** (10714 ms)
-1. This Guangdong study analyzes the techno-economic feasibility of battery-electric trucks in China and may compare their costs with diesel trucks across delivery use cases. The excerpt is truncated, so it does not reveal the specific TCO results.
-2. This passage is a bibliography entry about China’s road-transport decarbonization and electric-vehicle costs, but it does not provide a heavy-truck TCO comparison.
-3. It identifies a study specifically comparing the total cost of ownership of battery-electric, fuel-cell, and diesel heavy trucks in China. It is directly pertinent, though the excerpt gives no findings or figures.
-4. This passage lists references on truck markets and related topics, but the excerpt does not provide a China-specific comparison of battery-electric and diesel truck ownership costs.
-5. The excerpt is a list of references about vehicle markets and consumer choice, rather than evidence about the TCO of battery-electric versus diesel heavy-duty trucks in China.
-6. It discusses barriers to adopting battery-electric and fuel-cell vehicles in China and other countries, offering context on technology uptake but no heavy-truck TCO comparison.
-7. This passage cites research on China’s low-carbon transition pathways, which provides broad transport-decarbonization context but no direct comparison of electric and diesel truck TCO.
-8. The study concerns transport systems serving a Shenzhen port and evaluates rail, water, and road options, but the excerpt does not address battery-electric versus diesel truck ownership costs.
-9. This source describes a model for estimating China’s vehicle fleets, use, emissions, and energy consumption; it may provide background inputs, but the excerpt does not report truck TCO comparisons.
-10. It explicitly compares the TCO of several types of battery-electric heavy trucks with diesel trucks in Beijing and says some electric models can reach cost parity under ideal one-for-one replacement. It directly addresses the query, although the excerpt omits the chart’s numerical results.
-11. The passage defines terms for a heavy-duty truck TCO comparison, but the excerpt does not show the comparison results or clarify the technologies and scenarios involved.
-12. This passage concerns road-transport decarbonization in Hong Kong and includes heavy-duty vehicle technology categories, but it does not compare truck ownership costs in China.
-13. The tool compares costs for transit buses, including battery-electric and diesel options in China, but bus economics do not directly answer the question about heavy-duty trucks.
-14. It summarizes TCO findings for electric buses compared with diesel buses in other markets, not heavy-duty trucks in China, so it offers only general context on electrification costs.
-15. This passage discusses methods and studies for assessing electric-bus TCO and battery degradation, but it does not address heavy-duty truck costs or China specifically.
-16. The excerpt presents transport-cost data without a clear connection to Chinese heavy-duty trucks or a battery-electric versus diesel TCO comparison.
-17. It describes electric-bus ownership and operating-cost benefits in a city outside China, providing general context but not the requested truck comparison.
-18. This passage concerns policies for electrifying U.S. school buses and does not provide evidence about heavy-duty truck TCO in China.
-19. The tool compares zero-emission and diesel trucks, but it is designed for Indian operators and the excerpt does not provide results for China or specifically quantify the requested comparison.
-20. This passage explains TCO for electric auto-rickshaws in Indian cities, a different vehicle class and country, so it offers only general background on ownership-cost analysis.
+**gpt-6.1-terra** (8025 ms)
+1. The study concerns the techno-economic feasibility of battery-electric trucks in Guangdong, China, providing context for truck cost comparisons.
+2. This reference points to an evaluation of electric vehicle costs and benefits in China, but does not specify heavy-duty trucks or compare them with diesel trucks.
+3. This citation identifies a study specifically comparing the total cost of ownership of battery-electric, fuel-cell, and diesel heavy trucks in China.
+4. The cited vehicle market and consumer choice models provide background for assessing adoption, but the excerpt does not compare truck ownership costs in China.
+5. The references concern medium- and heavy-duty vehicle markets and consumer choice, offering background rather than a China-specific ownership cost comparison.
+6. The passage notes barriers to adopting battery-electric and fuel-cell vehicles, providing context for transport electrification but no truck cost comparison.
+7. This citation concerns low-carbon transition pathways in China, providing broader decarbonization context rather than a truck ownership cost comparison.
+8. The study evaluates freight transport options serving Yantian Port, providing context for freight operations in China but no electric-versus-diesel truck cost comparison.
+9. The cited China vehicle fleet model estimates vehicle stocks, usage, emissions, and energy use, which can provide context for transport analysis but not a direct cost comparison.
+10. The passage states that some battery-electric heavy trucks could reach total cost parity with diesel trucks under ideal one-for-one replacement conditions, and identifies the cost categories compared.
+11. The passage defines total cost of ownership, heavy-duty trucks, and Chinese yuan for an authors' comparison, but the excerpt does not show its results.
+12. The excerpt identifies vehicle and powertrain categories in a Hong Kong road decarbonization study, but does not compare ownership costs.
+13. The tool compares diesel and battery-electric transit buses in China and other markets, offering a related cost-comparison approach rather than results for heavy-duty trucks.
+14. The passage reports an electric-versus-diesel bus ownership cost finding from India, illustrating TCO comparisons but not addressing Chinese heavy-duty trucks.
+15. The passage discusses how battery degradation relates to electric-bus total cost of ownership, providing potentially relevant cost context but no Chinese truck comparison.
+16. The excerpt presents transport emissions data for gasoline vehicles, providing methodology context but no electric-versus-diesel truck ownership cost comparison.
+17. The passage discusses electric-bus operating costs and potential ownership savings, but its example is not about heavy-duty trucks in China.
+18. The passage reports projected effects of policies on US electric school bus sales, providing electrification context but no relevant truck cost comparison.
+19. The Fi-ZET tool compares zero-emission and diesel trucks on financial measures in India, offering a related comparison method but not China-specific results.
+20. The passage introduces total cost of ownership for electric auto-rickshaws in India, providing general TCO context but not a heavy-duty truck comparison.
 
 ### q3_regional-vs-longhaul-adoption: What is the difference in zero-emission truck adoption potential between regional transport and long-haul transport scenarios?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (4661 ms)
-1. This passage provides a direct comparison of zero-emission truck (ZET) market share/adoption outcomes for regional delivery versus another freight mode within the article’s regional and long-haul framing. It quantifies adoption potential in the regional case (2–17% by 2030) and describes how policy incentives affect the gap to long-haul adoption.
-2. This passage discusses a key sensitivity assumption (Residual_value_30%) used in the techno-economic/policy modeling within the same regional vs long-haul study. While it does not by itself state the adoption differences, it underpins how the scenario results for regional and long-haul potential are tested.
-3. This passage explains factors limiting heavy-duty truck adoption of zero-emission options, including lack of policy incentives and delayed TCO parity. These constraints are relevant background for why regional transport scenarios may differ in adoption potential from long-haul scenarios.
-4. This passage focuses on emission breakdown across modes under different policy scenarios, which supports understanding how regional vs long-haul activity translates into modeled outcomes. However, it does not explicitly quantify ZET adoption potential differences, making it only indirectly related to the adoption potential question.
-5. This passage explicitly addresses how implementing zero-emission freight zones (ZEFZs) impacts long-haul versus regional-haul transport and goods supply. It is therefore directly relevant to comparing adoption potential between regional and long-haul scenarios under ZEFZ-related policies.
-6. This passage discusses differential feasibility/adoption considerations for urban delivery versus longer-mile and cold-chain operations, mapping closely onto the regional vs long-haul distinction. It directly indicates that BEVs can work well for most city light delivery (regional) but face challenges at long distances (long-haul).
-7. This passage provides methodological sourcing (personal communications) for a feasibility analysis, rather than reporting adoption potential differences between regional and long-haul scenarios. It is relevant only as supporting evidence for the modeling assumptions.
-8. Similar to the previous one, this passage is additional documentation of interview/communication sources used in the feasibility analysis. It does not itself compare adoption potential, but it underlies the study that includes regional delivery use cases.
-9. This passage describes limitations of a financial assessment tool, including sensitivity to user-defined financial assumptions. It is relevant background for interpreting scenario-based adoption potential differences, though it does not directly compare regional vs long-haul adoption levels.
+**gpt-6-luna** (3549 ms)
+1. It directly compares zero-emission truck adoption potential for regional delivery and long-haul freight, including projected market shares under a no-incentive scenario.
+2. It describes a residual-value assumption used in sensitivity analysis, which may affect ZET adoption economics, but it does not state the difference between regional and long-haul potential.
+3. It gives background on barriers to heavy-duty truck adoption, including technology constraints, industry fragmentation, delayed cost parity, and limited incentives, but does not compare the two transport scenarios.
+4. It concerns road-transport emissions under different policy scenarios, offering broad decarbonization context but no specific comparison of ZET adoption in regional versus long-haul freight.
+5. It notes that zero-emission freight zones could affect both long-haul and regional-haul transport, but does not quantify or compare their adoption potential.
+6. It discusses how zero-emission truck suitability varies by urban use case, including limits for longer-distance and cold-chain operations, providing context on how operating conditions affect adoption.
+7. This passage is a reference list about interviews with truck dealers and other stakeholders; it provides no substantive comparison of regional and long-haul adoption potential.
+8. This passage is also a reference list for stakeholder communications and does not provide findings about adoption differences between regional and long-haul transport.
+9. It describes financial-input limitations in a tool for comparing ZET and conventional trucks, which is relevant to adoption feasibility generally but not to differences between the transport scenarios.
 
-**gpt-6-luna** (5235 ms)
-1. This passage directly compares zero-emission truck adoption prospects in regional delivery and long-haul freight, including the regional market-share estimate and the relatively nascent long-haul outlook.
-2. It describes an assumed residual-value guarantee used in sensitivity analysis, a financial condition that could affect adoption potential, but it does not itself compare regional and long-haul scenarios.
-3. It gives background on barriers to zero-emission heavy-duty truck adoption, including technology constraints, industry fragmentation, delayed cost parity, and limited incentives. It does not distinguish regional from long-haul potential.
-4. It concerns road-transport emissions under different policy scenarios, which provides broader decarbonization context but does not directly compare zero-emission truck adoption in regional and long-haul transport.
-5. It addresses how zero-emission freight zones could affect both long-haul and regional-haul transport, making it relevant to the two freight contexts, though it does not quantify their adoption potential.
-6. It discusses which urban truck applications are suitable for zero-emission vehicles and notes challenges for longer-distance and cold-chain uses. This offers related context on how operating conditions affect adoption, but it is not a regional-versus-long-haul comparison.
-7. This is a reference-list fragment from a study of urban and regional delivery feasibility; it identifies the study's topic but provides no findings about adoption potential or a long-haul comparison.
-8. This is another reference-list fragment from the urban and regional delivery feasibility study and supplies no substantive comparison of adoption potential with long-haul transport.
-9. It describes financial-assumption limitations in a truck-feasibility tool, which may matter when assessing adoption economics but does not compare regional and long-haul scenarios.
+**gpt-6.1-terra** (3897 ms)
+1. It directly compares adoption potential, projecting a 2–17% zero-emission truck market share for regional delivery by 2030 without incentives and nascent adoption in the other scenario, though the excerpt is truncated.
+2. It identifies a residual-value guarantee used in sensitivity analysis, a financial assumption that could affect adoption estimates, but gives no regional-versus-long-haul comparison.
+3. It describes technology, industry, cost-parity, and policy barriers to heavy-duty truck adoption, providing context for differences between transport scenarios.
+4. It presents road transport emissions under different policy scenarios, providing decarbonization context but no visible comparison of truck adoption potential.
+5. It discusses how zero-emission freight zones could affect long-haul and regional-haul transport, but does not compare their adoption potential.
+6. It says battery-electric trucks can meet most urban light-delivery needs and have cost advantages, while indicating challenges for longer-distance operations. This provides related evidence about how suitability varies by use case.
+7. It lists consultations with truck dealers and manufacturers for a study of urban and regional zero-emission truck feasibility, but provides no findings or long-haul comparison.
+8. It lists consultations with truck dealers and new-energy truck experts for a regional feasibility study, but provides no adoption results or long-haul comparison.
+9. It notes that a zero-emission truck feasibility tool is sensitive to financial assumptions, which is relevant to interpreting adoption estimates but does not compare transport scenarios.
 
 ### q4_bev-payback-periods: What are the payback periods for battery electric semi-trucks compared to diesel trucks in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (5100 ms)
-1. This passage provides assumptions about diesel truck residual value, which directly affects comparative lifetime economics and thus the payback period comparison versus battery electric trucks.
-2. It focuses on techno-economic feasibility of battery electric trucks (BETs) in China (e.g., port operations), which is the type of analysis that can be used to derive payback periods relative to diesel. 
-3. It includes an explicit residual value assumption for zero-emission trucks used in sensitivity analysis, which is a key input into cashflow and payback period calculations compared with diesel.
-4. This passage states when BETs reach TCO parity relative to ICEV (diesel) counterparts, and TCO parity timing is closely related to (and often used as a proxy for) payback timing.
-5. It defines “payback period” as the time needed to break even on an investment, establishing the conceptual metric the question asks for in China comparisons.
-6. This is a bibliographic citation about evaluating electric vehicle costs and benefits in China, which likely contains supporting data needed for payback-period analyses.
-7. This cited white paper is explicitly about total cost of ownership for heavy trucks in China across battery electric, fuel cell electric, and diesel, which is the economic basis for deriving or comparing payback periods.
-8. It provides quantified cost differences between pure electric freight trucks and conventional fuel trucks (including distance thresholds where parity may occur), which can inform payback or break-even timing.
-9. It discusses constraints and current emphasis of the electric truck market in China (e.g., battery capability for heavy-duty power demands), which affects which routes/segments get analyzed for economics like payback periods.
-10. This citation relates to modeling the vehicle fleet and usage in China, which can provide inputs (mileage, utilization) required to compute payback periods for BEVs vs diesel.
-11. This cited work directly compares TCO for heavy trucks in China across battery electric, fuel cell, and diesel, which is closely tied to payback-period comparisons.
-12. It describes diesel-based port freight transport and the context for decarbonization, but it does not directly provide payback-period calculations; still, it frames where BEVs vs diesel are being considered.
-13. It explicitly links accelerated adoption to reaching TCO parity with diesel, which provides timing information that can correspond to payback/break-even periods for battery electric (and hydrogen) HGVs.
+**gpt-6-luna** (4132 ms)
+1. This passage compares residual-value assumptions for diesel and zero-emission trucks, which can affect their costs and payback calculations, but it does not state the payback periods.
+2. The study concerns the economic feasibility of battery electric trucks in Guangdong, China, but the excerpt does not provide payback periods for semi-trucks or a direct comparison with diesel.
+3. This passage describes a sensitivity assumption for zero-emission truck residual values, a factor that can influence payback periods, but it gives no payback results.
+4. It reports cost advantages and timing of total-cost-of-ownership parity for battery electric trucks in several Chinese use cases, but TCO parity is not the same as a payback period and the excerpt does not specify semi-truck payback versus diesel.
+5. This passage defines payback period as an investment break-even measure and identifies it as an output of a truck comparison tool, but it gives no China-specific payback figures.
+6. This is a bibliography excerpt with no payback-period findings; it only provides general background references on China’s road transport sector.
+7. It cites a study comparing battery electric, fuel-cell, and diesel heavy trucks in China, which is closely related to the query, but the excerpt contains no payback-period numbers.
+8. The excerpt gives cost differences and mileage thresholds for electric trucks, including a semi-truck category, relative to conventional trucks in Beijing; these figures may inform economic comparison but do not clearly state payback periods.
+9. This passage discusses the development and limitations of electric heavy trucks in China, providing market context but no payback-period comparison with diesel.
+10. This is a reference to a China transport-sector modeling document and provides no information about electric semi-truck payback periods.
+11. It cites a study directly comparing total ownership costs of battery electric, fuel-cell, and diesel heavy trucks in China, but gives no payback-period results itself.
+12. This Shenzhen port study provides context on diesel trucks in Chinese freight operations, but the excerpt does not give comparative payback periods for electric semi-trucks.
+13. It notes that zero-emission heavy goods vehicles may gain uptake after reaching TCO parity with diesel, offering general economic context but no China-specific semi-truck payback periods.
 
-**gpt-6-luna** (7331 ms)
-1. This passage discusses residual-value assumptions for diesel and zero-emission trucks, which can affect their comparative economics and payback calculations, but the excerpt does not give payback periods.
-2. This Guangdong study compares battery-electric and conventional trucks in Chinese delivery use cases, providing relevant economic context, but the excerpt does not state semi-truck payback periods.
-3. The passage describes a residual-value sensitivity assumption for zero-emission trucks, a factor in truck cost and payback analysis, but it does not report payback periods.
-4. It reports cost advantages and timing of total-cost-of-ownership parity for battery-electric trucks in several Guangdong use cases, which is related to—but not the same as—their payback period versus diesel.
-5. This passage defines payback period as an investment-recovery metric and identifies it as an output of truck comparisons, but it provides no China-specific semi-truck figures.
-6. This is a reference-list excerpt about vehicle statistics and electric-vehicle costs in China, offering background but no semi-truck payback estimates.
-7. It cites a study comparing battery-electric, fuel-cell, and diesel heavy trucks in China, a potentially relevant source for the requested comparison, but gives no payback-period results itself.
-8. The excerpt gives cost differences and distance-related figures for electric trucks, including a 49-ton semi-truck, compared with conventional fuel trucks in Beijing; these figures are relevant to economic recovery but are not clearly stated as payback periods.
-9. It provides background on the limitations and development of electric heavy trucks in China, but does not compare their payback periods with diesel trucks.
-10. This reference-list material concerns a China road-transport model and supplies no specific battery-electric versus diesel semi-truck payback figures.
-11. It cites a study on total ownership costs for heavy trucks in China, including battery-electric and diesel models, which is relevant background but does not state payback periods.
-12. The passage describes diesel-truck use in Chinese container ports and the broader low-carbon transport context, but provides no comparative payback-period data.
-13. It links zero-emission heavy-goods vehicles' adoption to reaching total-cost parity with diesel, which is related to comparative economics but does not provide payback periods or China-specific semi-truck figures.
+**gpt-6.1-terra** (4753 ms)
+1. It provides a diesel truck residual-value assumption relevant to comparing lifetime costs, but gives no payback period.
+2. It identifies a study of the economic feasibility of battery electric trucks in Guangdong, China, but the excerpt gives no payback figures.
+3. It describes a zero-emission truck residual-value sensitivity assumption that can affect financial comparisons, but gives no payback period.
+4. It reports total-cost-of-ownership advantages and expected parity before model year 2027 for certain battery electric truck applications in Guangdong, but does not give payback periods.
+5. It defines payback period as an output of a tool comparing zero-emission and combustion-engine trucks, but provides no China-specific result.
+6. It cites sources on vehicle statistics and electric vehicle costs and benefits in China, providing background rather than truck payback estimates.
+7. It cites a study comparing the total cost of ownership of battery electric and diesel heavy trucks in China, but provides no results.
+8. It compares the total cost of ownership of a 49-tonne battery electric semi-tractor with its conventional-fuel counterpart in Beijing, reporting a cost gap rather than a payback period.
+9. It discusses battery limitations and heavy-truck electrification in China, providing technological context rather than payback estimates.
+10. It cites a vehicle fleet model covering vehicle use, emissions, and energy consumption, but provides no electric-versus-diesel payback comparison.
+11. It cites a comparative total-cost-of-ownership study of battery electric and diesel heavy trucks in China, but does not state its findings.
+12. It identifies diesel truck use in Chinese container-port logistics, providing context for a potential electric truck application but no payback figures.
+13. It discusses prospective total-cost parity between electric and diesel heavy goods vehicles in Hong Kong, but gives no payback period.
 
 ### q5_bikeshare-trip-substitution: What share of bike-share trips replace private car, taxi, or ride-hailing trips in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (7735 ms)
-1. This passage reports survey findings on dockless bike-sharing in China, including the share of trips that replace other motorized trips (it explicitly discusses replacing short-distance motor vehicle trips). It directly contains the information needed to estimate what portion of bike-share trips come from car/taxi/ride-hailing substitution.
-2. This passage is about decarbonization strategies for China’s road transport sector and focuses on emissions/energy consumption by mode. It does not provide the specific trip-replacement shares for bike-share versus private car/taxi/ride-hailing.
-3. This passage states that bike-sharing is used for connecting to other transport and includes figures about the percentage of trips that substitute private car trips for short trips (the text is truncated but clearly about substitution). It directly addresses the question about replacement of private car/taxi/ride-hailing trips, though taxi/ride-hailing may be less explicit.
-4. This passage provides general modal share targets/achievements for commute trips in other cities/countries (e.g., Santiago) and does not focus on China or bike-share trip substitution.
-5. This passage gives factual context about the scale of bicycle-sharing systems in China (e.g., Hangzhou fleet size). It does not quantify what share of trips replace private car/taxi/ride-hailing.
-6. This passage describes the emergence and growth of dockless bike-sharing technology in China, including fleet adoption. It does not provide trip-replacement percentages against private car/taxi/ride-hailing.
-7. This passage discusses China’s broader transport and emissions targets (e.g., rail and bus ridership growth), not bike-share substitution of private car/taxi/ride-hailing trips.
-8. This passage is about another topic (e.g., living conditions in Johannesburg) and does not provide China bike-share modal substitution data.
-9. This passage is about electrifying ride-hailing in the US/EU/Canada, focusing on whether ride-hailing replaces or adds to private vehicle travel. It does not provide China bike-share replacement shares.
-10. This passage focuses on Hong Kong’s road transport emissions and net-zero pathways. It does not answer the question about what share of China bike-share trips replace private car/taxi/ride-hailing trips.
-11. This passage discusses bicycle use as a “last-mile” mode and includes data on walking/cycling shares connecting to public transit in various Chinese cities. It provides related context but not the specific share of bike-share trips that substitute private car/taxi/ride-hailing.
-12. This is a methodology guide for transport emissions/social cost and includes tables for private car emissions categories. It does not provide bike-share trip substitution shares.
-13. This passage discusses ride-hailing users substituting modes in general (competition between modes) but does not provide China bike-share replacement statistics.
-14. This passage covers lessons from implementing public bicycle sharing in India, not China or substitution of private car/taxi/ride-hailing trips.
-15. This passage is a guide for assessing environmental impacts of shared micromobility and explains what cities should evaluate. It does not contain the specific empirical share for China bike-share replacing car/taxi/ride-hailing.
-16. This passage provides conceptual discussion about environmental impacts depending on whether shared services replace or add trips. It does not give China-specific quantitative replacement shares.
-17. This passage provides broad global context on shared mobility services and their growth, not China-specific evidence on replacement of private car/taxi/ride-hailing by bike-share trips.
-18. This passage is about upgrading informal settlements (Surabaya) and does not concern bike-sharing trip substitution in China.
-19. This passage describes demand responsive transit/ride-hailing business models and does not provide China bike-share substitution shares.
-20. This passage provides grid-impact modelling for electric vehicles in China, including some taxi adoption figures. It is not about bike-share trip replacement of private car/taxi/ride-hailing trips.
-21. This passage is an overview of public transportation reforms in Latin America and includes unrelated table values. It does not address China bike-share trip substitution.
-22. This passage gives background on the prevalence of bike-sharing in China (number of cities offering services) and vehicle ownership trends. It does not provide the specific percentage of bike-share trips that replace private car/taxi/ride-hailing.
-23. This passage is about public space interventions in Guadalajara and shows mode split for trip purposes, not bike-share substitution in China.
-24. This passage discusses behavioral choice for commuting to metro rail in Bengaluru and does not include China bike-share replacement shares.
-25. This passage focuses on bus aggregators in India and provides modelling details for private car trip costs. It does not provide bike-share substitution data for China.
-26. This passage discusses feasible interventions for Mexico’s transport sector, including encouraging more public transport/cycling to reduce vehicle trips. It does not provide China bike-share empirical trip replacement shares.
+**gpt-6-luna** (5699 ms)
+1. This Chinese bike-share survey passage appears to provide trip-substitution findings, but the excerpt is truncated before the specific share replacing private cars, taxis, or ride-hailing is visible.
+2. It discusses decarbonizing China's road transport but does not give bike-share trip substitution rates in the excerpt.
+3. This report explicitly states that 17% to 45% of bike-share trips replaced private motorized trips, directly addressing the requested share, though the excerpt cuts off before specifying the exact categories or context.
+4. It gives walking and cycling commute targets for Vietnamese cities, not the share of Chinese bike-share trips replacing motorized trips.
+5. It provides background on the scale of bicycle sharing in China but no information about what trips bike sharing replaces.
+6. It describes the rapid growth of dockless bike sharing in China without reporting which transport modes its trips substitute for.
+7. It gives figures on public transit use and policy in China, which is contextual to urban mobility but does not answer the question about car, taxi, or ride-hailing substitution.
+8. It concerns travel patterns in Johannesburg and does not provide Chinese bike-share substitution data.
+9. It discusses whether ride-hailing replaces private vehicle or other ride-hailing miles, but not whether Chinese bike-share trips replace those modes.
+10. It concerns transport emissions in Hong Kong and does not report bike-share trip substitution in China.
+11. It discusses bicycle access to public transport in China, not the proportion of bike-share trips that replace car, taxi, or ride-hailing journeys.
+12. It lists transport modes for an emissions methodology but provides no Chinese bike-share substitution share.
+13. It describes ride-hailing as a substitute mode in other contexts, but does not quantify bike-share trips replacing motorized travel in China.
+14. It concerns public bicycle sharing in India rather than China and does not supply the requested substitution share.
+15. It explains how cities can assess micromobility emissions and substitution effects, but gives no specific China-wide share for the named modes.
+16. It discusses the environmental effect of ride-sharing trips replacing other modes, not the share of Chinese bike-share trips replacing cars, taxis, or ride-hailing.
+17. It provides broad context on shared mobility, including bike sharing, but no specific Chinese trip-substitution proportion.
+18. It concerns settlement conditions in Surabaya and is unrelated to Chinese bike-share trip substitution.
+19. It explains ride-hailing service models but does not address bike-share substitution rates in China.
+20. It presents projections for electric vehicles and taxis in China, not the share of bike-share trips replacing taxi or other car journeys.
+21. It concerns informal transport modes in Latin America and provides no relevant China bike-share substitution data.
+22. It notes the spread of shared bikes and rising car ownership in China, providing background but no proportion of bike-share trips that replace motorized modes.
+23. It reports transport mode shares for Guadalajara, not Chinese bike-share trips or their substitutes.
+24. It discusses commuting mode choices in Bengaluru and does not quantify Chinese bike-share trip substitution.
+25. It concerns bus aggregators and car-trip costs in India, not bike-share substitution in China.
+26. It discusses broad transport strategies in Mexico, but does not provide the requested Chinese bike-share substitution share.
 
-**gpt-6-luna** (9773 ms)
-1. This passage appears to report survey results on how dockless bike sharing changes travel choices in Chinese cities, which may include the share of trips replacing motorized modes. The excerpt is truncated before giving the figures.
-2. It discusses emissions and energy use across transport modes in China, but the excerpt does not address which trips bike sharing replaces or provide a substitution share.
-3. It directly reports that 17%–45% of bike-share trips replaced private motorized trips, addressing the requested share. The excerpt is cut off before specifying the full mode breakdown.
-4. This passage concerns walking and cycling targets in Vietnamese cities, not the share of Chinese bike-share trips replacing car, taxi, or ride-hailing trips.
-5. It gives background on the scale of bicycle sharing in China but does not say what share of trips substitute for private cars, taxis, or ride-hailing.
-6. It describes the rapid growth and rollout of dockless bike sharing in China, providing context but no trip-substitution percentage.
-7. It provides context about public transport use and policy in China, but it does not quantify bike-share trips replacing motorized private or for-hire trips.
-8. This passage concerns travel patterns in Johannesburg rather than bike-share trip substitution in China, so it does not answer the query.
-9. It discusses how ride-hailing affects emissions depending on what trips it replaces, but does not provide a Chinese bike-share substitution share.
-10. This passage concerns transport emissions in Hong Kong and does not address bike sharing or the share of trips replacing cars, taxis, or ride-hailing.
-11. It discusses bicycle access to public transportation in China, which is related to bike travel but not to the requested share of trips replacing private motorized modes.
-12. It lists transport categories for an emissions assessment methodology but provides no evidence about Chinese bike-share trips or their replacements.
-13. It describes ride-hailing as a substitute mode in other contexts, but does not quantify bike-share trips replacing ride-hailing or other motorized modes in China.
-14. It concerns public bicycle-sharing implementation in Indian cities, not the replacement share for bike-share trips in China.
-15. It explains how cities can assess micromobility’s emissions effects, which is related to trip substitution, but gives no China-specific share.
-16. It discusses the emissions implications of shared mobility trips replacing other modes, but does not report the requested Chinese bike-share percentage.
-17. It provides general context on the growth of shared mobility, including bike sharing, but does not quantify which modes bike-share trips replace in China.
-18. This passage concerns transport and settlement conditions in Surabaya and does not address Chinese bike-share trip substitution.
-19. It explains how ride-hailing services operate, but does not provide information about bike sharing or its mode-replacement share in China.
-20. It concerns projections for electric vehicles and taxis in China, not bike-share trips or the share replacing taxis, cars, or ride-hailing.
-21. It reports on motorcycle- and bike-taxi services in Latin America rather than Chinese bicycle sharing and its trip substitutions.
-22. It notes the spread of shared bikes and growth in private car ownership in China, offering relevant background but no estimate of bike-share trips replacing motorized modes.
-23. It gives transport-mode shares in Guadalajara, Mexico, rather than the replacement share for bike-share trips in China.
-24. It discusses commuter mode choices in Bengaluru, India, without addressing Chinese bike-share trip substitution.
-25. It discusses trip-cost assumptions for cars in India, not how bike-share trips in China replace car, taxi, or ride-hailing journeys.
-26. It concerns transport strategies in Mexico and mentions cycling generally, but does not provide the requested China-specific substitution share.
+**gpt-6.1-terra** (7847 ms)
+1. The passage provides survey context about why people choose cycling over walking and buses for short and medium trips in Chinese cities, but does not state the share replacing car or ride-hailing trips.
+2. The passage describes data sources for energy use and emissions across transport modes in China, but does not discuss bike-share trip substitution.
+3. The passage reports that 17% to 45% of bike-share trips replace private vehicle trips, although the excerpt cuts off before the full list of modes is visible.
+4. The passage provides cycling and walking targets and results for cities outside China, offering general mobility context but no bike-share substitution figures.
+5. The passage describes the scale of bike sharing in China, including Hangzhou's system, but not which trips it replaces.
+6. The passage provides background on the emergence and growth of dockless bike sharing in China, without reporting substitution shares.
+7. The passage describes growth in urban rail and bus ridership in China, providing transport context rather than bike-share substitution data.
+8. The passage contains Johannesburg household and travel statistics, not evidence about bike-share substitution in China.
+9. The passage discusses whether electric ride-hailing replaces private vehicle or conventional ride-hailing travel, but does not address bike-share trips in China.
+10. The passage concerns transport emissions data for Hong Kong, not the share of bike-share trips replacing car or ride-hailing trips.
+11. The passage discusses cycling as a last-mile mode connecting people to public transport in Chinese cities, but does not quantify replacement of car or ride-hailing trips.
+12. The passage lists transport modes and driving contexts for an emissions assessment, including private cars, but provides no bike-share substitution estimates.
+13. The passage discusses ride-hailing as a substitute for other travel modes in Kampala and Hyderabad, not bike-share substitution in China.
+14. The passage introduces public bicycle sharing in India, providing related international context but no evidence about substitution rates in China.
+15. The passage discusses assessing the greenhouse-gas effects of shared micromobility, for which mode substitution matters, but gives no China-specific share.
+16. The passage discusses the environmental consequences of ride-sharing replacing public transport or walking, rather than bike sharing replacing car trips in China.
+17. The passage notes the growth of shared mobility services, including bike sharing, but does not quantify trips replaced in China.
+18. The passage contains household service statistics for Surabaya and does not address bike-share substitution in China.
+19. The passage explains how ride-hailing services operate, providing background on one of the modes in the query but no bike-share substitution data.
+20. The passage presents projections for electric taxi fleets in China, not the share of taxi trips replaced by bike sharing.
+21. The passage includes motorcycle- and bike-taxi figures in a Latin American transport study, but does not address bike-share substitution in China.
+22. The passage reports that bike sharing is available in more than 360 Chinese cities alongside rising car ownership, but gives no trip replacement share.
+23. The passage provides a travel-mode breakdown for Guadalajara, including bicycles, taxis and private vehicles, but not bike-share substitution in China.
+24. The passage discusses income-related commuting choices in Bengaluru, providing general mode-choice context but no China bike-share data.
+25. The passage describes assumptions for calculating private-car trip costs in India's National Capital Region, not bike-share substitution in China.
+26. The passage discusses shifting travel toward public transport and cycling in Mexico, but does not quantify bike-share substitution in China.
 
 ### q6_bikeshare-co2-reduction: How much CO2 emissions reduction is attributed to bike-sharing in China?
 
-**check:** ✗ gpt-5.4-nano — response contains substituted text (provenance.sanitized), so part of it is not model output · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (6163 ms) — sanitized: some text was substituted
-1. This passage is an analysis of dockless bike-sharing in Chinese cities and includes study outputs derived from survey data. It is likely to contain the emissions reduction attribution estimates the query asks for.
-2. This passage provides relevant context for the query.
-3. This passage is about decarbonizing China’s road transport sector and modeling inputs/outputs, but it does not specifically quantify CO2 reductions attributed to bike-sharing. It provides sector context rather than the bike-sharing attribution number.
-4. This passage describes bicycle-sharing examples and mentions that China has the world’s largest systems, but it does not provide CO2 emissions reduction attributed to bike-sharing. It is relevant only for background on the scale of bike-sharing.
-5. This passage gives specific operational details about China’s bicycle share systems (e.g., Hangzhou stations and bicycles). It does not state CO2 emissions reduction attributed to bike-sharing, but it may support understanding of how large the system is for any emissions calculations.
-6. This passage discusses general climate mitigation modeling outcomes for countries/regions and includes percentage reductions, but it does not focus on bike-sharing or attribute CO2 reductions to it. Therefore it does not directly answer the query.
-7. This passage focuses on transport CO2 accounting methodologies and notes historical trends for Beijing and Shenzhen. It does not quantify the CO2 reduction attributable to bike-sharing, so it is only method/background related.
-8. This passage is about the evolution of bike-sharing technology (e.g., smart cards) and interoperability with public transit payments. It does not provide emissions reduction attribution, so it is not directly relevant to the CO2 reduction amount.
-9. This passage provides emissions shares for motor vehicles and other pollutants in Beijing, which is not bike-sharing-specific and does not provide a CO2 reduction attribution for bike-sharing. It is therefore only indirectly related to transport emissions context.
-10. This passage discusses projections of China’s transport emissions peaking and links to climate goals, but it does not mention bike-sharing or provide an attribution of CO2 reductions to it. It is broader transport decarbonization context.
-11. This passage is about emissions accounting approaches (production vs. consumption) for shared micromobility. While not giving a specific CO2 reduction figure for China bike-sharing, it is relevant because the attribution depends on the accounting framework.
-12. This passage describes scenario/optimization logic for transport decarbonization and does not mention bike-sharing or China-specific CO2 reduction attribution. It is not directly responsive to the query.
-13. This passage describes how CO2 emissions are calculated for bike sharing (comparing trips that could have been made by car) in an India context. It is relevant only for methodology understanding, not for the specific question about how much CO2 reduction is attributed to bike-sharing in China.
-14. This passage provides energy/emissions background about China’s overall CO2 situation (e.g., coal share) but does not discuss bike-sharing or its attributable CO2 reductions. It is not directly related to the query.
-15. This passage is about feasibility of zero-emission trucks and case study activities, not bike-sharing. It does not contain information on CO2 reduction attributed to bike-sharing in China.
+**gpt-6-luna** (4080 ms)
+1. This study analyzes the environmental effects of dockless bike-sharing in Chinese cities, so it is directly relevant, although the excerpt does not show the amount of CO₂ reduction.
+2. The passage explicitly reports that Chinese bike-sharing replaces some short motor-vehicle trips and provides emissions-reduction benefits, making it directly relevant; the excerpt omits the numerical reduction.
+3. This passage concerns emissions accounting for China's road transport sector, but it does not address bike-sharing or quantify reductions attributable to it.
+4. It gives examples of bike-sharing systems in China and elsewhere, but provides no information about CO₂ emissions reductions.
+5. It describes the scale of bike-sharing in China through the Hangzhou system's fleet and stations, but does not quantify any emissions reduction.
+6. The passage gives modeled transport-emissions reduction targets for several countries, including China, but does not attribute those reductions to bike-sharing.
+7. It provides context on transport CO₂ emissions in Chinese cities, but does not discuss bike-sharing or its emissions-reduction contribution.
+8. It mentions bike-sharing integration with public transport in Chinese cities, which is related to travel behavior, but gives no CO₂ reduction estimate.
+9. This passage concerns vehicle pollution in Beijing, but it does not address bike-sharing or quantify CO₂ reductions from it.
+10. It discusses China's transport emissions and decarbonization needs, but does not identify bike-sharing as a source of reductions or provide a relevant figure.
+11. The guide explains how emissions from shared micromobility can be assessed, providing methodological context, but the excerpt gives no China-specific reduction amount.
+12. This passage concerns transport decarbonization strategies in India rather than bike-sharing in China, so it does not answer the query.
+13. It describes a method for calculating CO₂ emissions avoided by public bicycle-sharing in India, offering related methodological context but no estimate for China.
+14. It provides background on China's energy-related emissions, but does not discuss bike-sharing or emissions reductions attributable to it.
+15. This passage concerns zero-emission trucks in Guangdong, not bike-sharing, and gives no relevant estimate of bike-sharing's CO₂ reduction.
 
-**gpt-6-luna** (6553 ms)
-1. This study evaluates dockless bike-sharing in Chinese cities and mentions emissions benefits, but the excerpt gives no specific CO₂ reduction figure.
-2. This passage describes a China-focused study that estimates bike-sharing’s emissions reductions, directly matching the query, though the excerpt omits the numerical result.
-3. It concerns emissions accounting for China’s road-transport modes, but does not discuss bike-sharing or give its attributed CO₂ reduction.
-4. It provides context on the scale of bike-sharing in China, including Hangzhou’s system, but says nothing about CO₂ reductions.
-5. It notes that China has the world’s largest bike-sharing systems and gives Hangzhou system statistics, but does not quantify emissions reductions.
-6. It reports modeled emissions reductions for countries including China, but the figure is not specifically attributed to bike-sharing.
-7. It gives background on rising transport CO₂ emissions in Chinese cities, but does not address bike-sharing’s reduction impact.
-8. It describes bike-sharing integration with public transport in Chinese cities, which is relevant context for potential emissions effects, but gives no reduction estimate.
-9. It discusses motor-vehicle pollution in Beijing, but does not connect those emissions to bike-sharing or quantify a reduction from it.
-10. It provides context on China’s transport decarbonization needs, but does not identify bike-sharing’s contribution or a specific reduction amount.
-11. It explains methods for assessing shared micromobility emissions, which can inform how reductions are calculated, but gives no China-specific result.
-12. It concerns transport decarbonization strategies in India rather than bike-sharing emissions reductions in China.
-13. It explains a method for calculating CO₂ savings from public bicycle sharing, but the discussion is about Indian cities, not the reduction attributed to bike-sharing in China.
-14. It provides broad context on China’s energy-related CO₂ emissions, but does not discuss bike-sharing or its emissions reductions.
-15. It concerns zero-emission trucks in Guangdong rather than bike-sharing, so it does not answer the query.
+**gpt-6.1-terra** (6112 ms)
+1. The passage describes a large survey of dockless bike-sharing users across Chinese cities, but the excerpt reports health benefits rather than CO2 reductions.
+2. The passage explicitly discusses emissions-reduction estimates from bike-sharing in Chinese cities and the replacement of motor vehicle trips, although the excerpt gives no CO2 reduction figure.
+3. The passage describes data sources for energy consumption and transport air pollutants, providing methodological context but no bike-sharing CO2 estimate.
+4. The passage provides background on the scale of bike-sharing in Hangzhou, China, but does not quantify its emissions impact.
+5. The passage gives the number of bikes and stations in Hangzhou's bike-sharing system, providing scale but not an emissions reduction.
+6. The passage cites a modeled 89% reduction in China and India by 2050, but the excerpt does not attribute it to bike-sharing.
+7. The passage provides context on rising transport CO2 emissions in Beijing and Shenzhen, but does not discuss bike-sharing reductions.
+8. The passage describes how bike-sharing integrates with public transport in Hangzhou and Guangzhou, but gives no emissions estimate.
+9. The passage discusses motor vehicle pollution in Beijing, providing transport emissions context without quantifying bike-sharing benefits.
+10. The passage discusses China's transport emissions trajectory and climate goals, but does not address bike-sharing's contribution.
+11. The passage explains approaches to accounting for greenhouse gas emissions, which could inform assessment of shared micromobility, but provides no China-specific reduction figure.
+12. The passage concerns transport resource efficiency in India, but the excerpt does not address bike-sharing or emissions reductions in China.
+13. The passage describes a method for calculating CO2 savings from bicycle sharing in India, but does not provide an estimate for China.
+14. The passage provides background on China's energy-related CO2 emissions and coal reliance, but does not discuss bike-sharing.
+15. The source concerns zero-emission trucks in China, while the excerpt describes general partnership activities and provides no bike-sharing emissions data.
 
 ### q7_bikeshare-travel-behavior: How does dockless bike-sharing affect travel behavior in Chinese cities?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (7565 ms)
-1. This passage introduces dockless bike-sharing (DBS) as a widely adopted shared transport system and frames it as having an impact on people’s lives. It is directly relevant because the query asks about how DBS affects travel behavior in Chinese cities.
-2. This is the report’s title/identification for a study specifically about how dockless bike-sharing affects cities in China. It is directly relevant because it signals the source material that analyzes DBS impacts on urban travel behavior.
-3. This passage provides historical context on the emergence and rapid growth of dockless bike sharing in China, including the scale by 2017. Such rollout information is relevant to understanding how and why travel behavior could change as adoption expands.
-4. This passage gives concrete scale details for bicycle sharing in China (e.g., Hangzhou station and bike counts). System size and availability are important drivers of how users may adjust trips and mode choices, linking to travel behavior effects.
-5. This passage compares large bicycle-sharing deployments and again emphasizes China’s leading scale (e.g., Hangzhou). By establishing widespread presence, it indirectly supports discussion of behavioral changes such as increased cycling trips or altered commuting patterns.
-6. This passage focuses on decarbonization strategies and emissions modeling for road transport rather than directly describing behavioral changes from DBS. It is only indirectly relevant to the extent that travel behavior shifts can be inferred through emissions outcomes.
-7. This passage is a bibliography snippet related to public transport access and includes a citation about dockless bike-sharing. While it does not explain effects itself, it may point to studies addressing how shared bikes relate to travel patterns and planning considerations.
-8. This passage notes the growing popularity of shared bikes across many Chinese cities and provides broader context on competing trends like car ownership growth. That context is relevant to interpreting how DBS may influence travel behavior relative to automobile use.
-9. This methodology guide is about transport emissions and social cost assessment, not travel behavior itself. It is relevant only indirectly because emissions modeling often depends on assumptions about mode shares and trip patterns.
-10. This passage is a guide for assessing environmental impacts of shared micromobility services and discusses evaluation frameworks (including LCA). It is not primarily about behavior, but it can indirectly inform how DBS might be studied in terms of outcomes driven by travel changes.
-11. This passage is primarily about global EV and CO2 data sources and is not focused on dockless bike-sharing or Chinese urban travel behavior. It has little direct connection to how DBS changes mode choice or trip patterns.
-12. This passage discusses first-mile and last-mile transportation patterns in the context of mobility and shared schemes. That is relevant to travel behavior because it relates to how users combine modes and may shift short-trip behavior when DBS is available.
-13. This passage describes emerging solutions in shared mobility (including ride-hailing) and includes a figure on characteristics of new mobility schemes. While not specific to Chinese DBS behavior, it provides background on how new mobility services can affect travel behavior.
-14. This passage explains dockless bike-sharing/technology’s role in reducing the need for parking infrastructure. That directly relates to travel behavior insofar as convenience and accessibility changes how people choose trips and pick-up/drop-off patterns.
-15. This passage emphasizes embedding considerations of existing mode shares and the role they play in encouraging sustainable mobility. That is directly relevant to travel behavior because DBS effects depend on whether it shifts people from other modes or complements them.
-16. This passage focuses on bicycle lane design and safety during and after COVID, including dedicating resources/space to walking and cycling. It is relevant indirectly because safety infrastructure can influence cycling uptake and thus how DBS users adjust their travel behavior.
-17. This passage is about assessing climate policy coverage and includes an example of regulating traffic flows via smart transportation systems. It is only indirectly connected to DBS travel behavior, since policy and traffic management affect mode choices and route decisions.
+**gpt-6-luna** (5440 ms)
+1. This report focuses specifically on how dockless bike-sharing changes people’s lives in Chinese cities, making it a direct source on its effects on travel behavior.
+2. This is the title and author information for a report about how dockless bike-sharing affects Chinese cities; it identifies a directly relevant source, though the excerpt gives no findings.
+3. It describes the introduction and rapid expansion of dockless bike-sharing in China, providing context for how the service could reshape urban travel patterns.
+4. It gives the scale of a major Chinese bicycle-sharing system, offering background on the prominence of bike-sharing in Chinese urban transport but not describing behavioral effects.
+5. It provides figures on the size and infrastructure of Hangzhou’s bike-sharing system, illustrating the scale of bike-sharing in China without explaining its effects on travel behavior.
+6. The excerpt concerns transport energy and emissions data rather than bike-sharing or traveler behavior, so it offers little relevant evidence.
+7. It cites a 2017 report on shared bikes and urban development, which may contain relevant evidence, but the passage itself is only a reference.
+8. It notes that shared bikes are widespread across Chinese cities, providing context for their place in the broader transport landscape, but does not say how they change travel behavior.
+9. This passage concerns assumptions in a tool for estimating truck travel and does not address bike-sharing or its effects on urban travelers.
+10. It discusses methods for assessing the environmental impacts of shared micromobility, a related topic, but the excerpt does not describe behavioral effects in Chinese cities.
+11. The excerpt is about electric mobility and emissions data, with no stated connection to dockless bike-sharing or travel behavior in China.
+12. It mentions first- and last-mile transportation patterns, which are relevant to how shared mobility can affect travel choices, but does not specifically address dockless bikes in China.
+13. It discusses shared mobility and ride-hailing rather than dockless bike-sharing, so it provides only broad context about emerging transport services.
+14. It describes how dockless public bike-sharing was introduced in an Indian city, offering a comparison on the potential effects of dockless technology, but not evidence about Chinese cities.
+15. It discusses how cycling schemes relate to sustainable mobility and mode shares, concepts relevant to travel behavior, but its focus is on Mexican cities rather than dockless bikes in China.
+16. It addresses the safety and infrastructure needs of walking and cycling, which can influence whether people choose to cycle, but does not examine dockless bike-sharing in China.
+17. The passage concerns smart traffic management and commuting generally, with no specific information about dockless bike-sharing or its effects on travel behavior.
 
-**gpt-6-luna** (8177 ms)
-1. This passage introduces a report specifically about how dockless bike-sharing affects people's lives in Chinese cities, making it directly relevant to its effects on travel behavior.
-2. This is the title and author information for a report analyzing how dockless bike-sharing changes life in Chinese cities. It identifies a likely source for evidence about resulting travel-behavior changes.
-3. It describes the emergence and rapid growth of dockless bike-sharing in China, providing context for how widespread the service became and its potential to influence travel behavior.
-4. It gives the scale of a major Chinese bicycle-sharing system, but discusses station-based sharing rather than dockless services or their effects on travel behavior.
-5. It provides figures on the size of Hangzhou's station-based bike-sharing system, offering background on bicycle sharing in China but not explaining dockless systems' behavioral effects.
-6. The passage concerns transport-sector energy and emissions data, but does not address dockless bike-sharing or changes in how people travel.
-7. This passage cites a 2017 white paper on shared bicycles and urban development, which may provide background on bike-sharing in China, but the excerpt does not state its findings about travel behavior.
-8. It notes the spread of shared-bike services across Chinese cities alongside rising car ownership, providing context for how bike-sharing fits into broader travel patterns, but does not describe its behavioral effects.
-9. This passage concerns assumptions in a transport-emissions assessment tool and does not discuss bike-sharing or travel behavior in Chinese cities.
-10. It concerns environmental assessment of shared micromobility, which may include shared bikes, but the excerpt focuses on life-cycle assessment rather than changes in travel behavior.
-11. This is a reference list about electric mobility and emissions, with no specific information about dockless bike-sharing or its influence on travel choices.
-12. The passage mentions first- and last-mile transportation patterns, a travel behavior that dockless bikes can affect, but it does not specifically discuss bike-sharing in China.
-13. It provides general background on shared mobility and emerging transport schemes, but the excerpt does not address dockless bikes or Chinese travel behavior.
-14. It explains how dockless bike-sharing was introduced in an Indian city, which offers a comparison for the technology but does not answer how it affects travel behavior in China.
-15. It discusses how cycling schemes can support sustainable mobility and the importance of considering mode shares, providing related context but not evidence about dockless bike-sharing in China.
-16. It addresses the need to support safe walking and cycling, which is relevant to cycling as a travel mode, but does not discuss dockless bike-sharing or its behavioral effects.
-17. The passage concerns local climate policies and smart traffic management, not dockless bike-sharing or changes in urban travel behavior.
+**gpt-6.1-terra** (5772 ms)
+1. Introduces dockless bike-sharing and its impact on people’s lives, providing context for the study of Chinese cities.
+2. Identifies a report on how dockless bike-sharing changes lives in Chinese cities, but provides no findings on travel behavior.
+3. Describes the emergence and rapid growth of dockless bike-sharing in China, providing context for its potential influence on travel.
+4. Provides scale and infrastructure details for Hangzhou’s station-based bike-sharing system, offering related Chinese context rather than evidence about dockless travel behavior.
+5. Describes the size of Hangzhou’s station-based bike-sharing system and usage of a Mexican system, providing background on bike-sharing.
+6. Identifies sources for Chinese transport energy and pollution data, but does not discuss dockless bike-sharing or travel behavior.
+7. Cites a 2017 white paper on bike-sharing and urban development that may provide relevant evidence, though the excerpt contains no findings.
+8. Notes that bike-sharing services are available in more than 360 Chinese cities and contrasts their growth with rising car ownership.
+9. Discusses assumptions about driving patterns in a transport assessment tool, but does not address bike-sharing or Chinese cities.
+10. Discusses assessing the life-cycle impacts of shared micromobility, a related topic, but gives no evidence about travel behavior in China.
+11. Lists energy and electric-vehicle references but does not address dockless bike-sharing or travel behavior in Chinese cities.
+12. Points to first- and last-mile transportation patterns as an urban mobility issue, but does not explain the role of dockless bikes in China.
+13. Introduces the growth of shared mobility services, providing broad context but no evidence about dockless cycling in Chinese cities.
+14. Explains that dockless technology reduces the need for parking stations in an Indian bike-sharing system, offering relevant technology context outside China.
+15. Emphasizes considering existing transport mode shares when promoting sustainable mobility, a relevant framework for assessing travel behavior.
+16. Discusses the need for safe walking and cycling space during COVID, providing infrastructure context rather than evidence about bike-sharing behavior.
+17. Mentions smart traffic management as a local low-carbon strategy, but does not address dockless bike-sharing or its effects on travel.
 
 ### q8_yantian-port-mode-shift-targets: Can Yantian Port realistically meet the mode-shift targets set in Shenzhen's Master Plan (2035), or would it require more aggressive measures than a "stated policy" trajectory?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (4012 ms)
-1. This passage frames an analysis focused on Yantian Port’s domestic transportation and distribution emissions, which is directly tied to how freight mode shifts would translate into decarbonization outcomes. It helps assess whether Yantian’s hinterland logistics can plausibly change modes to meet Shenzhen’s 2035 targets.
-2. This passage discusses how the effectiveness of decarbonization measures varies by region and highlights near-term options like zero-emission vehicles. That is relevant because meeting mode-shift targets often depends on choosing measures with sufficient regional abatement potential, informing whether a stated trajectory may be insufficient.
-3. This passage defines a “Stated Policy” scenario and contrasts it with other scenarios (e.g., structural change). Since the query asks whether targets require more aggressive measures than a stated-policy trajectory, this provides the needed baseline concept for comparison.
-4. This passage describes how, in high-density cities, trends can reverse passenger mode shift toward private cars. While the query is about freight/mode shift for port logistics, the discussion provides contextual evidence on how difficult it can be for mode shift targets to materialize without stronger interventions.
-5. This passage details policy mechanisms for shifting urban travel from energy-intensive modes to cleaner modes using a “pull and push” strategy, including public transport coverage and reducing car dependence. These policy levers are directly relevant to evaluating whether Shenzhen’s port-adjacent logistics would need more than a stated-policy trajectory to achieve its mode-shift goals.
-6. This passage evaluates local government low-carbon strategies through the lens of climate policy coverage, including the presence of sustainable transportation plans and emission reduction targets. That directly informs whether Shenzhen (and by extension Yantian’s connected systems) has sufficiently strong policy coverage to realistically meet 2035 mode-shift targets beyond a stated-policy path.
+**gpt-6-luna** (3237 ms)
+1. This study explicitly analyzes transportation and distribution trips associated with Yantian Port, making its scope relevant to assessing the port’s emissions and transport-mode shifts. The excerpt does not provide the mode-share targets or results needed to determine whether the Master Plan targets are achievable.
+2. The passage compares the decarbonization potential of measures across regions, which can help assess what interventions might be needed beyond a stated-policy trajectory. It is not specific to Yantian Port or Shenzhen’s 2035 mode-shift targets.
+3. It defines the Stated Policy scenario and contrasts it with a structural-change pathway, providing a useful benchmark for judging whether meeting the targets would require action beyond stated policies. The excerpt does not establish the port-specific feasibility of those targets.
+4. It discusses how urban conditions can affect shifts between public and private transport, offering context for whether mode-shift ambitions are realistic. It does not directly address freight movements at Yantian Port or compare them with Shenzhen’s 2035 targets.
+5. It describes push-and-pull policies for shifting urban travel toward public and other green transport, illustrating the kinds of measures that can support mode shift. The focus is passenger transport rather than port freight, so it does not directly establish what Yantian needs.
+6. It concerns how local governments cover sustainable transportation planning and emissions targets in their climate policies, providing context for evaluating Shenzhen’s policy framework. The excerpt does not indicate Yantian-specific targets, outcomes, or the additional measures needed to meet them.
 
-**gpt-6-luna** (5020 ms)
-1. This case study focuses specifically on Yantian Port’s transport and distribution system, making it directly relevant to assessing its mode-shift prospects. The excerpt only identifies the study’s emissions scope, however, and does not provide the targets or results needed to judge whether the port can meet them.
-2. This passage discusses how effective different decarbonization measures can be across regions, which can inform whether ordinary policy measures are sufficient or stronger interventions are needed. It does not establish Yantian-specific mode-shift projections.
-3. It defines the Stated Policy scenario and distinguishes it from a Structural Change scenario, directly relevant to comparing a policy-as-usual trajectory with more transformative action. The excerpt does not give Yantian-specific outcomes or compare them with Shenzhen’s 2035 targets.
-4. It provides broader context on how urban conditions can shape travel-mode shifts, including the risk of movement toward private cars. This may inform expectations about mode shift but does not address port freight or Yantian’s targets specifically.
-5. It describes push-and-pull policies—expanding public transport while discouraging car dependence—that illustrate measures capable of accelerating passenger mode shift. These measures offer policy context but are not specific to Yantian Port’s freight transport or its 2035 targets.
-6. This passage concerns how local governments’ sustainable transportation plans and emissions targets are assessed, providing a framework for evaluating Shenzhen’s planning commitments. It does not state Yantian’s mode-shift targets or whether a stated-policy trajectory can achieve them.
+**gpt-6.1-terra** (3642 ms)
+1. This passage identifies the scope of a Yantian Port transportation analysis, providing context for assessing its freight mode shift. The excerpt does not state the targets or whether they can be met.
+2. This passage discusses how transport decarbonization potential varies across regions and highlights zero-emission vehicles, but it does not address Yantian Port's mode-shift targets.
+3. This passage defines the Stated Policy scenario, helping clarify the trajectory against which more aggressive measures could be compared. It does not assess Yantian Port's targets.
+4. This passage discusses passenger mode shifts in Chinese cities, offering broader transport context but not addressing freight transport at Yantian Port.
+5. This passage describes push-and-pull policies for shifting passenger travel toward public transport. It provides examples of mode-shift measures, but not for port freight.
+6. This passage identifies sustainable transportation plans and emissions targets as categories for assessing local government policy. It does not address Shenzhen's specific port targets or their feasibility.
 
 ### q9_yantian-port-rail-water-barriers: What are the barriers to expanding rail-water intermodal transport (road-to-rail) at Yantian Port?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (3133 ms)
-1. The passage states that Yantian Port’s future container distribution plan will rely on railways and waterways for a large share of throughput, directly tying the port to potential road-to-rail (intermodal) expansion. It provides the strategic context needed to discuss what factors may enable or limit that shift at Yantian.
-2. It identifies key barriers to rail intermodality in China—specifically uncompetitive railway pricing, underdeveloped intermodal services, and limited rail service quality. These factors directly correspond to obstacles for expanding road-to-rail intermodal transport at a port like Yantian.
-3. The passage frames intermodal expansion as a tactic (shifting freight to rail/waterways and investing in intermodal infrastructure), which helps clarify what capabilities and investments are required. By implication, it points to barriers such as inadequate intermodal infrastructure and services that would hinder road-to-rail scaling.
-4. It explicitly recommends promoting sea-to-rail or sea-to-water intermodal services at Shenzhen port (near Yantian), which is closely related to intermodal transport involving road/land connections. This provides port-level policy or action guidance that reflects practical constraints and requirements for intermodal scaling.
+**gpt-6-luna** (1932 ms)
+1. It directly describes Yantian Port’s planned shift toward rail and water transport, establishing the expansion goal that the query asks about, though the excerpt does not show the specific barriers.
+2. It identifies obstacles to rail-based intermodal freight in China—uncompetitive railway pricing, underdeveloped services, and limited service quality—that help explain barriers relevant to Yantian Port.
+3. It discusses tactics for shifting freight to rail and water and investing in intermodal infrastructure, which provides context on the measures needed to address expansion constraints, but does not name Yantian-specific barriers.
+4. It recommends promoting sea-to-rail or sea-to-water intermodal services at Shenzhen Port, a relevant regional policy response, but the excerpt does not specify the barriers to expanding them at Yantian.
 
-**gpt-6-luna** (3186 ms)
-1. This passage directly addresses Yantian Port’s planned shift toward rail and water transport, but the excerpt is truncated before giving specific barriers to achieving that shift.
-2. It identifies barriers relevant to expanding rail-based intermodal freight in China: uncompetitive railway pricing, underdeveloped intermodal services, and limited rail service quality. These are broader national constraints, not specifically attributed to Yantian Port.
-3. It recommends shifting freight to rail and water and investing in intermodal infrastructure, indicating that infrastructure and service development are relevant to expansion. It does not specify Yantian-specific barriers.
-4. It recommends promoting sea-to-rail and sea-to-water services at Shenzhen Port, a policy direction relevant to Yantian’s intermodal expansion. The passage does not describe the obstacles to implementing those services.
+**gpt-6.1-terra** (2989 ms)
+1. It provides a 2035 target for increasing the share of Yantian Port's container traffic carried by rail and water, but does not identify barriers.
+2. It identifies uncompetitive rail pricing, underdeveloped intermodal services, and limited rail service quality as barriers in China, though it does not address Yantian specifically.
+3. It recommends shifting freight to rail and water and investing in intermodal infrastructure, providing context on potential measures rather than Yantian-specific barriers.
+4. It recommends promoting sea-to-rail and sea-to-water services at Shenzhen port, which is relevant to the proposed modal shift but does not identify barriers.
 
 ### q10_yantian-port-drayage-electrification-co2: How much would well-to-wheel CO2 emissions decline if drayage truck electrification reached 95% by 2035 at Yantian Port, and how does that compare to rail and water mode-shift measures?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (8618 ms)
-1. This case study discusses the need for aggressive measures like freight mode shift and upstream grid decarbonization to reduce remaining emissions, which are core components of comparing drayage electrification versus rail/water shift. It provides the framing needed for a well-to-wheel CO2 decline comparison, even though it does not quantify the exact 95% Yantian scenario.
-2. This passage focuses on decarbonization pathways for China’s road transport, including when emissions can peak under different policy strengths. While it does not give Yantian-specific well-to-wheel numbers or a 95% drayage electrification target, it supports the plausibility of estimating emissions impacts from electrification measures.
-3. It highlights that achieving carbon neutrality requires increased ambition on structural changes and vehicle electrification, referencing policy directions like Table ES-2. This is relevant background for electrification adoption levels (such as reaching 95% by 2035) but does not provide the specific magnitude of well-to-wheel CO2 reductions or compare to rail/water shift quantitatively.
-4. This source is about policies to accelerate zero-emission heavy-duty trucks, providing technical context and terminology (battery-electric, fuel-cell, charging infrastructure). That helps interpret what “drayage truck electrification” means for emissions calculations, but it does not provide the quantified Yantian well-to-wheel decline or direct comparison to rail and water measures.
-5. This work explicitly argues that electrification alone is insufficient and that multiple measures are needed, and it describes modeling using national traffic and electricity models. That is directly relevant to well-to-wheel CO2 framing and the comparison between electrification and other measures, though it still does not contain the specific Yantian 95% by-2035 quantified estimate versus rail/water shift.
-6. This passage focuses on decarbonizing Hong Kong’s roads with recommendations such as improving public transit and active mobility, which is more passenger-focused. It does not address drayage trucks at Yantian Port or mode shift to rail/water for freight, so it is not directly useful for the query’s required comparison.
-7. It mentions port-related initiatives like piloting low-carbon ports and distributed energy, which are upstream/port-side measures that influence well-to-wheel emissions. However, it does not quantify how much well-to-wheel CO2 would decline from reaching 95% drayage electrification by 2035, nor does it provide comparable rail/water mode-shift effects.
-8. This passage proposes a transport-sector quantified climate goal including a shift to green fuels and reduced transport energy use by 2035 across all modes. While helpful for context on what types of measures matter by 2035, it does not provide the specific drayage electrification at Yantian Port or any quantified comparison to rail and water mode shift.
-9. This is about sustainable urban mobility in NDCs and the role of public transport, which is not freight drayage or port mode shift between trucks, rail, and water. Therefore, it does not provide information needed for calculating well-to-wheel CO2 declines from drayage electrification versus rail/water shift.
-10. This includes a table on the impact of electrification under low- and high-ambition scenarios on percentage CO2 emissions reduction by 2030 and 2050. It is relevant to electrification impact estimation in general, but it lacks Yantian Port specificity, a 95% by-2035 drayage scenario, and a rail/water mode-shift comparison.
-11. The passage directly states that pairing with train electrification and grid modernization increases emission reduction potential and explicitly calls to invest in and electrify freight rail. This directly connects to the query’s request to compare electrified drayage impacts against rail-related measures, but it still does not provide the numeric Yantian 95% by-2035 well-to-wheel decline.
-12. It provides techno-economic feasibility for zero-emission trucks in delivery use cases, which can support the assumptions behind electrification emissions calculations. However, it does not quantify well-to-wheel CO2 declines at Yantian Port for a 95% by-2035 drayage target, nor does it quantify rail and water mode-shift measures for comparison.
-13. This passage is about interventions that shift freight from trucks to rail (freight TDM). That makes it directly relevant to the query’s comparison component—how rail mode shift measures stack up against drayage electrification—though it does not provide the Yantian-specific 95% electrification result or numerical well-to-wheel CO2 declines.
-14. This is mostly methodological assumptions and truck lifecycle assumptions used in a feasibility analysis, which may affect how emissions (including well-to-wheel) are calculated. It is not directly tied to Yantian Port or rail/water mode shift comparisons, and it lacks the requested quantified CO2 decline under a 95% by-2035 drayage scenario.
-15. It discusses prioritizing zero-emission logistic vehicles and provides policy interventions (such as subsidies) for adoption in the near term. This can inform how to interpret electrification adoption rates like 95% by 2035, but it does not present the specific well-to-wheel CO2 reduction at Yantian Port or any quantitative rail versus water mode-shift comparison.
+**gpt-6-luna** (5483 ms)
+1. This Shenzhen Port case study directly discusses reducing port transportation emissions through freight mode shift and grid decarbonization, which are relevant to comparing drayage electrification with rail and water measures. The excerpt does not provide the requested 95%-by-2035 reduction figure.
+2. This passage provides national context on strategies for reducing road-transport emissions in China, including electrification, but it does not address Yantian Port, the specified drayage target, or comparisons with rail and water mode shifts.
+3. It highlights vehicle electrification and structural changes as necessary strategies for China's carbon-neutrality goals, offering general context for the query. It does not give the port-specific emissions estimate or mode-shift comparison requested.
+4. This source concerns policies to accelerate zero-emission heavy-duty trucks in China, so it is related to truck electrification. The excerpt contains no Yantian Port estimate or comparison with rail and water measures.
+5. This passage offers broad evidence that road-vehicle electrification alone is insufficient for achieving net-zero emissions, supporting the relevance of comparing electrification with other measures. It does not provide the requested Yantian-specific figures.
+6. The passage concerns pathways to decarbonize Hong Kong road transport, providing regional context on transport emissions and policy. It does not address Yantian drayage electrification or the rail and water mode-shift comparison.
+7. This passage mentions low-carbon port initiatives and vehicle electrification targets in China, giving general policy context for port decarbonization. It does not quantify Yantian's well-to-wheel reductions or compare truck electrification with rail and water shifts.
+8. This passage proposes broad transport-sector targets for 2035 across modes, which is relevant background for assessing transport decarbonization measures. It does not specify Yantian Port or the requested drayage and mode-shift emissions comparison.
+9. This passage concerns public transport policies in national climate plans, rather than port freight or drayage trucks. It provides little direct information about the requested emissions estimate or rail and water comparisons.
+10. This passage reports emissions-reduction effects of vehicle electrification in India's transport scenarios, which is only broadly related to the electrification component of the query. It does not cover Yantian Port or freight mode shifts.
+11. This passage explicitly discusses pairing transport measures with freight-rail electrification and mode-share changes, making it relevant to the rail comparison. It does not provide the Yantian-specific drayage estimate or address the water-mode comparison in the excerpt.
+12. This study examines zero-emission truck feasibility in Guangdong, which offers regional context for truck electrification. The excerpt does not state port-level well-to-wheel reductions or compare electrification with rail and water mode shifts.
+13. This passage directly identifies shifting freight from trucks to rail as a freight-demand measure, relevant to comparing rail mode shift with drayage electrification. It does not provide Yantian Port figures or address water transport.
+14. This passage concerns the assumptions used in a Guangdong zero-emission truck feasibility study, providing limited regional context for truck electrification. It does not contain the emissions estimate or mode-shift comparison requested.
+15. This passage recommends zero-emission logistics vehicles in Guangdong cities, making it relevant background on regional freight electrification policy. It does not quantify Yantian Port's well-to-wheel reductions or compare them with rail and water measures.
 
-**gpt-6-luna** (9975 ms)
-1. This Shenzhen Port case study directly addresses port decarbonization and notes that further emission reductions depend on freight mode shifts and cleaner grid electricity. The excerpt does not provide the requested 95%-electrification estimate or a numerical comparison with rail and water measures.
-2. This source concerns strategies for reducing emissions from China's road transport, providing broader context for truck electrification. It does not specifically address Yantian Port, drayage, or the requested comparison with rail and water mode shifts.
-3. The passage discusses the need for stronger vehicle-electrification and structural-change policies in China, which is relevant background for evaluating drayage electrification and freight mode shifts. It gives no Yantian-specific emissions estimate.
-4. This report concerns policies to accelerate zero-emission heavy-duty trucks in China, making it relevant background for truck electrification assumptions. The excerpt does not give the Yantian Port well-to-wheel reduction or compare it with rail and water measures.
-5. This study describes the broader role and scale of road-transport emissions in China and notes that vehicle electrification alone is insufficient for net zero. It does not provide the requested port-specific estimate or mode-shift comparison.
-6. This passage concerns decarbonization pathways for Hong Kong roads, offering regional context on transport emissions and policy. It does not address Yantian drayage trucks or rail and water freight shifts.
-7. The passage mentions low-carbon port initiatives and transport electrification in Chinese policy examples, which is relevant general context for port decarbonization. It does not quantify Yantian's drayage emissions reduction or compare the measures asked about.
-8. This passage proposes a broad 2035 transport-sector target involving green fuels and lower energy use, providing general context for transport decarbonization. It does not quantify drayage electrification at Yantian or compare rail and water shifts.
-9. This source concerns public transport measures in national climate plans, rather than freight-port emissions. It does not contribute a Yantian-specific estimate or a comparison of drayage electrification with rail and water mode shifts.
-10. This passage concerns emissions reductions from transport electrification in India, which is only general comparative context. It does not address Yantian Port or the requested freight-mode comparison.
-11. The passage mentions that emission reductions can increase when rail electrification and grid modernization are included, directly relating to comparison with rail measures. It does not provide the Yantian-specific drayage estimate or discuss water mode shift in the excerpt.
-12. This study evaluates zero-emission truck feasibility in Guangdong, offering regional context about truck technology. The excerpt is a fragment of a technical table and does not state the requested Yantian emissions reduction or mode-shift comparison.
-13. The passage explicitly describes freight demand management as shifting freight from trucks to rail, which is relevant to comparing electrification with rail mode shift. It concerns Mexico and gives no Yantian-specific estimate or water-shift comparison.
-14. This excerpt describes assumptions used in a Guangdong zero-emission truck feasibility study, providing background on truck lifetimes and costs. It does not address port emissions or the requested rail and water comparison.
-15. This passage recommends zero-emission logistics vehicles in cities in Guangdong, making it regionally relevant to truck electrification policy. It does not provide a Yantian Port well-to-wheel estimate or compare electrification with rail and water mode shifts.
+**gpt-6.1-terra** (6256 ms)
+1. This Shenzhen Port study identifies greater freight mode shift and cleaner electricity generation as ways to reduce remaining emissions. It provides context for the comparison but no numerical estimates.
+2. This passage provides national context on when China's road transport emissions could peak, but it does not address Yantian Port or compare specific measures.
+3. It identifies structural changes and vehicle electrification as priorities for China's transport decarbonization, without quantifying the Yantian Port scenarios.
+4. The passage lists terminology for zero-emission heavy-duty trucks, which is relevant to truck electrification but gives no emissions results for Yantian Port.
+5. This national road transport study says electrification alone is insufficient for net-zero emissions, providing context for combining electrification with other measures.
+6. The passage discusses savings and investment in sustainable transport in Hong Kong, but does not address port drayage or freight mode-shift emissions.
+7. It describes low-carbon port energy measures and vehicle electrification targets in Tianjin, offering related policy context rather than Yantian Port estimates.
+8. It proposes global 2035 transport fuel and energy-consumption targets, providing broad decarbonization context but no port-specific comparison.
+9. The passage inventories public transport measures in national climate plans, a related transport policy topic but not the freight measures in the query.
+10. It references a table on emissions reductions from transport electrification in India, but the excerpt provides no Yantian Port figures.
+11. It discusses freight rail investment and notes that rail electrification and grid modernization can increase emissions savings, relevant background for the rail comparison.
+12. This Guangdong zero-emission truck study provides regional vehicle-analysis context, but the excerpt contains no usable well-to-wheel emissions comparison.
+13. It describes shifting freight from trucks to rail as a transport demand management measure, relevant to the query's rail mode-shift comparison but not to Yantian's results.
+14. This passage gives vehicle lifetime assumptions for a Guangdong zero-emission truck cost analysis, but does not report port emissions reductions.
+15. It recommends incentives for zero-emission logistics vehicles in Guangdong cities, providing regional electrification policy context rather than the requested port-specific estimates.
 
 ## batch-relates
 
 ### q1_zero-emission-heavy-duty-trucks: What is the projected market penetration rate of new energy heavy-duty trucks in China through 2035?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1973 ms)
-1. Provides China 2035 projected new energy heavy-duty truck penetration ranges by regional and long-haul scenarios.
-2. Supplies modeling inputs and definitions supporting the report’s 2035 penetration projections for zero-emission heavy-duty trucks.
-3. Discusses broader decarbonization strategies and vehicle transition context, without specific 2035 penetration rates.
+**gpt-6-luna** (2112 ms)
+1. Projects regional zero-emission truck penetration above 50% in 2027–2030 and long-haul penetration around 15%–53% by 2035 under strengthened policies.
+2. Provides technical assumptions for the 2035 truck analysis but does not state projected market penetration rates.
+3. Discusses low-carbon vehicle deployment in China’s road transport but does not give the requested heavy-truck penetration projection.
 
-**gpt-6-luna** (2116 ms)
-1. Projects regional zero-emission truck penetration above 50% by 2027–2030 and long-haul penetration around 15%–53% by 2035 under strengthened policies.
-2. Provides truck-use assumptions for the same study but does not state projected market penetration rates.
-3. Discusses low-carbon vehicle deployment in China but gives no specific heavy-duty truck penetration projection through 2035.
+**gpt-6.1-terra** (4733 ms)
+1. Projects regional penetration above 50% in 2027–2030 and long-haul penetration of 15%–53% by 2035 under strengthened policies.
+2. Lists vehicle mileage assumptions and terminology used in the 2035 heavy-duty truck analysis.
+3. Discusses low-carbon vehicle technologies and freight efficiency without stating a heavy-duty truck penetration forecast.
 
 ### q2_bev-diesel-truck-tco-china: How does total cost of ownership compare between battery electric and diesel heavy-duty trucks in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (5269 ms)
-1. Reports Guangdong case study where battery-electric HDTs reach TCO parity with diesel before MY2025 for 42-ton tractor trailers.
-2. Discusses China road transport decarbonization and cites prior work on evaluating electric vehicle costs and benefits including TCO.
-3. Explicitly references an ICCT study comparing TCO for battery-electric, fuel-cell, and diesel heavy trucks in China.
-4. Covers policy acceleration for zero-emission HD trucks but does not provide specific China TCO comparisons.
-5. References research on zero-emission HD truck policies, without direct quantitative TCO comparison between BEVs and diesel.
-6. States studies suggest BEV trucks in China will achieve lower total cost, but provides no detailed diesel comparison.
-7. Focuses on carbon-neutrality strategies rather than providing explicit BEV-vs-diesel heavy-truck TCO results.
-8. Explains that port adoption of battery-electric HDTs depends on TCO feasibility versus diesel equivalents.
-9. Cites the ICCT TCO study for battery-electric, fuel-cell, and diesel heavy trucks in China.
-10. Provides TCO comparison charts for heavy-duty truck types showing BEVs can reach 1:1 replacement parity with diesel.
-11. Addresses zero-emission freight zones using abatements and scenarios; TCO comparison between BEV and diesel isn’t shown.
-12. Sets up an emissions/TCO framework for Hong Kong but not China heavy-truck TCO comparison outcomes.
-13. Presents a tool comparing diesel and battery-electric buses across procurement, operations, and maintenance costs (bus TCO).
-14. Generalizes that electric vehicles have lower lifetime cost than diesel, but not China heavy-duty truck TCO.
-15. Describes how TCO is calculated for electric buses, without China heavy-duty truck BEV-vs-diesel results.
-16. Provides methodology for transport emissions and social costs; does not compare heavy-truck TCO by powertrain.
-17. Shows electric bus cost benefits (fuel and maintenance reductions) but not heavy-duty truck BEV-vs-diesel TCO in China.
-18. Discusses TCO gap for electric versus diesel buses in the US, not China heavy-duty trucks.
-19. Introduces a tool to compare zero-emission and diesel trucks via total cost of ownership, but for India.
-20. Provides TCO comparison for electric auto-rickshaws versus ICE, not heavy-duty trucks in China.
+**gpt-6-luna** (5876 ms)
+1. Reports battery-electric trucks in Guangdong can reach TCO parity with diesel before model year 2025, especially 42-ton tractors.
+2. Covers China road-transport decarbonization but provides no truck TCO comparison in the snippet.
+3. Cites a study directly comparing battery-electric, fuel-cell, and diesel heavy trucks’ TCO in China.
+4. Addresses zero-emission heavy-truck policy in China, but the snippet gives no TCO comparison.
+5. References research comparing battery-electric and diesel heavy trucks’ TCO in China, without giving results.
+6. Notes studies predicting Chinese battery-electric trucks’ TCO relative to diesel, but omits the comparison’s outcome.
+7. Discusses China transport decarbonization but offers no heavy-truck TCO results in the snippet.
+8. Examines battery-electric heavy trucks’ TCO against diesel equivalents for Shenzhen port operations, but gives no comparative results.
+9. Cites a study comparing battery-electric, fuel-cell, and diesel heavy-truck TCO in China, without stating findings.
+10. Compares Chinese electric and diesel heavy-truck TCO, reporting parity for some types under ideal one-for-one replacement.
+11. Uses truck TCO in zero-emission-zone scenarios but does not compare battery-electric and diesel ownership costs.
+12. Concerns Hong Kong road transport and TCO, not battery-electric versus diesel heavy trucks in China.
+13. Compares bus technologies’ TCO in several regions, not heavy trucks in China.
+14. Discusses electric-bus TCO outside China and does not address heavy-truck costs.
+15. Analyzes electric-bus TCO and battery degradation, not Chinese heavy-truck comparisons.
+16. Provides China transport emissions factors rather than heavy-truck ownership-cost comparisons.
+17. Discusses electric-bus ownership costs in global cities, not Chinese heavy trucks.
+18. Examines the TCO gap for U.S. electric and diesel school buses, not Chinese trucks.
+19. Compares zero-emission and diesel trucks’ TCO in India rather than China.
+20. Compares Indian electric and combustion auto-rickshaw costs, not heavy trucks in China.
 
-**gpt-6-luna** (6078 ms)
-1. Finds battery-electric trucks in Guangdong can reach TCO parity with diesel before model year 2025, especially 42-ton tractors.
-2. Discusses China’s road-transport decarbonization but provides no truck TCO comparison in the snippet.
-3. Cites a detailed China study comparing battery-electric, fuel-cell, and diesel heavy-truck TCO.
-4. Focuses on policies for zero-emission freight trucks, but the snippet gives no TCO comparison.
-5. References research on battery-electric versus diesel truck costs, without stating comparative TCO results.
-6. Notes studies of Chinese BEV truck TCO, but gives no comparison or cost findings.
-7. Covers China’s transport decarbonization strategy, but the snippet provides no heavy-truck TCO results.
-8. Reports that carriers’ electric-truck adoption depends partly on TCO relative to diesel, without giving comparative figures.
-9. Cites a study directly comparing battery-electric, fuel-cell, and diesel heavy-truck TCO in China.
-10. Compares Chinese heavy-truck TCO and says some battery-electric types reach parity with diesel under ideal one-for-one replacement.
-11. Addresses zero-emission freight-zone costs, but the snippet does not compare electric and diesel truck TCO.
-12. Concerns Hong Kong road transport and mentions TCO, but not China’s electric-versus-diesel truck costs.
-13. Compares bus TCO across technologies, not heavy-duty trucks in China.
-14. Discusses electric-vehicle ownership costs outside China and does not compare truck TCO.
-15. Analyzes electric-bus TCO and battery degradation, not Chinese heavy-truck costs.
-16. Provides China transport emissions methodology, not a truck TCO comparison.
-17. Compares electric and conventional bus ownership costs, not heavy trucks in China.
-18. Examines US school-bus TCO, not battery-electric and diesel heavy trucks in China.
-19. Compares electric and diesel truck TCO in India, rather than China.
-20. Analyzes Indian auto-rickshaw ownership costs, not Chinese heavy-duty trucks.
+**gpt-6.1-terra** (12858 ms)
+1. Battery-electric trucks in Guangdong port, drayage, and urban delivery operations reach diesel TCO parity before model year 2025.
+2. Its bibliography cites a study of electric vehicle costs and benefits in China.
+3. It cites a dedicated comparison of Chinese heavy-truck ownership costs across battery-electric, fuel-cell, and diesel technologies.
+4. It concerns policies for zero-emission heavy-duty freight in China, but the excerpt contains only unrelated references.
+5. It addresses zero-emission heavy-duty trucks in China, but the excerpt does not provide cost comparisons.
+6. It discusses electrification barriers in China's heavy-duty truck market, but its cost finding is truncated.
+7. Its bibliography references research on electric vehicle costs and benefits in China.
+8. It identifies ownership costs and operational feasibility as factors influencing battery-electric truck adoption at Yantian Port.
+9. It cites a study comparing ownership costs of battery-electric, fuel-cell, and diesel heavy trucks in China.
+10. Some battery-electric heavy trucks reach diesel TCO parity under an ideal one-for-one replacement assumption in Beijing.
+11. It examines freight-zone scenarios and defines truck ownership costs, but the excerpt provides no electric-diesel comparison.
+12. It discusses road transport decarbonization in Hong Kong and references ownership costs without comparing truck technologies.
+13. Its tool compares ownership costs of electric and diesel buses, including fleets in China.
+14. It reports that electric buses in India have lower lifetime costs than diesel buses.
+15. It explains electric bus ownership cost analysis, including capital, operation, and battery replacement costs.
+16. It presents Chinese vehicle particulate emission factors rather than ownership costs.
+17. It reports electric bus fuel and maintenance savings in Izmir compared with conventional buses.
+18. It identifies an ownership cost gap between electric and diesel school buses in the United States.
+19. Its Indian fleet tool compares zero-emission and diesel trucks using ownership costs and other financial metrics.
+20. It compares purchase and operating costs of electric and conventional auto-rickshaws in India.
 
 ### q3_regional-vs-longhaul-adoption: What is the difference in zero-emission truck adoption potential between regional transport and long-haul transport scenarios?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2530 ms)
-1. Reports modest regional ZET market share (2–17%) by MY2030 and nascent long-haul adoption through MY2035.
-2. Provides scenario assumptions and sensitivity framing contrasting regional delivery versus long-haul contexts.
-3. Discusses delayed market tipping for NEV heavy-duty trucks, implying slower adoption timelines overall.
-4. States zero-emission vehicle promotion has greatest decarbonization potential, without separating regional vs long-haul adoption.
-5. Evaluates how zero-emission freight zones affect long-haul/regional-haul transportation and goods supply.
-6. Shows BEVs suit most urban/regional delivery while FCEVs better fit long-range and cold-chain scenarios.
-7. Examines techno-economic feasibility for urban and regional delivery use cases, not long-haul adoption directly.
-8. Continuation of the same techno-economic case study references regional delivery feasibility rather than long-haul adoption.
-9. Presents a financial assessment tool for ZETs vs ICE trucks, not regional versus long-haul adoption potential.
+**gpt-6-luna** (3098 ms)
+1. It reports regional ZET market shares of 2–17% by 2030 without incentives, while long-haul adoption remains nascent through 2035.
+2. It defines regional and long-haul scenario abbreviations but gives no adoption-potential comparison.
+3. It discusses differing truck decarbonization timelines by duty cycle, but not a regional-versus-long-haul adoption comparison.
+4. It assesses zero-emission vehicle decarbonization potential in Guangdong without comparing regional and long-haul truck adoption.
+5. It evaluates freight-zone scenarios affecting regional and long-haul transport, not their relative zero-emission truck adoption potential.
+6. It compares urban truck technologies and use cases, rather than regional and long-haul adoption scenarios.
+7. It concerns zero-emission trucks in urban and regional delivery, but provides no regional-versus-long-haul adoption comparison.
+8. It concerns urban and regional delivery feasibility, but the snippet offers no long-haul adoption comparison.
+9. It describes a financial comparison tool for individual trucks, not adoption potential across transport scenarios.
 
-**gpt-6-luna** (3286 ms)
-1. It directly compares adoption: regional delivery reaches 2–17% ZET share by 2030 without incentives, while long-haul remains nascent through 2035.
-2. It defines regional-delivery and long-haul scenario abbreviations but provides no adoption comparison.
-3. It discusses differing truck decarbonization timelines by duty cycle, but does not quantify regional-versus-long-haul adoption potential.
-4. It examines zero-emission vehicle decarbonization potential in Guangdong, without comparing regional and long-haul truck adoption.
-5. It considers regional and long-haul transport impacts from freight-zone scenarios, not their relative zero-emission truck adoption potential.
-6. It contrasts urban truck technologies and use cases, but does not compare regional with long-haul adoption scenarios.
-7. It analyzes urban and regional delivery feasibility, but the snippet does not compare adoption potential with long-haul transport.
-8. It analyzes urban and regional delivery feasibility, but the snippet does not compare adoption potential with long-haul transport.
-9. It assesses individual truck financial feasibility, not adoption differences between regional and long-haul scenarios.
+**gpt-6.1-terra** (6494 ms)
+1. Without incentives, regional delivery reaches 2–17% market share by 2030; long-haul adoption remains nascent through 2035.
+2. Defines regional and long-haul scenario abbreviations and describes a residual-value sensitivity assumption.
+3. Discusses barriers to heavy-duty electric truck adoption and differing decarbonization paces across duty cycles.
+4. Identifies zero-emission vehicles as Guangdong's largest transport emissions-reduction opportunity.
+5. Assesses zero-emission freight zone scenarios affecting regional and long-haul transport around Beijing.
+6. Finds battery trucks suitable for urban delivery, while fuel-cell trucks compete better in longer-distance and heavy-duty applications.
+7. Cites research on regional and long-haul truck electrification in a Guangdong delivery feasibility study.
+8. Cites research on regional and long-haul truck electrification in a Guangdong delivery feasibility study.
+9. Describes financial assumptions and geographic limitations of an Indian zero-emission truck feasibility tool.
 
 ### q4_bev-payback-periods: What are the payback periods for battery electric semi-trucks compared to diesel trucks in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (4185 ms)
-1. Provides ZET residual value assumptions and cost-competitiveness drivers, necessary inputs for payback-period comparisons.
-2. Reports when BETs reach TCO parity with diesel by MY2027, informing the implied payback timing.
-3. Details residual value sensitivity (e.g., 30% residual), a key factor determining payback periods.
-4. States BETs reach TCO parity versus diesel before MY2027 in multiple Guangdong use cases.
-5. Defines payback period and its comparison between diesel and e-trucks, but not China-specific results.
-6. Discusses decarbonization strategies and references EV cost-evaluation literature, but no explicit payback periods.
-7. Cites an ICCT TCO study for heavy trucks in China, which likely underpins payback-period estimates.
-8. Shows BEV vs diesel TCO cost differences and break-even mileage, which corresponds to payback timing.
-9. Discusses constraints of electric heavy trucks in China but provides no payback-period comparison.
-10. References a heavy-truck TCO-in-China study, likely containing payback period comparisons.
-11. Cites heavy-truck TCO work for China but does not provide direct payback-period figures.
-12. Focuses on port logistics with diesel truck emissions and modal shifts, not payback periods.
-13. Links zero-emission trucks to reaching TCO parity with diesel, but for Hong Kong, not China payback periods.
+**gpt-6-luna** (4145 ms)
+1. Discusses zero-emission truck residual values and costs in China, but gives no battery-electric versus diesel payback periods.
+2. Reports battery-electric truck total-cost parity with diesel by use case in Guangdong, not investment payback periods.
+3. Examines residual-value assumptions for zero-emission trucks in China, without comparing payback periods.
+4. Compares battery-electric and diesel truck ownership costs in Guangdong, but does not specify payback periods.
+5. Defines payback period as a comparison metric but focuses on a tool and does not provide China-specific results.
+6. Addresses China road-transport decarbonization broadly, without giving truck payback-period comparisons.
+7. Cites a China study comparing battery-electric and diesel heavy-truck ownership costs, but gives no payback figures.
+8. Provides electric-truck versus diesel cost gaps and distance thresholds in Beijing, rather than payback periods.
+9. Discusses electric heavy-truck development in China but provides no comparative payback-period estimates.
+10. Cites research on battery-electric and diesel heavy-truck ownership costs in China, without reporting payback periods.
+11. References a China heavy-truck ownership-cost comparison but does not state payback periods.
+12. Analyzes port transport decarbonization in Shenzhen but gives no truck payback-period comparison.
+13. Discusses Hong Kong truck total-cost parity with diesel, not China-specific payback periods.
 
-**gpt-6-luna** (3663 ms)
-1. Discusses electric-truck residual values, which affect payback calculations, but gives no payback period.
-2. Reports battery-electric trucks reaching total-cost parity with diesel in Guangdong, not their payback periods.
-3. Examines residual-value assumptions for zero-emission trucks, a factor in payback, but provides no period.
-4. Compares electric and diesel truck total costs in Guangdong but does not state payback periods.
-5. Defines payback period as a comparison metric for diesel and electric trucks, but gives no China-specific results.
-6. Addresses China’s road-transport decarbonization, but the snippet does not provide truck payback periods.
-7. Cites a China heavy-truck total-cost study, but supplies no payback-period figures.
-8. Gives electric-truck cost gaps and mileage thresholds versus diesel in Beijing, but not payback periods.
-9. Discusses electric heavy-truck technology in China, without comparing payback periods.
-10. Cites a China heavy-truck total-cost study, but provides no payback-period results.
-11. Cites a China battery-electric and diesel truck cost study, but gives no payback periods.
-12. Examines diesel-truck alternatives at Shenzhen port, but does not report electric-truck payback periods.
-13. Discusses electric-truck total-cost parity in Hong Kong, not payback periods in China.
+**gpt-6.1-terra** (8141 ms)
+1. Assumed residual values affect the comparative lifetime costs of electric and diesel trucks.
+2. Guangdong electric tractor-trailers reach total cost of ownership parity with diesel before model year 2025.
+3. A sensitivity scenario assumes a 30% residual-value guarantee for zero-emission trucks.
+4. Most electric trucks reach lifetime cost parity with combustion counterparts before model year 2027 without incentives.
+5. Defines payback period and describes a tool comparing electric and diesel truck profitability in India.
+6. Cites research on electric vehicle costs and benefits in China.
+7. Cites a study comparing ownership costs of electric, fuel-cell, and diesel heavy trucks in China.
+8. A 49-ton electric tractor-trailer costs 105,000 yuan more than its diesel counterpart over six years.
+9. Discusses battery limitations and early electric heavy-truck models, including tractor units.
+10. Cites a study comparing ownership costs of electric and diesel heavy trucks in China.
+11. Cites a study comparing ownership costs of electric and diesel heavy trucks in China.
+12. Examines alternatives to diesel trucking at Shenzhen's Yantian Port.
+13. Discusses potential electric heavy-truck adoption after lifetime cost parity with diesel in Hong Kong.
 
 ### q5_bikeshare-trip-substitution: What share of bike-share trips replace private car, taxi, or ride-hailing trips in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (6036 ms)
-1. Reports survey results that 17%–45% of bike-share trips replaced private motorized trips in Chinese cities.
-2. Analyzes passenger mode shares in China but does not isolate bike-share replacement of cars/taxis/ride-hailing.
-3. States that 17%–45% of trips replaced private motorized (private car/taxi/ride-hailing) trips and includes 54% used for transit access.
-4. Discusses electric mobility targets in Vietnamese cities, not bike-share trip replacement in China.
-5. Provides general background on bicycle-sharing and safety, without replacement shares for China.
-6. Describes the emergence and growth of dockless bike-sharing in China, not replacement shares.
-7. Notes bike-sharing is encouraged across many Chinese cities, without quantifying mode replacement.
-8. Shows mode shares for Johannesburg, not China bike-share trip substitution.
-9. Discusses whether ride-hailing replaces or adds to private car miles, not China bike-share replacement shares.
-10. Focuses on Hong Kong road decarbonization, not China bike-share substitution of car/taxi/ride-hailing.
-11. Addresses safety for bicycles as last-mile transport but provides no replacement percentages.
-12. Gives methodology for emissions/cost assessment, not bike-share trip replacement shares.
-13. Explains ride-hailing as a mode substitute in general terms, without China bike-share replacement figures.
-14. Covers bike-sharing implementation lessons in India, not China and not replacement shares.
-15. Provides a guide for assessing micromobility environmental impacts, not China replacement shares.
-16. Discusses ride-sharing additionality and data gaps, not measured bike-share replacement in China.
-17. Describes shared mobility trends globally, without China-specific replacement shares.
-18. Provides mode shares for Surabaya, Indonesia, unrelated to China bike-share substitution.
-19. Characterizes dockless bikes as independent travel alternatives, without quantifying replacement shares in China.
-20. Models electric vehicle adoption impacts in China, not bike-share trip replacement of car/taxi/ride-hailing.
-21. Summarizes informal services in Latin America, not China bike-share replacement.
-22. Gives context on bicycle-sharing adoption and vehicle ownership growth in China, not replacement percentages.
-23. Presents public space intervention mode split in Guadalajara, not China bike-share replacement shares.
-24. Studies commuting mode choice in Bengaluru, not China bike-share trip replacement of cars/taxis/ride-hailing.
-25. Models aggregator impacts for India’s mobility, not China bike-share replacement shares.
-26. Discusses transport demand management strategies in Mexico, not China bike-share replacement shares.
+**gpt-6-luna** (7329 ms)
+1. Discusses cycling’s potential to replace motorized trips but provides no replacement share in the snippet.
+2. Covers China’s transport mode shares and decarbonization, not bike-share trip replacement rates.
+3. Reports that 17–45% of Chinese dockless bike-share trips replaced private motorized trips.
+4. Focuses on electric mobility in Vietnamese cities, not Chinese bike-share trip replacement.
+5. Mentions Hangzhou’s bike-share system but gives no trip-replacement share.
+6. Describes dockless bike-sharing’s growth in China without reporting what trips it replaces.
+7. Notes expanding bike-sharing in China but provides no substitution share.
+8. Reports Johannesburg travel modes, unrelated to Chinese bike-share substitution.
+9. Discusses ride-hailing substitution in other regions, not bike-share in China.
+10. Covers Hong Kong road transport emissions and vehicles, not bike-share trip substitution.
+11. Addresses bicycle safety and public-transport access in China, without a replacement share.
+12. Provides transport-emissions methodology, not bike-share substitution rates.
+13. Examines ride-hailing in Uganda and India, not Chinese bike-share trips.
+14. Discusses public bicycle sharing in India, not China or replacement shares.
+15. Offers a general method for assessing micromobility impacts, without China-specific substitution figures.
+16. Discusses on-demand ride-sharing trip replacement, not Chinese bike-share trips.
+17. Reviews shared mobility generally, without China-specific bike-share replacement data.
+18. Reports Surabaya travel modes, unrelated to Chinese bike-share substitution.
+19. Discusses demand-responsive transit and mobility alternatives, not bike-share replacement shares in China.
+20. Focuses on electric-vehicle grid impacts in China, not bike-share trips.
+21. Covers informal transport in Latin America, not Chinese bike-sharing.
+22. Notes bike-share expansion and car ownership in China but gives no replacement share.
+23. Reports travel-mode shares in Guadalajara, not Chinese bike-share substitution.
+24. Examines commuting and metro access in Bengaluru, not Chinese bike-share replacement.
+25. Studies bus aggregators in India, not Chinese bike-share trips.
+26. Discusses transport policies in Mexico, not Chinese bike-share substitution rates.
 
-**gpt-6-luna** (6311 ms)
-1. It notes cycling’s potential to replace short motorized trips but provides no share for cars, taxis, or ride-hailing.
-2. It discusses China’s transport mode shares but gives no bike-share substitution percentage.
-3. It reports that 17–45% of bike-share trips replace private motorized trips, directly answering the question.
-4. It concerns electric mobility in Vietnamese cities, not bike-share substitution in China.
-5. It mentions China’s bike-share systems but gives no trip-replacement share.
-6. It describes bike-share growth in China without reporting which trips bike sharing replaces.
-7. It notes bike-share expansion in Chinese cities but gives no substitution percentage.
-8. It reports travel modes in Johannesburg, not bike-share substitution in China.
-9. It discusses ride-hailing substitution in other regions, not bike-share trips in China.
-10. It concerns Hong Kong road transport, not bike-share substitution across China.
-11. It addresses safe access to public transport in China but gives no bike-share replacement share.
-12. It lists transport modes for emissions assessment without bike-share substitution data.
-13. It discusses ride-hailing competition in other countries, not China bike-share trip replacements.
-14. It examines bike sharing in India rather than replacement shares in China.
-15. It explains how to assess micromobility emissions but reports no China-specific substitution share.
-16. It discusses on-demand ride-sharing substitution, not bike-share trips in China.
-17. It broadly discusses shared mobility but gives no China bike-share replacement percentage.
-18. It reports transport mode shares in Surabaya, not Chinese bike-share substitution.
-19. It describes mobility alternatives without quantifying bike-share trips replacing motorized trips in China.
-20. It concerns electric-vehicle adoption in China, not bike-share trip replacement.
-21. It examines informal transport in Latin America, not Chinese bike-share substitution.
-22. It describes China’s bike-share expansion but gives no share of trips replacing motorized modes.
-23. It reports Guadalajara travel modes, not bike-share substitution in China.
-24. It concerns commuting choices in Bengaluru, not bike-share substitution in China.
-25. It compares trip costs for Indian transport modes, not bike-share replacement shares in China.
-26. It discusses transport strategies in Mexico without China bike-share substitution data.
+**gpt-6.1-terra** (12886 ms)
+1. Discusses Chinese bike-sharing's potential to replace short motorized trips, without specifying the replacement share.
+2. Shows changes in passenger transport mode shares in Beijing and China.
+3. Reports that 17%–45% of shared-bike trips replace private motorized vehicle trips.
+4. Reports walking, cycling, and electric taxi targets in Santiago.
+5. Describes the scale of Hangzhou's bike-share system and potential health benefits.
+6. Describes the emergence and rapid growth of dockless bike-sharing in China.
+7. Notes that bike-sharing services operate in more than 360 Chinese cities.
+8. Lists Johannesburg's trip shares by private car, walking, cycling, and taxi.
+9. Discusses whether electric ride-hailing replaces private vehicle travel or adds trips.
+10. Reports Hong Kong's registered private car and taxi counts.
+11. Discusses cycling safety for last-mile connections to public transport in China.
+12. Lists private cars and taxis among vehicle categories for transport emissions assessment.
+13. Describes ride-hailing as a substitute for other travel modes in Kampala and Hyderabad.
+14. Discusses the potential for public bicycle sharing in Indian cities.
+15. Outlines how cities can assess shared micromobility's net greenhouse-gas impacts.
+16. Discusses whether on-demand ride-sharing replaces public transport or walking trips.
+17. Discusses the growth of shared mobility, including bike-sharing and car-sharing.
+18. Lists Surabaya's trip shares by two-wheeler, private car, and public transport.
+19. Identifies dockless bikes and ride-hailing as alternatives to private vehicles and other modes.
+20. Projects the share of electric vehicles in China's taxi fleet.
+21. Discusses motorcycle taxis and the difficulty of estimating informal transport's modal share in Latin America.
+22. Notes bike-sharing's spread across Chinese cities alongside rising private car ownership.
+23. Lists Guadalajara's trip shares by bicycle, private vehicles, buses, and taxis.
+24. Discusses commuting mode choices and car use in Bengaluru.
+25. Details assumptions for estimating car and taxi trip costs in India's National Capital Region.
+26. Discusses reducing vehicle travel through public transport, cycling, and walking in Mexico.
 
 ### q6_bikeshare-co2-reduction: How much CO2 emissions reduction is attributed to bike-sharing in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (3937 ms)
-1. Reports dockless bike sharing in Chinese cities and estimates annual CO2 reduction of 4.8 million tonnes.
-2. Finds dockless bike sharing in China reduces CO2 by about 4.8 million tonnes annually.
-3. Discusses decarbonizing transport but provides no bike-sharing-specific CO2 reduction estimate.
-4. Provides general bike-sharing examples and health impacts without quantifying CO2 reductions in China.
-5. Mentions bike-sharing size and air-pollution/health risk findings, not CO2 reduction amounts.
-6. Provides national/emerging-economy climate modeling, not CO2 reduction attributed to China bike-sharing.
-7. Covers transport CO2 accounting methodologies and trends, not bike-sharing reduction figures.
-8. Describes bike-sharing technology and integration, without estimating CO2 emissions reduction in China.
-9. Offers transport emissions assessment methodology without any bike-sharing CO2 reduction attribution.
-10. Analyzes road transport emissions for China but does not quantify bike-sharing CO2 reductions.
-11. Discusses shared micromobility environmental impact accounting methods, not China bike-sharing CO2 amounts.
-12. Scenario analysis for transport decarbonization emphasizing shared mobility, without CO2 reduction attributed to bike-sharing.
-13. Calculates bicycle-sharing CO2 for India using a car substitution assumption; China bike-sharing not covered.
-14. Reviews China net-zero and air pollution/emissions context without bike-sharing-specific CO2 reduction.
-15. Zero-emission trucks feasibility in Guangdong; no bike-sharing CO2 reduction quantified.
+**gpt-6-luna** (3951 ms)
+1. The study estimates dockless bike-sharing in China reduces CO₂ emissions by 4.8 million tonnes annually.
+2. The report estimates Chinese bike-sharing reduces approximately 4.8 million tonnes of CO₂ annually.
+3. Discusses Chinese road-transport decarbonization but gives no bike-sharing emissions reduction figure.
+4. Describes bike-sharing systems and health impacts without quantifying China’s CO₂ reductions.
+5. Describes Chinese bike-sharing systems but provides no CO₂ reduction estimate.
+6. Models broad national emissions reductions, not bike-sharing’s contribution in China.
+7. Addresses transport emissions accounting in China without estimating bike-sharing reductions.
+8. Discusses bike-sharing integration and planning but gives no emissions-reduction figure.
+9. Provides transport emissions methodology, not a bike-sharing reduction estimate.
+10. Analyzes China’s road-transport emissions but does not quantify bike-sharing’s impact.
+11. Covers environmental assessment of shared micromobility but gives no China-specific reduction figure.
+12. Examines transport decarbonization in India rather than bike-sharing reductions in China.
+13. Discusses public bike-sharing in India, not emissions reductions in China.
+14. Addresses China’s urban emissions and climate policy without quantifying bike-sharing reductions.
+15. Focuses on zero-emission trucks in Guangdong, not bike-sharing emissions reductions.
 
-**gpt-6-luna** (3681 ms)
-1. Dockless bike-sharing in China is estimated to reduce CO₂ emissions by 4.8 million tonnes annually.
-2. The report estimates that bike-sharing in China reduces CO₂ emissions by about 4.8 million tonnes each year.
-3. Discusses China’s transport decarbonization strategies but gives no bike-sharing reduction figure.
-4. Describes Chinese bike-sharing systems and health benefits without quantifying CO₂ reductions.
-5. Describes China’s bike-sharing systems but provides no CO₂ reduction estimate.
-6. Covers broad urban emissions reductions, not bike-sharing’s contribution in China.
-7. Discusses transport emissions accounting in China without a bike-sharing reduction figure.
-8. Discusses bike-sharing integration in Chinese cities but does not quantify its CO₂ reductions.
-9. Addresses transport emissions in Chinese cities but not bike-sharing’s quantified impact.
-10. Analyzes China’s road transport emissions without stating bike-sharing’s CO₂ reduction.
-11. Provides a general guide to shared-micromobility emissions assessment, not China’s specific reduction amount.
-12. Focuses on India’s transport decarbonization rather than bike-sharing emissions reductions in China.
-13. Examines public bicycle sharing in India, not its CO₂ reduction in China.
-14. Discusses China’s urban climate challenges but not bike-sharing’s emissions reduction.
-15. Studies zero-emission trucks in Guangdong, not bike-sharing’s CO₂ reduction.
+**gpt-6.1-terra** (8449 ms)
+1. Estimates dockless bike-sharing reduces CO₂ emissions by 4.8 million tonnes annually.
+2. Estimates shared bicycles reduce CO₂ emissions by approximately 4.8 million tonnes annually.
+3. Discusses Chinese passenger transport mode shares and metro CO₂ emission factors.
+4. Describes the scale of Hangzhou's bike-sharing system and potential health benefits.
+5. Reports Hangzhou's bike-sharing fleet and station counts, but no emissions reduction.
+6. Models an 89% emissions reduction by 2050 in China and India, without attributing it to bike-sharing.
+7. Discusses rising transport CO₂ emissions and emissions accounting in Chinese cities.
+8. Describes integration of bike-sharing and public transit payments in Hangzhou and Guangzhou.
+9. Discusses transport's contribution to air pollution in Beijing and other Chinese cities.
+10. Reports road transport's share of China's transport-related greenhouse gas emissions.
+11. Discusses accounting methods for emissions associated with shared micromobility services.
+12. Discusses shared mobility as a strategy for reducing transport energy consumption in India.
+13. Explains a method for estimating bike-sharing CO₂ savings in India using assumed car emissions.
+14. Discusses China's energy-related CO₂ emissions, air pollution, and urban traffic congestion.
+15. Addresses zero-emission delivery trucks in Guangdong, not bike-sharing emissions savings.
 
 ### q7_bikeshare-travel-behavior: How does dockless bike-sharing affect travel behavior in Chinese cities?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (4394 ms)
-1. Analyzes how dockless bike-sharing in Chinese cities changes travel behavior and city outcomes.
-2. Same report chapter framing how shared bikes affect urban mobility patterns in China.
-3. Describes the rapid emergence and scale of dockless bike-sharing in China, contextualizing behavioral impacts.
-4. Provides safety/design context for bike-sharing, indirectly relevant to travel behavior effects.
-5. Discusses bicycle-sharing safety and health co-benefits from other cities, indirectly informing behavior shifts.
-6. Examines transport mode shares and emissions in China, potentially related to shifts from bike-sharing adoption.
-7. Covers public transport accessibility design, not dockless bike-sharing specifically.
-8. Gives broader context on shared bike proliferation in many Chinese cities and competing car growth trends.
-9. Methodology for transport emissions/cost assessment in Chinese cities, not bike-sharing behavior.
-10. City guide for assessing environmental impacts of shared micromobility, not travel behavior specifically.
-11. Discusses electric mobility roadmap for Vietnamese cities, unrelated to Chinese dockless bike-sharing behavior.
-12. Focuses on first/last-mile solutions and shared rides generally, not dockless bike-sharing in China.
-13. Defines shared mobility and responsive transit concepts, without China-specific dockless bike-sharing behavior findings.
-14. Reports on dockless PBS implementation in India, which is only indirectly relevant as a comparative case.
-15. Lessons from cycling schemes in Mexico City and Guadalajara, indirectly relevant to interpreting behavior impacts.
-16. Examines cycling policy and infrastructure safety, indirectly supporting mechanisms for travel behavior changes.
-17. Assesses local low-carbon policy coverage, with no direct linkage to dockless bike-sharing travel behavior.
-
-**gpt-6-luna** (4476 ms)
-1. This report directly analyzes how dockless bike-sharing changes travel and other aspects of life in Chinese cities.
-2. This Chinese-language report directly examines dockless bike-sharing’s effects on travel behavior in Chinese cities.
-3. It outlines dockless bike-sharing’s rapid growth in China but does not detail its effects on travel behavior.
+**gpt-6-luna** (4770 ms)
+1. This report directly analyzes how dockless bike-sharing changes travel behavior and lives in Chinese cities.
+2. This Chinese-language report directly examines dockless bike-sharing’s effects on urban travel behavior in Chinese cities.
+3. It describes dockless bike-sharing’s rapid growth in China but does not explain its effects on travel behavior.
 4. It discusses conventional bike-sharing in China, not dockless systems or their travel-behavior effects.
-5. It describes Chinese bike-sharing’s scale but focuses on conventional systems and health impacts elsewhere.
-6. It addresses transport mode-share changes in China but does not specifically assess dockless bike-sharing’s effects.
-7. It cites a Chinese bike-sharing report but does not explain dockless systems’ effects on travel behavior.
-8. It notes bike-sharing’s prevalence across Chinese cities without describing its effects on travel behavior.
-9. It concerns transport-emissions assessment methods, not bike-sharing or travel behavior changes.
-10. It discusses environmental assessment of shared micromobility, including dockless operations, but not Chinese travel behavior.
-11. It addresses electric mobility in Vietnamese cities, not dockless bike-sharing in China.
-12. It discusses first- and last-mile transit connections but does not address dockless bike-sharing’s effects in China.
-13. It surveys demand-responsive transit rather than dockless bike-sharing or its effects on Chinese travel behavior.
-14. It describes dockless bike-sharing implementation in India, not its travel effects in Chinese cities.
-15. It concerns cycling schemes in Mexican cities, not dockless bike-sharing’s effects in China.
-16. It discusses cycling infrastructure and travel during COVID-19, not dockless bike-sharing in Chinese cities.
-17. It discusses local climate and mobility policy but does not address dockless bike-sharing’s travel effects.
+5. It describes China’s conventional bike-sharing system and general cycling benefits, not dockless-bike travel effects.
+6. It covers passenger travel mode shares in China but does not specify dockless bike-sharing’s influence.
+7. It cites a bike-sharing report but provides no findings about travel behavior.
+8. It notes bike-sharing’s broad availability in Chinese cities without describing behavioral effects.
+9. It concerns transport emissions and driving patterns, not dockless bike-sharing or travel behavior.
+10. It addresses shared micromobility impacts generally, but the snippet does not identify effects in Chinese cities.
+11. It concerns electric mobility in Vietnamese cities rather than dockless bike-sharing in China.
+12. It discusses first- and last-mile mobility generally but does not address dockless bike-sharing in China.
+13. It defines shared mobility broadly without discussing dockless bikes or Chinese travel behavior.
+14. It describes a dockless bike-sharing launch in an Indian city, not travel effects in China.
+15. It concerns cycling schemes in Mexican cities and does not address dockless bike-sharing in China.
+16. It discusses cycling trends and infrastructure generally, not dockless bike-sharing’s effects in Chinese cities.
+17. It discusses transportation choices and climate policy generally without examining dockless bike-sharing.
+
+**gpt-6.1-terra** (11220 ms)
+1. The report examines dockless bike-sharing in Chinese cities, but the excerpt does not describe travel behavior changes.
+2. The report concerns dockless bike-sharing in Chinese cities; this excerpt contains only publication and author details.
+3. Dockless bike-sharing began in China in 2015 and expanded rapidly from campus pilots.
+4. Hangzhou's station-based bike-sharing system illustrates the scale of Chinese bicycle sharing, rather than dockless travel effects.
+5. Hangzhou's station-based system and Barcelona's health findings provide context on bicycle sharing.
+6. The report presents changes in passenger transport mode share, including Beijing's intracity trips.
+7. The manual cites a Mobike white paper on bike-sharing and urban development.
+8. The excerpt reports bike-sharing services in over 360 Chinese cities alongside rising car ownership.
+9. The guide provides driving-condition assumptions for transport emissions calculations in a Chinese city.
+10. The guide addresses environmental assessment of shared micromobility, including docked and dockless operations.
+11. The excerpt lists electric-vehicle and emissions references for a Vietnamese urban mobility roadmap.
+12. The report discusses first-mile and last-mile connections to transit hubs using shared rides.
+13. The excerpt defines shared mobility and describes growth in ride-hailing services.
+14. An Indian city's dockless bike-sharing rollout illustrates deployment and usage outside China.
+15. The report discusses incorporating existing mode shares into sustainable mobility planning in Mexican cities.
+16. The excerpt describes cycling's increased popularity during the pandemic and cities' infrastructure responses.
+17. The excerpt discusses commuting decisions, transportation energy use, and urban land-use policies.
 
 ### q8_yantian-port-mode-shift-targets: Can Yantian Port realistically meet the mode-shift targets set in Shenzhen's Master Plan (2035), or would it require more aggressive measures than a "stated policy" trajectory?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1975 ms)
-1. Examines Yantian Port inland transport emissions but not mode-shift targets or 2035 Master Plan feasibility.
-2. Discusses near-term need for more proactive mode-shift beyond stated policy trajectory in Shenzhen context.
-3. Defines scenario trajectories including a stated-policy baseline versus deeper structural change via mode shift.
-4. Assumes high green transport mode share in stated-policy scenario by 2030, relevant to comparing against stricter targets.
-5. Presents mode-shift policy levers (“pull and push”) but lacks Shenzhen 2035 target evaluation.
-6. Reviews how local governments set sustainable transport plans and targets, without analyzing Yantian’s meeting 2035 mode shift.
+**gpt-6-luna** (3020 ms)
+1. Analyzes Yantian Port’s transport emissions and decarbonization pathways, directly informing whether its mode-shift targets are achievable.
+2. Compares transport measures and mode-shift ambition across Guangdong regions, but does not assess Yantian Port’s targets.
+3. Defines stated-policy and stronger structural-change scenarios useful for comparing mode-shift ambition, without evaluating Yantian Port.
+4. Reports stated-policy green-transport assumptions for major cities, not Yantian Port’s freight-mode targets.
+5. Describes policy tools to shift urban travel toward public transport, but does not assess Yantian Port or its targets.
+6. Classifies local transport plans and emissions targets, but does not evaluate Yantian Port’s mode-shift feasibility.
 
-**gpt-6-luna** (2451 ms)
-1. Analyzes Yantian’s transport emissions and distribution system, directly informing whether port mode-shift targets are achievable.
-2. Compares transport decarbonization measures and mode-shift ambition, but does not specifically assess Yantian or Shenzhen’s 2035 targets.
-3. Defines stated-policy and stronger structural-change scenarios, offering a framework to compare mode-shift ambition.
-4. Describes stated-policy urban green-transport assumptions, but not Yantian’s freight targets or feasibility.
-5. Outlines policy tools for shifting transport toward public transit, without assessing port freight or target feasibility.
-6. Classifies local sustainable-transport plans and targets, but provides no Yantian-specific feasibility analysis.
+**gpt-6.1-terra** (5568 ms)
+1. Analyzes Yantian Port's domestic freight emissions, but the excerpt does not assess mode-shift targets or policy trajectories.
+2. Compares Guangdong transport decarbonization measures and calls for proactive mode shifts outside the Pearl River Delta.
+3. Defines national stated-policy and structural-change scenarios, the latter assuming greater transport mode shifts.
+4. Describes stated-policy passenger transport targets for major Chinese cities, rather than port freight.
+5. Discusses policies encouraging public transit and reducing private-car dependence in urban passenger travel.
+6. Provides a framework for assessing local sustainable transport plans and emissions targets.
 
 ### q9_yantian-port-rail-water-barriers: What are the barriers to expanding rail-water intermodal transport (road-to-rail) at Yantian Port?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2098 ms)
-1. Predicts Yantian Port will shift toward railways and waterways, implying expansion barriers like capacity and mode share constraints.
-2. Identifies barriers including uncompetitive rail pricing, underdeveloped intermodal services, and limited service quality in China.
-3. Suggests barriers/needs for expansion are intermodal infrastructure, equipment, service connectivity, pricing, and scheduling improvements.
-4. Recommends promoting sea-to-rail intermodal services at Shenzhen/Yantian region, implying current service gaps as a barrier.
-
-**gpt-6-luna** (1932 ms)
-1. Projects rail and waterway growth at Yantian but does not identify barriers to achieving it.
+**gpt-6-luna** (2074 ms)
+1. Projects Yantian’s rail and waterway share above half by 2035 but does not identify expansion barriers.
 2. Identifies uncompetitive rail pricing, underdeveloped intermodal services, and poor rail service quality as barriers in China.
-3. Recommends infrastructure, equipment, connectivity, pricing, scheduling, and first-/last-mile improvements that address intermodal barriers.
-4. Recommends sea-to-rail services at Shenzhen Port but does not specify barriers to expanding them.
+3. Recommends infrastructure, connectivity, pricing, scheduling, and first-/last-mile improvements to address intermodal freight barriers.
+4. Recommends promoting sea-to-rail services at Shenzhen Port but does not specify barriers.
+
+**gpt-6.1-terra** (4153 ms)
+1. Projects rail and waterways carrying over half of Yantian's throughput by 2035, without identifying barriers.
+2. Identifies uncompetitive rail pricing, underdeveloped intermodal services, and limited rail service quality across China.
+3. Recommends infrastructure, connectivity, pricing, scheduling, and first- and last-mile delivery improvements for Chinese intermodal freight.
+4. Recommends promoting sea-to-rail and sea-to-water services at Shenzhen port without identifying barriers.
 
 ### q10_yantian-port-drayage-electrification-co2: How much would well-to-wheel CO2 emissions decline if drayage truck electrification reached 95% by 2035 at Yantian Port, and how does that compare to rail and water mode-shift measures?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (4839 ms)
-1. Discusses Shenzhen port decarbonization and highlights road-to-rail as largest decarbonization mode-shift measure.
-2. Provides sector-wide shares for electrification and structural changes, including freight mode shifts relevance to 2035.
-3. Quantifies needed electrification and freight mode-share structural changes for China’s mitigation pathways.
-4. Focuses on policies for zero-emission heavy-duty trucks, but not Yantian or well-to-wheel CO2 totals.
-5. States that net-zero requires substantial freight mode shift and heavy-duty electrification, but no drayage-specific WTW numbers.
-6. Recommends transport decarbonization strategies, but does not quantify Yantian drayage WTW or compare rail/water.
-7. Mentions “low-carbon port” pilots and targets for freight mode shares, including rail-water increases by 2030.
-8. Gives transport-sector targets for fuels and energy reductions by 2035, applicable but not drayage-at-Yantian-specific.
-9. Covers public transport in NDCs, unrelated to drayage trucking well-to-wheel CO2 or rail-water shift comparisons.
-10. Scenario table includes emission-reduction impacts of electrification, but no drayage/port/WTT comparison metrics.
-11. Argues for electrifying freight rail and shifting away from road toward rail/water for lower GHG.
-12. Analyzes techno-economic feasibility of zero-emission trucks in Guangdong; no WTW CO2 or Yantian port results.
-13. Describes freight TDM aimed at shifting freight from trucks to rail, but lacks CO2/WTT quantification for Yantian.
-14. Provides abbreviations and feasibility framing for zero-emission trucks, without Yantian drayage WTW CO2 declines.
-15. Recommends accelerating zero-emission drayage trucks in Shenzhen/nearby, directly relevant but no quantitative WTW CO2 decline.
+**gpt-6-luna** (4947 ms)
+1. The Shenzhen Port case study compares truck electrification with road-to-rail and other freight measures, likely containing the requested Yantian estimates.
+2. Discusses national road-transport electrification and mode shifts, but not Yantian Port’s specific emissions comparison.
+3. Provides China-wide freight mode-share and electrification targets, not port-specific well-to-wheel reductions.
+4. Examines zero-emission heavy-truck policies in China, without Yantian Port or rail-and-water comparisons.
+5. Describes national freight shifts and heavy-truck electrification as decarbonization strategies, not Yantian-specific impacts.
+6. Focuses on Hong Kong road transport pathways, not Yantian Port’s truck electrification or mode-shift estimates.
+7. Covers provincial transport targets and port measures, but gives no Yantian-specific well-to-wheel comparison.
+8. Discusses broad transport decarbonization goals, not the requested port-level emissions estimates.
+9. Focuses on public transport in national climate pledges, unrelated to Yantian freight emissions estimates.
+10. Analyzes Indian transport scenarios, not Yantian Port or its freight mode-shift measures.
+11. Supports freight rail and water shifts as emissions measures, but provides no Yantian-specific figures.
+12. Studies zero-emission truck feasibility in Guangdong, potentially relevant to truck technology but not Yantian mode-shift comparisons.
+13. Discusses shifting freight from trucks to rail in Mexico, not Yantian Port’s emissions effects.
+14. Assesses zero-emission trucks in Guangdong, including port operations, but does not answer the Yantian comparison directly.
+15. Recommends zero-emission drayage trucks in Guangdong, but does not quantify Yantian’s well-to-wheel reductions against rail and water shifts.
 
-**gpt-6-luna** (4876 ms)
-1. The Shenzhen Port case study directly compares port decarbonization measures, including drayage electrification and rail or water freight shifts.
-2. This national road-transport study discusses electrification and freight mode shifts but gives no Yantian-specific comparison.
-3. This study addresses nationwide road-freight mode shifts and vehicle electrification, not Yantian Port emissions.
-4. This report concerns zero-emission heavy trucks in regional and long-haul freight, not port-specific well-to-wheel impacts or mode shifts.
-5. This China-wide pathway includes heavy-truck electrification and road-to-rail or water shifts, but no Yantian-specific estimates.
-6. This study concerns Hong Kong road-transport decarbonization rather than Yantian Port drayage or freight mode shifts.
-7. This document discusses provincial transport policies and port decarbonization, but not Yantian’s electrification scenario comparison.
-8. This global transport-goal paper mentions electrification and sustainable mode shifts without estimating port-specific emissions reductions.
-9. This paper focuses on public transport in national climate pledges, not freight drayage or port emissions.
-10. This India-focused scenario analysis addresses transport electrification, not Yantian Port or its rail and water measures.
-11. This report broadly supports freight shifts toward rail and water but provides no Yantian-specific emissions estimate.
-12. This Guangdong truck-feasibility study includes port-use cases but does not compare Yantian electrification with mode shifts.
-13. This Mexico transport pathway discusses shifting freight from trucks to rail, not Yantian Port scenarios.
-14. This Guangdong zero-emission truck study includes port-operation cases but lacks the requested Yantian well-to-wheel comparison.
-15. This Guangdong pathway recommends zero-emission drayage trucks but does not quantify Yantian outcomes against rail and water shifts.
+**gpt-6.1-terra** (9184 ms)
+1. The Shenzhen port study compares decarbonization measures and identifies road-to-rail as the largest reduction opportunity.
+2. A nationwide scenario estimates electrification's contribution to cumulative transport emissions reductions alongside freight mode shifts.
+3. It outlines nationwide freight mode-share and vehicle electrification targets for carbon neutrality.
+4. It examines zero-emission heavy-duty trucks in China, including battery-electric truck payload losses.
+5. It discusses heavy-truck electrification, freight shifts to rail and water, and electricity decarbonization across China.
+6. It compares passenger-car electrification scenarios in Hong Kong rather than port freight measures.
+7. It lists Chinese provincial targets for vehicle electrification and rail-water freight transport.
+8. It proposes global transport targets combining electrification, cleaner fuels, and shifts toward rail.
+9. It counts countries' public transport and transit electrification commitments in climate plans.
+10. It models transport electrification and emissions reductions in India, including freight vehicles and ships.
+11. It discusses shifting freight from trucks to rail and water, alongside rail electrification.
+12. It assesses zero-emission truck ownership costs in Guangdong, including electric trucks.
+13. It discusses freight shifts from trucks to rail and electric vehicles in Mexico.
+14. It assesses zero-emission truck economics in Guangdong, including port-operation use cases.
+15. It recommends accelerating zero-emission drayage and other heavy-duty trucks in Shenzhen and Guangzhou.
 
 ## alignment
 
 ### q1_zero-emission-heavy-duty-trucks: What is the projected market penetration rate of new energy heavy-duty trucks in China through 2035?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1785 ms)
-1. One source directly projects ZET penetration for China’s regional-delivery and long-haul heavy-duty truck scenarios, but only up to 2030 (not 2035): ~2%–17% under a no-policy case.
-2. The other highly relevant items appear to discuss models/policies and technical parameters (e.g., annual vehicle kilometers traveled, charging), yet the provided excerpts don’t state an explicit 2035 market-penetration number.
-3. A lower-relevance WRI authors’ piece includes partial projections but the excerpt focuses on operational decarbonization strategies, not a clear 2035 market penetration rate for new energy heavy-duty trucks.
-4. Because all retrieved sources are Chinese and the excerpt coverage stops at 2030, the evidence for “through 2035” is incomplete; a targeted query for “2035 penetration rate / adoption curve” is needed.
+**gpt-6-luna** (2630 ms)
+1. Two highly relevant results address China’s zero-emission heavy-duty trucks through 2035, and the results include Chinese-language publications.
+2. The excerpt gives only a 2030 no-policy estimate: regional-delivery penetration is about 2%–17%; it does not provide the requested 2035 rate or long-haul estimates.
+3. The third result is only weakly related, and the excerpts do not establish whether projections cover all new-energy trucks or only zero-emission trucks; request 2035 rates by scenario and transport setting.
 
-**gpt-6-luna** (4613 ms)
-1. Two highly relevant sources address China’s zero-emission heavy-duty truck uptake through 2035; retrieved publications include Chinese-language material.
-2. The excerpt gives only a no-policy 2030 estimate: regional-delivery penetration of about 2%–17%; it does not establish a single 2035 rate or long-haul estimate.
-3. The second excerpt lists vehicle-use assumptions, not penetration projections, while the third is weakly relevant; refine by specifying policy scenario and regional versus long-haul trucks.
+**gpt-6.1-terra** (2796 ms)
+1. The Chinese-language report directly addresses adoption through 2035, but the excerpt provides only a 2030 estimate: 2–17% for regional delivery without policy.
+2. The 2035 penetration rate is not visible in the excerpts; consult the full report for projections by transport segment and policy scenario.
+3. Avoid treating the 2030 range as a national forecast: it covers zero-emission trucks in regional delivery, not necessarily all new energy heavy-duty trucks.
+4. Search for English terms such as “2035 China zero-emission heavy-duty truck penetration policy scenarios” and specify whether penetration means sales or fleet share.
 
 ### q2_bev-diesel-truck-tco-china: How does total cost of ownership compare between battery electric and diesel heavy-duty trucks in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1778 ms)
-1. Most results focus on China-specific TCO comparisons for heavy trucks, including battery-electric vs diesel, via the Guangdong/port-delivery case study and related techno-economic feasibility work.
-2. A key strong source is Mao et al. (2021) on “Total Cost of Ownership for Heavy Trucks in China” explicitly comparing battery-electric, fuel-cell electric, and diesel—ideal for direct TCO side-by-side.
-3. Coverage appears largely China-and-delivery oriented; missing are nationwide operations detail (routes, duty cycles), assumed electricity prices, utilization rates, and discount rates that drive TCO swings.
-4. Because all retrieved items are Chinese-language publications, cross-checking with English summaries or meta-analyses (same assumptions) would reduce risk of incomplete interpretation of methods.
+**gpt-6-luna** (2098 ms)
+1. Strong matches include a China-focused heavy-truck ownership-cost study and a Guangdong delivery-use feasibility analysis; 10 of 20 results are rated highly relevant.
+2. The excerpts mostly show titles or citations, not comparative cost estimates, assumptions, or findings, so they cannot establish which technology is cheaper or by how much.
+3. Relevant publications include Chinese-language sources; refine the query by specifying truck class, duty cycle, ownership period, and assumptions such as electricity, diesel, battery, and charging costs.
 
-**gpt-6-luna** (4002 ms)
-1. The Guangdong delivery-use case study and a cited China heavy-truck ownership-cost analysis directly match the comparison, but excerpts provide no cost figures or conclusions.
-2. Results include Chinese-language publications; available snippets do not reveal whether estimates account for purchase price, energy, maintenance, battery replacement, or incentives.
-3. Use the underlying cost study and specify truck duty cycle, annual mileage, ownership period, and subsidy assumptions to make the BEV–diesel comparison actionable.
+**gpt-6.1-terra** (4250 ms)
+1. The Guangdong case study directly addresses electric truck feasibility, but the excerpts do not establish a numerical ownership-cost comparison with diesel.
+2. A Chinese-language publication cites a 2021 study comparing battery-electric, fuel-cell and diesel heavy trucks in China; retrieve that study to verify its findings.
+3. Several excerpts are bibliography entries rather than evidence of results; relevance scores alone should not be treated as proof of cost parity.
+4. Refine the search by truck class, province, delivery or long-haul use, and assessment year; request purchase, energy, maintenance and charging costs.
 
 ### q3_regional-vs-longhaul-adoption: What is the difference in zero-emission truck adoption potential between regional transport and long-haul transport scenarios?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1947 ms)
-1. A China-focused study reports regional delivery (MY2030) has a modest ZET market share of ~2–17% without incentives, implying low adoption early under policy lag.
-2. The long-haul vs regional contrast is implied by scenario-focused work on vehicle deployment potential, but the provided excerpts don’t quantify the long-haul adoption share directly.
-3. Policy sensitivity assumptions (e.g., 30% residual value for ZETs) indicate adoption gaps between scenarios depend heavily on incentives and economics, not only routing distance.
-4. Evidence is largely from Chinese-language sources; missing: explicit, side-by-side numerical adoption potentials for both regional and long-haul in a single consistent framework.
+**gpt-6-luna** (2819 ms)
+1. The strongest source directly compares regional and long-haul truck scenarios in China; its excerpt gives regional delivery 2–17% ZET market share by 2030 without incentives.
+2. The long-haul estimate is cut off, so the excerpts do not establish the adoption gap; consult the full scenario results and compare assumptions and policy cases.
+3. Other results address broader road-transport decarbonization or freight zones, which offer context but do not directly quantify this comparison; refine by specifying year and incentive scenario.
+4. Relevant results include Chinese-language publications, alongside the English-titled lead source; the sample is promising but incomplete, with only two results rated highly relevant.
 
-**gpt-6-luna** (4870 ms)
-1. The lead study directly compares regional and long-haul trucking: without incentives, regional ZET market share reaches 2–17% by MY2030, while long-haul adoption remains nascent.
-2. Most other results address broader road-transport decarbonization or freight-zone impacts, so they offer limited direct evidence for quantifying the adoption gap; the supplied excerpts are also incomplete.
-3. Relevant publications include Chinese-language sources. Refine the query by specifying the target year and policy scenario, such as adoption potential with versus without purchase incentives.
+**gpt-6.1-terra** (2831 ms)
+1. The strongest match estimates 2–17% regional-delivery adoption by model year 2030 without incentives, but the excerpt truncates the long-haul figure.
+2. Relevant publications include Chinese-language sources. The other passages provide context on cost parity, policy and freight zones rather than a direct adoption comparison.
+3. Retrieve the full regional-versus-long-haul study and compare scenario assumptions, policy incentives, vehicle types and adoption estimates for the same years.
+4. Specify China and the desired timeframe, or broaden the geography to assess whether the findings apply elsewhere.
 
 ### q4_bev-payback-periods: What are the payback periods for battery electric semi-trucks compared to diesel trucks in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1684 ms)
-1. China-focused sources model BET cost advantages and explicitly track payback period alongside TCO and discounted cash flows, but the provided excerpts don’t report numeric payback-period values.
-2. At least one study assumes residual value for diesel trucks (~30% retained), which can materially shift BET payback results; without full parameter values, comparisons are uncertain.
-3. Results are heavily Chinese-language and appear concentrated on specific corridors/use cases (e.g., port operations, urban/regional delivery), leaving gaps for other semi-truck classes, routes, and charging infrastructure assumptions.
+**gpt-6-luna** (2387 ms)
+1. China-focused sources cover zero-emission truck economics, including Guangdong use cases and diesel residual-value assumptions, but the excerpts do not provide battery-electric semi-truck payback periods directly.
+2. The Guangdong study reports total-cost-of-ownership parity for several use cases, not necessarily investment payback; distinguish these metrics and verify whether its results cover semis specifically.
+3. Relevant publications include Chinese-language sources. Refine the query by specifying long-haul semis, payback definition, comparison assumptions, and target year; current evidence is partial.
 
-**gpt-6-luna** (5451 ms)
-1. China-focused sources cover zero-emission heavy-duty trucks and Guangdong delivery cases, but the excerpts provide no direct battery-electric semi-truck versus diesel payback figures.
-2. The Guangdong study discusses total-cost-of-ownership parity across port, distribution, and urban uses; these scenarios may not represent long-haul semi-truck operations.
-3. Chinese-language publications are included; refine the search around semi-truck payback periods, duty cycles, purchase incentives, and the comparison year to locate comparable estimates.
+**gpt-6.1-terra** (2319 ms)
+1. The China regional and long-haul study is relevant, but its excerpt gives no payback period; consult its full results before citing a figure.
+2. The Guangdong study reports electric-truck cost advantages and projected parity before model year 2027, but cost parity is not a payback period.
+3. Residual-value assumptions affect comparisons; the studies also cover different truck uses. Retrieved publications include Chinese-language sources.
+4. Search for China battery-electric semi-truck payback periods versus diesel, specifying long-haul use, annual mileage, purchase year, and incentives.
 
 ### q5_bikeshare-trip-substitution: What share of bike-share trips replace private car, taxi, or ride-hailing trips in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1805 ms)
-1. Only one retrieved Chinese WRI report directly addresses substitution: it states 17%–45% of trips replace private car, taxi, or ride-hailing (range depends on trip type).
-2. The key finding is framed as replacing short-distance motorized trips and connecting to public transit (54% for transfers; 91% of those connect to transit), not necessarily full “mode-to-mode” shares.
-3. Other results are either methodological/background (e.g., decarbonization strategies) or lack the specific replacement share needed for China-wide estimates.
-4. To improve, refine to “modal replacement share of dockless bike sharing” and ask for “private car/taxi/ride-hailing substitution by trip distance” for comparable datasets across major Chinese cities.
+**gpt-6-luna** (2906 ms)
+1. The Chinese-language report directly addresses substitution, reporting that 17%–45% of trips replaced private motorized travel; the excerpt does not specify separate shares for cars, taxis, and ride-hailing.
+2. The report also finds 54% of rides connect to other modes, 91% of those to public transit—useful context, but not a direct answer to the requested mode-specific share.
+3. Evidence is promising but incomplete: query the report’s underlying survey tables and narrow the search to China bike-share mode substitution by private car, taxi, and ride-hailing; other results are less directly relevant.
 
-**gpt-6-luna** (4895 ms)
-1. A Chinese WRI report says 17%–45% of trips replaced private motorized travel, but the excerpt does not specify the share replacing cars, taxis, or ride-hailing individually.
-2. The dockless-bike study is relevant and reports survey evidence (n=6,902), but its excerpt emphasizes walking and buses rather than the requested replacement share; several other results are tangential.
-3. Relevant results include Chinese-language publications. Refine the query to ask for mode-specific substitution estimates for bike-share trips in Chinese cities, including survey year and city.
+**gpt-6.1-terra** (2871 ms)
+1. A Chinese-language report excerpt cites a 17–45% substitution range, but truncates the affected mode; check the full report before attributing it to cars, taxis, or ride-hailing.
+2. The excerpts do not establish a combined national share or separate estimates for each motorized mode. Search for mode substitution rates by Chinese city and survey year.
+3. The two bike-share passages cite different survey sizes, 6,902 and 8,218; verify their populations and methods before combining or comparing results.
+4. Other results address road transport, electric mobility, or bike-share system size rather than displaced trips; prioritize studies reporting respondents’ alternative travel modes.
 
 ### q6_bikeshare-co2-reduction: How much CO2 emissions reduction is attributed to bike-sharing in China?
 
-**check:** ✓ gpt-5.4-nano · ✗ gpt-6-luna — response contains substituted text (provenance.sanitized), so part of it is not model output
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2306 ms)
-1. China-focused results are present, but CO2 reduction attribution is not clearly quantified in the excerpts provided; the bike-sharing study discusses emissions estimation without a specific “kg/ton CO2” figure in the snippet.
-2. A “Decarbonizing Road Transport” source appears more sector-strategy than bike-sharing attribution; it may lack direct linkage from bike-sharing volumes to CO2 reductions.
-3. Improve the query with keywords like “net CO2 reduction,” “carbon emissions avoided,” “life-cycle emissions,” and request a specific unit (e.g., “annual tons CO2e”) for China.
+**gpt-6-luna** (2865 ms)
+1. The Chinese-city study is directly relevant, but the excerpts report health benefits and transport substitution—not a quantified CO2 reduction—so they do not answer “how much.”
+2. A Chinese-language WRI report says bike-sharing replaces some short motorized trips and brings emissions benefits; the provided passage gives no emissions total or calculation method.
+3. Most results are not highly relevant, and the road-transport and design sources offer broader context rather than a direct bike-sharing estimate; avoid treating them as evidence of a specific reduction.
+4. Refine the query to request a quantified annual CO2 estimate, its baseline and method, and specify dockless or station-based sharing and the Chinese cities or period; relevant sources include Chinese publications.
 
-**gpt-6-luna** (4611 ms) — sanitized: some text was substituted
-1. The China-focused bike-sharing report is relevant: it estimates emissions reductions, but the excerpt gives no CO₂ quantity; a Chinese-language publication is also among the results.
-2. The most detailed English excerpt reports avoided mortality, not emissions, so the results do not establish how much CO₂ was reduced or the estimate’s timeframe.
-3. Refine the query to seek the report’s quantified CO₂ savings, specifying annual versus cumulative reductions and dockless versus public bike-sharing; alignment is Moderate.
+**gpt-6.1-terra** (2632 ms)
+1. The dockless bike-sharing study surveys 8,218 users across 12 Chinese cities and estimates emissions benefits, but the excerpts provide no CO2 reduction figure.
+2. Chinese-language results describe substitution of motorized trips and public-transit connections; system-size figures for Hangzhou do not establish emissions savings.
+3. Avoid citing the mortality estimate as an emissions result. Check the full study for CO2 units, study year, baseline, and whether estimates include lifecycle emissions.
+4. Refine the English query with “dockless bike sharing,” “China,” “annual CO2 emissions avoided,” and a city or study year.
 
 ### q7_bikeshare-travel-behavior: How does dockless bike-sharing affect travel behavior in Chinese cities?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1712 ms)
-1. Sources strongly focus on Chinese dockless bike-sharing’s impacts on daily mobility, with a dedicated WRI-China style report (“How Dockless Bike-Sharing Changes Lives”).
-2. Coverage is skewed toward system growth and general effects; travel-behavior mechanisms (mode shift, trip chaining, longer/shorter trips, induced demand) are not clearly evidenced in provided excerpts.
-3. All retrieved items are labeled Chinese; potential missing perspectives from other WRI regions or comparative studies (e.g., non-China city contexts) could limit causal interpretation.
-4. Improve by narrowing to measurable outcomes: “mode shift,” “first/last mile,” “trip length,” “public transit ridership,” and specifying cities (e.g., Hangzhou, Shanghai, Shenzhen).
+**gpt-6-luna** (2593 ms)
+1. The Chinese-city report directly matches the query, and a Chinese-language publication is also among the results; however, the excerpts provide little evidence about specific travel-behavior changes.
+2. Only 2 of 17 results are highly relevant; broader bike-sharing technology and station-based Hangzhou examples may not capture dockless use or its effects on trip frequency, mode choice, and transit connections.
+3. Refine the query around a behavior or outcome—such as car or transit substitution, trip distance, or usage frequency—and specify Chinese cities or a time period; current excerpts leave these perspectives uncertain.
 
-**gpt-6-luna** (3398 ms)
-1. The Chinese-cities report directly matches the topic, but the excerpts provide little evidence about specific travel-behavior changes; consult its findings and methods before drawing conclusions.
-2. Only 2 of 17 results are highly relevant; broader bike-sharing evolution and safety sources may not address dockless systems or behavioral effects in Chinese cities.
-3. Results include Chinese-language publications. Refine the query around a city and outcomes such as mode substitution, trip frequency, or transit connections to surface more targeted evidence.
+**gpt-6.1-terra** (2281 ms)
+1. The leading report directly addresses Chinese cities, but the excerpts do not establish effects on mode choice, trip frequency, or transit connections.
+2. Results include Chinese-language publications; the two leading entries appear to be versions of the same report, limiting independent corroboration.
+3. The Hangzhou example describes station-based sharing, not necessarily dockless systems; fleet counts alone do not demonstrate behavioral change.
+4. Search for specific Chinese cities and outcomes such as mode substitution, first- and last-mile connections, and changes in car use.
 
 ### q8_yantian-port-mode-shift-targets: Can Yantian Port realistically meet the mode-shift targets set in Shenzhen's Master Plan (2035), or would it require more aggressive measures than a "stated policy" trajectory?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2139 ms)
-1. Sources focus on transport decarbonization (mostly road) and explicitly model a “Stated Policy” scenario, but they don’t provide Yantian Port container mode-shift shares or Shenzhen 2035 targets.
-2. The only Yantian-specific material is about emissions coverage for domestic transport trips to/from Yantian; it’s not linked to modal share outcomes or port hinterland rail/barge targets.
-3. Guangdong road emission studies discuss measure-by-measure decarbonization potential, yet none quantify whether meeting Shenzhen’s 2035 port mode-shift requires “more aggressive than stated policy” action.
-4. To improve: narrow the query to “Shenzhen Master Plan 2035 mode shift Yantian port container rail barge share” and “scenario analysis rail intermodal stated policy vs accelerated,” and include English/Chinese plan documents and target tables.
+**gpt-6-luna** (2818 ms)
+1. The top Chinese-language study directly analyzes Yantian Port’s domestic transport and distribution trips, but excludes international transloading and shipping—important boundaries for judging port-wide mode shift.
+2. Chinese-language Guangdong and national road-transport studies describe policy scenarios and varying measure potential, but do not establish whether Yantian meets Shenzhen’s 2035 targets.
+3. The results do not show a direct comparison with the Master Plan’s quantified targets or a Yantian-specific stated-policy forecast; treat any feasibility conclusion as uncertain.
+4. Refine the query to compare Yantian’s baseline and projected freight-mode shares with Shenzhen’s 2035 targets, specifying stated-policy assumptions, port hinterland scope, and stronger-measure scenarios.
 
-**gpt-6-luna** (5627 ms)
-1. The Yantian port study is directly relevant, but its excerpt covers domestic trips and excludes international transloading and shipping; it shows no target-attainment or modal-share projections.
-2. Road-traffic scenario studies define “Stated_policy” and discuss regional measures, but Guangdong or national findings cannot establish Yantian-specific feasibility; compare port-level baselines, targets, and scenario shares.
-3. Results include Chinese-language publications; seek the Master Plan’s exact freight mode-shift targets and quantified Yantian scenarios, including rail and waterway capacity and measures beyond stated policy.
+**gpt-6.1-terra** (2612 ms)
+1. The Yantian study covers domestic port-related trips, but excludes international transshipment and shipping; its excerpt does not establish whether the 2035 targets are achievable.
+2. The stated-policy scenario describes national road-transport policies, not necessarily a Yantian-specific trajectory; comparing it directly with port targets risks a misleading conclusion.
+3. Retrieved publications include Chinese-language sources. Several discuss passenger transport or regional emissions rather than freight mode shift, leaving the port-specific evidence incomplete.
+4. Search for Shenzhen's 2035 freight mode-share targets, Yantian baseline and projected shares, and policy scenarios comparing stated measures with stronger rail and waterway investments.
 
 ### q9_yantian-port-rail-water-barriers: What are the barriers to expanding rail-water intermodal transport (road-to-rail) at Yantian Port?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2180 ms)
-1. Only one source directly names Yantian Port and sets a 2035 target for shifting to rail+water; it provides limited detail on the specific road-to-rail barriers.
-2. General barriers to intermodal rail use in China include uncompetitive rail pricing, underdeveloped intermodal services, and limited rail service quality—likely relevant to road-to-rail at Yantian.
-3. Guangdong-focused excerpts suggest sea-to-rail/sea-to-water promotion (not road-to-rail) and emphasize infrastructure and HDT decarbonization, implying gaps in supporting facilities and logistics integration.
-4. To improve, narrow the query to Yantian Port road-rail intermodal links (hinterland rail access, truck-to-rail transfer yards, terminal handling capacity, pricing/tariffs, scheduling reliability) and include Shenzhen/Guangdong logistics constraints.
+**gpt-6-luna** (2674 ms)
+1. A highly relevant Yantian-focused study targets railways and waterways exceeding 50% of port throughput by 2035, but the excerpt states an ambition, not the barriers to achieving it.
+2. China-wide sources identify uncompetitive rail pricing, underdeveloped intermodal services, and limited rail service quality; these are plausible context, not confirmed Yantian-specific obstacles.
+3. Relevant publications include Chinese-language sources. Search specifically for Yantian implementation constraints—pricing, rail capacity, terminal connections, and service reliability—to distinguish local evidence from national context.
 
-**gpt-6-luna** (3673 ms)
-1. The Yantian-focused source sets a 2035 goal for rail and water to exceed 50% of throughput, but the excerpt does not identify barriers to reaching it.
-2. Broader China evidence points to uncompetitive rail pricing, underdeveloped intermodal services, and limited rail-service quality; these constraints are not confirmed specifically for Yantian.
-3. Results include Chinese-language publications; refine the query to distinguish rail-water from road-to-rail and seek Yantian-specific evidence on costs, infrastructure, service capacity, and coordination.
+**gpt-6.1-terra** (2669 ms)
+1. The Yantian study sets a 2035 rail-and-water target but the excerpt does not identify barriers; consult the full Chinese publication for port-specific evidence.
+2. A China-wide study cites uncompetitive rail pricing, underdeveloped intermodal services, and limited service quality; these barriers should not be assumed to apply to Yantian.
+3. The Guangdong study recommends sea-to-rail services at Shenzhen but provides no implementation details in the excerpt; distinguish rail-water intermodal transport from road-to-rail shifting.
+4. Refine the search with English terms such as “Yantian port rail access,” “intermodal terminal capacity,” “rail freight costs,” and “hinterland connections.”
 
 ### q10_yantian-port-drayage-electrification-co2: How much would well-to-wheel CO2 emissions decline if drayage truck electrification reached 95% by 2035 at Yantian Port, and how does that compare to rail and water mode-shift measures?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2357 ms)
-1. The retrieved sources are strongly road-focused and discuss electrification and “upstream decarbonization,” but none quantify Yantian Port drayage well-to-wheel CO2 reductions at 95% by 2035.
-2. Mode-shift is mentioned generically (“greater degrees of freight mode shift”), yet the results don’t provide comparable rail vs water shift impacts for the port/drayage use case you asked for.
-3. Key calculation inputs are missing for your scenario—baseline drayage emissions, truck energy/fuel mix, grid-intensity by year, and assumed duty cycle—so any numeric decline would be speculative.
-4. To improve coverage, narrow the query to “Yantian Port drayage electrification 2035 well-to-wheel,” and explicitly request “WRI port decarbonization model” plus “rail shift” and “inland waterway shift” comparisons.
+**gpt-6-luna** (3075 ms)
+1. The top result directly concerns low-carbon port transport and says greater freight mode shift and cleaner grid emissions are needed, but the excerpt gives no 95%-by-2035 emissions estimate.
+2. The excerpts do not quantify Yantian-specific well-to-wheel reductions or compare truck electrification with rail and water shifts, so the requested magnitude remains unsupported here.
+3. Broader China road-transport studies provide context, not a port-level comparison; relevant retrieved publications include Chinese-language sources.
+4. Refine toward the Yantian port study’s scenario results, specifying baseline year, well-to-wheel CO2 metric, electrification share, and separate rail-versus-water mode-shift cases.
 
-**gpt-6-luna** (4623 ms)
-1. The top result directly addresses low-carbon container-port transport and says greater freight mode shift and grid decarbonization are needed, but the excerpt gives no 95%-electrification estimate.
-2. No supplied passage quantifies Yantian’s well-to-wheel CO2 reduction or compares rail and water mode-shift scenarios; broader China road-transport studies do not fill that gap.
-3. Relevant sources include Chinese publications. Refine the search around Yantian, 2035, 95% drayage electrification, well-to-wheel emissions, and rail-versus-water scenarios; alignment is only partial.
+**gpt-6.1-terra** (2675 ms)
+1. The leading Chinese-language port study discusses freight mode shift and grid decarbonization, but the excerpt does not quantify Yantian’s 95% electrification scenario.
+2. The excerpts provide no well-to-wheel reduction figures or direct comparison with rail and water measures; broader national road-transport findings cannot substitute for port-specific estimates.
+3. Search the port study for “Yantian 2035 drayage electrification 95% well-to-wheel emissions rail water mode shift,” and check scenario baselines and grid assumptions.
 
 ## translate
 
 ### q1_zero-emission-heavy-duty-trucks: What is the projected market penetration rate of new energy heavy-duty trucks in China through 2035?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2634 ms)
-> Heading toward 2035: Research on the Promotion Potential of China’s New Energy Heavy Trucks in Regional and Long‑Haul Transportation Scenarios
+**gpt-6-luna** (3130 ms)
+> Driving Toward 2035: A Study of the Potential to Promote New Energy Heavy-Duty Trucks in China’s Regional and Long-Haul Transport Scenarios
 
-This report assesses the potential and policy effects of promoting zero‑emission heavy‑duty trucks (zero‑emission heavy‑duty trucks, abbreviated as ZET) in China from 2024 to 2035 for two scenarios: regional delivery (regional delivery, abbreviated as RD) and long‑haul (long‑haul, abbreviated as LH). The findings show that, under a scenario with no policies, the ZET penetration rate in the RD scenario for vehicle model year 2030 is only about 2%–17%, while the LH scenario remains at an early stage before 2035.
+This report assesses the potential and policy effects of promoting zero-emission heavy-duty trucks (ZETs) in China’s regional delivery (RD) and long-haul (LH) transport scenarios from 2024 to 2035. The findings show that, in the no-policy scenario, ZET penetration in RD reaches only about 2%–17% by model year 2030, while LH remains at an early stage through 2035. Existing policies can significantly increase regional adoption—primarily of battery-electric tractors—by 2027, but adoption may decline after subsidies expire. Among stronger policy measures, reducing highway tolls (for example, by 50%) is the most effective at increasing penetration, followed by accelerating the construction of dedicated fast-charging networks for heavy-duty trucks and lowering nighttime charging costs. Combining stronger policies could push ZET penetration in RD above 50% during MY2027–2030 and drive substantial growth in LH during MY2032–2035, reaching about 15%–53% by 2035. The study highlights the significant effects of uncertainty around operations, technology, and fuel and electricity prices. It recommends setting targets by scenario and vehicle type, carefully assessing the fiscal impact of toll reductions, prioritizing heavy-duty truck charging infrastructure, and establishing scenario-specific systems for operational data collection and support.
 
-Existing policies can significantly increase regional adoption dominated by battery‑electric prime movers before 2027, but it may decline after subsidies expire. Among strengthened policies, waiving or reducing highway tolls (e.g., 50%) is the most effective measure for increasing penetration. The next most effective actions are accelerating the construction of dedicated high‑power fast‑charging networks for heavy trucks and lowering the cost of overnight charging. With an enhanced package of policies, the RD scenario can achieve penetration rates above 50% during MY2027–2030, and can drive significant growth in the LH scenario during MY2032–2035 (reaching approximately 15%–53% by 2035).
+**gpt-6.1-terra** (8857 ms)
+> Driving Toward 2035: A Study of the Deployment Potential of New Energy Heavy-Duty Trucks in China’s Regional and Long-Haul Transport
 
-The study indicates that uncertainties related to operations, technology, and electricity‑to‑fuel price dynamics have a major impact. It recommends setting targets by scenario and by vehicle type, cautiously evaluating the fiscal impact of highway toll reductions, prioritizing the improvement of heavy‑truck charging infrastructure, and establishing scenario‑based operational data collection and support mechanisms.
-
-**gpt-6-luna** (3119 ms)
-> Driving Toward 2035: A Study of the Potential for Promoting New Energy Heavy-Duty Trucks in China’s Regional and Long-Haul Transport Scenarios
-
-This report assesses the potential and policy effects of promoting zero-emission heavy-duty trucks (ZETs) in China from 2024 to 2035 in regional delivery (RD) and long-haul (LH) scenarios. The findings show that, without policy measures, ZET penetration in the RD scenario would reach only around 2%–17% by model year 2030, while the LH scenario would remain at an early stage through 2035. Existing policies could significantly increase regional adoption—primarily of battery-electric tractors—by 2027, but adoption may decline after subsidies expire. Among stronger policy measures, reducing highway tolls (for example, by 50%) is the most effective at boosting penetration, followed by accelerating the development of dedicated fast-charging networks for heavy-duty trucks and lowering nighttime charging costs. Combining stronger policies could raise penetration in the RD scenario to over 50% during MY2027–2030 and drive substantial growth in the LH scenario during MY2032–2035, reaching around 15%–53% by 2035. The study notes that uncertainty regarding operations, technology, and fuel and electricity prices has a significant impact. It recommends setting targets by scenario and vehicle type, carefully assessing the fiscal impact of toll reductions, prioritizing the development of heavy-duty truck charging infrastructure, and establishing scenario-specific operational data collection and support mechanisms.
+This report assesses the potential for deploying zero-emission heavy-duty trucks (ZETs) in regional delivery (RD) and long-haul (LH) transport in China from 2024 to 2035, as well as the effects of related policies. The findings show that, in a no-policy scenario, ZET penetration in the RD segment would reach only about 2%–17% by model year 2030, while adoption in the LH segment would remain at an early stage through 2035. Existing policies could substantially increase regional adoption, primarily of battery-electric tractor-trailers, by 2027, but adoption could decline after subsidies expire. Among strengthened policies, expressway toll reductions (such as 50%) are the most effective in increasing penetration, followed by accelerating the development of a dedicated fast-charging network for heavy-duty trucks and reducing nighttime charging costs. Combining strengthened policies could raise penetration in the RD segment above 50% during MY2027–2030 and drive significant growth in the LH segment during MY2032–2035, reaching approximately 15%–53% in 2035. The study finds that operational, technological, and fuel and electricity price uncertainties have substantial impacts. It recommends setting targets by use case and vehicle type, carefully assessing the fiscal impact of toll reductions, prioritizing improvements to charging infrastructure for heavy-duty trucks, and establishing use-case-specific operational data collection and support mechanisms.
 
 ### q2_bev-diesel-truck-tco-china: How does total cost of ownership compare between battery electric and diesel heavy-duty trucks in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1380 ms)
-> Techno-Economic Feasibility Analysis of Zero-Emission Trucks in Urban and Regional Delivery Use Cases: A Case Study of Guangdong Province, China
+**gpt-6-luna** (1880 ms)
+> Techno-Economic Feasibility Analysis of Zero-Emission Trucks in Urban and Regional Delivery Use Cases: A Case Study of Guangdong Province, China Battery electric trucks (BETs) in port operations, drayage, and urban delivery reach total cost of ownership (TCO) parity with diesel before MY2025 in Guangdong, China—particularly 42-ton tractor trailers. Fuel-cell trucks achieve parity later, around MY2028–2030. Comprehensive policy packages—tax exemptions, energy incentives, road access privileges, ...
 
-Battery electric trucks (BETs) in port operations, drayage, and urban delivery reach total cost of ownership (TCO) parity with diesel before MY2025 in Guangdong, China—particularly 42-ton tractor trailers. Fuel-cell trucks achieve parity later, around MY2028–2030. Comprehensive policy packages—tax exemptions, energy incentives, road access privileges, ...
-
-**gpt-6-luna** (2116 ms)
+**gpt-6.1-terra** (4657 ms)
 > Techno-Economic Feasibility Analysis of Zero-Emission Trucks in Urban and Regional Delivery Use Cases: A Case Study of Guangdong Province, China Battery electric trucks (BETs) in port operations, drayage, and urban delivery reach total cost of ownership (TCO) parity with diesel before MY2025 in Guangdong, China—particularly 42-ton tractor trailers. Fuel-cell trucks achieve parity later, around MY2028–2030. Comprehensive policy packages—tax exemptions, energy incentives, road access privileges, ...
 
 ### q3_regional-vs-longhaul-adoption: What is the difference in zero-emission truck adoption potential between regional transport and long-haul transport scenarios?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2321 ms)
-> The key findings are as follows: First, without policy incentives, regional delivery would see a modest ZET market share of 2–17 percent by MY2030, while ZET adoption would remain at a nascent stage for long-haul trucking through MY2035. Battery electric trucks will dominate regional delivery, but for long-haul application, the optimal technological mix is uncertain.
-[{"box_2d": [78, 365, 480, 500, "label": "text", "caption": "In both applications, zero-emission tractor trailers are more likely to achieve a wide adoption than zero-emission straight trucks. This is primarily due to a wider cost gap between zero-emission straight trucks and their diesel counterparts, driven by greater payload losses in zero-emission straight trucks. Additionally, diesel straight trucks are generally more energy-efficient and have lower purchase costs than diesel tractor trailers."}]
-In terms of technology selection, for regional delivery, battery electric trucks are more cost-competitive than fuel cell electric trucks and are expected to dominate this market segment. For long-haul trucking (particularly for tractor trailers), the optimal technological mix is uncertain.
+**gpt-6-luna** (2699 ms)
+> The key findings are as follows: First, without policy incentives, ZETs would have a modest market share of 2–17 percent in regional delivery by MY2030, while ZET adoption in long-haul trucking would remain at a nascent stage through MY2035. Battery electric trucks will dominate regional delivery, but the optimal technology mix for long-haul applications is uncertain. [{"box_2d": [78, 365, 480, 500, "label": "text", "caption": "In both applications, zero-emission tractor trailers are more likely to achieve a wide adoption than zero-emission straight trucks. This is primarily due to a wider cost gap between zero-emission straight trucks and their diesel counterparts, driven by greater payload losses in zero-emission straight trucks. Additionally, diesel straight trucks are generally more energy-efficient and have lower purchase costs than diesel tractor trailers."}] In terms of technology selection, battery electric trucks are more cost-competitive than fuel cell electric trucks for regional delivery and are expected to dominate this market segment. For long-haul trucking (particularly for tractor trailers), the optimal technology mix is uncertain.
 
-**gpt-6-luna** (2807 ms)
-> The key findings are as follows: First, without policy incentives, ZETs would have a modest market share of 2–17 percent in regional delivery by MY2030, while ZET adoption in long-haul trucking would remain at a nascent stage through MY2035. Battery electric trucks will dominate regional delivery, but the optimal technology mix for long-haul applications is uncertain.[{"box_2d": [78, 365, 480, 500, "label": "text", "caption": "In both applications, zero-emission tractor trailers are more likely to achieve wide adoption than zero-emission straight trucks. This is primarily due to the wider cost gap between zero-emission straight trucks and their diesel counterparts, driven by greater payload losses in zero-emission straight trucks. Additionally, diesel straight trucks are generally more energy-efficient and have lower purchase costs than diesel tractor trailers."}] In terms of technology selection, battery electric trucks are more cost-competitive than fuel cell electric trucks for regional delivery and are expected to dominate this market segment. For long-haul trucking (particularly for tractor trailers), the optimal technology mix is uncertain.
+**gpt-6.1-terra** (7768 ms)
+> The key findings are as follows: First, without policy incentives, regional delivery would see a modest ZET market share of 2–17 percent by MY2030, while ZET adoption would remain at a nascent stage for long-haul trucking through MY2035. Battery electric trucks will dominate regional delivery, but for long-haul application, the optimal technological mix is uncertain.[{"box_2d": [78, 365, 480, 500, "label": "text", "caption": "In both applications, zero-emission tractor trailers are more likely to achieve a wide adoption than zero-emission straight trucks. This is primarily due to a wider cost gap between zero-emission straight trucks and their diesel counterparts, driven by greater payload losses in zero-emission straight trucks. Additionally, diesel straight trucks are generally more energy-efficient and have lower purchase costs than diesel tractor trailers."}] In terms of technology selection, for regional delivery, battery electric trucks are more cost-competitive than fuel cell electric trucks and are expected to dominate this market segment. For long-haul trucking (particularly for tractor trailers), the optimal technological mix is uncertain.
 
 ### q4_bev-payback-periods: What are the payback periods for battery electric semi-trucks compared to diesel trucks in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2277 ms)
-> Diesel trucks are assumed to retain about 30 percent of their retail price as residual value after first use (Pers. Comm. 2024; Basma et al. 2021). The above assumption likely underestimates ZET residual values (and their cost-competitiveness). Under the above assumption, ZET residual values account for 7–25 percent of their retail price, with particularly low residual values for longer-range BETs in the LH application, where larger battery capacity would typically result in higher resale value. To remedy this problem, we also developed several scenarios with increased ZET residual values to evaluate their impact on ZET adoption (see the subsection below “Scenario analysis and uncertainty analysis”). 28 | WRI.ORG.CN # METHODS OF PROJECTING ZET PAYBACK PERIODS AND MARKET SHARE
-
-The cumulative effect of the above decision variables is reflected in the projected ZETs' payback periods and TCO by application:
-
-- ■ “Payback period” refers to the number of years required to recover the higher capital cost of a ZET compared to a diesel truck through ZETs' operational cost savings. For the RD application, diesel trucks generally have a useful life of seven to 10 years (Pers. Comm. 2024; CATARC 2022). Thus, ZET adoption is deemed feasible when the payback period is within five years (Shenzhen Xieli 2022).
-
-**gpt-6-luna** (2520 ms)
-> Diesel trucks are assumed to retain about 30 percent of their retail price as residual value after first use (Pers. Comm. 2024; Basma et al. 2021). This assumption likely underestimates ZET residual values (and their cost-competitiveness). Under this assumption, ZET residual values account for 7–25 percent of their retail price, with particularly low residual values for longer-range BETs in the LH application, where larger battery capacity would typically result in higher resale value. To address this issue, we also developed several scenarios with increased ZET residual values to evaluate their impact on ZET adoption (see the subsection below, “Scenario analysis and uncertainty analysis”).
+**gpt-6-luna** (2774 ms)
+> It is assumed that diesel trucks retain about 30 percent of their retail price as residual value after their first use (Pers. Comm. 2024; Basma et al. 2021). This assumption likely underestimates ZET residual values (and their cost competitiveness). Under this assumption, ZET residual values account for 7–25 percent of their retail price, with particularly low residual values for longer-range BETs in the LH application, where greater battery capacity would typically result in higher resale value. To address this issue, we also developed several scenarios with increased ZET residual values to evaluate their impact on ZET adoption (see the subsection below, “Scenario analysis and uncertainty analysis”).
 
 28 | WRI.ORG.CN
 
@@ -928,66 +921,44 @@ The cumulative effect of the above decision variables is reflected in the projec
 
 The cumulative effect of the above decision variables is reflected in the projected ZET payback periods and TCO by application:
 
-- ■ “Payback period” refers to the number of years required to recover a ZET’s higher capital cost compared to a diesel truck through its operational cost savings. For the RD application, diesel trucks generally have a useful life of seven to 10 years (Pers. Comm. 2024; CATARC 2022). Thus, ZET adoption is deemed feasible when the payback period is within five years (Shenzhen Xieli 2022).
+- ■ “Payback period” refers to the number of years required to recoup the higher capital cost of a ZET compared to a diesel truck through the ZET’s operational cost savings. In the RD application, diesel trucks generally have a useful life of seven to 10 years (Pers. Comm. 2024; CATARC 2022). Thus, ZET adoption is deemed feasible when the payback period is within five years (Shenzhen Xieli 2022).
+
+**gpt-6.1-terra** (8983 ms)
+> Diesel trucks are assumed to retain about 30 percent of their retail price as residual value after first use (Pers. Comm. 2024; Basma et al. 2021). The above assumption likely underestimates ZET residual values (and their cost-competitiveness). Under the above assumption, ZET residual values account for 7–25 percent of their retail price, with particularly low residual values for longer-range BETs in the LH application, where larger battery capacity would typically result in higher resale value. To remedy this problem, we also developed several scenarios with increased ZET residual values to evaluate their impact on ZET adoption (see the subsection below “Scenario analysis and uncertainty analysis”). 28 | WRI.ORG.CN # METHODS OF PROJECTING ZET PAYBACK PERIODS AND MARKET SHARE The cumulative effect of the above decision variables is reflected in the projected ZETs' payback periods and TCO by application: - ■ “Payback period” refers to the number of years required to recover the higher capital cost of a ZET compared to a diesel truck through ZETs' operational cost savings. For the RD application, diesel trucks generally have a useful life of seven to 10 years (Pers. Comm. 2024; CATARC 2022). Thus, ZET adoption is deemed feasible when the payback period is within five years (Shenzhen Xieli 2022).
 
 ### q5_bikeshare-trip-substitution: What share of bike-share trips replace private car, taxi, or ride-hailing trips in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2286 ms)
-> Notes: n = 6,902 Source: Survey results. 22 WRI.org.cn
+**gpt-6-luna** (2714 ms)
+> Notes: n = 6,902 Source: Survey results. 22 WRI.org.cn For short- and medium-distance trips, people prefer cycling to walking and buses (which rely on fixed schedules) because it saves time. In most cities, motorized vehicles are overused for short-distance travel. For example, 39.3 percent of car trips in Beijing are less than 5 kilometers (BTI 2016). This means that cycling has enormous potential to replace motorized trips in cities. Based on the survey results (shown in Table 3-1), depending on the city, 17–45 percent of the total kilometers traveled using dockless bike-sharing replaced kilometers traveled by motorized modes (including private cars, taxis, ride-hailing, and motorcycles). Moreover, bike-and-ride (combining bicycle and public transport for a single trip) may also have the potential to replace long-distance trips by private motorized vehicles. These impacts—especially the replacement of private vehicle travel—may be underestimated, since the questionnaire was designed to understand trips completed using DBS, rather than the entire travel chain. Furthermore, the results indicate that travelers prefer to use dockless bikes because they believe cycling offers opportunities for health benefits and is an environmentally friendly mode of travel.
 
-For short and medium trips, compared with walking and buses (relying on fixed bus schedules), people prefer cycling, as it is time-saving. In most cities, motorized vehicles are overused for short-distance travel. For example, 39.3 percent of car trips are less than 5 kilometers in Beijing (BTI 2016). This means cycling has enormous potential for replacing motorized trips in cities.
-
-Based on the survey results (shown in Table 3-1), depending on the city, 17–45 percent of total dockless bike-sharing kilometers traveled replaced motorized kilometers traveled (including private cars, taxis, ride-hailing, and motorcycles). Moreover, bike-and-ride (combined use of bicycle and public transport for one trip) may also have the potential to replace long-distance private motorized trips. And these impacts, especially in terms of replacing private vehicle travel, may be underestimated, as the questionnaire is designed to understand the trips finished by DBS, rather than the entire travel chain in this report.
-
-Furthermore, according to the results, travelers prefer to use dockless bikes since they believe cycling provides opportunities for health gains, as an environmentally friendly travel mode.
-
-**gpt-6-luna** (2859 ms)
-> Notes: n = 6,902 Source: Survey results. 22 WRI.org.cn For short and medium trips, compared with walking and buses (which rely on fixed schedules), people prefer cycling because it saves time. In most cities, motorized vehicles are overused for short-distance travel. For example, 39.3 percent of car trips in Beijing are less than 5 kilometers (BTI 2016). This means cycling has enormous potential to replace motorized trips in cities. Based on the survey results (shown in Table 3-1), depending on the city, 17–45 percent of total kilometers traveled by dockless bike-sharing replaced kilometers traveled by motorized modes (including private cars, taxis, ride-hailing, and motorcycles). Moreover, bike-and-ride (combining bicycle and public transport for one trip) may also have the potential to replace long-distance private motorized trips. These impacts, especially in terms of replacing private vehicle travel, may be underestimated, because the questionnaire in this report was designed to understand trips completed by DBS, rather than the entire travel chain. Furthermore, according to the results, travelers prefer to use dockless bikes because they believe cycling offers opportunities for health gains and is an environmentally friendly mode of travel.
+**gpt-6.1-terra** (6900 ms)
+> Notes: n = 6,902 Source: Survey results. 22 WRI.org.cn For short and medium trips, compared with walking and buses (relying on fixed bus schedules), people prefer cycling, as it is time-saving. In most cities, motorized vehicles are overused for short-distance travel. For example, 39.3 percent of car trips are less than 5 kilometers in Beijing (BTI 2016). This means cycling has enormous potential for replacing motorized trips in cities. Based on the survey results (shown in Table 3-1), depending on the city, 17–45 percent of total dockless bike-sharing kilometers traveled replaced motorized kilometers traveled (including private cars, taxis, ride-hailing, and motorcycles). Moreover, bike-and-ride (combined use of bicycle and public transport for one trip) may also have the potential to replace long-distance private motorized trips. And these impacts, especially in terms of replacing private vehicle travel, may be underestimated, as the questionnaire is designed to understand the trips finished by DBS, rather than the entire travel chain in this report. Furthermore, according to the results, travelers prefer to use dockless bikes since they believe cycling provides opportunities for health gains, as an environmentally friendly travel mode.
 
 ### q6_bikeshare-co2-reduction: How much CO2 emissions reduction is attributed to bike-sharing in China?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1612 ms)
+**gpt-6-luna** (1844 ms)
 > How Dockless Bike Sharing Changes Lives: An Analysis of Chinese Cities
 
-Surveying 8,218 DBS users across 12 Chinese cities, DBS cycling yields net annual mortality avoided of 59,635 among 235 million users. Cycling up to one hour daily is optimal at PM2.5 levels of 50–60 µg/m³; cycling beyond 30 minutes is inadvisable above 160 µg/m³. DBS reduces CO₂ by 4.8 million tonnes annually.
+Surveying 8,218 DBS users across 12 Chinese cities, DBS cycling yields net annual mortality avoided of 59,635 among 235 million users. Cycling up to one hour daily is optimal at PM2.5 levels of 50–60µg/m³; cycling beyond 30 minutes is inadvisable above 160µg/m³. DBS reduces CO₂ by 4.8 million tonnes annually. Some 54% of users connect DBS to other modes, with 91% linking to public transit. An estimated 15,556 annual bike fat...
 
-Some 54% of users connect DBS to other modes, with 91% linking to public transit. An estimated 15,556 annual bike fat...
-
-**gpt-6-luna** (1631 ms)
+**gpt-6.1-terra** (6518 ms)
 > How Dockless Bike Sharing Changes Lives: An Analysis of Chinese Cities Surveying 8,218 DBS users across 12 Chinese cities, DBS cycling yields net annual mortality avoided of 59,635 among 235 million users. Cycling up to one hour daily is optimal at PM2.5 levels of 50–60µg/m³; cycling beyond 30 minutes is inadvisable above 160µg/m³. DBS reduces CO₂ by 4.8 million tonnes annually. Some 54% of users connect DBS to other modes, with 91% linking to public transit. An estimated 15,556 annual bike fat...
 
 ### q7_bikeshare-travel-behavior: How does dockless bike-sharing affect travel behavior in Chinese cities?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (1733 ms)
-> How do dockless bike-sharing changes lives: an analysis of Chinese cities
+**gpt-6-luna** (1909 ms)
+> # HOW DOCKLESS BIKE-SHARING CHANGES LIVES: AN ANALYSIS OF CHINESE CITIES
 
-Jiang Hui, Song Su, Zou Xuan, Lu Lu
-
-WRI.ORG.CN
-
-Report QR code:
-
-## Authors
-
-Jiang Hui, Deputy Researcher, World Resources Institute (WRI) Beijing Office (United States)  
-Song Su, Researcher, World Resources Institute (WRI) Beijing Office (United States)  
-Zou Xuan, Intern, World Resources Institute (WRI) Beijing Office (United States)  
-Lu Lu, Deputy Researcher, World Resources Institute (WRI) Beijing Office (United States)
-
-This report is supported by the Oak Foundation, the Stephen M. Ross Philanthropies, and the William and Flora Hewlett Foundation.
-
-![img-4.jpeg](img-4.
-
-**gpt-6-luna** (1666 ms)
-> # How Dockless Bike-Sharing Changes Lives: An Analysis of Chinese Cities
-
-Jiang Hui, Song Su, Zou Xuan, Lu Lu
+Jiang Hui  
+Song Su  
+Zou Xuan  
+Lu Lu
 
 WRI.ORG.CN
 
@@ -995,61 +966,59 @@ Report QR code:
 
 ## Authors
 
-Jiang Hui, Associate Researcher, World Resources Institute (WRI), China Office
+Jiang Hui, Associate Researcher, World Resources Institute (WRI) China
 
-Song Su, Researcher, World Resources Institute (WRI), China Office
+Song Su, Researcher, World Resources Institute (WRI) China
 
-Zou Xuan, Intern, World Resources Institute (WRI), China Office
+Zou Xuan, Intern, World Resources Institute (WRI) China
 
-Lu Lu, Associate Researcher, World Resources Institute (WRI), China Office
+Lu Lu, Associate Researcher, World Resources Institute (WRI) China
 
 This report was supported by the Oak Foundation, Stephen M. Ross Philanthropies, and the William and Flora Hewlett Foundation.
 
 ![img-4.jpeg](img-4.
 
+**gpt-6.1-terra** (5810 ms)
+> # How Dockless Bike-Sharing Affects Cities ## HOW DOCKLESS BIKE-SHARING CHANGES LIVES: AN ANALYSIS OF CHINESE CITIES Jiang Hui Song Su Zou Xuan Lu Lu WRI.ORG.CN Report QR code: ## Authors Jiang Hui, Associate Researcher, World Resources Institute (United States) Beijing Representative Office Song Su, Researcher, World Resources Institute (United States) Beijing Representative Office Zou Xuan, Intern, World Resources Institute (United States) Beijing Representative Office Lu Lu, Associate Researcher, World Resources Institute (United States) Beijing Representative Office This report was supported by the Oak Foundation, Stephen M. Ross Philanthropies, and the William and Flora Hewlett Foundation. ![img-4.jpeg](img-4.
+
 ### q8_yantian-port-mode-shift-targets: Can Yantian Port realistically meet the mode-shift targets set in Shenzhen's Master Plan (2035), or would it require more aggressive measures than a "stated policy" trajectory?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2631 ms)
-> The emissions scope of the analysis covered all the domestic transportation and distribution trips that originated or ended at Yantian Port, excluding international transloading and shipping and the emissions from port handling equipment. The emissions accounting method we used is a bottom-up activity-based method with data acquired through stakeholder interviews and a literature review. It should be noted that, due to insufficient data availability, we did not evaluate the cost-effectiveness of different optimization measures.
-
-## Research findings and recommendations
-The scenario construction revealed that shifting containers to railways and waterways would be so challenging for Yantian Port that it would be difficult for the port to reach the mode shift targets set in the *Master Plan of Shenzhen Port (2035)* without taking aggressive measures. Therefore, we constructed scenarios as follows in this study (Table ES-1):
-
-(1). Enhanced-policy scenario (“Enhanced_policy”): This scenario assumed that Yantian Port will reach the freight mode shift targets outlined in the *Master Plan of Shenzhen Port (2035)* (TPRI 2018). By 2035, Yantian Port will rely on railways and waterways for container transportation and distribution—together, the two modes will account for over 50 percent of the port throughput.
-
-**gpt-6-luna** (2624 ms)
-> The emissions scope of the analysis covered all domestic transportation and distribution trips that originated or ended at Yantian Port, excluding international transloading and shipping, as well as emissions from port handling equipment. We used a bottom-up, activity-based method to account for emissions, using data collected through stakeholder interviews and a literature review. Due to insufficient data availability, we did not evaluate the cost-effectiveness of different optimization measures.
+**gpt-6-luna** (2262 ms)
+> The emissions scope of the analysis covered all domestic transportation and distribution trips that originated or ended at Yantian Port, excluding international transloading and shipping, as well as emissions from port handling equipment. The emissions accounting method used was a bottom-up, activity-based approach, with data collected through stakeholder interviews and a literature review. Due to insufficient data availability, we did not evaluate the cost-effectiveness of different optimization measures.
 
 ## Research findings and recommendations
 
-The scenario construction revealed that shifting containers to railways and waterways would be so challenging for Yantian Port that reaching the mode-shift targets set in the *Master Plan of Shenzhen Port (2035)* would be difficult without aggressive measures. Therefore, we constructed the following scenarios for this study (Table ES-1): (1) Enhanced-policy scenario (“Enhanced_policy”): This scenario assumed that Yantian Port would meet the freight mode-shift targets outlined in the *Master Plan of Shenzhen Port (2035)* (TPRI 2018). By 2035, Yantian Port would rely on railways and waterways for container transportation and distribution, with the two modes together accounting for over 50 percent of port throughput.
+The scenario construction revealed that shifting containers to railways and waterways would be so challenging for Yantian Port that reaching the mode shift targets set in the *Master Plan of Shenzhen Port (2035)* would be difficult without aggressive measures. Therefore, we constructed the following scenarios in this study (Table ES-1): (1). Enhanced-policy scenario (“Enhanced_policy”): This scenario assumed that Yantian Port would meet the freight mode shift targets outlined in the *Master Plan of Shenzhen Port (2035)* (TPRI 2018). By 2035, Yantian Port would rely on railways and waterways for container transportation and distribution, with the two modes together accounting for over 50 percent of the port throughput.
+
+**gpt-6.1-terra** (5831 ms)
+> The emissions scope of the analysis covered all the domestic transportation and distribution trips that originated or ended at Yantian Port, excluding international transloading and shipping and the emissions from port handling equipment. The emissions accounting method we used is a bottom-up activity-based method with data acquired through stakeholder interviews and a literature review. It should be noted that due to insufficient data availability, we did not evaluate the cost-effectiveness of different optimization measures. ## Research findings and recommendations The scenario construction revealed that shifting containers to railways and waterways would be so challenging for Yantian Port that it would be difficult for the port to reach the mode shift targets set in the *Master Plan of Shenzhen Port (2035)* without taking aggressive measures. Therefore, we constructed scenarios as follows in this study (Table ES-1): (1). Enhanced-policy scenario (“Enhanced_policy”): This scenario assumed that Yantian Port will reach the freight mode shift targets outlined in the *Master Plan of Shenzhen Port (2035)* (TPRI 2018). By 2035, Yantian Port will rely on railways and waterways for container transportation and distribution—together, the two modes will account for over 50 percent of the port throughput.
 
 ### q9_yantian-port-rail-water-barriers: What are the barriers to expanding rail-water intermodal transport (road-to-rail) at Yantian Port?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2588 ms)
-> By 2035, Yantian Port will rely on railways and waterways for container transportation and distribution—together, the two modes will account for over 50 percent of the port throughput. Further, we assumed that battery-electric HDTs will represent 15 percent of fleet penetration by 2035. Since this assumption is conservative, we also analyzed the environmental benefits of having a 95 percent fleet penetration of battery-electric drayage trucks in 2035 in the same scenario. (2). Stated-policy scenario (“Stated_policy”): Because railway construction and expansion of the port’s catchment areas would take years, it would be challenging to shift containers to railways and waterways by 2025. Therefore, this scenario assumed that it is infeasible to reach the freight mode shift targets outlined in the Master Plan of Shenzhen Port (2035) (TPRI 2018) by 2025. Further, given that expansion of the port’s hinterland areas to make railways and waterways more cost-competitive (currently, Yantian Port mostly serves Guangdong Province) has future uncertainties, we assumed that the port will not reach the freight mode shift targets set in the Master Plan of Shenzhen Port (2035) by 2035. In the future, Yantian Port will still heavily depend on roadways for container transportation and distribution. (3).
+**gpt-6-luna** (2467 ms)
+> By 2035, Yantian Port will rely on railways and waterways for container transportation and distribution, with the two modes together accounting for over 50 percent of port throughput. We further assumed that battery-electric HDTs will account for 15 percent of the fleet by 2035. Because this assumption is conservative, we also analyzed the environmental benefits of a 95 percent fleet penetration rate for battery-electric drayage trucks in 2035 under the same scenario. (2). Stated-policy scenario (“Stated_policy”): Because railway construction and the expansion of the port’s catchment areas would take years, shifting containers to railways and waterways by 2025 would be challenging. Therefore, this scenario assumed that it would not be feasible to meet the freight mode shift targets outlined in the *Master Plan of Shenzhen Port (2035)* (TPRI 2018) by 2025. Furthermore, given the uncertainty surrounding the future expansion of the port’s hinterland areas to make railways and waterways more cost-competitive (Yantian Port currently serves mostly Guangdong Province), we assumed that the port would not meet the freight mode shift targets set in the *Master Plan of Shenzhen Port (2035)* by 2035. In the future, Yantian Port will continue to depend heavily on roadways for container transportation and distribution. (3).
 
-**gpt-6-luna** (3168 ms)
-> By 2035, Yantian Port will rely on railways and waterways for container transportation and distribution, with the two modes together accounting for over 50 percent of port throughput. We further assumed that battery-electric HDTs will account for 15 percent of the fleet by 2035. Because this assumption is conservative, we also analyzed the environmental benefits of a 95 percent fleet penetration rate for battery-electric drayage trucks in 2035 under the same scenario. (2). Stated-policy scenario (“Stated_policy”): Because railway construction and expansion of the port’s catchment areas would take years, shifting containers to railways and waterways by 2025 would be challenging. Therefore, this scenario assumed that the freight mode shift targets set out in the *Master Plan of Shenzhen Port (2035)* (TPRI 2018) would not be achievable by 2025. Further, given the uncertainty surrounding expansion of the port’s hinterland areas to make railways and waterways more cost-competitive (Yantian Port currently serves mostly Guangdong Province), we assumed that the port would not meet the freight mode shift targets set out in the *Master Plan of Shenzhen Port (2035)* by 2035. In the future, Yantian Port will continue to depend heavily on roadways for container transportation and distribution. (3).
+**gpt-6.1-terra** (7452 ms)
+> By 2035, Yantian Port will rely on railways and waterways for container transportation and distribution—together, the two modes will account for over 50 percent of the port throughput. Further, we assumed that battery-electric HDTs will represent 15 percent of fleet penetration by 2035. Since this assumption is conservative, we also analyzed the environmental benefits of having a 95 percent fleet penetration of battery-electric drayage trucks in 2035 in the same scenario. (2). Stated-policy scenario (“Stated_policy”): Because railway construction and expansion of the port’s catchment areas would take years, it would be challenging to shift containers to railways and waterways by 2025. Therefore, this scenario assumed that it is infeasible to reach the freight mode shift targets outlined in the *Master Plan of Shenzhen Port (2035)* (TPRI 2018) by 2025. Further, given that expansion of the port’s hinterland areas to make railways and waterways more cost-competitive (currently, Yantian Port mostly serves Guangdong Province) has future uncertainties, we assumed that the port will not reach the freight mode shift targets set in the *Master Plan of Shenzhen Port (2035)* by 2035. In the future, Yantian Port will still heavily depend on roadways for container transportation and distribution. (3).
 
 ### q10_yantian-port-drayage-electrification-co2: How much would well-to-wheel CO2 emissions decline if drayage truck electrification reached 95% by 2035 at Yantian Port, and how does that compare to rail and water mode-shift measures?
 
-**check:** ✓ gpt-5.4-nano · ✓ gpt-6-luna
+**check:** ✓ gpt-6-luna · ✓ gpt-6.1-terra
 
-**gpt-5.4-nano** (2153 ms)
-> Reducing the remaining carbon emissions would require more aggressive measures such as greater degrees of freight mode shift and upstream decarbonization of grid emissions (see Figure ES-1). Second, although the optimization measures examined in this study have decarbonization potentials, not all measures have air pollution reduction co-benefits. Road-to-rail delivers the largest decarbonization and air pollutant reduction potential among the measures examined in this study. The promotion of battery-electric HDTs could also provide air pollution reduction co-benefits: Zero-emission HDTs representing 95 percent of the drayage truck fleet in 2035 would have the second-largest emission reduction potential, following road-to-rail (see Figure ES-2). Figure ES-1 | Well-to-wheel carbon dioxide emissions in the three policy scenarios Note: CO₂ = carbon dioxide. Source: Authors' calculations. Figure ES-2 | Reduction of well-to-wheel carbon dioxide emissions in Enhanced_policy scenario with 95% battery electric drayage trucks in the fleet by different measures Note: WTW = well-to-wheel; CO₂ = carbon dioxide; HDT = heavy-duty truck; BAU = business as usual. Source: Authors' calculations.
-
-**gpt-6-luna** (2890 ms)
-> Reducing the remaining carbon emissions would require more aggressive measures, such as a greater shift in freight modes and upstream decarbonization of grid emissions (see Figure ES-1). Second, although the optimization measures examined in this study have decarbonization potential, not all of them also reduce air pollution. Road-to-rail offers the greatest potential among the measures examined in this study to reduce both carbon emissions and air pollutants. Promoting battery-electric HDTs could also yield air pollution reduction co-benefits: zero-emission HDTs making up 95 percent of the drayage truck fleet in 2035 would have the second-greatest emissions reduction potential, after road-to-rail (see Figure ES-2).
+**gpt-6-luna** (2298 ms)
+> Reducing the remaining carbon emissions would require more aggressive measures such as greater degrees of freight mode shift and upstream decarbonization of grid emissions (see Figure ES-1). Second, although the optimization measures examined in this study have decarbonization potentials, not all measures have air pollution reduction co-benefits. Road-to-rail delivers the largest decarbonization and air pollutant reduction potential among the measures examined in this study. The promotion of battery-electric HDTs could also provide air pollution reduction co-benefits: Zero-emission HDTs representing 95 percent of the drayage truck fleet in 2035 would have the second-largest emission reduction potential, following road-to-rail (see Figure ES-2).
 
 Figure ES-1 | Well-to-wheel carbon dioxide emissions in the three policy scenarios
 
 Note: CO₂ = carbon dioxide. Source: Authors' calculations.
 
-Figure ES-2 | Reduction in well-to-wheel carbon dioxide emissions in the Enhanced_policy scenario with battery-electric drayage trucks making up 95% of the fleet, by measure
+Figure ES-2 | Reduction of well-to-wheel carbon dioxide emissions in Enhanced_policy scenario with 95% battery electric drayage trucks in the fleet by different measures
 
 Note: WTW = well-to-wheel; CO₂ = carbon dioxide; HDT = heavy-duty truck; BAU = business as usual. Source: Authors' calculations.
+
+**gpt-6.1-terra** (7030 ms)
+> Reducing the remaining carbon emissions would require more aggressive measures such as greater degrees of freight mode shift and upstream decarbonization of grid emissions (see Figure ES-1). Second, although the optimization measures examined in this study have decarbonization potentials, not all measures have air pollution reduction co-benefits. Road-to-rail delivers the largest decarbonization and air pollutant reduction potential among the measures examined in this study. The promotion of battery-electric HDTs could also provide air pollution reduction co-benefits: Zero-emission HDTs representing 95 percent of the drayage truck fleet in 2035 would have the second-largest emission reduction potential, following road-to-rail (see Figure ES-2). Figure ES-1 | Well-to-wheel carbon dioxide emissions in the three policy scenarios Note: CO₂ = carbon dioxide. Source: Authors' calculations. Figure ES-2 | Reduction of well-to-wheel carbon dioxide emissions in Enhanced_policy scenario with 95% battery electric drayage trucks in the fleet by different measures Note: WTW = well-to-wheel; CO₂ = carbon dioxide; HDT = heavy-duty truck; BAU = business as usual. Source: Authors' calculations.
