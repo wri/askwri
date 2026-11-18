@@ -19,8 +19,6 @@ export interface ResolvedProvider {
   model: string
   baseUrl: string
   apiKey: string | undefined
-  /** gpt-5* takes max_completion_tokens and no temperature. */
-  isGpt5: boolean
 }
 
 export class UnsupportedProviderBaseUrlError extends Error {
@@ -62,7 +60,7 @@ export function resolveProvider(
     lunarouteBaseUrl === baseUrl
       ? process.env.LUNAROUTE_API_KEY?.trim()
       : process.env.OPENAI_API_KEY?.trim()
-  return { model, baseUrl, apiKey, isGpt5: /^gpt-5/i.test(model) }
+  return { model, baseUrl, apiKey }
 }
 
 export interface ChatResult {

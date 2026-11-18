@@ -36,7 +36,8 @@
     "seed:tag-aliases": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/seed-tag-aliases.ts",
     "repair:author-formats": "ts-node --project tsconfig.typeorm.json -r ./scripts/load-env.js scripts/repair-author-formats.ts",
     "convert:wri-keywords": "ts-node --project tsconfig.typeorm.json --transpile-only scripts/convert-wri-keywords-csv.ts",
-    "verify:experts": "node scripts/playwright/verify-experts.js"
+    "verify:experts": "node scripts/playwright/verify-experts.js",
+    "probe:models": "npx tsx --env-file-if-exists=.env scripts/probe-models.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.997.0",

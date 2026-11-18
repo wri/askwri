@@ -10,6 +10,7 @@
  * tests are here because the route is the sole consumer.
  */
 import { NextRequest } from 'next/server'
+import { ALIGNMENT_SYSTEM_PROMPT } from '@/config/alignment'
 
 const ENV = { ...process.env }
 let fetchMock: jest.SpyInstance
@@ -99,37 +100,107 @@ afterEach(() => {
 })
 
 describe('resolveAlignmentConfig', () => {
-  it('derives GPT-5 timeouts and caps for a gpt-5 model', async () => {
+  it('derives GPT-5 timeout bases for a gpt-5 model', async () => {
     expect(await configFor('gpt-5-mini')).toEqual({
       model: 'gpt-5-mini',
-      isGpt5: true,
+      gpt5Class: true,
       mainMs: 40000,
       repairMs: 25000,
-      mainMax: 4000,
-      repairMax: 5000,
-      temperature: 0.3,
     })
   })
 
-  it('derives non-GPT-5 timeouts and caps for other models', async () => {
+  it('derives non-GPT-5 timeout bases for other models', async () => {
     const cfg = await configFor('gpt-4o-mini')
-    expect(cfg.isGpt5).toBe(false)
+    expect(cfg.gpt5Class).toBe(false)
     expect(cfg.mainMs).toBe(20000)
     expect(cfg.repairMs).toBe(12000)
-    // The cap only ever tightens for a non-GPT-5 model.
-    expect(cfg.mainMax).toBeLessThanOrEqual(1500)
-    expect(cfg.repairMax).toBe(Math.min(cfg.mainMax + 500, 2000))
   })
 
-  it('reads the timeout and cap env at call time, not at import time', async () => {
+  it('reads the timeout env at call time, not at import time', async () => {
     // Imported before the env is set: a module-scope const would have frozen the
-    // defaults and this test would see 20000 / the configured cap ignored.
+    // defaults and this test would see 20000.
     const { resolveAlignmentConfig } = await import('@/lib/alignment-config')
     process.env.ALIGNMENT_TIMEOUT_MS_MAIN = '33000'
-    process.env.OPENAI_MAX_TOKENS = '1200'
     const cfg = resolveAlignmentConfig('gpt-4o-mini')
     expect(cfg.mainMs).toBe(33000)
-    expect(cfg.mainMax).toBe(1200)
+  })
+
+  it('sizes the token caps at call time from the env via requestProfile', async () => {
+    const { requestProfile } = await import('@/lib/request-profile')
+    process.env.OPENAI_MAX_TOKENS = '1200'
+    const primary = requestProfile({
+      task: 'alignment',
+      model: 'gpt-4o-mini',
+      attempt: 'primary',
+      input: {},
+    })
+    expect(primary.maxTokens).toBe(1200) // max(1000, min(1500, 1200))
+    const repair = requestProfile({
+      task: 'alignment',
+      model: 'gpt-4o-mini',
+      attempt: 'repair',
+      input: {},
+    })
+    expect(repair.maxTokens).toBe(1700) // min(mainMax + 500, 2000)
+    expect(repair.temperature).toBe(0.3) // config/alignment's CFG_TEMPERATURE
+  })
+})
+
+describe('POST /api/alignment — the timeout ladder scales the bases and clamps them', () => {
+  // The route hands each attempt's deadline to setTimeout; capturing those
+  // calls pins the RESULTing deadlines, so a change from "bases scaled per
+  // prompt" to "bases treated as finals" fails here.
+  function spyDeadlines(): number[] {
+    const delays: number[] = []
+    jest.spyOn(global, 'setTimeout').mockImplementation(((
+      fn: unknown,
+      ms?: unknown,
+    ) => {
+      if (typeof ms === 'number') delays.push(ms)
+      return undefined
+    }) as unknown as typeof setTimeout)
+    return delays
+  }
+
+  const approxToks = (summary: string) =>
+    Math.ceil((ALIGNMENT_SYSTEM_PROMPT.length + summary.length) / 4)
+
+  it('a small non-GPT-5 prompt gets the base scaled by the prompt, not the bare base', async () => {
+    process.env.OPENAI_MODEL = 'gpt-4o-mini'
+    const delays = spyDeadlines()
+    const { status } = await post({
+      query: 'How do cities cool streets?',
+      resultsSummary: 'Short summary.',
+    })
+    expect(status).toBe(200)
+    const expected = Math.min(35000, 20000 + approxToks('Short summary.') * 12)
+    expect(delays).toEqual([expected])
+    // Neither the unscaled base nor the clamped ceiling.
+    expect(expected).toBeGreaterThan(20000)
+    expect(expected).toBeLessThan(35000)
+  })
+
+  it('a large non-GPT-5 prompt clamps every attempt at 35000/30000', async () => {
+    process.env.OPENAI_MODEL = 'gpt-4o-mini'
+    const delays = spyDeadlines()
+    mockReply('', 500) // every attempt fails: schema, tools, json_object
+    const { status } = await post({
+      query: 'How do cities cool streets?',
+      resultsSummary: 'x'.repeat(10000),
+    })
+    expect(status).toBe(200)
+    expect(delays).toEqual([35000, 35000, 30000])
+  })
+
+  it('a gpt-5 model runs the longer ladder: 60000 main / 50000 repair', async () => {
+    const delays = spyDeadlines()
+    mockReply('', 500)
+    const { status } = await post({
+      query: 'How do cities cool streets?',
+      resultsSummary: SUMMARY,
+    })
+    expect(status).toBe(200)
+    expect(delays).toEqual([60000, 60000, 50000])
   })
 })
 

@@ -2,7 +2,13 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isEnglishText } from '@/lib/ensure-english'
+import {
+  modelCapability,
+  requestProfile,
+  wireParams,
+} from '@/lib/request-profile'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
+import { ASSIGNMENT } from '@/config/models'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,7 +19,7 @@ export const revalidate = 0
 const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_WHY ??
   process.env.OPENAI_MODEL ??
-  'gpt-4o-mini'
+  ASSIGNMENT.why
 ).trim()
 
 const CANNED_WHY = 'This passage provides relevant context for the query.'
@@ -31,57 +37,6 @@ function provenance(
     model,
     produced,
     ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
-  }
-}
-
-// Calculate optimal token allocation based on content and model
-function calculateOptimalTokens(passages: any[], model: string): number {
-  const isGPT5 = model.includes('gpt-5') || model === 'gpt-5-mini'
-
-  // Simplified calculation optimized for pagination (20-30 passages per call)
-  // Base overhead + ~80 tokens per passage for JSON structure
-  const calculatedTokens = 200 + passages.length * 80
-
-  // Cap at reasonable maximum - increased to handle 20-30 passages per page
-  // Note: gpt-4o-mini supports up to 16k output tokens
-  const maxTokens = isGPT5 ? 3000 : 2500
-
-  console.log(
-    `[batch-why] Token calculation: ${passages.length} passages -> ${calculatedTokens} tokens (capped at ${maxTokens})`,
-  )
-
-  return Math.min(calculatedTokens, maxTokens)
-}
-
-// Parameter configuration for different model families
-function getModelParams(model: string, tokenCount: number) {
-  const isGPT5 = model.includes('gpt-5') || model === 'gpt-5-mini'
-  const isGPT4o = model.includes('gpt-4o')
-  const isO1 = model.includes('o1')
-
-  if (isGPT5) {
-    // GPT-5 models use max_completion_tokens, skip reasoning_effort for reliable JSON
-    return {
-      max_completion_tokens: tokenCount,
-      // Removed reasoning_effort for batch processing to ensure reliable JSON output
-    }
-  } else if (isO1) {
-    // o1 models use max_completion_tokens, no temperature, no system messages
-    return {
-      max_completion_tokens: tokenCount,
-    }
-  } else if (isGPT4o) {
-    // GPT-4o models use max_completion_tokens and support temperature
-    return {
-      max_completion_tokens: tokenCount,
-      temperature: 0.3,
-    }
-  } else {
-    // Older models (gpt-3.5-turbo, gpt-4) use max_tokens
-    return {
-      max_tokens: tokenCount,
-      temperature: 0.3,
-    }
   }
 }
 
@@ -184,12 +139,21 @@ Rules:
       })
       .join('\n')
 
-    const isO1Model = model.includes('o1')
+    const isO1Model = modelCapability(model).mergesSystemIntoUser
 
     // For o1 models, combine system and user prompts since they don't support system messages
     const userPrompt = isO1Model
       ? `${systemPrompt}\n\nQuery: "${query}"\n\n${passageList}\n\nExplain why each passage is relevant to this query:`
       : `Query: "${query}"\n\n${passageList}\n\nExplain why each passage is relevant to this query:`
+
+    // Dynamic token allocation: base overhead + ~80 tokens per passage for
+    // JSON structure, capped per model class.
+    const profile = requestProfile({
+      task: 'why',
+      model,
+      attempt: 'primary',
+      input: { passages: passages.length },
+    })
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -205,7 +169,7 @@ Rules:
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt },
             ],
-        ...getModelParams(model, calculateOptimalTokens(passages, model)), // Dynamic allocation
+        ...wireParams(profile),
       }),
     })
 

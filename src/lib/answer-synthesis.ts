@@ -1,7 +1,9 @@
 import { resolveProvider } from '@/lib/llm/chat-completions'
+import { requestProfile } from '@/lib/request-profile'
+import { ASSIGNMENT } from '@/config/models'
 
-const DEFAULT_MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.4').trim()
-export const MAX_PASSAGES_CAP = 15
+const DEFAULT_MODEL = (process.env.OPENAI_MODEL ?? ASSIGNMENT.answer).trim()
+export const MAX_PASSAGES_CAP = 15 // equals the gpt-5 default budget in requestProfile — raising one requires raising the other
 
 export type PromptVersion = 'v1' | 'v2'
 
@@ -9,9 +11,11 @@ export interface SynthesisConfig {
   model: string
   baseUrl: string
   apiKey: string | undefined
-  isGpt5: boolean
-  maxTokens: number
-  temperature: number
+  /** Exactly one of the two token fields is set: the one the resolved model takes. */
+  maxCompletionTokens?: number
+  maxTokens?: number
+  /** Omitted entirely for gpt-5-class models. */
+  temperature?: number
   maxPassages: number
   passageChars: number
   promptVersion: PromptVersion
@@ -34,24 +38,27 @@ export function resolveSynthesisConfig(body: any): SynthesisConfig {
     model: str(body?.model),
     base_url: str(body?.base_url),
   })
-  const defaultMax = provider.isGpt5 ? 2000 : 1500
-  const envMax = Number(process.env.OPENAI_MAX_TOKENS || defaultMax)
-  const maxTokens = provider.isGpt5 ? Math.max(2000, envMax) : envMax
-  const temperature = Number(process.env.OPENAI_TEMPERATURE ?? 0.3)
+  const profile = requestProfile({
+    task: 'answer',
+    model: provider.model,
+    attempt: 'primary',
+    input: {},
+  })
   const int = (v: unknown, fallback: number, cap: number) =>
     Number.isInteger(v) && (v as number) > 0
       ? Math.min(v as number, cap)
       : fallback
   return {
     ...provider,
-    maxTokens,
-    temperature,
+    maxCompletionTokens: profile.maxCompletionTokens,
+    maxTokens: profile.maxTokens,
+    temperature: profile.temperature,
     maxPassages: int(
       body?.max_passages,
-      provider.isGpt5 ? 15 : 6, // gpt-5 default equals MAX_PASSAGES_CAP — raising the default requires raising the cap
+      profile.maxPassages ?? 6,
       MAX_PASSAGES_CAP,
     ),
-    passageChars: int(body?.passage_chars, provider.isGpt5 ? 800 : 350, 20_000),
+    passageChars: int(body?.passage_chars, profile.passageChars ?? 350, 20_000),
     promptVersion: body?.prompt_version === 'v1' ? 'v1' : 'v2',
     likelyOffTopic: body?.likely_off_topic === true,
   }

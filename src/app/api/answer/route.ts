@@ -6,6 +6,8 @@ import {
   chatCompletion,
   UnsupportedProviderBaseUrlError,
 } from '@/lib/llm/chat-completions'
+import { requestProfile, wireParams } from '@/lib/request-profile'
+import { ASSIGNMENT } from '@/config/models'
 import {
   MAX_PASSAGES_CAP,
   normalizeSentences,
@@ -18,7 +20,9 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const NANO_MODEL = (process.env.OPENAI_MODEL_NANO ?? 'gpt-5.4-nano').trim()
+const NANO_MODEL = (
+  process.env.OPENAI_MODEL_NANO ?? ASSIGNMENT.prefilter
+).trim()
 const USE_NANO_FILTER =
   (process.env.USE_NANO_FILTER ?? 'false').toLowerCase() === 'true'
 
@@ -177,19 +181,19 @@ async function runNanoFilter(
 
     const userPrompt = `Question: ${query}\n\nPassages (presented in random order):\n${passageText}`
 
-    const isNanoGPT5 = /^gpt-5/i.test(NANO_MODEL)
+    const profile = requestProfile({
+      task: 'prefilter',
+      model: NANO_MODEL,
+      attempt: 'primary',
+      input: {},
+    })
     const body: any = {
       model: NANO_MODEL,
       messages: [
         { role: 'system', content: NANO_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-    }
-    if (isNanoGPT5) {
-      body.max_completion_tokens = 500
-    } else {
-      body.max_tokens = 500
-      body.temperature = 0.1
+      ...wireParams(profile),
     }
 
     const r = await chatCompletion({
@@ -414,21 +418,20 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
       { role: 'user', content: userContent },
     ]
 
-    const used = cfg.isGpt5
-      ? 'chat.max_completion_tokens.no_temp'
-      : 'chat.max_tokens.with_temp'
+    const used =
+      cfg.maxCompletionTokens !== undefined
+        ? 'chat.max_completion_tokens.no_temp'
+        : 'chat.max_tokens.with_temp'
     const apiBody: any = {
       model: cfg.model,
       messages,
-      ...(cfg.isGpt5
-        ? { max_completion_tokens: cfg.maxTokens }
-        : { max_tokens: cfg.maxTokens, temperature: cfg.temperature }),
+      ...wireParams(cfg),
     }
 
     debugInfo.apiCall = {
       model: cfg.model,
-      maxTokens: cfg.maxTokens,
-      temperature: cfg.isGpt5 ? 'omitted' : cfg.temperature,
+      maxTokens: cfg.maxCompletionTokens ?? cfg.maxTokens,
+      temperature: cfg.temperature === undefined ? 'omitted' : cfg.temperature,
       messageCount: messages.length,
       userContentLength: userContent.length,
     }

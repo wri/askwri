@@ -18,7 +18,6 @@ describe('resolveProvider', () => {
       model: 'gpt-5.4',
       baseUrl: 'https://api.openai.com/v1',
       apiKey: 'sk-openai',
-      isGpt5: true,
     })
   })
 
@@ -40,7 +39,6 @@ describe('resolveProvider', () => {
       model: 'glm-5.2-vision',
       baseUrl: 'https://gw.lunaroute.com/v1',
       apiKey: 'lr-key',
-      isGpt5: false,
     })
   })
 

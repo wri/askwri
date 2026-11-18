@@ -12,7 +12,6 @@ it('uses the fallback when no model is requested', () => {
   expect(resolveRouteModel(req(), {}, 'gpt-5.4-nano')).toEqual({
     ok: true,
     model: 'gpt-5.4-nano',
-    isGpt5: true,
   })
 })
 
@@ -56,10 +55,10 @@ it('honours an override with the matching token', () => {
       { model: 'gpt-5.6-luna' },
       'gpt-5.4-nano',
     ),
-  ).toEqual({ ok: true, model: 'gpt-5.6-luna', isGpt5: true })
+  ).toEqual({ ok: true, model: 'gpt-5.6-luna' })
 })
 
-it('reports isGpt5 false for a non-gpt-5 name', () => {
+it('resolves a non-gpt-5 name', () => {
   process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
   expect(
     resolveRouteModel(
@@ -67,5 +66,5 @@ it('reports isGpt5 false for a non-gpt-5 name', () => {
       { model: 'o4-mini' },
       'gpt-5.4-nano',
     ),
-  ).toEqual({ ok: true, model: 'o4-mini', isGpt5: false })
+  ).toEqual({ ok: true, model: 'o4-mini' })
 })

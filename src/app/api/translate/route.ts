@@ -7,6 +7,8 @@
  * for the sparse lane and this shares nothing with it.
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { requestProfile, wireParams } from '@/lib/request-profile'
+import { ASSIGNMENT } from '@/config/models'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
@@ -18,7 +20,7 @@ export const revalidate = 0
 const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_TRANSLATE ??
   process.env.OPENAI_MODEL ??
-  'gpt-5-mini'
+  ASSIGNMENT.translate
 ).trim()
 const MAX_INPUT_CHARS = 4000
 
@@ -99,7 +101,12 @@ export async function POST(req: NextRequest) {
     // A passage is capped at 800 chars upstream (search-service main.py); the
     // translation can run longer than the source, and GPT-5 spends reasoning
     // tokens out of the same budget. Sized from the model actually being asked.
-    const maxTokens = resolved.isGpt5 ? 2000 : 1200
+    const profile = requestProfile({
+      task: 'translate',
+      model,
+      attempt: 'primary',
+      input: {},
+    })
 
     const payload: any = {
       model,
@@ -107,9 +114,7 @@ export async function POST(req: NextRequest) {
         { role: 'system', content: SYS },
         { role: 'user', content: source.slice(0, MAX_INPUT_CHARS) },
       ],
-      ...(resolved.isGpt5
-        ? { max_completion_tokens: maxTokens }
-        : { max_tokens: maxTokens, temperature: 0.2 }),
+      ...wireParams(profile),
     }
 
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
