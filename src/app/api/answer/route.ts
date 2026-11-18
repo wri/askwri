@@ -8,6 +8,7 @@ import {
 } from '@/lib/llm/chat-completions'
 import { requestProfile, wireParams } from '@/lib/request-profile'
 import { resolveModel } from '@/config/models'
+import type { RouteProvenance } from '@/lib/route-model'
 import {
   MAX_PASSAGES_CAP,
   normalizeSentences,
@@ -19,6 +20,21 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+// This route answers 200 with canned text on every failure, so `produced` is what
+// keeps a response no model wrote from reading as evidence, and `model` is what an
+// after-deploy check reads to see which model the job runs.
+function provenance(
+  model: string,
+  produced: boolean,
+  fallbackReason?: string,
+): RouteProvenance {
+  return {
+    model,
+    produced,
+    ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
+  }
+}
 
 const NANO_MODEL = resolveModel('prefilter')
 const USE_NANO_FILTER =
@@ -275,6 +291,7 @@ export async function POST(req: NextRequest) {
         ),
         passages_sent: [],
         debug: debugInfo,
+        provenance: provenance(cfg.model, false, 'no_api_key'),
       })
     }
 
@@ -362,6 +379,8 @@ export async function POST(req: NextRequest) {
             nanoFilter: 'all_weak',
             coverage: coverageRating,
           },
+          // No synthesis call was made: the sentence is the route's own.
+          provenance: provenance(cfg.model, false, 'no_relevant_sources'),
         })
       }
     } else {
@@ -472,6 +491,7 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
         ),
         passages_sent: passagesSent,
         debug: { ...debugInfo, used, status: r.status, upstream: json },
+        provenance: provenance(cfg.model, false, `upstream_${r.status}`),
       })
     }
 
@@ -607,6 +627,10 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
       synthesis,
       passages_sent: passagesSent,
       debug: debugInfo,
+      provenance:
+        debugInfo.fallbackReason === 'no_valid_sentences'
+          ? provenance(cfg.model, false, 'no_valid_sentences')
+          : provenance(cfg.model, true),
     })
   } catch (error: any) {
     if (error instanceof UnsupportedProviderBaseUrlError) {
@@ -631,6 +655,13 @@ Task: Evaluate each source's relevance, then write exactly 2-3 clear sentences s
       ),
       passages_sent: [],
       debug: debugInfo,
+      // `knobs` is set before anything that can throw past config resolution; a
+      // throw before it leaves no model to name.
+      provenance: provenance(
+        debugInfo.knobs?.model ?? 'unknown',
+        false,
+        'error',
+      ),
     })
   }
 }
