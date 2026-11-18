@@ -1,7 +1,8 @@
 import { resolveProvider } from '@/lib/llm/chat-completions'
 import { requestProfile } from '@/lib/request-profile'
+import { ASSIGNMENT } from '@/config/models'
 
-const DEFAULT_MODEL = (process.env.OPENAI_MODEL ?? 'gpt-5.4').trim()
+const DEFAULT_MODEL = (process.env.OPENAI_MODEL ?? ASSIGNMENT.answer).trim()
 export const MAX_PASSAGES_CAP = 15 // equals the gpt-5 default budget in requestProfile — raising one requires raising the other
 
 export type PromptVersion = 'v1' | 'v2'

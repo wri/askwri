@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isEnglishText } from '@/lib/ensure-english'
 import { requestProfile, wireParams } from '@/lib/request-profile'
+import { ASSIGNMENT } from '@/config/models'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
@@ -14,7 +15,7 @@ export const revalidate = 0
 const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_RELATES ??
   process.env.OPENAI_MODEL ??
-  'gpt-4o-mini'
+  ASSIGNMENT.relates
 ).trim()
 
 // This route answers 200 with canned sentences on every failure, so

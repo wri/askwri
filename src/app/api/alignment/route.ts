@@ -12,6 +12,7 @@ import {
   ALIGNMENT_MODEL as CFG_MODEL,
 } from '@/config/alignment'
 import { resolveAlignmentConfig } from '@/lib/alignment-config'
+import { ASSIGNMENT } from '@/config/models'
 import { isEnglishText } from '@/lib/ensure-english'
 import { requestProfile, wireParams } from '@/lib/request-profile'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
@@ -28,7 +29,7 @@ const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_ALIGNMENT ??
   process.env.OPENAI_MODEL ??
   CFG_MODEL ??
-  'gpt-5-mini'
+  ASSIGNMENT.alignment
 ).trim()
 const BASE_URL = (
   process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'

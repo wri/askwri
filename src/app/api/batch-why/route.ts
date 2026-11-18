@@ -8,6 +8,7 @@ import {
   wireParams,
 } from '@/lib/request-profile'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
+import { ASSIGNMENT } from '@/config/models'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,7 +19,7 @@ export const revalidate = 0
 const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_WHY ??
   process.env.OPENAI_MODEL ??
-  'gpt-4o-mini'
+  ASSIGNMENT.why
 ).trim()
 
 const CANNED_WHY = 'This passage provides relevant context for the query.'

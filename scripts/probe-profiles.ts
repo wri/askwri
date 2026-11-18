@@ -263,6 +263,7 @@ export const profiles: Record<ProfileId, ProbeProfile> = {
     id: 'answer',
     inputCount: ANSWER_DOCS.length,
     expect: 'json_object',
+    requiredFields: ['sentences', 'source_relevance'],
     body: ({ model, effort, budget }) =>
       reasoningBody({ model, effort, budget, messages: ANSWER_MESSAGES }),
   },
@@ -270,6 +271,7 @@ export const profiles: Record<ProfileId, ProbeProfile> = {
     id: 'prefilter',
     inputCount: ANSWER_DOCS.length,
     expect: 'json_object',
+    requiredFields: ['relevance'],
     body: ({ model, effort, budget }) =>
       reasoningBody({ model, effort, budget, messages: PREFILTER_MESSAGES }),
   },
@@ -277,6 +279,7 @@ export const profiles: Record<ProfileId, ProbeProfile> = {
     id: 'why',
     inputCount: PASSAGES.length,
     expect: 'json_object',
+    minItems: PASSAGES.length,
     body: ({ model, effort, budget }) =>
       reasoningBody({ model, effort, budget, messages: WHY_MESSAGES }),
   },
@@ -284,6 +287,7 @@ export const profiles: Record<ProfileId, ProbeProfile> = {
     id: 'relates',
     inputCount: DOCS.length,
     expect: 'json_object',
+    minItems: DOCS.length,
     body: ({ model, effort, budget }) =>
       reasoningBody({ model, effort, budget, messages: RELATES_MESSAGES }),
   },
@@ -291,6 +295,7 @@ export const profiles: Record<ProfileId, ProbeProfile> = {
     id: 'alignment.schema',
     inputCount: DOCS.length,
     expect: 'json_object',
+    requiredFields: ['insights', 'alignment'],
     body: ({ model, effort, budget }) =>
       reasoningBody({
         model,
@@ -309,6 +314,7 @@ export const profiles: Record<ProfileId, ProbeProfile> = {
     id: 'alignment.tools',
     inputCount: DOCS.length,
     expect: 'json_object',
+    requiredFields: ['insights', 'alignment'],
     body: ({ model, effort, budget }) =>
       reasoningBody({
         model,
@@ -328,6 +334,7 @@ export const profiles: Record<ProfileId, ProbeProfile> = {
     id: 'alignment.json_object',
     inputCount: DOCS.length,
     expect: 'json_object',
+    requiredFields: ['insights', 'alignment'],
     body: ({ model, effort, budget }) =>
       reasoningBody({
         model,

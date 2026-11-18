@@ -131,8 +131,11 @@ afterEach(() => {
 
 const x = (n: number) => 'x'.repeat(n)
 
-/** 8 docs of 1000-char snippets: over both the 15-passage and the 800-char
- *  budgets, so the non-GPT-5 arm (6 × 350) truncates visibly. */
+/** 1000-char snippets. These fixtures carry 8 documents, which is UNDER the
+ *  15-passage default budget — so they lock the sub-budget path, not the
+ *  boundary. The boundary gets its own test below, which asserts the passage
+ *  count rather than bytes: these bodies were recorded before the refactor and
+ *  recapturing them would destroy exactly the evidence they carry. */
 function docs(n: number) {
   return Array.from({ length: n }, (_, i) => ({
     doc_id: `doc_${i + 1}`,
@@ -452,6 +455,15 @@ describe('POST /api/answer — raw request bytes', () => {
     expectRawBodies([
       answerBody('gpt-5.4', SYS_V2, 8, 800, { max_completion_tokens: 2000 }),
     ])
+  })
+
+  it('16 documents are capped at the 15-passage default budget', async () => {
+    // The boundary the byte fixtures cannot reach: 8 documents sit under the
+    // 15-passage default, so only a count assertion catches a 15 -> 8 change.
+    await post('answer', { query: 'What?', docs: docs(16) })
+    const body = JSON.parse(rawBodies()[0])
+    const passages = (body.messages[1].content.match(/^\[\d+\]/gm) ?? []).length
+    expect(passages).toBe(15)
   })
 
   it('prompt_version v1 swaps the system prompt, bytes otherwise identical', async () => {

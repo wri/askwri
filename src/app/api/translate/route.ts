@@ -8,6 +8,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requestProfile, wireParams } from '@/lib/request-profile'
+import { ASSIGNMENT } from '@/config/models'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
@@ -19,7 +20,7 @@ export const revalidate = 0
 const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_TRANSLATE ??
   process.env.OPENAI_MODEL ??
-  'gpt-5-mini'
+  ASSIGNMENT.translate
 ).trim()
 const MAX_INPUT_CHARS = 4000
 

@@ -35,6 +35,12 @@ export interface ProbeProfile {
    *  `json_object` and still sends no `response_format`, because the route asks
    *  for JSON in the prompt. */
   expect: 'json_object' | 'text'
+  /** Keys a usable object reply must carry. A reply of `{}` parses as JSON and
+   *  is worthless, so parsing alone is not the verdict. */
+  requiredFields?: string[]
+  /** For array-shaped replies: the minimum number of items a usable answer has.
+   *  A route that silently drops rows still parses. */
+  minItems?: number
   /** Passages/documents the profile was built from, for the record. */
   inputCount: number
 }
@@ -46,6 +52,7 @@ export interface ProbeResult {
   error?: string
   latencyMs: number
   finishReason?: string // 'length' means the budget ran out: not usable
+  shapeProblems: string[] // empty when the reply is shaped like the reply we read
   promptTokens?: number
   completionTokens?: number
   reasoningTokens?: number
@@ -95,6 +102,31 @@ function replyText(choice: any): string {
 }
 
 /** The routes accept bare JSON and JSON inside a markdown fence or prose. */
+/**
+ * What a usable reply of this profile must contain, beyond parsing. Returns the
+ * problems; empty means the reply is shaped like something the caller can read.
+ */
+function shapeOf(parsed: any, profile: ProbeProfile): string[] {
+  if (profile.expect === 'text') {
+    return typeof parsed === 'string' && parsed.trim() !== ''
+      ? []
+      : ['reply is not text']
+  }
+  if (Array.isArray(parsed)) {
+    const min = profile.minItems ?? 1
+    return parsed.length >= min
+      ? []
+      : [`reply has ${parsed.length} item(s), expected at least ${min}`]
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return ['reply is not a JSON object']
+  }
+  const missing = (profile.requiredFields ?? []).filter((f) => !(f in parsed))
+  return missing.length === 0
+    ? []
+    : [`reply is missing required field(s): ${missing.join(', ')}`]
+}
+
 function replyJson(text: string): any {
   try {
     return JSON.parse(text)
@@ -165,14 +197,20 @@ export async function probeProfile(args: {
       choice.finish_reason ??
       (Array.isArray(choice.message?.tool_calls) ? 'tool_calls' : undefined)
     const parsed = profile.expect === 'json_object' ? replyJson(text) : text
+    // Parsing is not usability. `{}`, `[]` and a reply cut off before it closes
+    // all parse or read as text, and each has passed for a model that answered
+    // nothing. So the verdict also requires the fields the caller will read, and
+    // enough items to have covered the input.
+    const shapeProblems = shapeOf(parsed, profile)
     return {
       ok: res.ok,
       usable:
         res.ok &&
         text.trim() !== '' &&
+        finishReason !== undefined &&
         finishReason !== 'length' &&
-        (profile.expect === 'text' ||
-          (typeof parsed === 'object' && parsed !== null)),
+        shapeProblems.length === 0,
+      shapeProblems,
       status: res.status,
       ...(res.ok
         ? {}
@@ -187,6 +225,7 @@ export async function probeProfile(args: {
     return {
       ok: false,
       usable: false,
+      shapeProblems: [],
       error: err instanceof Error ? err.message : String(err),
       latencyMs: Date.now() - started,
     }
