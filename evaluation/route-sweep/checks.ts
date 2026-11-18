@@ -125,6 +125,15 @@ export function checkCall(
         `provenance.model is ${p.model}, not the requested ${expectedModel}`,
       )
     }
+    // Substitution is a failure, not a footnote. A route that replaced part of
+    // the model's answer with canned text answered *partly*, and the acceptance
+    // bar for a model swap is zero substituted content. Reporting it only as a
+    // readout caveat let a 39-of-40-padded response pass every mechanical check.
+    if (p.sanitized === true) {
+      failures.push(
+        'response contains substituted text (provenance.sanitized), so part of it is not model output',
+      )
+    }
   }
 
   const extracted = extractOutputs(r.route, r.response)

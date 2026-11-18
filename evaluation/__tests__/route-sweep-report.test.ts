@@ -207,7 +207,7 @@ describe('renderMarkdown', () => {
     expect(md).toContain('Substituted.')
   })
 
-  it('marks a sanitized row as substituted, without failing its check', () => {
+  it('marks a sanitized row as substituted and fails its check', () => {
     const md = renderMarkdown(
       artifact([
         alignmentCall(MODEL_A, [CANNED_INSIGHT], {
@@ -219,10 +219,10 @@ describe('renderMarkdown', () => {
 
     const sanitizedRow = lineWith(md, `**${MODEL_A}**`)
     expect(sanitizedRow).toContain('sanitized: some text was substituted')
-    // A caveat, not a failure: `produced` is true, so the check still passes.
-    expect(sanitizedRow).not.toContain('NOT EVIDENCE')
-    expect(lineWith(md, '**check:**')).toContain(`✓ ${MODEL_A}`)
-    expect(md).toContain('All 2 calls passed the mechanical checks.')
+    // Substituted text is not model output, so the acceptance bar for a model
+    // swap (zero substitutions) cannot be met by a passing check.
+    expect(lineWith(md, '**check:**')).toContain(`✗ ${MODEL_A}`)
+    expect(md).not.toContain('All 2 calls passed the mechanical checks.')
 
     // The clean row carries no caveat, or the marker would say nothing.
     expect(lineWith(md, `**${MODEL_B}**`)).not.toContain('sanitized')

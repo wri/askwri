@@ -339,7 +339,7 @@ function readFrozenSet(label: string): FrozenSet {
  * every verdict and both outputs — but a sweep whose console says nothing sends
  * a person to parse markdown to find out whether the model answered at all.
  */
-function printChecks(calls: CallResult[]): void {
+function printChecks(calls: CallResult[]): { failed: number; total: number } {
   const failed = calls
     .map((call) => ({
       call,
@@ -351,7 +351,7 @@ function printChecks(calls: CallResult[]): void {
     console.log(
       '\nchecks: no calls recorded — every frozen case was skipped, so this run is evidence of nothing',
     )
-    return
+    return { failed: 1, total: 0 }
   }
   console.log(`\nchecks: ${failed.length} of ${calls.length} calls failed`)
   const shown = 20
@@ -363,6 +363,7 @@ function printChecks(calls: CallResult[]): void {
   if (failed.length > shown) {
     console.log(`  … and ${failed.length - shown} more in the readout`)
   }
+  return { failed: failed.length, total: calls.length }
 }
 
 /**
@@ -458,7 +459,15 @@ async function runSweepStage(
   writeFileSync(files.json, JSON.stringify(artifact, null, 2))
   writeFileSync(files.md, renderMarkdown(artifact))
 
-  printChecks(calls)
+  const checks = printChecks(calls)
+  // The tool exists to gate a model swap, so a run that is not evidence of a
+  // clean sweep must not exit 0: CI and a person both read the exit code first.
+  if (checks.failed > 0 || checks.total === 0) {
+    process.exitCode = 1
+    console.log('gate: FAILED — this run is not evidence of a clean sweep')
+  } else {
+    console.log('gate: passed')
+  }
   console.log(`\nreadout:  ${files.md}`)
   console.log(`artifact: ${files.json}`)
 }
