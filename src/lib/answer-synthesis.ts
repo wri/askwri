@@ -18,6 +18,8 @@ export interface SynthesisConfig {
   /** Omitted entirely for gpt-5-class models. */
   temperature?: number
   reasoningEffort?: Effort
+  /** The provider's fast tier, from the task's profile (reasoning arm only). */
+  serviceTier?: 'fast'
   maxPassages: number
   passageChars: number
   promptVersion: PromptVersion
@@ -56,6 +58,7 @@ export function resolveSynthesisConfig(body: any): SynthesisConfig {
     maxTokens: profile.maxTokens,
     temperature: profile.temperature,
     reasoningEffort: profile.reasoningEffort,
+    serviceTier: profile.serviceTier,
     maxPassages: int(
       body?.max_passages,
       profile.maxPassages ?? 6,

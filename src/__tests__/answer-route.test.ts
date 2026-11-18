@@ -105,10 +105,13 @@ describe('POST /api/answer — defaults reproduce current behaviour', () => {
       })
       expect(out.ok).toBe(true)
       expect(out.passages_sent).toHaveLength(15)
+      // `low` plus the fast tier (operator ruling 2026-11-18, latency first). The
+      // tier reaching the body proves SynthesisConfig carries it from the profile.
       expect(sentBody()).toMatchObject({
         model: 'gpt-6.1-sol',
-        reasoning_effort: 'medium',
+        reasoning_effort: 'low',
         max_completion_tokens: 2000,
+        service_tier: 'fast',
       })
       expect(sentBody().temperature).toBeUndefined()
     },
@@ -386,5 +389,76 @@ describe('POST /api/answer — knobs', () => {
     expect(out.synthesis.sentences).toHaveLength(1)
     expect(out.synthesis.cites).toEqual([[]])
     expect(out.synthesis.warning).toBe('low_coverage')
+  })
+})
+
+// The route used to answer 200 with canned text on every failure and name no
+// model at all, so a sweep or an after-deploy check could not tell which model
+// wrote an answer, or whether any did. `provenance` closes that.
+describe('POST /api/answer — provenance', () => {
+  it('names the model that wrote a parsed answer', async () => {
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.provenance).toEqual({ model: 'gpt-5.4-mini', produced: true })
+  })
+
+  it('reports no_valid_sentences when the reply parses to nothing usable', async () => {
+    fetchMock.mockResolvedValue(modelReply('not json at all'))
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.debug.fallbackReason).toBe('no_valid_sentences')
+    expect(out.provenance).toEqual({
+      model: 'gpt-5.4-mini',
+      produced: false,
+      fallback_reason: 'no_valid_sentences',
+    })
+  })
+
+  it('reports the upstream status when the provider errors', async () => {
+    fetchMock.mockResolvedValue(modelReply('upstream error', 500))
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.provenance).toEqual({
+      model: 'gpt-5.4-mini',
+      produced: false,
+      fallback_reason: 'upstream_500',
+    })
+  })
+
+  it('reports no_api_key when none is configured', async () => {
+    delete process.env.OPENAI_API_KEY
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(out.provenance).toEqual({
+      model: 'gpt-5.4-mini',
+      produced: false,
+      fallback_reason: 'no_api_key',
+    })
+  })
+
+  it('reports the exception path as not produced, still naming the model', async () => {
+    fetchMock.mockRejectedValue(new Error('boom'))
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.provenance).toEqual({
+      model: 'gpt-5.4-mini',
+      produced: false,
+      fallback_reason: 'error',
+    })
+  })
+
+  it('reports an all-weak pre-filter short circuit as not produced by the synthesis model', async () => {
+    process.env.USE_NANO_FILTER = 'true'
+    fetchMock.mockResolvedValueOnce(
+      modelReply(
+        JSON.stringify({
+          relevance: [1, 2, 3].map((id) => ({ id, tier: 'weak' })),
+          coverage: 'poor',
+        }),
+      ),
+    )
+    const out = await post({ query: 'q', docs: docs(3) })
+    expect(out.debug.nanoFilter).toBe('all_weak')
+    expect(out.provenance).toEqual({
+      model: 'gpt-5.4-mini',
+      produced: false,
+      fallback_reason: 'no_relevant_sources',
+    })
   })
 })

@@ -170,7 +170,7 @@ function answerBody(
   sys: string,
   count: number,
   chars: number,
-  params: Record<string, number>,
+  params: Record<string, number | string>,
 ) {
   return JSON.stringify({
     model,
@@ -208,9 +208,16 @@ function nanoUser(count: number, chars: number) {
   return `Question: What?\n\nPassages (presented in random order):\n${entries.join('\n\n')}`
 }
 
+// The default answer arm (flip 5): gpt-6.1-terra at low effort on the fast tier.
+const TERRA_ANSWER = {
+  reasoning_effort: 'low',
+  max_completion_tokens: 2000,
+  service_tier: 'fast',
+}
+
 function nanoBody(
   model: string,
-  params: Record<string, number>,
+  params: Record<string, number | string>,
   count = 8,
   chars = 800,
 ) {
@@ -451,13 +458,9 @@ function translateBody(model: string, params: Record<string, number>) {
 /* ---------------- POST /api/answer ---------------- */
 
 describe('POST /api/answer — raw request bytes', () => {
-  it('default arm (prefilter off): one gpt-5.4-mini call, 15×800 evidence budget', async () => {
+  it('default arm (prefilter off): one gpt-6.1-terra call, 15×800 evidence budget', async () => {
     await post('answer', { query: 'What?', docs: docs(8) })
-    expectRawBodies([
-      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
-        max_completion_tokens: 2000,
-      }),
-    ])
+    expectRawBodies([answerBody('gpt-6.1-terra', SYS_V2, 8, 800, TERRA_ANSWER)])
   })
 
   it('16 documents are capped at the 15-passage default budget', async () => {
@@ -475,20 +478,12 @@ describe('POST /api/answer — raw request bytes', () => {
       docs: docs(8),
       prompt_version: 'v1',
     })
-    expectRawBodies([
-      answerBody('gpt-5.4-mini', SYS_V1, 8, 800, {
-        max_completion_tokens: 2000,
-      }),
-    ])
+    expectRawBodies([answerBody('gpt-6.1-terra', SYS_V1, 8, 800, TERRA_ANSWER)])
   })
 
   it('an explicit max_passages override shrinks the evidence list', async () => {
     await post('answer', { query: 'What?', docs: docs(8), max_passages: 3 })
-    expectRawBodies([
-      answerBody('gpt-5.4-mini', SYS_V2, 3, 800, {
-        max_completion_tokens: 2000,
-      }),
-    ])
+    expectRawBodies([answerBody('gpt-6.1-terra', SYS_V2, 3, 800, TERRA_ANSWER)])
   })
 
   it('the non-GPT-5 arm via body.model: 6×350 evidence, max_tokens + temperature', async () => {
@@ -512,7 +507,7 @@ describe('POST /api/answer — raw request bytes', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0.999999999)
     fetchMock.mockImplementation(async (_url: unknown, init: RequestInit) => {
       const body = JSON.parse(init.body as string)
-      return body.model === 'gpt-5.4-nano'
+      return body.model === 'gpt-6-luna'
         ? chatReply(
             JSON.stringify({
               relevance: Array.from({ length: 8 }, (_, i) => ({
@@ -526,10 +521,11 @@ describe('POST /api/answer — raw request bytes', () => {
     })
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
-      nanoBody('gpt-5.4-nano', { max_completion_tokens: 500 }),
-      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
-        max_completion_tokens: 2000,
+      nanoBody('gpt-6-luna', {
+        reasoning_effort: 'none',
+        max_completion_tokens: 500,
       }),
+      answerBody('gpt-6.1-terra', SYS_V2, 8, 800, TERRA_ANSWER),
     ])
   })
 
@@ -538,16 +534,17 @@ describe('POST /api/answer — raw request bytes', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0.999999999)
     fetchMock.mockImplementation(async (_url: unknown, init: RequestInit) => {
       const body = JSON.parse(init.body as string)
-      return body.model === 'gpt-5.4-nano'
+      return body.model === 'gpt-6-luna'
         ? chatReply('upstream error', 500)
         : chatReply(JSON.stringify({ sentences: [{ text: 'A.', cites: [1] }] }))
     })
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
-      nanoBody('gpt-5.4-nano', { max_completion_tokens: 500 }),
-      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
-        max_completion_tokens: 2000,
+      nanoBody('gpt-6-luna', {
+        reasoning_effort: 'none',
+        max_completion_tokens: 500,
       }),
+      answerBody('gpt-6.1-terra', SYS_V2, 8, 800, TERRA_ANSWER),
     ])
   })
 
@@ -572,9 +569,7 @@ describe('POST /api/answer — raw request bytes', () => {
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
       nanoBody('gpt-4o-mini', { max_tokens: 500, temperature: 0.1 }),
-      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
-        max_completion_tokens: 2000,
-      }),
+      answerBody('gpt-6.1-terra', SYS_V2, 8, 800, TERRA_ANSWER),
     ])
   })
 })
@@ -582,17 +577,25 @@ describe('POST /api/answer — raw request bytes', () => {
 /* ---------------- POST /api/batch-why ---------------- */
 
 describe('POST /api/batch-why — raw request bytes', () => {
-  it('default arm (gpt-5.4-nano, the deployed model): max_completion_tokens 360, no temperature', async () => {
+  it('default arm (gpt-6-luna, flipped 2026-11-18): effort none, max_completion_tokens 360, fast tier, no temperature', async () => {
     await post('batch-why', { query: WHY_QUERY, passages: TWO_PASSAGES })
     expectRawBodies([
-      whyBody('gpt-5.4-nano', TWO_PASSAGES, { max_completion_tokens: 360 }),
+      whyBody('gpt-6-luna', TWO_PASSAGES, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 360,
+        service_tier: 'fast',
+      }),
     ])
   })
 
   it('default arm above the 35-passage cap: budget clamped to 3000', async () => {
     await post('batch-why', { query: WHY_QUERY, passages: MANY_PASSAGES })
     expectRawBodies([
-      whyBody('gpt-5.4-nano', MANY_PASSAGES, { max_completion_tokens: 3000 }),
+      whyBody('gpt-6-luna', MANY_PASSAGES, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 3000,
+        service_tier: 'fast',
+      }),
     ])
   })
 
@@ -684,17 +687,23 @@ describe('POST /api/batch-why — raw request bytes', () => {
 /* ---------------- POST /api/batch-relates ---------------- */
 
 describe('POST /api/batch-relates — raw request bytes', () => {
-  it('default arm (gpt-5.4-nano, the deployed model): floor 1000, no temperature', async () => {
+  it('default arm (gpt-6-luna, flipped 2026-11-18): effort none, floor 1000, no temperature', async () => {
     await post('batch-relates', { query: WHY_QUERY, docs: TWO_DOCS })
     expectRawBodies([
-      relatesBody('gpt-5.4-nano', TWO_DOCS, { max_completion_tokens: 1000 }),
+      relatesBody('gpt-6-luna', TWO_DOCS, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 1000,
+      }),
     ])
   })
 
   it('default arm above the floor: 120×docs unclamped', async () => {
     await post('batch-relates', { query: WHY_QUERY, docs: MANY_DOCS })
     expectRawBodies([
-      relatesBody('gpt-5.4-nano', MANY_DOCS, { max_completion_tokens: 4800 }),
+      relatesBody('gpt-6-luna', MANY_DOCS, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 4800,
+      }),
     ])
   })
 
@@ -726,12 +735,18 @@ describe('POST /api/batch-relates — raw request bytes', () => {
 /* ---------------- POST /api/alignment ---------------- */
 
 describe('POST /api/alignment — raw request bytes', () => {
-  it('default arm (gpt-5.4-nano, the deployed model): cap 4000, json_schema first', async () => {
+  // Alignment's default arm after flip 4: gpt-6.1-terra at the task's low effort,
+  // with the fast tier. Every rung of the ladder carries the same three fields.
+  const TERRA = (cap: number) => ({
+    reasoning_effort: 'low',
+    max_completion_tokens: cap,
+    service_tier: 'fast',
+  })
+
+  it('default arm (gpt-6.1-terra, flipped 2026-11-18): effort low, cap 4000, fast tier, json_schema first', async () => {
     fetchMock.mockResolvedValue(chatReply(GOOD_ASSESSMENT))
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
-    expectRawBodies([
-      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
-    ])
+    expectRawBodies([schemaAttempt('gpt-6.1-terra', TERRA(4000))])
   })
 
   it('schema fails then tools succeeds: both primary budgets, same arm', async () => {
@@ -748,8 +763,8 @@ describe('POST /api/alignment — raw request bytes', () => {
       )
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
     expectRawBodies([
-      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
-      toolsAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
+      schemaAttempt('gpt-6.1-terra', TERRA(4000)),
+      toolsAttempt('gpt-6.1-terra', TERRA(4000)),
     ])
   })
 
@@ -760,9 +775,9 @@ describe('POST /api/alignment — raw request bytes', () => {
       .mockResolvedValueOnce(chatReply(GOOD_ASSESSMENT))
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
     expectRawBodies([
-      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
-      toolsAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
-      objectAttempt('gpt-5.4-nano', { max_completion_tokens: 5000 }),
+      schemaAttempt('gpt-6.1-terra', TERRA(4000)),
+      toolsAttempt('gpt-6.1-terra', TERRA(4000)),
+      objectAttempt('gpt-6.1-terra', TERRA(5000)),
     ])
   })
 
