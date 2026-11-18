@@ -18,28 +18,28 @@ All 80 calls passed the mechanical checks.
 ## Acceptance numbers
 
 ### batch-why
-- gpt-6-luna — calls 10, failed 0, p95 6546 ms (n=10), cost $0.004519
-- gpt-6.1-terra — calls 10, failed 0, p95 9402 ms (n=10), cost $0.041529
+- gpt-6-luna — calls 10, failed 0, p95 6546 ms (n=10), cost $0.009039 for 10 calls ($0.000904 per call), fast mode priced at 2x list
+- gpt-6.1-terra — calls 10, failed 0, p95 9402 ms (n=10), cost $0.083058 for 10 calls ($0.008306 per call), fast mode priced at 2x list
 - p95 of gpt-6.1-terra vs gpt-6-luna: +43.6% (6546 ms to 9402 ms)
-- cost of gpt-6.1-terra vs gpt-6-luna: +819.0%
+- cost of gpt-6.1-terra vs gpt-6-luna: +818.9%
 
 ### batch-relates
-- gpt-6-luna — calls 10, failed 0, p95 7136 ms (n=10), cost $0.004415
-- gpt-6.1-terra — calls 10, failed 0, p95 15457 ms (n=10), cost $0.043109
+- gpt-6-luna — calls 10, failed 0, p95 7136 ms (n=10), cost $0.004415 for 10 calls ($0.000441 per call)
+- gpt-6.1-terra — calls 10, failed 0, p95 15457 ms (n=10), cost $0.043109 for 10 calls ($0.004311 per call)
 - p95 of gpt-6.1-terra vs gpt-6-luna: +116.6% (7136 ms to 15457 ms)
 - cost of gpt-6.1-terra vs gpt-6-luna: +876.4%
 
 ### alignment
-- gpt-6-luna — calls 10, failed 0, p95 3088 ms (n=10), cost $0.002261
-- gpt-6.1-terra — calls 10, failed 0, p95 3268 ms (n=10), cost $0.018313
+- gpt-6-luna — calls 10, failed 0, p95 3088 ms (n=10), cost $0.004523 for 10 calls ($0.000452 per call), fast mode priced at 2x list
+- gpt-6.1-terra — calls 10, failed 0, p95 3268 ms (n=10), cost $0.036626 for 10 calls ($0.003663 per call), fast mode priced at 2x list
 - p95 of gpt-6.1-terra vs gpt-6-luna: +5.8% (3088 ms to 3268 ms)
-- cost of gpt-6.1-terra vs gpt-6-luna: +710.0%
+- cost of gpt-6.1-terra vs gpt-6-luna: +709.8%
 
 ### translate
-- gpt-6-luna — calls 10, failed 0, p95 3508 ms (n=10), cost $0.001469
-- gpt-6.1-terra — calls 10, failed 0, p95 7296 ms (n=10), cost $0.014755
+- gpt-6-luna — calls 10, failed 0, p95 3508 ms (n=10), cost $0.001468 for 10 calls ($0.000147 per call)
+- gpt-6.1-terra — calls 10, failed 0, p95 7296 ms (n=10), cost $0.014755 for 10 calls ($0.001476 per call)
 - p95 of gpt-6.1-terra vs gpt-6-luna: +108.0% (3508 ms to 7296 ms)
-- cost of gpt-6.1-terra vs gpt-6-luna: +904.4%
+- cost of gpt-6.1-terra vs gpt-6-luna: +905.1%
 
 ## batch-why
 
