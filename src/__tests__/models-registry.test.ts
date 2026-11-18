@@ -280,3 +280,19 @@ describe('cost and energy read the registry (Task 4b)', () => {
     )
   })
 })
+
+describe('cost lookups that must fail loudly', () => {
+  it('throws for a registered model with no sourced price', () => {
+    // gpt-5.4 is registered ahead of any assignment to it; selecting it must fail
+    // on the first cost computation rather than borrow another model's rate.
+    expect(() =>
+      estimateCostUSD({ model: 'gpt-5.4', prompt_tokens: 10 }),
+    ).toThrow(/no price for gpt-5\.4/)
+  })
+
+  it('throws when usage carries no model at all', () => {
+    expect(() => estimateCostUSD({ prompt_tokens: 10 })).toThrow(
+      /unknown model/,
+    )
+  })
+})

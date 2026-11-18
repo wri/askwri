@@ -458,6 +458,9 @@ const AskWriAppContent = () => {
             (total: any, tryInfo: any) => {
               if (tryInfo.usage) {
                 return {
+                  // The model the cost is priced at; without it estimateCostUSD
+                  // has nothing to look up and must not guess a rate.
+                  model: tryInfo.usage.model ?? total.model,
                   prompt_tokens:
                     (total.prompt_tokens || 0) +
                     (tryInfo.usage.prompt_tokens || 0),
