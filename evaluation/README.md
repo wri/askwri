@@ -112,6 +112,69 @@ cover. Three things to hold when reading them:
 Retrieval params are deliberately not sent, so the target applies its own
 presets and the numbers reflect what users actually get.
 
+### Route model sweep
+
+Compares two models on the four routes that have no scored evaluation —
+`batch-why`, `batch-relates`, `alignment`, `translate` — by running the same frozen
+retrieval through both and putting the outputs side by side.
+
+```bash
+export EVAL_MODEL_OVERRIDE_TOKEN=<token from the QA task definition>
+npm run eval:routes -- --label smoke --model-a gpt-5.4-nano --model-b gpt-5.6-luna --limit 2
+```
+
+Defaults: `--stage all`, `--limit 10`, `--concurrency 2`, `--timeout-ms 120000`,
+`--target https://qa.askwri-app.org`, `--evalset evalset_answer_02` (first N cases in
+file order — the pinned set has no reviewed tier, and the run says so); `--ids q1,q3`
+selects exactly those cases instead of the first N.
+`--label` and both models are required, and the two models must differ: the tool
+never compares a model with itself. `--timeout-ms` cannot exceed 300000, the ALB
+`idle_timeout` — a longer deadline only converts slow calls into client timeouts
+that look like dead models. The token comes from `--token` or
+`EVAL_MODEL_OVERRIDE_TOKEN`; without it every override is refused with a 400.
+
+**`--stage freeze` needs no token.** Freezing sends no model override — it is one
+cite retrieval per case and no route call at all — so the token is required for the
+sweep stage only. Flags are written `--flag value`: an unknown `--`-prefixed token
+is an error rather than a silent default, but anything without the double dash
+(`-stage sweep`) is not a flag to this parser and is ignored.
+
+Two stages, because the frozen retrieval is the reusable half:
+
+```bash
+npm run eval:routes -- --stage freeze --label smoke --model-a … --model-b …   # one cite retrieval per case
+npm run eval:routes -- --stage sweep  --label smoke --model-a … --model-b …   # replay a second model pair
+```
+
+`freeze` writes `evaluation/results/route-freeze-<label>.json` (gitignored — it is an
+input, not a published result). `--stage all` does both in one command; `sweep` alone
+reads an existing frozen set.
+
+**The two outputs** of a sweep, written beside the other baselines and named for the
+day and the label:
+
+- `evaluation/baselines/YYYY-MM-DD-route-sweep-<label>.json` — per case, per route, per
+  model: the payload sent, the raw response, its `provenance` block, latency, error.
+  Plus a header with the target, both models, `max_results`, the evalset submodule
+  commit, and the image digest of the QA task that answered (`unknown` when the AWS
+  lookup fails, in which case nothing in the artifact evidences a deployed change).
+- `evaluation/baselines/YYYY-MM-DD-route-sweep-<label>.md` — the same run for a person:
+  mechanical check results at the top, then per route, per case, the two outputs stacked.
+
+**A `produced: false` row is not evidence.** When a route's model call fails (no API
+key, provider 4xx, unparseable reply) the route answers `200` with substituted text.
+The `provenance` block says so, the check line marks it `✗`, and the output underneath
+is labelled `NOT EVIDENCE` with the `fallback_reason`. Two plausible strings side by
+side read as agreement unless one is labelled otherwise — never compare a row whose
+`provenance.produced` is not `true`. Rows also fail when `provenance.model` is not the
+model requested (a stale override), when a route drops or empties an output, and when
+the case's frozen retrieval returned no documents.
+
+**The tool reports, it does not judge.** There is no judge, no threshold and no score:
+the mechanical checks say whether each call is evidence, and the prose comparison is
+the reader's. Quality differences between two models are visible in the readout, not
+measured by it.
+
 ## Cite Mode Evaluation
 
 Tests retrieval recall against a hand-curated golden dataset of 11 queries and 74 expected documents.

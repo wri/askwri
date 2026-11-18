@@ -32,6 +32,14 @@ app_environment_variables = {
   "DB_HOST" = "askwri-db1.cty8g4ssygz9.us-east-2.rds.amazonaws.com"
   "DB_PORT" = "5432"
   "DB_NAME" = "qa"
+
+  # Gates the per-request `model` override on batch-why, batch-relates,
+  # alignment and translate — the knob `npm run eval:routes` sweeps with.
+  # production.tfvars must never set it: it bounds accidents only, and anyone
+  # who can read this task definition already holds the OpenAI key in it.
+  # THE VALUE IS IN GIT, SO TREAT IT AS PUBLIC. It stops a stray caller and
+  # nothing else; rotate it if a private value is ever wanted.
+  "EVAL_MODEL_OVERRIDE_TOKEN" = "qa-route-sweep"
 }
 
 # =============================================================================

@@ -2,18 +2,35 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isEnglishText } from '@/lib/ensure-english'
+import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const MODEL = (
+// Read at import: this is the route's own default, used whenever the request
+// names no model. A requested model is resolved per request in POST.
+const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_RELATES ??
   process.env.OPENAI_MODEL ??
   'gpt-4o-mini'
 ).trim()
-const IS_GPT5 = /^gpt-5/i.test(MODEL)
 const TEMP = Number(process.env.OPENAI_TEMPERATURE ?? 0.2)
+
+// This route answers 200 with canned sentences on every failure, so
+// `produced: false` is what keeps a response no model authored from reading as
+// evidence; `fallback_reason` names the cause.
+function provenance(
+  model: string,
+  produced: boolean,
+  fallbackReason?: string,
+): RouteProvenance {
+  return {
+    model,
+    produced,
+    ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
+  }
+}
 
 const SYS = `
 You are given a user query and a list of documents. For each document, explain in ONE terse sentence how it relates to the query.
@@ -62,15 +79,42 @@ interface DocInput {
 }
 
 export async function POST(req: NextRequest) {
+  // The model this response is about, for the catch-all below that cannot
+  // re-read the request body.
+  let model = FALLBACK_MODEL
   try {
-    const { query, docs } = (await req.json()) as {
+    const body = (await req.json()) as {
       query: string
       docs: DocInput[]
+      model?: string
     }
+    const { query, docs } = body
+
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    if (!resolved.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: resolved.error,
+          provenance: provenance(
+            FALLBACK_MODEL,
+            false,
+            'model_override_rejected',
+          ),
+        },
+        { status: 400 },
+      )
+    }
+    model = resolved.model
+
     const key = process.env.OPENAI_API_KEY?.trim()
 
     if (!docs || !Array.isArray(docs) || docs.length === 0) {
-      return NextResponse.json({ ok: true, results: [] })
+      return NextResponse.json({
+        ok: true,
+        results: [],
+        provenance: provenance(model, false, 'no_docs'),
+      })
     }
 
     // If no API key, return fallback for all docs. A passage sentence is
@@ -80,7 +124,11 @@ export async function POST(req: NextRequest) {
         relates: 'Relevant supporting evidence.',
         relation: 'indirect' as const,
       }))
-      return NextResponse.json({ ok: true, results })
+      return NextResponse.json({
+        ok: true,
+        results,
+        provenance: provenance(model, false, 'no_api_key'),
+      })
     }
 
     // Build compact doc list for the prompt
@@ -97,18 +145,20 @@ export async function POST(req: NextRequest) {
       documents: docList,
     })
 
-    // Token allocation: ~100 tokens per doc for output
-    const outputTokens = IS_GPT5
+    // Token allocation: ~100 tokens per doc for output. GPT-5 spends reasoning
+    // tokens out of the same budget, so it gets the larger floor — sized from the
+    // model actually being asked, not the route's default.
+    const outputTokens = resolved.isGpt5
       ? Math.max(1000, docs.length * 120)
       : Math.min(docs.length * 120, 4000)
 
-    const body: any = {
-      model: MODEL,
+    const payload: any = {
+      model,
       messages: [
         { role: 'system', content: SYS },
         { role: 'user', content: userContent },
       ],
-      ...(IS_GPT5
+      ...(resolved.isGpt5
         ? { max_completion_tokens: outputTokens }
         : { max_tokens: outputTokens, temperature: TEMP }),
     }
@@ -119,7 +169,7 @@ export async function POST(req: NextRequest) {
         authorization: `Bearer ${key}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     })
 
     const raw = await r.text()
@@ -141,6 +191,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         results,
         debug: { status: r.status, upstream: j?.error },
+        provenance: provenance(model, false, `upstream_${r.status}`),
       })
     }
 
@@ -156,31 +207,62 @@ export async function POST(req: NextRequest) {
     const parsed = safeParse(content)
 
     if (Array.isArray(parsed)) {
+      // `sanitized` means the response carries text the model did not write:
+      // either the English fallback replacing mirrored output (issue #387: the
+      // model sometimes mirrors Chinese passages despite the prompt rule) or a
+      // row the model never answered (padding below). `written` counts the rows
+      // that came from the model at all.
+      let sanitized = false
+      let written = 0
       // Pad with fallbacks if we got fewer results than docs
       const results = docs.map((doc, i) => {
         const item = parsed[i]
-        // Issue #387: the model sometimes mirrors Chinese passages despite the
-        // prompt rule — replace mirrored output with the English fallback.
-        if (
-          item &&
-          typeof item.relates === 'string' &&
-          item.relates.trim() &&
-          isEnglishText(item.relates)
-        ) {
+        const relates =
+          item && typeof item.relates === 'string' ? item.relates.trim() : ''
+        if (!relates) {
+          sanitized = true
           return {
-            relates: item.relates.trim(),
+            relates: 'Relevant supporting evidence.',
+            relation: 'indirect' as const,
+          }
+        }
+        written += 1
+        if (isEnglishText(relates)) {
+          return {
+            relates,
             relation:
               item.relation === 'direct'
                 ? ('direct' as const)
                 : ('indirect' as const),
           }
         }
+        sanitized = true
         return {
           relates: 'Relevant supporting evidence.',
           relation: 'indirect' as const,
         }
       })
-      return NextResponse.json({ ok: true, results, usage: j?.usage })
+      // "[]" parses, and a padded-only answer pads every row: neither carries a
+      // single word the model wrote, so report it as the parse failure it is
+      // rather than as model output.
+      if (written === 0) {
+        return NextResponse.json({
+          ok: true,
+          results,
+          debug: { parseError: true },
+          provenance: provenance(model, false, 'parse_error'),
+        })
+      }
+      return NextResponse.json({
+        ok: true,
+        results,
+        model,
+        usage: j?.usage,
+        provenance: {
+          ...provenance(model, true),
+          ...(sanitized ? { sanitized: true } : {}),
+        },
+      })
     }
 
     // Parsing failed — return fallbacks
@@ -188,12 +270,18 @@ export async function POST(req: NextRequest) {
       relates: 'Relevant supporting evidence.',
       relation: 'indirect' as const,
     }))
-    return NextResponse.json({ ok: true, results, debug: { parseError: true } })
+    return NextResponse.json({
+      ok: true,
+      results,
+      debug: { parseError: true },
+      provenance: provenance(model, false, 'parse_error'),
+    })
   } catch (e: any) {
     return NextResponse.json({
       ok: true,
       results: [],
       debug: { error: String(e?.message || e) },
+      provenance: provenance(model, false, 'error'),
     })
   }
 }

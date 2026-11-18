@@ -52,6 +52,8 @@ Structured Outputs (required by `chat_json`, `alignment`, `relates`) supported o
 
 **Global default** (currently missing): `gpt-5.6-luna` for most routes; `gpt-5.6` only for answer synthesis. Land via a shared `getOpenAIModel(route)` helper after the per-route PRs.
 
+**Sweepable on QA:** batch-why, batch-relates, alignment and translate take a per-request `model` override, gated by `EVAL_MODEL_OVERRIDE_TOKEN` in `qa.tfvars`, so `npm run eval:routes` can compare two models on one frozen retrieval.
+
 ## PR sequence
 
 1. **Worker → gpt-5.6-luna** (in flight). `config.py`, `variables.tf`, `qa.tfvars`, `topicsAdmin.ts` (EST_PER_DOC_COST 0.0008→0.0002). QA: scoped reclassify, check the log names the model.

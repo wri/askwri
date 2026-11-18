@@ -7,22 +7,34 @@
  * for the sparse lane and this shares nothing with it.
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const MODEL = (
+// Read at import: this is the route's own default, used whenever the request
+// names no model. A requested model is resolved per request in POST.
+const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_TRANSLATE ??
   process.env.OPENAI_MODEL ??
   'gpt-5-mini'
 ).trim()
-const IS_GPT5 = /^gpt-5/i.test(MODEL)
-// A passage is capped at 800 chars upstream (search-service main.py); the
-// translation can run longer than the source, and GPT-5 spends reasoning
-// tokens out of the same budget.
-const MAX_TOKENS = IS_GPT5 ? 2000 : 1200
 const MAX_INPUT_CHARS = 4000
+
+// `produced: false` is what keeps a response that no model authored from
+// reading as evidence; `fallback_reason` names the cause.
+function provenance(
+  model: string,
+  produced: boolean,
+  fallbackReason?: string,
+): RouteProvenance {
+  return {
+    model,
+    produced,
+    ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
+  }
+}
 
 const SYS = `
 You translate excerpts from research publications into English.
@@ -37,13 +49,37 @@ Rules:
 `.trim()
 
 export async function POST(req: NextRequest) {
+  // The model this response is about, for the catch-all below that cannot
+  // re-read the request body.
+  let model = FALLBACK_MODEL
   try {
-    const { text } = (await req.json()) as { text?: string }
-    const source = String(text ?? '').trim()
+    const body = (await req.json()) as { text?: string; model?: string }
+    const source = String(body?.text ?? '').trim()
+
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    if (!resolved.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: resolved.error,
+          provenance: provenance(
+            FALLBACK_MODEL,
+            false,
+            'model_override_rejected',
+          ),
+        },
+        { status: 400 },
+      )
+    }
+    model = resolved.model
 
     if (!source) {
       return NextResponse.json(
-        { ok: false, error: 'text is required' },
+        {
+          ok: false,
+          error: 'text is required',
+          provenance: provenance(model, false, 'no_text'),
+        },
         { status: 400 },
       )
     }
@@ -51,20 +87,29 @@ export async function POST(req: NextRequest) {
     const key = process.env.OPENAI_API_KEY?.trim()
     if (!key) {
       return NextResponse.json(
-        { ok: false, error: 'OPENAI_API_KEY not configured' },
+        {
+          ok: false,
+          error: 'OPENAI_API_KEY not configured',
+          provenance: provenance(model, false, 'no_api_key'),
+        },
         { status: 500 },
       )
     }
 
-    const body: any = {
-      model: MODEL,
+    // A passage is capped at 800 chars upstream (search-service main.py); the
+    // translation can run longer than the source, and GPT-5 spends reasoning
+    // tokens out of the same budget. Sized from the model actually being asked.
+    const maxTokens = resolved.isGpt5 ? 2000 : 1200
+
+    const payload: any = {
+      model,
       messages: [
         { role: 'system', content: SYS },
         { role: 'user', content: source.slice(0, MAX_INPUT_CHARS) },
       ],
-      ...(IS_GPT5
-        ? { max_completion_tokens: MAX_TOKENS }
-        : { max_tokens: MAX_TOKENS, temperature: 0.2 }),
+      ...(resolved.isGpt5
+        ? { max_completion_tokens: maxTokens }
+        : { max_tokens: maxTokens, temperature: 0.2 }),
     }
 
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -73,7 +118,7 @@ export async function POST(req: NextRequest) {
         authorization: `Bearer ${key}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     })
 
     const j = await r.json().catch(() => null)
@@ -81,7 +126,11 @@ export async function POST(req: NextRequest) {
     if (!r.ok) {
       console.error('[translate] OpenAI error:', r.status, j?.error?.message)
       return NextResponse.json(
-        { ok: false, error: 'Translation service unavailable' },
+        {
+          ok: false,
+          error: 'Translation service unavailable',
+          provenance: provenance(model, false, `upstream_${r.status}`),
+        },
         { status: 502 },
       )
     }
@@ -89,16 +138,29 @@ export async function POST(req: NextRequest) {
     const translation = String(j?.choices?.[0]?.message?.content ?? '').trim()
     if (!translation) {
       return NextResponse.json(
-        { ok: false, error: 'Empty translation' },
+        {
+          ok: false,
+          error: 'Empty translation',
+          provenance: provenance(model, false, 'empty_translation'),
+        },
         { status: 502 },
       )
     }
 
-    return NextResponse.json({ ok: true, translation, model: MODEL })
+    return NextResponse.json({
+      ok: true,
+      translation,
+      model,
+      provenance: provenance(model, true),
+    })
   } catch (error: any) {
     console.error('[translate] Error:', error?.message)
     return NextResponse.json(
-      { ok: false, error: 'Internal server error' },
+      {
+        ok: false,
+        error: 'Internal server error',
+        provenance: provenance(model, false, 'error'),
+      },
       { status: 500 },
     )
   }

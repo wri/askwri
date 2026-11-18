@@ -10,46 +10,58 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   ALIGNMENT_SYSTEM_PROMPT,
   ALIGNMENT_MODEL as CFG_MODEL,
-  ALIGNMENT_MAX_TOKENS as CFG_MAX_TOKENS,
-  ALIGNMENT_TEMPERATURE as CFG_TEMPERATURE,
 } from '@/config/alignment'
+import { resolveAlignmentConfig } from '@/lib/alignment-config'
 import { isEnglishText } from '@/lib/ensure-english'
+import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 /* ---------------- Config ---------------- */
-const MODEL = (
+// Read at import: this is the route's own default, used whenever the request
+// names no model. A requested model is resolved per request in POST, and every
+// model-derived parameter below is computed from that resolved name.
+const FALLBACK_MODEL = (
   process.env.OPENAI_MODEL_ALIGNMENT ??
   process.env.OPENAI_MODEL ??
   CFG_MODEL ??
   'gpt-5-mini'
 ).trim()
-const IS_GPT5 = /^gpt-5/i.test(MODEL)
 const BASE_URL = (
   process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
 ).replace(/\/$/, '')
 
-// Timeouts (scaled; capped) - GPT-5 needs longer timeouts
-const DEFAULT_MAIN_MS = IS_GPT5 ? 40000 : 20000
-const DEFAULT_REPAIR_MS = IS_GPT5 ? 25000 : 12000
-const BASE_MAIN_MS = Number(
-  process.env.ALIGNMENT_TIMEOUT_MS_MAIN ?? DEFAULT_MAIN_MS,
-)
-const BASE_REPAIR_MS = Number(
-  process.env.ALIGNMENT_TIMEOUT_MS_REPAIR ?? DEFAULT_REPAIR_MS,
-)
+// The model-derived parameters live in `src/lib/alignment-config.ts`: this file
+// may export routes only, and Next's generated type guard fails the build over
+// any other export.
+type AlignmentConfig = ReturnType<typeof resolveAlignmentConfig>
 
-// Token caps - increased for GPT-5 reasoning token usage
-const ENV_MAX = Number(process.env.OPENAI_MAX_TOKENS ?? CFG_MAX_TOKENS ?? 1500)
-const MAIN_MAX = IS_GPT5 ? 4000 : Math.max(1000, Math.min(1500, ENV_MAX))
-const REPAIR_MAX = IS_GPT5 ? 5000 : Math.min(MAIN_MAX + 500, 2000)
+// This route answers 200 with a canned assessment on every failure, so
+// `produced: false` is what keeps a response no model authored from reading as
+// evidence; `fallback_reason` names the cause. `sanitized` is added only by the
+// returns where the sanitizer rewrote an answer the model did give.
+function provenance(
+  model: string,
+  produced: boolean,
+  fallbackReason?: string,
+): RouteProvenance {
+  return {
+    model,
+    produced,
+    ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
+  }
+}
 
-// Temperature (route will omit for GPT-5 models)
-const TEMPERATURE = Number(
-  process.env.OPENAI_TEMPERATURE ?? CFG_TEMPERATURE ?? 0.7,
-)
+function producedProvenance(
+  model: string,
+  sanitized: boolean,
+): RouteProvenance {
+  return sanitized
+    ? { model, produced: true, sanitized: true }
+    : { model, produced: true }
+}
 
 /* ---------------- Types ---------------- */
 type KP = {
@@ -189,7 +201,14 @@ function stripMeta(arr: string[], limit: number): string[] {
   return cleaned.slice(0, limit)
 }
 
-function sanitizeAssessment(input: any = {}): Assessment {
+// `sanitized` is true when the response carries text the model did not write:
+// the canned insight replacing an empty/non-English set, or `Moderate` replacing
+// an alignment value outside the enum. The model still answered, so the caller
+// keeps `produced: true`.
+function sanitizeAssessment(input: any = {}): {
+  assessment: Assessment
+  sanitized: boolean
+} {
   const insightsRaw = Array.isArray(input?.insights) ? input.insights : []
   // Issue #386: drop insights that mirrored a non-English query/passage —
   // prompt pins alone already failed once on QA. Empty result falls through
@@ -199,8 +218,10 @@ function sanitizeAssessment(input: any = {}): Assessment {
     typeof input.alignment === 'string' ? input.alignment.trim() : ''
 
   const validAlignments = ['High', 'Moderate', 'Low', 'Very Low']
+  const insightsSubstituted = insights.length === 0
+  const alignmentCoerced = !validAlignments.includes(alignmentRaw)
 
-  if (insights.length === 0 || !validAlignments.includes(alignmentRaw)) {
+  if (insightsSubstituted || alignmentCoerced) {
     console.warn(
       '[Alignment] Sanitization fallback triggered. Raw input:',
       input,
@@ -209,18 +230,18 @@ function sanitizeAssessment(input: any = {}): Assessment {
     )
   }
 
-  const out: Assessment = {
-    insights: insights.length
-      ? insights
-      : [
+  const assessment: Assessment = {
+    insights: insightsSubstituted
+      ? [
           'Unable to assess alignment. Try providing more sources or refining your query.',
-        ],
-    alignment: validAlignments.includes(alignmentRaw)
-      ? alignmentRaw
-      : 'Moderate',
+        ]
+      : insights,
+    alignment: alignmentCoerced
+      ? 'Moderate'
+      : (alignmentRaw as Assessment['alignment']),
   }
 
-  return out
+  return { assessment, sanitized: insightsSubstituted || alignmentCoerced }
 }
 
 /* ---------------- HTTP helpers ---------------- */
@@ -332,12 +353,16 @@ async function chatOnce(
 }
 
 /* ------------- Param router ------------- */
-function applyCap(body: any, cap: number) {
-  if (IS_GPT5) body.max_completion_tokens = cap
+// Both read the request's own config: which parameters a model accepts depends
+// on the model actually being asked, not on the route's default.
+function applyCap(body: any, cap: number, cfg: AlignmentConfig) {
+  if (cfg.isGpt5) body.max_completion_tokens = cap
   else body.max_tokens = cap
 }
-function maybeTemperature(body: any) {
-  if (!IS_GPT5 && Number.isFinite(TEMPERATURE)) body.temperature = TEMPERATURE
+function maybeTemperature(body: any, cfg: AlignmentConfig) {
+  if (!cfg.isGpt5 && Number.isFinite(cfg.temperature)) {
+    body.temperature = cfg.temperature
+  }
 }
 
 /* ------------- Schema & Tools ------------- */
@@ -378,6 +403,10 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now()
   console.log(`[Alignment] Request started at ${new Date().toISOString()}`)
 
+  // The model this response is about, for the catch-all below that cannot re-read
+  // the request body.
+  let model = FALLBACK_MODEL
+
   try {
     const body = await req.json().catch(() => ({}))
     const query = String(body?.query || '').trim()
@@ -387,9 +416,33 @@ export async function POST(req: NextRequest) {
       `[Alignment] Processing: query=${query.slice(0, 50)}..., resultsSummary=${resultsSummary.slice(0, 50)}...`,
     )
 
+    // Resolved before any other check, and refused rather than ignored: a sweep
+    // that thinks it ran two models must not run one twice.
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    if (!resolved.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: resolved.error,
+          provenance: provenance(
+            FALLBACK_MODEL,
+            false,
+            'model_override_rejected',
+          ),
+        },
+        { status: 400 },
+      )
+    }
+    model = resolved.model
+    const cfg = resolveAlignmentConfig(model)
+
     if (!query)
       return NextResponse.json(
-        { ok: false, error: 'Missing query' },
+        {
+          ok: false,
+          error: 'Missing query',
+          provenance: provenance(cfg.model, false, 'no_text'),
+        },
         { status: 400 },
       )
 
@@ -408,7 +461,8 @@ export async function POST(req: NextRequest) {
           insights: fallbackInsights,
           alignment: 'Low',
         },
-        debug: { fallback: true, reason: 'missing_api_key', model: MODEL },
+        debug: { fallback: true, reason: 'missing_api_key', model: cfg.model },
+        provenance: provenance(cfg.model, false, 'no_api_key'),
       })
     }
 
@@ -418,30 +472,30 @@ export async function POST(req: NextRequest) {
 
     const approxToks = estimateTokens(sys.length, userStr.length)
     // Increase timeouts for GPT-5 models which are slower
-    const TIMEOUT_MAIN_MS = IS_GPT5
-      ? Math.min(60000, BASE_MAIN_MS * 2 + approxToks * 15)
-      : Math.min(35000, BASE_MAIN_MS + approxToks * 12)
-    const TIMEOUT_REPAIR_MS = IS_GPT5
-      ? Math.min(50000, BASE_REPAIR_MS * 2 + approxToks * 12)
-      : Math.min(30000, BASE_REPAIR_MS + approxToks * 10)
+    const TIMEOUT_MAIN_MS = cfg.isGpt5
+      ? Math.min(60000, cfg.mainMs * 2 + approxToks * 15)
+      : Math.min(35000, cfg.mainMs + approxToks * 12)
+    const TIMEOUT_REPAIR_MS = cfg.isGpt5
+      ? Math.min(50000, cfg.repairMs * 2 + approxToks * 12)
+      : Math.min(30000, cfg.repairMs + approxToks * 10)
 
     console.log(
-      `[Alignment] Config: model=${MODEL}, tokens=${approxToks}, main_timeout=${TIMEOUT_MAIN_MS}ms, repair_timeout=${TIMEOUT_REPAIR_MS}ms`,
+      `[Alignment] Config: model=${cfg.model}, tokens=${approxToks}, main_timeout=${TIMEOUT_MAIN_MS}ms, repair_timeout=${TIMEOUT_REPAIR_MS}ms`,
     )
 
     const tries: TryInfo[] = []
 
     /* ---- Variant 1: JSON SCHEMA ---- */
     const bodySchema: any = {
-      model: MODEL,
+      model: cfg.model,
       messages: [
         { role: 'system', content: sys },
         { role: 'user', content: userStr },
       ],
       response_format: { type: 'json_schema', json_schema: ALIGNMENT_SCHEMA },
     }
-    applyCap(bodySchema, MAIN_MAX)
-    maybeTemperature(bodySchema)
+    applyCap(bodySchema, cfg.mainMax, cfg)
+    maybeTemperature(bodySchema, cfg)
     let t
     try {
       t = await chatOnce(apiKey, bodySchema, TIMEOUT_MAIN_MS, 'json_schema')
@@ -462,17 +516,25 @@ export async function POST(req: NextRequest) {
       status: t.status,
       durationMs: t.durationMs,
       finishReason: t.finishReason,
-      usage: t.usage ? { ...t.usage, model: `openai/${MODEL}` } : null,
+      usage: t.usage ? { ...t.usage, model: `openai/${cfg.model}` } : null,
       rawHead: t.rawHead,
       rawTail: t.rawTail,
     })
 
     if (t.ok && t.parsed && typeof t.parsed === 'object') {
-      const sanitized = sanitizeAssessment(t.parsed as Assessment)
+      const { assessment, sanitized } = sanitizeAssessment(
+        t.parsed as Assessment,
+      )
       return NextResponse.json({
         ok: true,
-        assessment: sanitized,
-        debug: { fallback: false, used: 'json_schema', model: MODEL, tries },
+        assessment,
+        debug: {
+          fallback: false,
+          used: 'json_schema',
+          model: cfg.model,
+          tries,
+        },
+        provenance: producedProvenance(cfg.model, sanitized),
       })
     }
 
@@ -486,7 +548,7 @@ export async function POST(req: NextRequest) {
     /* ---- Variant 2: Tools (function call) ---- */
     if (needTools || !t.ok || !t.parsed) {
       const bodyTools: any = {
-        model: MODEL,
+        model: cfg.model,
         messages: [
           { role: 'system', content: sys },
           { role: 'user', content: userStr },
@@ -494,8 +556,8 @@ export async function POST(req: NextRequest) {
         tools: TOOL_DEF,
         tool_choice: { type: 'function', function: { name: 'set_assessment' } },
       }
-      applyCap(bodyTools, MAIN_MAX)
-      maybeTemperature(bodyTools)
+      applyCap(bodyTools, cfg.mainMax, cfg)
+      maybeTemperature(bodyTools, cfg)
       try {
         t = await chatOnce(apiKey, bodyTools, TIMEOUT_MAIN_MS, 'tools')
       } catch (err: any) {
@@ -515,31 +577,34 @@ export async function POST(req: NextRequest) {
         status: t.status,
         durationMs: t.durationMs,
         finishReason: t.finishReason,
-        usage: t.usage ? { ...t.usage, model: `openai/${MODEL}` } : null,
+        usage: t.usage ? { ...t.usage, model: `openai/${cfg.model}` } : null,
         rawHead: t.rawHead,
         rawTail: t.rawTail,
       })
       if (t.ok && t.parsed && typeof t.parsed === 'object') {
-        const sanitized = sanitizeAssessment(t.parsed as Assessment)
+        const { assessment, sanitized } = sanitizeAssessment(
+          t.parsed as Assessment,
+        )
         return NextResponse.json({
           ok: true,
-          assessment: sanitized,
-          debug: { fallback: false, used: 'tools', model: MODEL, tries },
+          assessment,
+          debug: { fallback: false, used: 'tools', model: cfg.model, tries },
+          provenance: producedProvenance(cfg.model, sanitized),
         })
       }
     }
 
     /* ---- Variant 3: JSON OBJECT ---- */
     const bodyObject: any = {
-      model: MODEL,
+      model: cfg.model,
       messages: [
         { role: 'system', content: sys },
         { role: 'user', content: userStr },
       ],
       response_format: { type: 'json_object' },
     }
-    applyCap(bodyObject, REPAIR_MAX)
-    maybeTemperature(bodyObject)
+    applyCap(bodyObject, cfg.repairMax, cfg)
+    maybeTemperature(bodyObject, cfg)
     try {
       t = await chatOnce(apiKey, bodyObject, TIMEOUT_REPAIR_MS, 'json_object')
     } catch (err: any) {
@@ -559,16 +624,24 @@ export async function POST(req: NextRequest) {
       status: t.status,
       durationMs: t.durationMs,
       finishReason: t.finishReason,
-      usage: t.usage ? { ...t.usage, model: `openai/${MODEL}` } : null,
+      usage: t.usage ? { ...t.usage, model: `openai/${cfg.model}` } : null,
       rawHead: t.rawHead,
       rawTail: t.rawTail,
     })
     if (t.ok && t.parsed && typeof t.parsed === 'object') {
-      const sanitized = sanitizeAssessment(t.parsed as Assessment)
+      const { assessment, sanitized } = sanitizeAssessment(
+        t.parsed as Assessment,
+      )
       return NextResponse.json({
         ok: true,
-        assessment: sanitized,
-        debug: { fallback: false, used: 'json_object', model: MODEL, tries },
+        assessment,
+        debug: {
+          fallback: false,
+          used: 'json_object',
+          model: cfg.model,
+          tries,
+        },
+        provenance: producedProvenance(cfg.model, sanitized),
       })
     }
 
@@ -592,9 +665,16 @@ export async function POST(req: NextRequest) {
       debug: {
         fallback: true,
         reason: t.ok ? 'empty_or_unparseable_content' : `http_${t.status}`,
-        model: MODEL,
+        model: cfg.model,
         tries,
       },
+      // status 0 means no response was ever read (a thrown request or an abort),
+      // so `upstream_0` would name a status no provider returned.
+      provenance: provenance(
+        cfg.model,
+        false,
+        t.ok ? 'parse_error' : t.status > 0 ? `upstream_${t.status}` : 'error',
+      ),
     })
   } catch (err: any) {
     console.error(`[Alignment] Fatal error:`, err)
@@ -618,9 +698,10 @@ export async function POST(req: NextRequest) {
       debug: {
         fallback: true,
         reason: String(err?.message || err),
-        model: MODEL,
+        model,
         isTimeout,
       },
+      provenance: provenance(model, false, 'error'),
     })
   }
 }
@@ -629,7 +710,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     info: 'Alignment route v12.1 (model-aware params; json_schema→tools→json_object; compact; meta-sanitized; rich debug).',
-    model: MODEL,
+    model: FALLBACK_MODEL,
     hasKey: !!process.env.OPENAI_API_KEY,
   })
 }
