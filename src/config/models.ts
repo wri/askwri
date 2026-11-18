@@ -175,7 +175,7 @@ export const ASSIGNMENT: Record<TaskId, ModelId> = {
   why: 'gpt-5.4-nano',
   relates: 'gpt-5.4-nano',
   alignment: 'gpt-5.4-nano',
-  translate: 'gpt-5.4-mini',
+  translate: 'gpt-6-luna', // flip 1, 2026-11-18
 }
 
 /** Whether a model can run an effort at all. One predicate, because the lever path

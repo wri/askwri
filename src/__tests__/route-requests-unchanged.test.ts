@@ -801,9 +801,25 @@ describe('POST /api/alignment — raw request bytes', () => {
 /* ---------------- POST /api/translate ---------------- */
 
 describe('POST /api/translate — raw request bytes', () => {
-  it('default arm (gpt-5.4-mini, the deployed model): max_completion_tokens 2000', async () => {
+  it('default arm (gpt-6-luna, flipped 2026-11-18): reasoning_effort none, max_completion_tokens 2000, no temperature', async () => {
     fetchMock.mockResolvedValue(chatReply('Hello world'))
     await post('translate', { text: 'Hola mundo' })
+    expectRawBodies([
+      translateBody('gpt-6-luna', {
+        reasoning_effort: 'none',
+        max_completion_tokens: 2000,
+      }),
+    ])
+  })
+
+  it('the incumbent arm via the eval override (gpt-5.4-mini): max_completion_tokens 2000, no effort field', async () => {
+    process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
+    fetchMock.mockResolvedValue(chatReply('Hello world'))
+    await post(
+      'translate',
+      { text: 'Hola mundo', model: 'gpt-5.4-mini' },
+      { 'x-eval-token': 'secret' },
+    )
     expectRawBodies([
       translateBody('gpt-5.4-mini', { max_completion_tokens: 2000 }),
     ])
@@ -827,7 +843,10 @@ describe('POST /api/translate — raw request bytes', () => {
     const { status } = await post('translate', { text: 'Hola mundo' })
     expect(status).toBe(502)
     expectRawBodies([
-      translateBody('gpt-5.4-mini', { max_completion_tokens: 2000 }),
+      translateBody('gpt-6-luna', {
+        reasoning_effort: 'none',
+        max_completion_tokens: 2000,
+      }),
     ])
   })
 
@@ -836,7 +855,10 @@ describe('POST /api/translate — raw request bytes', () => {
     const { status } = await post('translate', { text: 'Hola mundo' })
     expect(status).toBe(502)
     expectRawBodies([
-      translateBody('gpt-5.4-mini', { max_completion_tokens: 2000 }),
+      translateBody('gpt-6-luna', {
+        reasoning_effort: 'none',
+        max_completion_tokens: 2000,
+      }),
     ])
   })
 })

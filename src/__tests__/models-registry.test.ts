@@ -1,13 +1,7 @@
 /** @jest-environment node */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  ASSIGNMENT,
-  EMBEDDERS,
-  MODELS,
-  resolveModel,
-  type ModelId,
-} from '@/config/models'
+import { ASSIGNMENT, EMBEDDERS, MODELS, resolveModel } from '@/config/models'
 import { requestProfile, wireParams } from '@/lib/request-profile'
 import { estimateCostUSD } from '@/config/costs'
 import { EST_PER_DOC_COST } from '@/db/queries/topicsAdmin'
@@ -46,7 +40,7 @@ describe('model registry', () => {
       why: 'gpt-5.4-nano',
       relates: 'gpt-5.4-nano',
       alignment: 'gpt-5.4-nano',
-      translate: 'gpt-5.4-mini',
+      translate: 'gpt-6-luna', // flip 1, 2026-11-18: sweep clean, p95 3.5 s vs 7.3 s on terra
     })
   })
 
@@ -129,12 +123,14 @@ describe('model registry', () => {
     }
   })
 
-  it('declares the candidates as known but unassigned', () => {
-    const assigned = new Set(Object.values(ASSIGNMENT))
+  it('declares the candidates as known, and assigns only the ones that have flipped', () => {
+    // A flip adds its candidate here, together with its ASSIGNMENT line.
+    const flipped = new Set<string>(['gpt-6-luna'])
+    const assigned = new Set<string>(Object.values(ASSIGNMENT))
     ;['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'].forEach(
       (id) => {
         expect(Object.keys(MODELS)).toContain(id)
-        expect(assigned.has(id as ModelId)).toBe(false)
+        expect(assigned.has(id)).toBe(flipped.has(id))
       },
     )
   })
