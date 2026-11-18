@@ -283,9 +283,8 @@ variable "ingestion_worker_secret_env" {
 }
 
 variable "intake_s3_prefix" {
-  description = "S3 prefix (folder path) for intake documents within the bucket"
+  description = "S3 prefix for intake documents. No default: the bucket is shared across environments, so each one sets its own, and no two may overlap"
   type        = string
-  default     = "intake/"
 }
 
 variable "worker_llm_model" {

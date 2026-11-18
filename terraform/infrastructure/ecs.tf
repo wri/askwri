@@ -420,6 +420,12 @@ resource "aws_ecs_task_definition" "app" {
           {
             name  = "CACHE_S3_PREFIX"
             value = var.cache_s3_prefix
+          },
+          {
+            # Same value as the worker's: the upload route writes where this
+            # environment's worker reads.
+            name  = "INTAKE_S3_PREFIX"
+            value = var.intake_s3_prefix
           }
         ],
         [

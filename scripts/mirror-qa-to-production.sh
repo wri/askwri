@@ -34,9 +34,8 @@
 #                      would orphan it.
 #
 # PRECONDITIONS (checked, not assumed)
-#   1. BOTH ingestion workers at desired_count 0. qa's too — it is the copy SOURCE, and
-#      qa and production share s3://askwri-data/intake/, so a live qa worker can mutate
-#      the source mid-copy.
+#   1. BOTH ingestion workers at desired_count 0. qa's too — it is the copy SOURCE, so a
+#      live qa worker can mutate the source mid-copy.
 #   2. Migrations already applied to production (this script does not run them).
 #   3. An RDS snapshot taken. `aws rds create-db-snapshot --db-instance-identifier askwri-db1
 #      --db-snapshot-identifier pre-release-<date>`. One server-side call, no egress —

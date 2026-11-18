@@ -119,3 +119,7 @@ rds_security_group_id = "sg-0575d778d3c2efb0c"
 documents_s3_bucket = "askwri-data"
 documents_s3_prefix = "documents/"
 cache_s3_prefix     = "cache/"
+# Intake is per environment: the bucket is shared with production, and whichever
+# worker lists a prefix takes the files under it. Must not start with, or be
+# the start of, any other environment's intake_s3_prefix.
+intake_s3_prefix = "qa-intake/"
