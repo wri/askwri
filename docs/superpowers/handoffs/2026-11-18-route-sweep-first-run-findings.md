@@ -95,6 +95,28 @@ baseline model table). `--model-a gpt-5.4-nano --model-b gpt-6-luna`, same froze
 - `batch-why` has no client deadline, so the p95-under-60%-of-deadline clause is unevaluable there.
   Luna's p95 is 2 s above nano's.
 
+## Third sweep: the two candidates head to head, 2026-11-18
+
+After #490 deployed (live image `2fd41c9`, verified; unoverridden requests still return the baseline
+models, so the deploy was inert). `--model-a gpt-6-luna --model-b gpt-6.1-terra`, same frozen set, with
+fast mode live on batch-why and alignment and the task efforts (why/relates/translate `none`, alignment
+`low`). Artifact `evaluation/baselines/2026-11-18-route-sweep-routes-v1.{json,md}`.
+
+| Route | Luna p95 | Terra p95 | Failed (both) |
+|---|---|---|---|
+| batch-why (fast) | 6.5 s | 9.4 s | 0 of 20 |
+| batch-relates | 7.1 s | 15.5 s | 0 of 20 |
+| alignment (fast, low) | 3.1 s | 3.3 s | 0 of 20 |
+| translate | 3.5 s | 7.3 s | 0 of 20 |
+
+- 0 of 80 calls failed: no substitutions, parse failures or wrong counts, for either model, on any route.
+- Luna is faster on every route; on alignment the two are at parity once fast mode is on.
+- Human read of alignment, 5 cases each: both grounded in the same passages and flag the same limits.
+  Terra is slightly sharper (e.g. warns that bibliography entries are not evidence); Luna is a little more
+  generic. No fabricated figures from either.
+- batch-relates (7.1 s) and translate (3.5 s) do not ask for fast mode: they were not probed with it.
+- Terra's cost is about 8-10x Luna's. The gate reports it; it is not the concern.
+
 ## Where the sequence stands
 
 Task 5's gate is **not passed** and the plan says a failed gate stops the sequence rather than
