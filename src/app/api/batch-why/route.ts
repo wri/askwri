@@ -188,6 +188,12 @@ Rules:
       JSON.stringify(data, null, 2),
     )
 
+    const finishReason: string | null = data.choices?.[0]?.finish_reason ?? null
+    // `length` means the provider stopped at the token cap, so a reply that does
+    // not parse is a budget problem, not a malformed-output problem.
+    const failureReason =
+      finishReason === 'length' ? 'truncated' : 'parse_error'
+
     // For gpt-5-mini, the content might be in a different location when reasoning is used
     let content = ''
 
@@ -271,9 +277,13 @@ Rules:
           ok: true,
           explanations,
           usage: data.usage,
-          debug: { parseError: true, rawContent: content.slice(0, 200) },
+          debug: {
+            parseError: true,
+            rawContent: content.slice(0, 200),
+            finish_reason: finishReason,
+          },
           provenance: {
-            ...provenance(model, false, 'parse_error'),
+            ...provenance(model, false, failureReason),
             ...(sanitized ? { sanitized: true } : {}),
           },
         })
@@ -283,7 +293,10 @@ Rules:
         ok: true,
         explanations, // one per passage, in order
         usage: data.usage,
-        debug: { rawContent: content.slice(0, 200) },
+        debug: {
+          rawContent: content.slice(0, 200),
+          finish_reason: finishReason,
+        },
         provenance: {
           ...provenance(model, true),
           ...(sanitized ? { sanitized: true } : {}),
@@ -310,8 +323,9 @@ Rules:
         debug: {
           parseError: parseError.message,
           rawContent: content.slice(0, 200),
+          finish_reason: finishReason,
         },
-        provenance: provenance(model, false, 'parse_error'),
+        provenance: provenance(model, false, failureReason),
       })
     }
   } catch (error: any) {

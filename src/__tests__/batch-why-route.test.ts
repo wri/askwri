@@ -258,7 +258,11 @@ describe('POST /api/batch-why — provenance marks every path that produced noth
       sanitized: true,
     })
     // The success path's raw content is not lost when the answer is all padding.
-    expect(json.debug).toEqual({ parseError: true, rawContent: '[]' })
+    expect(json.debug).toEqual({
+      parseError: true,
+      rawContent: '[]',
+      finish_reason: 'stop',
+    })
   })
 
   it('reports sanitized true when every explanation is mirrored', async () => {
@@ -359,5 +363,68 @@ describe('POST /api/batch-why — provenance marks every path that produced noth
       produced: false,
       fallback_reason: 'error',
     })
+  })
+})
+
+function chatReplyFinishing(content: string, finishReason: string) {
+  return new Response(
+    JSON.stringify({
+      choices: [{ finish_reason: finishReason, message: { content } }],
+    }),
+    { status: 200 },
+  )
+}
+
+describe('POST /api/batch-why — finish_reason', () => {
+  const QUERY = 'How do cities cool streets?'
+
+  it('records finish_reason on a clean reply', async () => {
+    const { json } = await post({ query: QUERY, passages: PASSAGES })
+    expect(json.debug.finish_reason).toBe('stop')
+    expect(json.provenance).toEqual({ model: 'gpt-5-mini', produced: true })
+  })
+
+  it('names a cut-off reply truncated, not parse_error', async () => {
+    fetchMock.mockResolvedValue(
+      chatReplyFinishing(
+        '[{"why": "Both measure how shade cools str',
+        'length',
+      ),
+    )
+    const { json } = await post({ query: QUERY, passages: PASSAGES })
+    expect(json.fallback).toBe(true)
+    expect(json.explanations).toEqual([CANNED, CANNED])
+    expect(json.debug.finish_reason).toBe('length')
+    expect(json.provenance).toEqual({
+      model: 'gpt-5-mini',
+      produced: false,
+      fallback_reason: 'truncated',
+    })
+  })
+
+  it('keeps parse_error for a malformed reply that finished normally', async () => {
+    fetchMock.mockResolvedValue(chatReplyFinishing('not json at all', 'stop'))
+    const { json } = await post({ query: QUERY, passages: PASSAGES })
+    expect(json.debug.finish_reason).toBe('stop')
+    expect(json.provenance.fallback_reason).toBe('parse_error')
+  })
+
+  it('names an all-canned truncated reply truncated too', async () => {
+    fetchMock.mockResolvedValue(chatReplyFinishing('[]', 'length'))
+    const { json } = await post({ query: QUERY, passages: PASSAGES })
+    expect(json.provenance.produced).toBe(false)
+    expect(json.provenance.fallback_reason).toBe('truncated')
+  })
+
+  it('records null when the provider sends no finish_reason', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: 'not json' } }] }),
+        { status: 200 },
+      ),
+    )
+    const { json } = await post({ query: QUERY, passages: PASSAGES })
+    expect(json.debug.finish_reason).toBeNull()
+    expect(json.provenance.fallback_reason).toBe('parse_error')
   })
 })
