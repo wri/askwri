@@ -8,7 +8,7 @@ import {
   resolveModel,
   type ModelId,
 } from '@/config/models'
-import { requestProfile } from '@/lib/request-profile'
+import { requestProfile, wireParams } from '@/lib/request-profile'
 import { estimateCostUSD } from '@/config/costs'
 import { EST_PER_DOC_COST } from '@/db/queries/topicsAdmin'
 
@@ -207,6 +207,39 @@ describe('the reasoning arm (design §3)', () => {
     })
   })
 
+  // Fast mode (operator ruling 2026-11-18, latency first): probed on luna and
+  // terra, it cut batch-why 30-54% and alignment 18-48%. Only the reasoning arm
+  // sends it: the incumbents were never probed with a service_tier.
+  it('puts fast mode on the wire for batch-why and alignment candidates', () => {
+    for (const [task, model] of [
+      ['why', 'gpt-6-luna'],
+      ['alignment', 'gpt-6.1-terra'],
+    ] as const) {
+      expect(wireParams(profile(task, model))).toMatchObject({
+        service_tier: 'fast',
+      })
+    }
+  })
+
+  it('leaves fast mode off the tasks it was not asked for', () => {
+    for (const task of ['translate', 'relates', 'answer', 'prefilter']) {
+      expect(wireParams(profile(task, 'gpt-6-luna'))).not.toHaveProperty(
+        'service_tier',
+      )
+    }
+  })
+
+  it('never sends fast mode to an incumbent, whatever the task', () => {
+    for (const task of ['why', 'alignment']) {
+      expect(wireParams(profile(task, 'gpt-5.4-nano'))).not.toHaveProperty(
+        'service_tier',
+      )
+      expect(wireParams(profile(task, 'gpt-4o-mini'))).not.toHaveProperty(
+        'service_tier',
+      )
+    }
+  })
+
   it.each([
     [28, 2440],
     [29, 2520],
@@ -222,7 +255,11 @@ describe('the reasoning arm (design §3)', () => {
           attempt: 'primary',
           input: { passages },
         }),
-      ).toEqual({ maxCompletionTokens: budget, reasoningEffort: 'none' })
+      ).toEqual({
+        maxCompletionTokens: budget,
+        reasoningEffort: 'none',
+        serviceTier: 'fast',
+      })
     },
   )
 })

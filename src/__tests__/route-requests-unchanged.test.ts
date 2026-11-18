@@ -674,6 +674,8 @@ describe('POST /api/batch-why — raw request bytes', () => {
       whyBody('gpt-6-luna', TWO_PASSAGES, {
         reasoning_effort: 'none',
         max_completion_tokens: 360,
+        // Fast mode rides the reasoning arm only (operator ruling 2026-11-18).
+        service_tier: 'fast',
       }),
     ])
   })

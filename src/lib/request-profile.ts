@@ -17,6 +17,7 @@ import {
   MODELS,
   TASK_EFFORT,
   TASK_EVIDENCE,
+  TASK_SERVICE_TIER,
   type Effort,
   type ModelId,
   type TaskId,
@@ -30,6 +31,9 @@ export interface RequestProfile {
   temperature?: number
   /** Declared per task by the registry; undefined — never sent — this stage. */
   reasoningEffort?: Effort
+  /** The provider's fast tier, set only on the reasoning arm for the tasks that
+   *  ask for it (`TASK_SERVICE_TIER`); an incumbent never carries one. */
+  serviceTier?: 'fast'
   /** Answer synthesis only: the evidence budget the model class decides. */
   maxPassages?: number
   passageChars?: number
@@ -46,6 +50,7 @@ export function wireParams(p: RequestProfile): Record<string, number | string> {
     out.max_completion_tokens = p.maxCompletionTokens
   if (p.maxTokens !== undefined) out.max_tokens = p.maxTokens
   if (p.temperature !== undefined) out.temperature = p.temperature
+  if (p.serviceTier !== undefined) out.service_tier = p.serviceTier
   return out
 }
 
@@ -103,6 +108,8 @@ export function requestProfile(args: {
     }
     const evidence = TASK_EVIDENCE[task]
     if (evidence) Object.assign(arm, evidence)
+    const tier = TASK_SERVICE_TIER[task]
+    if (tier) arm.serviceTier = tier
     return arm
   }
   return profile
