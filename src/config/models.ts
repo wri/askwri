@@ -195,5 +195,13 @@ export function resolveModel(task: TaskId): ModelId {
       `unknown model ${raw} for ${lever}: it must name a model id the registry describes`,
     )
   }
+  const model = MODELS[raw as ModelId]
+  if (
+    model.capability.reasoning &&
+    TASK_EFFORT[task] === 'none' &&
+    !model.capability.supportsEffortNone
+  ) {
+    throw new Error(`model ${raw} cannot run the none effort for ${task}`)
+  }
   return raw as ModelId
 }

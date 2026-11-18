@@ -65,6 +65,19 @@ describe('model registry', () => {
     }
   })
 
+  it('rejects a known lever model that cannot run the task effort at module load', async () => {
+    process.env.MODEL_TRANSLATE = 'gpt-6.1-sol'
+    try {
+      await expect(
+        jest.isolateModulesAsync(async () => {
+          await import('@/app/api/translate/route')
+        }),
+      ).rejects.toThrow(/gpt-6\.1-sol.*none.*translate/i)
+    } finally {
+      delete process.env.MODEL_TRANSLATE
+    }
+  })
+
   it('fails at module load when a route is imported with a bad lever', async () => {
     process.env.MODEL_RELATES = 'gpt-4-turbo'
     try {
@@ -183,4 +196,23 @@ describe('the reasoning arm (design §3)', () => {
       maxCompletionTokens: 2000,
     })
   })
+
+  it.each([
+    [28, 2440],
+    [29, 2520],
+    [35, 3000],
+    [40, 3000],
+  ])(
+    'keeps the task why budget for %i candidate passages',
+    (passages, budget) => {
+      expect(
+        requestProfile({
+          task: 'why',
+          model: 'gpt-6-luna',
+          attempt: 'primary',
+          input: { passages },
+        }),
+      ).toEqual({ maxCompletionTokens: budget, reasoningEffort: 'none' })
+    },
+  )
 })

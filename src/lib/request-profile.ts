@@ -154,7 +154,7 @@ function profileFor({
       // batch-why sized its GPT-5 budget by substring; every other caller
       // used the prefix test. Registered ids satisfy both.
       const gpt5 = s
-        ? s.capability.gpt5Class
+        ? s.capability.gpt5Class || s.capability.reasoning
         : model.includes('gpt-5') || model === 'gpt-5-mini'
       const budget = Math.min(
         200 + (input.passages ?? 0) * 80,

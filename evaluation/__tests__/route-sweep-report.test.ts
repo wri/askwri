@@ -447,6 +447,48 @@ describe('summarise — the bar’s two numbers', () => {
     expect(row.costUsd).toBeNull()
   })
 
+  it('leaves cost unmeasured when only some calls report usage', () => {
+    const calls = [
+      withUsage(whyCall(MODEL_A, ['a']), {
+        prompt_tokens: 1_000_000,
+        completion_tokens: 0,
+      }),
+      whyCall(MODEL_A, ['b'], { case_id: 'q2' }),
+    ]
+    expect(summarise(artifactOf(calls))[0].costUsd).toBeNull()
+    expect(renderMarkdown(artifactOf(calls))).toContain('cost unmeasured')
+  })
+
+  it.each([
+    undefined,
+    { prompt_tokens: 100 },
+    { prompt_tokens: -1, completion_tokens: 20 },
+    { prompt_tokens: 'invalid', completion_tokens: 20 },
+  ])(
+    'leaves cost unmeasured for an alignment attempt with incomplete usage %j',
+    (usage) => {
+      const call = alignmentCall(MODEL_A, ['x'], {
+        response: {
+          debug: {
+            tries: [
+              { usage },
+              { usage: { prompt_tokens: 1_000_000, completion_tokens: 0 } },
+            ],
+          },
+        },
+      })
+      expect(summarise(artifactOf([call]))[0].costUsd).toBeNull()
+    },
+  )
+
+  it('prices complete input/output token usage without prompt/completion aliases', () => {
+    const call = withUsage(whyCall(MODEL_A, ['a']), {
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+    })
+    expect(summarise(artifactOf([call]))[0].costUsd).toBe(1.45)
+  })
+
   it('prices by the model asked for, not the id the response echoes', () => {
     const call = withUsage(whyCall(MODEL_A, ['a']), {
       model: 'openai/gpt-6.1-terra', // alignment's prefix, and a different model

@@ -292,26 +292,33 @@ function routeLines(a: SweepArtifact, route: RouteName): string[] {
  *  reports none, and a route with no usage gets a null cost rather than a zero. */
 function billedTokens(
   call: CallResult,
-): Array<{ input: number; output: number }> {
+): Array<{ input: number; output: number }> | null {
   const body = call.response as any
-  if (!body || typeof body !== 'object') return []
-  const one = (u: any) =>
-    u && (u.prompt_tokens != null || u.completion_tokens != null)
-      ? {
-          input: Number(u.prompt_tokens ?? u.input_tokens ?? 0),
-          output: Number(u.completion_tokens ?? u.output_tokens ?? 0),
-        }
+  if (!body || typeof body !== 'object') return null
+  const one = (u: any) => {
+    const input = u?.prompt_tokens ?? u?.input_tokens
+    const output = u?.completion_tokens ?? u?.output_tokens
+    return typeof input === 'number' &&
+      typeof output === 'number' &&
+      Number.isFinite(input) &&
+      Number.isFinite(output) &&
+      input >= 0 &&
+      output >= 0
+      ? { input, output }
       : null
+  }
   const tries = Array.isArray(body.debug?.tries) ? body.debug.tries : []
   if (tries.length) {
-    return tries
-      .map((t: any) => one(t?.usage))
-      .filter(
-        (t: unknown): t is { input: number; output: number } => t !== null,
-      )
+    const tokens: Array<{ input: number; output: number }> = []
+    for (const attempt of tries) {
+      const usage = one(attempt?.usage)
+      if (!usage) return null
+      tokens.push(usage)
+    }
+    return tokens
   }
   const usage = one(body.usage)
-  return usage ? [usage] : []
+  return usage ? [usage] : null
 }
 
 /** Keyed on the model the call ASKED for, not on `usage.model`: alignment echoes
@@ -329,7 +336,7 @@ export type RouteSummary = {
   failed: number
   /** Nearest-rank p95; null only when there were no calls at all. */
   p95Ms: number | null
-  /** Null when no call reported usage, or the registry holds no price. */
+  /** Null when any call/attempt lacks complete usage, or there is no price. */
   costUsd: number | null
 }
 
@@ -351,9 +358,10 @@ export function summarise(a: SweepArtifact): RouteSummary[] {
       ).length
       const latencies = calls.map((c) => c.latency_ms).sort((x, y) => x - y)
       const price = priceOf(model)
-      const billable = calls.flatMap(billedTokens)
+      const usages = calls.map(billedTokens)
+      const billable = usages.flatMap((usage) => usage ?? [])
       const costUsd =
-        price && billable.length
+        price && usages.every((usage) => usage !== null) && billable.length
           ? +billable
               .reduce(
                 (sum, t) =>

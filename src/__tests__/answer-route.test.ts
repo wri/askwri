@@ -94,6 +94,26 @@ afterEach(() => {
 })
 
 describe('POST /api/answer — defaults reproduce current behaviour', () => {
+  it.each(['lever', 'override'])(
+    'sends the answer task effort for a reasoning candidate via %s',
+    async (source) => {
+      if (source === 'lever') process.env.MODEL_ANSWER = 'gpt-6.1-sol'
+      const out = await post({
+        query: 'q',
+        docs: docs(15),
+        ...(source === 'override' ? { model: 'gpt-6.1-sol' } : {}),
+      })
+      expect(out.ok).toBe(true)
+      expect(out.passages_sent).toHaveLength(15)
+      expect(sentBody()).toMatchObject({
+        model: 'gpt-6.1-sol',
+        reasoning_effort: 'medium',
+        max_completion_tokens: 2000,
+      })
+      expect(sentBody().temperature).toBeUndefined()
+    },
+  )
+
   it('gpt-5 default: 15 passages, 800 chars, max_completion_tokens, no temperature', async () => {
     const out = await post({ query: 'q', docs: docs(15) })
     expect(out.ok).toBe(true)

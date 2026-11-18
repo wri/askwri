@@ -1,6 +1,7 @@
 import { resolveProvider } from '@/lib/llm/chat-completions'
 import { requestProfile } from '@/lib/request-profile'
 import { resolveModel } from '@/config/models'
+import type { Effort } from '@/config/models'
 
 const DEFAULT_MODEL = resolveModel('answer')
 export const MAX_PASSAGES_CAP = 15 // equals the gpt-5 default budget in requestProfile — raising one requires raising the other
@@ -16,6 +17,7 @@ export interface SynthesisConfig {
   maxTokens?: number
   /** Omitted entirely for gpt-5-class models. */
   temperature?: number
+  reasoningEffort?: Effort
   maxPassages: number
   passageChars: number
   promptVersion: PromptVersion
@@ -53,6 +55,7 @@ export function resolveSynthesisConfig(body: any): SynthesisConfig {
     maxCompletionTokens: profile.maxCompletionTokens,
     maxTokens: profile.maxTokens,
     temperature: profile.temperature,
+    reasoningEffort: profile.reasoningEffort,
     maxPassages: int(
       body?.max_passages,
       profile.maxPassages ?? 6,
