@@ -374,7 +374,7 @@ git commit -m "feat(alignment): per-request model override and provenance"
 
 - [ ] **Step 1: Add the variable**
 
-In `qa.tfvars` `app_environment_variables`, add `"EVAL_MODEL_OVERRIDE_TOKEN" = "qa-route-sweep"` with a comment stating what it gates, that production must not set it, and that it bounds accidents only — anyone who can read the task definition already holds the OpenAI key.
+In `qa.tfvars` `app_environment_variables`, add `"EVAL_MODEL_OVERRIDE_TOKEN"` with a comment stating what it gates, that production must not set it, and that it bounds accidents only — anyone who can read the repo or the task definition already knows the value and holds the OpenAI key anyway. **The value goes in git, so treat it as public:** generate it once, and rotate it if a private value is ever wanted.
 
 - [ ] **Step 2: Confirm production has no reference to it**
 
@@ -393,7 +393,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://qa.askwri-app.org/api/t
 # Expected: 400
 
 curl -s -X POST https://qa.askwri-app.org/api/translate \
-  -H 'content-type: application/json' -H 'x-eval-token: qa-route-sweep' \
+  -H 'content-type: application/json' -H "x-eval-token: $EVAL_MODEL_OVERRIDE_TOKEN" \
   -d '{"text":"Hola mundo","model":"gpt-5.6-luna"}' | head -c 400
 # Expected: 200 body, provenance.model == "gpt-5.6-luna"
 ```
@@ -515,7 +515,7 @@ Expected: FAIL — module not found
 
 - [ ] **Step 3: Implement `payloads.ts`**
 
-Fetch `${target}/api/catalog`, map `.items` through `normalizeCatalogRow`, then `buildCatalogIndex`. Mirror `src/app/results/page.tsx:355-380` for the relates payload and `:419` for alignment, and `SupportingCitations.tsx:155-170` for why — by calling the shared builders, not by copying their logic. For translate, pick the first snippet containing non-ASCII characters; fall back to the first snippet and record which case has no non-ASCII text.
+Fetch `${target}/api/catalog`, map `.items` through `normalizeCatalogRow`, then `buildCatalogIndex`. Mirror `src/app/results/page.tsx:355-380` for the relates payload and `:419` for alignment, and `SupportingCitations.tsx:159` for why — by calling the shared builders, not by copying their logic. For translate, pick the first snippet containing non-ASCII characters; fall back to the first snippet and record which case has no non-ASCII text.
 
 - [ ] **Step 4: Run test to verify it passes**
 

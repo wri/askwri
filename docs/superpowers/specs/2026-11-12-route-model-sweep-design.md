@@ -133,7 +133,8 @@ A shared helper in `src/lib/`, used by all four routes, replacing their module-s
 consts:
 
 ```
-resolveRouteModel(req, body, fallback) -> string
+resolveRouteModel(req, body, fallback)
+  -> { ok: true; model: string; isGpt5: boolean } | { ok: false; error: string }
 ```
 
 - If `body.model` is absent → `fallback` (today's behaviour, unchanged).
@@ -239,7 +240,7 @@ for the eye.
 
 ### 5. Where the code lives
 
-A new `evaluation/routes/` sibling plus `evaluation/run-route-sweep.ts`, reusing
+A new `evaluation/route-sweep/` sibling plus `evaluation/run-route-sweep.ts`, reusing
 `evaluation/lib/` conventions and the `evaluation/baselines/` artifact convention.
 Two PRs: the knob (four routes + one helper, reviewable on its own) then the tooling.
 The knob must be deployed to QA with the token set before stage two can run there.
@@ -252,7 +253,7 @@ The knob must be deployed to QA with the token set before stage two can run ther
 
 ## Calls I made, for checking
 
-- **`evaluation/routes/` as a sibling** rather than a mode inside `evaluation/answer/`:
+- **`evaluation/route-sweep/` as a sibling** rather than a mode inside `evaluation/answer/`:
   that harness is answer-shaped (evalsets, selection modes, judged metrics) and
   bolting route sweeps in would tangle both.
 - **400 on an unauthorised override** rather than ignoring it: quiet fallback is how
@@ -267,8 +268,14 @@ The knob must be deployed to QA with the token set before stage two can run ther
 
 ## Known limits
 
+- **The override token's value is in git history and cannot be un-published.** It is written
+  into `qa.tfvars` by this work, so anyone with repo read access knows it and could spend the
+  shared OpenAI key through the public QA gateway. The gate was designed to bound accidents,
+  not adversaries, and that is the accepted position — but it means the value must be treated
+  as public: rotate it if it ever needs to be private, and never reuse it outside QA.
+
 - **The batch-why payload the UI actually sends under-informs the route.**
-  `SupportingCitations.tsx:155` posts `query: 'answer'` — a generic placeholder —
+  `SupportingCitations.tsx:159` posts `query: 'answer'` — a generic placeholder —
   because the component does not hold the real query. The sweep should send the real
   question (that is the condition worth testing), which means a clean sweep is
   necessary but not sufficient: users get a worse-conditioned call than the sweep
