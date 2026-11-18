@@ -150,6 +150,21 @@ export const ASSIGNMENT: Record<TaskId, ModelId> = {
   translate: 'gpt-5.4-mini',
 }
 
+/** Whether a model can run an effort at all. One predicate, because the lever path
+ *  (resolveModel) and the per-request override path (route-model) must reject the
+ *  same models — two copies drift silently (roborev job 930). */
+export function canRunEffort(model: string, effort: Effort): boolean {
+  if (!Object.prototype.hasOwnProperty.call(MODELS, model)) return true
+  const spec = MODELS[model as ModelId]
+  // Only a reasoning model is ever SENT an effort, so a flag on any other model
+  // is not a refusal.
+  return !(
+    spec.capability.reasoning &&
+    effort === 'none' &&
+    !spec.capability.supportsEffortNone
+  )
+}
+
 /** The effort each task runs at when its model is a reasoning model (design §2).
  *  Effort belongs to the TASK: an override inherits it rather than choosing one. */
 export const TASK_EFFORT: Record<TaskId, Effort> = {
@@ -195,13 +210,10 @@ export function resolveModel(task: TaskId): ModelId {
       `unknown model ${raw} for ${lever}: it must name a model id the registry describes`,
     )
   }
-  const model = MODELS[raw as ModelId]
-  if (
-    model.capability.reasoning &&
-    TASK_EFFORT[task] === 'none' &&
-    !model.capability.supportsEffortNone
-  ) {
-    throw new Error(`model ${raw} cannot run the none effort for ${task}`)
+  if (!canRunEffort(raw, TASK_EFFORT[task])) {
+    throw new Error(
+      `model ${raw} cannot run the ${TASK_EFFORT[task]} effort for ${task}`,
+    )
   }
   return raw as ModelId
 }

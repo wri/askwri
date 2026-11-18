@@ -416,7 +416,7 @@ export async function POST(req: NextRequest) {
       )
     }
     model = resolved.model
-    const cfg = resolveAlignmentConfig(model, resolveModel('alignment'))
+    const cfg = resolveAlignmentConfig(model)
     const primary = requestProfile({
       task: 'alignment',
       model,

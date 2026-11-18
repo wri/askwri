@@ -1,6 +1,11 @@
 /** @jest-environment node */
 
-import { artifactPath, renderMarkdown, summarise } from '../route-sweep/report'
+import {
+  acceptanceGate,
+  artifactPath,
+  renderMarkdown,
+  summarise,
+} from '../route-sweep/report'
 import type { CallResult, SweepArtifact } from '../route-sweep/types'
 import { MODELS } from '@/config/models'
 
@@ -528,5 +533,49 @@ describe('summarise — the bar’s two numbers', () => {
       2 * price.inputPer1M,
       6,
     )
+  })
+})
+
+describe('acceptanceGate — a clean mechanical run is not a passed bar', () => {
+  // Two REGISTERED and priced models: an unregistered one has no price, so its
+  // cost is unmeasured and the delta clause never runs.
+  const NANO = 'gpt-5.4-nano'
+  const MINI = 'gpt-5.4-mini'
+  const priced = (model: string, inputTokens: number) =>
+    withUsage(whyCall(model, ['a', 'b']), {
+      prompt_tokens: inputTokens,
+      completion_tokens: 0,
+    })
+  const pair = (calls: CallResult[], models: [string, string]) => ({
+    ...artifactOf(calls),
+    models,
+  })
+
+  it('fails when a route reported no usage, so its cost is unmeasured', () => {
+    const gate = acceptanceGate(
+      pair([translateCall(NANO, 'a'), translateCall(MINI, 'b')], [NANO, MINI]),
+    )
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(/cost unmeasured/i)
+  })
+
+  it('fails when a candidate costs more than 20% above the incumbent', () => {
+    // nano is $0.20/1M input, mini $0.75: 1M vs 3M input is +1025%.
+    const gate = acceptanceGate(
+      pair([priced(NANO, 1_000_000), priced(MINI, 3_000_000)], [NANO, MINI]),
+    )
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(/\+.*% over/i)
+  })
+
+  it('passes when every row is priced and the pair is within 20%', () => {
+    // nano $0.20/1M x 1.0M vs gpt-4o-mini $0.15/1M x 1.3M: 0.200 vs 0.195.
+    const gate = acceptanceGate(
+      pair(
+        [priced(NANO, 1_000_000), priced('gpt-4o-mini', 1_300_000)],
+        [NANO, 'gpt-4o-mini'],
+      ),
+    )
+    expect(gate).toMatchObject({ ok: true, reasons: [] })
   })
 })

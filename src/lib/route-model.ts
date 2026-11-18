@@ -3,7 +3,7 @@
 // request's x-eval-token does not match it, so production cannot be swept by accident.
 // Which request parameters the resolved model takes is decided by
 // `requestProfile`, not by the name.
-import { MODELS, TASK_EFFORT, type ModelId, type TaskId } from '@/config/models'
+import { TASK_EFFORT, canRunEffort, type TaskId } from '@/config/models'
 
 export type RouteProvenance = {
   model: string
@@ -34,16 +34,9 @@ export function resolveRouteModel(
 
   if (task) {
     const effort = TASK_EFFORT[task]
-    const known = Object.prototype.hasOwnProperty.call(MODELS, model)
-      ? MODELS[model as ModelId]
-      : undefined
-    // An unregistered id keeps its documented hole: the eval-only callers send
-    // ids the registry does not own, and their arms are the callers' business.
-    if (
-      known?.capability.reasoning &&
-      effort === 'none' &&
-      !known.capability.supportsEffortNone
-    ) {
+    // An unregistered id keeps its documented hole: the eval-only callers send ids
+    // the registry does not own, and `canRunEffort` allows those.
+    if (!canRunEffort(model, effort)) {
       return {
         ok: false,
         error: `model ${model} cannot run the ${effort} effort this task uses`,

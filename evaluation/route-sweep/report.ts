@@ -386,6 +386,43 @@ export function summarise(a: SweepArtifact): RouteSummary[] {
   return rows
 }
 
+/** The bar's cost clauses, as arithmetic: every row must be measured, and a
+ *  candidate must not cost more than 20% above the incumbent it replaces. A clean
+ *  mechanical run says nothing about either — a translate sweep can print "cost
+ *  unmeasured" over zero failed checks (whole-branch review, finding 6).
+ *
+ *  Latency is NOT gated here: the artifact records whole-call time while each
+ *  route scales and clamps its own deadline per prompt, so no denominator in this
+ *  file is the clock the call ran against. Printing the p95 and its n is honest;
+ *  inventing a ratio would not be. */
+export function acceptanceGate(a: SweepArtifact): {
+  ok: boolean
+  reasons: string[]
+} {
+  const reasons: string[] = []
+  const rows = summarise(a)
+  for (const row of rows) {
+    if (row.costUsd === null) {
+      reasons.push(
+        `cost unmeasured for ${row.route} / ${row.model}: the bar needs it within 20% of the incumbent`,
+      )
+    }
+  }
+  for (const route of ROUTE_ORDER) {
+    const mine = rows.filter((r) => r.route === route)
+    const [a1, b1] = mine
+    if (!a1 || !b1 || a1.costUsd === null || b1.costUsd === null) continue
+    if (a1.costUsd === 0) continue
+    const pct = ((b1.costUsd - a1.costUsd) / a1.costUsd) * 100
+    if (Math.abs(pct) > 20) {
+      reasons.push(
+        `${b1.model} is ${pct > 0 ? '+' : ''}${pct.toFixed(1)}% over ${a1.model} on ${route}: the bar allows 20%`,
+      )
+    }
+  }
+  return { ok: reasons.length === 0, reasons }
+}
+
 /** One line per route and model, with n beside every percentile: ten cases is an
  *  observation with a wide interval, and a percentile printed without its count
  *  reads as a baseline. */
