@@ -35,9 +35,13 @@ export interface RequestProfile {
   passageChars?: number
 }
 
-/** The profile's wire fields, in the key order today's requests use. */
-export function wireParams(p: RequestProfile): Record<string, number> {
-  const out: Record<string, number> = {}
+/** The profile's wire fields, in the key order today's requests use. The effort
+ *  leads when it is set, matching the body `scripts/probe-profiles.ts` proved the
+ *  provider accepts at that shape; an incumbent has no effort, so its bytes are
+ *  unchanged. */
+export function wireParams(p: RequestProfile): Record<string, number | string> {
+  const out: Record<string, number | string> = {}
+  if (p.reasoningEffort !== undefined) out.reasoning_effort = p.reasoningEffort
   if (p.maxCompletionTokens !== undefined)
     out.max_completion_tokens = p.maxCompletionTokens
   if (p.maxTokens !== undefined) out.max_tokens = p.maxTokens

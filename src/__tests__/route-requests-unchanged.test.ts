@@ -269,7 +269,7 @@ function whyUser(passages: { docTitle: string; snippet: string }[]) {
 function whyBody(
   model: string,
   passages: { docTitle: string; snippet: string }[],
-  params: Record<string, number>,
+  params: Record<string, number | string>,
   mergeSystem = false,
 ) {
   const user = whyUser(passages)
@@ -661,8 +661,9 @@ describe('POST /api/batch-why — raw request bytes', () => {
     // effort and every GPT-6 case came back accepted and usable. A reasoning
     // family is the one place max_tokens is most likely to be refused.
     //
-    // The reasoning arm landed since: the task's effort now rides along, so the
-    // family's temperature rejection applies and the field is gone.
+    // The reasoning arm: the task's effort rides along (roborev job 922 — it did
+    // not, because wireParams dropped it), and the family rejects temperature
+    // while the effort is set.
     process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
     await post(
       'batch-why',
@@ -670,7 +671,10 @@ describe('POST /api/batch-why — raw request bytes', () => {
       { 'x-eval-token': 'secret' },
     )
     expectRawBodies([
-      whyBody('gpt-6-luna', TWO_PASSAGES, { max_completion_tokens: 360 }),
+      whyBody('gpt-6-luna', TWO_PASSAGES, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 360,
+      }),
     ])
   })
 })

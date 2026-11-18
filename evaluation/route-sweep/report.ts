@@ -14,7 +14,6 @@
  */
 import { checkCall, inputCount } from './checks'
 import type { CallResult, RouteName, SweepArtifact } from './types'
-import { checkCall, inputCount } from './checks'
 import { MODELS, type ModelId } from '@/config/models'
 
 /** The order a reader expects the routes in, matching the sweep's own. */
@@ -285,8 +284,6 @@ function routeLines(a: SweepArtifact, route: RouteName): string[] {
   return lines
 }
 
-/** The whole readout. Pure: same artifact in, same markdown out. */
-
 /* ---------------- the acceptance numbers ---------------- */
 
 /** What the provider billed for one call. Every attempt counts: alignment reports
@@ -414,6 +411,7 @@ function acceptanceLines(a: SweepArtifact): string[] {
   return lines
 }
 
+/** The whole readout. Pure: same artifact in, same markdown out. */
 export function renderMarkdown(a: SweepArtifact): string {
   const verdicts = a.calls.map(verdictOf)
   const failed = verdicts.filter((v) => !v.ok)
