@@ -76,12 +76,11 @@ beforeEach(() => {
   process.env = {
     ...ENV,
     OPENAI_API_KEY: 'sk-test',
-    OPENAI_MODEL: 'gpt-5-mini',
+    MODEL_ALIGNMENT: 'gpt-5-mini',
   }
   // A developer's deploy-day .env — loaded by next/jest even under NODE_ENV=test —
   // must not masquerade as the route's default, and no machine-wide cap, timeout,
   // temperature or sweep token may silently satisfy an assertion.
-  delete process.env.OPENAI_MODEL_ALIGNMENT
   delete process.env.OPENAI_MAX_TOKENS
   delete process.env.OPENAI_TEMPERATURE
   delete process.env.ALIGNMENT_TIMEOUT_MS_MAIN
@@ -166,7 +165,7 @@ describe('POST /api/alignment — the timeout ladder scales the bases and clamps
     Math.ceil((ALIGNMENT_SYSTEM_PROMPT.length + summary.length) / 4)
 
   it('a small non-GPT-5 prompt gets the base scaled by the prompt, not the bare base', async () => {
-    process.env.OPENAI_MODEL = 'gpt-4o-mini'
+    process.env.MODEL_ALIGNMENT = 'gpt-4o-mini'
     const delays = spyDeadlines()
     const { status } = await post({
       query: 'How do cities cool streets?',
@@ -181,7 +180,7 @@ describe('POST /api/alignment — the timeout ladder scales the bases and clamps
   })
 
   it('a large non-GPT-5 prompt clamps every attempt at 35000/30000', async () => {
-    process.env.OPENAI_MODEL = 'gpt-4o-mini'
+    process.env.MODEL_ALIGNMENT = 'gpt-4o-mini'
     const delays = spyDeadlines()
     mockReply('', 500) // every attempt fails: schema, tools, json_object
     const { status } = await post({

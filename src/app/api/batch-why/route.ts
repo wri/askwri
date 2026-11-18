@@ -8,7 +8,7 @@ import {
   wireParams,
 } from '@/lib/request-profile'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
-import { ASSIGNMENT } from '@/config/models'
+import { resolveModel } from '@/config/models'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -16,11 +16,7 @@ export const revalidate = 0
 
 // Read at import: this is the route's own default, used whenever the request
 // names no model. A requested model is resolved per request in POST.
-const FALLBACK_MODEL = (
-  process.env.OPENAI_MODEL_WHY ??
-  process.env.OPENAI_MODEL ??
-  ASSIGNMENT.why
-).trim()
+const FALLBACK_MODEL = resolveModel('why')
 
 const CANNED_WHY = 'This passage provides relevant context for the query.'
 
@@ -57,7 +53,7 @@ export async function POST(req: NextRequest) {
 
   // The model this response is about, for the catch-all below that cannot
   // re-read the request body.
-  let model = FALLBACK_MODEL
+  let model: string = FALLBACK_MODEL
 
   try {
     const body = await req.json()

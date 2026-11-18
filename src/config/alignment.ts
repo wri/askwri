@@ -1,8 +1,8 @@
 // Alignment LLM settings (OpenAI)
 // Add OPENAI_API_KEY to .env.local
+import { resolveModel } from '@/config/models'
 
-export const ALIGNMENT_MODEL =
-  process.env.OPENAI_MODEL_ALIGNMENT ?? 'gpt-4o-mini'
+export const ALIGNMENT_MODEL = resolveModel('alignment')
 export const ALIGNMENT_MAX_TOKENS = Number(process.env.OPENAI_MAX_TOKENS ?? 800)
 export const ALIGNMENT_TEMPERATURE = Number(
   process.env.OPENAI_TEMPERATURE ?? 0.3,

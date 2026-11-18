@@ -44,11 +44,10 @@ beforeEach(() => {
   process.env = {
     ...ENV,
     OPENAI_API_KEY: 'sk-test',
-    OPENAI_MODEL: 'gpt-5-mini',
+    MODEL_TRANSLATE: 'gpt-5-mini',
   }
   // A developer's deploy-day .env — loaded by next/jest even under NODE_ENV=test —
   // must not masquerade as the route's default, and no test inherits a sweep token.
-  delete process.env.OPENAI_MODEL_TRANSLATE
   delete process.env.EVAL_MODEL_OVERRIDE_TOKEN
   jest.spyOn(console, 'error').mockImplementation()
   fetchMock = jest
@@ -63,7 +62,7 @@ afterEach(() => {
 
 describe('POST /api/translate — model resolution', () => {
   it('defaults to the env model and reports it', async () => {
-    process.env.OPENAI_MODEL = 'gpt-5.4-mini'
+    process.env.MODEL_TRANSLATE = 'gpt-5.4-mini'
     const { status, json } = await post({ text: 'Hola mundo' })
     expect(status).toBe(200)
     expect(json.provenance).toEqual({ model: 'gpt-5.4-mini', produced: true })

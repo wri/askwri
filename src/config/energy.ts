@@ -93,7 +93,7 @@ function normalizeModelKey(model: string): string {
 }
 
 function factorsForModel(model: string): Factors {
-  const key = normalizeModelKey(model || process.env.OPENAI_MODEL || '')
+  const key = normalizeModelKey(model || '')
   if (key && MODEL_DEFAULTS[key]) return MODEL_DEFAULTS[key]
   return {
     promptJpt: DEFAULT_PROMPT_JPT,
@@ -169,7 +169,7 @@ function pickGridGco2PerKwh(): number {
  *   - prompt_tokens / input_tokens
  *   - completion_tokens / output_tokens
  *   - total_tokens (will be split 50/50 if prompt/completion missing)
- *   - model?  (optional; if omitted we try OPENAI_MODEL env var)
+ *   - model?  (optional; if omitted the registry tier lookup falls back)
  * @param modelOverride - optional model name (wins over usage.model)
  * @returns number|null - gCO₂e rounded to 2 decimals, or null if inputs missing
  */
@@ -179,7 +179,7 @@ export function estimateEnergyGCO2e(
 ): number | null {
   if (!usage) return null
 
-  const model = modelOverride || usage.model || process.env.OPENAI_MODEL || ''
+  const model = modelOverride || usage.model || ''
   const { promptJpt, completionJpt } = factorsForModel(model)
 
   // Gather tokens with graceful fallback

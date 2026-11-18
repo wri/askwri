@@ -2,9 +2,9 @@
 // the capability each id has, and the task each route currently defaults to.
 //
 // Being KNOWN is not the same as being ASSIGNED: a candidate being in MODELS
-// does not move any request onto it. ASSIGNMENT records each task's CURRENT
-// CODE DEFAULT — not the value production runs, which arrives through the
-// OPENAI_MODEL* env vars whose precedence this stage leaves untouched.
+// does not move any request onto it. ASSIGNMENT is the model each task runs —
+// measured against QA, not read off the code — and a task can be backed out of a
+// change through its validated `MODEL_<TASK>` lever.
 
 export type Effort = 'none' | 'low' | 'medium' | 'high'
 
@@ -16,6 +16,7 @@ export type ModelId =
   | 'gpt-4o-mini'
   | 'gpt-5-mini'
   | 'gpt-5.4'
+  | 'gpt-5.4-mini'
   | 'gpt-5.4-nano'
   | 'gpt-6-astra'
   | 'gpt-6.1-sol'
@@ -66,6 +67,13 @@ export const MODELS: Record<ModelId, ModelSpec> = {
     // No sourced price for this id exists in this repo (costs.ts prices
     // gpt-5-mini/gpt-5-nano); the pricing chore fills it in.
   },
+  'gpt-5.4-mini': {
+    capability: {
+      gpt5Class: true,
+      acceptsMaxCompletionTokens: true,
+      supportsEffortNone: true,
+    },
+  },
   'gpt-5.4-nano': {
     capability: {
       gpt5Class: true,
@@ -111,16 +119,45 @@ export const MODELS: Record<ModelId, ModelSpec> = {
   },
 }
 
-/** Each task's CURRENT CODE DEFAULT — not the value production runs.
- *  Production overrides these through OPENAI_MODEL*, and that precedence is
- *  untouched in this stage. */
+/** Each task's model. Nothing in the app tier reads an env var for the model id
+ *  any more: a lever may override a row here, and `resolveModel` validates it. */
 export const ASSIGNMENT: Record<TaskId, ModelId> = {
-  answer: 'gpt-5.4',
-  prefilter: 'gpt-5.4-nano',
-  why: 'gpt-4o-mini',
-  relates: 'gpt-4o-mini',
-  // The alignment route's env chain bottoms out at src/config/alignment's
-  // gpt-4o-mini default; its 'gpt-5-mini' tail is unreachable with no env.
-  alignment: 'gpt-4o-mini',
-  translate: 'gpt-5-mini',
+  // Measured, not read off the code: `handoffs/2026-11-18-qa-baseline-models.md`
+  // records one unoverridden request per route against QA image 6ad67fc. Five of
+  // these rows used to hold a code default that production never ran.
+  answer: 'gpt-5.4-mini',
+  prefilter: 'gpt-5.4-nano', // unobservable: USE_NANO_FILTER is off on QA
+  why: 'gpt-5.4-nano',
+  relates: 'gpt-5.4-nano',
+  alignment: 'gpt-5.4-nano',
+  translate: 'gpt-5.4-mini',
+}
+
+/** The lever each task can be backed out through, renamed on purpose: the stale
+ *  `OPENAI_MODEL*` values in the deployed secret blob are inert because nothing
+ *  reads them any more. */
+const LEVERS: Record<TaskId, string> = {
+  answer: 'MODEL_ANSWER',
+  prefilter: 'MODEL_PREFILTER',
+  why: 'MODEL_WHY',
+  relates: 'MODEL_RELATES',
+  alignment: 'MODEL_ALIGNMENT',
+  translate: 'MODEL_TRANSLATE',
+}
+
+/**
+ * The one place a task's model is decided: a validated lever, else the registry.
+ * Called at module scope by every consumer, so a lever naming an id the registry
+ * cannot describe fails when the process loads — not at 3am on a real request.
+ */
+export function resolveModel(task: TaskId): ModelId {
+  const lever = LEVERS[task]
+  const raw = process.env[lever]?.trim()
+  if (!raw) return ASSIGNMENT[task]
+  if (!Object.prototype.hasOwnProperty.call(MODELS, raw)) {
+    throw new Error(
+      `unknown model ${raw} for ${lever}: it must name a model id the registry describes`,
+    )
+  }
+  return raw as ModelId
 }

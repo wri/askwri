@@ -65,12 +65,11 @@ beforeEach(() => {
   process.env = {
     ...ENV,
     OPENAI_API_KEY: 'sk-test',
-    OPENAI_MODEL: 'gpt-5-mini',
+    MODEL_RELATES: 'gpt-5-mini',
   }
   // A developer's deploy-day .env — loaded by next/jest even under NODE_ENV=test —
   // must not masquerade as the route's default, and no test inherits a sweep token
   // or a machine-wide temperature.
-  delete process.env.OPENAI_MODEL_RELATES
   delete process.env.EVAL_MODEL_OVERRIDE_TOKEN
   delete process.env.OPENAI_TEMPERATURE
   jest.spyOn(console, 'error').mockImplementation()

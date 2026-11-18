@@ -1,13 +1,14 @@
 /** @jest-environment node */
-import { ASSIGNMENT, MODELS, type ModelId } from '@/config/models'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { ASSIGNMENT, MODELS, resolveModel, type ModelId } from '@/config/models'
 
 /**
- * The registry's contract: every incumbent code default is a known model,
- * each task is assigned its CURRENT CODE DEFAULT (not the deployed value —
- * production overrides through OPENAI_MODEL*, and that precedence is
- * untouched this stage), and the four GPT-6 candidates are known but not
- * assigned. Capability is recorded, not used: only supportsEffortNone is
- * asserted here, and no price is asserted this stage.
+ * The registry's contract: every assigned task names a known, priced model — and
+ * the assignment is the model QA actually runs, measured once through the deployed
+ * routes (`handoffs/2026-11-18-qa-baseline-models.md`) rather than read off the code.
+ * A lever (`MODEL_<TASK>`) may point at any registered id and fails loudly when it
+ * does not.
  */
 describe('model registry', () => {
   it('every assigned task names a known model', () => {
@@ -18,22 +19,81 @@ describe('model registry', () => {
   })
 
   it('registers every incumbent code default as a known model', () => {
-    ;['gpt-4o-mini', 'gpt-5-mini', 'gpt-5.4', 'gpt-5.4-nano'].forEach((id) =>
-      expect(Object.keys(MODELS)).toContain(id),
-    )
+    ;[
+      'gpt-4o-mini',
+      'gpt-5-mini',
+      'gpt-5.4',
+      'gpt-5.4-mini',
+      'gpt-5.4-nano',
+    ].forEach((id) => expect(Object.keys(MODELS)).toContain(id))
   })
 
-  it('assigns each task its current code default', () => {
+  it('assigns each task the model QA actually runs', () => {
+    // Measured 2026-11-18 on image 6ad67fc, one unoverridden request per route.
+    // A flip edits one row here and its route's line in ASSIGNMENT, together.
     expect(ASSIGNMENT).toEqual({
-      answer: 'gpt-5.4',
-      prefilter: 'gpt-5.4-nano',
-      why: 'gpt-4o-mini',
-      relates: 'gpt-4o-mini',
-      // The alignment route's env chain bottoms out at src/config/alignment's
-      // gpt-4o-mini; its 'gpt-5-mini' tail is unreachable with no env set.
-      alignment: 'gpt-4o-mini',
-      translate: 'gpt-5-mini',
+      answer: 'gpt-5.4-mini',
+      prefilter: 'gpt-5.4-nano', // unobservable while USE_NANO_FILTER is off
+      why: 'gpt-5.4-nano',
+      relates: 'gpt-5.4-nano',
+      alignment: 'gpt-5.4-nano',
+      translate: 'gpt-5.4-mini',
     })
+  })
+
+  it('resolves a task from its lever', () => {
+    process.env.MODEL_WHY = 'gpt-6-luna'
+    try {
+      expect(resolveModel('why')).toBe('gpt-6-luna')
+    } finally {
+      delete process.env.MODEL_WHY
+    }
+  })
+
+  it('falls back to the assignment when no lever is set', () => {
+    delete process.env.MODEL_TRANSLATE
+    expect(resolveModel('translate')).toBe(ASSIGNMENT.translate)
+  })
+
+  it('throws on a lever naming an id the registry does not describe', () => {
+    process.env.MODEL_WHY = 'gpt-4-turbo'
+    try {
+      expect(() => resolveModel('why')).toThrow(/unknown model gpt-4-turbo/)
+    } finally {
+      delete process.env.MODEL_WHY
+    }
+  })
+
+  it('fails at module load when a route is imported with a bad lever', async () => {
+    process.env.MODEL_RELATES = 'gpt-4-turbo'
+    try {
+      await expect(
+        jest.isolateModulesAsync(async () => {
+          await import('@/app/api/batch-relates/route')
+        }),
+      ).rejects.toThrow(/unknown model gpt-4-turbo/)
+    } finally {
+      delete process.env.MODEL_RELATES
+    }
+  })
+
+  it('no source file reads an OPENAI_MODEL* variable', () => {
+    // The read, not the mention: comments may explain what those keys were.
+    // Assembled so this test does not match its own source.
+    const pattern = new RegExp('process\\.env\\.OPENAI' + '_MODEL')
+    const files: string[] = []
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const p = join(dir, entry)
+        if (statSync(p).isDirectory()) {
+          if (entry !== '__tests__') walk(p)
+        } else if (/\.(ts|tsx)$/.test(entry)) files.push(p)
+      }
+    }
+    walk(join(process.cwd(), 'src'))
+    expect(files.filter((f) => pattern.test(readFileSync(f, 'utf8')))).toEqual(
+      [],
+    )
   })
 
   it('declares the candidates as known but unassigned', () => {
