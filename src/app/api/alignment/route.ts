@@ -7,12 +7,9 @@
 /* eslint-disable */
 
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  ALIGNMENT_SYSTEM_PROMPT,
-  ALIGNMENT_MODEL as CFG_MODEL,
-} from '@/config/alignment'
+import { ALIGNMENT_SYSTEM_PROMPT } from '@/config/alignment'
 import { resolveAlignmentConfig } from '@/lib/alignment-config'
-import { ASSIGNMENT } from '@/config/models'
+import { resolveModel } from '@/config/models'
 import { isEnglishText } from '@/lib/ensure-english'
 import { requestProfile, wireParams } from '@/lib/request-profile'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
@@ -25,12 +22,7 @@ export const revalidate = 0
 // Read at import: this is the route's own default, used whenever the request
 // names no model. A requested model is resolved per request in POST, and every
 // model-derived parameter below is computed from that resolved name.
-const FALLBACK_MODEL = (
-  process.env.OPENAI_MODEL_ALIGNMENT ??
-  process.env.OPENAI_MODEL ??
-  CFG_MODEL ??
-  ASSIGNMENT.alignment
-).trim()
+const FALLBACK_MODEL = resolveModel('alignment')
 const BASE_URL = (
   process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
 ).replace(/\/$/, '')
@@ -395,7 +387,7 @@ export async function POST(req: NextRequest) {
 
   // The model this response is about, for the catch-all below that cannot re-read
   // the request body.
-  let model = FALLBACK_MODEL
+  let model: string = FALLBACK_MODEL
 
   try {
     const body = await req.json().catch(() => ({}))
@@ -408,7 +400,7 @@ export async function POST(req: NextRequest) {
 
     // Resolved before any other check, and refused rather than ignored: a sweep
     // that thinks it ran two models must not run one twice.
-    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL, 'alignment')
     if (!resolved.ok) {
       return NextResponse.json(
         {

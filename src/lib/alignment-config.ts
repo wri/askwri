@@ -12,6 +12,10 @@
 import { modelCapability } from '@/lib/request-profile'
 
 export function resolveAlignmentConfig(model: string) {
+  // The ladder follows the model this call will actually reach. After a flip the
+  // assignment IS the candidate, so a pre-flip sweep measures the candidate under
+  // the deadline it will run with — deriving it from the incumbent instead biased
+  // every candidate gate toward the slower ladder (whole-branch review, finding 7).
   const gpt5Class = modelCapability(model).gpt5Class
 
   // Timeout bases (scaled per request and clamped in the route) - GPT-5

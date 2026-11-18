@@ -9,13 +9,14 @@
  * order fails here.
  *
  * Arms covered per route, on the code as it stood when these were written:
- *  - each route's default arm (no OPENAI_MODEL* env, no eval override);
+ *  - each route's default arm (no MODEL_<TASK> lever, no eval override), which
+ *    is the model QA was measured running (`handoffs/2026-11-18-qa-baseline-models.md`);
  *  - the GPT-5 arm via the eval override (EVAL_MODEL_OVERRIDE_TOKEN +
  *    x-eval-token + body.model) where the route has one — including
  *    batch-why's o1 arm, which also merges the system prompt;
  *  - the non-GPT-5 arm of the GPT-5-default routes: answer via body.model,
- *    the nano prefilter via OPENAI_MODEL_NANO (+ jest.resetModules(), the
- *    default is read at import), translate via the eval override.
+ *    the nano prefilter via MODEL_PREFILTER (+ jest.resetModules(), the lever
+ *    is read at import), translate via the eval override.
  *
  * The answer prefilter shuffles passages with Math.random(); those fixtures
  * stub it so the passage order — and therefore the body — is deterministic.
@@ -95,12 +96,12 @@ beforeEach(() => {
   // NODE_ENV=test — must not masquerade as a route default, and no test may
   // inherit a sweep token, a token cap or a temperature.
   for (const key of [
-    'OPENAI_MODEL',
-    'OPENAI_MODEL_WHY',
-    'OPENAI_MODEL_RELATES',
-    'OPENAI_MODEL_TRANSLATE',
-    'OPENAI_MODEL_ALIGNMENT',
-    'OPENAI_MODEL_NANO',
+    'MODEL_ANSWER',
+    'MODEL_PREFILTER',
+    'MODEL_WHY',
+    'MODEL_RELATES',
+    'MODEL_ALIGNMENT',
+    'MODEL_TRANSLATE',
     'OPENAI_MAX_TOKENS',
     'OPENAI_TEMPERATURE',
     'USE_NANO_FILTER',
@@ -268,7 +269,7 @@ function whyUser(passages: { docTitle: string; snippet: string }[]) {
 function whyBody(
   model: string,
   passages: { docTitle: string; snippet: string }[],
-  params: Record<string, number>,
+  params: Record<string, number | string>,
   mergeSystem = false,
 ) {
   const user = whyUser(passages)
@@ -450,10 +451,12 @@ function translateBody(model: string, params: Record<string, number>) {
 /* ---------------- POST /api/answer ---------------- */
 
 describe('POST /api/answer — raw request bytes', () => {
-  it('default arm (prefilter off): one gpt-5.4 call, 15×800 evidence budget', async () => {
+  it('default arm (prefilter off): one gpt-5.4-mini call, 15×800 evidence budget', async () => {
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
-      answerBody('gpt-5.4', SYS_V2, 8, 800, { max_completion_tokens: 2000 }),
+      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
+        max_completion_tokens: 2000,
+      }),
     ])
   })
 
@@ -473,14 +476,18 @@ describe('POST /api/answer — raw request bytes', () => {
       prompt_version: 'v1',
     })
     expectRawBodies([
-      answerBody('gpt-5.4', SYS_V1, 8, 800, { max_completion_tokens: 2000 }),
+      answerBody('gpt-5.4-mini', SYS_V1, 8, 800, {
+        max_completion_tokens: 2000,
+      }),
     ])
   })
 
   it('an explicit max_passages override shrinks the evidence list', async () => {
     await post('answer', { query: 'What?', docs: docs(8), max_passages: 3 })
     expectRawBodies([
-      answerBody('gpt-5.4', SYS_V2, 3, 800, { max_completion_tokens: 2000 }),
+      answerBody('gpt-5.4-mini', SYS_V2, 3, 800, {
+        max_completion_tokens: 2000,
+      }),
     ])
   })
 
@@ -520,7 +527,9 @@ describe('POST /api/answer — raw request bytes', () => {
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
       nanoBody('gpt-5.4-nano', { max_completion_tokens: 500 }),
-      answerBody('gpt-5.4', SYS_V2, 8, 800, { max_completion_tokens: 2000 }),
+      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
+        max_completion_tokens: 2000,
+      }),
     ])
   })
 
@@ -536,13 +545,15 @@ describe('POST /api/answer — raw request bytes', () => {
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
       nanoBody('gpt-5.4-nano', { max_completion_tokens: 500 }),
-      answerBody('gpt-5.4', SYS_V2, 8, 800, { max_completion_tokens: 2000 }),
+      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
+        max_completion_tokens: 2000,
+      }),
     ])
   })
 
-  it('prefilter non-GPT-5 arm via OPENAI_MODEL_NANO: max_tokens 500 + temperature 0.1', async () => {
+  it('prefilter non-GPT-5 arm via MODEL_PREFILTER: max_tokens 500 + temperature 0.1', async () => {
     process.env.USE_NANO_FILTER = 'true'
-    process.env.OPENAI_MODEL_NANO = 'gpt-4o-mini'
+    process.env.MODEL_PREFILTER = 'gpt-4o-mini'
     jest.spyOn(Math, 'random').mockReturnValue(0.999999999)
     fetchMock.mockImplementation(async (_url: unknown, init: RequestInit) => {
       const body = JSON.parse(init.body as string)
@@ -561,7 +572,9 @@ describe('POST /api/answer — raw request bytes', () => {
     await post('answer', { query: 'What?', docs: docs(8) })
     expectRawBodies([
       nanoBody('gpt-4o-mini', { max_tokens: 500, temperature: 0.1 }),
-      answerBody('gpt-5.4', SYS_V2, 8, 800, { max_completion_tokens: 2000 }),
+      answerBody('gpt-5.4-mini', SYS_V2, 8, 800, {
+        max_completion_tokens: 2000,
+      }),
     ])
   })
 })
@@ -569,23 +582,17 @@ describe('POST /api/answer — raw request bytes', () => {
 /* ---------------- POST /api/batch-why ---------------- */
 
 describe('POST /api/batch-why — raw request bytes', () => {
-  it('default arm (gpt-4o-mini): max_completion_tokens + temperature 0.3', async () => {
+  it('default arm (gpt-5.4-nano, the deployed model): max_completion_tokens 360, no temperature', async () => {
     await post('batch-why', { query: WHY_QUERY, passages: TWO_PASSAGES })
     expectRawBodies([
-      whyBody('gpt-4o-mini', TWO_PASSAGES, {
-        max_completion_tokens: 360,
-        temperature: 0.3,
-      }),
+      whyBody('gpt-5.4-nano', TWO_PASSAGES, { max_completion_tokens: 360 }),
     ])
   })
 
-  it('default arm above the 35-passage cap: budget clamped to 2500', async () => {
+  it('default arm above the 35-passage cap: budget clamped to 3000', async () => {
     await post('batch-why', { query: WHY_QUERY, passages: MANY_PASSAGES })
     expectRawBodies([
-      whyBody('gpt-4o-mini', MANY_PASSAGES, {
-        max_completion_tokens: 2500,
-        temperature: 0.3,
-      }),
+      whyBody('gpt-5.4-nano', MANY_PASSAGES, { max_completion_tokens: 3000 }),
     ])
   })
 
@@ -643,7 +650,7 @@ describe('POST /api/batch-why — raw request bytes', () => {
     ])
   })
 
-  it('a registered gpt-6 candidate via the eval override: max_completion_tokens, not max_tokens', async () => {
+  it('a registered gpt-6 candidate via the eval override: max_completion_tokens at the task effort, no temperature', async () => {
     // This body is NOT a behaviour promise, and it was wrong to pin it as one. No
     // task is assigned a candidate, so the only thing that sends this arm is the
     // route sweep's override. The pre-change capture (27543fe) had `max_tokens`
@@ -654,8 +661,9 @@ describe('POST /api/batch-why — raw request bytes', () => {
     // effort and every GPT-6 case came back accepted and usable. A reasoning
     // family is the one place max_tokens is most likely to be refused.
     //
-    // Temperature still rides along because no reasoning_effort is sent in this
-    // stage; dropping it belongs to the migration arm that supplies the effort.
+    // The reasoning arm: the task's effort rides along (roborev job 922 — it did
+    // not, because wireParams dropped it), and the family rejects temperature
+    // while the effort is set.
     process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
     await post(
       'batch-why',
@@ -664,8 +672,8 @@ describe('POST /api/batch-why — raw request bytes', () => {
     )
     expectRawBodies([
       whyBody('gpt-6-luna', TWO_PASSAGES, {
+        reasoning_effort: 'none',
         max_completion_tokens: 360,
-        temperature: 0.3,
       }),
     ])
   })
@@ -674,23 +682,17 @@ describe('POST /api/batch-why — raw request bytes', () => {
 /* ---------------- POST /api/batch-relates ---------------- */
 
 describe('POST /api/batch-relates — raw request bytes', () => {
-  it('default arm (gpt-4o-mini): max_tokens 120×docs + temperature 0.2', async () => {
+  it('default arm (gpt-5.4-nano, the deployed model): floor 1000, no temperature', async () => {
     await post('batch-relates', { query: WHY_QUERY, docs: TWO_DOCS })
     expectRawBodies([
-      relatesBody('gpt-4o-mini', TWO_DOCS, {
-        max_tokens: 240,
-        temperature: 0.2,
-      }),
+      relatesBody('gpt-5.4-nano', TWO_DOCS, { max_completion_tokens: 1000 }),
     ])
   })
 
-  it('default arm above the 9-doc floor: budget clamped to 4000', async () => {
+  it('default arm above the floor: 120×docs unclamped', async () => {
     await post('batch-relates', { query: WHY_QUERY, docs: MANY_DOCS })
     expectRawBodies([
-      relatesBody('gpt-4o-mini', MANY_DOCS, {
-        max_tokens: 4000,
-        temperature: 0.2,
-      }),
+      relatesBody('gpt-5.4-nano', MANY_DOCS, { max_completion_tokens: 4800 }),
     ])
   })
 
@@ -722,15 +724,15 @@ describe('POST /api/batch-relates — raw request bytes', () => {
 /* ---------------- POST /api/alignment ---------------- */
 
 describe('POST /api/alignment — raw request bytes', () => {
-  it('default arm (gpt-4o-mini): json_schema succeeds on the first attempt', async () => {
+  it('default arm (gpt-5.4-nano, the deployed model): cap 4000, json_schema first', async () => {
     fetchMock.mockResolvedValue(chatReply(GOOD_ASSESSMENT))
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
     expectRawBodies([
-      schemaAttempt('gpt-4o-mini', { max_tokens: 1000, temperature: 0.3 }),
+      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
     ])
   })
 
-  it('schema fails then tools succeeds: both primary budgets, same parameter arm', async () => {
+  it('schema fails then tools succeeds: both primary budgets, same arm', async () => {
     fetchMock
       .mockResolvedValueOnce(chatReply('nope', 500))
       .mockResolvedValueOnce(
@@ -744,21 +746,21 @@ describe('POST /api/alignment — raw request bytes', () => {
       )
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
     expectRawBodies([
-      schemaAttempt('gpt-4o-mini', { max_tokens: 1000, temperature: 0.3 }),
-      toolsAttempt('gpt-4o-mini', { max_tokens: 1000, temperature: 0.3 }),
+      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
+      toolsAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
     ])
   })
 
-  it('schema and tools fail then json_object: the repair budget is mainMax + 500', async () => {
+  it('schema and tools fail then json_object: the repair cap is 5000', async () => {
     fetchMock
       .mockResolvedValueOnce(chatReply('nope', 500))
       .mockResolvedValueOnce(chatReply('nope again', 500))
       .mockResolvedValueOnce(chatReply(GOOD_ASSESSMENT))
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
     expectRawBodies([
-      schemaAttempt('gpt-4o-mini', { max_tokens: 1000, temperature: 0.3 }),
-      toolsAttempt('gpt-4o-mini', { max_tokens: 1000, temperature: 0.3 }),
-      objectAttempt('gpt-4o-mini', { max_tokens: 1500, temperature: 0.3 }),
+      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
+      toolsAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
+      objectAttempt('gpt-5.4-nano', { max_completion_tokens: 5000 }),
     ])
   })
 
@@ -797,11 +799,11 @@ describe('POST /api/alignment — raw request bytes', () => {
 /* ---------------- POST /api/translate ---------------- */
 
 describe('POST /api/translate — raw request bytes', () => {
-  it('default arm (gpt-5-mini): max_completion_tokens 2000, no temperature', async () => {
+  it('default arm (gpt-5.4-mini, the deployed model): max_completion_tokens 2000', async () => {
     fetchMock.mockResolvedValue(chatReply('Hello world'))
     await post('translate', { text: 'Hola mundo' })
     expectRawBodies([
-      translateBody('gpt-5-mini', { max_completion_tokens: 2000 }),
+      translateBody('gpt-5.4-mini', { max_completion_tokens: 2000 }),
     ])
   })
 
@@ -823,7 +825,7 @@ describe('POST /api/translate — raw request bytes', () => {
     const { status } = await post('translate', { text: 'Hola mundo' })
     expect(status).toBe(502)
     expectRawBodies([
-      translateBody('gpt-5-mini', { max_completion_tokens: 2000 }),
+      translateBody('gpt-5.4-mini', { max_completion_tokens: 2000 }),
     ])
   })
 
@@ -832,7 +834,7 @@ describe('POST /api/translate — raw request bytes', () => {
     const { status } = await post('translate', { text: 'Hola mundo' })
     expect(status).toBe(502)
     expectRawBodies([
-      translateBody('gpt-5-mini', { max_completion_tokens: 2000 }),
+      translateBody('gpt-5.4-mini', { max_completion_tokens: 2000 }),
     ])
   })
 })

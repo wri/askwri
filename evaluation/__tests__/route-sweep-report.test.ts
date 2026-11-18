@@ -1,7 +1,13 @@
 /** @jest-environment node */
 
-import { artifactPath, renderMarkdown } from '../route-sweep/report'
+import {
+  acceptanceGate,
+  artifactPath,
+  renderMarkdown,
+  summarise,
+} from '../route-sweep/report'
 import type { CallResult, SweepArtifact } from '../route-sweep/types'
+import { MODELS } from '@/config/models'
 
 const MODEL_A = 'gpt-5.4-nano'
 const MODEL_B = 'gpt-5.6-luna'
@@ -394,5 +400,230 @@ describe('renderMarkdown', () => {
 
     expect(md).not.toContain('nothing to show')
     expect(lineWith(md, `**${MODEL_A}**`)).toContain('timeout after 120000ms')
+  })
+})
+
+/* ---------------- the acceptance numbers ---------------- */
+
+const artifactOf = (calls: CallResult[]): SweepArtifact => ({
+  label: 't',
+  target: 'https://qa.example',
+  models: [MODEL_A, MODEL_B],
+  code_version: null,
+  max_results: 40,
+  submodule_commit: 'abc',
+  calls,
+})
+
+const withUsage = (call: CallResult, usage: unknown): CallResult => ({
+  ...call,
+  response: { ...(call.response as object), usage },
+})
+
+describe('summarise — the bar’s two numbers', () => {
+  it('reports p95 with the sample count beside it', () => {
+    const calls = [100, 200, 300, 400, 500].map((ms, i) =>
+      whyCall(MODEL_A, ['a'], { case_id: `q${i}`, latency_ms: ms }),
+    )
+    const [row] = summarise(artifactOf(calls))
+    expect(row.calls).toBe(5)
+    expect(row.p95Ms).toBe(500)
+    expect(renderMarkdown(artifactOf(calls))).toContain('p95 500 ms (n=5)')
+  })
+
+  it('counts a failed call through checkCall, substitutions included', () => {
+    const calls = [
+      whyCall(MODEL_A, ['a']),
+      whyCall(MODEL_A, ['b'], {
+        case_id: 'q2',
+        response: {
+          ok: true,
+          explanations: [{ why: 'b' }],
+          provenance: { model: MODEL_A, produced: true, sanitized: true },
+        },
+        provenance: { model: MODEL_A, produced: true, sanitized: true },
+      }),
+    ]
+    expect(summarise(artifactOf(calls))[0].failed).toBe(1)
+  })
+
+  it('leaves cost null when a route reports no usage, rather than zero', () => {
+    const [row] = summarise(artifactOf([translateCall(MODEL_A, 'hello')]))
+    expect(row.costUsd).toBeNull()
+  })
+
+  it('leaves cost unmeasured when only some calls report usage', () => {
+    const calls = [
+      withUsage(whyCall(MODEL_A, ['a']), {
+        prompt_tokens: 1_000_000,
+        completion_tokens: 0,
+      }),
+      whyCall(MODEL_A, ['b'], { case_id: 'q2' }),
+    ]
+    expect(summarise(artifactOf(calls))[0].costUsd).toBeNull()
+    expect(renderMarkdown(artifactOf(calls))).toContain('cost unmeasured')
+  })
+
+  it.each([
+    undefined,
+    { prompt_tokens: 100 },
+    { prompt_tokens: -1, completion_tokens: 20 },
+    { prompt_tokens: 'invalid', completion_tokens: 20 },
+  ])(
+    'leaves cost unmeasured for an alignment attempt with incomplete usage %j',
+    (usage) => {
+      const call = alignmentCall(MODEL_A, ['x'], {
+        response: {
+          debug: {
+            tries: [
+              { usage },
+              { usage: { prompt_tokens: 1_000_000, completion_tokens: 0 } },
+            ],
+          },
+        },
+      })
+      expect(summarise(artifactOf([call]))[0].costUsd).toBeNull()
+    },
+  )
+
+  it('prices complete input/output token usage without prompt/completion aliases', () => {
+    const call = withUsage(whyCall(MODEL_A, ['a']), {
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+    })
+    expect(summarise(artifactOf([call]))[0].costUsd).toBe(1.45)
+  })
+
+  it('prices by the model asked for, not the id the response echoes', () => {
+    const call = withUsage(whyCall(MODEL_A, ['a']), {
+      model: 'openai/gpt-6.1-terra', // alignment's prefix, and a different model
+      prompt_tokens: 1_000_000,
+      completion_tokens: 0,
+    })
+    // gpt-5.4-nano is the requested id; a lookup on usage.model would price terra.
+    const price = MODELS[MODEL_A].price!
+    expect(summarise(artifactOf([call]))[0].costUsd).toBeCloseTo(
+      price.inputPer1M,
+      6,
+    )
+  })
+
+  it('sums every alignment attempt, not only the one that parsed', () => {
+    const call: CallResult = {
+      route: 'alignment',
+      case_id: 'q1',
+      model: MODEL_A,
+      request: { query: QUESTION, resultsSummary: 's' },
+      response: {
+        ok: true,
+        assessment: { insights: ['x'] },
+        debug: {
+          tries: [
+            { usage: { prompt_tokens: 1_000_000, completion_tokens: 0 } },
+            { usage: { prompt_tokens: 1_000_000, completion_tokens: 0 } },
+          ],
+        },
+        provenance: { model: MODEL_A, produced: true },
+      },
+      provenance: { model: MODEL_A, produced: true },
+      latency_ms: 900,
+    }
+    const price = MODELS[MODEL_A].price!
+    expect(summarise(artifactOf([call]))[0].costUsd).toBeCloseTo(
+      2 * price.inputPer1M,
+      6,
+    )
+  })
+})
+
+describe('acceptanceGate — a clean mechanical run is not a passed bar', () => {
+  // Two REGISTERED and priced models: an unregistered one has no price, so its
+  // cost is unmeasured and the delta clause never runs.
+  const NANO = 'gpt-5.4-nano'
+  const MINI = 'gpt-5.4-mini'
+  const priced = (model: string, inputTokens: number) =>
+    withUsage(whyCall(model, ['a', 'b']), {
+      prompt_tokens: inputTokens,
+      completion_tokens: 0,
+    })
+  const pair = (calls: CallResult[], models: [string, string]) => ({
+    ...artifactOf(calls),
+    models,
+  })
+
+  it('fails when a route reported no usage, so its cost is unmeasured', () => {
+    const gate = acceptanceGate(
+      pair([translateCall(NANO, 'a'), translateCall(MINI, 'b')], [NANO, MINI]),
+    )
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(/cost unmeasured/i)
+  })
+
+  it('fails when a candidate costs more than 20% above the incumbent', () => {
+    // nano is $0.20/1M input, mini $0.75: 1M vs 3M input is +1025%.
+    const gate = acceptanceGate(
+      pair([priced(NANO, 1_000_000), priced(MINI, 3_000_000)], [NANO, MINI]),
+    )
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(/\+1025\.0% vs .*allows ±20%/i)
+  })
+
+  it('fails when a route ran one model but not the other', () => {
+    // roborev job 931: summarise() skips a pair with no calls, so a candidate that
+    // never ran on a route the incumbent ran was silently not compared.
+    const gate = acceptanceGate(
+      pair([priced(NANO, 1_000_000), translateCall(MINI, 'b')], [NANO, MINI]),
+    )
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(
+      /no calls for batch-why \/ gpt-5\.4-mini/i,
+    )
+  })
+
+  it('fails when the incumbent cost is zero, so the bar cannot be computed', () => {
+    // roborev job 932: a zero baseline used to skip the clause entirely and let
+    // any candidate through. "Within 20% of the incumbent's" is unanswerable at 0.
+    const zero = withUsage(whyCall(NANO, ['a', 'b']), {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+    })
+    const gate = acceptanceGate(
+      pair([zero, priced(MINI, 1_000_000)], [NANO, MINI]),
+    )
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(/incumbent cost is zero/i)
+  })
+
+  it('passes when every row is priced and the pair is within 20%', () => {
+    // nano $0.20/1M x 1.0M vs gpt-4o-mini $0.15/1M x 1.3M: 0.200 vs 0.195.
+    const gate = acceptanceGate(
+      pair(
+        [priced(NANO, 1_000_000), priced('gpt-4o-mini', 1_300_000)],
+        [NANO, 'gpt-4o-mini'],
+      ),
+    )
+    expect(gate).toMatchObject({ ok: true, reasons: [] })
+  })
+})
+
+describe('acceptanceGate — a gate with nothing to compute fails', () => {
+  it('fails an artifact with no calls at all', () => {
+    expect(acceptanceGate(artifactOf([])).ok).toBe(false)
+  })
+
+  it('fails when both sides measured zero cost', () => {
+    const NANO = 'gpt-5.4-nano'
+    const MINI = 'gpt-5.4-mini'
+    const zero = (model: string) =>
+      withUsage(whyCall(model, ['a', 'b']), {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+      })
+    const gate = acceptanceGate({
+      ...artifactOf([zero(NANO), zero(MINI)]),
+      models: [NANO, MINI],
+    })
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(/incumbent cost is zero/i)
   })
 })

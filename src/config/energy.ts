@@ -1,3 +1,5 @@
+import { EMBEDDERS, MODELS, type ModelId } from '@/config/models'
+
 /**
  * Rough, configurable energy estimator for LLM calls (in gCO₂e).
  *
@@ -61,40 +63,54 @@ function strFromEnv(name: string, def: string): string {
 const DEFAULT_PROMPT_JPT = numFromEnv('ENERGY_JPT_PROMPT_DEFAULT', 1.0)
 const DEFAULT_COMPLETION_JPT = numFromEnv('ENERGY_JPT_COMPLETION_DEFAULT', 2.0)
 
-// --- Model-specific defaults (tune with real telemetry) ---
-// Keys are normalized (uppercased, non-alphanumeric -> underscores).
-const MODEL_DEFAULTS: Record<string, Factors> = {
-  // GPT‑5 class (Blackwell/B200-era): ~1.6× better perf/W than H100 mid-case
-  GPT_5: {
+// --- Tier defaults (tune with real telemetry) ---
+// Keyed by the registry's `tier` (design §4), so a model change moves the factors
+// with the model instead of silently keeping the last hardcoded family's.
+const TIER_FACTORS: Record<string, Factors> = {
+  // Flagship (GPT‑5 class, Blackwell/B200-era): ~1.6× better perf/W than H100
+  flagship: {
     promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_5', 0.6),
     completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_5', 1.4),
   },
 
-  // GPT‑4‑class (H100-era)
-  GPT_4O: {
+  // Balanced (GPT‑4‑class, H100-era)
+  balanced: {
     promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_4O', 1.0),
     completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_4O', 2.2),
   },
 
-  // Minis (~7–12B)
-  GPT_5_MINI: {
+  // Fast (minis, ~7–12B)
+  fast: {
     promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_5_MINI', 0.3),
     completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_5_MINI', 0.6),
   },
 
-  GPT_4O_MINI: {
+  // Volume
+  volume: {
     promptJpt: numFromEnv('ENERGY_JPT_PROMPT__GPT_4O_MINI', 0.35),
     completionJpt: numFromEnv('ENERGY_JPT_COMPLETION__GPT_4O_MINI', 0.7),
   },
 }
 
-function normalizeModelKey(model: string): string {
-  return (model || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')
+function normalizeModelKey(v: string): string {
+  return (v || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')
 }
 
-function factorsForModel(model: string): Factors {
-  const key = normalizeModelKey(model || process.env.OPENAI_MODEL || '')
-  if (key && MODEL_DEFAULTS[key]) return MODEL_DEFAULTS[key]
+function tierOf(model: string): string | null | undefined {
+  // Alignment stamps its usage `openai/<id>`; the embedder has its own entry.
+  const id = (model || '').replace(/^openai\//, '')
+  if (!id) return undefined // no model named: the defaults below still apply
+  if (Object.prototype.hasOwnProperty.call(MODELS, id)) {
+    return MODELS[id as ModelId].tier
+  }
+  if (id === EMBEDDERS.active) return 'volume'
+  return null // an id nothing describes: no estimate, never a guessed one
+}
+
+function factorsForModel(model: string): Factors | null {
+  const tier = tierOf(model)
+  if (tier === null) return null
+  if (tier && TIER_FACTORS[tier]) return TIER_FACTORS[tier]
   return {
     promptJpt: DEFAULT_PROMPT_JPT,
     completionJpt: DEFAULT_COMPLETION_JPT,
@@ -169,7 +185,7 @@ function pickGridGco2PerKwh(): number {
  *   - prompt_tokens / input_tokens
  *   - completion_tokens / output_tokens
  *   - total_tokens (will be split 50/50 if prompt/completion missing)
- *   - model?  (optional; if omitted we try OPENAI_MODEL env var)
+ *   - model?  (optional; if omitted the registry tier lookup falls back)
  * @param modelOverride - optional model name (wins over usage.model)
  * @returns number|null - gCO₂e rounded to 2 decimals, or null if inputs missing
  */
@@ -179,8 +195,10 @@ export function estimateEnergyGCO2e(
 ): number | null {
   if (!usage) return null
 
-  const model = modelOverride || usage.model || process.env.OPENAI_MODEL || ''
-  const { promptJpt, completionJpt } = factorsForModel(model)
+  const model = modelOverride || usage.model || ''
+  const factors = factorsForModel(model)
+  if (!factors) return null // unpriceable model: no estimate rather than a guess
+  const { promptJpt, completionJpt } = factors
 
   // Gather tokens with graceful fallback
   let pt = toInt(usage.prompt_tokens ?? usage.input_tokens)

@@ -458,6 +458,9 @@ const AskWriAppContent = () => {
             (total: any, tryInfo: any) => {
               if (tryInfo.usage) {
                 return {
+                  // The model the cost is priced at; without it estimateCostUSD
+                  // has nothing to look up and must not guess a rate.
+                  model: tryInfo.usage.model ?? total.model,
                   prompt_tokens:
                     (total.prompt_tokens || 0) +
                     (tryInfo.usage.prompt_tokens || 0),
@@ -479,17 +482,35 @@ const AskWriAppContent = () => {
             alignmentUsage.prompt_tokens ||
             alignmentUsage.completion_tokens
           ) {
-            // Add alignment usage to existing ops
-            setOps((prev) => {
-              if (!prev) return prev
-              const alignmentCost = estimateCostUSD(alignmentUsage)
-              const alignmentEnergy = estimateEnergyGCO2e(alignmentUsage)
-              return {
-                ...prev,
-                cost_usd: (prev.cost_usd || 0) + (alignmentCost || 0),
-                energy_gco2e: (prev.energy_gco2e || 0) + (alignmentEnergy || 0),
-              }
-            })
+            // Computed OUTSIDE the updater: an updater runs during render, so a
+            // throw from an unpriceable model would crash the page instead of
+            // leaving the cost figure short (jobs 943, 944).
+            // One try per figure: energy does not depend on the price, so an
+            // unpriced model must not take the energy contribution down with the
+            // cost (job 945).
+            let alignmentCost: number | null = null
+            let alignmentEnergy: number | null = null
+            try {
+              alignmentCost = estimateCostUSD(alignmentUsage)
+            } catch {
+              // An unpriced model degrades the cost figure, never the page.
+            }
+            try {
+              alignmentEnergy = estimateEnergyGCO2e(alignmentUsage)
+            } catch {
+              // Same for energy.
+            }
+            if (alignmentCost !== null || alignmentEnergy !== null) {
+              setOps((prev) => {
+                if (!prev) return prev
+                return {
+                  ...prev,
+                  cost_usd: (prev.cost_usd || 0) + (alignmentCost || 0),
+                  energy_gco2e:
+                    (prev.energy_gco2e || 0) + (alignmentEnergy || 0),
+                }
+              })
+            }
           }
         }
       } else {

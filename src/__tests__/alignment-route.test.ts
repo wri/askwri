@@ -76,12 +76,11 @@ beforeEach(() => {
   process.env = {
     ...ENV,
     OPENAI_API_KEY: 'sk-test',
-    OPENAI_MODEL: 'gpt-5-mini',
+    MODEL_ALIGNMENT: 'gpt-5-mini',
   }
   // A developer's deploy-day .env — loaded by next/jest even under NODE_ENV=test —
   // must not masquerade as the route's default, and no machine-wide cap, timeout,
   // temperature or sweep token may silently satisfy an assertion.
-  delete process.env.OPENAI_MODEL_ALIGNMENT
   delete process.env.OPENAI_MAX_TOKENS
   delete process.env.OPENAI_TEMPERATURE
   delete process.env.ALIGNMENT_TIMEOUT_MS_MAIN
@@ -166,7 +165,7 @@ describe('POST /api/alignment — the timeout ladder scales the bases and clamps
     Math.ceil((ALIGNMENT_SYSTEM_PROMPT.length + summary.length) / 4)
 
   it('a small non-GPT-5 prompt gets the base scaled by the prompt, not the bare base', async () => {
-    process.env.OPENAI_MODEL = 'gpt-4o-mini'
+    process.env.MODEL_ALIGNMENT = 'gpt-4o-mini'
     const delays = spyDeadlines()
     const { status } = await post({
       query: 'How do cities cool streets?',
@@ -180,8 +179,35 @@ describe('POST /api/alignment — the timeout ladder scales the bases and clamps
     expect(expected).toBeLessThan(35000)
   })
 
+  // This pins WHICH ladder an override takes, not its scaling: on the gpt-5 path
+  // the clamp binds for any prompt (40000*2 is already past 60000), so the token
+  // term cannot show up in the assertion. The scaling has its own non-GPT-5 test.
+  it('gives an override the ladder of the model it will actually call', async () => {
+    // Whole-branch review, finding 7: a pre-flip sweep must measure the candidate
+    // under the deadline the task will run with AFTER the flip, and after the flip
+    // the called model IS the candidate. Deriving the ladder from the current
+    // assignment measured the incumbent's deadline instead — in the dangerous
+    // direction, since a GPT-6 candidate's ladder is the shorter one.
+    process.env.MODEL_ALIGNMENT = 'gpt-4o-mini' // non-gpt5 task ladder: 20000
+    process.env.EVAL_MODEL_OVERRIDE_TOKEN = 'secret'
+    const delays = spyDeadlines()
+    await post(
+      {
+        query: 'How do cities cool streets?',
+        resultsSummary: 'Short summary.',
+        model: 'gpt-5.4-mini', // gpt-5-class: its own ladder is 40000
+      },
+      { 'x-eval-token': 'secret' },
+    )
+    const expected = Math.min(
+      60000,
+      40000 * 2 + approxToks('Short summary.') * 15,
+    )
+    expect(delays).toEqual([expected])
+  })
+
   it('a large non-GPT-5 prompt clamps every attempt at 35000/30000', async () => {
-    process.env.OPENAI_MODEL = 'gpt-4o-mini'
+    process.env.MODEL_ALIGNMENT = 'gpt-4o-mini'
     const delays = spyDeadlines()
     mockReply('', 500) // every attempt fails: schema, tools, json_object
     const { status } = await post({

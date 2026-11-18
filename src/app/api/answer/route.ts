@@ -7,7 +7,7 @@ import {
   UnsupportedProviderBaseUrlError,
 } from '@/lib/llm/chat-completions'
 import { requestProfile, wireParams } from '@/lib/request-profile'
-import { ASSIGNMENT } from '@/config/models'
+import { resolveModel } from '@/config/models'
 import {
   MAX_PASSAGES_CAP,
   normalizeSentences,
@@ -20,9 +20,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const NANO_MODEL = (
-  process.env.OPENAI_MODEL_NANO ?? ASSIGNMENT.prefilter
-).trim()
+const NANO_MODEL = resolveModel('prefilter')
 const USE_NANO_FILTER =
   (process.env.USE_NANO_FILTER ?? 'false').toLowerCase() === 'true'
 

@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isEnglishText } from '@/lib/ensure-english'
 import { requestProfile, wireParams } from '@/lib/request-profile'
-import { ASSIGNMENT } from '@/config/models'
+import { resolveModel } from '@/config/models'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
@@ -12,11 +12,7 @@ export const revalidate = 0
 
 // Read at import: this is the route's own default, used whenever the request
 // names no model. A requested model is resolved per request in POST.
-const FALLBACK_MODEL = (
-  process.env.OPENAI_MODEL_RELATES ??
-  process.env.OPENAI_MODEL ??
-  ASSIGNMENT.relates
-).trim()
+const FALLBACK_MODEL = resolveModel('relates')
 
 // This route answers 200 with canned sentences on every failure, so
 // `produced: false` is what keeps a response no model authored from reading as
@@ -82,7 +78,7 @@ interface DocInput {
 export async function POST(req: NextRequest) {
   // The model this response is about, for the catch-all below that cannot
   // re-read the request body.
-  let model = FALLBACK_MODEL
+  let model: string = FALLBACK_MODEL
   try {
     const body = (await req.json()) as {
       query: string
@@ -91,7 +87,7 @@ export async function POST(req: NextRequest) {
     }
     const { query, docs } = body
 
-    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL, 'relates')
     if (!resolved.ok) {
       return NextResponse.json(
         {

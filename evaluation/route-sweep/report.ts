@@ -14,6 +14,7 @@
  */
 import { checkCall, inputCount } from './checks'
 import type { CallResult, RouteName, SweepArtifact } from './types'
+import { MODELS, type ModelId } from '@/config/models'
 
 /** The order a reader expects the routes in, matching the sweep's own. */
 const ROUTE_ORDER: RouteName[] = [
@@ -283,6 +284,208 @@ function routeLines(a: SweepArtifact, route: RouteName): string[] {
   return lines
 }
 
+/* ---------------- the acceptance numbers ---------------- */
+
+/** What the provider billed for one call. Every attempt counts: alignment reports
+ *  one usage per try inside `debug.tries[]` and pays for the ones that failed, so
+ *  costing only the attempt that parsed understates the spend. `translate`
+ *  reports none, and a route with no usage gets a null cost rather than a zero. */
+function billedTokens(
+  call: CallResult,
+): Array<{ input: number; output: number }> | null {
+  const body = call.response as any
+  if (!body || typeof body !== 'object') return null
+  const one = (u: any) => {
+    const input = u?.prompt_tokens ?? u?.input_tokens
+    const output = u?.completion_tokens ?? u?.output_tokens
+    return typeof input === 'number' &&
+      typeof output === 'number' &&
+      Number.isFinite(input) &&
+      Number.isFinite(output) &&
+      input >= 0 &&
+      output >= 0
+      ? { input, output }
+      : null
+  }
+  const tries = Array.isArray(body.debug?.tries) ? body.debug.tries : []
+  if (tries.length) {
+    const tokens: Array<{ input: number; output: number }> = []
+    for (const attempt of tries) {
+      const usage = one(attempt?.usage)
+      if (!usage) return null
+      tokens.push(usage)
+    }
+    return tokens
+  }
+  const usage = one(body.usage)
+  return usage ? [usage] : null
+}
+
+/** Keyed on the model the call ASKED for, not on `usage.model`: alignment echoes
+ *  `openai/<id>` and a lookup on that would silently price another model. */
+function priceOf(model: string) {
+  return Object.prototype.hasOwnProperty.call(MODELS, model)
+    ? MODELS[model as ModelId].price
+    : undefined
+}
+
+export type RouteSummary = {
+  route: RouteName
+  model: string
+  calls: number
+  failed: number
+  /** Nearest-rank p95; null only when there were no calls at all. */
+  p95Ms: number | null
+  /** Null when any call/attempt lacks complete usage, or there is no price. */
+  costUsd: number | null
+}
+
+/**
+ * The bar asks for p95 and cost per job. Nothing else in this tool computes
+ * either, and a number derived from the wrong model or the wrong attempt is
+ * worse than no number.
+ */
+export function summarise(a: SweepArtifact): RouteSummary[] {
+  const rows: RouteSummary[] = []
+  for (const route of ROUTE_ORDER) {
+    for (const model of a.models) {
+      const calls = a.calls.filter(
+        (c) => c.route === route && c.model === model,
+      )
+      if (!calls.length) continue
+      const failed = calls.filter(
+        (c) => !checkCall(c, model, inputCount(route, c.request)).ok,
+      ).length
+      const latencies = calls.map((c) => c.latency_ms).sort((x, y) => x - y)
+      const price = priceOf(model)
+      const usages = calls.map(billedTokens)
+      const billable = usages.flatMap((usage) => usage ?? [])
+      const costUsd =
+        price && usages.every((usage) => usage !== null) && billable.length
+          ? +billable
+              .reduce(
+                (sum, t) =>
+                  sum +
+                  (t.input / 1_000_000) * price.inputPer1M +
+                  (t.output / 1_000_000) * price.outputPer1M,
+                0,
+              )
+              .toFixed(6)
+          : null
+      rows.push({
+        route,
+        model,
+        calls: calls.length,
+        failed,
+        // Nearest rank: the smallest sample at or above the 95th percentile.
+        p95Ms: latencies[Math.ceil(0.95 * latencies.length) - 1] ?? null,
+        costUsd,
+      })
+    }
+  }
+  return rows
+}
+
+/** The bar's cost clauses, as arithmetic: every row must be measured, and a
+ *  candidate must not cost more than 20% above the incumbent it replaces. A clean
+ *  mechanical run says nothing about either — a translate sweep can print "cost
+ *  unmeasured" over zero failed checks (whole-branch review, finding 6).
+ *
+ *  Latency is NOT gated here: the artifact records whole-call time while each
+ *  route scales and clamps its own deadline per prompt, so no denominator in this
+ *  file is the clock the call ran against. Printing the p95 and its n is honest;
+ *  inventing a ratio would not be. */
+export function acceptanceGate(a: SweepArtifact): {
+  ok: boolean
+  reasons: string[]
+} {
+  const reasons: string[] = []
+  const rows = summarise(a)
+  // Nothing measured is not a passed bar (gpt-6-luna review).
+  if (!rows.length) {
+    return {
+      ok: false,
+      reasons: ['no calls in this artifact: nothing to gate'],
+    }
+  }
+  // A pair with no calls never becomes a row, so the loops below would skip it and
+  // report the clause as met (roborev job 931). Any route that ran at all must have
+  // run both models, or there is nothing to compare.
+  for (const route of new Set(rows.map((r) => r.route))) {
+    for (const model of a.models) {
+      if (!rows.some((r) => r.route === route && r.model === model)) {
+        reasons.push(
+          `no calls for ${route} / ${model}: the pair cannot be compared`,
+        )
+      }
+    }
+  }
+  for (const row of rows) {
+    if (row.costUsd === null) {
+      reasons.push(
+        `cost unmeasured for ${row.route} / ${row.model}: the bar needs it within 20% of the incumbent`,
+      )
+    }
+  }
+  for (const route of ROUTE_ORDER) {
+    const mine = rows.filter((r) => r.route === route)
+    const [a1, b1] = mine
+    if (!a1 || !b1 || a1.costUsd === null || b1.costUsd === null) continue
+    if (a1.costUsd === 0) {
+      // "Within 20% of the incumbent's" cannot be computed against zero, and a
+      // skipped clause reads as a met one — including when both sides are zero,
+      // which means the sweep measured no tokens at all (jobs 932, gpt-6-luna).
+      reasons.push(
+        `incumbent cost is zero on ${route}, so the 20% bar cannot be computed`,
+      )
+      continue
+    }
+    const pct = ((b1.costUsd - a1.costUsd) / a1.costUsd) * 100
+    // Symmetric on purpose: the bar says "within 20%", so a candidate far
+    // cheaper is as much a change as one far dearer. Worded neutrally, because
+    // "candidate over incumbent" would read as dearer when the sign is negative.
+    if (Math.abs(pct) > 20) {
+      reasons.push(
+        `${b1.model} is ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% vs ${a1.model} on ${route}: the bar allows ±20%`,
+      )
+    }
+  }
+  return { ok: reasons.length === 0, reasons }
+}
+
+/** One line per route and model, with n beside every percentile: ten cases is an
+ *  observation with a wide interval, and a percentile printed without its count
+ *  reads as a baseline. */
+function acceptanceLines(a: SweepArtifact): string[] {
+  const rows = summarise(a)
+  if (!rows.length) return []
+  const lines = ['## Acceptance numbers', '']
+  for (const route of ROUTE_ORDER) {
+    const mine = rows.filter((r) => r.route === route)
+    if (!mine.length) continue
+    lines.push(`### ${route}`)
+    for (const r of mine) {
+      const cost = r.costUsd === null ? 'cost unmeasured' : `cost $${r.costUsd}`
+      lines.push(
+        // Plain, not bold: the case rows above already head a line with
+        // `**model**`, and a second one makes every "the row for this model"
+        // reader pick the wrong line.
+        `- ${r.model} — calls ${r.calls}, failed ${r.failed}, ` +
+          `p95 ${r.p95Ms ?? '–'} ms (n=${r.calls}), ${cost}`,
+      )
+    }
+    const [first, second] = mine
+    if (first?.costUsd && second?.costUsd) {
+      const pct = ((second.costUsd - first.costUsd) / first.costUsd) * 100
+      lines.push(
+        `- cost of ${second.model} vs ${first.model}: ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`,
+      )
+    }
+    lines.push('')
+  }
+  return lines
+}
+
 /** The whole readout. Pure: same artifact in, same markdown out. */
 export function renderMarkdown(a: SweepArtifact): string {
   const verdicts = a.calls.map(verdictOf)
@@ -291,6 +494,7 @@ export function renderMarkdown(a: SweepArtifact): string {
   const lines = [
     ...headerLines(a, failed.length),
     ...mechanicalLines(a, failed),
+    ...acceptanceLines(a),
   ]
   for (const route of ROUTE_ORDER) lines.push(...routeLines(a, route))
   return (

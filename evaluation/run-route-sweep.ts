@@ -22,7 +22,11 @@ import { checkCall, inputCount } from './route-sweep/checks'
 import { freezeCases, loadEvalset } from './route-sweep/freeze'
 import type { LoadedEvalset } from './route-sweep/freeze'
 import { fetchCatalogIndex } from './route-sweep/payloads'
-import { artifactPath, renderMarkdown } from './route-sweep/report'
+import {
+  acceptanceGate,
+  artifactPath,
+  renderMarkdown,
+} from './route-sweep/report'
 import { resolveCodeVersion, runSweep } from './route-sweep/sweep'
 import type {
   CallResult,
@@ -460,11 +464,25 @@ async function runSweepStage(
   writeFileSync(files.md, renderMarkdown(artifact))
 
   const checks = printChecks(calls)
+  // Two independent gates. The mechanical one says the calls are evidence; the
+  // acceptance one says the bar's cost clauses hold. A run can pass the first and
+  // fail the second — unmeasured cost over zero failed checks is the case that
+  // motivated this split (whole-branch review, finding 6).
+  const acceptance = acceptanceGate(artifact)
+  if (!acceptance.ok) {
+    console.log('acceptance: FAILED')
+    for (const reason of acceptance.reasons) console.log(`  - ${reason}`)
+  }
   // The tool exists to gate a model swap, so a run that is not evidence of a
   // clean sweep must not exit 0: CI and a person both read the exit code first.
   if (checks.failed > 0 || checks.total === 0) {
     process.exitCode = 1
     console.log('gate: FAILED — this run is not evidence of a clean sweep')
+  } else if (!acceptance.ok) {
+    process.exitCode = 1
+    console.log(
+      'gate: FAILED — mechanically clean, but the acceptance bar is not met',
+    )
   } else {
     console.log('gate: passed')
   }

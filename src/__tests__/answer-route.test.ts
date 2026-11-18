@@ -67,7 +67,11 @@ function sentBody(): any {
 
 beforeEach(() => {
   jest.resetModules()
-  process.env = { ...ENV, OPENAI_API_KEY: 'sk-test', OPENAI_MODEL: 'gpt-5.4' }
+  process.env = {
+    ...ENV,
+    OPENAI_API_KEY: 'sk-test',
+    MODEL_ANSWER: 'gpt-5.4-mini',
+  }
   delete process.env.OPENAI_BASE_URL
   delete process.env.USE_NANO_FILTER
   // These tests assert the ROUTE's defaults; a developer's deploy-day .env
@@ -90,6 +94,26 @@ afterEach(() => {
 })
 
 describe('POST /api/answer — defaults reproduce current behaviour', () => {
+  it.each(['lever', 'override'])(
+    'sends the answer task effort for a reasoning candidate via %s',
+    async (source) => {
+      if (source === 'lever') process.env.MODEL_ANSWER = 'gpt-6.1-sol'
+      const out = await post({
+        query: 'q',
+        docs: docs(15),
+        ...(source === 'override' ? { model: 'gpt-6.1-sol' } : {}),
+      })
+      expect(out.ok).toBe(true)
+      expect(out.passages_sent).toHaveLength(15)
+      expect(sentBody()).toMatchObject({
+        model: 'gpt-6.1-sol',
+        reasoning_effort: 'medium',
+        max_completion_tokens: 2000,
+      })
+      expect(sentBody().temperature).toBeUndefined()
+    },
+  )
+
   it('gpt-5 default: 15 passages, 800 chars, max_completion_tokens, no temperature', async () => {
     const out = await post({ query: 'q', docs: docs(15) })
     expect(out.ok).toBe(true)
@@ -97,7 +121,7 @@ describe('POST /api/answer — defaults reproduce current behaviour', () => {
     for (const p of out.passages_sent)
       expect(p.text.length).toBeLessThanOrEqual(800)
     const body = sentBody()
-    expect(body.model).toBe('gpt-5.4')
+    expect(body.model).toBe('gpt-5.4-mini')
     expect(body.max_completion_tokens).toBe(2000)
     expect(body.temperature).toBeUndefined()
     expect(fetchMock.mock.calls[0][0]).toBe(
@@ -106,7 +130,7 @@ describe('POST /api/answer — defaults reproduce current behaviour', () => {
   })
 
   it('non-gpt-5 default: 6 passages, 350 chars, max_tokens + temperature', async () => {
-    process.env.OPENAI_MODEL = 'gpt-4o-mini'
+    process.env.MODEL_ANSWER = 'gpt-4o-mini'
     const out = await post({ query: 'q', docs: docs(15), prompt_version: 'v1' })
     expect(out.passages_sent).toHaveLength(6)
     for (const p of out.passages_sent)
@@ -141,7 +165,7 @@ describe('POST /api/answer — defaults reproduce current behaviour', () => {
       'content-type': 'application/json',
     })
     expect(body).toEqual({
-      model: 'gpt-5.4',
+      model: 'gpt-5.4-mini', // the deployed model; the lever in beforeEach pins it
       messages: [
         { role: 'system', content: expect.any(String) },
         {

@@ -8,7 +8,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requestProfile, wireParams } from '@/lib/request-profile'
-import { ASSIGNMENT } from '@/config/models'
+import { resolveModel } from '@/config/models'
 import { resolveRouteModel, type RouteProvenance } from '@/lib/route-model'
 
 export const runtime = 'nodejs'
@@ -17,11 +17,7 @@ export const revalidate = 0
 
 // Read at import: this is the route's own default, used whenever the request
 // names no model. A requested model is resolved per request in POST.
-const FALLBACK_MODEL = (
-  process.env.OPENAI_MODEL_TRANSLATE ??
-  process.env.OPENAI_MODEL ??
-  ASSIGNMENT.translate
-).trim()
+const FALLBACK_MODEL = resolveModel('translate')
 const MAX_INPUT_CHARS = 4000
 
 // `produced: false` is what keeps a response that no model authored from
@@ -53,12 +49,12 @@ Rules:
 export async function POST(req: NextRequest) {
   // The model this response is about, for the catch-all below that cannot
   // re-read the request body.
-  let model = FALLBACK_MODEL
+  let model: string = FALLBACK_MODEL
   try {
     const body = (await req.json()) as { text?: string; model?: string }
     const source = String(body?.text ?? '').trim()
 
-    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL)
+    const resolved = resolveRouteModel(req, body, FALLBACK_MODEL, 'translate')
     if (!resolved.ok) {
       return NextResponse.json(
         {

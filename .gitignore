@@ -97,3 +97,6 @@ Thumbs.db
 
 # Microsoft Office lock/owner files (created while a .docx in docs/ is open)
 ~$*
+
+# tsc incremental cache (a tsc experiment once committed one)
+*.tsbuildinfo

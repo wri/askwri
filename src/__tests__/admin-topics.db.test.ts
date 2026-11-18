@@ -541,7 +541,7 @@ d('topicsAdmin list/get (DB integration)', () => {
         expect(r1).toHaveProperty('runId')
         expect(typeof r1.runId).toBe('string')
         expect(r1.enqueued).toBeGreaterThanOrEqual(1)
-        expect(r1.estCost).toBe(+(r1.enqueued * EST_PER_DOC_COST).toFixed(4))
+        expect(r1.estCost).toBe(+(r1.enqueued * EST_PER_DOC_COST).toFixed(6))
 
         // Simulate a worker completing the first run before a second enqueue.
         await AppDataSource.query(
@@ -610,7 +610,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       const r = await enqueueReclassify({ tagId }, adminIdentity)
       runIds.push(r.runId)
       expect(r.enqueued).toBe(1)
-      expect(r.estCost).toBe(+(1 * EST_PER_DOC_COST).toFixed(4))
+      expect(r.estCost).toBe(+(1 * EST_PER_DOC_COST).toFixed(6))
       expect(typeof r.runId).toBe('string')
 
       // Verify the job row exists with the right scope_tag_id
@@ -676,7 +676,7 @@ d('topicsAdmin list/get (DB integration)', () => {
       expect(entry!).toHaveProperty('done')
       expect(entry!).toHaveProperty('error')
       expect(entry!).toHaveProperty('estCost')
-      expect(entry!.estCost).toBe(+(entry!.total * EST_PER_DOC_COST).toFixed(4))
+      expect(entry!.estCost).toBe(+(entry!.total * EST_PER_DOC_COST).toFixed(6))
       expect(entry!).toHaveProperty('createdAt')
     } finally {
       await AppDataSource.query(
@@ -737,7 +737,7 @@ d('topicsAdmin list/get (DB integration)', () => {
     try {
       await expect(estimateReclassify('all')).resolves.toEqual({
         eligible: before.eligible + 1,
-        estCost: +((before.eligible + 1) * EST_PER_DOC_COST).toFixed(4),
+        estCost: +((before.eligible + 1) * EST_PER_DOC_COST).toFixed(6),
       })
       await expect(estimateReclassify({ tagId: topic.id })).resolves.toEqual({
         eligible: 1,
