@@ -404,12 +404,20 @@ export const calculateEmbeddingCost = (
   } catch {
     citeEmbeddingCost = 0
   }
-  const citeEmbeddingEnergy =
-    estimateEnergyGCO2e({
-      model: 'text-embedding-3-small',
-      prompt_tokens: citeEmbeddingTokens,
-      completion_tokens: 0,
-    }) ?? 0.01
+  // Same embedder as the cost above: the id that writes rows. The old
+  // 'text-embedding-3-small' is not a model this app calls, so it now yields no
+  // estimate at all and must not be papered over with a constant (jobs 946, 947).
+  let citeEmbeddingEnergy = 0
+  try {
+    citeEmbeddingEnergy =
+      estimateEnergyGCO2e({
+        model: EMBEDDERS.active,
+        prompt_tokens: citeEmbeddingTokens,
+        completion_tokens: 0,
+      }) ?? 0
+  } catch {
+    citeEmbeddingEnergy = 0
+  }
 
   return {
     index_version: 'v1.0',

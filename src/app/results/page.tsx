@@ -485,13 +485,20 @@ const AskWriAppContent = () => {
             // Computed OUTSIDE the updater: an updater runs during render, so a
             // throw from an unpriceable model would crash the page instead of
             // leaving the cost figure short (jobs 943, 944).
+            // One try per figure: energy does not depend on the price, so an
+            // unpriced model must not take the energy contribution down with the
+            // cost (job 945).
             let alignmentCost: number | null = null
             let alignmentEnergy: number | null = null
             try {
               alignmentCost = estimateCostUSD(alignmentUsage)
+            } catch {
+              // An unpriced model degrades the cost figure, never the page.
+            }
+            try {
               alignmentEnergy = estimateEnergyGCO2e(alignmentUsage)
             } catch {
-              // An unpriced model degrades the figure, never the page.
+              // Same for energy.
             }
             if (alignmentCost !== null || alignmentEnergy !== null) {
               setOps((prev) => {
