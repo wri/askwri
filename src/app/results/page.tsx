@@ -482,17 +482,28 @@ const AskWriAppContent = () => {
             alignmentUsage.prompt_tokens ||
             alignmentUsage.completion_tokens
           ) {
-            // Add alignment usage to existing ops
-            setOps((prev) => {
-              if (!prev) return prev
-              const alignmentCost = estimateCostUSD(alignmentUsage)
-              const alignmentEnergy = estimateEnergyGCO2e(alignmentUsage)
-              return {
-                ...prev,
-                cost_usd: (prev.cost_usd || 0) + (alignmentCost || 0),
-                energy_gco2e: (prev.energy_gco2e || 0) + (alignmentEnergy || 0),
-              }
-            })
+            // Computed OUTSIDE the updater: an updater runs during render, so a
+            // throw from an unpriceable model would crash the page instead of
+            // leaving the cost figure short (jobs 943, 944).
+            let alignmentCost: number | null = null
+            let alignmentEnergy: number | null = null
+            try {
+              alignmentCost = estimateCostUSD(alignmentUsage)
+              alignmentEnergy = estimateEnergyGCO2e(alignmentUsage)
+            } catch {
+              // An unpriced model degrades the figure, never the page.
+            }
+            if (alignmentCost !== null || alignmentEnergy !== null) {
+              setOps((prev) => {
+                if (!prev) return prev
+                return {
+                  ...prev,
+                  cost_usd: (prev.cost_usd || 0) + (alignmentCost || 0),
+                  energy_gco2e:
+                    (prev.energy_gco2e || 0) + (alignmentEnergy || 0),
+                }
+              })
+            }
           }
         }
       } else {
