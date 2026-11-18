@@ -37,9 +37,9 @@ describe('model registry', () => {
     expect(ASSIGNMENT).toEqual({
       answer: 'gpt-5.4-mini',
       prefilter: 'gpt-5.4-nano', // unobservable while USE_NANO_FILTER is off
-      why: 'gpt-5.4-nano',
-      relates: 'gpt-5.4-nano',
-      alignment: 'gpt-5.4-nano',
+      why: 'gpt-6-luna', // flip 2: p95 6.5 s with fast mode, 0 of 10 failed
+      relates: 'gpt-6-luna', // flip 3: p95 7.1 s, 0 of 10 failed
+      alignment: 'gpt-6.1-terra', // flip 4: p95 3.3 s with fast mode at low, parity with luna, sharper
       translate: 'gpt-6-luna', // flip 1, 2026-11-18: sweep clean, p95 3.5 s vs 7.3 s on terra
     })
   })
@@ -125,7 +125,7 @@ describe('model registry', () => {
 
   it('declares the candidates as known, and assigns only the ones that have flipped', () => {
     // A flip adds its candidate here, together with its ASSIGNMENT line.
-    const flipped = new Set<string>(['gpt-6-luna'])
+    const flipped = new Set<string>(['gpt-6-luna', 'gpt-6.1-terra'])
     const assigned = new Set<string>(Object.values(ASSIGNMENT))
     ;['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'].forEach(
       (id) => {

@@ -172,9 +172,9 @@ export const ASSIGNMENT: Record<TaskId, ModelId> = {
   // these rows used to hold a code default that production never ran.
   answer: 'gpt-5.4-mini',
   prefilter: 'gpt-5.4-nano', // unobservable: USE_NANO_FILTER is off on QA
-  why: 'gpt-5.4-nano',
-  relates: 'gpt-5.4-nano',
-  alignment: 'gpt-5.4-nano',
+  why: 'gpt-6-luna', // flip 2, 2026-11-18
+  relates: 'gpt-6-luna', // flip 3, 2026-11-18
+  alignment: 'gpt-6.1-terra', // flip 4, 2026-11-18: at low effort with fast mode
   translate: 'gpt-6-luna', // flip 1, 2026-11-18
 }
 

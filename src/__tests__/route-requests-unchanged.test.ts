@@ -582,17 +582,25 @@ describe('POST /api/answer — raw request bytes', () => {
 /* ---------------- POST /api/batch-why ---------------- */
 
 describe('POST /api/batch-why — raw request bytes', () => {
-  it('default arm (gpt-5.4-nano, the deployed model): max_completion_tokens 360, no temperature', async () => {
+  it('default arm (gpt-6-luna, flipped 2026-11-18): effort none, max_completion_tokens 360, fast tier, no temperature', async () => {
     await post('batch-why', { query: WHY_QUERY, passages: TWO_PASSAGES })
     expectRawBodies([
-      whyBody('gpt-5.4-nano', TWO_PASSAGES, { max_completion_tokens: 360 }),
+      whyBody('gpt-6-luna', TWO_PASSAGES, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 360,
+        service_tier: 'fast',
+      }),
     ])
   })
 
   it('default arm above the 35-passage cap: budget clamped to 3000', async () => {
     await post('batch-why', { query: WHY_QUERY, passages: MANY_PASSAGES })
     expectRawBodies([
-      whyBody('gpt-5.4-nano', MANY_PASSAGES, { max_completion_tokens: 3000 }),
+      whyBody('gpt-6-luna', MANY_PASSAGES, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 3000,
+        service_tier: 'fast',
+      }),
     ])
   })
 
@@ -684,17 +692,23 @@ describe('POST /api/batch-why — raw request bytes', () => {
 /* ---------------- POST /api/batch-relates ---------------- */
 
 describe('POST /api/batch-relates — raw request bytes', () => {
-  it('default arm (gpt-5.4-nano, the deployed model): floor 1000, no temperature', async () => {
+  it('default arm (gpt-6-luna, flipped 2026-11-18): effort none, floor 1000, no temperature', async () => {
     await post('batch-relates', { query: WHY_QUERY, docs: TWO_DOCS })
     expectRawBodies([
-      relatesBody('gpt-5.4-nano', TWO_DOCS, { max_completion_tokens: 1000 }),
+      relatesBody('gpt-6-luna', TWO_DOCS, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 1000,
+      }),
     ])
   })
 
   it('default arm above the floor: 120×docs unclamped', async () => {
     await post('batch-relates', { query: WHY_QUERY, docs: MANY_DOCS })
     expectRawBodies([
-      relatesBody('gpt-5.4-nano', MANY_DOCS, { max_completion_tokens: 4800 }),
+      relatesBody('gpt-6-luna', MANY_DOCS, {
+        reasoning_effort: 'none',
+        max_completion_tokens: 4800,
+      }),
     ])
   })
 
@@ -726,12 +740,18 @@ describe('POST /api/batch-relates — raw request bytes', () => {
 /* ---------------- POST /api/alignment ---------------- */
 
 describe('POST /api/alignment — raw request bytes', () => {
-  it('default arm (gpt-5.4-nano, the deployed model): cap 4000, json_schema first', async () => {
+  // Alignment's default arm after flip 4: gpt-6.1-terra at the task's low effort,
+  // with the fast tier. Every rung of the ladder carries the same three fields.
+  const TERRA = (cap: number) => ({
+    reasoning_effort: 'low',
+    max_completion_tokens: cap,
+    service_tier: 'fast',
+  })
+
+  it('default arm (gpt-6.1-terra, flipped 2026-11-18): effort low, cap 4000, fast tier, json_schema first', async () => {
     fetchMock.mockResolvedValue(chatReply(GOOD_ASSESSMENT))
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
-    expectRawBodies([
-      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
-    ])
+    expectRawBodies([schemaAttempt('gpt-6.1-terra', TERRA(4000))])
   })
 
   it('schema fails then tools succeeds: both primary budgets, same arm', async () => {
@@ -748,8 +768,8 @@ describe('POST /api/alignment — raw request bytes', () => {
       )
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
     expectRawBodies([
-      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
-      toolsAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
+      schemaAttempt('gpt-6.1-terra', TERRA(4000)),
+      toolsAttempt('gpt-6.1-terra', TERRA(4000)),
     ])
   })
 
@@ -760,9 +780,9 @@ describe('POST /api/alignment — raw request bytes', () => {
       .mockResolvedValueOnce(chatReply(GOOD_ASSESSMENT))
     await post('alignment', { query: WHY_QUERY, resultsSummary: SUMMARY })
     expectRawBodies([
-      schemaAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
-      toolsAttempt('gpt-5.4-nano', { max_completion_tokens: 4000 }),
-      objectAttempt('gpt-5.4-nano', { max_completion_tokens: 5000 }),
+      schemaAttempt('gpt-6.1-terra', TERRA(4000)),
+      toolsAttempt('gpt-6.1-terra', TERRA(4000)),
+      objectAttempt('gpt-6.1-terra', TERRA(5000)),
     ])
   })
 
