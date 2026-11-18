@@ -54,6 +54,22 @@ JSON. **That is a hypothesis, not a finding**, and this artifact cannot decide i
 - `batch-why` p95 is the slowest route and the only one with no client timeout — 9.3 s at the
   incumbent, before any migration.
 
+## Probe on the candidate, 2026-11-18
+
+`gpt-5.4-*` is retired, so the probe ran on the model this route is moving to:
+`npm run probe:models -- --task why --models gpt-6-luna` (25-passage fixture, budget 2200).
+
+| Effort | Latency | in / out | reasoning | Verdict |
+|---|---|---|---|---|
+| medium | 10.6 s | 1707 / 947 | 57 | usable |
+| none | 6.6 s | 1707 / 805 | 0 | usable |
+
+Output sits at 36–43% of the budget, and `none` spends no reasoning tokens, so the truncation hypothesis
+does not reproduce on Luna. A 6-passage reply is roughly a quarter of this size. No budget change is
+indicated; the route now records `finish_reason` (`b2a6229`) and names a cut-off `truncated`, so a
+recurrence is distinguishable on the next sweep. Caveat: the probe prints `usable`, not `finish_reason`
+itself, and the failing 6-passage shape was not run.
+
 ## Where the sequence stands
 
 Task 5's gate is **not passed** and the plan says a failed gate stops the sequence rather than
