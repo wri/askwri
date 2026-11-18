@@ -286,7 +286,9 @@ describe('renderMarkdown', () => {
       ]),
     )
 
-    const section = md.slice(md.indexOf('## batch-why'))
+    // Line-anchored: a bare '## batch-why' also matches the acceptance block's
+    // '### batch-why', which would measure the wrong region.
+    const section = md.slice(md.indexOf('\n## batch-why'))
     expect(section).toContain(QUESTION)
     expect(section).toContain(MODEL_A)
     expect(section).toContain(MODEL_B)
@@ -431,6 +433,16 @@ describe('summarise — the bar’s two numbers', () => {
     expect(renderMarkdown(artifactOf(calls))).toContain('p95 500 ms (n=5)')
   })
 
+  it('prints the candidate’s p95 against the incumbent’s, so latency is read first-class', () => {
+    const calls = [
+      whyCall(MODEL_A, ['a'], { case_id: 'q1', latency_ms: 1000 }),
+      whyCall(MODEL_B, ['a'], { case_id: 'q1', latency_ms: 1500 }),
+    ]
+    expect(renderMarkdown(artifactOf(calls))).toContain(
+      `p95 of ${MODEL_B} vs ${MODEL_A}: +50.0% (1000 ms to 1500 ms)`,
+    )
+  })
+
   it('counts a failed call through checkCall, substitutions included', () => {
     const calls = [
       whyCall(MODEL_A, ['a']),
@@ -565,7 +577,15 @@ describe('acceptanceGate — a clean mechanical run is not a passed bar', () => 
       pair([priced(NANO, 1_000_000), priced(MINI, 3_000_000)], [NANO, MINI]),
     )
     expect(gate.ok).toBe(false)
-    expect(gate.reasons.join(' ')).toMatch(/\+1025\.0% vs .*allows ±20%/i)
+    expect(gate.reasons.join(' ')).toMatch(/\+1025\.0% vs .*allows \+20%/i)
+  })
+
+  it('passes when the candidate costs far less than the incumbent', () => {
+    // A saving is not a regression: only a candidate more than 20% dearer fails.
+    const gate = acceptanceGate(
+      pair([priced(MINI, 3_000_000), priced(NANO, 1_000_000)], [MINI, NANO]),
+    )
+    expect(gate).toMatchObject({ ok: true, reasons: [] })
   })
 
   it('fails when a route ran one model but not the other', () => {

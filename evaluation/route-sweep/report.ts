@@ -441,12 +441,11 @@ export function acceptanceGate(a: SweepArtifact): {
       continue
     }
     const pct = ((b1.costUsd - a1.costUsd) / a1.costUsd) * 100
-    // Symmetric on purpose: the bar says "within 20%", so a candidate far
-    // cheaper is as much a change as one far dearer. Worded neutrally, because
-    // "candidate over incumbent" would read as dearer when the sign is negative.
-    if (Math.abs(pct) > 20) {
+    // One-sided: a saving is not a regression, and the incumbent is being
+    // retired, so only a candidate more than 20% dearer fails.
+    if (pct > 20) {
       reasons.push(
-        `${b1.model} is ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% vs ${a1.model} on ${route}: the bar allows ±20%`,
+        `${b1.model} is +${pct.toFixed(1)}% vs ${a1.model} on ${route}: the bar allows +20%`,
       )
     }
   }
@@ -475,6 +474,14 @@ function acceptanceLines(a: SweepArtifact): string[] {
       )
     }
     const [first, second] = mine
+    // Latency first: reported as a delta, not gated, because the spec's clause
+    // (p95 under 60% of the job's deadline) has no honest denominator here.
+    if (first?.p95Ms && second?.p95Ms) {
+      const lat = ((second.p95Ms - first.p95Ms) / first.p95Ms) * 100
+      lines.push(
+        `- p95 of ${second.model} vs ${first.model}: ${lat >= 0 ? '+' : ''}${lat.toFixed(1)}% (${first.p95Ms} ms to ${second.p95Ms} ms)`,
+      )
+    }
     if (first?.costUsd && second?.costUsd) {
       const pct = ((second.costUsd - first.costUsd) / first.costUsd) * 100
       lines.push(
