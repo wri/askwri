@@ -605,3 +605,25 @@ describe('acceptanceGate — a clean mechanical run is not a passed bar', () => 
     expect(gate).toMatchObject({ ok: true, reasons: [] })
   })
 })
+
+describe('acceptanceGate — a gate with nothing to compute fails', () => {
+  it('fails an artifact with no calls at all', () => {
+    expect(acceptanceGate(artifactOf([])).ok).toBe(false)
+  })
+
+  it('fails when both sides measured zero cost', () => {
+    const NANO = 'gpt-5.4-nano'
+    const MINI = 'gpt-5.4-mini'
+    const zero = (model: string) =>
+      withUsage(whyCall(model, ['a', 'b']), {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+      })
+    const gate = acceptanceGate({
+      ...artifactOf([zero(NANO), zero(MINI)]),
+      models: [NANO, MINI],
+    })
+    expect(gate.ok).toBe(false)
+    expect(gate.reasons.join(' ')).toMatch(/incumbent cost is zero/i)
+  })
+})

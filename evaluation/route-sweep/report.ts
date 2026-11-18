@@ -401,6 +401,13 @@ export function acceptanceGate(a: SweepArtifact): {
 } {
   const reasons: string[] = []
   const rows = summarise(a)
+  // Nothing measured is not a passed bar (gpt-6-luna review).
+  if (!rows.length) {
+    return {
+      ok: false,
+      reasons: ['no calls in this artifact: nothing to gate'],
+    }
+  }
   // A pair with no calls never becomes a row, so the loops below would skip it and
   // report the clause as met (roborev job 931). Any route that ran at all must have
   // run both models, or there is nothing to compare.
@@ -426,12 +433,11 @@ export function acceptanceGate(a: SweepArtifact): {
     if (!a1 || !b1 || a1.costUsd === null || b1.costUsd === null) continue
     if (a1.costUsd === 0) {
       // "Within 20% of the incumbent's" cannot be computed against zero, and a
-      // skipped clause reads as a met one (roborev job 932).
-      if (b1.costUsd > 0) {
-        reasons.push(
-          `incumbent cost is zero on ${route}, so the 20% bar cannot be computed`,
-        )
-      }
+      // skipped clause reads as a met one — including when both sides are zero,
+      // which means the sweep measured no tokens at all (jobs 932, gpt-6-luna).
+      reasons.push(
+        `incumbent cost is zero on ${route}, so the 20% bar cannot be computed`,
+      )
       continue
     }
     const pct = ((b1.costUsd - a1.costUsd) / a1.costUsd) * 100

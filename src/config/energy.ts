@@ -1,4 +1,4 @@
-import { MODELS, type ModelId } from '@/config/models'
+import { EMBEDDERS, MODELS, type ModelId } from '@/config/models'
 
 /**
  * Rough, configurable energy estimator for LLM calls (in gCO₂e).
@@ -96,12 +96,20 @@ function normalizeModelKey(v: string): string {
   return (v || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')
 }
 
-function factorsForModel(model: string): Factors {
-  // Registry tier first: alignment stamps its usage `openai/<id>`.
+function tierOf(model: string): string | null | undefined {
+  // Alignment stamps its usage `openai/<id>`; the embedder has its own entry.
   const id = (model || '').replace(/^openai\//, '')
-  const tier = Object.prototype.hasOwnProperty.call(MODELS, id)
-    ? MODELS[id as ModelId].tier
-    : undefined
+  if (!id) return undefined // no model named: the defaults below still apply
+  if (Object.prototype.hasOwnProperty.call(MODELS, id)) {
+    return MODELS[id as ModelId].tier
+  }
+  if (id === EMBEDDERS.active) return 'volume'
+  return null // an id nothing describes: no estimate, never a guessed one
+}
+
+function factorsForModel(model: string): Factors | null {
+  const tier = tierOf(model)
+  if (tier === null) return null
   if (tier && TIER_FACTORS[tier]) return TIER_FACTORS[tier]
   return {
     promptJpt: DEFAULT_PROMPT_JPT,
@@ -188,7 +196,9 @@ export function estimateEnergyGCO2e(
   if (!usage) return null
 
   const model = modelOverride || usage.model || ''
-  const { promptJpt, completionJpt } = factorsForModel(model)
+  const factors = factorsForModel(model)
+  if (!factors) return null // unpriceable model: no estimate rather than a guess
+  const { promptJpt, completionJpt } = factors
 
   // Gather tokens with graceful fallback
   let pt = toInt(usage.prompt_tokens ?? usage.input_tokens)
