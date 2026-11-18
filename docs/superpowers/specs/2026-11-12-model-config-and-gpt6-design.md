@@ -415,6 +415,11 @@ incumbent's; and a human read of the side-by-side showing no regression on what 
 - **Prices are list prices** from OpenAI's pricing page; a contract rate would need a field.
 - **`energy.ts` factors are invented per tier.** The existing table was already labelled
   "tune with real telemetry"; moving it to tiers does not make it measured.
+- **Latency is uncharacterised, and it is the next thing to get wrong.** The probe's single
+  sample measured `answer` at 4.5 s (`medium`), `alignment` at 4–5 s (`medium`), and `why` at
+  7.1 s (`none`) — the slowest call on the highest-volume route, which has no client timeout
+  today. One sample each is an observation, not a baseline. Before any task flips, the timeout
+  ladders must be re-derived from measured p95 per task, not carried over from the GPT-5 ones.
 - **Long-context pricing is not modelled.** Our prompts are ~4–15K, far under the 272K
   boundary; if a prompt ever crosses it, the cost table under-reports.
 - **The judge moving to Astra** changes judge spend and latency, and makes old and new
