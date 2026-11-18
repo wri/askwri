@@ -97,6 +97,17 @@ describe('model registry', () => {
     )
   })
 
+  it('prices every model a task is assigned to', () => {
+    // The cost half of the acceptance bar is arithmetic on this table. A missing
+    // price must fail here, not print a substituted rate in the readout.
+    for (const [task, id] of Object.entries(ASSIGNMENT)) {
+      expect({ task, priced: Boolean(MODELS[id].price) }).toEqual({
+        task,
+        priced: true,
+      })
+    }
+  })
+
   it('declares the candidates as known but unassigned', () => {
     const assigned = new Set(Object.values(ASSIGNMENT))
     ;['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'].forEach(

@@ -81,6 +81,8 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       supportsEffortNone: true,
       reasoning: false,
     },
+    // Sourced 2026-11-18: OpenAI model page — $0.75 / $4.50 per 1M short-context
+    price: { inputPer1M: 0.75, outputPer1M: 4.5 },
   },
   'gpt-5.4-nano': {
     capability: {
@@ -89,6 +91,8 @@ export const MODELS: Record<ModelId, ModelSpec> = {
       supportsEffortNone: true,
       reasoning: false,
     },
+    // Sourced 2026-11-18: OpenAI standard rates — $0.20 / $1.25 per 1M short-context
+    price: { inputPer1M: 0.2, outputPer1M: 1.25 },
   },
   // Candidates: known but unassigned. Their capability mirrors what today's
   // family tests do with these ids — the non-gpt-5 arms everywhere — so an

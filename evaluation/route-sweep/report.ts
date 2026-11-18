@@ -14,6 +14,8 @@
  */
 import { checkCall, inputCount } from './checks'
 import type { CallResult, RouteName, SweepArtifact } from './types'
+import { checkCall, inputCount } from './checks'
+import { MODELS, type ModelId } from '@/config/models'
 
 /** The order a reader expects the routes in, matching the sweep's own. */
 const ROUTE_ORDER: RouteName[] = [
@@ -284,6 +286,134 @@ function routeLines(a: SweepArtifact, route: RouteName): string[] {
 }
 
 /** The whole readout. Pure: same artifact in, same markdown out. */
+
+/* ---------------- the acceptance numbers ---------------- */
+
+/** What the provider billed for one call. Every attempt counts: alignment reports
+ *  one usage per try inside `debug.tries[]` and pays for the ones that failed, so
+ *  costing only the attempt that parsed understates the spend. `translate`
+ *  reports none, and a route with no usage gets a null cost rather than a zero. */
+function billedTokens(
+  call: CallResult,
+): Array<{ input: number; output: number }> {
+  const body = call.response as any
+  if (!body || typeof body !== 'object') return []
+  const one = (u: any) =>
+    u && (u.prompt_tokens != null || u.completion_tokens != null)
+      ? {
+          input: Number(u.prompt_tokens ?? u.input_tokens ?? 0),
+          output: Number(u.completion_tokens ?? u.output_tokens ?? 0),
+        }
+      : null
+  const tries = Array.isArray(body.debug?.tries) ? body.debug.tries : []
+  if (tries.length) {
+    return tries
+      .map((t: any) => one(t?.usage))
+      .filter(
+        (t: unknown): t is { input: number; output: number } => t !== null,
+      )
+  }
+  const usage = one(body.usage)
+  return usage ? [usage] : []
+}
+
+/** Keyed on the model the call ASKED for, not on `usage.model`: alignment echoes
+ *  `openai/<id>` and a lookup on that would silently price another model. */
+function priceOf(model: string) {
+  return Object.prototype.hasOwnProperty.call(MODELS, model)
+    ? MODELS[model as ModelId].price
+    : undefined
+}
+
+export type RouteSummary = {
+  route: RouteName
+  model: string
+  calls: number
+  failed: number
+  /** Nearest-rank p95; null only when there were no calls at all. */
+  p95Ms: number | null
+  /** Null when no call reported usage, or the registry holds no price. */
+  costUsd: number | null
+}
+
+/**
+ * The bar asks for p95 and cost per job. Nothing else in this tool computes
+ * either, and a number derived from the wrong model or the wrong attempt is
+ * worse than no number.
+ */
+export function summarise(a: SweepArtifact): RouteSummary[] {
+  const rows: RouteSummary[] = []
+  for (const route of ROUTE_ORDER) {
+    for (const model of a.models) {
+      const calls = a.calls.filter(
+        (c) => c.route === route && c.model === model,
+      )
+      if (!calls.length) continue
+      const failed = calls.filter(
+        (c) => !checkCall(c, model, inputCount(route, c.request)).ok,
+      ).length
+      const latencies = calls.map((c) => c.latency_ms).sort((x, y) => x - y)
+      const price = priceOf(model)
+      const billable = calls.flatMap(billedTokens)
+      const costUsd =
+        price && billable.length
+          ? +billable
+              .reduce(
+                (sum, t) =>
+                  sum +
+                  (t.input / 1_000_000) * price.inputPer1M +
+                  (t.output / 1_000_000) * price.outputPer1M,
+                0,
+              )
+              .toFixed(6)
+          : null
+      rows.push({
+        route,
+        model,
+        calls: calls.length,
+        failed,
+        // Nearest rank: the smallest sample at or above the 95th percentile.
+        p95Ms: latencies[Math.ceil(0.95 * latencies.length) - 1] ?? null,
+        costUsd,
+      })
+    }
+  }
+  return rows
+}
+
+/** One line per route and model, with n beside every percentile: ten cases is an
+ *  observation with a wide interval, and a percentile printed without its count
+ *  reads as a baseline. */
+function acceptanceLines(a: SweepArtifact): string[] {
+  const rows = summarise(a)
+  if (!rows.length) return []
+  const lines = ['## Acceptance numbers', '']
+  for (const route of ROUTE_ORDER) {
+    const mine = rows.filter((r) => r.route === route)
+    if (!mine.length) continue
+    lines.push(`### ${route}`)
+    for (const r of mine) {
+      const cost = r.costUsd === null ? 'cost unmeasured' : `cost $${r.costUsd}`
+      lines.push(
+        // Plain, not bold: the case rows above already head a line with
+        // `**model**`, and a second one makes every "the row for this model"
+        // reader pick the wrong line.
+        `- ${r.model} — calls ${r.calls}, failed ${r.failed}, ` +
+          `p95 ${r.p95Ms ?? '–'} ms (n=${r.calls}), ${cost}`,
+      )
+    }
+    const [first, second] = mine
+    if (first?.costUsd && second?.costUsd) {
+      const pct = ((second.costUsd - first.costUsd) / first.costUsd) * 100
+      lines.push(
+        `- cost of ${second.model} vs ${first.model}: ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`,
+      )
+    }
+    lines.push('')
+  }
+  return lines
+}
+
 export function renderMarkdown(a: SweepArtifact): string {
   const verdicts = a.calls.map(verdictOf)
   const failed = verdicts.filter((v) => !v.ok)
@@ -291,6 +421,7 @@ export function renderMarkdown(a: SweepArtifact): string {
   const lines = [
     ...headerLines(a, failed.length),
     ...mechanicalLines(a, failed),
+    ...acceptanceLines(a),
   ]
   for (const route of ROUTE_ORDER) lines.push(...routeLines(a, route))
   return (

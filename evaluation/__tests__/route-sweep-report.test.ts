@@ -1,7 +1,8 @@
 /** @jest-environment node */
 
-import { artifactPath, renderMarkdown } from '../route-sweep/report'
+import { artifactPath, renderMarkdown, summarise } from '../route-sweep/report'
 import type { CallResult, SweepArtifact } from '../route-sweep/types'
+import { MODELS } from '@/config/models'
 
 const MODEL_A = 'gpt-5.4-nano'
 const MODEL_B = 'gpt-5.6-luna'
@@ -394,5 +395,96 @@ describe('renderMarkdown', () => {
 
     expect(md).not.toContain('nothing to show')
     expect(lineWith(md, `**${MODEL_A}**`)).toContain('timeout after 120000ms')
+  })
+})
+
+/* ---------------- the acceptance numbers ---------------- */
+
+const artifactOf = (calls: CallResult[]): SweepArtifact => ({
+  label: 't',
+  target: 'https://qa.example',
+  models: [MODEL_A, MODEL_B],
+  code_version: null,
+  max_results: 40,
+  submodule_commit: 'abc',
+  calls,
+})
+
+const withUsage = (call: CallResult, usage: unknown): CallResult => ({
+  ...call,
+  response: { ...(call.response as object), usage },
+})
+
+describe('summarise — the bar’s two numbers', () => {
+  it('reports p95 with the sample count beside it', () => {
+    const calls = [100, 200, 300, 400, 500].map((ms, i) =>
+      whyCall(MODEL_A, ['a'], { case_id: `q${i}`, latency_ms: ms }),
+    )
+    const [row] = summarise(artifactOf(calls))
+    expect(row.calls).toBe(5)
+    expect(row.p95Ms).toBe(500)
+    expect(renderMarkdown(artifactOf(calls))).toContain('p95 500 ms (n=5)')
+  })
+
+  it('counts a failed call through checkCall, substitutions included', () => {
+    const calls = [
+      whyCall(MODEL_A, ['a']),
+      whyCall(MODEL_A, ['b'], {
+        case_id: 'q2',
+        response: {
+          ok: true,
+          explanations: [{ why: 'b' }],
+          provenance: { model: MODEL_A, produced: true, sanitized: true },
+        },
+        provenance: { model: MODEL_A, produced: true, sanitized: true },
+      }),
+    ]
+    expect(summarise(artifactOf(calls))[0].failed).toBe(1)
+  })
+
+  it('leaves cost null when a route reports no usage, rather than zero', () => {
+    const [row] = summarise(artifactOf([translateCall(MODEL_A, 'hello')]))
+    expect(row.costUsd).toBeNull()
+  })
+
+  it('prices by the model asked for, not the id the response echoes', () => {
+    const call = withUsage(whyCall(MODEL_A, ['a']), {
+      model: 'openai/gpt-6.1-terra', // alignment's prefix, and a different model
+      prompt_tokens: 1_000_000,
+      completion_tokens: 0,
+    })
+    // gpt-5.4-nano is the requested id; a lookup on usage.model would price terra.
+    const price = MODELS[MODEL_A].price!
+    expect(summarise(artifactOf([call]))[0].costUsd).toBeCloseTo(
+      price.inputPer1M,
+      6,
+    )
+  })
+
+  it('sums every alignment attempt, not only the one that parsed', () => {
+    const call: CallResult = {
+      route: 'alignment',
+      case_id: 'q1',
+      model: MODEL_A,
+      request: { query: QUESTION, resultsSummary: 's' },
+      response: {
+        ok: true,
+        assessment: { insights: ['x'] },
+        debug: {
+          tries: [
+            { usage: { prompt_tokens: 1_000_000, completion_tokens: 0 } },
+            { usage: { prompt_tokens: 1_000_000, completion_tokens: 0 } },
+          ],
+        },
+        provenance: { model: MODEL_A, produced: true },
+      },
+      provenance: { model: MODEL_A, produced: true },
+      latency_ms: 900,
+    }
+    const price = MODELS[MODEL_A].price!
+    expect(summarise(artifactOf([call]))[0].costUsd).toBeCloseTo(
+      2 * price.inputPer1M,
+      6,
+    )
   })
 })
