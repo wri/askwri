@@ -513,7 +513,7 @@ d('topics API routes (DB integration)', () => {
         await expect(response.json()).resolves.toEqual({
           ok: true,
           eligible: before.eligible + 1,
-          estCost: +((before.eligible + 1) * EST_PER_DOC_COST).toFixed(4),
+          estCost: +((before.eligible + 1) * EST_PER_DOC_COST).toFixed(6),
         })
         const [job] = await AppDataSource.query(
           `SELECT id FROM reclassify_jobs WHERE document_id = $1`,

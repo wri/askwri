@@ -581,8 +581,10 @@ export const EST_PER_DOC_COST = +(
   (100 / 1_000_000) * WORKER_PRICE.outputPer1M
 ).toFixed(6)
 
+// Same precision as EST_PER_DOC_COST: rounding coarser than the per-document
+// figure turns one document's $0.00025 into $0.0003. The admin UI formats to 4dp.
 function estimateCost(documentCount: number): number {
-  return +(documentCount * EST_PER_DOC_COST).toFixed(4)
+  return +(documentCount * EST_PER_DOC_COST).toFixed(6)
 }
 
 /** Count rows that a matching enqueue can insert, without mutating the queue. */
@@ -788,7 +790,7 @@ export async function reclassifyStatus(): Promise<ReclassifyStatus> {
       total: r.total,
       done: r.done,
       error: r.error,
-      estCost: +(r.total * EST_PER_DOC_COST).toFixed(4),
+      estCost: estimateCost(r.total),
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       errors: r.errors,
