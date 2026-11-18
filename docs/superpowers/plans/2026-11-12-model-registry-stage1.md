@@ -220,7 +220,8 @@ export const ASSIGNMENT: Record<TaskId, ModelId>
 // prefilter → 'gpt-5.4-nano' (answer/route.ts:21)
 // why → 'gpt-4o-mini'        (batch-why/route.ts)
 // relates → 'gpt-4o-mini'    (batch-relates/route.ts)
-// alignment → 'gpt-5-mini'   (alignment-config.ts)
+// alignment → 'gpt-4o-mini' (src/config/alignment.ts — CFG_MODEL; the route's
+//             'gpt-5-mini' tail is unreachable, see the Task 2 rulings)
 // translate → 'gpt-5-mini'   (translate/route.ts)
 
 // src/lib/request-profile.ts

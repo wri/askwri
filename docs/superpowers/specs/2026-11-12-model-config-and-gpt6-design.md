@@ -96,7 +96,7 @@ A was chosen because it is the only option that kills all six scattered surfaces
 the failure modes that matter here (silent default pricing, string-matched capabilities) are
 code-shaped, not config-shaped. It carries two amendments from the premise audit:
 
-- **Keep one validated env lever** (`OPENAI_MODEL_<TASK>`) so a bad model can be backed out
+- **Keep one validated env lever** (`MODEL_<TASK>` — renamed, see §9) so a bad model can be backed out
   without a full deploy. The value space is closed — it must name a registry id, or the
   process fails at boot — so it cannot reintroduce drift.
 - **Emit a test-only JSON fixture** from the TS registry, which the Python tests assert
