@@ -112,6 +112,15 @@ cover. Three things to hold when reading them:
 Retrieval params are deliberately not sent, so the target applies its own
 presets and the numbers reflect what users actually get.
 
+**Recording a baseline.** Any eval run worth comparing later is saved as
+`evaluation/baselines/YYYY-MM-DD-<what>.md`, and it always carries: the target and
+its backend and corpus size, the fixtures commit (CI fetches upstream `main`, not
+the pin), the app commit live on the target, the CI run id, the headline numbers
+per set, and the model settings in force (`ASSIGNMENT`, `TASK_EFFORT`,
+`TASK_SERVICE_TIER`, evidence budget, any `MODEL_<TASK>` lever). Without those, two
+runs cannot be told apart. Example:
+`baselines/2026-11-18-cite-evalsets-qa-model-migration.md`.
+
 ### Route model sweep
 
 Compares two models on the four routes that have no scored evaluation —
