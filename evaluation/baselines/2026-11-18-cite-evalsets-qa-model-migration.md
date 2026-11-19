@@ -15,6 +15,11 @@ Cite mode is retrieval-only: none of the model changes touch it, so this is a no
 | App commit on QA | `8f2a786` (before #493) | `8280d39` (live) |
 | Models | per `docs/superpowers/handoffs/2026-11-18-qa-baseline-models.md` | the table below |
 
+Merges between the two app commits: #493 (why, relates, alignment and answer model flips, answer provenance) and
+#494 (route-sweep cost display; no runtime change). The eval posts only `{ query, mode: 'cite' }` to the search
+service's gateway, which never calls the app's LLM routes. The cost column is the search service's own spend
+(`usage.total_usd`: its translations and query embeddings), not the app routes' cost.
+
 ## Results
 
 | Evalset | | MAP | Attainable recall | Latency p50 / p95 | Cost per query |
@@ -61,7 +66,7 @@ Provenance of each route's model: `provenance.model` in the route response.
 ## Reproduce
 
 ```bash
-git -C evaluation/eval-review fetch --depth 1 origin main
+git -C evaluation/eval-review fetch origin
 git -C evaluation/eval-review checkout fcf87208706b6f66e8741ce29d90094c5c5e7f51
 npm run eval:qa
 ```
