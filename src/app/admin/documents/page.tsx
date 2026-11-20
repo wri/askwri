@@ -276,9 +276,28 @@ const CatalogInner = () => {
 
   return (
     <Box>
-      <Heading size='lg' style={{ marginBottom: 8 }}>
-        Document catalog
-      </Heading>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <Heading size='lg'>Document catalog</Heading>
+        {/* Downloads every document (any status), not just the filtered view.
+            prefetch is off so opening the page does not pull the CSV. */}
+        <Link
+          href='/api/admin/documents/export'
+          prefetch={false}
+          style={actionButton}
+          className='admin-btn'
+          title='Download metadata for every document as CSV (import-template format)'
+        >
+          ↓ Export metadata (CSV)
+        </Link>
+      </div>
 
       <Flash
         notice={notice}

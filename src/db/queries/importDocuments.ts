@@ -13,7 +13,9 @@ import {
 
 // Mirrors LANGUAGE_MAP in search-service/scripts/migrate_csv_to_postgres.py
 // plus Phase 1 amendment: bahasa → id
-const LANGUAGE_MAP: Record<string, string> = {
+// Exported so the metadata export can invert it and emit only labels that
+// round-trip through this map.
+export const LANGUAGE_MAP: Record<string, string> = {
   english: 'en',
   spanish: 'es',
   portuguese: 'pt',
