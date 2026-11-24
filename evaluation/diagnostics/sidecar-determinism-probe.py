@@ -23,7 +23,6 @@ evaluation/baselines/2026-11-24-flag-on-vs-off-qa.md.
 import collections
 import json
 import os
-import sys
 
 K = int(os.environ.get("PROBE_K", "3"))
 queries = []

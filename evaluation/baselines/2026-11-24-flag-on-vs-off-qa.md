@@ -142,17 +142,32 @@ varying between samples, the ±2-3 MAP differences above are not distinguishable
 **this measurement cannot say whether the flags help retrieval.** Anyone quoting "+2.8 on cite_02 / −2.0 on
 cite_01" as the effect of the flags would be quoting one roll of the dice.
 
-## Memo — against bars set before the numbers were read
+## Memo — against the bars pre-registered before the runs
 
-Bars: **promote** if both sets' doc MAP is within 1.0 point of the off arm or better and p95 grows by under
-1.5 s; **hold** if either set loses more than 1.0 MAP or p95 grows by 1.5 s or more; **narrower promotion** if
-the sets disagree.
+**The governing rule, verbatim as committed at `4a9d320` (before any run):** promote if both sets' doc MAP is
+within 1.0 pp of the off arm and service p95 grows by under 1.5 s; **hold** if either set loses more than 1.0 pp
+or p95 grows by 1.5 s or more; narrower promotion if the sets disagree.
 
-**Verdict: HOLD — do not promote all five flags yet.** cite_01 loses 2.0 MAP against a 1.0-point bar and the
-sets disagree in direction, which alone triggers hold; independently, the determinism probe says the
-quality numbers cannot support *any* promotion decision until the treatment arm is reproducible.
+**Verdict: HOLD.** Two independent pre-registered triggers fire:
 
-Recommended order:
+| Trigger | Measured | Bar |
+|---|---|---|
+| cite_01 doc MAP falls | −2.0 pp | more than 1.0 pp → hold |
+| service p95 grows | cite_01 +1.39 s, cite_02 +1.77 s | 1.5 s or more → hold |
+
+Independently of the bars, the determinism probe forecloses a promotion decision: the treatment arm is a single
+draw from a sidecar that varies on roughly two-thirds of queries, so the MAP deltas above cannot be attributed to
+the flags.
+
+**Post-hoc clarification, disclosed.** The pre-registered bullets overlapped where a set both loses more than
+1.0 pp and the sets disagree, and that overlap is what this run hit. The plan's step 5 now carries an exhaustive
+decision table **written after these numbers were read**, which removes the ambiguity for future runs. Applied to
+this data it would have selected "narrower promotion (sets disagree)" — the table's row for a set below −1.0 pp
+takes no account of latency, which the original hold clause did. The original clause governs here, because it was
+the rule in force when the runs were made and because it is the stricter of the two on two axes independently.
+The plan says the table is post-hoc; nothing in this memo claims otherwise.
+
+**Recommended order:**
 
 1. **Make the sidecar deterministic across deploys** (small code change): persist the per-query result by query
    hash instead of `lru_cache`-ing it per process. That removes the per-deploy lottery, makes every future eval
@@ -163,7 +178,7 @@ Recommended order:
    expensive, non-deterministic part. That experiment needs a QA flag flip and redeploy between arms — no
    per-flag request lever exists.
 3. Only then decide item 9. If the off-topic guard is wanted sooner, note that it cannot be separated from the
-   sidecar today: `core_topic` comes only from the LLM call.
+   sidecar today: `core_topic` comes only from the LLM call. Its reliability is also unmeasured (see above).
 4. The cost case for item 9 needs the **cold** figure (≈ $0.0029/query vs $0.0020, +45%), because these runs
    measured a warm sidecar cache. No metering change is needed — `usage.calls` already itemises the
    `query_understanding` hop; the eval harness's warm-run cost is the thing that has to be flagged.

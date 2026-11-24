@@ -165,7 +165,10 @@ identical, stop: the lever is not reaching the service, and no comparison can be
 
 - [ ] **Step 5: Write the go/no-go memo at the end of the baseline**
 
-Decide against this table, stated before the numbers were read. **Unit: percentage points (pp) of doc MAP**, as
+Decide against this table. **Revision note: this table was written after the first run's numbers were
+read**, to close an overlap in the original three bullets (a set losing more than 1.0 pp *and* the sets
+disagreeing matched two different verdicts). The runs that produced the recorded baseline were governed by
+the original bullets, which the baseline quotes verbatim; this table governs future runs. **Unit: percentage points (pp) of doc MAP**, as
 printed by the harness. **"Disagree"** means exactly one set's doc-MAP delta is below −1.0 pp and the other's is
 not. Every combination maps to exactly one verdict:
 
