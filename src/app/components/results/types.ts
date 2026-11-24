@@ -78,6 +78,9 @@ export type ResultsPageProps = {
     _debugKeys?: string[]
   } | null
   alignLoading?: boolean
+  /** True when an assessment was attempted and none is available (the route
+   *  answered `provenance.produced: false`, or never answered at all). */
+  alignFailed?: boolean
   // Query understanding (design 2026-08-19 §3): the interpretation line +
   // did-you-mean live above the results; chips remove a hard facet and
   // re-query with explicit facets (auto-detect off).
