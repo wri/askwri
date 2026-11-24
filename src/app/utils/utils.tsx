@@ -1,4 +1,4 @@
-import { DocMeta, LlamaCloudDebug } from '@/lib/llamacloud'
+import { DocMeta, LlamaCloudDebug, RelevanceTier } from '@/lib/llamacloud'
 import { estimateCostUSD } from '@/config/costs'
 import { EMBEDDERS } from '@/config/models'
 import { estimateEnergyGCO2e } from '@/config/energy'
@@ -335,9 +335,15 @@ export function buildAlignmentSummary(
   // copy here drifted from them (#498). Docs with no tier had no rerank, so
   // they are reported apart rather than folded into a band their score
   // cannot support.
-  const tiers = { strong: 0, partial: 0, weak: 0 }
+  const tiers: Record<RelevanceTier, number> = {
+    strong: 0,
+    partial: 0,
+    weak: 0,
+  }
   for (const d of docs) {
-    const tier = d.relevance_tier
+    // Typed, not `any`: the narrowed literal is what makes tiers[tier] legal
+    // under noImplicitAny (CI typechecks via `npm run build`; jest does not).
+    const tier = d.relevance_tier as RelevanceTier | undefined
     if (tier === 'strong' || tier === 'partial' || tier === 'weak')
       tiers[tier]++
   }
