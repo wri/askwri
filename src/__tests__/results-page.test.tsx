@@ -534,10 +534,12 @@ describe('results page — assessment availability', () => {
 
   it('leaves the overview unflagged when a model produced the assessment', async () => {
     mockCite.mockResolvedValue(citeResponse([doc('a')]))
+    // sanitized: the model answered but the sanitizer rewrote part of it. It is
+    // still model output, so it must render as an assessment (spec decision 3).
     global.fetch = alignmentFetch({
       ok: true,
       assessment: { insights: ['Real.'], alignment: 'High' },
-      provenance: { model: 'm', produced: true },
+      provenance: { model: 'm', produced: true, sanitized: true },
     })
     renderPage('cities')
     await waitFor(() =>
