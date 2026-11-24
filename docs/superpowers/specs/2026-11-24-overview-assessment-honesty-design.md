@@ -121,8 +121,11 @@ Settled with the operator during design:
 4. **Answer mode renders nothing when unavailable.** Its only alignment surface
    is the badge, so the fix there is to treat `produced === false` as "no
    assessment" — which the component already renders as nothing.
-5. **A failed assessment is not cached.** The query cache entry keeps its docs;
-   its `alignment` stays unset so a repeat query retries.
+5. **A failed assessment is not cached, and not retried by itself.** The query
+   cache entry keeps its docs; its `alignment` stays unset so a repeat query
+   retries. The auto-run effect gates on `!alignFailed`, so one failure is one
+   failure — measured today: a failing route is called once, and that is what
+   keeps the message stable on screen instead of flickering against retries.
 6. **Counts, not bands.** The summary line becomes
    `Strong: N. Partial: M. Weak: K.` plus `Untiered: J.` only when J > 0.
 
@@ -134,8 +137,9 @@ Settled with the operator during design:
 - `src/app/results/page.tsx` — `alignFailed` state; set it (with
   `setAlignment(null)`) on a non-ok response, `produced === false`, a thrown
   fetch, and the empty-docs early return; clear it wherever a new search or a
-  new run resets `alignment`; never write `alignment` into `queryCache` when
-  failed; pass the flag to `CitePanel`.
+  new run resets `alignment`; gate the auto-run effect on `!alignFailed`; never
+  write `alignment` into `queryCache` when failed; pass the flag to
+  `CitePanel`.
 - `src/app/results/CitePanel.tsx` — accept `alignFailed` and pass it on.
 - `src/app/components/results/types.ts` — `ResultsPageProps.alignFailed?`.
 - `src/app/components/results/index.tsx` — the three-way render; the message
@@ -149,7 +153,8 @@ Settled with the operator during design:
   - `src/app/components/results/__tests__/ResultsPage.test.tsx` — the message
     renders and the badge does not, when `alignFailed` is set.
   - `src/__tests__/results-page.test.tsx` — the page sets the flag when
-    `/api/alignment` answers `produced: false`, and passes it down (the suite
+    `/api/alignment` answers `produced: false`, clears it when a model did
+    produce the assessment, and does not re-call a failed route (the suite
     stubs `CitePanel`, so this is where the call site is observable).
   - `evaluation/__tests__/route-sweep-payloads.test.ts` — the asserted summary
     prefix moves to the new wording; the fixture gains tiers so the counts are
