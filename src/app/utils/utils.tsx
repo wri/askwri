@@ -329,10 +329,19 @@ export function buildAlignmentSummary(
   } | null,
 ) {
   const reviewedCount = docs.length
-  const highlyRelevant = docs.filter((d) => d.score >= 0.8).length
-  const moderatelyRelevant = docs.filter(
-    (d) => d.score >= 0.5 && d.score < 0.8,
-  ).length
+  // Count the tiers the results table shows, not bands of our own: the
+  // thresholds live in the search service (cite_strong_threshold 0.70 /
+  // cite_partial_threshold 0.30, search-service/app/config.py) and a second
+  // copy here drifted from them (#498). Docs with no tier had no rerank, so
+  // they are reported apart rather than folded into a band their score
+  // cannot support.
+  const tiers = { strong: 0, partial: 0, weak: 0 }
+  for (const d of docs) {
+    const tier = d.relevance_tier
+    if (tier === 'strong' || tier === 'partial' || tier === 'weak')
+      tiers[tier]++
+  }
+  const untiered = reviewedCount - tiers.strong - tiers.partial - tiers.weak
 
   const topDocs = [...docs]
     .sort((a, b) => (b.score || 0) - (a.score || 0))
@@ -376,7 +385,7 @@ export function buildAlignmentSummary(
     })
     .join(' ')
 
-  const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Highly relevant: ${highlyRelevant}. Moderately: ${moderatelyRelevant}.${languageList.length ? ` Languages among the results: ${languageList.join(', ')}.` : ''} Sample passages: ${passages}`
+  const resultsSummaryForAlignment = `Query: ${query}. Results: ${reviewedCount}. Strong: ${tiers.strong}. Partial: ${tiers.partial}. Weak: ${tiers.weak}.${untiered ? ` Untiered: ${untiered}.` : ''}${languageList.length ? ` Languages among the results: ${languageList.join(', ')}.` : ''} Sample passages: ${passages}`
 
   return resultsSummaryForAlignment
 }
