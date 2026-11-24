@@ -14,6 +14,9 @@ understanding/expansion path — lanes and LLM sidecar — takes the byte-identi
 (`search-service/app/understanding.py:62`). With lanes off, `domain_expansion = not lanes_on`, so **the off arm
 is also the path production runs today.**
 
+**The decomposability of the cost is the useful part:** `usage.calls` names each paid hop, so the
+`query_understanding` line is visible per request when it runs.
+
 ## Method
 
 `EVAL_EXPANSION` was added to `evaluation/run-evalset.ts` for this measurement (`evaluation/lib/gateway-body.ts`):
@@ -38,14 +41,38 @@ EVAL_EXPANSION=off npx tsx evaluation/run-evalset.ts evaluation/eval-review/eval
 | cite_02 (13 pos, 3 neg) | on | **76.5%** | **88.4%** (86/104) | **3/3** | 0 | 2118 / 3038 ms | $0.0320 |
 | cite_02 | off | 73.7% | 86.9% (84/104) | **0/3** | 0 | **1128 / 1268 ms** | $0.0320 |
 
+**Arm separation was confirmed on live signals, not assumed:** with the flags on, cite_02's three
+negatives all abstained and the harness warned about one false abstention; with them off, neither
+happened (`likely_off_topic` is hard-wired false without the sidecar). A cold single query on each arm
+also showed `usage.calls` differing by the `query_understanding` hop itself.
+
 Chunk-grain metrics are `null` for both cite sets — they carry no passage ground truth, so the grain is
-unscored, not zero. Cost is identical across arms: the reported `usage.total_usd` covers embedding and rerank,
-**not** the sidecar's OpenAI call, so this table says nothing about the sidecar's spend (see Next steps).
+unscored, not zero. The reported cost is **identical across arms for a reason that matters** — see
+"Cost: warm versus cold" below.
 
 **Repeat spread: zero.** All three runs of each arm produced byte-identical MAP, attainable recall and cost, on
 both sets. That is not model stability — the sidecar is `@lru_cache`d per process
 (`search-service/app/understanding_llm.py:52`), so within one deployment every repeat is served from the first
-draw. Only wall p95 moved between runs (1.6-3.5 s, network noise).
+draw. Only wall p95 moved between runs: ~1.3-1.6 s on the off arm, ~2.9-3.5 s on the on arm.
+
+### Cost: warm versus cold
+
+The sidecar's OpenAI call **is** metered: `app/usage_meter.py` prices `gpt-5.4-mini`, and
+`understanding_llm.py` records its tokens as the `query_understanding` call. Recording sits inside the
+`lru_cache`d body, so a cache **hit** makes no API call and correctly reports $0 — which is why both arms
+show $0.0020/query here: the eval questions were already warm in the QA process when the matrix ran.
+
+Measured cold, on a novel query against the same deployment:
+
+```
+arm on  → query_understanding  gpt-5.4-mini  286 in / 149 out  $0.000885
+          embed ×3 (query + 2 variants) + rerank              $0.002000
+arm off → rerank only                                         $0.002000
+```
+
+So a **cold** on-arm query costs ≈ $0.0029 against $0.0020 off — about +45% — while the warm figures above
+understate it. Note also what the cold trace shows about latency: the on arm makes three embed calls to the off
+arm's one, so the ~0.95 s delta is the expansion **lanes**, not only the sidecar; a warm query still pays it.
 
 Per-case doc AP deltas (on − off, points):
 
@@ -58,7 +85,7 @@ Per-case doc AP deltas (on − off, points):
 | q11_urban_finance_exclude_ebuses | −1.1 | d7_electric-buses-excluding-school-buses | +2.2 |
 | q4_climate_brazil | +8.8 | d13_low-cost-air-quality-monitoring-discovery | −13.3 |
 | q5_micromobility | +1.8 | d4_public-transport-financing-discovery | −3.4 |
-| (4 cases unchanged) | 0.0 | d11_coalition-for-urban-transitions-partnership | −1.8 |
+| (4 cases unchanged) | 0.0 | (5 cases unchanged) | 0.0 |
 
 ## Sidecar determinism (item 8, measured properly)
 
@@ -120,8 +147,9 @@ Recommended order:
    per-flag request lever exists.
 3. Only then decide item 9. If the off-topic guard is wanted sooner, note that it cannot be separated from the
    sidecar today: `core_topic` comes only from the LLM call.
-4. The sidecar's own spend must enter the cost figures before item 9 — it is currently invisible in
-   `usage.total_usd`, so the published "$0.0020/query" understates the on arm.
+4. The cost case for item 9 needs the **cold** figure (≈ $0.0029/query vs $0.0020, +45%), because these runs
+   measured a warm sidecar cache. No metering change is needed — `usage.calls` already itemises the
+   `query_understanding` hop; the eval harness's warm-run cost is the thing that has to be flagged.
 
 ## Reproduction
 
@@ -130,7 +158,11 @@ npx tsx evaluation/run-evalset.ts evaluation/eval-review/evalsets/evalset_cite_0
 EVAL_EXPANSION=off npx tsx evaluation/run-evalset.ts evaluation/eval-review/evalsets/evalset_cite_01.json
 ```
 
-The determinism probe is a throwaway script (not committed): it imports
+The determinism probe is committed as `evaluation/diagnostics/sidecar-determinism-probe.py`: it imports
 `app.understanding_llm.build_understanding_llm`, calls it three times per eval question with
-`cache_clear()` between calls, and diffs `{intent, facets, variants, core_topic}`. Report files for all 12 runs
-are under `evaluation/results/` (git-ignored).
+`cache_clear()` between calls, and diffs `{intent, facets, variants, core_topic}`.
+
+The 14 report files for these runs are under `evaluation/results/` (git-ignored) with timestamps
+`1795519343099`-`1795519732855`; the first two are exploratory, the remaining twelve are the matrix. Because
+that directory never leaves this machine, the provenance others have is the target commit, the fixtures pin,
+and the commands above.
