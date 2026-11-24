@@ -548,6 +548,9 @@ const AskWriAppContent = () => {
 
       if (cached && !isExpired && cached.alignment) {
         setAlignment(cached.alignment)
+        // Non-null alignment always implies no failure: a restored assessment
+        // must never inherit a stale flag from a failed query (#498 review).
+        setAlignFailed(false)
         return
       }
 

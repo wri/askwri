@@ -32,7 +32,7 @@ Strong rows can be summarised to the model as "Highly relevant: 0".
 ## Findings that update the issue text
 
 1. **The tier is already on every document.** `DocMeta.relevance_tier`
-   (`src/lib/llamacloud.ts:24`) is threaded through `/api/llamaindex`
+   (`src/lib/llamacloud.ts:31`) is threaded through `/api/llamaindex`
    (`route.ts:209`) and is what `CitePanel` renders (`tierLabels`). So item 2
    needs no threshold constants in TypeScript — only counting. Importing
    `0.70/0.30` into the app would create the second copy that this item exists

@@ -550,6 +550,64 @@ describe('results page — assessment availability', () => {
     )
   })
 
+  it('clears a stale failure flag when a cached assessment is restored', async () => {
+    // The sequence the spec's anti-goal forbids: one query fails, then the
+    // user returns to a query whose assessment is cached and real. A leftover
+    // flag would claim "unavailable" over a valid assessment.
+    mockCite.mockResolvedValue(citeResponse([doc('a')]))
+    global.fetch = jest.fn((url: any, init: any) => {
+      const ok = (body: any) =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
+      const u = String(url)
+      if (u.includes('batch-relates')) return ok({ results: [] })
+      if (u.includes('/api/alignment')) {
+        const q = JSON.parse(init.body).query
+        return q === 'urban heat'
+          ? ok({ ok: false })
+          : ok({
+              ok: true,
+              assessment: { insights: ['Real.'], alignment: 'High' },
+              provenance: { model: 'm', produced: true },
+            })
+      }
+      return ok({ ok: false })
+    }) as any
+
+    const { rerender } = renderPage('cooling')
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'false',
+      ),
+    )
+
+    currentQ = 'urban heat'
+    rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'true',
+      ),
+    )
+
+    currentQ = 'cooling'
+    rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'false',
+      ),
+    )
+  })
+
   it('does not re-call a route that answered with no assessment', async () => {
     mockCite.mockResolvedValue(citeResponse([doc('a')]))
     global.fetch = alignmentFetch({ ok: false })

@@ -41,7 +41,7 @@ Inputs and conditions the spec implies but whose behaviour no existing test pins
 - Test: `evaluation/__tests__/route-sweep-payloads.test.ts` (~L14-27 `doc` helper, ~L59-62 `docsAB`, ~L172-183 assertion)
 
 **Interfaces:**
-- Consumes: `DocMeta.relevance_tier?: 'strong' | 'partial' | 'weak'` (`src/lib/llamacloud.ts:24`), stamped by the search service from `cite_strong_threshold` / `cite_partial_threshold`.
+- Consumes: `DocMeta.relevance_tier?: 'strong' | 'partial' | 'weak'` (`src/lib/llamacloud.ts:31`), stamped by the search service from `cite_strong_threshold` / `cite_partial_threshold`.
 - Produces: `buildAlignmentSummary(query: string, docs: any[], index?: CatalogIndex | null): string` — signature unchanged. The summary now contains `Results: N. Strong: X. Partial: Y. Weak: Z.` followed by ` Untiered: J.` only when `J > 0`.
 
 - [ ] **Step 1: Write the failing test**
