@@ -74,18 +74,24 @@ So a **cold** on-arm query costs ≈ $0.0029 against $0.0020 off — about +45% 
 understate it. Note also what the cold trace shows about latency: the on arm makes three embed calls to the off
 arm's one, so the ~0.95 s delta is the expansion **lanes**, not only the sidecar; a warm query still pays it.
 
-Per-case doc AP deltas (on − off, points):
+Per-case doc AP, every positive case (on − off, points; 9 of cite_01's 11 and 10 of cite_02's 13 moved,
+the rest are exactly unchanged). The per-case deltas average to the table's MAP delta in both sets:
 
-| cite_01 | Δ | cite_02 | Δ |
-|---|---|---|---|
-| q1_land_value_capture | −11.1 | d1_zero-emission-heavy-duty-trucks-discovery | +18.6 |
-| q9_world_resources_report | −7.6 | d14_pawan-mulukutla-authorship | +15.5 |
-| q3_children_pollution | −7.2 | d5_public-transport-financing-since-2022 | +13.3 |
-| q8_hydrogen | −6.1 | d6_seizing-urban-opportunity-series | +6.2 |
-| q11_urban_finance_exclude_ebuses | −1.1 | d7_electric-buses-excluding-school-buses | +2.2 |
-| q4_climate_brazil | +8.8 | d13_low-cost-air-quality-monitoring-discovery | −13.3 |
-| q5_micromobility | +1.8 | d4_public-transport-financing-discovery | −3.4 |
-| (4 cases unchanged) | 0.0 | (5 cases unchanged) | 0.0 |
+| cite_01 | on | off | Δ | cite_02 | on | off | Δ |
+|---|---|---|---|---|---|---|---|
+| q1_land_value_capture | 15.6 | 26.7 | −11.1 | d13_low-cost-air-quality-monitoring | 86.7 | 100.0 | −13.3 |
+| q9_world_resources_report | 64.0 | 71.6 | −7.6 | d4_public-transport-financing | 55.2 | 58.6 | −3.4 |
+| q3_children_pollution | 28.6 | 35.8 | −7.2 | d11_coalition-for-urban-transitions | 72.4 | 74.2 | −1.8 |
+| q8_hydrogen | 21.7 | 27.8 | −6.1 | d12_climate-hazards-heat-resilience | 47.4 | 48.0 | −0.6 |
+| q11_urban_finance_exclude_ebuses | 10.6 | 11.7 | −1.1 | d15_flooding-risk-informal-settlements | 60.1 | 60.6 | −0.5 |
+| q10_urban_finance_since_2020 | 3.3 | 3.4 | −0.1 | d2_dockless-bike-sharing-discovery | 83.3 | 83.3 | 0.0 |
+| q6_school_bus_health | 76.9 | 76.9 | 0.0 | d3_container-port-decarbonization | 100.0 | 100.0 | 0.0 |
+| q7_jakarta_housing | 10.4 | 10.4 | 0.0 | d16_urban-tree-inventory-discovery | 100.0 | 100.0 | 0.0 |
+| q2_bangalore_geography | 45.6 | 45.0 | +0.6 | d7_electric-buses-excluding-school-buses | 57.0 | 54.8 | +2.2 |
+| q5_micromobility | 30.6 | 28.8 | +1.8 | d6_seizing-urban-opportunity-series | 100.0 | 93.8 | +6.2 |
+| q4_climate_brazil | 71.0 | 62.3 | +8.8 | d5_public-transport-financing-since-2022 | 80.0 | 66.7 | +13.3 |
+|  |  |  |  | d14_pawan-mulukutla-authorship | 79.5 | 64.0 | +15.5 |
+|  |  |  |  | d1_zero-emission-heavy-duty-trucks | 73.1 | 54.5 | +18.6 |
 
 ## Sidecar determinism (item 8, measured properly)
 
@@ -95,8 +101,14 @@ since the first draw is frozen for the process's lifetime. Measured directly aga
 queries × 3 fresh samples each, `build_understanding_llm.cache_clear()` between samples so every sample is a
 real API call, at the shipped `temperature=0` and `gpt-5.4-mini`.
 
-**16 of 27 queries (59%) produced different output across samples.** Five queries gave three distinct outputs
-out of three. By field: `variants` 14, `facets` 7, `core_topic` 3, `intent` 1.
+Two independent probe runs, same queries, same model: **16/27 and 18/27 queries produced different output
+across samples (59% and 67%).** Field counts varied too — run 1: `variants` 14, `facets` 7, `core_topic` 3,
+`intent` 1; run 2: `variants` 15, `facets` 7, `core_topic` 3, `intent` 2. Which queries are unstable also moves
+between runs, so read the headline as "roughly two-thirds of queries vary", not as a fixed list.
+
+The unstable sets (run 1 / run 2) are in `evaluation/diagnostics/sidecar-determinism-probe.py`'s docstring and
+the probe output; run 2's list: `q1`, `q2`, `q5`, `q6`, `q9`, `q11`, `d1`, `d2`, `d5`, `d7`, `d8`, `d9`, `d10`,
+`d11`, `d12`, `d13`, `d14`, `d15`.
 
 Unstable queries: `q2_bangalore_geography`, `q5_micromobility`, `q9_world_resources_report`,
 `q10_urban_finance_since_2020`, `q11_urban_finance_exclude_ebuses`, `d1_…trucks`, `d2_…bike-sharing`,
@@ -112,9 +124,14 @@ abstain decision is downstream of a field that changes between samples.
 
 **Solid, draw-independent findings:**
 
-1. **The off-topic guard works and only exists in the on arm.** cite_02's three negatives: 3/3 abstained with
-   the flags on, 0/3 with them off. Production has no such guard in any configuration — with understanding off,
-   `likely_off_topic` is hard-wired false (`app/main.py:2062-2073`).
+1. **The off-topic guard exists only in the on arm.** cite_02's three negatives: 3/3 abstained with the flags
+   on, 0/3 with them off. Production has no such guard in any configuration — with understanding off,
+   `likely_off_topic` is hard-wired false (`app/main.py:2062-2073`). **The 3/3 is one draw, not a reliability
+   claim:** abstention is decided from `core_topic`, and `core_topic` varies across samples — probe run 2 shows
+   `d9_vertical-farming-negative` drawing two distinct core topics across three samples (`urban vertical farming`
+   vs `urban vertical farming or rooftop agriculture`). Whether those variants flip the present/absent verdict
+   needs `core_topic_in_corpus` against the corpus and was not measured, so the guard's false-negative rate on
+   this negative set is **unmeasured**.
 2. **The guard also misfires:** `q5_micromobility` is a positive case that the on arm flagged off-topic. This is
    the known coverage gap in #403/#498 item 11, now with a measured false-positive.
 3. **The cost is ~0.95 s at service p50** (1128 → 2072-2118 ms) on every cold query. The sidecar's cache is per

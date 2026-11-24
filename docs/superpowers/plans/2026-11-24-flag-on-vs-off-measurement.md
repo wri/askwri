@@ -107,8 +107,8 @@ Expected: PASS (4 tests).
 
 In `evaluation/run-evalset.ts`:
 - `queryTarget` builds its body with `gatewayBody(question, mode)`.
-- The header block in `main()` (~L746-756, beside `Target:`/`Backend:`/`Corpus:`) prints `Expansion: ${expansionArm()}` — always, so every run states its arm.
-- The `report` object (~L630-645) gains `expansion_arm: expansionArm()`.
+- The header block in `main()` (beside `Target:`/`Backend:`/`Corpus:`) prints `Expansion: ${expansionArm()}` — always, so every run states its arm.
+- The `report` object in `runEvalset` gains `expansion_arm: expansionArm()`.
 
 - [ ] **Step 6: Run the harness suites**
 
@@ -149,7 +149,11 @@ Each run writes `evaluation/results/evalset-<name>-<ts>.json` and prints MAP, ch
 
 - [ ] **Step 3: Confirm the two arms really differ**
 
-For one query, compare `debug`/`query_understanding` between an on run and an off run in the report JSON: the off arm must show no understanding object (or an empty one) and the on arm must show facets. If they look identical, stop: the lever is not reaching the service, and no comparison can be recorded.
+The harness does not persist `query_understanding`, so check the lever against the service directly: send
+one query to `POST /api/llamaindex` twice (with and without `expansion: false`) and compare `usage.calls` — the
+on arm carries a `query_understanding` entry, the off arm has none. Also check the abstain signal on a
+negative case (on: it can fire; off: `likely_off_topic` is hard-wired false). If the two requests look
+identical, stop: the lever is not reaching the service, and no comparison can be recorded.
 
 - [ ] **Step 4: Write the baseline document**
 
@@ -161,12 +165,23 @@ For one query, compare `debug`/`query_understanding` between an on run and an of
 
 - [ ] **Step 5: Write the go/no-go memo at the end of the baseline**
 
-Decide against these bars, stated before the numbers were read:
-- **Promote** if both sets' doc MAP is within 1.0 point of the off arm (either direction) or better, and service p95 grows by less than 1.5 s.
-- **Hold** if either set loses more than 1.0 MAP, or p95 grows by 1.5 s or more.
-- **Narrower promotion** (some flags, not all — e.g. understanding + lanes without the LLM sidecar) if the sets disagree.
+Decide against this table, stated before the numbers were read. **Unit: percentage points (pp) of doc MAP**, as
+printed by the harness. **"Disagree"** means exactly one set's doc-MAP delta is below −1.0 pp and the other's is
+not. Every combination maps to exactly one verdict:
 
-Record which bar was hit and what it implies for item 9.
+| cite_01 Δ (pp) | cite_02 Δ (pp) | service p95 growth | Verdict |
+|---|---|---|---|
+| ≥ −1.0 | ≥ −1.0 | < +1.5 s | **Promote** |
+| ≥ −1.0 | ≥ −1.0 | ≥ +1.5 s | **Hold** — quality is fine, cost is not; measure per-component |
+| < −1.0 | ≥ −1.0 | any | **Narrower promotion** (sets disagree) |
+| ≥ −1.0 | < −1.0 | any | **Narrower promotion** (sets disagree) |
+| < −1.0 | < −1.0 | any | **Hold** |
+
+The 1.0 pp bar is a judgement, not a measured noise floor: repeats within a deployment are served from the
+`lru_cache`d sidecar, so they give no variance estimate at all. The determinism probe measures variance in the
+sidecar's *inputs*, not in MAP.
+
+Record which row was hit and what it implies for item 9.
 
 - [ ] **Step 6: Commit**
 

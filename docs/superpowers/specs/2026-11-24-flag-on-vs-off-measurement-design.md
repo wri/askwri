@@ -39,7 +39,8 @@ no flag flip, no local corpus, no credentials.
 - Latency and cost alongside quality: `service_ms` p50/p95 and per-request cost for each arm.
 - A recorded baseline in `evaluation/baselines/` per `evaluation/README.md`'s requirements.
 - An answer to item 8 that says what was and was not measurable, and why.
-- A go/no-go memo: promote, promote-with-changes, or hold.
+- A go/no-go memo: promote, promote-with-changes, or hold. Its thresholds are a judgement, not a measured
+  noise floor — repeats inside one deployment are cached, so they cannot estimate MAP variance.
 
 ## Non-goals
 
