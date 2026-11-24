@@ -7,6 +7,7 @@ import {
   Button,
   Tag,
   Tooltip as DS_Tooltip,
+  InlineMessage,
   getThemedColor,
 } from '@worldresources/wri-design-systems'
 import { FaInfoCircle } from 'react-icons/fa'
@@ -35,6 +36,7 @@ const ResultsPage = ({
   onExportBib,
   ops,
   alignment,
+  alignFailed,
   alignLoading,
   queryUnderstanding,
   onRemoveFacet,
@@ -164,7 +166,28 @@ const ResultsPage = ({
           <Heading size='2xl'>Overview</Heading>
         </div>
         <Box style={{ paddingBottom: '1rem' }}>
-          {alignLoading || !alignment || !alignment.insights?.length ? (
+          {alignLoading ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '20px',
+              }}
+            >
+              <Spinner size='md' color={getThemedColor('primary', 500)} />
+            </div>
+          ) : alignFailed ? (
+            // The route answers 200 with a canned assessment on every failure
+            // (#498); this is the state that keeps that text off screen.
+            <InlineMessage
+              icon=''
+              variant='warning'
+              label=''
+              size='full-width'
+              caption='Assessment unavailable — the assessment service didn’t respond for this search. The results below are unaffected.'
+            />
+          ) : !alignment || !alignment.insights?.length ? (
             <div
               style={{
                 display: 'flex',
@@ -183,7 +206,7 @@ const ResultsPage = ({
             </List.Root>
           )}
         </Box>
-        {!alignLoading && alignment?.alignment && (
+        {!alignLoading && !alignFailed && alignment?.alignment && (
           <div
             style={{
               width: '280px',

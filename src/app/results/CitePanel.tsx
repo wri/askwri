@@ -27,6 +27,7 @@ const CitePanel = ({
   docSummaryLoading,
   ops,
   alignment,
+  alignFailed,
   alignLoading,
   queryUnderstanding,
   onRemoveFacet,
@@ -51,6 +52,7 @@ const CitePanel = ({
     alignment?: 'High' | 'Moderate' | 'Low' | 'Very Low'
     _debugKeys?: string[]
   } | null
+  alignFailed?: boolean
   alignLoading: boolean
   queryUnderstanding?: {
     facets: { facet: string; value: string; action: string; source: string }[]
@@ -135,6 +137,7 @@ const CitePanel = ({
       docSummaryLoading={docSummaryLoading}
       docWhyLoading={docWhyLoading}
       alignment={alignment}
+      alignFailed={alignFailed}
       alignLoading={alignLoading}
       onExportBib={exportBibCsv}
       queryUnderstanding={queryUnderstanding}

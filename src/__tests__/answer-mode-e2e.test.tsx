@@ -156,4 +156,140 @@ describe('answer mode end-to-end UI flow', () => {
       }),
     )
   })
+
+  it('shows no alignment badge when no model produced the assessment', async () => {
+    const query = 'How do cities cut emissions?'
+    const doc = {
+      doc_id: 'doc-1',
+      ref: 'doc-1',
+      title: 'Urban Climate Action',
+      year: 2025,
+      kps: [
+        {
+          kp_relevance: 0.9,
+          snippet: 'Compact growth reduces emissions.',
+          passage_id: 'passage-7',
+          page: 4,
+          citation_targets: [],
+        },
+      ],
+    }
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/llamaindex') {
+        return jsonResponse({
+          docs: [doc],
+          usage: null,
+          debug: {},
+          likely_off_topic: false,
+        })
+      }
+      if (url === '/api/answer') {
+        return jsonResponse({
+          ok: true,
+          synthesis: { sentences: ['Answer.'], cites: [[1]] },
+          passages_sent: [],
+        })
+      }
+      if (url === '/api/alignment') {
+        return jsonResponse({
+          ok: true,
+          assessment: { insights: ['Canned.'], alignment: 'Moderate' },
+          provenance: {
+            model: 'm',
+            produced: false,
+            fallback_reason: 'upstream_500',
+          },
+        })
+      }
+      if (url === '/api/answer-mode-query-logs') {
+        return jsonResponse({ ok: true })
+      }
+      if (url === '/api/batch-why') {
+        return jsonResponse({ ok: true, explanations: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <ChakraProvider>
+        <AIResearchModal open />
+      </ChakraProvider>,
+    )
+    fireEvent.change(screen.getByLabelText('Search query input'), {
+      target: { value: query },
+    })
+    fireEvent.click(screen.getByLabelText('Submit search query'))
+
+    await screen.findByText('Answer.')
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([u]) => u === '/api/alignment')).toBe(
+        true,
+      ),
+    )
+    expect(screen.queryByText(/Alignment:/)).not.toBeInTheDocument()
+  })
+
+  it('shows the alignment badge when a model did produce the assessment', async () => {
+    const query = 'How do cities cut emissions?'
+    const doc = {
+      doc_id: 'doc-1',
+      ref: 'doc-1',
+      title: 'Urban Climate Action',
+      year: 2025,
+      kps: [
+        {
+          kp_relevance: 0.9,
+          snippet: 'Compact growth reduces emissions.',
+          passage_id: 'passage-7',
+          page: 4,
+          citation_targets: [],
+        },
+      ],
+    }
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/llamaindex') {
+        return jsonResponse({
+          docs: [doc],
+          usage: null,
+          debug: {},
+          likely_off_topic: false,
+        })
+      }
+      if (url === '/api/answer') {
+        return jsonResponse({
+          ok: true,
+          synthesis: { sentences: ['Answer.'], cites: [[1]] },
+          passages_sent: [],
+        })
+      }
+      if (url === '/api/alignment') {
+        return jsonResponse({
+          ok: true,
+          assessment: { insights: ['Real.'], alignment: 'High' },
+          provenance: { model: 'm', produced: true },
+        })
+      }
+      if (url === '/api/answer-mode-query-logs') {
+        return jsonResponse({ ok: true })
+      }
+      if (url === '/api/batch-why') {
+        return jsonResponse({ ok: true, explanations: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <ChakraProvider>
+        <AIResearchModal open />
+      </ChakraProvider>,
+    )
+    fireEvent.change(screen.getByLabelText('Search query input'), {
+      target: { value: query },
+    })
+    fireEvent.click(screen.getByLabelText('Submit search query'))
+
+    expect(await screen.findByText('Alignment: High')).toBeInTheDocument()
+  })
 })

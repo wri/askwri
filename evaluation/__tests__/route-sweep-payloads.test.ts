@@ -7,13 +7,19 @@ const TARGET = 'https://qa.askwrimvp.test'
 
 // The citation-shaped document `/api/llamaindex` returns for cite mode: one
 // kp per doc, its snippet the passage the UI shows in the Sources panel.
-const doc = (docId: string, title: string, snippet: string) => ({
+const doc = (
+  docId: string,
+  title: string,
+  snippet: string,
+  relevance_tier?: string,
+) => ({
   doc_id: docId,
   ref: docId,
   title,
   authors: ['Surname, Given'],
   year: 2019,
   score: 0.7,
+  relevance_tier,
   kps: [{ kp_relevance: 0.7, snippet, passage_id: `${docId}_chunk_1` }],
   meta: { raw: {} },
 })
@@ -56,8 +62,8 @@ const catalogIndex = () =>
   )
 
 const docsAB = () => [
-  doc('doc-a', 'title a (native)', 'snippet from A'),
-  doc('doc-b', 'title b (native)', 'snippet from B'),
+  doc('doc-a', 'title a (native)', 'snippet from A', 'strong'),
+  doc('doc-b', 'title b (native)', 'snippet from B', 'partial'),
 ]
 
 describe('fetchCatalogIndex', () => {
@@ -178,7 +184,7 @@ describe('buildPayloads', () => {
     expect(Object.keys(withIndex).sort()).toEqual(['query', 'resultsSummary'])
     expect(withIndex.query).toBe('why does it matter?')
     expect(withIndex.resultsSummary).toContain(
-      'Query: why does it matter?. Results: 2. Highly relevant: 0. Moderately: 2.',
+      'Query: why does it matter?. Results: 2. Strong: 1. Partial: 1. Weak: 0.',
     )
     // The index is what puts the non-English languages in the summary; a
     // sweep without one silently loses them, which is why it is fetched.

@@ -44,6 +44,10 @@ const AskWriAppContent = () => {
   const [query, setQuery] = useState('')
   const [retrievalLoading, setRetrievalLoading] = useState(false)
   const [alignLoading, setAlignLoading] = useState(false)
+  // An assessment was attempted and none is available: the route answered
+  // `provenance.produced: false` (it answers 200 with a canned assessment on
+  // every failure, #498) or never answered at all.
+  const [alignFailed, setAlignFailed] = useState(false)
   const [ops, setOps] = useState<Ops | null>(null)
   const [supporting, setSupporting] = useState<DocMeta[]>([])
   const [alignment, setAlignment] = useState<Assessment | null>(null)
@@ -222,6 +226,7 @@ const AskWriAppContent = () => {
       setBatchRelatesRequested(false)
       setSupporting(cached.supporting)
       setAlignment(cached.alignment ?? null)
+      setAlignFailed(false)
       setUnderstanding(cached.understanding ?? null)
       setLikelyOffTopic(cached.likelyOffTopic ?? false)
       setSearchCompleted(true)
@@ -229,6 +234,7 @@ const AskWriAppContent = () => {
     }
 
     setAlignment(null)
+    setAlignFailed(false)
 
     setDocWhy({})
     setDocSummary({})
@@ -412,6 +418,7 @@ const AskWriAppContent = () => {
     try {
       if (!docs?.length) {
         setAlignment(null)
+        setAlignFailed(true)
         return
       }
       setAlignLoading(true)
@@ -428,7 +435,10 @@ const AskWriAppContent = () => {
       })
       const j = await r.json()
 
-      if (j?.ok && j?.assessment) {
+      // shortcut: sanitized responses still render as assessments — the flag
+      // conflates a coerced rating with a substituted bullet; split it when
+      // the substituted insights need their own copy (#498).
+      if (j?.ok && j?.assessment && j.provenance?.produced !== false) {
         const { insights, alignment } = j.assessment
 
         const finalAlignment = {
@@ -438,6 +448,7 @@ const AskWriAppContent = () => {
         }
 
         setAlignment(finalAlignment)
+        setAlignFailed(false)
 
         // Merge the alignment into the same cache entry the docs were
         // written under (facet-aware key — see cacheKeyFor).
@@ -515,9 +526,11 @@ const AskWriAppContent = () => {
         }
       } else {
         setAlignment(null)
+        setAlignFailed(true)
       }
     } catch (e: any) {
       setAlignment(null)
+      setAlignFailed(true)
     } finally {
       setAlignLoading(false)
     }
@@ -535,6 +548,9 @@ const AskWriAppContent = () => {
 
       if (cached && !isExpired && cached.alignment) {
         setAlignment(cached.alignment)
+        // Non-null alignment always implies no failure: a restored assessment
+        // must never inherit a stale flag from a failed query (#498 review).
+        setAlignFailed(false)
         return
       }
 
@@ -563,6 +579,11 @@ const AskWriAppContent = () => {
       !retrievalLoading &&
       supporting.length > 0 &&
       query.trim() &&
+      // One failure is one failure: the effect re-runs whenever alignLoading
+      // flips, so without this a failing route is re-called on every render
+      // and the unavailable line flickers against retries (#498). A new
+      // search clears the flag.
+      !alignFailed &&
       !alignLoading
     ) {
       const timer = setTimeout(() => {
@@ -573,6 +594,7 @@ const AskWriAppContent = () => {
   }, [
     retrievalLoading,
     alignLoading,
+    alignFailed,
     supporting.length,
     query,
     catalogSettled,
@@ -677,6 +699,7 @@ const AskWriAppContent = () => {
             docSummaryLoading={docSummaryLoading}
             ops={ops}
             alignment={alignment}
+            alignFailed={alignFailed}
             alignLoading={alignLoading}
             queryUnderstanding={understanding}
             onRemoveFacet={onRemoveFacet}

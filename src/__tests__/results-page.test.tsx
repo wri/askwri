@@ -48,6 +48,7 @@ jest.mock('@/app/results/CitePanel', () => ({
       data-testid='cite-panel'
       data-query={props.query}
       data-docs={props.docs.length}
+      data-align-failed={String(Boolean(props.alignFailed))}
     >
       {(props.queryUnderstanding?.facets ?? [])
         .filter((f: any) => f.action === 'hard')
@@ -492,5 +493,135 @@ describe('results page — likely-off-topic banner (slice 6, #356)', () => {
       expect(screen.getByTestId('cite-panel')).toBeInTheDocument(),
     )
     expect(screen.queryByText(/No strong matches for/u)).not.toBeInTheDocument()
+  })
+})
+
+describe('results page — assessment availability', () => {
+  const alignmentFetch = (body: any) =>
+    jest.fn((url: any) =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            String(url).includes('batch-relates')
+              ? { results: [] }
+              : String(url).includes('/api/alignment')
+                ? body
+                : { ok: false },
+          ),
+      }),
+    ) as any
+
+  it('flags the overview unavailable when no model produced the assessment', async () => {
+    mockCite.mockResolvedValue(citeResponse([doc('a')]))
+    global.fetch = alignmentFetch({
+      ok: true,
+      assessment: { insights: ['Canned.'], alignment: 'Moderate' },
+      provenance: {
+        model: 'm',
+        produced: false,
+        fallback_reason: 'upstream_500',
+      },
+    })
+    renderPage('cities')
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'true',
+      ),
+    )
+  })
+
+  it('leaves the overview unflagged when a model produced the assessment', async () => {
+    mockCite.mockResolvedValue(citeResponse([doc('a')]))
+    // sanitized: the model answered but the sanitizer rewrote part of it. It is
+    // still model output, so it must render as an assessment (spec decision 3).
+    global.fetch = alignmentFetch({
+      ok: true,
+      assessment: { insights: ['Real.'], alignment: 'High' },
+      provenance: { model: 'm', produced: true, sanitized: true },
+    })
+    renderPage('cities')
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'false',
+      ),
+    )
+  })
+
+  it('clears a stale failure flag when a cached assessment is restored', async () => {
+    // The sequence the spec's anti-goal forbids: one query fails, then the
+    // user returns to a query whose assessment is cached and real. A leftover
+    // flag would claim "unavailable" over a valid assessment.
+    mockCite.mockResolvedValue(citeResponse([doc('a')]))
+    global.fetch = jest.fn((url: any, init: any) => {
+      const ok = (body: any) =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
+      const u = String(url)
+      if (u.includes('batch-relates')) return ok({ results: [] })
+      if (u.includes('/api/alignment')) {
+        const q = JSON.parse(init.body).query
+        return q === 'urban heat'
+          ? ok({ ok: false })
+          : ok({
+              ok: true,
+              assessment: { insights: ['Real.'], alignment: 'High' },
+              provenance: { model: 'm', produced: true },
+            })
+      }
+      return ok({ ok: false })
+    }) as any
+
+    const { rerender } = renderPage('cooling')
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'false',
+      ),
+    )
+
+    currentQ = 'urban heat'
+    rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'true',
+      ),
+    )
+
+    currentQ = 'cooling'
+    rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'false',
+      ),
+    )
+  })
+
+  it('does not re-call a route that answered with no assessment', async () => {
+    mockCite.mockResolvedValue(citeResponse([doc('a')]))
+    global.fetch = alignmentFetch({ ok: false })
+    renderPage('cities')
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-align-failed',
+        'true',
+      ),
+    )
+    await new Promise((r) => setTimeout(r, 500))
+    const calls = (global.fetch as jest.Mock).mock.calls.filter((c) =>
+      String(c[0]).includes('/api/alignment'),
+    )
+    expect(calls).toHaveLength(1)
   })
 })

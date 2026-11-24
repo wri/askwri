@@ -232,3 +232,29 @@ describe('results component — interpretation line placement (design §3)', () 
     expect(screen.queryByText(/Showing:/)).not.toBeInTheDocument()
   })
 })
+
+describe('overview — assessment availability', () => {
+  const renderWith = (overrides: any) =>
+    render(
+      <ChakraProvider>
+        <ResultsPage {...props({ facets: [] })} {...overrides} />
+      </ChakraProvider>,
+    )
+
+  it('says the assessment is unavailable instead of showing a rating', () => {
+    renderWith({ alignment: null, alignFailed: true })
+    expect(screen.getByText(/Assessment unavailable/)).toBeInTheDocument()
+    expect(screen.queryByText(/Alignment:/)).not.toBeInTheDocument()
+  })
+
+  it('still shows a model-produced assessment', () => {
+    renderWith({
+      alignment: { insights: ['Tree canopy studies are direct evidence.'] },
+      alignFailed: false,
+    })
+    expect(
+      screen.getByText('Tree canopy studies are direct evidence.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Assessment unavailable/)).not.toBeInTheDocument()
+  })
+})
