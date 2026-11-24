@@ -78,7 +78,9 @@ export const AIResearchModal = ({
       })
       const j = await r.json()
 
-      if (j?.ok && j?.assessment) {
+      // The route answers 200 with a canned assessment on every failure, so
+      // `produced: false` means no badge (#498).
+      if (j?.ok && j?.assessment && j.provenance?.produced !== false) {
         const { insights, alignment: alignmentData } = j.assessment
 
         setAlignment({ insights, alignment: alignmentData })
