@@ -77,10 +77,20 @@ assert_images() {
   [ -n "$EXPECTED_TAG" ] || return 0
   local svc arn img bad=0 images
   for svc in $SERVICES; do
-    arn=$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" \
-      --query 'services[0].taskDefinition' --output text)
-    images=$(aws ecs describe-task-definition --task-definition "$arn" \
-      --query 'taskDefinition.containerDefinitions[].image' --output text)
+    # An unchecked call here would leave `images` empty, skip the loop below and
+    # report success without having checked anything.
+    if ! arn=$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" \
+      --query 'services[0].taskDefinition' --output text) || [ -z "$arn" ] || [ "$arn" = "None" ]; then
+      echo "::error::$svc: could not read its live task definition"
+      bad=1
+      continue
+    fi
+    if ! images=$(aws ecs describe-task-definition --task-definition "$arn" \
+      --query 'taskDefinition.containerDefinitions[].image' --output text) || [ -z "$images" ]; then
+      echo "::error::$svc: could not read the images of $arn"
+      bad=1
+      continue
+    fi
     for img in $(echo "$images" | tr '\t' '\n' | sort -u); do
       case "$img" in
         *":$EXPECTED_TAG") ;;

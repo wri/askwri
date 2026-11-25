@@ -15,7 +15,7 @@ const SCRIPT = join(ROOT, 'scripts/ecs-await-deploy.sh')
 const ARN = (rev: string) =>
   `arn:aws:ecs:us-east-2:1:task-definition/svc:${rev}`
 
-type Run = { status: number | null; out: string }
+type Run = { status: number | null; out: string; ms: number }
 
 /** Stubs `aws` with canned JSON; `--query` calls get the text they asked for. */
 function runAws(
@@ -23,6 +23,7 @@ function runAws(
   args: string[],
   images: string,
   taskDefArn: string,
+  opts: { failTaskDef?: boolean } = {},
 ): Run {
   const dir = mkdtempSync(join(tmpdir(), 'ecs-await-'))
   const bin = join(dir, 'bin')
@@ -36,7 +37,8 @@ function runAws(
 case "$1 $2" in
   "ecs describe-services")
     case "$*" in *--query*) echo "${taskDefArn}" ;; *) cat "${dir}/services.json" ;; esac ;;
-  "ecs describe-task-definition") echo "${images}" ;;
+  "ecs describe-task-definition")
+    ${opts.failTaskDef ? 'echo "stub: throttled" >&2; exit 254' : `echo "${images}"`} ;;
   "ecs list-tasks") echo "arn:aws:ecs:us-east-2:1:task/cluster/deadbeef" ;;
   "ecs describe-tasks") cat "${dir}/tasks.json" ;;
   *) echo "stub: unhandled aws $*" >&2; exit 1 ;;
@@ -44,12 +46,17 @@ esac
 `,
   )
   chmodSync(join(bin, 'aws'), 0o755)
+  const started = Date.now()
   const res = spawnSync('bash', [SCRIPT, ...args], {
     cwd: ROOT,
     env: { ...process.env, PATH: `${bin}:/usr/bin:/bin` },
     encoding: 'utf8',
   })
-  return { status: res.status, out: `${res.stdout}${res.stderr}` }
+  return {
+    status: res.status,
+    out: `${res.stdout}${res.stderr}`,
+    ms: Date.now() - started,
+  }
 }
 
 const args = (sha?: string) => [
@@ -187,4 +194,55 @@ it('fails when the live revision is not the image that was built', () => {
   expect(r.out).toContain(
     'svc-a runs 1.dkr.ecr.us-east-2.amazonaws.com/app:stale999, not tag abc123',
   )
+})
+
+it('fails rather than reporting success when it cannot read the live images', () => {
+  // The guard must never pass by checking nothing: a throttled/denied call here
+  // used to leave `images` empty, skip the loop and print success.
+  const r = runAws(
+    {
+      services: {
+        failures: [],
+        services: [service('svc-a', '7', true), service('svc-b', '9', true)],
+      },
+    },
+    args('abc123'),
+    '',
+    ARN('7'),
+    { failTaskDef: true },
+  )
+  expect(r.status).toBe(1)
+  expect(r.out).toContain('could not read the images of')
+  expect(r.out).not.toContain('carry image tag')
+})
+
+it('fails at once, not on the deadline, when a service does not exist', () => {
+  const r = runAws(
+    {
+      services: {
+        failures: [
+          {
+            arn: 'arn:aws:ecs:us-east-2:1:service/cluster/nope',
+            reason: 'MISSING',
+          },
+        ],
+        services: [],
+      },
+    },
+    [
+      '--cluster',
+      'c',
+      '--services',
+      'svc-a',
+      '--timeout',
+      '60',
+      '--interval',
+      '15',
+    ],
+    '',
+    ARN('7'),
+  )
+  expect(r.status).toBe(1)
+  expect(r.out).toContain('MISSING SERVICE')
+  expect(r.ms).toBeLessThan(5000)
 })
