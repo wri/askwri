@@ -77,6 +77,12 @@ section is leftover template text and does not describe this repo's release flow
   Direction is an argument: qa → production seeded the 2026-08-07 cutover;
   production → qa is the future refresh. See
   `docs/runbooks/prod-cutover-multilingual-v3.md`.
+- `./scripts/ecs-await-deploy.sh --cluster <c> --services "<svc> ..."
+  [--expected-image-tag <sha>] [--timeout 600]` — what both deploy workflows use
+  instead of `aws ecs wait services-stable` (which fails with an exit code and no
+  reason). Bounded poll; on failure prints each service's rollout state and every
+  stopped task's stop reason, then fails if a live revision is not tagged with the
+  image just built. Run it by hand to check any deploy. See #503.
 
 ## Conventions (follow, don't invent)
 - API routes: `src/app/api/<name>/route.ts` → call `initializeDatabase()` → call a function in

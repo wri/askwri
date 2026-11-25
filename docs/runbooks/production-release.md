@@ -19,15 +19,18 @@ Read these before anything else. Each one cost real time or real risk.
 
 2. **A green workflow does not mean a successful deploy.** The app service has
    `deployment_circuit_breaker { rollback = true }`. A completed rollback *is* a steady
-   state, so `aws ecs wait services-stable` returns success and `/api/health` looks fine —
-   and `/api/health` carries no build identity (it returns `npm_package_version`, not a SHA).
-   **Always assert the live image SHA** (§6 Gate 1). This is the single highest-value check
-   in the whole runbook.
+   state, so `/api/health` looks fine — and `/api/health` carries no build identity (it
+   returns `npm_package_version`, not a SHA). Since #503 the deploy wait
+   (`scripts/ecs-await-deploy.sh`) fails the run when a live revision is not tagged with
+   the commit being deployed, so a rolled-back or stale service now goes red by itself.
+   **Still assert the live image SHA by hand** (§6 Gate 1): it is the only check that
+   covers deploys made outside the workflow.
 
 3. **The ingestion worker does not reliably pick up new images.** It sat on task definition
    revision 1 / image `c1af292` from 2026-08-07 through two "successful" deploys.
    `--force-new-deployment` cannot fix this — it relaunches whatever the service already
-   points at. Only `--task-definition` moves it. See §8.
+   points at. Only `--task-definition` moves it. See §8. The image-tag assertion now fails
+   the deploy when this happens, but the fix is still the `--task-definition` step.
 
 4. **The search-service cannot report its own health.** It has no container health check
    (disabled deliberately in `ecs.tf`), it is not behind the ALB, and `/health` returns
@@ -278,7 +281,8 @@ done
 ```
 
 All three must show the release merge SHA. Anything else means a circuit-breaker rollback
-that every other signal reported as success.
+that every other signal reported as success. The deploy workflow asserts this itself since
+#503; run it here for any deploy that bypassed the workflow.
 
 ### Gate 2 — search-service actually booted
 
