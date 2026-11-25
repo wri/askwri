@@ -1,5 +1,7 @@
 # AskWRI
 
+System administrators: [PDF parser migration and corpus rebuild runbook](docs/runbooks/pdf-parser-migration.md) covers onboarding, prerequisites, re-ingestion, chunking/embedding, validation, release and rollback. It distinguishes existing tools from engineering prerequisites.
+
 A production-ready Next.js + Python application deployed to AWS ECS Fargate with Terraform and GitHub Actions. The Next.js frontend provides cite-mode and answer-mode search interfaces, while the Python search service handles BM25 + vector retrieval with query expansion.
 
 ## 🏗️ Architecture
