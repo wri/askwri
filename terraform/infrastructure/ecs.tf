@@ -505,6 +505,16 @@ resource "aws_ecs_service" "app" {
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
 
+
+  # The container downloads the whole documents bucket into /tmp before it
+  # listens on :3000 (start-app.sh), and the ALB gives it 75s to answer
+  # (15s interval x 5 unhealthy checks). With the default grace of 0, ECS
+  # counts ELB failures from the moment the task starts, so every task was
+  # killed mid-sync and the rollout could not converge: on 2026-11-25 QA's
+  # deploy looped while 607 objects / 3.12 GB took 2m00s to download. 600s is
+  # ~5x that measurement. The durable fix is not fetching the corpus on every
+  # boot; until then this gap is what keeps a deploy from succeeding.
+  health_check_grace_period_seconds = 600
   deployment_circuit_breaker {
     enable   = true
     rollback = true
