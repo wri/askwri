@@ -84,14 +84,14 @@ export class PreflightAbortError extends Error {
   }
 }
 
-/** The submodule's pinned commit as recorded in the parent tree; falls back
- * to the submodule's own HEAD (e.g. an uncommitted submodule bump). */
-function fixtureCommit(git: (args: string[]) => string): string {
-  try {
-    return git(['rev-parse', 'HEAD:evaluation/eval-review']).trim()
-  } catch {
-    return git(['-C', 'evaluation/eval-review', 'rev-parse', 'HEAD']).trim()
-  }
+/** Content-addressed fixture revision. The `sha256:` prefix distinguishes new
+ * vendored fixtures from the submodule commit stored by older artifacts. */
+function fixtureRevision(evalsetPath: string): string {
+  const digest = crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(evalsetPath))
+    .digest('hex')
+  return `sha256:${digest}`
 }
 
 /** HEAD sha, suffixed `-dirty` when the tree has uncommitted changes — a
@@ -473,7 +473,7 @@ export async function runCapture(
       // being invoked from another directory.
       path: path.resolve(ctl.evalsetPath),
       name: evalset.name,
-      commit: fixtureCommit(git),
+      commit: fixtureRevision(ctl.evalsetPath),
     },
     target: {
       mode: target.mode,

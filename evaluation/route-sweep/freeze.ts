@@ -5,14 +5,9 @@
  * rather than assumed, because it is the input size for three of the four
  * route payloads and it selects their truncation regime.
  */
-import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import type { FrozenCase, FrozenSet } from './types'
-
-// The evalsets live in this submodule. Its checked-out commit is part of the
-// frozen set's provenance, so it is read, never bumped: the pin is the anchor
-// that makes a frozen set traceable back to the ground truth it came from.
-const SUBMODULE_DIR = 'evaluation/eval-review'
 
 export type EvalsetCase = {
   id: string
@@ -28,21 +23,16 @@ export type LoadedEvalset = {
 }
 
 /**
- * Selects cases from a pinned evalset. The reviewed tier is preferred when a
- * future pin introduces it; at pin 1dcbeab no case carries `review_status`, so
- * the default is "first `limit` cases in file order" and the caller records
- * that the set had no reviewed tier.
+ * Selects cases from a versioned evalset. The reviewed tier is preferred when
+ * one exists; otherwise the default is "first `limit` cases in file order" and
+ * the caller records that the set had no reviewed tier.
  */
 export function loadEvalset(
   evalsetPath: string,
   opts: { limit?: number; ids?: string[] },
 ): LoadedEvalset {
   if (!existsSync(evalsetPath)) {
-    throw new Error(
-      `evalset not found: ${evalsetPath} — the evalsets live in the ` +
-        `${SUBMODULE_DIR} submodule; run ` +
-        `\`git submodule update --init ${SUBMODULE_DIR}\``,
-    )
+    throw new Error(`evalset not found: ${evalsetPath}`)
   }
 
   const parsed = JSON.parse(readFileSync(evalsetPath, 'utf8')) as {
@@ -74,12 +64,9 @@ export function loadEvalset(
   }
 }
 
-/** The submodule's checked-out commit, read from git rather than the parent
- * tree's index: an uncommitted bump must show up in the artifact. */
-function submoduleCommit(): string {
-  return execFileSync('git', ['-C', SUBMODULE_DIR, 'rev-parse', 'HEAD'], {
-    encoding: 'utf8',
-  }).trim()
+/** Content digest of the exact fixture used for this frozen set. */
+function fixtureSha256(evalsetPath: string): string {
+  return createHash('sha256').update(readFileSync(evalsetPath)).digest('hex')
 }
 
 /**
@@ -95,12 +82,13 @@ export async function freezeCases(args: {
   maxResults: number
   label: string
   evalset: string
+  evalsetPath: string
   evalsetNote?: string
   fetchImpl?: typeof fetch
 }): Promise<FrozenSet> {
   const doFetch = args.fetchImpl ?? fetch
   const base = args.target.replace(/\/+$/, '')
-  const commit = submoduleCommit()
+  const fixtureDigest = fixtureSha256(args.evalsetPath)
 
   const cases: FrozenCase[] = []
   for (const c of args.cases) {
@@ -128,7 +116,7 @@ export async function freezeCases(args: {
     label: args.label,
     target: args.target,
     evalset: args.evalset,
-    submodule_commit: commit,
+    fixture_sha256: fixtureDigest,
     max_results: args.maxResults,
     cases,
     ...(args.evalsetNote ? { evalsetNote: args.evalsetNote } : {}),

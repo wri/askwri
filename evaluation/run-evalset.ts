@@ -1,5 +1,5 @@
 /**
- * Runs a generation-2 evalset (askwri-eval-review/evalsets/*.json) against a
+ * Runs a generation-2 evalset (evaluation/evalsets/*.json) against a
  * deployed AskWRI instance via its public retrieval gateway.
  *
  * Scores retrieval at two grains, both keyed on ids the gateway returns
@@ -49,9 +49,9 @@ import { expansionArm, gatewayBody } from './lib/gateway-body'
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
 
-// Fixtures live in the eval-review submodule, pinned by commit so a report can
-// always be traced back to the exact ground truth that produced it.
-const EVALSET_DIR = path.join(__dirname, 'eval-review', 'evalsets')
+// Fixtures are versioned with the harness so a report can be traced back to the
+// exact ground truth that produced it.
+const EVALSET_DIR = path.join(__dirname, 'evalsets')
 
 /**
  * One chunk of a source document, named by the `chunk_id` the fixture resolved
@@ -753,16 +753,14 @@ async function main() {
     ? [explicit]
     : fs
         .readdirSync(EVALSET_DIR)
-        // Superseded sets stay in the submodule for provenance, named
+        // Superseded sets may stay in this directory for provenance, named
         // `*_bkupNN.json`. They are still runnable by path, just not by default.
         .filter((f) => f.endsWith('.json') && !f.includes('_bkup'))
         .sort()
         .map((f) => path.join(EVALSET_DIR, f))
 
   if (evalsetPaths.length === 0) {
-    console.error(
-      `No evalsets in ${EVALSET_DIR} — run: git submodule update --init`,
-    )
+    console.error(`No evalsets in ${EVALSET_DIR}`)
     process.exit(1)
   }
 

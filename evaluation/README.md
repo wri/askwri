@@ -1,12 +1,11 @@
 # AskWRI Evaluation System
 
-**Last Updated:** 2026-09
+**Last Updated:** 2026-11
 
 ## Quick Reference
 
 **Against a deployed instance — no services to run:**
 ```bash
-git submodule update --init                 # once per checkout, fetches the evalsets
 npm run eval:qa                             # every evalset vs QA (~1 min)
 ```
 No search service, no database, no AWS credentials. See
@@ -52,23 +51,19 @@ deployment through its public `/api/llamaindex` gateway. Nothing runs locally
 except the script, so there is no corpus to maintain and no credentials to hold.
 
 ```bash
-git submodule update --init                        # once per checkout
-npm run eval:qa                                    # every set in the submodule
+npm run eval:qa                                    # every active set in evaluation/evalsets
 EVAL_TARGET=https://other.example npm run eval:qa  # a different instance
 npx tsx evaluation/run-evalset.ts <path.json>      # one set
 ```
 
-Without the submodule checked out there are no fixtures to run, and `eval:qa`
-exits telling you to run the `--init` above. A fresh clone of this repo does not
-fetch submodule contents; `git clone --recurse-submodules` does it in one step.
-
-**Fixtures** come from the `evaluation/eval-review` submodule, pinned by commit
-so a report always traces back to the ground truth that produced it. To take new
-sets from upstream:
+**Fixtures** are versioned directly in `evaluation/evalsets/`. Add a uniquely
+named `.json` file to include a new set in the default `eval:qa` run, or replace
+an existing file when revising the same logical set. Files containing `_bkup`
+remain runnable by explicit path but are skipped by the default run. Git history
+preserves prior versions, so backup copies are normally unnecessary.
 
 ```bash
-git submodule update --remote evaluation/eval-review
-git commit evaluation/eval-review -m "chore(eval): bump evalset fixtures"
+npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_03.json
 ```
 
 **Reading the output.** These sets key on `external_id`, which is exactly the
@@ -172,8 +167,8 @@ day and the label:
 
 - `evaluation/baselines/YYYY-MM-DD-route-sweep-<label>.json` — per case, per route, per
   model: the payload sent, the raw response, its `provenance` block, latency, error.
-  Plus a header with the target, both models, `max_results`, the evalset submodule
-  commit, and the image digest of the QA task that answered (`unknown` when the AWS
+  Plus a header with the target, both models, `max_results`, the evalset SHA-256,
+  and the image digest of the QA task that answered (`unknown` when the AWS
   lookup fails, in which case nothing in the artifact evidences a deployed change).
 - `evaluation/baselines/YYYY-MM-DD-route-sweep-<label>.md` — the same run for a person:
   mechanical check results at the top, then per route, per case, the two outputs stacked.
@@ -247,7 +242,8 @@ npm run eval:answer-score   -- --capture evaluation/answer/artifacts/capture-<la
 npm run eval:answer-compare -- <reportA.json> <reportB.json>
 ```
 
-Every artifact carries a provenance block: fixture commit (submodule SHA),
+Every artifact carries a provenance block: fixture revision (the fixture file's
+SHA-256 for new captures; older captures retain their submodule commit),
 target URL or local config snapshot, every injected knob, synthesis and judge
 models with base URLs, prompt hashes, pass count, and timestamp. Judge verdicts
 are keyed `(case, pass, item)` and carry the prompt hash and judge model.
@@ -495,9 +491,8 @@ and the same reviewer's later file for the same case+pass wins (a corrected
 file supersedes their earlier one).
 
 Without `--labels` nothing changes: the report is byte-identical to a plain
-run. The fixture data enabling this (answer twins, negative cases,
-`review_status` fields) arrives with the eval-review submodule pin bump,
-separately.
+run. The fixture data enabling this (answer twins, negative cases, and
+`review_status` fields) is versioned in `evaluation/evalsets/`.
 
 ### Cost caveats
 
@@ -560,6 +555,8 @@ required. Publish it with `npm run eval:upload-cite` after `eval:cite`
 ```
 evaluation/
 ├── README.md                              # This file
+├── evalsets/                              # Versioned gen-2 retrieval/answer fixtures
+├── run-evalset.ts                         # Run gen-2 fixtures against a deployment
 │
 ├── # Shared infrastructure
 ├── lib/

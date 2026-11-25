@@ -227,11 +227,7 @@ afterEach(async () => {
 
 /** Clean tree: `status --porcelain` is empty. */
 const stubGit = (args: string[]) =>
-  args[0] === 'status'
-    ? ''
-    : args.join(' ').includes('eval-review')
-      ? 'fixturesha0000'
-      : 'harnesssha0000'
+  args[0] === 'status' ? '' : 'harnesssha0000'
 /** Dirty tree: one modified file. */
 const dirtyGit = (args: string[]) =>
   args[0] === 'status' ? ' M evaluation/answer/score.ts\n' : stubGit(args)
@@ -362,7 +358,7 @@ describe('runCapture', () => {
     await close(gw.server)
   })
 
-  it('assembles provenance: fixture commit, harness SHA, prompt hashes, effective synthesis, target, passes, ISO timestamp', async () => {
+  it('assembles provenance: fixture digest, harness SHA, prompt hashes, effective synthesis, target, passes, ISO timestamp', async () => {
     const gw = await startFakeGateway(['doc_a', 'doc_b'])
     const esPath = writeEvalsetTo(makeEvalset())
     const artifact = await runCapture(
@@ -372,7 +368,7 @@ describe('runCapture', () => {
     expect(artifact.provenance.fixture).toEqual({
       path: esPath,
       name: 'capture-test',
-      commit: 'fixturesha0000',
+      commit: `sha256:${sha256(fs.readFileSync(esPath, 'utf8'))}`,
     })
     expect(artifact.provenance.harness_sha).toBe('harnesssha0000')
     // Prompt hashes keyed by version, sha256 of the shipped prompt strings.

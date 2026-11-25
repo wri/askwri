@@ -112,7 +112,9 @@ export interface CaseCapture {
 }
 
 export interface Provenance {
-  fixture: { path: string; name: string; commit: string } // submodule SHA
+  /** `commit` is the legacy field name retained for artifact compatibility.
+   * New captures store `sha256:<fixture file digest>` in it. */
+  fixture: { path: string; name: string; commit: string }
   target: {
     mode: 'gateway' | 'direct'
     urls: string[]
