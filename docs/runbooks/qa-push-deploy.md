@@ -265,7 +265,11 @@ git push origin qa
 
 This triggers `Deploy to QA`: test → build-and-push (app + search-service images, tagged
 with the commit short SHA **and** `latest`) → terraform plan+apply → force-new-deployment
-of all three ECS services → `aws ecs wait services-stable`.
+of all three ECS services → `scripts/ecs-await-deploy.sh`, which polls for stability
+against a 600s bound, prints each service's rollout state and every stopped task's stop
+reason if it gives up, and then asserts the live revisions carry this commit's image tag
+(a green run is not proof the deploy landed — see
+`docs/runbooks/production-release.md` §0).
 
 Watch it:
 

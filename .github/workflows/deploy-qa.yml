@@ -34,6 +34,8 @@ jobs:
   test:
     name: Build and Test
     runs-on: ubuntu-latest
+    # Nothing else bounds these steps; see #503.
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -68,6 +70,7 @@ jobs:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
     needs: test
+    timeout-minutes: 30
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
 
@@ -117,6 +120,7 @@ jobs:
     name: Build and Push Search Service
     runs-on: ubuntu-latest
     needs: test
+    timeout-minutes: 30
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
 
@@ -164,6 +168,7 @@ jobs:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
     needs: [build-and-push, build-and-push-search-service]
+    timeout-minutes: 25
 
     steps:
       - name: Checkout code
@@ -217,8 +222,12 @@ jobs:
     name: Deploy to ECS
     runs-on: ubuntu-latest
     needs: deploy-infrastructure
+    timeout-minutes: 15
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -240,11 +249,17 @@ jobs:
             --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-ingestion-worker \
             --force-new-deployment
 
-      - name: Wait for service stability
+      # Bounded poll that names the service, revision and stop reason when a
+      # rollout dies, then asserts the live revisions carry this commit's image
+      # tag — a green workflow is not proof the deploy landed (#503).
+      - name: Wait for service stability and verify the live revision
+        timeout-minutes: 12
         run: |
-          aws ecs wait services-stable \
+          ./scripts/ecs-await-deploy.sh \
             --cluster ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-cluster \
-            --services ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-ingestion-worker
+            --services "${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-search-service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-ingestion-worker" \
+            --expected-image-tag "${{ github.sha }}" \
+            --timeout 600
 
       - name: Get Application URL
         run: |
