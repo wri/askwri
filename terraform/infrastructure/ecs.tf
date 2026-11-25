@@ -327,7 +327,7 @@ resource "aws_ecs_task_definition" "app" {
       # - linuxParameters drops all Linux capabilities; the Node process needs none.
       # - ulimits cap process count to slow fork-bomb / miner-spawn behaviour.
       # - mountPoints expose only the specific writable paths needed:
-      #   /tmp/askWRI_docs  S3-synced documents directory
+      #   /tmp/askWRI_docs  local documents dir (dev fallback; no boot sync since #502)
       #   /app/.next/cache  next/image optimized-image cache; without it the app
       #                     fails to boot or serves 500s for next/image requests
       #   /var/lib/amazon/ssm  writable scratch space for the SSM agent injected
@@ -506,15 +506,12 @@ resource "aws_ecs_service" "app" {
   deployment_minimum_healthy_percent = 100
 
 
-  # The container downloads the whole documents bucket into /tmp before it
-  # listens on :3000 (start-app.sh), and the ALB gives it 75s to answer
-  # (15s interval x 5 unhealthy checks). With the default grace of 0, ECS
-  # counts ELB failures from the moment the task starts, so every task was
-  # killed mid-sync and the rollout could not converge: on 2026-11-25 QA's
-  # deploy looped while 607 objects / 3.12 GB took 2m00s to download. 600s is
-  # ~5x that measurement. The durable fix is not fetching the corpus on every
-  # boot; until then this gap is what keeps a deploy from succeeding.
-  health_check_grace_period_seconds = 600
+  # The task no longer downloads the documents bucket at boot (#502: 3.12 GB
+  # took 2m00s, longer than the ALB's 75s unhealthy window, so tasks were
+  # SIGTERMed mid-sync and rollouts never converged). #501 raised this to 600s
+  # to paper over that; boot is now just `exec node server.js`, so start
+  # failing health checks promptly again.
+  health_check_grace_period_seconds = 60
   deployment_circuit_breaker {
     enable   = true
     rollback = true
