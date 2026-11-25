@@ -285,7 +285,7 @@ Notes:
   - `aws s3 sync /tmp/askWRI_docs s3://askwri-data/documents/`
   - `aws s3 rm --recursive s3://askwri-data/cache/`
   - `aws s3 sync /tmp/askWRI_cache s3://askwri-data/cache/`
-- Restart services (both search service and app) to pick up new files from AWS S3 (either by deploying or via AWS Console ECS service)
+- Restart the search service to pick up new files from AWS S3 (either by deploying or via AWS Console ECS service). The app no longer downloads the corpus at boot (#502) — public PDFs stream from S3 per request and the catalog comes from Postgres — so a new PDF needs no app restart; a `documents.csv` change needs the DB import, not a sync.
 
 ## 📊 Monitoring
 
