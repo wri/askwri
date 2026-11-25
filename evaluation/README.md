@@ -112,6 +112,14 @@ cover. Three things to hold when reading them:
 Retrieval params are deliberately not sent, so the target applies its own
 presets and the numbers reflect what users actually get.
 
+**The one exception** is the flag-on vs flag-off comparison (#498):
+`EVAL_EXPANSION=off` sends `expansion: false`, the search service's flag-off
+guard, so the same target can be measured with its query-understanding path
+disabled — no redeploy. The arm is printed in the run header and stored as
+`expansion_arm` in the report, so two reports can never be compared across arms
+by accident. Any other value of `EVAL_EXPANSION` fails before the first
+request. See `baselines/2026-11-24-flag-on-vs-off-qa.md`.
+
 **Recording a baseline.** Any eval run worth comparing later is saved as
 `evaluation/baselines/YYYY-MM-DD-<what>.md`, and it always carries: the target and
 its backend and corpus size, the fixtures commit (CI fetches upstream `main`, not

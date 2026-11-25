@@ -44,6 +44,7 @@ import {
   latencySummary,
 } from './lib/metrics'
 import { isAbstained, isFalseAbstention } from './lib/abstention'
+import { expansionArm, gatewayBody } from './lib/gateway-body'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
@@ -234,7 +235,7 @@ async function queryTarget(
   const response = await fetch(`${TARGET}/api/llamaindex`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: question, mode }),
+    body: JSON.stringify(gatewayBody(question, mode)),
     signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
   })
   if (!response.ok) {
@@ -597,6 +598,10 @@ async function runEvalset(
     evalset_version: evalset.version,
     target: TARGET,
     mode,
+    // Which arm this run measured (#498): the default arm sends no retrieval
+    // params, the off arm sends expansion:false. Recorded so two reports can
+    // never be compared across arms by accident.
+    expansion_arm: expansionArm(),
     environment: service.environment ?? null,
     keyword_backend: service.keyword_backend ?? null,
     retrieval_backend: service.retrieval_backend ?? null,
@@ -738,6 +743,8 @@ async function runEvalset(
 }
 
 async function main() {
+  // Before any request: a mistyped arm must not reach the target at all.
+  const arm = expansionArm()
   const args = process.argv.slice(2)
   const explicit = args.find((a) => !a.startsWith('--'))
   const modeFlag = args[args.indexOf('--mode') + 1]
@@ -770,6 +777,7 @@ async function main() {
     `Backend:  keyword=${service.keyword_backend} retrieval=${service.retrieval_backend} env=${service.environment}`,
   )
   console.log(`Corpus:   ${corpusIds.size} documents`)
+  console.log(`Expansion: ${arm}`)
 
   for (const evalsetPath of evalsetPaths) {
     await runEvalset(evalsetPath, modeFlag, service, corpusIds)
