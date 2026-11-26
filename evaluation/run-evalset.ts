@@ -361,8 +361,15 @@ async function runCase(
   }
 
   try {
-    const { hits, serviceMs, costUsd, excludedDocIds, boostedDocIds, facetMode, likelyOffTopic } =
-      await queryTarget(tc.question, mode, facets)
+    const {
+      hits,
+      serviceMs,
+      costUsd,
+      excludedDocIds,
+      boostedDocIds,
+      facetMode,
+      likelyOffTopic,
+    } = await queryTarget(tc.question, mode, facets)
     const docs = bestPerDoc(hits)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
