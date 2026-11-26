@@ -44,7 +44,14 @@ import {
   latencySummary,
 } from './lib/metrics'
 import { isAbstained, isFalseAbstention } from './lib/abstention'
-import { expansionArm, gatewayBody } from './lib/gateway-body'
+import {
+  expansionArm,
+  facetsForCase,
+  facetsManifest,
+  gatewayBody,
+  validateFacetCaseIds,
+  type FacetInput,
+} from './lib/gateway-body'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
@@ -161,6 +168,16 @@ interface CaseResult {
    * null when the target predates usage metering, or the query failed.
    */
   cost_usd: number | null
+  /**
+   * Doc ids the target excluded via hard facets (its debug.excluded_doc_ids,
+   * populated only because gatewayBody sends return_intermediate_results
+   * when facets are in play). null when the run sent no facets, the target
+   * didn't report them, or the query failed. Task 8's leakage metric
+   * reads this against retrieved_ids.
+   */
+  excluded_doc_ids: string[] | null
+  /** The fixed facets this case was measured with ([] when the lever is off). */
+  facets: FacetInput[]
   error?: string
 }
 
@@ -226,16 +243,18 @@ interface RetrievedChunk {
 async function queryTarget(
   question: string,
   mode: 'cite' | 'answer',
+  facets: FacetInput[],
 ): Promise<{
   hits: RetrievedChunk[]
   serviceMs: number | null
   costUsd: number | null
+  excludedDocIds: string[] | null
   likelyOffTopic: boolean
 }> {
   const response = await fetch(`${TARGET}/api/llamaindex`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(gatewayBody(question, mode)),
+    body: JSON.stringify(gatewayBody(question, mode, facets)),
     signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
   })
   if (!response.ok) {
@@ -258,6 +277,7 @@ async function queryTarget(
     hits,
     serviceMs: data.debug?.total_ms ?? null,
     costUsd: data.usage?.total_usd ?? null,
+    excludedDocIds: data.debug?.excluded_doc_ids ?? null,
     likelyOffTopic: data.likely_off_topic === true,
   }
 }
@@ -306,6 +326,7 @@ async function runCase(
   const attainableChunks = expectedChunks.filter(
     (p) => !missingChunks.includes(p.chunk_id),
   )
+  const facets = facetsForCase(tc.id)
   const start = Date.now()
 
   const base = {
@@ -317,13 +338,12 @@ async function runCase(
     recall_ceiling: ceiling,
     expected_chunk_ids: expectedChunkIds,
     chunks_missing_from_corpus: missingChunks,
+    facets,
   }
 
   try {
-    const { hits, serviceMs, costUsd, likelyOffTopic } = await queryTarget(
-      tc.question,
-      mode,
-    )
+    const { hits, serviceMs, costUsd, excludedDocIds, likelyOffTopic } =
+      await queryTarget(tc.question, mode, facets)
     const docs = bestPerDoc(hits)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
@@ -359,6 +379,7 @@ async function runCase(
         execution_time_ms: Date.now() - start,
         service_time_ms: serviceMs,
         cost_usd: costUsd,
+        excluded_doc_ids: excludedDocIds,
       }
     }
 
@@ -436,6 +457,7 @@ async function runCase(
       execution_time_ms: Date.now() - start,
       service_time_ms: serviceMs,
       cost_usd: costUsd,
+      excluded_doc_ids: excludedDocIds,
       likely_off_topic: likelyOffTopic,
     }
   } catch (error: any) {
@@ -466,6 +488,7 @@ async function runCase(
       execution_time_ms: Date.now() - start,
       service_time_ms: null,
       cost_usd: null,
+      excluded_doc_ids: null,
       error: error.message,
     }
   }
@@ -536,6 +559,8 @@ async function runEvalset(
         ? 'answer'
         : 'cite'
 
+  const manifest = facetsManifest()
+
   console.log(
     `\n${path.basename(evalsetPath)} — ${cases.length} cases [mode: ${mode}]\n`,
   )
@@ -602,6 +627,9 @@ async function runEvalset(
     // params, the off arm sends expansion:false. Recorded so two reports can
     // never be compared across arms by accident.
     expansion_arm: expansionArm(),
+    // The fixed-facet manifest this run was measured under ({} when the lever
+    // is off), so two reports can never be compared across levers by accident.
+    facets_manifest: manifest,
     environment: service.environment ?? null,
     keyword_backend: service.keyword_backend ?? null,
     retrieval_backend: service.retrieval_backend ?? null,
@@ -745,6 +773,7 @@ async function runEvalset(
 async function main() {
   // Before any request: a mistyped arm must not reach the target at all.
   const arm = expansionArm()
+  const manifest = facetsManifest()
   const args = process.argv.slice(2)
   const explicit = args.find((a) => !a.startsWith('--'))
   const modeFlag = args[args.indexOf('--mode') + 1]
@@ -764,6 +793,17 @@ async function main() {
     process.exit(1)
   }
 
+  // Before any request: a manifest key that matches no case id in the union of
+  // evalsets being run is a typo that would silently measure nothing — fail
+  // the run. Validated once here, against the union, so a partial manifest
+  // does not abort the first set that happens to lack its keys.
+  const knownCaseIds = new Set<string>()
+  for (const evalsetPath of evalsetPaths) {
+    const evalset = JSON.parse(fs.readFileSync(evalsetPath, 'utf-8'))
+    for (const tc of evalset.test_cases ?? []) knownCaseIds.add(tc.id)
+  }
+  validateFacetCaseIds(knownCaseIds)
+
   // The target's backend and corpus are the same for every set in a run, so
   // fetch them once and report them once.
   const health = await getJson(`${TARGET}/api/llamaindex`)
@@ -776,6 +816,9 @@ async function main() {
   )
   console.log(`Corpus:   ${corpusIds.size} documents`)
   console.log(`Expansion: ${arm}`)
+  const manifestKeys = Object.keys(manifest)
+  if (manifestKeys.length > 0)
+    console.log(`Facets:    ${manifestKeys.length} case(s) in EVAL_FACETS`)
 
   for (const evalsetPath of evalsetPaths) {
     await runEvalset(evalsetPath, modeFlag, service, corpusIds)

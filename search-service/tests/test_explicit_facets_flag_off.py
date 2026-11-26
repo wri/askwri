@@ -24,11 +24,15 @@ DOCS_META = {
 }
 
 
+DOC_TEXTS = {**{d: "t" for d in DOCS_META}, "es_doc": "coal power"}
+
+
 class _Retriever:
     def retrieve(self, bundle):
         return [
             NodeWithScore(
-                node=TextNode(id_=f"c-{d}", text="t", metadata={"doc_id": d, "title": d}),
+                node=TextNode(id_=f"c-{d}", text=DOC_TEXTS[d],
+                              metadata={"doc_id": d, "title": d}),
                 score=1.0 - i * 0.01,
             )
             for i, d in enumerate(DOCS_META)
@@ -74,3 +78,110 @@ def test_flag_off_invalid_facet_is_dropped_not_fatal(monkeypatch):
     payload = _post(monkeypatch, facets=[{"facet": "nonsense", "value": "x"},
                                          {"facet": "language", "value": "es"}])
     assert _doc_ids(payload) == {"es_doc", "en_with_es", "unknown_lang"}
+
+
+def test_flag_off_legacy_excluded_keywords_apply(monkeypatch):
+    payload = _post(monkeypatch, excluded_keywords=["coal"])
+    assert _doc_ids(payload) == {"en_doc", "en_with_es", "unknown_lang"}
+
+
+def test_debug_exposes_excluded_doc_ids(monkeypatch):
+    payload = _post(monkeypatch, excluded_keywords=["coal"],
+                   return_intermediate_results=True)
+    assert payload["debug"]["excluded_doc_ids"] == ["es_doc"]
+
+
+def test_excluded_doc_ids_match_with_understanding_on_and_off(monkeypatch):
+    # The same exclusion must report the same debug.excluded_doc_ids whether
+    # it arrives as the legacy param (flag off) or as a hard facet on the
+    # understanding object (flag on) — the eval harness compares arms on
+    # this field, so any divergence would read as facet-caused leakage.
+    from app.understanding import Facet, QueryUnderstanding
+
+    off = _post(monkeypatch, excluded_keywords=["coal"],
+                return_intermediate_results=True)
+    assert off["debug"]["excluded_doc_ids"] == ["es_doc"]
+
+    # Flag-on arm: _post pins understanding_active off, so re-pin it on and
+    # drive the same body through the handler directly. attach_topic_suggestions
+    # is imported inside the handler, so patch it at its module.
+    monkeypatch.setattr(app_main, "understanding_active", lambda s, r: True)
+    monkeypatch.setattr(
+        app_main, "build_understanding",
+        lambda *a, **k: QueryUnderstanding(facets=[Facet(
+            facet="excluded_keyword", value="coal",
+            confidence=1.0, source="user", action="hard")]))
+    monkeypatch.setattr("app.topic_sense.attach_topic_suggestions",
+                        lambda *a, **k: None)
+    monkeypatch.setattr(app_main, "lanes_active", lambda s, r: False)
+    resp = TestClient(app_main.app).post("/query", json={
+        "query": "urban finance mechanisms", "mode": "cite", "rerank": False,
+        "excluded_keywords": ["coal"], "return_intermediate_results": True})
+    assert resp.status_code == 200
+    assert resp.json()["debug"]["excluded_doc_ids"] == off["debug"]["excluded_doc_ids"]
+
+
+class _TwoChunkRetriever:
+    def retrieve(self, bundle):
+        return [
+            NodeWithScore(node=TextNode(id_="c-coal", text="coal power",
+                metadata={"doc_id": "es_doc", "title": "es_doc"}), score=0.9),
+            NodeWithScore(node=TextNode(id_="c-clean", text="clean power",
+                metadata={"doc_id": "es_doc", "title": "es_doc"}), score=0.8),
+        ]
+
+
+class _KeepCleanReranker:
+    # Scores must be rerank-scale (0-1): the real Bedrock reranker assigns
+    # fresh relevance scores, and cite mode's relevance floor (0.09) drops
+    # the raw RRF-scale fusion scores (~0.008) — without this the response
+    # would be empty and the pre/post-rerank distinction unobservable.
+    def postprocess_nodes(self, nodes, query_bundle=None, top_n=None):
+        return [NodeWithScore(node=n.node, score=0.9)
+                for n in nodes if "coal" not in n.node.text]
+
+
+def test_legacy_exclusion_decides_on_the_pre_rerank_pool(monkeypatch):
+    # Two chunks for one doc: rerank keeps the clean one, the matching one
+    # would be dropped. A post-rerank decision would keep the document.
+    monkeypatch.setitem(app_main.service_state, "bm25_retriever", _TwoChunkRetriever())
+    monkeypatch.setitem(app_main.service_state, "pg_dense_ready", True)
+    monkeypatch.setitem(app_main.service_state, "documents_metadata", {})
+    monkeypatch.setitem(app_main.service_state, "reranker_cite", _KeepCleanReranker())
+    monkeypatch.setattr(app_main, "make_dense_retriever", lambda top_k: _DenseStub())
+    monkeypatch.setattr(app_main, "understanding_active", lambda s, r: False)
+    resp = TestClient(app_main.app).post("/query", json={
+        "query": "power", "mode": "cite", "rerank": True,
+        "excluded_keywords": ["coal"]})
+    assert resp.status_code == 200
+    assert "es_doc" not in _doc_ids(resp.json())
+
+
+PAIRS = {"t1": {"original": "o1", "original_title": "Autobuses electricos",
+                "original_searchable": True}}
+
+
+class _PairRetriever:
+    def retrieve(self, bundle):
+        return [
+            NodeWithScore(node=TextNode(id_="c-o1", text="zero emission buses",
+                metadata={"doc_id": "o1", "title": "Original"}), score=0.9),
+            NodeWithScore(node=TextNode(id_="c-t1", text="autobuses electricos",
+                metadata={"doc_id": "t1", "title": "Traduccion"}), score=0.8),
+        ]
+
+
+def test_citation_substitution_cannot_resurrect_excluded_original(monkeypatch):
+    # The original is excluded by its own text; the translation does not match
+    # and survives. Without the assembly guard it is credited back to o1.
+    monkeypatch.setitem(app_main.service_state, "bm25_retriever", _PairRetriever())
+    monkeypatch.setitem(app_main.service_state, "pg_dense_ready", True)
+    monkeypatch.setitem(app_main.service_state, "documents_metadata", {})
+    monkeypatch.setattr(app_main, "make_dense_retriever", lambda top_k: _DenseStub())
+    monkeypatch.setattr(app_main, "understanding_active", lambda s, r: False)
+    monkeypatch.setattr(app_main, "load_confirmed_pairs", lambda: PAIRS)
+    resp = TestClient(app_main.app).post("/query", json={
+        "query": "buses", "mode": "cite", "rerank": False,
+        "facets": [{"facet": "excluded_keyword", "value": "zero emission"}]})
+    assert resp.status_code == 200
+    assert "o1" not in _doc_ids(resp.json())

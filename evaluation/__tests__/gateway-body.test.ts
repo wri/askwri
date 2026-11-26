@@ -1,4 +1,9 @@
-import { gatewayBody, expansionArm } from '../lib/gateway-body'
+import {
+  gatewayBody,
+  expansionArm,
+  facetsForCase,
+  validateFacetCaseIds,
+} from '../lib/gateway-body'
 
 const ENV = { ...process.env }
 afterEach(() => {
@@ -37,4 +42,61 @@ it('fails fast on any other value rather than running a default-arm comparison',
     process.env.EVAL_EXPANSION = bad
     expect(() => expansionArm()).toThrow(/EVAL_EXPANSION/)
   }
+})
+
+it('sends per-case facets and asks for exclusion diagnostics', () => {
+  process.env.EVAL_FACETS = JSON.stringify({
+    q11: [{ facet: 'excluded_keyword', value: 'electric buses' }],
+  })
+  expect(facetsForCase('q11')).toEqual([
+    { facet: 'excluded_keyword', value: 'electric buses' },
+  ])
+  expect(gatewayBody('q', 'cite', facetsForCase('q11'))).toMatchObject({
+    facets: [{ facet: 'excluded_keyword', value: 'electric buses' }],
+    return_intermediate_results: true,
+  })
+})
+
+it('sends no facets for cases the manifest does not name', () => {
+  process.env.EVAL_FACETS = JSON.stringify({
+    q11: [{ facet: 'excluded_keyword', value: 'electric buses' }],
+  })
+  expect(facetsForCase('q12')).toEqual([])
+  expect(gatewayBody('q', 'cite', facetsForCase('q12'))).toEqual({
+    query: 'q',
+    mode: 'cite',
+  })
+})
+
+it('returns no facets for any case when EVAL_FACETS is unset', () => {
+  delete process.env.EVAL_FACETS
+  expect(facetsForCase('q11')).toEqual([])
+})
+
+it('fails fast on a malformed facets manifest', () => {
+  process.env.EVAL_FACETS = JSON.stringify({ q11: 'electric buses' })
+  expect(() => facetsForCase('q11')).toThrow(/EVAL_FACETS/)
+})
+
+it('fails fast on facets manifest JSON that does not parse', () => {
+  process.env.EVAL_FACETS = '{q11:'
+  expect(() => facetsForCase('q11')).toThrow(/EVAL_FACETS/)
+})
+
+it('accepts a manifest key present in the union of case ids', () => {
+  process.env.EVAL_FACETS = JSON.stringify({
+    q11: [{ facet: 'excluded_keyword', value: 'electric buses' }],
+  })
+  expect(() =>
+    validateFacetCaseIds(new Set(['q12', 'q11', 'q13'])),
+  ).not.toThrow()
+})
+
+it('fails fast on a manifest key absent from the union of case ids', () => {
+  process.env.EVAL_FACETS = JSON.stringify({
+    q11: [{ facet: 'excluded_keyword', value: 'electric buses' }],
+  })
+  expect(() => validateFacetCaseIds(new Set(['q12', 'q13']))).toThrow(
+    /EVAL_FACETS/,
+  )
 })

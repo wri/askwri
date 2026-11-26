@@ -20,7 +20,15 @@ UNDERSTANDING_VERSION = 1
 # ("transportation") appearing in the query would over-add a lane.
 _LITERAL_FACETS = ("geography",)
 
-FACET_NAMES = ("year_min", "year_max", "language", "program", "excluded_keyword")
+# Policy mode for every facet type: "filter" facets exclude on metadata
+# mismatch; "negate" facets exclude on content match. apply_facet_filters
+# skips (logs) any facet type missing from this table.
+FACET_MODES: dict[str, str] = {
+    "year_min": "filter", "year_max": "filter",
+    "date_min": "filter", "date_max": "filter",
+    "language": "filter", "office": "filter", "program": "filter",
+    "excluded_keyword": "negate",
+}
 
 
 class Facet(BaseModel):

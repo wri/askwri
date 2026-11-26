@@ -418,19 +418,16 @@ class HybridFusionRetriever(BaseRetriever):
 def apply_metadata_filters(
     nodes: List[NodeWithScore],
     min_year: Optional[int] = None,
-    max_year: Optional[int] = None,
-    excluded_keywords: Optional[List[str]] = None,
-    required_program: Optional[str] = None
+    max_year: Optional[int] = None
 ) -> List[NodeWithScore]:
     """
-    Apply metadata-based filtering to retrieved nodes
+    Apply metadata-based filtering to retrieved nodes (year only; negation
+    and program filtering run as facets at Stage 1.6 — design §4.5)
 
     Args:
         nodes: List of nodes with scores from retrieval
         min_year: Minimum publication year (inclusive)
         max_year: Maximum publication year (inclusive)
-        excluded_keywords: Keywords to exclude (checks title, content, metadata)
-        required_program: Required program_series value
 
     Returns:
         Filtered list of nodes
@@ -453,28 +450,6 @@ def apply_metadata_filters(
                 except (ValueError, TypeError):
                     # If year can't be parsed, exclude it if year filter is strict
                     continue
-
-        # Program series filtering
-        if required_program is not None:
-            doc_program = metadata.get('program_series', '')
-            if doc_program != required_program:
-                continue
-
-        # Excluded keywords filtering
-        if excluded_keywords:
-            title = metadata.get('title', '').lower()
-            content = node_with_score.node.text.lower()
-
-            # Check if any excluded keyword appears in title or content
-            has_excluded = False
-            for keyword in excluded_keywords:
-                keyword_lower = keyword.lower()
-                if keyword_lower in title or keyword_lower in content:
-                    has_excluded = True
-                    break
-
-            if has_excluded:
-                continue
 
         filtered.append(node_with_score)
 
@@ -1696,26 +1671,40 @@ async def hybrid_query(request: QueryRequest):
 
         # Stage 1.6: THE facet application point — post-fusion, pre-rerank
         # (design §4.5). Legacy params flow through the same path so there
-        # is exactly one filter behavior when understanding is active.
+        # is exactly one filter behavior in both flag states.
         if understanding is not None:
-            from app.facet_filter import apply_facet_filters, legacy_request_facets
+            from app.facet_filter import apply_facet_filters, excluded_doc_ids, legacy_request_facets
             all_facets = understanding.facets + legacy_request_facets(request)
-            pre_facet = len(stage1_results)
-            stage1_results = apply_facet_filters(
-                stage1_results, all_facets, service_state.get("documents_metadata") or {}
-            )
-            logger.info(f"Stage 1.6 (Facet Filters): {pre_facet} → {len(stage1_results)} results")
-        elif request.facets:
+        elif request.facets or request.excluded_keywords or request.required_program:
             # Explicit chips are user input, not inferred understanding: apply
             # them with understanding off too (production runs that way), at the
-            # same point with the same semantics. Legacy params stay in Stage 2.5.
-            from app.facet_filter import apply_facet_filters
+            # same point with the same semantics. Legacy negation and program
+            # params join them here; year stays in Stage 2.5.
+            from app.facet_filter import apply_facet_filters, excluded_doc_ids, legacy_request_facets
+            all_facets = (user_facets(request.facets)
+                          + [f for f in legacy_request_facets(request)
+                             if f.facet in ("excluded_keyword", "program")])
+        else:
+            all_facets = []
+        # Excluded doc ids for the whole request: computed once here so the
+        # cite assembly can skip excluded originals without recomputing.
+        excluded = set()
+        if all_facets:
+            docs_meta = service_state.get("documents_metadata") or {}
+            # Scan the translation seeds too: a pair's canonical original is
+            # excluded even when only the translation surfaced, and excluded
+            # seeds must not join the rerank candidates.
+            excluded = excluded_doc_ids(
+                stage1_results + translation_seed, all_facets, docs_meta,
+                translation_pairs)
             pre_facet = len(stage1_results)
             stage1_results = apply_facet_filters(
-                stage1_results, user_facets(request.facets),
-                service_state.get("documents_metadata") or {}
-            )
-            logger.info(f"Stage 1.6 (Explicit Facets, flag off): {pre_facet} → {len(stage1_results)} results")
+                stage1_results, all_facets, docs_meta,
+                translation_pairs=translation_pairs, excluded_ids=excluded)
+            if excluded and translation_seed:
+                translation_seed = [n for n in translation_seed
+                                    if n.node.metadata.get("doc_id") not in excluded]
+            logger.info(f"Stage 1.6 (Facet Filters): {pre_facet} → {len(stage1_results)} results")
 
         # Stage 2: Reranking (Bedrock Cohere Rerank — 0-1 relevance scores).
         # rerank_applied gates the cite floor/tiers downstream: they are
@@ -1785,18 +1774,14 @@ async def hybrid_query(request: QueryRequest):
             stage2_results.sort(key=lambda n: n.score, reverse=True)
             logger.info(f"Stage 2.1 (Page-1 Demotion): applied to answer mode")
 
-        # Stage 2.5: Apply metadata filters (year, program, excluded keywords)
-        # Skipped when understanding is active: the new Stage 1.6 facet point
-        # already applied these (design §4.5 — one application point).
-        if understanding is None and (request.min_year or request.max_year or
-            request.excluded_keywords or request.required_program):
+        # Stage 2.5: Year filter only. Everything else (negation, program)
+        # already ran at Stage 1.6 — one application point per filter (design §4.5).
+        if understanding is None and (request.min_year or request.max_year):
             pre_filter_count = len(stage2_results)
             stage2_results = apply_metadata_filters(
                 stage2_results,
                 min_year=request.min_year,
-                max_year=request.max_year,
-                excluded_keywords=request.excluded_keywords,
-                required_program=request.required_program
+                max_year=request.max_year
             )
             logger.info(f"Stage 2.5 (Metadata Filters): {pre_filter_count} → {len(stage2_results)} results")
 
@@ -1828,6 +1813,8 @@ async def hybrid_query(request: QueryRequest):
 
             originals_of = {p["original"]: p for p in translation_pairs.values()}
             for canon, tnode in translation_best.items():
+                if canon in excluded:
+                    continue  # facet exclusion wins over translation credit
                 pair = originals_of[canon]
                 if canon in doc_groups:
                     doc_groups[canon].node.metadata["has_english_translation"] = True
@@ -2036,6 +2023,8 @@ async def hybrid_query(request: QueryRequest):
                                 if request.return_intermediate_results else None),
                 "rerank_window_ids": (rerank_window_ids
                                       if request.return_intermediate_results else None),
+                "excluded_doc_ids": (sorted(excluded)
+                                     if request.return_intermediate_results else None),
                 "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,

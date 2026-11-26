@@ -4,20 +4,25 @@ One code path for parser-detected, user-chip, and legacy-param facets.
 Only action='hard' facets exclude (Invariant 1: every one of these is
 rendered as a removable chip by the UI; Invariant 2: all hard facet types
 are human-verifiable metadata)."""
-from typing import List
+from typing import List, Optional, Set
 from datetime import date
+import logging
+import re
 
 import unicodedata
 
-from app.understanding import Facet
+from app.understanding import FACET_MODES, Facet
+
+logger = logging.getLogger(__name__)
 
 
-def _normalize_office(s: str) -> str:
-    # Case-, accent- and whitespace-insensitive: the UI canonicalizes values
-    # ("WRI US" → "WRI Us", all accents stripped) while the corpus keeps its
-    # own spelling ("WRI México", "WRI US", stray double spaces).
+def _normalize_meta(s: str) -> str:
+    # Case-, accent-, dash- and whitespace-insensitive: the UI canonicalizes
+    # values ("WRI US" → "WRI Us", all accents stripped) while the corpus
+    # keeps its own spelling ("WRI México", "WRI US", stray double spaces,
+    # hyphen/en-dash joins like "zero–emission").
     stripped = "".join(
-        ch
+        (" " if unicodedata.category(ch) == "Pd" else ch)
         for ch in unicodedata.normalize("NFD", s.casefold())
         if not unicodedata.combining(ch)
     )
@@ -41,16 +46,88 @@ def legacy_request_facets(request) -> List[Facet]:
     return out
 
 
-def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
+def _exclusion_patterns(facets: List[Facet]):
+    # Each term compiled once per request as whole normalized words:
+    # "coal" must not match "coalition", "zero–emission" must match
+    # "ZERO EMISSION". A term with no tokens (blank value) never matches.
+    terms = set()
+    for f in facets:
+        if f.action != "hard" or FACET_MODES.get(f.facet) != "negate":
+            continue
+        tokens = _normalize_meta(f.value).split()
+        if tokens:
+            terms.add(r"(?<!\w)" + r"\s+".join(re.escape(t) for t in tokens) + r"(?!\w)")
+    return [re.compile(t) for t in terms]
+
+
+def excluded_doc_ids(
+    nodes, facets: List[Facet], docs_meta: dict, translation_pairs: Optional[dict] = None,
+) -> Set[str]:
+    patterns = _exclusion_patterns(facets)
+    if not patterns:
+        return set()
+    pairs = translation_pairs or {}
+    # Reverse map: `pairs` maps translation → original, so a matching
+    # original also needs its translations — excluding a topic excludes the
+    # work in every language, in both directions.
+    translations_of: dict = {}
+    for tid, pair in pairs.items():
+        original = pair.get("original")
+        if original:
+            translations_of.setdefault(original, []).append(tid)
+
+    def _add_with_pairs(doc_id):
+        out.add(doc_id)
+        pair = pairs.get(doc_id) or {}
+        original = pair.get("original")
+        if original:
+            out.add(original)
+            # The original's other translations are this doc's siblings: an
+            # excluded work is excluded in every language.
+            out.update(translations_of.get(original, ()))
+        else:
+            # doc_id is the original: exclude its translations.
+            out.update(translations_of.get(doc_id, ()))
+
+    out: Set[str] = set()
+    for nws in nodes:
+        md = nws.node.metadata or {}
+        doc_id = md.get("doc_id")
+        if doc_id is None:
+            # A doc-less node has nothing to exclude; a None in the set would
+            # drop every doc-less node in apply_facet_filters and make
+            # sorted(excluded) raise in the debug payload.
+            continue
+        pair = pairs.get(doc_id) or {}
+        title = md.get("title") or docs_meta.get(doc_id, {}).get("title") or ""
+        fields = [title, nws.node.text]
+        if pair.get("original_title"):
+            fields.append(pair["original_title"])
+        # Each field normalized and scanned separately, so a phrase can't
+        # false-match across a title/text boundary.
+        if any(p.search(_normalize_meta(v)) for v in fields for p in patterns):
+            _add_with_pairs(doc_id)
+    return out
+
+
+def apply_facet_filters(
+    nodes, facets: List[Facet], docs_meta: dict,
+    translation_pairs: Optional[dict] = None, excluded_ids: Optional[Set[str]] = None,
+):
     year_min = year_max = None
     date_min = date_max = None
     program = None
     languages = []
     offices = []
-    excluded = []
     for f in facets:
         if f.action != "hard":
             continue
+        mode = FACET_MODES.get(f.facet)
+        if mode is None:
+            logger.warning("facet_filter: no policy mode for facet %r; skipping", f.facet)
+            continue
+        if mode == "negate":
+            continue  # handled document-level by excluded_doc_ids
         if f.facet == "year_min":
             try:
                 year_min = int(f.value)
@@ -76,9 +153,11 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
             program = f.value
         elif f.facet == "office":
             offices.append(f.value)
-        elif f.facet == "excluded_keyword":
-            excluded.append(f.value.lower())
 
+    if excluded_ids is not None:
+        excluded = excluded_ids
+    else:
+        excluded = excluded_doc_ids(nodes, facets, docs_meta, translation_pairs)
     if year_min is None and year_max is None and date_min is None and date_max is None and program is None and not languages and not offices and not excluded:
         return nodes
 
@@ -140,7 +219,11 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
             if doc_language is not None and not doc_matches:
                 continue
 
-        if program is not None and md.get("program_series", "") != program:
+        # Case-, accent-, dash- and whitespace-insensitive like office:
+        # the UI canonicalizes chip values while the corpus keeps its own
+        # spelling for the same program series. `or ""`: an explicit
+        # program_series: None is a mismatch, never a crash.
+        if program is not None and _normalize_meta(md.get("program_series") or "") != _normalize_meta(program):
             continue
 
         # Office lives in raw_metadata (wri_primary_office); a doc with unknown
@@ -151,15 +234,12 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
         if offices:
             doc_office = doc.get("office")
             if doc_office is not None and not any(
-                _normalize_office(doc_office) == _normalize_office(o) for o in offices
+                _normalize_meta(doc_office) == _normalize_meta(o) for o in offices
             ):
                 continue
 
-        if excluded:
-            title = (md.get("title") or "").lower()
-            text = nws.node.text.lower()
-            if any(kw in title or kw in text for kw in excluded):
-                continue
+        if md.get("doc_id") in excluded:
+            continue
 
         out.append(nws)
     return out
