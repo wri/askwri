@@ -132,11 +132,15 @@ _(numbers filled in as arms run; the rule above is frozen)_
 
 **Arms 1 and 2 were measured on QA at `858bbca`, before this branch merged.** That is sound
 rather than convenient: both arms run the filter path, which this branch leaves
-behaviour-identical by default (`FACET_MODE` unset), and the pre-existing baseline reproduces
-exactly (39.6 / 67.8 and 73.7 / 86.9 match `2026-11-26-facet-negation-qa.md`). It also proves
-the arm evidence is honest — `facet_mode` is `null` on that deploy, because only this branch
-reports it. Arm 3 needs the deploy (`FACET_MODE=boost`), and records the image tag the deploy
-landed on.
+behaviour-identical by default (`FACET_MODE` unset). Two cross-checks, neither of them
+in-repo on this branch: the numbers match the baseline recorded on open PR #520's branch
+(`fix/450-facet-policy:evaluation/baselines/2026-11-26-facet-negation-qa.md` — 39.6 / 67.8 and
+73.7 / 86.9), and the determinism evidence is this branch's own paired runs (§ below), not
+that file. The older in-repo baseline (`2026-11-24-flag-on-vs-off-qa.md:40`, 36.4 / 65.8) was
+measured on a different evalset version and is not a comparison point here. The same runs also
+prove the arm evidence is honest — `facet_mode` is `null` on that deploy, because only this
+branch reports it. Arm 3 needs the deploy (`FACET_MODE=boost`), and records the image tag the
+deploy landed on.
 
 Run order, so that a determinism claim means what it says: arms 1 and 2, each run twice, on
 one deployment (above); then arm 3, twice per set, on the `FACET_MODE=boost` deployment. No
