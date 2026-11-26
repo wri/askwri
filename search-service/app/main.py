@@ -359,8 +359,10 @@ class HybridFusionRetriever(BaseRetriever):
                 continue
             lane_weight = lane.get("weight")
             if lane_weight is None:
-                # 5a: per-mode expansion-lane weight (cite 1.0 / answer 0.25);
-                # fall back to sparse_weight when not set (pre-5a back-compat).
+                # 5a: per-mode expansion-lane weight (cite 0.5 / answer 1.0 —
+                # see cite_expansion_lane_weight in config.py for the sweep that
+                # chose them); fall back to sparse_weight when not set (pre-5a
+                # back-compat).
                 lane_weight = self.expansion_lane_weight if self.expansion_lane_weight is not None else self.sparse_weight
             lane_specs.append((
                 lane["name"], extra_results[lane["name"]],
@@ -1117,11 +1119,17 @@ def core_topic_in_corpus(core_topic: str) -> dict:
 
 
 def _expansion_lane_weight_for(settings, mode: str, request_override: Optional[float] = None) -> Optional[float]:
-    """5a: per-mode expansion-lane RRF weight (cite 1.0 recall-first / answer
-    0.25 precision-first). Request-level override wins (sweep knob — data-driven
-    tuning without a redeploy), then EXPANSION_LANE_WEIGHT env (back-compat with
-    qa.tfvars), then per-mode config default. Returns None when lanes are off
-    (no expansion lanes → weight is inert; keeps the fusion call simple)."""
+    """5a: per-mode expansion-lane RRF weight (cite 0.5 / answer 1.0). Request-
+    level override wins (sweep knob — data-driven tuning without a redeploy),
+    then EXPANSION_LANE_WEIGHT env (back-compat with qa.tfvars), then per-mode
+    config default. Returns None when lanes are off (no expansion lanes → weight
+    is inert; keeps the fusion call simple).
+
+    Answer carries the higher weight on purpose: answer mode wants the one right
+    source document, and the expansion lanes help find it, so a heavy weight
+    helps. Cite mode dilutes its direct-match goldens at 1.0 — 0.5 measured
+    better there. Both numbers come from the 2026-08-26 live-qa sweep, not from
+    a recall-vs-precision intuition."""
     if request_override is not None:
         return request_override
     import os

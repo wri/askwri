@@ -230,12 +230,35 @@ select 'source_rows', count(*)::text from s;
 select 'will_change', count(*)::text from s
   join document_summaries t on t.document_id=s.document_id and t.language=s.language and t.kind=s.kind
  where (t.text,t.source,t.model_version) is distinct from (s.text,s.source,s.model_version);
+-- Summaries carry the same source precedence as document_tags: a human edit is
+-- never overwritten by a generated one. This table had NO guard until #515, so a
+-- mirror would silently replace human summaries — measured 2026-11-26: 1 of
+-- production's 48 human summaries (6997e79b en/long) would have been replaced by
+-- qa's external copy, and the count grows as staff edit summaries on production.
+-- A trip here aborts the step, because a loss the operator did not see is worse
+-- than a release that stops and asks.
+select 'human_rows_protected', count(*)::text from s
+  join document_summaries t on t.document_id=s.document_id and t.language=s.language and t.kind=s.kind
+ where t.source='human' and s.source is distinct from 'human';
+do \$\$ declare n int; begin
+  select count(*) into n from s
+    join document_summaries t on t.document_id=s.document_id and t.language=s.language and t.kind=s.kind
+   where t.source='human' and s.source is distinct from 'human';
+  if n <> 0 then raise exception
+    'GUARD: % human summary rows would be overwritten with a non-human source', n; end if;
+end \$\$;
 update document_summaries t set text=s.text, source=s.source, model_version=s.model_version
   from s where t.document_id=s.document_id and t.language=s.language and t.kind=s.kind
-   and (t.text,t.source,t.model_version) is distinct from (s.text,s.source,s.model_version);
+   and (t.text,t.source,t.model_version) is distinct from (s.text,s.source,s.model_version)
+-- belt and braces: even if the guard above is ever removed, a human row can only
+-- be updated by another human row.
+   and (t.source is distinct from 'human' or s.source = 'human');
 select 'remaining_diffs', count(*)::text from s
   join document_summaries t on t.document_id=s.document_id and t.language=s.language and t.kind=s.kind
  where (t.text,t.source,t.model_version) is distinct from (s.text,s.source,s.model_version);
+select 'human_rows_preserved', count(*)::text from s
+  join document_summaries t on t.document_id=s.document_id and t.language=s.language and t.kind=s.kind
+ where t.source='human' and s.source is distinct from 'human';
 $END"
 
 # ---------------------------------------------------------------- chunks
