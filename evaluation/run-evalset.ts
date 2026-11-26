@@ -53,6 +53,7 @@ import {
   validateFacetCaseIds,
   type FacetInput,
 } from './lib/gateway-body'
+import { checkGate, loadGateBaseline } from './lib/gate'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
@@ -792,6 +793,7 @@ async function runEvalset(
     for (const id of [...missing].sort()) console.log(`  - ${id}`)
   }
   console.log(`Report: ${path.relative(process.cwd(), reportPath)}`)
+  return report
 }
 
 async function main() {
@@ -799,8 +801,29 @@ async function main() {
   const arm = expansionArm()
   const manifest = facetsManifest()
   const args = process.argv.slice(2)
-  const explicit = args.find((a) => !a.startsWith('--'))
-  const modeFlag = args[args.indexOf('--mode') + 1]
+  const consumed: number[] = []
+  const valueAfter = (flag: string): string | undefined => {
+    const i = args.indexOf(flag)
+    if (i < 0) return undefined
+    const value = args[i + 1]
+    if (!value || value.startsWith('--'))
+      throw new Error(`${flag} needs a value`)
+    consumed.push(i, i + 1)
+    return value
+  }
+  const modeFlag = valueAfter('--mode')
+  const gatePath = valueAfter('--gate')
+  const explicit = args.find(
+    (a, i) => !a.startsWith('--') && !consumed.includes(i),
+  )
+
+  const gateBaseline = gatePath ? loadGateBaseline(gatePath) : undefined
+  if (gateBaseline && arm !== 'off')
+    throw new Error(
+      '--gate measures the deterministic no-facet arm: set EVAL_EXPANSION=off',
+    )
+  if (gateBaseline && Object.keys(manifest).length > 0)
+    throw new Error('--gate measures the no-facet arm: unset EVAL_FACETS')
 
   const evalsetPaths = explicit
     ? [explicit]
@@ -843,10 +866,18 @@ async function main() {
   const manifestKeys = Object.keys(manifest)
   if (manifestKeys.length > 0)
     console.log(`Facets:    ${manifestKeys.length} case(s) in EVAL_FACETS`)
+  if (gateBaseline) console.log(`Gate:      ${gatePath} (no-facet arm)`)
 
+  let gateFailed = false
   for (const evalsetPath of evalsetPaths) {
-    await runEvalset(evalsetPath, modeFlag, service, corpusIds)
+    const report = await runEvalset(evalsetPath, modeFlag, service, corpusIds)
+    if (gateBaseline) {
+      const gate = checkGate(report, gateBaseline)
+      console.log(gate.message)
+      if (!gate.ok) gateFailed = true
+    }
   }
+  if (gateFailed) process.exitCode = 1
 }
 
 main().catch((error) => {

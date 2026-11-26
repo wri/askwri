@@ -32,7 +32,7 @@ _SYSTEM = (
     "published corpus. Return JSON with: intent (one of \"topical\", "
     "\"known_item\", \"catalog\", \"binary_presence\"), facets (a list of "
     "{facet, value, confidence} where facet is one of \"year_min\", "
-    "\"year_max\", \"language\", \"program\", \"excluded_keyword\" and "
+    "\"year_max\", \"language\", \"program\" and "
     "confidence is 0.0-1.0), variants (0-2 alternative phrasings of the query), "
     "disambiguation (alternative readings if the query is ambiguous, else "
     "empty), and core_topic (the single core noun phrase of the query's "
@@ -99,15 +99,21 @@ def build_understanding_llm(query: str) -> dict | None:
     facets = []
     try:
         for f in data.get("facets", []) or []:
-            facets.append(
-                Facet(
-                    facet=f["facet"],
-                    value=str(f["value"]),
-                    confidence=float(f["confidence"]),
-                    source="llm",
-                    action="suggest",
-                )
+            facet = Facet(
+                facet=f["facet"],
+                value=str(f["value"]),
+                confidence=float(f["confidence"]),
+                source="llm",
+                action="suggest",
             )
+            # #521: exclusions are user-confirmed only (explicit chips, legacy
+            # excluded_keywords). The model can't tell a query's subject from
+            # an aside — it suggested excluding "Brazil" from a Brazil query
+            # (QA AP 62.3 -> 0). Validated first (§5), then dropped so one
+            # stray facet does not degrade the rest.
+            if facet.facet == "excluded_keyword":
+                continue
+            facets.append(facet)
     except Exception:  # noqa: BLE001 — ValidationError / KeyError / ValueError
         logger.warning("understanding_llm: rejecting malformed LLM facets for %r", query)
         return None

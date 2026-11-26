@@ -127,21 +127,28 @@ def _facet_constraints(facets: List[Facet]) -> dict:
             continue
         if mode == "negate":
             continue  # handled document-level by excluded_doc_ids
-        if f.facet == "year_min":
+        if f.facet in ("year_min", "year_max"):
             try:
-                c["year_min"] = int(f.value)
+                bound = int(f.value)
             except (ValueError, TypeError):
                 continue  # invalid chip value: drop the facet, never a 500
-        elif f.facet == "year_max":
-            try:
-                c["year_max"] = int(f.value)
-            except (ValueError, TypeError):
-                continue  # invalid chip value: drop the facet, never a 500
+            # Bounds only ever narrow: duplicates intersect, never override
+            # (a chip and a legacy param can arrive in the same request).
+            current = c[f.facet]
+            if current is None:
+                c[f.facet] = bound
+            else:
+                c[f.facet] = max(current, bound) if f.facet == "year_min" else min(current, bound)
         elif f.facet in ("date_min", "date_max"):
             try:
-                c[f.facet] = date.fromisoformat(f.value)
+                bound = date.fromisoformat(f.value)
             except (ValueError, TypeError):
                 continue
+            current = c[f.facet]
+            if current is None:
+                c[f.facet] = bound
+            else:
+                c[f.facet] = max(current, bound) if f.facet == "date_min" else min(current, bound)
         elif f.facet == "language":
             c["languages"].append(f.value.casefold())
         elif f.facet == "program":
@@ -201,9 +208,8 @@ def _matches(nws, doc: dict, md: dict, c: dict, unknown_matches: bool = True) ->
                 try:
                     year = int(raw)
                 except (ValueError, TypeError):
-                    return False  # present-but-unparseable year is excluded (legacy semantics)
-        # year still None ⇒ no year metadata at all: KEPT, matching
-        # apply_metadata_filters (main.py:361 falls through on None).
+                    return False  # present-but-unparseable year is excluded
+        # year still None ⇒ no year metadata at all: KEPT, never dropped.
         if year is None:
             unknown = True
         elif year_min is not None and year < year_min:

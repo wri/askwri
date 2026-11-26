@@ -35,7 +35,7 @@ export interface FacetInput {
  */
 export function facetsManifest(): Record<string, FacetInput[]> {
   const raw = process.env.EVAL_FACETS
-  if (manifestCache?.raw === raw) return manifestCache.manifest
+  if (manifestCache && manifestCache.raw === raw) return manifestCache.manifest
   const manifest: Record<string, FacetInput[]> = {}
   if (raw !== undefined) {
     let parsed: unknown
@@ -84,6 +84,11 @@ let manifestCache: {
   raw: string | undefined
   manifest: Record<string, FacetInput[]>
 } | null = null
+
+/** Test-only: force the next call to parse from the current environment. */
+export function resetFacetManifestCache(): void {
+  manifestCache = null
+}
 
 /** The facets the manifest names for one case — `[]` when it names none. */
 export function facetsForCase(caseId: string): FacetInput[] {
