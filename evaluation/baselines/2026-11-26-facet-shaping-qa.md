@@ -14,6 +14,14 @@ The arm is chosen by **service env** (`FACET_MODE`), not by the request: the req
 are identical across arms 2 and 3. `debug.facet_mode` in each report JSON is the evidence of
 which arm actually answered.
 
+**Target build (amended before arm 3):** the measurement runs against **one combined build** —
+this branch plus #525 (444 item 3, one year filter). #525 changes the year filter itself
+(`year_int` source, pre-rerank only, intersecting bounds), which is exactly the mechanism the
+*recency* arm measures; measuring recency on the old year path would make its verdict stale
+the moment 444 shipped. The arms 1-2 numbers recorded below were taken on `858bbca`, the
+pre-#525 year filter; they are kept as a stepping stone and **superseded by a re-run on the
+combined build** (same commands, same rule).
+
 ## Question
 
 Per facet type, does a **shape** lever (keep everything, reward the matching documents) beat
@@ -213,7 +221,8 @@ only one that moves in either set.
 
 ```bash
 export EVAL_EXPANSION=off
-# arm 1 — `{}` rather than unset: the unset path crashes on qa until #520 lands.
+# arm 1 — no facets. (Unset `EVAL_FACETS` works since #520 landed; `{}` is equivalent and was
+# the workaround before that.)
 EVAL_FACETS='{}' npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_01.json
 EVAL_FACETS='{}' npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_02.json
 EVAL_FACETS='{}' npx tsx evaluation/run-evalset.ts evaluation/evalsets/facet-office-probe.json
