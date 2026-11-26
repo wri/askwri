@@ -109,41 +109,67 @@ limit of the answer:
 
 ## Results
 
-_(filled in after the runs; the rule above is frozen)_
+_(numbers filled in as arms run; the rule above is frozen)_
+
+**Arms 1 and 2 were measured on QA at `858bbca`, before this branch merged.** That is sound
+rather than convenient: both arms run the filter path, which this branch leaves
+behaviour-identical by default (`FACET_MODE` unset), and the pre-existing baseline reproduces
+exactly (39.6 / 67.8 and 73.7 / 86.9 match `2026-11-26-facet-negation-qa.md`). It also proves
+the arm evidence is honest — `facet_mode` is `null` on that deploy, because only this branch
+reports it. Arm 3 needs the deploy (`FACET_MODE=boost`).
 
 ### Determinism check (arm 1, twice)
 
-TBD
+| set | run A MAP / aR | run B MAP / aR | spread |
+|---|---|---|---|
+| cite_01 | 39.6 / 67.8 | 39.6 / 67.8 | 0 / 0 |
+| cite_02 | 73.7 / 86.9 | 73.7 / 86.9 | 0 / 0 |
+| probe | 57.5 / 83.3 | 57.5 / 83.3 | 0 / 0 |
+
+Zero, so the pre-registered zero tolerance stands and every later delta is attributable.
 
 ### Per set
 
 | set | arm | MAP | attainable recall |
 |---|---|---|---|
-| cite_01 | 1 no facet | TBD | TBD |
-| cite_01 | 2 filter | TBD | TBD |
+| cite_01 | 1 no facet | 39.6 | 67.8 |
+| cite_01 | 2 filter | **40.8** | **68.7** |
 | cite_01 | 3 boost | TBD | TBD |
-| cite_02 | 1 no facet | TBD | TBD |
-| cite_02 | 2 filter | TBD | TBD |
+| cite_02 | 1 no facet | 73.7 | 86.9 |
+| cite_02 | 2 filter | **74.7** | 86.9 |
 | cite_02 | 3 boost | TBD | TBD |
-| probe | 1 no facet | TBD | TBD |
-| probe | 2 filter | TBD | TBD |
+| probe | 1 no facet | 57.5 | 83.3 |
+| probe | 2 filter | **58.3** | 83.3 |
 | probe | 3 boost | TBD | TBD |
+
+Arm 2 moves the set only through the facet case (the other cases receive no facet): cite_01's
++1.2 MAP / +0.9 aR is `q10` alone; cite_02's +1.0 MAP is `d5` alone; the probe is nothing but
+its two cases.
 
 ### Per facet case
 
-| case | arm 2 AP / aR | arm 3 AP / aR | gold removed (2) | gold boosted (3) | leakage |
+| case | arm 1 AP / aR | arm 2 AP / aR | gold removed (2) | gold boosted (3) | leakage |
 |---|---|---|---|---|---|
-| `q10_urban_finance_since_2020` | TBD | TBD | TBD | TBD | TBD |
-| `d5_public-transport-financing-since-2022` | TBD | TBD | TBD | TBD | TBD |
-| `office_q10_mexico` | TBD | TBD | TBD | TBD | TBD |
-| `office_d7_india` | TBD | TBD | TBD | TBD | TBD |
+| `q10_urban_finance_since_2020` | 3.4 / 20.0 | 17.5 / 30.0 | 0 | TBD | 0 |
+| `d5_public-transport-financing-since-2022` | 66.2 / 80.0 | 80.0 / 80.0 | 0 | TBD | 0 |
+| `office_q10_mexico` | 15.0 / 66.7 | 16.7 / 66.7 | 0 | TBD | 0 |
+| `office_d7_india` | 100 / 100 | 100 / 100 | 0 | TBD | 0 |
+
+**Gold removed is zero in every case, on every arm**, which is what the structural caveat
+predicted before the first run: all four facet cases have gold that satisfies its own facet.
+A `constraint` verdict here therefore cannot be read as "the filter is safe"; it can only be
+read as "the boost did not beat a correct filter on window composition".
+
+Note the direction of the recency evidence: the year filter **helps** (q10 3.4 → 17.5 AP,
+d5 66.2 → 80.0 AP, recall equal or better, no gold lost). The `date_constrained` group is the
+only one that moves in either set.
 
 ### Verdicts
 
 | type | verdict | numbers that produced it |
 |---|---|---|
-| recency | TBD | TBD |
-| office | TBD | TBD |
+| recency | TBD (arm 3 pending) | arm 2: q10 17.5/30.0, d5 80.0/80.0, zero gold removed |
+| office | TBD (arm 3 pending) | arm 2: probe 58.3/83.3, both cases unchanged or +1.7 AP |
 | series | blocked (#523) | no document carries a series value |
 
 ## Reproduction
