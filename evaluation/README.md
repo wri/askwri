@@ -71,6 +71,15 @@ git submodule update --remote evaluation/eval-review
 git commit evaluation/eval-review -m "chore(eval): bump evalset fixtures"
 ```
 
+**CI runs ahead of the pin, deliberately.** `.github/workflows/eval-qa.yml`
+fetches the tip of the submodule's `main` and records the SHA it got
+(`FIXTURES_SHA`), leaving the committed pointer untouched — scheduled QA runs
+want the newest fixtures, while local runs and the committed pointer stay
+reproducible. The two can therefore disagree on numbers: a report taken at the
+pin and a CI report taken ahead of it are not comparable until the pin is bumped.
+Every artifact records its fixture commit for exactly this reason; state the SHA
+when comparing two runs, not just the evalset name.
+
 **Reading the output.** These sets key on `external_id`, which is exactly the
 `doc_id` the gateway returns, so every case is scored at document grain.
 Positive cases report two numbers:

@@ -73,15 +73,24 @@ graph TB
 ├── src/
 │   ├── app/                        # Next.js App Router
 │   │   ├── api/                    # API routes
-│   │   │   ├── answer/             # Answer-mode endpoints
-│   │   │   ├── alignment/          # Alignment endpoints
-│   │   │   ├── catalog/            # Catalog endpoints
+│   │   │   ├── admin/              # Admin CRUD (documents, tags, collections)
+│   │   │   ├── alignment/          # Query-level overview / assessment
+│   │   │   ├── answer/             # Answer-mode synthesis
+│   │   │   ├── batch-why/          # "Why this source" (batched)
+│   │   │   ├── batch-relates/      # Related questions (batched)
+│   │   │   ├── catalog/            # Public catalog
 │   │   │   ├── cite-mode-*/        # Cite-mode feedback & query logs
 │   │   │   ├── answer-mode-*/      # Answer-mode feedback & query logs
+│   │   │   ├── experts-mode-*/     # Experts-mode query logs
+│   │   │   ├── documents/          # Document management + metadata export
 │   │   │   ├── eval/               # Evaluation endpoints
+│   │   │   ├── experts/            # Experts mode
 │   │   │   ├── health/             # Health check
-│   │   │   ├── relates/            # Related questions
-│   │   │   └── why/                # Why endpoints
+│   │   │   ├── import-documents/   # CSV import
+│   │   │   ├── llamaindex/         # Search-service gateway
+│   │   │   ├── mcp/                # Assistant-facing MCP endpoint
+│   │   │   ├── pdf/                # PDF streaming from S3
+│   │   │   └── translate/          # Translation
 │   │   ├── components/             # React components
 │   │   │   ├── AnswerMode/         # Answer-mode UI
 │   │   │   ├── results/            # Results display
@@ -184,14 +193,14 @@ The AWS credentials need permissions for:
 Push to the appropriate branch to trigger deployment:
 
 ```bash
-# Deploy to QA
-git checkout -b qa
+# Deploy to QA — all work lands here via PR; pushes to `qa` auto-deploy QA.
 git push origin qa
-
-# Deploy to Production
-git checkout main
-git push origin main
 ```
+
+**`main` and `production` deploy production immediately** — no promotion step, no
+approval gate. Never target `main` with a PR. Releases go to `production` per
+[`docs/runbooks/production-release.md`](docs/runbooks/production-release.md); read
+that runbook start to finish before releasing.
 
 ## 🔧 Local Development
 
@@ -243,7 +252,7 @@ docker run -p 3000:3000 askwri-app
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
 | `deploy-qa.yml` | Push to `qa` branch | Deploy to QA environment |
-| `deploy-production.yml` | Push to `main`/`production` | Deploy to Production |
+| `deploy-production.yml` | Push to `main`/`production` | **Deploy to Production — no gate** |
 | `pr-check.yml` | Pull requests | Run tests and validate |
 | `destroy.yml` | Manual | Tear down infrastructure |
 
