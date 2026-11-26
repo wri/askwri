@@ -1,0 +1,18 @@
+{
+  "tolerance_pp": 1.0,
+  "note": "No-facet control arm (EVAL_EXPANSION=off) on QA. Update deliberately, in the PR whose change is expected to move the scores.",
+  "sets": {
+    "evalset_cite_01.json": {
+      "evalset_version": "3.2",
+      "map": 39.6,
+      "attainable_recall": 67.8,
+      "corpus_size": 219
+    },
+    "evalset_cite_02.json": {
+      "evalset_version": "4.3",
+      "map": 73.7,
+      "attainable_recall": 86.9,
+      "corpus_size": 219
+    }
+  }
+}

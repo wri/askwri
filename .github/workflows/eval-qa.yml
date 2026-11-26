@@ -62,6 +62,26 @@ jobs:
           set -o pipefail
           npm run --silent eval:qa 2>&1 | tee "$RUNNER_TEMP/eval.log"
 
+      # The no-facet control arm is the regression gate: a deterministic run
+      # with no facets, compared to the committed baseline. The facet arm is a
+      # separate experiment and is never gated.
+      - name: 'Gate: no-facet arm (cite)'
+        env:
+          EVAL_EXPANSION: off
+          EVAL_TARGET: https://qa.askwri-app.org
+        run: |
+          set -o pipefail
+          status=0
+          npx tsx evaluation/run-evalset.ts \
+            --gate evaluation/baselines/no-facet-gate.json \
+            evaluation/evalsets/evalset_cite_01.json \
+            2>&1 | tee -a "$RUNNER_TEMP/eval.log" || status=1
+          npx tsx evaluation/run-evalset.ts \
+            --gate evaluation/baselines/no-facet-gate.json \
+            evaluation/evalsets/evalset_cite_02.json \
+            2>&1 | tee -a "$RUNNER_TEMP/eval.log" || status=1
+          exit $status
+
       # The console report is what a human actually reads. Mirror it onto the
       # run summary so the numbers are visible without opening the log. The
       # fence preserves the report's column alignment, which Markdown would
