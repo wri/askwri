@@ -7,6 +7,13 @@ output, raw response and source page. **Tooling:** `evaluation/parser-eval/`.
 
 ## Decision
 
+> **Superseded later the same day by §7.** The follow-up measurements below changed this
+> recommendation to **Sonnet 5.5 alone**, and to replacing Mistral: across the whole hard set Mistral
+> keeps 77.1% of numbers, on ordinary pages Inkling keeps 98.9% against Sonnet's 99.9% while a full
+> rebuild costs only ~$160 more with Sonnet, and the number check flags a third of pages even at 99.9%
+> accuracy, so it cannot be the cheap option's safety net. The bullets below are kept as the second
+> edition's record; read §7 before acting on them.
+
 - **Pilot Sonnet 5.5 through OpenRouter, on WRI's own account.** On 27 hard pages it kept the same
   numbers as GPT-6.2 Astra (99.8%, every language) at about a quarter of Astra's billed cost, and
   finished fastest. WRI has OpenRouter access, which would route around the Bedrock `InvokeModel`
@@ -107,7 +114,9 @@ Two consequences:
 - **It makes a cheap guard.** Check that every number a model writes exists in the page's text layer,
   and flag or re-run the page when one does not. Only in that direction: the reverse fails on hidden
   text. Skip pages whose layer is damaged. The scorer in `evaluation/parser-eval/score_text_layer.py`
-  is the prototype.
+  is the prototype. **Superseded in part by §7.3:** measured on ordinary pages, this rule flags a
+  third of a 99.9%-accurate model's pages (figure numbers, callouts, page numbers) and cannot see the
+  omissions that make up the cheap model's remaining errors.
 
 ## 4. What the OpenRouter route changes
 
@@ -174,6 +183,89 @@ Agent-reviewed references, not independent human ground truth. Single runs. The 
 measures numbers and words, not reading order or cell placement. Astra on OpenRouter ran with default
 reasoning, not the first edition's high setting. No full-corpus run, no cross-page table continuity,
 no controlled retrieval experiment. No QA index, queue, IAM or serving configuration changed.
+
+## 7. Follow-up, later on 26 November: ordinary pages, the whole hard set, and the revised recommendation
+
+Two measurements made after the second edition was published, both cheap enough to run before
+acting on it. Neither is in the report PDF, which remains the record of the second edition.
+
+### 7.1 Mistral over the whole hard-document set (no API calls)
+
+The current parser's output needed no re-run: QA stores it. All 24 hard documents — 1,947 pages —
+were scored against each page's own text layer by splitting QA's `document_texts` at its page
+boundaries (`score_qa_text.py`). Twelve pages with damaged layers were excluded; 1,519 pages carry
+at least five numbers (68,584 numbers).
+
+| Measure | Value |
+|---|---|
+| Numbers kept, token-weighted | **77.1%** |
+| Mean per-page keeping | 83.3% |
+| Pages keeping 100% | 58.1% |
+| Pages keeping under 50% | 15.3% |
+| Pages with any extra number | 61.7% |
+
+By language: zh 68.5%, en 71.1%, es 86.8%, pt 87.6%, id 92.2%.
+
+The losses are chart pages. Mistral writes `![img-N.jpeg]` where a chart sits, and the chart's axis
+and data labels are vector text in the layer. Confirmed by eye on 4687 p13 (2% of 62 numbers kept),
+7600 p56, 2276 p18, 6748 p18 and p58. The hard-page table's 83.9% was directionally right; measured
+over whole documents the loss is larger and concentrated on those pages.
+
+### 7.2 One hundred ordinary pages, three parsers ($1.97)
+
+`pick_ordinary_pages.py` samples content pages seeded, one or two per document, excluding the pages
+the hard set already covers: en 59, zh 20, es 15, pt 4, id 2, from 51 documents. `build_set.py`
+builds them (its optional selection argument), `run_openrouter.py` parses them, and Mistral's stored
+text is scored on the same pages. Per model, over the 87 pages that carry at least five numbers:
+
+| Parser | Numbers kept (token) | Pages under 100% | of those, no extra number (check silent) | Pages with an extra number | $/1,000 pages | s/page |
+|---|---|---|---|---|---|---|
+| Sonnet 5.5 | 99.89% | 1 / 87 | 0 | 34% | $18.52 | 7.2 |
+| Inkling 2 Mini | 98.87% | 11 / 87 | 5 | 26% | $1.20 | 12.5 |
+| Mistral OCR (stored) | 85.49% | 28 / 85 | 4 | 60% | ~$2 | — |
+
+By language (numbers kept): Sonnet en 99.78 / zh 100 / es 100 / id 100 / pt 100; Inkling en 98.54 /
+zh 98.82 / es 99.68 / id 96.97 / pt 100; Mistral en 85.83 / zh 74.96 / es 95.87 / id 84.85 / pt 100.
+
+Inkling's weak pages: 3356 p21 55.3% (flagged), 6429 p7 85.7% (flagged), 7471 p40 90.0% (silent),
+4324 p7 90.9% (flagged), 8038 p111 91.7% (flagged), 1665 p10 92.3% (silent), 2716 p11 92.9%
+(flagged), 1735 p34 95.2% (flagged), 1267 p51 95.7% (silent), 7051 p73 98.1% (silent), 1735 p21
+98.1% (silent).
+
+### 7.3 What the number check can and cannot do
+
+Section 3 proposed the guard as "every number the model writes exists in the page's text layer". On
+ordinary pages that rule flags **34% of Sonnet's pages while Sonnet keeps 99.9% of numbers** —
+figure numbers, numbered callouts and page numbers, not errors. It flagged 26% of Inkling's pages and
+60% of Mistral's. It caught 6 of Inkling's 11 weak pages; the other 5 fail by omitting numbers, and
+an omission produces no extra number to catch. Priced as a production guard with Sonnet as the
+fallback, Inkling costs $1.20 + 0.26 × $18.52 ≈ $6.00 per 1,000 pages, about $56 per full rebuild.
+
+So the check cannot be the cheap option's safety net, and the rule as prototyped is too loose to
+ship. A pipeline stage would need a narrower rule — an extra number one edit away from a printed one,
+which is what a misread digit looks like — and would still be blind to omissions.
+
+### 7.4 Revised recommendation
+
+- **Replace Mistral OCR with Sonnet 5.5.** It keeps 99.9% of numbers on ordinary pages and 100% in
+  four of five languages, against Mistral's 85.5% on the same pages and 77.1% over the hard set.
+- **Do not adopt Inkling 2 Mini as the default.** It trails Sonnet by 1.0 point on ordinary pages and
+  1.3 on the hard set, and the check does not close the gap because it cannot see omissions.
+- **Do not build the number check into the pipeline yet.** If it is revisited, start from the
+  near-miss rule above and measure its false-positive rate first.
+- **Cost is not the deciding factor at this corpus size.** A full 9,292-page rebuild costs ~$172 with
+  Sonnet, ~$11 with Inkling, ~$56 for the pair and ~$19 today: a ~$160 one-off difference.
+- **WRI's OpenRouter account is still unexercised.** Every run in this document and in this section
+  used the personal key; a WRI-account run against the data policy is still owed before a migration.
+
+### 7.5 Limits of this follow-up
+
+One run per model; 100 ordinary pages from 51 documents; agent-reviewed, like the rest of the
+evaluation. It measures numbers and words, not reading order or table cells, and says nothing about
+retrieval or answers. The hard-set sweep compares QA's stored text with the local PDFs' layers; the
+`content_hash` of all 24 documents matched the local bytes, twelve damaged layers were excluded, and
+the known invisible-text pages were confirmed by eye, but hidden text can still inflate the
+denominator. The report PDF has not been regenerated.
 
 ## Sources
 

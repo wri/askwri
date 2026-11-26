@@ -1,5 +1,8 @@
 """Build the hard page set: single-page PDFs, text-layer reference, manifest, contact sheet.
-Usage: python build_set.py <pdf_dir> <set_dir> <contact_sheet.png> <first_round_manifest.json>"""
+Usage: python build_set.py <pdf_dir> <set_dir> <contact_sheet.png> <first_round_manifest.json> [selection.json]
+
+selection.json is an optional [[doc, page, language, why], ...] list; without it the
+26 November hard set below is used. reason: whole-document and ordinary-page runs."""
 import hashlib, json, pathlib, sys
 import pypdf, pypdfium2 as pdfium
 from PIL import Image, ImageDraw
@@ -34,6 +37,8 @@ SELECTION = [  # (doc, page, language, why)
     ("2020_impactar-tool-valuing-air-quality-health-impacts_1028", 31, "en", "very long, small print"),
     ("2023_assessing-the-environmental-impact-of-shared_4976", 49, "en", "table, notes"),
 ]
+if len(sys.argv) > 5:
+    SELECTION = [tuple(x) for x in json.loads(pathlib.Path(sys.argv[5]).read_text())]
 
 prompt = json.loads(first.read_text())["prompt"]
 (out / "source-pages").mkdir(parents=True, exist_ok=True)

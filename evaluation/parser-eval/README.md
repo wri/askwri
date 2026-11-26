@@ -2,7 +2,9 @@
 
 Scripts behind the 26 November 2026 PDF parser comparison (second edition of the
 24 November report). Findings and recommendation:
-`docs/research/2026-11-26-pdf-parser-openrouter-and-self-hosting.md`.
+`docs/research/2026-11-26-pdf-parser-openrouter-and-self-hosting.md`. Its §7 is the
+same-day follow-up (ordinary pages and the whole hard set) that revised the
+recommendation; steps 0, 0b and the optional selection argument to step 3 reproduce it.
 
 Nothing here touches the ingestion worker, QA or production. Outputs go under
 `evaluation/results/`, which is gitignored, as the 24 November outputs were.
@@ -41,9 +43,11 @@ argument, and is never written to any output. Never paste it at a shell prompt.
 
 | Step | Script | Does |
 |---|---|---|
+| 0 | `pick_ordinary_pages.py <pdf_dir> <out.json>` | Seeds one or two unremarkable content pages per document, excluding pages the hard set covers, across the corpus languages |
+| 0b | `score_qa_text.py <pdf_dir> <set_dir> [selection.json]` | Scores the Mistral text QA already stores against each page's text layer — no API calls. Read-only; run it through `scripts/with-remote-env.sh qa` with psycopg available |
 | 1 | `profile_pages.py <pdf_dir> <pages.jsonl>` | Per page: text-layer size, numbers, numeric rows, table/notes words, image cover, landscape, damaged characters, language |
 | 2 | `pick_pages.py <pages.jsonl>` | Ranks the hardest pages per language (max 2 per document) |
-| 3 | `build_set.py <pdf_dir> <set_dir> <sheet.png> <first_round_manifest.json>` | Writes a page set: single-page PDFs, text layers, 3x PNG renders for image-only models, manifest, contact sheet. The selection list in the file is the 26 November hard set |
+| 3 | `build_set.py <pdf_dir> <set_dir> <sheet.png> <first_round_manifest.json> [selection.json]` | Writes a page set: single-page PDFs, text layers, 3x PNG renders for image-only models, manifest, contact sheet. The selection list in the file is the 26 November hard set; a selection JSON replaces it |
 | 3b | `build_v2refs.py <recovery-v2> <set_dir>` | Page set of the eight frozen first-edition reference pages, same split PDFs and prompt |
 | 4 | `run_openrouter.py --set <set_dir> [model ...]` | Runs models in parallel; `mistral-ocr` is OpenRouter's file-parser engine. Image-only models get `renders/` at the manifest's `render_scale` |
 | 4b | `run_docling.py <set_dir>` | Docling, first-edition settings |
