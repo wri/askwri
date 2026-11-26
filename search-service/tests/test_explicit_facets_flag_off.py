@@ -119,3 +119,33 @@ def test_legacy_exclusion_decides_on_the_pre_rerank_pool(monkeypatch):
         "excluded_keywords": ["coal"]})
     assert resp.status_code == 200
     assert "es_doc" not in _doc_ids(resp.json())
+
+
+PAIRS = {"t1": {"original": "o1", "original_title": "Autobuses electricos",
+                "original_searchable": True}}
+
+
+class _PairRetriever:
+    def retrieve(self, bundle):
+        return [
+            NodeWithScore(node=TextNode(id_="c-o1", text="zero emission buses",
+                metadata={"doc_id": "o1", "title": "Original"}), score=0.9),
+            NodeWithScore(node=TextNode(id_="c-t1", text="autobuses electricos",
+                metadata={"doc_id": "t1", "title": "Traduccion"}), score=0.8),
+        ]
+
+
+def test_citation_substitution_cannot_resurrect_excluded_original(monkeypatch):
+    # The original is excluded by its own text; the translation does not match
+    # and survives. Without the assembly guard it is credited back to o1.
+    monkeypatch.setitem(app_main.service_state, "bm25_retriever", _PairRetriever())
+    monkeypatch.setitem(app_main.service_state, "pg_dense_ready", True)
+    monkeypatch.setitem(app_main.service_state, "documents_metadata", {})
+    monkeypatch.setattr(app_main, "make_dense_retriever", lambda top_k: _DenseStub())
+    monkeypatch.setattr(app_main, "understanding_active", lambda s, r: False)
+    monkeypatch.setattr(app_main, "load_confirmed_pairs", lambda: PAIRS)
+    resp = TestClient(app_main.app).post("/query", json={
+        "query": "buses", "mode": "cite", "rerank": False,
+        "facets": [{"facet": "excluded_keyword", "value": "zero emission"}]})
+    assert resp.status_code == 200
+    assert "o1" not in _doc_ids(resp.json())
