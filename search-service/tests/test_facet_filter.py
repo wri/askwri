@@ -3,13 +3,14 @@
 Semantics mirror the legacy apply_metadata_filters where they overlap
 (missing year is KEPT, present-but-unparseable year is EXCLUDED when a year
 filter is set; program is exact-match on node metadata; excluded_keywords
-substring on title+text). Language has no legacy counterpart: unknown
+match whole normalized words in title+text and exclude at the DOCUMENT
+level). Language has no legacy counterpart: unknown
 language is KEPT — exclusion requires a positive mismatch."""
 from types import SimpleNamespace
 from datetime import date
 from unittest.mock import MagicMock
 
-from app.facet_filter import apply_facet_filters, legacy_request_facets
+from app.facet_filter import apply_facet_filters, excluded_doc_ids, legacy_request_facets
 from app.understanding import Facet
 
 
@@ -277,8 +278,39 @@ def test_hard_facet_without_a_mode_is_not_applied():
     assert apply_facet_filters(nodes, [f], {}) is nodes
 
 
+def test_excluded_doc_ids_returns_translation_and_canonical():
+    nodes = [_node("t1", text="english text", title="t")]
+    pairs = {"t1": {"original": "o1", "original_title": "Zero-emission buses"}}
+    got = excluded_doc_ids(nodes, [_hard("excluded_keyword", "zero emission")], {}, pairs)
+    assert got == {"t1", "o1"}
+
+
 def test_language_kept_when_doc_has_no_language_metadata():
     # Unknown language is still KEPT (conservative posture), siblings or not.
     nodes = [_node("mystery")]
     out = apply_facet_filters(nodes, [_hard("language", "es")], {})
     assert [n.node.metadata["doc_id"] for n in out] == ["mystery"]
+
+
+def test_exclusion_respects_word_boundaries():
+    nodes = [_node("coalition", text="coalition building"), _node("coal", text="coal power")]
+    out = apply_facet_filters(nodes, [_hard("excluded_keyword", "coal")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["coalition"]
+
+
+def test_exclusion_is_document_level():
+    nodes = [_node("doc", text="school buses are safe"), _node("doc", text="electric buses")]
+    out = apply_facet_filters(nodes, [_hard("excluded_keyword", "school buses")], {})
+    assert out == []
+
+
+def test_exclusion_normalizes_case_accents_hyphens_and_spacing():
+    nodes = [_node("mx", title="México’s zero–emission  buses", text="x")]
+    out = apply_facet_filters(nodes, [_hard("excluded_keyword", "ZERO EMISSION")], {})
+    assert out == []
+
+
+def test_blank_exclusion_never_matches():
+    nodes = [_node("a")]
+    out = apply_facet_filters(nodes, [_hard("excluded_keyword", "   ")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["a"]
