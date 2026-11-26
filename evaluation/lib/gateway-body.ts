@@ -86,6 +86,23 @@ export function facetsForCase(caseId: string): FacetInput[] {
   return facetsManifest()[caseId] ?? []
 }
 
+/**
+ * Fails before any request when a manifest key names no case id in the set
+ * passed in. `main()` passes the union across every evalset being run, so a
+ * partial manifest is legal — the default multi-set run must not abort on the
+ * first set that lacks its keys.
+ */
+export function validateFacetCaseIds(knownCaseIds: Set<string>): void {
+  const unknown = Object.keys(facetsManifest()).filter(
+    (key) => !knownCaseIds.has(key),
+  )
+  if (unknown.length > 0) {
+    throw new Error(
+      `EVAL_FACETS names case ids not in the evalsets being run: ${unknown.join(', ')}`,
+    )
+  }
+}
+
 export function gatewayBody(
   query: string,
   mode: 'cite' | 'answer',

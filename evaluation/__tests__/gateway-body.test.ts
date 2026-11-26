@@ -1,4 +1,9 @@
-import { gatewayBody, expansionArm, facetsForCase } from '../lib/gateway-body'
+import {
+  gatewayBody,
+  expansionArm,
+  facetsForCase,
+  validateFacetCaseIds,
+} from '../lib/gateway-body'
 
 const ENV = { ...process.env }
 afterEach(() => {
@@ -76,4 +81,22 @@ it('fails fast on a malformed facets manifest', () => {
 it('fails fast on facets manifest JSON that does not parse', () => {
   process.env.EVAL_FACETS = '{q11:'
   expect(() => facetsForCase('q11')).toThrow(/EVAL_FACETS/)
+})
+
+it('accepts a manifest key present in the union of case ids', () => {
+  process.env.EVAL_FACETS = JSON.stringify({
+    q11: [{ facet: 'excluded_keyword', value: 'electric buses' }],
+  })
+  expect(() =>
+    validateFacetCaseIds(new Set(['q12', 'q11', 'q13'])),
+  ).not.toThrow()
+})
+
+it('fails fast on a manifest key absent from the union of case ids', () => {
+  process.env.EVAL_FACETS = JSON.stringify({
+    q11: [{ facet: 'excluded_keyword', value: 'electric buses' }],
+  })
+  expect(() => validateFacetCaseIds(new Set(['q12', 'q13']))).toThrow(
+    /EVAL_FACETS/,
+  )
 })

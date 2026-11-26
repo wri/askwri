@@ -49,6 +49,7 @@ import {
   facetsForCase,
   facetsManifest,
   gatewayBody,
+  validateFacetCaseIds,
   type FacetInput,
 } from './lib/gateway-body'
 
@@ -558,17 +559,7 @@ async function runEvalset(
         ? 'answer'
         : 'cite'
 
-  // Before any request: a manifest key that matches no case in the set being
-  // measured is a typo that would silently measure nothing — fail the run.
   const manifest = facetsManifest()
-  const unknownKeys = Object.keys(manifest).filter(
-    (key) => !cases.some((tc) => tc.id === key),
-  )
-  if (unknownKeys.length > 0) {
-    throw new Error(
-      `EVAL_FACETS names case ids not in ${path.basename(evalsetPath)}: ${unknownKeys.join(', ')}`,
-    )
-  }
 
   console.log(
     `\n${path.basename(evalsetPath)} — ${cases.length} cases [mode: ${mode}]\n`,
@@ -801,6 +792,17 @@ async function main() {
     console.error(`No evalsets in ${EVALSET_DIR}`)
     process.exit(1)
   }
+
+  // Before any request: a manifest key that matches no case id in the union of
+  // evalsets being run is a typo that would silently measure nothing — fail
+  // the run. Validated once here, against the union, so a partial manifest
+  // does not abort the first set that happens to lack its keys.
+  const knownCaseIds = new Set<string>()
+  for (const evalsetPath of evalsetPaths) {
+    const evalset = JSON.parse(fs.readFileSync(evalsetPath, 'utf-8'))
+    for (const tc of evalset.test_cases ?? []) knownCaseIds.add(tc.id)
+  }
+  validateFacetCaseIds(knownCaseIds)
 
   // The target's backend and corpus are the same for every set in a run, so
   // fetch them once and report them once.

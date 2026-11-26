@@ -300,6 +300,27 @@ def test_excluded_doc_ids_returns_translation_and_canonical():
     got = excluded_doc_ids(nodes, [_hard("excluded_keyword", "zero emission")], {}, pairs)
     assert got == {"t1", "o1"}
 
+def test_exclusion_propagates_from_original_to_translation():
+    # pairs only maps translation → original; the ORIGINAL matching must also
+    # exclude its translation — a user excluding a topic excludes the work in
+    # every language, in both directions.
+    nodes = [_node("o1", text="coal power"), _node("t1", text="texto limpio")]
+    pairs = {"t1": {"original": "o1"}}
+    got = excluded_doc_ids(nodes, [_hard("excluded_keyword", "coal")], {}, pairs)
+    assert got == {"o1", "t1"}
+
+def test_exclusion_propagates_to_sibling_translations():
+    # o1 has two translations; only t1 matches. Excluding one version of a
+    # work excludes the whole work: o1, the matching t1, and sibling t2.
+    nodes = [
+        _node("o1", text="clean energy"),
+        _node("t1", text="coal power"),
+        _node("t2", text="texte propre"),
+    ]
+    pairs = {"t1": {"original": "o1"}, "t2": {"original": "o1"}}
+    got = excluded_doc_ids(nodes, [_hard("excluded_keyword", "coal")], {}, pairs)
+    assert got == {"o1", "t1", "t2"}
+
 def test_excluded_doc_ids_skips_docless_node():
     # A doc-less node must be skipped, not keyed as None: a None in the set
     # would drop every doc-less node in apply_facet_filters and make

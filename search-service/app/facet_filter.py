@@ -67,6 +67,28 @@ def excluded_doc_ids(
     if not patterns:
         return set()
     pairs = translation_pairs or {}
+    # Reverse map: `pairs` maps translation → original, so a matching
+    # original also needs its translations — excluding a topic excludes the
+    # work in every language, in both directions.
+    translations_of: dict = {}
+    for tid, pair in pairs.items():
+        original = pair.get("original")
+        if original:
+            translations_of.setdefault(original, []).append(tid)
+
+    def _add_with_pairs(doc_id):
+        out.add(doc_id)
+        pair = pairs.get(doc_id) or {}
+        original = pair.get("original")
+        if original:
+            out.add(original)
+            # The original's other translations are this doc's siblings: an
+            # excluded work is excluded in every language.
+            out.update(translations_of.get(original, ()))
+        else:
+            # doc_id is the original: exclude its translations.
+            out.update(translations_of.get(doc_id, ()))
+
     out: Set[str] = set()
     for nws in nodes:
         md = nws.node.metadata or {}
@@ -84,9 +106,7 @@ def excluded_doc_ids(
         # Each field normalized and scanned separately, so a phrase can't
         # false-match across a title/text boundary.
         if any(p.search(_normalize_meta(v)) for v in fields for p in patterns):
-            out.add(doc_id)
-            if pair.get("original"):
-                out.add(pair["original"])
+            _add_with_pairs(doc_id)
     return out
 
 
