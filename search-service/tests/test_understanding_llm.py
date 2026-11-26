@@ -76,6 +76,49 @@ def test_valid_output_merges_with_suggest_facets(monkeypatch):
     assert state["calls"] == 1
 
 
+def test_prompt_does_not_offer_excluded_keyword():
+    """#521: the model cannot tell a query's subject from an aside. On QA it
+    suggested excluding "Brazil" from a Brazil query (AP 62.3 -> 0), "school
+    buses" from an intended exclusion, etc. Exclusions are only ever
+    user-confirmed: explicit chips and the legacy excluded_keywords param.
+    Pinned so a silent re-add to the prompt fails."""
+    assert "excluded_keyword" not in ullm._SYSTEM
+    for facet in ("year_min", "year_max", "language", "program"):
+        assert f'"{facet}"' in ullm._SYSTEM
+
+
+def test_llm_excluded_keyword_facet_dropped(monkeypatch):
+    """#521: even if the model emits an exclusion anyway, it must never reach
+    the UI as an unconfirmed chip."""
+    body = json.dumps({
+        "intent": "topical",
+        "facets": [
+            {"facet": "excluded_keyword", "value": "Brazil", "confidence": 0.9},
+            {"facet": "year_min", "value": "2020", "confidence": 0.8},
+        ],
+        "variants": ["v"],
+    })
+    _patch_openai(monkeypatch, content=body)
+    out = ullm.build_understanding_llm("climate finance in Brazil")
+    assert out is not None
+    assert [f.facet for f in out["facets"]] == ["year_min"]
+    assert out["intent"] == "topical"
+
+
+def test_malformed_excluded_keyword_still_rejects_whole(monkeypatch):
+    """#521: dropping the facet must not be a way around design §5 — an
+    invalid exclusion still rejects the whole object."""
+    body = json.dumps({
+        "intent": "topical",
+        "facets": [
+            {"facet": "excluded_keyword", "value": "Brazil"},  # no confidence
+            {"facet": "year_min", "value": "2020", "confidence": 0.8},
+        ],
+    })
+    _patch_openai(monkeypatch, content=body)
+    assert ullm.build_understanding_llm("anything") is None
+
+
 def test_unknown_facet_name_rejects_whole(monkeypatch):
     """Design §5: an unknown facet name rejects the whole object (None)."""
     body = json.dumps({"facets": [{"facet": "vibe", "value": "good", "confidence": 0.9}]})
