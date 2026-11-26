@@ -68,9 +68,27 @@ for rnd in range(MAX_PER_DOC):
             want = min(quota - sum(1 for x in selection if x[2] == lang), MAX_PER_DOC - taken.get(doc, 0))
             if want <= 0:
                 break
+            # The second round draws with the same seed, so a document whose only
+            # candidate page was taken in the first round would return it again.
+            # Keep that page once and top up from pages the document has not given.
             picks = random.Random(f"{SEED}-{doc}").sample(candidates[doc], min(want, len(candidates[doc])))
-            selection += [[doc, p, lang, "ordinary content page"] for p in picks]
-            taken[doc] = taken.get(doc, 0) + len(picks)
+            picked = {p for d, p, _, _ in selection if d == doc}
+            fresh = [p for p in picks if p not in picked]
+            for p in candidates[doc]:
+                if len(fresh) >= want:
+                    break
+                if p not in picked and p not in fresh:
+                    fresh.append(p)
+            if not fresh:
+                continue
+            selection += [[doc, p, lang, "ordinary content page"] for p in fresh[:want]]
+            taken[doc] = taken.get(doc, 0) + len(fresh[:want])
+
+pairs = [(d, p) for d, p, _, _ in selection]
+assert len(set(pairs)) == len(pairs), "the selection contains a duplicate (document, page)"
+short = sum(QUOTA.values()) - len(selection)
+if short:
+    print(f"note: {short} pages short of the quotas — no more eligible pages for those languages")
 
 selection.sort()
 out_path.write_text(json.dumps(selection, indent=1))
