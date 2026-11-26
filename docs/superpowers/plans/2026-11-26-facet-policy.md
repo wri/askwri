@@ -467,24 +467,29 @@ the live image SHA with `./scripts/ecs-await-deploy.sh --cluster <c> --services 
 
 - [ ] **Step 1: Run the baseline and facet arms**
 
+The evalsets are vendored at `evaluation/evalsets/` (the `eval-review` submodule was removed
+in `0b93b01`), so no submodule init is needed.
+
 ```bash
-git submodule update --init evaluation/eval-review
 export EVAL_EXPANSION=off
-npx tsx evaluation/run-evalset.ts evaluation/eval-review/evalsets/evalset_cite_01.json
-EVAL_FACETS='{"q11_urban_finance_exclude_ebuses":[{"facet":"excluded_keyword","value":"electric buses"}]}' \
-  npx tsx evaluation/run-evalset.ts evaluation/eval-review/evalsets/evalset_cite_01.json
-npx tsx evaluation/run-evalset.ts evaluation/eval-review/evalsets/evalset_cite_02.json
-EVAL_FACETS='{"d7_electric-buses-excluding-school-buses":[{"facet":"excluded_keyword","value":"school buses"}]}' \
-  npx tsx evaluation/run-evalset.ts evaluation/eval-review/evalsets/evalset_cite_02.json
+npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_01.json
+EVAL_FACETS='{"q11_urban_finance_exclude_ebuses":[{"facet":"excluded_keyword","value":"electric buses"}],"q4_climate_brazil":[{"facet":"excluded_keyword","value":"Brazil"}]}' \
+  npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_01.json
+npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_02.json
+EVAL_FACETS='{"d7_electric-buses-excluding-school-buses":[{"facet":"excluded_keyword","value":"school buses"}],"d1_zero-emission-heavy-duty-trucks-discovery":[{"facet":"excluded_keyword","value":"China"}]}' \
+  npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_02.json
 ```
+
+q11/d7 are the intended exclusions; q4/d1 are the bad-suggestion click regressions and are
+reported separately, per case.
 
 - [ ] **Step 2: Record the result**
 
-In `evaluation/baselines/2026-11-26-facet-negation-qa.md`: target commit and fixture pin,
-the four runs, MAP and attainable recall per arm, `debug.excluded_doc_ids` leakage
-(returned ids ∩ excluded ids), and the gold ids removed. State that auto-detected facet
-claims remain blocked on sidecar determinism (#498 item 9), and that a demotion signal was
-not measured.
+In `evaluation/baselines/2026-11-26-facet-negation-qa.md`: target commit, the four runs,
+MAP and attainable recall per arm, the per-case result for the intended and bad-click
+cases, `debug.excluded_doc_ids` leakage (returned ids ∩ excluded ids), and the gold ids
+removed. State that auto-detected facet claims remain blocked on sidecar determinism (#498
+item 9), and that a demotion signal was not measured.
 
 - [ ] **Step 3: Commit**
 
