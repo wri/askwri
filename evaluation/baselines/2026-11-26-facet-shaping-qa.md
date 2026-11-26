@@ -166,8 +166,8 @@ arm's repeat may straddle a deploy.
 | cite_02 | 74.7 / 86.9 | 74.7 / 86.9 | 0 / 0 |
 | probe | 58.3 / 83.3 | 58.3 / 83.3 | 0 / 0 |
 
-Zero in both measured arms, so the pre-registered zero tolerance stands and every later delta
-is attributable. Arm 3's repeats are pending its deploy.
+Zero in all three measured arms — arm 3 on the boost deployment was also run twice per set and
+was identical — so the pre-registered zero tolerance stood and every delta is attributable.
 
 ### Per set
 
@@ -175,13 +175,13 @@ is attributable. Arm 3's repeats are pending its deploy.
 |---|---|---|---|
 | cite_01 | 1 no facet | 39.6 | 67.8 |
 | cite_01 | 2 filter | **40.8** | **68.7** |
-| cite_01 | 3 boost | TBD | TBD |
+| cite_01 | 3 boost | 40.3 | 68.7 |
 | cite_02 | 1 no facet | 73.7 | 86.9 |
 | cite_02 | 2 filter | **74.7** | 86.9 |
-| cite_02 | 3 boost | TBD | TBD |
+| cite_02 | 3 boost | 73.7 | 86.9 |
 | probe | 1 no facet | 57.5 | 83.3 |
 | probe | 2 filter | **58.3** | 83.3 |
-| probe | 3 boost | TBD | TBD |
+| probe | 3 boost | 58.9 | 83.3 |
 
 Arm 2 moves the set only through the facet case (the other cases receive no facet): cite_01's
 +1.2 MAP / +0.9 aR is `q10` alone; cite_02's +1.0 MAP is `d5` alone; the probe is nothing but
@@ -189,12 +189,24 @@ its two cases.
 
 ### Per facet case
 
-| case | arm 1 AP / aR | arm 2 AP / aR | gold removed (2) | gold boosted (3) | leakage |
-|---|---|---|---|---|---|
-| `q10_urban_finance_since_2020` | 3.4 / 20.0 | 17.5 / 30.0 | 0 | TBD | 0 |
-| `d5_public-transport-financing-since-2022` | 66.2 / 80.0 | 80.0 / 80.0 | 0 | TBD | 0 |
-| `office_q10_mexico` | 15.0 / 66.7 | 16.7 / 66.7 | 0 | TBD | 0 |
-| `office_d7_india` | 100 / 100 | 100 / 100 | 0 | TBD | 0 |
+| case | arm 1 AP / aR | arm 2 AP / aR | arm 3 AP / aR | gold removed (2) | gold boosted (3) | boost ∩ gold | leakage |
+|---|---|---|---|---|---|---|---|
+| `q10_urban_finance_since_2020` | 3.4 / 20.0 | **17.5 / 30.0** | 11.0 / 30.0 | 0 | 29 | 4/10 | 0 |
+| `d5_public-transport-financing-since-2022` | 66.2 / 80.0 | **80.0 / 80.0** | 66.7 / 80.0 | 0 | 39 | 4/5 | 0 |
+| `office_q10_mexico` | 15.0 / 66.7 | 16.7 / 66.7 | **17.8 / 66.7** | 0 | 8 | 2/3 | 0 |
+| `office_d7_india` | 100 / 100 | 100 / 100 | 100 / 100 | 0 | 13 | 4/4 | 0 |
+
+Arm 3 reports `facet_mode: "boost"` in every saved JSON and was run twice per set with
+identical results, so the arm is attributable and its repeats are real. `boost ∩ gold` is
+non-empty in all four cases, so none of these verdicts is the "inconclusive at weight 1.0"
+outcome: the boost demonstrably reached gold documents and still did not win.
+
+**What the boost actually did.** It admitted more documents into the rerank window — q10
+12 → 15, d5 19 → 25, the probe 8 → 15 and 12 → 23 — and added **no gold document that the
+filter had missed**. The filter already had every gold document its case could reach, so the
+extra candidates were dilution: q10's AP fell 17.5 → 11.0 and d5's 80.0 → 66.7 for identical
+recall. On the office probe, where the filter removes very little (8 retrieved), the boost's
+wider pool cost nothing and gained +1.1 AP on the Mexico case.
 
 **Gold removed is zero in every case, on every arm**, which is what the structural caveat
 predicted before the first run: all four facet cases have gold that satisfies its own facet.
@@ -209,8 +221,8 @@ only one that moves in either set.
 
 | type | verdict | numbers that produced it |
 |---|---|---|
-| recency | TBD (arm 3 pending) | arm 2: q10 17.5/30.0, d5 80.0/80.0, zero gold removed |
-| office | TBD (arm 3 pending) | arm 2: probe 58.3/83.3, both cases unchanged or +1.7 AP |
+| recency | **constraint — the filter stays** | Condition 1 fails on both sets (aR 30.0 = 30.0 on q10, 80.0 = 80.0 on d5; set level 68.7 = 68.7 and 86.9 = 86.9) and condition 2 fails too (MAP 40.3 < 40.8, 73.7 < 74.7). The boost admitted 3 and 6 more documents into the window and gained no gold: the filter already had all of it. |
+| office | **constraint — the filter stays (candidate-only evidence)** | Condition 1 fails (probe aR 83.3 = 83.3) even though MAP rose 58.3 → 58.9; per case, +1.1 AP on `office_q10_mexico` from a wider pool (8 → 15 retrieved) and unchanged on `office_d7_india` (already 100). The probe is one set of two cases, so by the amendment above this verdict is weaker than recency's. |
 | series | blocked (#523) | no document carries a series value |
 
 ## Reproduction
