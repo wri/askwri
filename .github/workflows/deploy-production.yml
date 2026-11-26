@@ -18,6 +18,14 @@ on:
       - 'LICENSE'
   workflow_dispatch:
 
+# Same guard as deploy-qa.yml, same reason: two pushes minutes apart race two ECS
+# rollouts (and the terraform state lock), and the older run fails its live-tag
+# assertion against the newer image. Queue rather than cancel -- a cancelled
+# rollout leaves a task definition flipped with no verification.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   AWS_REGION: us-east-2
   PROJECT_NAME: askwri-app

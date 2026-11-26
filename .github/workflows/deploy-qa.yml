@@ -18,6 +18,18 @@ on:
       - 'LICENSE'
   workflow_dispatch:
 
+# Serialise deploys for this environment. Two merges minutes apart otherwise start
+# two ECS rollouts against the same services; the older run's ecs-await-deploy.sh
+# tag assertion then sees the newer image and fails (2026-11-26, #514 vs #515:
+# "runs ...:d0e7448, not tag 26aaf52") -- a red deploy that means nothing. They
+# also contend for the terraform state lock. cancel-in-progress: false is
+# deliberate: cancelling a rollout leaves a task definition flipped with no
+# verification. GitHub keeps one pending run, so the last merge is the one that
+# gets deployed and verified.
+concurrency:
+  group: deploy-qa
+  cancel-in-progress: false
+
 env:
   AWS_REGION: us-east-2
   PROJECT_NAME: askwri-app
