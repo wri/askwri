@@ -133,6 +133,14 @@ per set, and the model settings in force (`ASSIGNMENT`, `TASK_EFFORT`,
 runs cannot be told apart. Example:
 `baselines/2026-11-18-cite-evalsets-qa-model-migration.md`.
 
+**The no-facet gate.** `baselines/no-facet-gate.json` pins the set-level MAP and
+attainable recall for the two cite sets on the deterministic no-facet arm
+(`EVAL_EXPANSION=off`). The `QA Evalset` workflow runs it after every successful
+QA deploy and fails when a score drops by more than `tolerance_pp` or the evalset
+version changes. Update the baseline in the PR whose change is expected to move
+the scores; never update it to turn a red run green. It is a post-deploy
+tripwire: it reports a regression after the rollout, not before it.
+
 ### Route model sweep
 
 Compares two models on the four routes that have no scored evaluation —

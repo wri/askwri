@@ -2,6 +2,7 @@ import {
   gatewayBody,
   expansionArm,
   facetsForCase,
+  resetFacetManifestCache,
   validateFacetCaseIds,
 } from '../lib/gateway-body'
 
@@ -70,6 +71,14 @@ it('sends no facets for cases the manifest does not name', () => {
 
 it('returns no facets for any case when EVAL_FACETS is unset', () => {
   delete process.env.EVAL_FACETS
+  expect(facetsForCase('q11')).toEqual([])
+})
+
+it('returns an empty manifest on a fresh module with EVAL_FACETS unset', () => {
+  // Regression: the cache starts null, and `manifestCache?.raw === undefined`
+  // matched the unset env value, so the first call dereferenced null.
+  delete process.env.EVAL_FACETS
+  resetFacetManifestCache()
   expect(facetsForCase('q11')).toEqual([])
 })
 
