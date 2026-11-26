@@ -270,8 +270,9 @@ retrieval or answers. The hard-set sweep compares QA's stored text with the loca
 `content_hash` of all 24 documents matched the local bytes, twelve damaged layers were excluded, and
 the known invisible-text pages were confirmed by eye, but hidden text can still inflate the
 denominator. The report PDF was revised in place as `v4`, keeping the second edition's content and
-adding this follow-up as its own section; `v3` remains published for comparison. The report, its scores and its cost records live on the private site under `evidence/v4`; the
-scripts that produced them are in `evaluation/parser-eval/`.
+adding this follow-up as its own section; `v3` remains published for comparison. The report, its
+scores and its cost records live on the private site under `evidence/v4`; the scripts that produced
+them are in `evaluation/parser-eval/`.
 
 ## Sources
 
