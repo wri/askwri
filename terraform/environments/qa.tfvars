@@ -101,6 +101,25 @@ search_service_environment_variables = {
 worker_llm_model = "gpt-5.6-luna"
 
 # Ingestion Worker Environment Variables
+#
+# desired_count = 0: qa is a MIRROR, not an ingestion target. Both workers read
+# the shared askwri-data bucket, but each only lists its own intake_s3_prefix,
+# so a PDF dropped in intake/ reaches production alone and one dropped in
+# qa-intake/ reaches qa alone. With both workers running the two databases
+# diverged in both directions (2026-11-26: 326 documents only on production,
+# 69 only on qa, and 52 document_relations on production with no qa
+# counterpart). Staff curate in BOTH environments — Despina on production, Tori
+# on qa — so neither side was a superset and no one-way copy was ever safe.
+#
+# Off by default, and the variable is authoritative (ecs.tf's ingestion_worker
+# no longer ignores desired_count). To exercise the ingestion pipeline against
+# qa deliberately, scale it up for the run and scale it back:
+#   aws ecs update-service --cluster askwri-app-qa-cluster \
+#     --service askwri-app-qa-ingestion-worker --desired-count 1 --region us-east-2
+# Then pull the resulting documents into production rather than leaving them
+# stranded in qa — see docs/runbooks/ (qa-ingestion-drift).
+ingestion_worker_desired_count = 0
+
 # SPARSE_EN_HANDLES must match the sparse-backfill operator's setting
 # (docs/runbooks/qa-push-deploy.md Step 3) — qa's corpus was rebuilt flag-on
 # 2026-07-26; without this, the worker's next re-ingest of a non-EN document

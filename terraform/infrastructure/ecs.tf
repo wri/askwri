@@ -1093,9 +1093,13 @@ resource "aws_ecs_service" "ingestion_worker" {
     rollback = true
   }
 
-  lifecycle {
-    ignore_changes = [desired_count]
-  }
+  # No lifecycle block here on purpose. The app and search-service resources
+  # ignore desired_count because they have appautoscaling targets that own it;
+  # this worker has none, so the tfvars variable is the only authority. An
+  # inherited ignore_changes would make ingestion_worker_desired_count inert —
+  # qa sets it to 0 and a variable Terraform ignores would look stopped while
+  # the service kept running. If autoscaling is ever added here, put the block
+  # back at the same time.
 
   tags = {
     Name = "${var.project_name}-${var.environment}-ingestion-worker"
