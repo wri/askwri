@@ -260,3 +260,34 @@ def apply_facet_filters(
         if _matches(nws, doc, md, c):
             out.append(nws)
     return out
+
+
+def boost_facet_matches(
+    nodes, facets: List[Facet], docs_meta: dict, weight: float,
+):
+    """Reward facet matches instead of removing the mismatches (#522).
+
+    Same predicate as the filter, opposite sign: every node is kept and a
+    matching one gains one RRF vote at rank 1 (`weight / (60 + 1)`), the unit
+    the fusion loop in `main.py` already uses. Applied pre-rerank, so this
+    changes which documents reach the rerank window — pool admission, not
+    ranking.
+
+    Returns `(nodes re-sorted by score, boosted doc ids)`. A non-positive
+    weight, or no positive constraint at all, returns `nodes` itself: a
+    misconfigured arm must not quietly reorder results.
+    """
+    c = _facet_constraints(facets)
+    if weight <= 0 or not _has_constraints(c):
+        return nodes, set()
+
+    bonus = weight / (60 + 1)
+    boosted: Set[str] = set()
+    for nws in nodes:
+        md = nws.node.metadata or {}
+        doc = docs_meta.get(md.get("doc_id")) or {}
+        if _matches(nws, doc, md, c):
+            nws.score = (nws.score or 0.0) + bonus
+            if md.get("doc_id") is not None:
+                boosted.add(md["doc_id"])
+    return sorted(nodes, key=lambda n: n.score or 0.0, reverse=True), boosted

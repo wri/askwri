@@ -10,7 +10,11 @@ from types import SimpleNamespace
 from datetime import date
 from unittest.mock import MagicMock
 
-from app.facet_filter import apply_facet_filters, excluded_doc_ids, legacy_request_facets
+from app.facet_filter import (
+    apply_facet_filters, boost_facet_matches, excluded_doc_ids, legacy_request_facets,
+)
+import pytest
+
 from app.understanding import Facet
 
 
@@ -358,3 +362,50 @@ def test_blank_exclusion_never_matches():
     nodes = [_node("a")]
     out = apply_facet_filters(nodes, [_hard("excluded_keyword", "   ")], {})
     assert [n.node.metadata["doc_id"] for n in out] == ["a"]
+
+
+# --- #522: pre-rerank boost (shape instead of filter) ------------------------
+#
+# Scores here are RRF-scale (4 votes ≈ 0.05): the boost unit is one RRF vote
+# at rank 1, weight / (60 + 1) ≈ 0.0164, so the tests use scores a single
+# vote can actually separate.
+
+def _scored(doc_id, score, **kwargs):
+    n = _node(doc_id, **kwargs)
+    n.score = score
+    return n
+
+
+def test_boost_keeps_every_node_and_raises_only_matches():
+    nodes = [_scored("a", 0.050), _scored("b", 0.060)]
+    meta = {"a": {"year_int": 2020}, "b": {"year_int": 1990}}
+    out, boosted = boost_facet_matches(nodes, [_hard("year_min", "2000")], meta, 1.0)
+    assert len(out) == 2                       # the filter would drop "b"
+    assert boosted == {"a"}
+    assert [n.node.metadata["doc_id"] for n in out] == ["a", "b"]
+    assert out[0].score == pytest.approx(0.050 + 1 / 61)
+    assert out[1].score == pytest.approx(0.060)   # untouched
+
+
+def test_boost_weight_zero_is_a_no_op_including_order():
+    nodes = [_scored("a", 0.050), _scored("b", 0.060)]
+    meta = {"a": {"office": "WRI India"}}
+    out, boosted = boost_facet_matches(nodes, [_hard("office", "WRI India")], meta, 0.0)
+    assert [n.node.metadata["doc_id"] for n in out] == ["a", "b"]
+    assert boosted == set()
+
+
+def test_boost_with_no_positive_constraints_returns_nodes_untouched():
+    nodes = [_scored("a", 0.050), _scored("b", 0.060)]
+    out, boosted = boost_facet_matches(nodes, [_hard("excluded_keyword", "coal")], {}, 1.0)
+    assert out is nodes
+    assert boosted == set()
+
+
+def test_boost_tolerates_missing_metadata_and_none_score():
+    node = _node("docless", year_meta=None)
+    node.node.metadata = {}
+    node.score = None
+    out, boosted = boost_facet_matches([node], [_hard("year_min", "2000")], {}, 1.0)
+    assert len(out) == 1
+    assert boosted == set()
