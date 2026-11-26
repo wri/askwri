@@ -46,7 +46,11 @@ export function facetsManifest(): Record<string, FacetInput[]> {
         `EVAL_FACETS is not valid JSON (${e.message}) — a malformed manifest must fail before any request`,
       )
     }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
       throw new Error(
         'EVAL_FACETS must be a JSON object mapping case id → [{facet, value}]',
       )
