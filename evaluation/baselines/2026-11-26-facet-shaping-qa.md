@@ -126,9 +126,13 @@ limit of the answer:
 
 _(numbers filled in as arms run; the rule above is frozen)_
 
-**Arms 1 and 2 were measured on QA at `858bbca`, before this branch merged.** That is sound
-rather than convenient: both arms run the filter path, which this branch leaves
-behaviour-identical by default (`FACET_MODE` unset). Two cross-checks. First, the numbers match
+**Arms 1 and 2 below are the pre-#525 measurement, kept for the record and superseded by the
+re-run on the combined build.** They were taken on QA at `858bbca`, before this branch merged:
+both arms run the filter path, which this branch leaves behaviour-identical by default
+(`FACET_MODE` unset), so the numbers are a valid picture of *that* build — and the wrong picture
+of the build the verdict will be taken on, because #525 changed the year filter itself. They are
+**not** input to the decision; the combined-build re-run replaces them (same commands, same
+frozen rule). Two cross-checks. First, the numbers match
 `evaluation/baselines/2026-11-26-facet-negation-qa.md` (in tree since #520 merged: 39.6 / 67.8
 and 73.7 / 86.9 for its two off-arms). The older in-repo 2026-11-24 report shows 36.4 / 65.8
 for cite_01's off arm, and the gap is the build, not the harness: that arm ran before #519
@@ -248,5 +252,6 @@ recorded here with the run state at the time, so the rule's fixity is auditable.
 
 | date | run state | amendment | affects thresholds? |
 |---|---|---|---|
+| 2026-11-26 | arms 1-2 measured on `858bbca`; arm 3 not run | **Rule text restored.** An intermediate commit (`25781d1`) had written the per-type set table into the rule body itself. That is reverted so the frozen wording is exactly `be15236`'s; the table's content is the row below. Reading the history as a diff: the rule is unchanged from `be15236`, and `25781d1`'s inline edit is withdrawn rather than silently kept. | No |
 | 2026-11-26 | arms 1-2 measured on `858bbca`; arm 3 not run | **Office set scope.** The frozen rule says "both sets of that type"; office has one set (the probe, two cases). "Both sets" means *every set that type runs on*: cite_01 + cite_02 for recency, the probe alone for office. A one-set verdict is recorded as a candidate for shaping, never as a mode change. | No |
 | 2026-11-26 | arms 1-2 measured on `858bbca`; arm 3 not run | **Target build.** #525 (444 item 3, one year filter) merged into this branch: recency is re-measured on the combined build, because #525 changes the year filter itself. The arms 1-2 numbers already in this document stay as the pre-#525 stepping stone. | No |
