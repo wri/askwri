@@ -161,13 +161,13 @@ def test_build_sparse_query_domain_expansion_kwarg():
 
 def test_expansion_lane_weight_applied_when_lane_weight_none():
     """5a: a lane with weight=None gets the expansion_lane_weight (per-mode
-    config), not sparse_weight. This is the dead-knob fix: today weight=None
-    falls back to sparse_weight (0.5) regardless of mode; the config knob is
-    not read. cite (recall-first) = 1.0, answer (precision-first) = 0.25."""
+    config), not sparse_weight. This is the dead-knob fix: before 5a, weight=None
+    fell back to sparse_weight (0.5) regardless of mode. Per-mode values live in
+    config.py."""
     dense = [_nws("a", 0.9), _nws("b", 0.8)]
     sparse = [_nws("b", 5.0), _nws("c", 4.0)]
     alias = _StubRetriever([_nws("c", 3.0), _nws("d", 2.0)])
-    # cite mode, expansion_lane_weight=1.0 (recall-first)
+    # 1.0 is this test's own value, not the cite default (that is 0.5)
     r = _retriever(dense, sparse, extra_lanes=[
         {"name": "alias_sparse", "retriever": alias,
          "query_str": "q OR syn", "weight": None, "top_k": None},
@@ -180,9 +180,10 @@ def test_expansion_lane_weight_applied_when_lane_weight_none():
 
 
 def test_expansion_lane_weight_answer_mode_lower_weight():
-    """answer (precision-first): expansion_lane_weight=0.25 → the alias lane
-    contributes less than under cite (1.0), so a doc only the alias found ranks
-    lower. Originals still at 2x (the recall-vs-precision asymmetry stays)."""
+    """A lower expansion_lane_weight (0.25 here, not the answer default of 1.0)
+    → the alias lane contributes less than under a high weight, so a doc only the
+    alias found ranks lower. Originals still at 2x (the recall-vs-precision
+    asymmetry stays)."""
     dense = [_nws("a", 0.9), _nws("b", 0.8)]
     sparse = [_nws("b", 5.0), _nws("c", 4.0)]
     alias = _StubRetriever([_nws("c", 3.0), _nws("d", 2.0)])
@@ -232,7 +233,8 @@ def test_expansion_lane_weight_defaults_to_sparse_weight_when_not_passed():
 
 
 def test_expansion_lane_weight_defaults_per_mode():
-    """5a config: cite 1.0 (recall-first), answer 0.25 (precision-first)."""
+    """5a config defaults: cite 0.5, answer 1.0 — the 2026-08-26 live-qa sweep
+    (see cite_expansion_lane_weight in config.py for why, per mode)."""
     from app.config import Settings
     assert Settings.model_fields["cite_expansion_lane_weight"].default == 0.5
     assert Settings.model_fields["answer_expansion_lane_weight"].default == 1.0
@@ -240,7 +242,7 @@ def test_expansion_lane_weight_defaults_per_mode():
 
 def test_expansion_lane_weight_env_override_back_compat(monkeypatch):
     """EXPANSION_LANE_WEIGHT env overrides both per-mode defaults (back-compat
-    with qa.tfvars, where it's set to 0.25 but currently a dead knob)."""
+    with any deployment that still sets it; qa.tfvars no longer does)."""
     import app.main as _main
     monkeypatch.setattr(_main, "settings", type("S", (), {
         "cite_expansion_lane_weight": 0.5,
