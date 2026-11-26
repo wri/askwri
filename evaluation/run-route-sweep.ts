@@ -48,8 +48,8 @@ const QA_ECS = {
   region: 'us-east-2',
 }
 
-/** The evalsets live in this submodule; a bare `--evalset name` resolves here. */
-const EVALSET_DIR = 'evaluation/eval-review/evalsets'
+/** Vendored evalsets; a bare `--evalset name` resolves here. */
+const EVALSET_DIR = 'evaluation/evalsets'
 const DEFAULT_EVALSET = 'evalset_answer_02.json'
 
 /** What the UI's cite call sends (`src/lib/llamaindex-client.ts`), and the input
@@ -233,8 +233,8 @@ export function frozenSetPath(label: string): string {
   return `evaluation/results/route-freeze-${label}.json`
 }
 
-/** A bare evalset name resolves inside the submodule; anything with a path
- * separator is taken as given, so a temporary set can be run by path. */
+/** A bare evalset name resolves inside the fixture directory; anything with a
+ * path separator is taken as given, so a temporary set can be run by path. */
 export function evalsetPath(evalset: string): string {
   if (evalset.includes('/')) return evalset
   return join(
@@ -255,8 +255,8 @@ export function selectCases(
 }
 
 /**
- * The frozen set's note about how its cases were chosen. The pinned set has no
- * reviewed tier, and a reader must not believe these cases were reviewed. The
+ * The frozen set's note about how its cases were chosen. A reader must not
+ * mistake cases from a set with no reviewed tier for reviewed cases. The
  * wording follows what the selection actually was: `--ids` can name a subset
  * that is not a prefix of the file, so "the first N in file order" is false for
  * it and must not be written into the artifact this tool exists to make
@@ -307,6 +307,7 @@ async function runFreezeStage(opts: SweepOptions): Promise<FrozenSet> {
     maxResults: MAX_RESULTS,
     label: opts.label,
     evalset,
+    evalsetPath: path,
     evalsetNote,
   })
 
@@ -440,7 +441,11 @@ async function runSweepStage(
     models: opts.models,
     code_version: codeVersion,
     max_results: frozen.max_results,
-    submodule_commit: frozen.submodule_commit,
+    ...(frozen.fixture_sha256
+      ? { fixture_sha256: frozen.fixture_sha256 }
+      : frozen.submodule_commit
+        ? { submodule_commit: frozen.submodule_commit }
+        : {}),
     // The frozen set is gitignored, so what it was built from survives only if
     // it is copied here: a committed baseline must say which evalset produced
     // it, whether that set had a reviewed tier, and where its documents came

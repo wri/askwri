@@ -1,6 +1,7 @@
 /**
- * Faithful TS mirror of evaluation/eval-review/scripts/lookup_chunk_id.py's
- * normalize(): the harness scores verbatim text_snippet containment against
+ * Faithful TS mirror of the former eval-review repository's
+ * scripts/lookup_chunk_id.py normalize(): the harness scores verbatim
+ * text_snippet containment against
  * chunk text, and those snippets were resolved by the python tool — so both
  * sides must pass through the SAME normalization. Same character tables,
  * same operation order; do not adjust one side without the other.

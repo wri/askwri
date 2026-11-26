@@ -1,28 +1,18 @@
 /** @jest-environment node */
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// The submodule commit comes from git; mocking child_process keeps the suite
-// off the real repo state and pins what the frozen set records.
-jest.mock('node:child_process', () => ({ execFileSync: jest.fn() }))
-
-import { execFileSync } from 'node:child_process'
 import { freezeCases, loadEvalset } from '../route-sweep/freeze'
 
-const SUBMODULE_COMMIT = '1dcbeabc909073c4141e8088cce8b7fef6de243a'
 const TARGET = 'https://qa.askwrimvp.test'
 const PINNED_EVALSET = join(
   __dirname,
   '..',
-  'eval-review',
   'evalsets',
   'evalset_answer_02.json',
 )
-
-// pr-check's checkout does not initialise submodules, so the assertions against
-// the pinned file self-skip there instead of failing on a missing fixture.
-const pinnedSetTest = existsSync(PINNED_EVALSET) ? it : it.skip
 
 const caseOf = (id: string) => ({
   id,
@@ -58,6 +48,7 @@ const freezeArgs = (overrides: Record<string, unknown> = {}) => ({
   maxResults: 40,
   label: 'smoke',
   evalset: 'evalset_answer_02.json',
+  evalsetPath: writeEvalset([caseOf('q1')]),
   ...overrides,
 })
 
@@ -66,9 +57,6 @@ let tempIndex = 0
 
 beforeEach(() => {
   tempDir = mkdtempSync(join(tmpdir(), 'route-sweep-freeze-'))
-  ;(execFileSync as unknown as jest.Mock).mockReturnValue(
-    `${SUBMODULE_COMMIT}\n`,
-  )
 })
 
 afterEach(() => {
@@ -76,7 +64,7 @@ afterEach(() => {
   jest.clearAllMocks()
 })
 
-/** Writes an evalset fixture in the submodule's shape to the temp dir. */
+/** Writes an evalset fixture in the vendored fixture shape to the temp dir. */
 function writeEvalset(cases: Record<string, unknown>[]): string {
   tempIndex += 1
   const path = join(tempDir, `evalset-${tempIndex}.json`)
@@ -135,21 +123,21 @@ describe('freezeCases', () => {
     expect(set.cases[1].doc_count).toBe(2)
   })
 
-  it('records max_results and the submodule commit in the set', async () => {
+  it('records max_results and the fixture digest in the set', async () => {
     const { fetchImpl } = fetchReturning([{ docs: [] }])
+    const evalsetPath = writeEvalset([caseOf('q1')])
 
-    const set = await freezeCases(freezeArgs({ maxResults: 40, fetchImpl }))
+    const set = await freezeCases(
+      freezeArgs({ maxResults: 40, fetchImpl, evalsetPath }),
+    )
 
     expect(set.max_results).toBe(40)
-    expect(set.submodule_commit).toBe(SUBMODULE_COMMIT)
+    expect(set.fixture_sha256).toBe(
+      createHash('sha256').update(readFileSync(evalsetPath)).digest('hex'),
+    )
     expect(set.label).toBe('smoke')
     expect(set.evalset).toBe('evalset_answer_02.json')
     expect(set.target).toBe(TARGET)
-    expect(execFileSync).toHaveBeenCalledWith(
-      'git',
-      ['-C', 'evaluation/eval-review', 'rev-parse', 'HEAD'],
-      expect.anything(),
-    )
     // No reviewed tier was passed, so there is nothing to say about one.
     expect('evalsetNote' in set).toBe(false)
   })
@@ -179,7 +167,7 @@ describe('freezeCases', () => {
 })
 
 describe('loadEvalset', () => {
-  pinnedSetTest('loads the first N cases of a named evalset', () => {
+  it('loads the first N cases of a named evalset', () => {
     const loaded = loadEvalset(PINNED_EVALSET, { limit: 2 })
 
     expect(loaded.cases).toHaveLength(2)
@@ -226,17 +214,15 @@ describe('loadEvalset', () => {
       freezeArgs({
         cases: loaded.cases,
         fetchImpl,
-        evalsetNote: `no expert_approved cases at pin ${SUBMODULE_COMMIT}`,
+        evalsetNote: 'no expert_approved cases in the fixture',
       }),
     )
-    expect(set.evalsetNote).toBe(
-      `no expert_approved cases at pin ${SUBMODULE_COMMIT}`,
-    )
+    expect(set.evalsetNote).toBe('no expert_approved cases in the fixture')
   })
 
-  it('names the submodule init command when the evalset file is absent', () => {
+  it('names the missing evalset when the file is absent', () => {
     expect(() => loadEvalset(join(tempDir, 'missing.json'), {})).toThrow(
-      /git submodule update --init evaluation\/eval-review/,
+      /evalset not found/,
     )
   })
 })

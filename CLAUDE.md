@@ -59,8 +59,8 @@ section is leftover template text and does not describe this repo's release flow
   hand-edit `requirements.txt`.
 - `npm run eval:cite` — cite-mode retrieval eval (search-service must be running)
 - `npm run eval:qa` — gen-2 evalsets against deployed QA via its public gateway;
-  no local service, DB, or AWS creds. Fixtures come from the
-  `evaluation/eval-review` submodule (`git submodule update --init` on first checkout).
+  no local service, DB, or AWS creds. Versioned fixtures live in
+  `evaluation/evalsets/`.
 - `./scripts/local-bootstrap.sh` — one-command local stack (docker pgvector Postgres
   \+ MinIO via `docker-compose.local.yml`, migrations, corpus, sparse backfill, bucket
   seed, admin user `admin`/`admin-local-password`). Idempotent. Details:

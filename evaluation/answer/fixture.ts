@@ -1,6 +1,6 @@
 /**
  * Evalset loader + case accessor helpers. The evalsets live in the
- * evaluation/eval-review submodule (read-only); structural validation here
+ * evaluation/evalsets (read-only at runtime); structural validation here
  * keeps harness runs from failing cryptically mid-capture on a malformed
  * fixture.
  */

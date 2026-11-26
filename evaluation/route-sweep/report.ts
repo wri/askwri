@@ -160,7 +160,9 @@ function headerLines(a: SweepArtifact, failedCount: number): string[] {
       : null,
     `- models: ${a.models[0]} vs ${a.models[1]}`,
     `- max_results: ${a.max_results}`,
-    `- submodule commit: ${a.submodule_commit}`,
+    a.fixture_sha256
+      ? `- fixture sha256: ${a.fixture_sha256}`
+      : `- legacy submodule commit: ${a.submodule_commit ?? 'unknown'}`,
     // The frozen set is gitignored, so these two lines are the only record a
     // committed baseline carries of which cases it ran and whether they were
     // reviewed.

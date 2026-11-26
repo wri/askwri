@@ -87,7 +87,7 @@ const artifact = (
   models: [MODEL_A, MODEL_B],
   code_version: 'sha256:9f1c2',
   max_results: 8,
-  submodule_commit: 'deadbee',
+  fixture_sha256: 'deadbee',
   calls,
   ...over,
 })
@@ -413,7 +413,7 @@ const artifactOf = (calls: CallResult[]): SweepArtifact => ({
   models: [MODEL_A, MODEL_B],
   code_version: null,
   max_results: 40,
-  submodule_commit: 'abc',
+  fixture_sha256: 'abc',
   calls,
 })
 

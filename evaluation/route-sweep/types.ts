@@ -1,7 +1,7 @@
 /**
  * Shapes shared by the route-sweep stages. A frozen set is written once and
  * reused across model pairs, so it carries the provenance that makes a rerun
- * comparable: the target, the evalset, the submodule commit that pinned the
+ * comparable: the target, the evalset, the fixture digest that identifies the
  * cases, and the `max_results` that sized each retrieval.
  */
 import type { RouteProvenance } from '@/lib/route-model'
@@ -29,7 +29,9 @@ export type FrozenSet = {
   label: string
   target: string
   evalset: string
-  submodule_commit: string
+  fixture_sha256?: string
+  /** Read compatibility for frozen sets created before fixtures were vendored. */
+  submodule_commit?: string
   max_results: number
   cases: FrozenCase[]
   /** Present only when the loaded set had no `expert_approved` case to filter
@@ -54,7 +56,9 @@ export type SweepArtifact = {
   models: [string, string]
   code_version: string | null
   max_results: number
-  submodule_commit: string
+  fixture_sha256?: string
+  /** Read compatibility for artifacts created before fixtures were vendored. */
+  submodule_commit?: string
   /** The evalset the frozen retrieval came from, and the note saying whether it
    * had a reviewed tier. The frozen set itself is gitignored, so without these
    * a committed baseline cannot say which cases produced it. */

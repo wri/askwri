@@ -22,7 +22,7 @@ import * as path from 'path'
 
 const MODEL = 'gpt-5.4-mini' // must match settings.query_understanding_llm_model (search-service/app/config.py)
 const OUT = path.join(__dirname, '..', 'extractions', 'core-topics.json')
-const EVALSET_DIR = path.join(__dirname, '..', 'eval-review', 'evalsets')
+const EVALSET_DIR = path.join(__dirname, '..', 'evalsets')
 
 // MUST stay identical to _SYSTEM in search-service/app/understanding_llm.py.
 const SYSTEM =

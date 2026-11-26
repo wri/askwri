@@ -258,12 +258,12 @@ describe('freezeNote', () => {
 })
 
 describe('evalsetPath', () => {
-  it('resolves a bare name inside the pinned submodule, adding .json', () => {
+  it('resolves a bare name inside the fixture directory, adding .json', () => {
     expect(evalsetPath('evalset_answer_02.json')).toBe(
-      'evaluation/eval-review/evalsets/evalset_answer_02.json',
+      'evaluation/evalsets/evalset_answer_02.json',
     )
     expect(evalsetPath('evalset_cite_02')).toBe(
-      'evaluation/eval-review/evalsets/evalset_cite_02.json',
+      'evaluation/evalsets/evalset_cite_02.json',
     )
   })
 

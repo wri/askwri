@@ -1,3 +1,0 @@
-[submodule "evaluation/eval-review"]
-	path = evaluation/eval-review
-	url = https://github.com/gofenris/askwri-eval-review.git

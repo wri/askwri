@@ -1,0 +1,435 @@
+{
+  "name": "evalset-cite-02",
+  "version": "4.3",
+  "created": "2026-08-11",
+  "updated": "2026-08-18",
+  "description": "Evaluation dataset (generation 2+) for AskWRI Cite mode - cross-lingual corpus (en/zh/es/pt). Builds on literature-discovery style queries ('What's already there on X?') and existence-check queries. Unlike previous fact-lookup queries, these use a broader 'topically substantive' relevance standard. Reconciled 2026-08-17 against a refreshed corpus snapshot.",
+  "test_cases": [
+    {
+      "id": "d1_zero-emission-heavy-duty-trucks-discovery",
+      "question": "What has WRI published on zero-emission heavy-duty truck adoption in China?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2025_zero-emission-heavy-duty-trucks_00015",
+        "2025_charging-toward-2035-policies-to-accelerate-zero_7455",
+        "2022_china-road-transport-decarbonization_00145",
+        "2024_techno-economic-feasibility-analysis-of-zero_7051",
+        "2022_decarbonizing-chinas-road-transport-sector_2101",
+        "2019_toward-net-zero-emissions-in-the-road-transport_1735",
+        "2024_accelerating-zero-emission-truck-adoption-in_6287",
+        "2024_zero-emission-trucks-guangdong_00006",
+        "2021_zero-emission-logistic-vehicles-promotion_1319",
+        "2024_feasibility-of-zero-emission-freight-zones_1267",
+        "2023_visioning-to-implementation-national-transport_8631"
+      ],
+      "expected_document_ids": [
+        "00be4a1d-33cc-4b56-a4d5-d15af0a5cc27",
+        "4281889f-338a-4997-88f9-36635930d447",
+        "6a5e424b-b894-450f-967e-1b64ddfd24d4",
+        "0e3a739a-bc93-4c8e-aab6-21f63443e5c9",
+        "7eb680c2-db98-429a-b404-1d0324f05fcf",
+        "f346f47c-03f7-436a-9ae5-a0f06b175636",
+        "c59c544a-b1db-4610-abd5-1a57f61ca362",
+        "61d7d9a2-7881-4b35-a553-ad9382520094",
+        "721c2661-65ed-4078-bc08-e74da3743553",
+        "1ad345fb-edbd-40a9-89d4-d967367ca230",
+        "cbeae4dd-c970-4697-88a4-6388c069c0a5"
+      ],
+      "source_document_id": "00be4a1d-33cc-4b56-a4d5-d15af0a5cc27",
+      "source_language": "zh",
+      "difficulty": "easy",
+      "query_type": "geography_constrained",
+      "note": "Includes two possible twin-language pairs confirmed by retrieval score parity."
+    },
+    {
+      "id": "d2_dockless-bike-sharing-discovery",
+      "question": "What research has WRI done on dockless bike-sharing in Chinese cities?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2020_dockless-bike-sharing_00124",
+        "2020_how-dockless-bike-sharing-changes-lives-an_2277",
+        "2019_the-evolution-of-bike-sharing-10-questions-on-the_1977"
+      ],
+      "expected_document_ids": [
+        "98cc253e-8d96-4499-b67a-38baffe2f3f2",
+        "950b35ab-743f-41de-8212-0a1f75250453",
+        "aa3afd35-3fbd-40c8-af80-b1f7cd8c11ef"
+      ],
+      "source_document_id": "98cc253e-8d96-4499-b67a-38baffe2f3f2",
+      "source_language": "zh",
+      "difficulty": "easy",
+      "query_type": "geography_constrained",
+      "note": "2026-09-04: _1977 reviewer unable to confirm, but retained."
+    },
+    {
+      "id": "d3_container-port-decarbonization-discovery",
+      "question": "What has WRI written about decarbonizing container port and drayage operations?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2024_optimizing-container-ports-transportation-and_9894"
+      ],
+      "expected_document_ids": [
+        "add211a7-3919-48f6-bf21-c1b55f889dfb"
+      ],
+      "source_document_id": "add211a7-3919-48f6-bf21-c1b55f889dfb",
+      "source_language": "zh",
+      "difficulty": "easy",
+      "query_type": "topic_discovery",
+      "note": ""
+    },
+    {
+      "id": "d4_public-transport-financing-discovery",
+      "question": "What has WRI published on financing mechanisms for public transport?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2023_analisis-de-los-mecanismos-financieros-para-la_3765",
+        "2022_impactos-economicos-pandemia-covid19-transporte-publico_0070",
+        "2024_a-fare-look-funding-urban-public-transport_7541",
+        "2024_access-to-climate-finance-in-low-and-middle_4708",
+        "2014_the-trillion-dollar-question_3289",
+        "2019_financing-electric-and-hybrid-electric-buses-10_6301",
+        "2024_assessing-financing-challenges-for-implementing_4732",
+        "2021_10-questions-to-ask-about-planning-financing-and_8828",
+        "2019_barriers-to-adopting-electric-buses_4116"
+      ],
+      "expected_document_ids": [
+        "76039c19-d7e5-45f3-b543-88302b6034fa",
+        "987353ab-9454-473f-8f00-eb767750dd24",
+        "f08f0762-7ba0-4f87-b5f2-bb5c63455a91",
+        "aa613e3b-9c05-4a65-ab10-8837dd2ed8ee",
+        "3b6fb2d4-9970-407e-99b9-57dbc92bf09c",
+        "f47b4397-15e1-4802-a9a4-26f52f34a847",
+        "0ae23d7a-5801-4bf2-95c4-a6e45311fae6",
+        "ee6bc3a5-78a9-4355-9493-ea97a68907c0",
+        "cfe63045-b7f5-422d-a2b9-9d8ba91abf0a"
+      ],
+      "source_document_id": "76039c19-d7e5-45f3-b543-88302b6034fa",
+      "source_language": "es",
+      "difficulty": "medium",
+      "query_type": "topic_discovery",
+      "note": "Dropping geography constraint from a previous version."
+    },
+    {
+      "id": "d5_public-transport-financing-since-2022",
+      "question": "What has WRI published on financing mechanisms for public transport since 2022?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2023_analisis-de-los-mecanismos-financieros-para-la_3765",
+        "2022_impactos-economicos-pandemia-covid19-transporte-publico_0070",
+        "2024_a-fare-look-funding-urban-public-transport_7541",
+        "2024_access-to-climate-finance-in-low-and-middle_4708",
+        "2024_assessing-financing-challenges-for-implementing_4732"
+      ],
+      "expected_document_ids": [
+        "76039c19-d7e5-45f3-b543-88302b6034fa",
+        "987353ab-9454-473f-8f00-eb767750dd24",
+        "f08f0762-7ba0-4f87-b5f2-bb5c63455a91",
+        "aa613e3b-9c05-4a65-ab10-8837dd2ed8ee",
+        "0ae23d7a-5801-4bf2-95c4-a6e45311fae6"
+      ],
+      "source_document_id": "76039c19-d7e5-45f3-b543-88302b6034fa",
+      "source_language": "es",
+      "difficulty": "easy",
+      "query_type": "date_constrained",
+      "note": "date_constrained test case variation of d4; Reuses d4's answer set. Will likely confirm post-retrieval filtering system in AskWRI."
+    },
+    {
+      "id": "d6_seizing-urban-opportunity-series",
+      "question": "Give me all the papers WRI published as part of the 'Seizing the Urban Opportunity' report series.",
+      "task_description": "",
+      "expected_external_ids": [
+        "2021_seizing-the-urban-opportunity_8690",
+        "2021_seizing-chinas-urban-opportunity_9025",
+        "2021_seizing-chinas-urban-opportunity_00015",
+        "2021_seizing-indias-urban-opportunity_1949",
+        "2021_seizing-indonesias-urban-opportunity_3408",
+        "2021_seizing-mexicos-urban-opportunity_3303",
+        "2021_seizing-south-africas-urban-opportunity_4664",
+        "2021_seizing-brazils-urban-opportunity_3268"
+      ],
+      "expected_document_ids": [
+        "3d2d04e6-b0a9-4c78-b8b7-0045a051a9f0",
+        "82645c0f-4b9a-41fd-81c6-99b680622adf",
+        "a13c6fbb-9acd-4825-b5fc-46731e14a301",
+        "3a94fabf-0587-4230-a996-52a2d2ba1e22",
+        "9900e40d-453f-446e-9f36-339bca5bb1e7",
+        "f47a7fde-3219-4e75-a115-1dbb819c5335",
+        "5123ef1c-3236-4d4d-9be1-a640f5c366c7",
+        "b3becd32-259f-4fda-8f0c-1dc895773176"
+      ],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "easy",
+      "query_type": "membership",
+      "note": "All 8 confirmed via shared metadata. Deliberately excludes 2019_climate-emergency-urban-opportunity_4461 ('Climate Emergency, Urban Opportunity')."
+    },
+    {
+      "id": "d7_electric-buses-excluding-school-buses",
+      "question": "What has WRI published on electric bus adoption and operations, excluding anything specific to school buses?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2019_barriers-to-adopting-electric-buses_4116",
+        "2019_how-to-enable-electric-bus-adoption-in-cities_4136",
+        "2019_en-electric-bus-adoption-guide_00123",
+        "2022_rolling-out-electric-buses-a-guidebook-on-route_8515",
+        "2024_real-world-electric-bus-operation-trend-in_3497",
+        "2019_financing-electric-and-hybrid-electric-buses-10_6301",
+        "2020_the-future-of-urban-mobility-the-case-for_6259",
+        "2024_assessing-financing-challenges-for-implementing_4732",
+        "2024_open-e-bus-blueprint_4307",
+        "2019_overcoming-the-operational-challenges-of-electric_2317",
+        "2020_impactar-tool-valuing-air-quality-health-impacts_1028",
+        "2022_impactar-tool-valuing-air-quality-health-impacts_4741",
+        "2020_the-costs-and-benefits-appraisal-tool-for-transit_6714",
+        "2019_costs-and-emissions-appraisal-tool-for-transit_4706"
+      ],
+      "expected_document_ids": [
+        "cfe63045-b7f5-422d-a2b9-9d8ba91abf0a",
+        "32d89e5e-618d-48a7-a275-90e91f50ead8",
+        "67529e99-40b1-46c2-9fd7-07e9964e2fc6",
+        "20e4cc09-add5-4535-91d4-79a548649b0f",
+        "011e3390-85a1-4169-9be8-4e8c5f28e95b",
+        "f47b4397-15e1-4802-a9a4-26f52f34a847",
+        "c1c6eff7-7e9d-4d66-873a-c1d18fdfae1b",
+        "0ae23d7a-5801-4bf2-95c4-a6e45311fae6",
+        "49c0b8b9-28e2-47e0-ba9f-d645ae99d208",
+        "5928fa8b-0536-4454-95b9-a715e758ee74",
+        "dd0fe27a-531b-4c1b-8cc0-6dce1fe87823",
+        "01829576-ced9-45a7-83d4-4cf2deb3e9e2",
+        "ea68cada-65af-492b-b7fb-fabd8f2e49a4",
+        "0fcfd147-dca7-415f-8b27-93f03073f224"
+      ],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "hard",
+      "query_type": "topic_exclusion",
+      "note": "Excludes the school-bus-specific cluster. Includes two likely duplicate-ingest pairs, kept as separate entries pending twin-pair confirmation."
+    },
+    {
+      "id": "d8_surveillance-tech-climate-resilience-negative",
+      "question": "Has WRI written about using surveillance technologies to increase climate resilience in cities?",
+      "task_description": "",
+      "expected_external_ids": [],
+      "expected_document_ids": [],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "easy",
+      "query_type": "binary_presence",
+      "note": "Negative case: no matches expected. Verified via qmd vsearch -- top results only match generic 'climate resilience in cities' framing, none substantively about surveillance tech."
+    },
+    {
+      "id": "d9_vertical-farming-negative",
+      "question": "Has WRI written about urban vertical farming or rooftop agriculture in cities?",
+      "task_description": "",
+      "expected_external_ids": [],
+      "expected_document_ids": [],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "easy",
+      "query_type": "binary_presence",
+      "note": "Negative case: no matches expected. Verified via qmd vsearch -- no on-topic hits, only generic urban-topic noise."
+    },
+    {
+      "id": "d10_nuclear-microreactors-negative",
+      "question": "Has WRI published research on nuclear microreactors for city-level power grids?",
+      "task_description": "",
+      "expected_external_ids": [],
+      "expected_document_ids": [],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "easy",
+      "query_type": "binary_presence",
+      "note": "Negative case: no matches expected. Verified via qmd vsearch -- top hit ('Powering Cities in the Global South') is about general urban energy access, not nuclear microreactors."
+    },
+    {
+      "id": "d11_coalition-for-urban-transitions-partnership",
+      "question": "What has WRI written with the Coalition for Urban Transitions?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2021_seizing-the-urban-opportunity_8690",
+        "2021_seizing-chinas-urban-opportunity_9025",
+        "2021_seizing-chinas-urban-opportunity_00015",
+        "2021_seizing-indias-urban-opportunity_1949",
+        "2021_seizing-indonesias-urban-opportunity_3408",
+        "2021_seizing-mexicos-urban-opportunity_3303",
+        "2021_seizing-south-africas-urban-opportunity_4664",
+        "2021_seizing-brazils-urban-opportunity_3268",
+        "2019_climate-emergency-urban-opportunity_4461",
+        "2018_resilient-and-affordable-housing-for-all-lessons_5955",
+        "2021_mexico-frontrunners-adapting-to-climate-change-in_8904",
+        "2021_mexico-frontrunners-sustainable-mobility-for_2332",
+        "2021_mexico-frontrunners-creating-safe-affordable-and_5127",
+        "2020_acciones-federales-para-la-planeacion-urbana_3682",
+        "2020_acciones-federales-planeacion-urbana_0152",
+        "2019_scaling-up-investment-for-sustainable-urban_2716",
+        "2017_connected-urban-growth-public-private_1272",
+        "2017_global-review-of-finance-for-sustainable-urban_8997",
+        "2020_housing-policies-for-sustainable-and-inclusive_3963",
+        "2018_developing-prosperous-and-inclusive-cities-in_3356",
+        "2021_el-costo-de-la-expansion-urbana-en-mexico_2705",
+        "2021_el-costo-de-la-expansion-urbana-en-mexico_9471",
+        "2017_integrating-national-policies-to-deliver-compact_5239"
+      ],
+      "expected_document_ids": [
+        "3d2d04e6-b0a9-4c78-b8b7-0045a051a9f0",
+        "82645c0f-4b9a-41fd-81c6-99b680622adf",
+        "a13c6fbb-9acd-4825-b5fc-46731e14a301",
+        "3a94fabf-0587-4230-a996-52a2d2ba1e22",
+        "9900e40d-453f-446e-9f36-339bca5bb1e7",
+        "f47a7fde-3219-4e75-a115-1dbb819c5335",
+        "5123ef1c-3236-4d4d-9be1-a640f5c366c7",
+        "b3becd32-259f-4fda-8f0c-1dc895773176",
+        "dfcb9c66-209a-448a-ae0a-d05bbe8b9650",
+        "5db22bba-99dc-43be-8fb4-fd21ec98f4e7",
+        "7c980340-3d1e-42f4-a092-f45e06e4908b",
+        "cfb24eb0-a4c6-481e-88c7-71fc140bfd93",
+        "6bf845bb-fe9b-4fb8-aa5b-194ac57e483a",
+        "cd491d2f-fe3f-4f47-a985-33d1cb45e26e",
+        "d24f1e12-50f0-46c6-bfb7-957e779701b4",
+        "0e47113a-790b-49fc-b851-787d99b59807",
+        "e6efadef-a9d8-4c6a-b9de-e2d486ed46db",
+        "b5039121-22b1-438d-95e8-e093560747ef",
+        "78bceec7-ee2c-401f-a700-95fac0b6fbe4",
+        "dd92ba27-3deb-4fb9-b503-1369bb557f93",
+        "68a76968-e10a-4119-98af-f14f3f349e27",
+        "4dca417f-a8fd-43c3-8ab1-38d9db116dbd",
+        "1b555d62-ff50-4b7d-8576-bee7f6cc78fa"
+      ],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "easy",
+      "query_type": "membership",
+      "note": "Contrast pair with d6: partnership/authoring-entity membership (broader) vs. named report series (narrower). Includes d6's 8 docs plus the 2019 precursor d6 excludes, plus docs with explicit 'in partnership with' / 'prepared for CUT' language. Excludes docs that only cite or acknowledge CUT in passing. Authorship reviewed 2026-09-04: Document included regardless of authorship affiliation."
+    },
+    {
+      "id": "d12_climate-hazards-heat-resilience-discovery",
+      "question": "What has WRI published on climate hazards and heat resilience in cities?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2024_climate-resilient-cities-assessing-differential_1543",
+        "2024_city-scale-city-relevant-climate-hazard_3175",
+        "2019_unlocking-the-potential-for-transformative_9741",
+        "2018_prepared-communities-implementing-the-urban_2922",
+        "2025_multilevel-action-for-community-led-climate_7058",
+        "2023_estimating-future-local-climate-hazard_4480",
+        "2021_mexico-frontrunners-adapting-to-climate-change-in_8904",
+        "2021_water-resilience-in-a-changing-urban-context_8364",
+        "2022_nature-based-solutions-in-sub-saharan-africa-for_1106",
+        "2025_calculating-indicators-from-global-geospatial_3765",
+        "mapping-scenarios-and-estimating-the-potential-for-heat-resilient-infrastructure-in-cities-technical-note",
+        "modeling-hyperlocal-heat-exposure-with-open-source-data",
+        "wri_brasil-root_causes_2024_disaster_rs"
+      ],
+      "expected_document_ids": [
+        "b5c503bc-31ce-4f79-b80d-4598be2411a3",
+        "1a65b36e-8fe4-4ae3-aaef-5b6e796d450b",
+        "233b09da-402e-404b-9758-d23652c63d98",
+        "a048729d-02bb-4a04-8fa2-a9e2782a662d",
+        "5e71b477-deca-4144-aade-ef9236fc62c2",
+        "a4c86569-d1d8-4cf3-8c70-46d9bc9b98cb",
+        "7c980340-3d1e-42f4-a092-f45e06e4908b",
+        "9a107830-918b-446e-b5ee-4e95f1867045",
+        "6d705c39-d2d3-4e86-9425-530dffc722e8",
+        "15831ee5-42b4-43c9-8297-02e474534d30",
+        "5ce0e576-54cc-43ed-95bd-fc2c2c3000c5",
+        "2be35c4c-552a-4329-a31e-a0d76bc7030b",
+        "67e8f418-46a5-4991-a0eb-a083c55b658b"
+      ],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "medium",
+      "query_type": "topic_discovery",
+      "note": "Excluded as a distinct topic: Climate Emergency Urban Opportunity (decarbonization/mitigation-focused, not hazards/resilience), Untreated and Unsafe: Urban Sanitation Crisis, and Kampala sanitation services (sanitation governance, not climate hazards). 2026-08-17 corpus refresh added Mapping Scenarios for Heat-Resilient Infrastructure, Modeling Hyperlocal Heat Exposure, and Root Causes of the 2024 Rio Grande do Sul climate disaster (Brazil flood) -- all 3 confirmed on-topic and added; a 4th refresh doc on this exact topic, Flooding in Nairobi's Informal Settlements, went to d15 instead (thematic_intersection with informal settlements is a better fit there). wri-india-nup-report also scored well here but was excluded: climate vulnerability/resilience is just one of ~7 thematic chapters in an omnibus national policy report, not primary focus. Authorship reviewed 2026-09-04: Document included regardless of authorship affiliation."
+    },
+    {
+      "id": "d13_low-cost-air-quality-monitoring-discovery",
+      "question": "What has WRI published on low-cost air quality sensors and monitoring in cities?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2021_medindo-mp25-com-sensores-de-baixo-custo_6821",
+        "2023_ciencia-participativa-accion-para-un-aire-limpio_6722",
+        "2025_aire-limpio-en-barrios-vitales_9425"
+      ],
+      "expected_document_ids": [
+        "146b57be-4e67-4952-9957-4ccd28e45641",
+        "7f8a32fc-6de5-45de-b340-e0778bc1a595",
+        "36c083e5-5439-466c-be92-b95ca0d6f293"
+      ],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "easy",
+      "query_type": "topic_discovery",
+      "note": ""
+    },
+    {
+      "id": "d14_pawan-mulukutla-authorship",
+      "question": "What has WRI published that was authored or co-authored by Pawan Mulukutla?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2022_rolling-out-electric-buses-a-guidebook-on-route_8515",
+        "2023_accelerating-the-production-and-use-of-green_9683",
+        "2023_assessing-the-viability-of-using-autorickshaws_2146",
+        "2023_financial-analysis-of-charging-station-fact_2082",
+        "2023_supporting-the-energy-transition-by-addressing_6756",
+        "2024_assessing-financing-challenges-for-implementing_4732",
+        "2024_open-e-bus-blueprint_4307",
+        "2024_real-world-electric-bus-operation-trend-in_3497",
+        "2025_financial-impact-assessment-for-zero-emission_8156",
+        "2025_toward-a-framework-to-support-better-decision_4539"
+      ],
+      "expected_document_ids": [
+        "20e4cc09-add5-4535-91d4-79a548649b0f",
+        "a05fe526-9948-4023-9667-8add7988f841",
+        "5bed6c1f-674c-4d54-a9cf-0b7ca09007e0",
+        "ce884819-c3c3-489a-b0e3-b7ccf1a47386",
+        "920fa327-eb75-4a10-a895-761eabbeba50",
+        "0ae23d7a-5801-4bf2-95c4-a6e45311fae6",
+        "49c0b8b9-28e2-47e0-ba9f-d645ae99d208",
+        "011e3390-85a1-4169-9be8-4e8c5f28e95b",
+        "b9f983c5-f35c-49dc-a161-2de24a3854b7",
+        "77f1de27-60e9-4aa9-8869-c99902b61336"
+      ],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "easy",
+      "query_type": "membership",
+      "note": "individual-authorship variant of membership. Sourced directly 'authors:' metadata field."
+    },
+    {
+      "id": "d15_flooding-risk-informal-settlements-intersection",
+      "question": "What has WRI published on flooding risk in informal settlements?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2025_multilevel-action-for-community-led-climate_7058",
+        "2018_resilient-and-affordable-housing-for-all-lessons_5955",
+        "flooding-nairobi-informal-settlements"
+      ],
+      "expected_document_ids": [
+        "5e71b477-deca-4144-aade-ef9236fc62c2",
+        "5db22bba-99dc-43be-8fb4-fd21ec98f4e7",
+        "7eadad61-eec8-485d-8bd4-fa376cc738f6"
+      ],
+      "source_document_id": "",
+      "source_language": "",
+      "difficulty": "hard",
+      "query_type": "thematic_intersection",
+      "note": "query_type thematic_intersection, with topics 'flooding risk' and 'informal settlements' as the two target concepts. Flooding in Nairobi's Informal Settlements added 2026-08-18 -- new document surfaced by the 2026-08-17 corpus refresh, direct title/executive-summary match confirmed via qmd vsearch (top result, score 0.72). Authorship reviewed 2026-09-04: Document included regardless of authorship affiliation."
+    },
+    {
+      "id": "d16_urban-tree-inventory-discovery",
+      "question": "What has WRI published on urban tree inventory methods?",
+      "task_description": "",
+      "expected_external_ids": [
+        "2025_panduan-pelaksanaan-inventarisasi-pohon-perkotaan_4324"
+      ],
+      "expected_document_ids": [
+        "ed7cc7fe-de63-4015-ba74-fe0cd84fe05f"
+      ],
+      "source_document_id": "ed7cc7fe-de63-4015-ba74-fe0cd84fe05f",
+      "source_language": "id",
+      "difficulty": "easy",
+      "query_type": "topic_discovery",
+      "note": "Single-doc topic. Targets the id-lang (Bahasa Indonesia) document flagged in the 2026-08-17 corpus refresh -- previously mislabeled en-lang. Confirmed via qmd vsearch: only this doc scores substantively (0.73-0.76 across phrasings), sharp drop to generic-urban noise (~0.6) for everything else; geography constraint ('in Indonesian cities') doesn't change the result set, so classified as plain topic_discovery per the d3 precedent."
+    }
+  ]
+}

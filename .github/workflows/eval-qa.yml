@@ -37,20 +37,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          submodules: true
 
-      # The pinned submodule commit is what makes a report traceable to its
-      # ground truth; these runs want the newest fixtures instead. Move to the
-      # tip of main for this run only and record which commit that was, both in
-      # the log and on the summary — the pointer committed in the repo is left
-      # untouched.
-      - name: Use latest eval fixtures
+      # Record a digest of the vendored fixture bundle. Individual answer and
+      # route-sweep artifacts also record the exact fixture file's SHA-256.
+      - name: Record eval fixtures
         run: |
-          git -C evaluation/eval-review fetch --depth 1 origin main
-          git -C evaluation/eval-review checkout FETCH_HEAD
-          echo "FIXTURES_SHA=$(git -C evaluation/eval-review rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "Fixtures: $(git -C evaluation/eval-review rev-parse HEAD)"
+          FIXTURES_SHA="$(sha256sum evaluation/evalsets/*.json | sha256sum | cut -d' ' -f1)"
+          echo "FIXTURES_SHA=$FIXTURES_SHA" >> "$GITHUB_ENV"
+          echo "Fixtures: $FIXTURES_SHA"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
