@@ -35,7 +35,7 @@ export interface FacetInput {
  */
 export function facetsManifest(): Record<string, FacetInput[]> {
   const raw = process.env.EVAL_FACETS
-  if (manifestCache?.raw === raw) return manifestCache.manifest
+  if (manifestCache && manifestCache.raw === raw) return manifestCache.manifest
   const manifest: Record<string, FacetInput[]> = {}
   if (raw !== undefined) {
     let parsed: unknown
