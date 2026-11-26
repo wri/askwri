@@ -44,7 +44,13 @@ import {
   latencySummary,
 } from './lib/metrics'
 import { isAbstained, isFalseAbstention } from './lib/abstention'
-import { expansionArm, gatewayBody } from './lib/gateway-body'
+import {
+  expansionArm,
+  facetsForCase,
+  facetsManifest,
+  gatewayBody,
+  type FacetInput,
+} from './lib/gateway-body'
 
 const TARGET = process.env.EVAL_TARGET || 'https://qa.askwri-app.org'
 const QUERY_TIMEOUT_MS = 120_000
@@ -161,6 +167,8 @@ interface CaseResult {
    * null when the target predates usage metering, or the query failed.
    */
   cost_usd: number | null
+  /** The fixed facets this case was measured with ([] when the lever is off). */
+  facets: FacetInput[]
   error?: string
 }
 
@@ -226,6 +234,7 @@ interface RetrievedChunk {
 async function queryTarget(
   question: string,
   mode: 'cite' | 'answer',
+  facets: FacetInput[],
 ): Promise<{
   hits: RetrievedChunk[]
   serviceMs: number | null
@@ -235,7 +244,7 @@ async function queryTarget(
   const response = await fetch(`${TARGET}/api/llamaindex`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(gatewayBody(question, mode)),
+    body: JSON.stringify(gatewayBody(question, mode, facets)),
     signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
   })
   if (!response.ok) {
@@ -306,6 +315,7 @@ async function runCase(
   const attainableChunks = expectedChunks.filter(
     (p) => !missingChunks.includes(p.chunk_id),
   )
+  const facets = facetsForCase(tc.id)
   const start = Date.now()
 
   const base = {
@@ -317,12 +327,14 @@ async function runCase(
     recall_ceiling: ceiling,
     expected_chunk_ids: expectedChunkIds,
     chunks_missing_from_corpus: missingChunks,
+    facets,
   }
 
   try {
     const { hits, serviceMs, costUsd, likelyOffTopic } = await queryTarget(
       tc.question,
       mode,
+      facets,
     )
     const docs = bestPerDoc(hits)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
@@ -536,6 +548,18 @@ async function runEvalset(
         ? 'answer'
         : 'cite'
 
+  // Before any request: a manifest key that matches no case in the set being
+  // measured is a typo that would silently measure nothing — fail the run.
+  const manifest = facetsManifest()
+  const unknownKeys = Object.keys(manifest).filter(
+    (key) => !cases.some((tc) => tc.id === key),
+  )
+  if (unknownKeys.length > 0) {
+    throw new Error(
+      `EVAL_FACETS names case ids not in ${path.basename(evalsetPath)}: ${unknownKeys.join(', ')}`,
+    )
+  }
+
   console.log(
     `\n${path.basename(evalsetPath)} — ${cases.length} cases [mode: ${mode}]\n`,
   )
@@ -602,6 +626,9 @@ async function runEvalset(
     // params, the off arm sends expansion:false. Recorded so two reports can
     // never be compared across arms by accident.
     expansion_arm: expansionArm(),
+    // The fixed-facet manifest this run was measured under ({} when the lever
+    // is off), so two reports can never be compared across levers by accident.
+    facets_manifest: manifest,
     environment: service.environment ?? null,
     keyword_backend: service.keyword_backend ?? null,
     retrieval_backend: service.retrieval_backend ?? null,
@@ -745,6 +772,7 @@ async function runEvalset(
 async function main() {
   // Before any request: a mistyped arm must not reach the target at all.
   const arm = expansionArm()
+  const manifest = facetsManifest()
   const args = process.argv.slice(2)
   const explicit = args.find((a) => !a.startsWith('--'))
   const modeFlag = args[args.indexOf('--mode') + 1]
@@ -776,6 +804,9 @@ async function main() {
   )
   console.log(`Corpus:   ${corpusIds.size} documents`)
   console.log(`Expansion: ${arm}`)
+  const manifestKeys = Object.keys(manifest)
+  if (manifestKeys.length > 0)
+    console.log(`Facets:    ${manifestKeys.length} case(s) in EVAL_FACETS`)
 
   for (const evalsetPath of evalsetPaths) {
     await runEvalset(evalsetPath, modeFlag, service, corpusIds)
