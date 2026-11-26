@@ -92,6 +92,13 @@ search_service_environment_variables = {
   # in search-service/app/config.py (which records the sweep that chose them).
   # The EXPANSION_LANE_WEIGHT env var remains as an override for both if set.
   "DEEP_RESCUE_MAX"                 = "10"
+  # #522 experiment arm 3 (TEMPORARY - revert the commit that adds this line).
+  # "boost" keeps every candidate and adds one RRF vote at rank 1 to the
+  # documents that match a positive facet, instead of removing the ones that do
+  # not. Code default is "filter"; production.tfvars is untouched. Applied only
+  # to run the three-arm comparison in
+  # evaluation/baselines/2026-11-26-facet-shaping-qa.md, then reverted.
+  "FACET_MODE"                      = "boost"
 }
 
 # Ingestion Worker LLM model: pin QA to the current small/fast classifier even
