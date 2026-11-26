@@ -29,6 +29,8 @@ add("Replace <b>Mistral OCR</b> with <b>Sonnet 5.5 through OpenRouter</b>. Over 
     "pipeline yet: on ordinary pages the check flags a third of Sonnet's pages while Sonnet keeps 99.9% of numbers, and it cannot see the "
     "omissions that make up most of Inkling's remaining errors.")
 add("Second-edition recommendation, superseded and kept for the record", "Heading2")
+add("The second edition's measurements and tables are unchanged in this version. Its recommendation is revised above; "
+    "the original text follows, labelled superseded.")
 add("Pilot <b>Sonnet 5.5 through OpenRouter, on WRI's own account</b>. On 27 hard pages it kept the same numbers as GPT-6.2 Astra (99.8%, every language) "
     "at about a quarter of Astra's billed cost, and finished fastest. WRI has OpenRouter access, which would route around the Bedrock permission block; "
     "these runs used a personal OpenRouter key, so WRI's account has not been exercised yet. <b>Mistral OCR</b>, the current parser, "
@@ -132,7 +134,7 @@ add("Limits of the follow-on", "Heading2")
 add("One run per model; 100 ordinary pages from 51 documents; agent-reviewed, like the rest of the evaluation. It measures numbers and words, "
     "not reading order or table cells, and says nothing about retrieval or answers. The hard-set sweep compares stored text with the local PDFs' "
     "layers; the content hashes matched for all 24 documents and the known invisible-text pages were checked by eye, but hidden text can still "
-    "inflate the denominator. Its scripts and every score are under evidence/v4.")
+    "inflate the denominator. Its scripts and every score are on the private report site under evidence/v4, not in this repository.")
 story.append(PageBreak())
 
 add("Cost, access and limits", "Heading1")
@@ -158,7 +160,7 @@ add("Agent-reviewed references, not independent human ground truth. Single runs;
     "numbers and words, not reading order or cell placement. No full-corpus run, no cross-page table continuity and no controlled retrieval "
     "experiment. No QA index, queue, IAM or serving configuration changed.")
 add("Evidence: every output, raw response, run record, scorer and the 27 hard source pages are under evidence/v3 on the private report site "
-    "(wri-parser-evaluation-lab.bouncychess17.chatgpt.site). The follow-on eval's scores, cost records and scripts are under evidence/v4.")
+    "(wri-parser-evaluation-lab.bouncychess17.chatgpt.site). The follow-on eval's scores, cost records and scripts are on the private report site under evidence/v4, not in this repository.")
 
 def footer(c, d):
     c.setFont("Helvetica", 8); c.setFillColor(colors.HexColor("#506975"))
