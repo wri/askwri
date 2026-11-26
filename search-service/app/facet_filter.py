@@ -193,9 +193,8 @@ def apply_facet_filters(
                     try:
                         year = int(raw)
                     except (ValueError, TypeError):
-                        continue  # present-but-unparseable year is excluded (legacy semantics)
-            # year still None ⇒ no year metadata at all: KEPT, matching
-            # apply_metadata_filters (main.py:361 falls through on None).
+                        continue  # present-but-unparseable year is excluded
+            # year still None ⇒ no year metadata at all: KEPT, never dropped.
             if year is not None:
                 if year_min is not None and year < year_min:
                     continue
