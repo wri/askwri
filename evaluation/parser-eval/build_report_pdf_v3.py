@@ -25,14 +25,18 @@ add("Second edition | 26 November 2026 (first edition 24 November)", "Deck")
 add("Recommendation", "Heading2")
 add("Pilot <b>Sonnet 5.5 through OpenRouter, on WRI's own account</b>. On 27 hard pages it kept the same numbers as GPT-6.2 Astra (99.8%, every language) "
     "at about a quarter of Astra's billed cost, and finished fastest. WRI has OpenRouter access, which would route around the Bedrock permission block; "
-    "these runs used a personal OpenRouter key, so WRI's account has not been exercised yet. <b>Gemini 3.8 Flash</b> is the budget alternative at about half Sonnet's cost. <b>Mistral OCR</b>, the current parser, "
+    "these runs used a personal OpenRouter key, so WRI's account has not been exercised yet. <b>Mistral OCR</b>, the current parser, "
     "dropped decimal points and chart values: 84% of numbers kept on the hard pages, 73% on Chinese. Replace it.")
+add("Pilot <b>Inkling 2 Mini alongside it as the low-cost option</b>. It nearly matched the leaders (96/96 reference cells, 98.5% of numbers on the "
+    "hard pages) at $1.37 per 1,000 pages, about a seventeenth of Sonnet's cost, and it is the only open-weight (Apache-2.0) model here, so the one "
+    "with a self-hosting path. Its errors are misread digits in very dense tables, which the text-layer number check catches; it needs pages rendered "
+    "as images. <b>Gemini 3.8 Flash</b> sits between them: similar accuracy at $13, native PDF input, and misses that are omissions rather than misreads.")
 add("<b>Pilot, not rollout.</b> References are agent-reviewed, not independent human ground truth, and no retrieval experiment has run. "
     "Pair any model with an automatic check that every number it writes exists in the page's PDF text layer.")
 add("Three evaluations", "Heading2")
 add("<b>103-page pass</b> (first edition): six whole papers, five variants, every page processed. "
     "<b>Eight reference pages</b>: 20 prose regions (5,600 characters) and 96 table/figure cells, frozen before outputs; now ten variants, "
-    "new ones scored with the unchanged v2 scorer, which first reproduced every published number. "
+    "new ones scored with the v2 scorer (plus HTML-table conversion), which first reproduced every published number. "
     "<b>27 hard pages</b> (new): the hardest pages per language among 9,292 local pages, Chinese 8, Spanish 7, Portuguese 5, Indonesian 2, English 5, "
     "scored against each page's own text layer.")
 add("Eight reference pages", "Heading2")

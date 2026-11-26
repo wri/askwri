@@ -12,7 +12,14 @@ output, raw response and source page. **Tooling:** `evaluation/parser-eval/`.
   finished fastest. WRI has OpenRouter access, which would route around the Bedrock `InvokeModel`
   denial on the QA task role. These runs used a personal OpenRouter key; WRI's account has not been
   exercised yet.
-- **Gemini 3.8 Flash is the budget alternative**, about half Sonnet's cost, slightly rougher output.
+- **Pilot Inkling 2 Mini with the number check as the low-cost option.** It nearly matched the leaders
+  (96/96 reference cells, 98.5% of numbers on the hard pages, level with Gemini 3.8 Flash) at $1.37
+  per 1,000 pages, about a seventeenth of Sonnet and a tenth of Flash, and it is the only open-weight
+  (Apache-2.0) model here, so the one with a self-hosting path. Its errors are misread digits in very
+  dense tables (11 of about 585 values on one page), which the text-layer number check catches
+  because the wrong value is not on the page. It takes images only, so pages must be rendered (3x).
+- **Gemini 3.8 Flash is the middle option**: similar accuracy at $13 per 1,000 pages, native PDF
+  input, and its misses are omissions (list numbers, axis ticks) rather than misreads.
 - **Replace Mistral OCR.** It drops decimal points and chart values: 84% of numbers kept on the hard
   pages, 73% on Chinese.
 - **Pair whichever model with a number check** against the page's PDF text layer (below).
@@ -28,7 +35,7 @@ Three evaluations, all with the first edition's transcription prompt verbatim, o
 | Evaluation | Pages | Scored by |
 |---|---|---|
 | 103-page pass (24 Nov) | 6 whole papers | page coverage |
-| Eight reference pages | EN 2, ZH 2, ES 2, PT 2 | the first edition's frozen references: 20 prose regions (5,600 chars) and 96 table/figure cells, scored with the unchanged v2 scorer. Re-scoring the original five candidates reproduced every published number before the new ones were scored |
+| Eight reference pages | EN 2, ZH 2, ES 2, PT 2 | the first edition's frozen references: 20 prose regions (5,600 chars) and 96 table/figure cells, scored with the v2 scorer, plus conversion of HTML tables to pipe rows for candidates that write HTML. Re-scoring the original five candidates reproduced every published number before the new ones were scored |
 | 27 hard pages (new) | ZH 8, ES 7, PT 5, ID 2, EN 5 | each page's own text layer (section 3) |
 
 The hard pages were chosen by profiling all 9,292 pages of the 169 local PDFs (`search-service/data/`)
