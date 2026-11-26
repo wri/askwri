@@ -91,6 +91,36 @@ def test_debug_exposes_excluded_doc_ids(monkeypatch):
     assert payload["debug"]["excluded_doc_ids"] == ["es_doc"]
 
 
+def test_excluded_doc_ids_match_with_understanding_on_and_off(monkeypatch):
+    # The same exclusion must report the same debug.excluded_doc_ids whether
+    # it arrives as the legacy param (flag off) or as a hard facet on the
+    # understanding object (flag on) — the eval harness compares arms on
+    # this field, so any divergence would read as facet-caused leakage.
+    from app.understanding import Facet, QueryUnderstanding
+
+    off = _post(monkeypatch, excluded_keywords=["coal"],
+                return_intermediate_results=True)
+    assert off["debug"]["excluded_doc_ids"] == ["es_doc"]
+
+    # Flag-on arm: _post pins understanding_active off, so re-pin it on and
+    # drive the same body through the handler directly. attach_topic_suggestions
+    # is imported inside the handler, so patch it at its module.
+    monkeypatch.setattr(app_main, "understanding_active", lambda s, r: True)
+    monkeypatch.setattr(
+        app_main, "build_understanding",
+        lambda *a, **k: QueryUnderstanding(facets=[Facet(
+            facet="excluded_keyword", value="coal",
+            confidence=1.0, source="user", action="hard")]))
+    monkeypatch.setattr("app.topic_sense.attach_topic_suggestions",
+                        lambda *a, **k: None)
+    monkeypatch.setattr(app_main, "lanes_active", lambda s, r: False)
+    resp = TestClient(app_main.app).post("/query", json={
+        "query": "urban finance mechanisms", "mode": "cite", "rerank": False,
+        "excluded_keywords": ["coal"], "return_intermediate_results": True})
+    assert resp.status_code == 200
+    assert resp.json()["debug"]["excluded_doc_ids"] == off["debug"]["excluded_doc_ids"]
+
+
 class _TwoChunkRetriever:
     def retrieve(self, bundle):
         return [

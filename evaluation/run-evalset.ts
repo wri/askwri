@@ -167,6 +167,14 @@ interface CaseResult {
    * null when the target predates usage metering, or the query failed.
    */
   cost_usd: number | null
+  /**
+   * Doc ids the target excluded via hard facets (its debug.excluded_doc_ids,
+   * populated only because gatewayBody sends return_intermediate_results
+   * when facets are in play). null when the run sent no facets, the target
+   * didn't report them, or the query failed. Task 8's leakage metric
+   * reads this against retrieved_ids.
+   */
+  excluded_doc_ids: string[] | null
   /** The fixed facets this case was measured with ([] when the lever is off). */
   facets: FacetInput[]
   error?: string
@@ -239,6 +247,7 @@ async function queryTarget(
   hits: RetrievedChunk[]
   serviceMs: number | null
   costUsd: number | null
+  excludedDocIds: string[] | null
   likelyOffTopic: boolean
 }> {
   const response = await fetch(`${TARGET}/api/llamaindex`, {
@@ -267,6 +276,7 @@ async function queryTarget(
     hits,
     serviceMs: data.debug?.total_ms ?? null,
     costUsd: data.usage?.total_usd ?? null,
+    excludedDocIds: data.debug?.excluded_doc_ids ?? null,
     likelyOffTopic: data.likely_off_topic === true,
   }
 }
@@ -331,11 +341,8 @@ async function runCase(
   }
 
   try {
-    const { hits, serviceMs, costUsd, likelyOffTopic } = await queryTarget(
-      tc.question,
-      mode,
-      facets,
-    )
+    const { hits, serviceMs, costUsd, excludedDocIds, likelyOffTopic } =
+      await queryTarget(tc.question, mode, facets)
     const docs = bestPerDoc(hits)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
@@ -371,6 +378,7 @@ async function runCase(
         execution_time_ms: Date.now() - start,
         service_time_ms: serviceMs,
         cost_usd: costUsd,
+        excluded_doc_ids: excludedDocIds,
       }
     }
 
@@ -448,6 +456,7 @@ async function runCase(
       execution_time_ms: Date.now() - start,
       service_time_ms: serviceMs,
       cost_usd: costUsd,
+      excluded_doc_ids: excludedDocIds,
       likely_off_topic: likelyOffTopic,
     }
   } catch (error: any) {
@@ -478,6 +487,7 @@ async function runCase(
       execution_time_ms: Date.now() - start,
       service_time_ms: null,
       cost_usd: null,
+      excluded_doc_ids: null,
       error: error.message,
     }
   }

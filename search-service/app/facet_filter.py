@@ -71,6 +71,11 @@ def excluded_doc_ids(
     for nws in nodes:
         md = nws.node.metadata or {}
         doc_id = md.get("doc_id")
+        if doc_id is None:
+            # A doc-less node has nothing to exclude; a None in the set would
+            # drop every doc-less node in apply_facet_filters and make
+            # sorted(excluded) raise in the debug payload.
+            continue
         pair = pairs.get(doc_id) or {}
         title = md.get("title") or docs_meta.get(doc_id, {}).get("title") or ""
         fields = [title, nws.node.text]

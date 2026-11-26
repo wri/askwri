@@ -20,8 +20,6 @@ UNDERSTANDING_VERSION = 1
 # ("transportation") appearing in the query would over-add a lane.
 _LITERAL_FACETS = ("geography",)
 
-FACET_NAMES = ("year_min", "year_max", "language", "program", "excluded_keyword")
-
 # Policy mode for every facet type: "filter" facets exclude on metadata
 # mismatch; "negate" facets exclude on content match. apply_facet_filters
 # skips (logs) any facet type missing from this table.

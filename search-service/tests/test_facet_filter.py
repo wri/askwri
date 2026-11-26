@@ -300,6 +300,13 @@ def test_excluded_doc_ids_returns_translation_and_canonical():
     got = excluded_doc_ids(nodes, [_hard("excluded_keyword", "zero emission")], {}, pairs)
     assert got == {"t1", "o1"}
 
+def test_excluded_doc_ids_skips_docless_node():
+    # A doc-less node must be skipped, not keyed as None: a None in the set
+    # would drop every doc-less node in apply_facet_filters and make
+    # sorted(excluded) raise in the debug payload.
+    nodes = [_node("coal", text="coal power"), _node(None, text="coal power")]
+    assert excluded_doc_ids(nodes, [_hard("excluded_keyword", "coal")], {}) == {"coal"}
+
 
 def test_language_kept_when_doc_has_no_language_metadata():
     # Unknown language is still KEPT (conservative posture), siblings or not.
