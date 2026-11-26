@@ -6,10 +6,13 @@ rendered as a removable chip by the UI; Invariant 2: all hard facet types
 are human-verifiable metadata)."""
 from typing import List
 from datetime import date
+import logging
 
 import unicodedata
 
-from app.understanding import Facet
+from app.understanding import FACET_MODES, Facet
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_office(s: str) -> str:
@@ -51,6 +54,13 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
     for f in facets:
         if f.action != "hard":
             continue
+        mode = FACET_MODES.get(f.facet)
+        if mode is None:
+            logger.warning("facet_filter: no policy mode for facet %r; skipping", f.facet)
+            continue
+        if mode == "negate":
+            excluded.append(f.value.lower())
+            continue
         if f.facet == "year_min":
             try:
                 year_min = int(f.value)
@@ -76,8 +86,6 @@ def apply_facet_filters(nodes, facets: List[Facet], docs_meta: dict):
             program = f.value
         elif f.facet == "office":
             offices.append(f.value)
-        elif f.facet == "excluded_keyword":
-            excluded.append(f.value.lower())
 
     if year_min is None and year_max is None and date_min is None and date_max is None and program is None and not languages and not offices and not excluded:
         return nodes

@@ -264,6 +264,19 @@ def test_language_no_work_match_excludes():
     assert out == []
 
 
+def test_every_facet_type_has_a_policy_mode():
+    from typing import get_args
+    from app.understanding import FACET_MODES, Facet
+    assert set(FACET_MODES) == set(get_args(Facet.model_fields["facet"].annotation))
+
+
+def test_hard_facet_without_a_mode_is_not_applied():
+    f = Facet.model_construct(facet="mystery", value="x", confidence=1.0,
+                              source="user", action="hard")
+    nodes = [_node("a")]
+    assert apply_facet_filters(nodes, [f], {}) is nodes
+
+
 def test_language_kept_when_doc_has_no_language_metadata():
     # Unknown language is still KEPT (conservative posture), siblings or not.
     nodes = [_node("mystery")]
