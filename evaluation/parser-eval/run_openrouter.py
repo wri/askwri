@@ -1,4 +1,4 @@
-"""Parser candidates through WRI's OpenRouter account.
+"""Parser candidates through OpenRouter (whichever account's key is configured).
 
 A page set is a folder holding manifest.json (prompt, documents with
 selected_pdf_pages, optional models and render_scale), source-pages/ with one

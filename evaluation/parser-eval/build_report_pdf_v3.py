@@ -23,9 +23,9 @@ def table(rows, widths):
 add("AskWRI PDF parser comparison", "Heading1")
 add("Second edition | 26 November 2026 (first edition 24 November)", "Deck")
 add("Recommendation", "Heading2")
-add("Pilot <b>Sonnet 5.5 through WRI's OpenRouter account</b>. On 27 hard pages it kept the same numbers as GPT-6.2 Astra (99.8%, every language) "
-    "at about a quarter of Astra's billed cost, and finished fastest. OpenRouter is an organizational route, so the Bedrock permission block no "
-    "longer stands in the way. <b>Gemini 3.8 Flash</b> is the budget alternative at about half Sonnet's cost. <b>Mistral OCR</b>, the current parser, "
+add("Pilot <b>Sonnet 5.5 through OpenRouter, on WRI's own account</b>. On 27 hard pages it kept the same numbers as GPT-6.2 Astra (99.8%, every language) "
+    "at about a quarter of Astra's billed cost, and finished fastest. WRI has OpenRouter access, which would route around the Bedrock permission block; "
+    "these runs used a personal OpenRouter key, so WRI's account has not been exercised yet. <b>Gemini 3.8 Flash</b> is the budget alternative at about half Sonnet's cost. <b>Mistral OCR</b>, the current parser, "
     "dropped decimal points and chart values: 84% of numbers kept on the hard pages, 73% on Chinese. Replace it.")
 add("<b>Pilot, not rollout.</b> References are agent-reviewed, not independent human ground truth, and no retrieval experiment has run. "
     "Pair any model with an automatic check that every number it writes exists in the page's PDF text layer.")
@@ -92,8 +92,8 @@ add("Second edition: OpenRouter, the first edition's transcription prompt verbat
     "PDF-native input for Sonnet, Astra and both Geminis; PNG at 3x for Inkling 2 Mini; Mistral via the file-parser engine, transcription taken from "
     "the parser's own annotation. Docling 2.152.0 locally, OCR off, tables on. First-edition settings are unchanged and listed in the v2 report.")
 add("Access", "Heading2")
-add("OpenRouter calls ran under WRI's account; the key is held in the operator's macOS Keychain and appears in no output. "
-    "Bedrock Sonnet remains IAM-denied but is no longer needed. Not tested by choice: Claude Opus 5.5 and Gemini 4 Carbon/Argon (no headroom left to show "
+add("OpenRouter calls ran on a personal OpenRouter key held in the operator's macOS Keychain; it appears in no output. "
+    "A pilot should move to a WRI key. Bedrock Sonnet remains IAM-denied; WRI's OpenRouter access would make it unnecessary. Not tested by choice: Claude Opus 5.5 and Gemini 4 Carbon/Argon (no headroom left to show "
     "at their price), and self-hosted open OCR models (no hosted provider; Fargate workers have no GPUs).")
 add("Limits", "Heading2")
 add("Agent-reviewed references, not independent human ground truth. Single runs; output format varies between runs. The hard-page scorer measures "

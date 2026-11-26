@@ -7,10 +7,11 @@ output, raw response and source page. **Tooling:** `evaluation/parser-eval/`.
 
 ## Decision
 
-- **Pilot Sonnet 5.5 through WRI's OpenRouter account.** On 27 hard pages it kept the same numbers as
-  GPT-6.2 Astra (99.8%, every language) at about a quarter of Astra's billed cost, and finished
-  fastest. OpenRouter is an organizational route, so the Bedrock `InvokeModel` denial on the QA task
-  role no longer blocks Sonnet.
+- **Pilot Sonnet 5.5 through OpenRouter, on WRI's own account.** On 27 hard pages it kept the same
+  numbers as GPT-6.2 Astra (99.8%, every language) at about a quarter of Astra's billed cost, and
+  finished fastest. WRI has OpenRouter access, which would route around the Bedrock `InvokeModel`
+  denial on the QA task role. These runs used a personal OpenRouter key; WRI's account has not been
+  exercised yet.
 - **Gemini 3.8 Flash is the budget alternative**, about half Sonnet's cost, slightly rougher output.
 - **Replace Mistral OCR.** It drops decimal points and chart values: 84% of numbers kept on the hard
   pages, 73% on Chinese.
@@ -103,9 +104,11 @@ Two consequences:
 
 ## 4. What the OpenRouter route changes
 
-- Sonnet is reachable organizationally without a Bedrock IAM change. Astra is also listed there.
+- Through WRI's OpenRouter access, Sonnet would be reachable without a Bedrock IAM change. Astra is
+  also listed there. All runs here used a personal key; moving to WRI's account means a WRI key and a
+  first small run to confirm access and billing.
 - OpenRouter forwards each page to the underlying provider. The corpus is published WRI material, but
-  confirm the account's data policy (provider routing, logging, retention) before a full run.
+  confirm WRI's account data policy (provider routing, logging, retention) before a full run.
 - `mistral-ocr` on OpenRouter is a file-parser engine ($2 per 1,000 pages), not a model; its
   transcription comes back as an annotation.
 - Not on OpenRouter: the dedicated open OCR models (PaddleOCR-VL, dots.ocr / dots.mocr, MinerU,
