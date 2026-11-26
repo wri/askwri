@@ -2,7 +2,7 @@
 
 'use client'
 
-import React, { useMemo, useState, useEffect, Suspense } from 'react'
+import React, { useMemo, useState, useEffect, useRef, Suspense } from 'react'
 import { Spinner } from '@chakra-ui/react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { DocMeta } from '@/lib/llamacloud'
@@ -68,9 +68,17 @@ const AskWriAppContent = () => {
   // empty state so it never claims "no matches" before the first response
   // or after a failed request.
   const [searchCompleted, setSearchCompleted] = useState(false)
+  // Set only when a search failed with no results on screen to hold (#348).
+  // Without it a failed request falls through every render branch below and
+  // lands on the loader, which then spins forever.
+  const [retrievalError, setRetrievalError] = useState(false)
   // The cache key of the in-flight/most-recent search — alignment results
   // merge into the same entry the docs were written under.
   const [activeCacheKey, setActiveCacheKey] = useState<string | null>(null)
+  // Monotonic request identity. A cacheKey is NOT identity — two searches for
+  // the same query share one — so a rejection is judged against this counter
+  // instead, and the newest request always owns the screen.
+  const requestIdRef = useRef(0)
 
   const [docWhy, setDocWhy] = useState<Record<string, WhyMeta>>({})
   const [docWhyLoading, setDocWhyLoading] = useState<Record<string, boolean>>(
@@ -133,6 +141,7 @@ const AskWriAppContent = () => {
     opts: {
       facets: UserFacet[] | null
       cacheKey: string
+      requestId: number
       autoSwitched?: boolean
       expansion?: false
     },
@@ -188,7 +197,16 @@ const AskWriAppContent = () => {
       const embeddingCost = calculateEmbeddingCost(q, docs, usage, debug ?? {})
       setOps(embeddingCost)
     } catch (e: any) {
+      // The request that failed may have been superseded while it was in
+      // flight (a new ?q=, facet change or nearby-topic nav). Its rejection is
+      // about a search nobody is waiting on: leave the screen to the newer
+      // one, which is still loading.
+      if (opts.requestId !== requestIdRef.current) return
+      // The UI hides upstream copy, but the failure still needs a trace: a
+      // client-side processing error looks identical to an outage otherwise.
+      console.error('[results] search failed:', q, e)
       setRetrievalLoading(false)
+      setRetrievalError(true)
     }
   }
 
@@ -207,6 +225,10 @@ const AskWriAppContent = () => {
     // Facets are threaded explicitly: a caller that just called
     // setUserFacets passes the new value, so we never read a stale closure.
     const facets = opts?.facets !== undefined ? opts.facets : userFacets
+    // Claim the screen before anything else: every branch below either issues
+    // a request under this id or restores from cache, and both supersede any
+    // request still in flight.
+    const requestId = ++requestIdRef.current
     const cacheKey = cacheKeyFor(q, facets, opts?.asTyped)
     setActiveCacheKey(cacheKey)
     const cached = queryCache[cacheKey]
@@ -230,6 +252,10 @@ const AskWriAppContent = () => {
       setUnderstanding(cached.understanding ?? null)
       setLikelyOffTopic(cached.likelyOffTopic ?? false)
       setSearchCompleted(true)
+      setRetrievalError(false)
+      // The cache hit owns the screen now; any request still in flight is
+      // superseded and its rejection returns early without clearing this.
+      setRetrievalLoading(false)
       return
     }
 
@@ -244,10 +270,12 @@ const AskWriAppContent = () => {
 
     setSupporting([])
     setSearchCompleted(false)
+    setRetrievalError(false)
 
     doCite(q, {
       facets,
       cacheKey,
+      requestId,
       autoSwitched: opts?.autoSwitched,
       ...(opts?.asTyped ? { expansion: false as const } : {}),
     })
@@ -711,9 +739,10 @@ const AskWriAppContent = () => {
     }
 
     // Empty state (design §3): a search actually COMPLETED with no docs
-    // surviving the floor (searchCompleted gates out the pre-search render
-    // and failed requests — those fall through to the spinner, as before
-    // this feature). A dead end becomes a door — show nearby topics, and
+    // surviving the floor. Gated on searchCompleted so it never renders
+    // before the first response or after a failed request — failures render
+    // the #348 error branch below instead (an empty state would be a false
+    // claim). A dead end becomes a door — show nearby topics, and
     // keep any hard-facet chips removable: a facet that filtered everything
     // out is exactly the one the user needs to be able to remove
     // (facet_filter.py Invariant 1).
@@ -745,6 +774,32 @@ const AskWriAppContent = () => {
             }
           />
         </>
+      )
+    }
+
+    // Failed search with nothing on screen to hold (#348): say so and offer a
+    // retry. Placement matters — this sits after the results branch above, so
+    // a failure landing after a superseded search cannot replace fresh
+    // results with an error.
+    if (!retrievalLoading && retrievalError) {
+      return (
+        <div style={{ padding: '0 2rem', maxWidth: '800px' }}>
+          <InlineMessage
+            variant='error'
+            size='full-width'
+            label='We could not run this search.'
+            // Does not claim a cause: the catch also covers client-side
+            // processing failures, not just an unresponsive service.
+            caption='Something went wrong on our side. Your query is unchanged — try again.'
+            actionLabel='Retry'
+            isButtonRight
+            // shortcut: retry re-derives facets from state and does not carry
+            // asTyped/expansion:false from the failed request, so a failed
+            // "search as typed" retries with expansion on. Narrow enough to
+            // leave; store the failed opts here if it ever bites.
+            onActionClick={() => runQuery(query)}
+          />
+        </div>
       )
     }
 

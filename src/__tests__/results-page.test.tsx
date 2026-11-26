@@ -112,6 +112,10 @@ const renderPage = (q: string) => {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  // clearAllMocks leaves once-queues intact, so a response a test queued but
+  // never consumed (e.g. it failed before the call that would use it) feeds
+  // the next test. Reset the implementation queue as well.
+  mockCite.mockReset()
   currentQ = null
   currentDateMin = null
   currentDateMax = null
@@ -382,6 +386,174 @@ describe('results page — empty and error states', () => {
       await Promise.resolve()
     })
     expect(screen.queryByText(/No strong matches/)).not.toBeInTheDocument()
+  })
+
+  // #348 item 2: a failed request used to fall through to the loader and spin
+  // forever, with no message and no way to retry.
+  it('shows a retryable error instead of an endless spinner when the search fails', async () => {
+    mockCite.mockRejectedValueOnce(new Error('upstream returned 500'))
+
+    renderPage('hydrogen')
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(1))
+
+    expect(
+      await screen.findByText(/We could not run this search/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    // Raw upstream copy is never shown to a reader.
+    expect(screen.queryByText(/upstream returned 500/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/No strong matches/)).not.toBeInTheDocument()
+  })
+
+  it('re-runs the search from the error state', async () => {
+    mockCite.mockRejectedValueOnce(new Error('network down'))
+
+    renderPage('hydrogen')
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(1))
+
+    mockCite.mockResolvedValueOnce(
+      citeResponse([doc('a'), doc('b'), doc('c')], null),
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    })
+
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(2))
+    expect(mockCite).toHaveBeenNthCalledWith(2, 'hydrogen', {})
+    expect(await screen.findByTestId('cite-panel')).toHaveAttribute(
+      'data-docs',
+      '3',
+    )
+    expect(
+      screen.queryByText(/We could not run this search/),
+    ).not.toBeInTheDocument()
+  })
+
+  // The error state must not claim a failure while a NEWER search is still in
+  // flight: the rejection belongs to a request nobody is waiting on any more.
+  it('does not report a failure for a superseded search while a newer one is in flight', async () => {
+    let rejectFirst: (e: any) => void = () => {}
+    mockCite.mockReturnValueOnce(
+      new Promise((_, rej) => {
+        rejectFirst = rej
+      }),
+    )
+    const view = renderPage('first query')
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(1))
+
+    mockCite.mockReturnValueOnce(new Promise(() => {}))
+    currentQ = 'second query'
+    view.rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(2))
+
+    await act(async () => {
+      rejectFirst(new Error('network down'))
+    })
+
+    expect(
+      screen.queryByText(/We could not run this search/),
+    ).not.toBeInTheDocument()
+    // Chakra v3's Spinner renders a bare <span> with no accessible role.
+    expect(document.querySelector('.chakra-spinner')).toBeTruthy()
+  })
+
+  // A cache hit leaves a slow in-flight request superseded, and that request's
+  // rejection now returns early (see doCite's catch), so the loading flag has
+  // to be dropped here or it stays true forever — the alignment effect is
+  // gated on it.
+  it('clears loading on a cache hit so a superseded search cannot keep alignment blocked', async () => {
+    mockCite.mockResolvedValueOnce(
+      citeResponse([doc('a'), doc('b'), doc('c')], null),
+    )
+    const view = renderPage('cached query')
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-docs',
+        '3',
+      ),
+    )
+
+    // A slow search starts and stays in flight, leaving retrievalLoading true.
+    let rejectSlow: (e: any) => void = () => {}
+    mockCite.mockReturnValueOnce(
+      new Promise((_, rej) => {
+        rejectSlow = rej
+      }),
+    )
+    currentQ = 'slow query'
+    view.rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(2))
+
+    // Navigate back to the cached query: cache hit, no request issued.
+    ;(global.fetch as jest.Mock).mockClear()
+    currentQ = 'cached query'
+    view.rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    expect(mockCite).toHaveBeenCalledTimes(2)
+
+    // The stale rejection must not strand the loading flag: alignment runs.
+    await act(async () => {
+      rejectSlow(new Error('network down'))
+    })
+
+    await waitFor(() =>
+      expect(
+        (global.fetch as jest.Mock).mock.calls.some((c) =>
+          String(c[0]).includes('/api/alignment'),
+        ),
+      ).toBe(true),
+    )
+  })
+
+  // Regression guard, not a defect detector: this passes without the fix too.
+  // It pins the error branch's placement — moving it above the results branch
+  // fails here, because a superseded failure would then replace fresh results.
+  it('ignores a late failure from a superseded search', async () => {
+    let rejectFirst: (e: any) => void = () => {}
+    mockCite.mockReturnValueOnce(
+      new Promise((_, rej) => {
+        rejectFirst = rej
+      }),
+    )
+    const view = renderPage('first query')
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(1))
+
+    mockCite.mockResolvedValueOnce(
+      citeResponse([doc('a'), doc('b'), doc('c')], null),
+    )
+    currentQ = 'second query'
+    view.rerender(
+      <ChakraProvider>
+        <ResultsPage />
+      </ChakraProvider>,
+    )
+    await waitFor(() => expect(mockCite).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(screen.getByTestId('cite-panel')).toHaveAttribute(
+        'data-docs',
+        '3',
+      ),
+    )
+
+    await act(async () => {
+      rejectFirst(new Error('late failure'))
+    })
+
+    expect(screen.getByTestId('cite-panel')).toHaveAttribute('data-docs', '3')
+    expect(
+      screen.queryByText(/We could not run this search/),
+    ).not.toBeInTheDocument()
   })
 })
 

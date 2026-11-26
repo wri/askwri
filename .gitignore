@@ -91,6 +91,8 @@ Thumbs.db
 .pi-subagents/
 .superpowers/
 .jspace/
+# bugfix-evidence red-green-revert artifacts (red.txt / green.txt / fix.patch)
+.bugfix/
 
 # Git worktrees for isolated feature/bugfix work
 .worktrees/
