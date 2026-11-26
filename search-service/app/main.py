@@ -158,7 +158,8 @@ class QueryRequest(BaseModel):
     sparse_weight: float = 0.5
     fusion_top_k: Optional[int] = None  # RRF fusion limit (None = mode default: 500 cite, 100 answer)
     # 5a sweep knob: override the per-mode expansion-lane weight for data-driven
-    # tuning without a redeploy. None -> per-mode config default (cite 1.0 / answer 0.25).
+    # tuning without a redeploy. None -> per-mode config default; the values live
+    # in config.py (cite_expansion_lane_weight / answer_expansion_lane_weight).
     expansion_lane_weight: Optional[float] = None
     # Metadata filtering
     min_year: Optional[int] = None  # Filter documents by minimum publication year
@@ -236,8 +237,9 @@ class HybridFusionRetriever(BaseRetriever):
         self.extra_lanes = list(extra_lanes) if extra_lanes else []
         # False = the gated DOMAIN_EXPANSIONS retirement (P2 flag-on).
         self.domain_expansion = domain_expansion
-        # 5a: per-mode expansion-lane RRF weight (cite 1.0 recall-first / answer
-        # 0.25 precision-first). None -> sparse_weight (pre-5a back-compat).
+        # 5a: per-mode expansion-lane RRF weight; the values live in config.py
+        # (cite_expansion_lane_weight / answer_expansion_lane_weight).
+        # None -> sparse_weight (pre-5a back-compat).
         self.expansion_lane_weight = expansion_lane_weight
 
         # Weights default to 0.5/0.5 if not specified by caller
