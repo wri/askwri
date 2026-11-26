@@ -55,6 +55,7 @@ argument, and is never written to any output. Never paste it at a shell prompt.
 | 5b | `score_v2_method.py <recovery-v2> <out.json> name=dir ...` | The first edition's prose and 96-cell scoring, plus HTML-table conversion for candidates that write HTML; re-scores the original candidates as a control. **Needs the gitignored 24 November folder** (`evaluation/results/parser-comparison-2026-11-24/recovery-v2`): it imports the prose scorer from there and reads the frozen references |
 | 6 | `list_extra_numbers.py <set_dir> [skip ...]` | Every number a candidate wrote that is not on the page, with context, for review by eye |
 | 7 | `build_report_pdf_v3.py <out.pdf>` | The second-edition PDF |
+| 8 | `build_report_pdf_v4.py <out.pdf>` | The revised second edition: v3's content plus the §7 follow-on eval as its own section |
 
 ## Reading the text-layer scores
 

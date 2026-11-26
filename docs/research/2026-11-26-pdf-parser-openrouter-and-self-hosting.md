@@ -187,7 +187,9 @@ no controlled retrieval experiment. No QA index, queue, IAM or serving configura
 ## 7. Follow-up, later on 26 November: ordinary pages, the whole hard set, and the revised recommendation
 
 Two measurements made after the second edition was published, both cheap enough to run before
-acting on it. Neither is in the report PDF, which remains the record of the second edition.
+acting on it. They are published as a follow-on eval section in the revised report
+(`AskWRI-parser-report-v4.pdf`); the second edition (`v3`) remains the record of what was measured
+before them.
 
 ### 7.1 Mistral over the whole hard-document set (no API calls)
 
@@ -265,7 +267,8 @@ evaluation. It measures numbers and words, not reading order or table cells, and
 retrieval or answers. The hard-set sweep compares QA's stored text with the local PDFs' layers; the
 `content_hash` of all 24 documents matched the local bytes, twelve damaged layers were excluded, and
 the known invisible-text pages were confirmed by eye, but hidden text can still inflate the
-denominator. The report PDF has not been regenerated.
+denominator. The report PDF was revised in place as `v4`, keeping the second edition's content and
+adding this follow-up as its own section; `v3` remains published for comparison.
 
 ## Sources
 
