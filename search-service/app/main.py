@@ -1660,6 +1660,12 @@ async def hybrid_query(request: QueryRequest):
             stage1_results = apply_facet_filters(
                 stage1_results, all_facets, docs_meta,
                 translation_pairs=translation_pairs, excluded_ids=excluded)
+            # Year bounds gate the seeds too: they join the rerank candidates
+            # below and nothing re-filters them (Stage 2.5 is gone).
+            bounds = [f for f in all_facets
+                      if f.facet in ("year_min", "year_max", "date_min", "date_max")]
+            if bounds and translation_seed:
+                translation_seed = apply_facet_filters(translation_seed, bounds, docs_meta)
             if excluded and translation_seed:
                 translation_seed = [n for n in translation_seed
                                     if n.node.metadata.get("doc_id") not in excluded]

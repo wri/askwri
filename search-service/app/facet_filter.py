@@ -130,23 +130,27 @@ def apply_facet_filters(
             continue  # handled document-level by excluded_doc_ids
         if f.facet == "year_min":
             try:
-                year_min = int(f.value)
+                bound = int(f.value)
             except (ValueError, TypeError):
                 continue  # invalid chip value: drop the facet, never a 500
+            # Bounds only ever narrow: duplicates intersect, never override
+            # (a chip and a legacy param can arrive in the same request).
+            year_min = bound if year_min is None else max(year_min, bound)
         elif f.facet == "year_max":
             try:
-                year_max = int(f.value)
+                bound = int(f.value)
             except (ValueError, TypeError):
                 continue  # invalid chip value: drop the facet, never a 500
+            year_max = bound if year_max is None else min(year_max, bound)
         elif f.facet in ("date_min", "date_max"):
             try:
                 bound = date.fromisoformat(f.value)
             except (ValueError, TypeError):
                 continue
             if f.facet == "date_min":
-                date_min = bound
+                date_min = bound if date_min is None else max(date_min, bound)
             else:
-                date_max = bound
+                date_max = bound if date_max is None else min(date_max, bound)
         elif f.facet == "language":
             languages.append(f.value.casefold())
         elif f.facet == "program":

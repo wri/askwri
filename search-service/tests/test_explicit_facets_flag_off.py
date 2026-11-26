@@ -11,6 +11,7 @@ TestClient + stubs — no DB/network (pattern: test_diagnostic_parity.py).
 """
 from fastapi.testclient import TestClient
 from llama_index.core.schema import NodeWithScore, TextNode
+from llama_index.core.base.base_query_engine import QueryBundle
 
 from app import main as app_main
 
@@ -86,6 +87,7 @@ YEAR_DOCS_META = {
     # DB metadata is the source of truth: it wins over the chunk's year string.
     "db_2025_chunk_2019": {"year_int": 2025},
     "db_2019_chunk_2025": {"year_int": 2019},
+    "db_2022": {"year_int": 2022},
     # No DB year: the chunk's year string is the fallback.
     "chunk_2025": {},
     # No year anywhere: undated docs are KEPT, never dropped.
@@ -145,6 +147,47 @@ def test_legacy_year_decides_on_the_pre_rerank_pool(monkeypatch):
     payload = _year_post(monkeypatch, rerank=True, min_year=2025)
     assert "db_2019_chunk_2025" not in reranker.seen
     assert _doc_ids(payload) == {"db_2025_chunk_2019", "chunk_2025", "undated"}
+
+
+def test_chip_and_legacy_bounds_intersect(monkeypatch):
+    # A client sending both a chip and a legacy bound used to get both applied
+    # (chip at Stage 1.6, legacy at Stage 2.5). On one path they must intersect,
+    # not silently override: min 2025 + min 2020 means min 2025.
+    both = _year_post(monkeypatch, min_year=2020,
+                      facets=[{"facet": "year_min", "value": "2025"}])
+    chip_only = _year_post(monkeypatch, facets=[{"facet": "year_min", "value": "2025"}])
+    assert _doc_ids(both) == _doc_ids(chip_only) == {
+        "db_2025_chunk_2019", "chunk_2025", "undated"}
+
+    both_max = _year_post(monkeypatch, max_year=2023,
+                          facets=[{"facet": "year_max", "value": "2020"}])
+    assert _doc_ids(both_max) == {"db_2019_chunk_2025", "undated"}
+
+
+class _SeedReranker(_RecordingReranker):
+    def _select_candidates(self, nodes, k):
+        return list(nodes)[:k]
+
+    def score_documents(self, nodes, query_bundle):
+        return {n.node.node_id: 0.9 for n in nodes}
+
+
+def test_year_bound_gates_translation_seeds(monkeypatch):
+    # Answer-mode translation seeds join the rerank candidates after Stage 1.6;
+    # a seed outside the year bound would otherwise be cited for a 2019 doc
+    # that the same request's page hits were filtered out of.
+    seed = NodeWithScore(
+        node=TextNode(id_="s-2019", text="区域运输",
+                      metadata={"doc_id": "db_2019_chunk_2025", "title": "t"}),
+        score=0.5)
+    monkeypatch.setitem(app_main.service_state, "reranker_answer", _SeedReranker())
+    monkeypatch.setattr(app_main.settings, "answer_translation_enabled", True)
+    monkeypatch.setattr(app_main, "build_answer_translation",
+                        lambda *a, **k: ([QueryBundle(query_str="区域运输")], [seed]))
+    payload = _year_post(monkeypatch, mode="answer", rerank=True, min_year=2025,
+                         cite_doc_ids=["db_2019_chunk_2025"],
+                         return_intermediate_results=True)
+    assert "s-2019" not in (payload["debug"]["rerank_window_ids"] or [])
 
 
 def test_flag_off_legacy_excluded_keywords_apply(monkeypatch):
