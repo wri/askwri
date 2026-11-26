@@ -142,6 +142,22 @@ def test_program_and_excluded_keyword():
     assert [n.node.metadata["doc_id"] for n in out] == ["d-en-2023"]
 
 
+def test_program_match_is_normalized():
+    # The chip shows canonical spacing/case; the corpus keeps its own
+    # spelling (double spaces, mixed case) for the same program series.
+    nodes = [_node("a", program="World Resources Report"), _node("b", program="WRR")]
+    out = apply_facet_filters(nodes, [_hard("program", "world  resources  report")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["a"]
+
+
+def test_program_none_metadata_is_a_mismatch_not_a_crash():
+    # An explicit program_series: None must behave like an absent value
+    # (mismatch → excluded), never raise in _normalize_meta.
+    nodes = [_node("a", program=None)]
+    out = apply_facet_filters(nodes, [_hard("program", "WRR")], {})
+    assert out == []
+
+
 def test_soft_and_suggest_facets_do_not_filter():
     nodes = [_node("d-es-2019")]
     soft = Facet(facet="language", value="en", confidence=0.5, source="llm", action="soft")

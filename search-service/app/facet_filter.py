@@ -194,7 +194,11 @@ def apply_facet_filters(
             if doc_language is not None and not doc_matches:
                 continue
 
-        if program is not None and md.get("program_series", "") != program:
+        # Case-, accent-, dash- and whitespace-insensitive like office:
+        # the UI canonicalizes chip values while the corpus keeps its own
+        # spelling for the same program series. `or ""`: an explicit
+        # program_series: None is a mismatch, never a crash.
+        if program is not None and _normalize_meta(md.get("program_series") or "") != _normalize_meta(program):
             continue
 
         # Office lives in raw_metadata (wri_primary_office); a doc with unknown
