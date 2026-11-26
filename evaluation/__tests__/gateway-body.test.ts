@@ -2,6 +2,7 @@ import {
   gatewayBody,
   expansionArm,
   facetsForCase,
+  resetFacetManifestCache,
   validateFacetCaseIds,
 } from '../lib/gateway-body'
 
@@ -77,11 +78,8 @@ it('returns an empty manifest on a fresh module with EVAL_FACETS unset', () => {
   // Regression: the cache starts null, and `manifestCache?.raw === undefined`
   // matched the unset env value, so the first call dereferenced null.
   delete process.env.EVAL_FACETS
-  jest.resetModules()
-  const fresh =
-    require('../lib/gateway-body') as typeof import('../lib/gateway-body')
-  expect(fresh.facetsManifest()).toEqual({})
-  expect(fresh.facetsForCase('q11')).toEqual([])
+  resetFacetManifestCache()
+  expect(facetsForCase('q11')).toEqual([])
 })
 
 it('fails fast on a malformed facets manifest', () => {

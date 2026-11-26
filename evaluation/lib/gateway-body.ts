@@ -85,6 +85,11 @@ let manifestCache: {
   manifest: Record<string, FacetInput[]>
 } | null = null
 
+/** Test-only: force the next call to parse from the current environment. */
+export function resetFacetManifestCache(): void {
+  manifestCache = null
+}
+
 /** The facets the manifest names for one case — `[]` when it names none. */
 export function facetsForCase(caseId: string): FacetInput[] {
   return facetsManifest()[caseId] ?? []
