@@ -1,0 +1,4597 @@
+{
+  "harness": "evaluation/system-one/consensus",
+  "ranAt": "2026-10-01T23:21:16.627Z",
+  "facet": "office",
+  "topN": 20,
+  "question": "Which single office value is this document's primary office? Answer with exactly one of the candidate values.",
+  "documents": 167,
+  "candidatesPerDoc": 9,
+  "goldNote": "9 distinct values",
+  "generators": [
+    {
+      "id": "bedrock:us.anthropic.claude-opus-5-5",
+      "family": "anthropic",
+      "note": "bedrock us-east-2, thinking=adaptive effort=high"
+    },
+    {
+      "id": "bedrock:us.anthropic.claude-sonnet-5-5",
+      "family": "anthropic",
+      "note": "bedrock us-east-2, thinking=adaptive effort=high"
+    },
+    {
+      "id": "llm:glm-5.3",
+      "family": "zhipu",
+      "note": "https://gw.lunaroute.com/v1 — json_schema, production worker/llm.py shape, provider default thinking"
+    },
+    {
+      "id": "llm:deepseek-4.1-flash",
+      "family": "deepseek",
+      "note": "https://gw.lunaroute.com/v1 — json_schema, production worker/llm.py shape, reasoning_effort=high"
+    }
+  ],
+  "unanimous": 135,
+  "agreeAllButOne": 154,
+  "sameFamilyAgreementPct": 95.18072289156626,
+  "crossFamilyAgreementPct": 89.119804400978,
+  "pairs": [
+    {
+      "a": "bedrock:us.anthropic.claude-opus-5-5",
+      "b": "bedrock:us.anthropic.claude-sonnet-5-5",
+      "same": true,
+      "n": 166,
+      "agree": 158
+    },
+    {
+      "a": "bedrock:us.anthropic.claude-opus-5-5",
+      "b": "llm:glm-5.3",
+      "same": false,
+      "n": 161,
+      "agree": 148
+    },
+    {
+      "a": "bedrock:us.anthropic.claude-opus-5-5",
+      "b": "llm:deepseek-4.1-flash",
+      "same": false,
+      "n": 166,
+      "agree": 143
+    },
+    {
+      "a": "bedrock:us.anthropic.claude-sonnet-5-5",
+      "b": "llm:glm-5.3",
+      "same": false,
+      "n": 162,
+      "agree": 149
+    },
+    {
+      "a": "bedrock:us.anthropic.claude-sonnet-5-5",
+      "b": "llm:deepseek-4.1-flash",
+      "same": false,
+      "n": 167,
+      "agree": 143
+    },
+    {
+      "a": "llm:glm-5.3",
+      "b": "llm:deepseek-4.1-flash",
+      "same": false,
+      "n": 162,
+      "agree": 146
+    }
+  ],
+  "results": [
+    {
+      "document_id": "00a1741a-8ed1-4a42-b03d-7e9a9dc3a153",
+      "title": "Stronger NDCs With Cities, States, and Regions: Recommendations for National Governments",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2846
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1547
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.55,
+          "ms": 191089
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 6827
+        }
+      }
+    },
+    {
+      "document_id": "011e3390-85a1-4169-9be8-4e8c5f28e95b",
+      "title": "Real-World Electric Bus Operation: Trend in Technology, Performance, Degradation, and Lifespan of Batteries",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.85,
+          "ms": 2498
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1610
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 6743
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 561
+        }
+      }
+    },
+    {
+      "document_id": "01829576-ced9-45a7-83d4-4cf2deb3e9e2",
+      "title": "ImpactAr Tool: Valuing Air Quality Health Impacts of Urban Bus Fleet Changes in Brazil",
+      "gold": "WRI Brasil",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 2563
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 1520
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 1,
+          "ms": 5795
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 1,
+          "ms": 555
+        }
+      }
+    },
+    {
+      "document_id": "0481cf8b-296c-4df2-b93b-c8d6d33140f3",
+      "title": "安全绿色出行设计指南",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 2475
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1506
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 2627
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 513
+        }
+      }
+    },
+    {
+      "document_id": "059d1c3b-da8f-414f-9e80-22126cb056a9",
+      "title": "Accelerating Innovation in Urban Service Delivery in Indian Cities: Lessons From TheCityFix Labs India",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 2467
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 1566
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 30482
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 626
+        }
+      }
+    },
+    {
+      "document_id": "0a64a194-9ff0-47b5-bcf6-4e0aa5d81b36",
+      "title": "Dataset of U.S. School Bus Depots",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 2274
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 1269
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.97,
+          "ms": 4853
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 438
+        }
+      }
+    },
+    {
+      "document_id": "0ae23d7a-5801-4bf2-95c4-a6e45311fae6",
+      "title": "Assessing Financing Challenges for Implementing the Large-scale Electric Bus Program in India",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.88,
+          "ms": 2557
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.72,
+          "ms": 3130
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.85,
+          "ms": 2089
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 1274
+        }
+      }
+    },
+    {
+      "document_id": "0d5ae93b-23bc-4abe-8507-f84b8cea3533",
+      "title": "Including the Excluded: Supporting Informal Workers for More Equal and Productive Cities in the Global South",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2263
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1318
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.65,
+          "ms": 11294
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 4629
+        }
+      }
+    },
+    {
+      "document_id": "0e3a739a-bc93-4c8e-aab6-21f63443e5c9",
+      "title": "Techno-Economic Feasibility Analysis of Zero-Emission Trucks in Urban and Regional Delivery Use Cases: A Case Study of Guangdong Province, China",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.8,
+          "ms": 2136
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1227
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 4187
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 634
+        }
+      }
+    },
+    {
+      "document_id": "0e47113a-790b-49fc-b851-787d99b59807",
+      "title": "Scaling Up Investment for Sustainable Urban Infrastructure: A Guide to National and Subnational Reform",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2180
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1331
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 9099
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 4047
+        }
+      }
+    },
+    {
+      "document_id": "0eba8be5-2380-4a30-a066-6bc8b8f38ca8",
+      "title": "Demand Responsive Transit: Understanding Emerging Solutions",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.5,
+          "ms": 5996
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1691
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 52708
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 5768
+        }
+      }
+    },
+    {
+      "document_id": "0f83d600-08ea-43da-bf08-7ebb6b2fe1b3",
+      "title": "广东省道路交通领域 中长期深度减排研究",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 2020
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 1283
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 4633
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 436
+        }
+      }
+    },
+    {
+      "document_id": "0fcfd147-dca7-415f-8b27-93f03073f224",
+      "title": "Costs and Emissions Appraisal Tool for Transit Buses",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.55,
+          "ms": 3727
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 2151
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.9,
+          "ms": 175888
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.9,
+          "ms": 6301
+        }
+      }
+    },
+    {
+      "document_id": "14254511-1905-44b7-9860-0b30f0f7c89a",
+      "title": "Safe Bicycle Lane Design Principles: Responding to Cycling Needs in Cities During COVID and Beyond",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.35,
+          "ms": 7870
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1756
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.8,
+          "ms": 150807
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 6527
+        }
+      }
+    },
+    {
+      "document_id": "146b57be-4e67-4952-9957-4ccd28e45641",
+      "title": "Measuring PM₂.₅ with Low-Cost Sensors",
+      "gold": "WRI Brasil",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.9,
+          "ms": 2191
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.93,
+          "ms": 1263
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 1561
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.99,
+          "ms": 381
+        }
+      }
+    },
+    {
+      "document_id": "152515b2-1b2b-4ed5-8e56-401291beb8e3",
+      "title": "Ahmedabad: Town Planning Schemes for Equitable Development—Glass Half Full or Half Empty?",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.62,
+          "ms": 5508
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 1255
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 5738
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 427
+        }
+      }
+    },
+    {
+      "document_id": "1530898a-ba0f-4688-84da-af967e6be00e",
+      "title": "Developing an Electric Mobility Roadmap: International Experiences From Subnational Case Studies for Vietnamese Cities",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 3536
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Indonesia",
+          "confidence": 0.45,
+          "ms": 2871
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 8472
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Indonesia",
+          "confidence": 0.8,
+          "ms": 34302
+        }
+      }
+    },
+    {
+      "document_id": "15831ee5-42b4-43c9-8297-02e474534d30",
+      "title": "Calculating Indicators From Global Geospatial Data Sets for Benchmarking and Tracking Change in the Urban Environment",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2140
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1334
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.82,
+          "ms": 5913
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 11633
+        }
+      }
+    },
+    {
+      "document_id": "175f383e-349d-44fc-a06a-e4b7fb5d22cf",
+      "title": "Public Bicycle Sharing in India: Lessons Learned From Implementation in Three Cities",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 5111
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1288
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 4125
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 643
+        }
+      }
+    },
+    {
+      "document_id": "1a65b36e-8fe4-4ae3-aaef-5b6e796d450b",
+      "title": "City-Scale, City-Relevant Climate Hazard Indicators Under 1.5°C, 2.0°C, and 3.0°C of Global Warming",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2250
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 1235
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.97,
+          "ms": 3109
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 765
+        }
+      }
+    },
+    {
+      "document_id": "1ad345fb-edbd-40a9-89d4-d967367ca230",
+      "title": "近零排放货运区可行性研究：情景与风险分析",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 2222
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 1249
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 1987
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 345
+        }
+      }
+    },
+    {
+      "document_id": "1b555d62-ff50-4b7d-8576-bee7f6cc78fa",
+      "title": "Integrating National Policies to Deliver Compact, Connected Cities: An Overview of Transport and Housing",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 5151
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1988
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 49468
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 4147
+        }
+      }
+    },
+    {
+      "document_id": "1bdd032e-a70b-4a5c-916f-9da5ddfc7458",
+      "title": "Johannesburg: Confronting Spatial Inequality",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.5,
+          "ms": 6467
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.8,
+          "ms": 1267
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Africa",
+          "confidence": 0.94,
+          "ms": 3671
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 2559
+        }
+      }
+    },
+    {
+      "document_id": "1c87b4ec-9f0f-4843-a5b4-9b627b558853",
+      "title": "Synergizing Land Value Capture and Transit-Oriented Development: A Study of Bengaluru Metro",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 2843
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 1250
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 2914
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 364
+        }
+      }
+    },
+    {
+      "document_id": "20e4cc09-add5-4535-91d4-79a548649b0f",
+      "title": "Rolling Out Electric Buses: A Guidebook on Route Prioritization and Implementation Planning",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 2241
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 1266
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 1925
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 2708
+        }
+      }
+    },
+    {
+      "document_id": "233b09da-402e-404b-9758-d23652c63d98",
+      "title": "Unlocking the Potential for Transformative Climate Adaptation in Cities",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 3526
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 2464
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.85,
+          "ms": 4958
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 509
+        }
+      }
+    },
+    {
+      "document_id": "26145b4e-af1e-43fa-9d30-75c52bdb5936",
+      "title": "Fare-Free Bus Travel Scheme for Women: Lessons From Delhi",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 2120
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1312
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 2189
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 552
+        }
+      }
+    },
+    {
+      "document_id": "2aef71cb-793b-49da-8b79-431d2d5b9481",
+      "title": "Completing the Trip: Establishing a Global Quantified Climate Goal for the Transport Sector",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2176
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1284
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2033
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.86,
+          "ms": 514
+        }
+      }
+    },
+    {
+      "document_id": "31159e63-4af1-4451-9ec8-9aafd6d1b69d",
+      "title": "Las ciudades mexicanas: tendencias de expansión y sus impactos",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2544
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.96,
+          "ms": 1264
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2466
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.99,
+          "ms": 424
+        }
+      }
+    },
+    {
+      "document_id": "32d89e5e-618d-48a7-a275-90e91f50ead8",
+      "title": "How to Enable Electric Bus Adoption in Cities Worldwide",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 4858
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 2049
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 171249
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.78,
+          "ms": 2330
+        }
+      }
+    },
+    {
+      "document_id": "363a3678-ae7a-4361-884e-d5ce17a00656",
+      "title": "Safer Streets in Mumbai: Reflecting on a Decade of Processes & Solutions for Road Safety",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 2305
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 1201
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 3218
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 1,
+          "ms": 530
+        }
+      }
+    },
+    {
+      "document_id": "36c083e5-5439-466c-be92-b95ca0d6f293",
+      "title": "Aire Limpio en Barrios Vitales",
+      "gold": "WRI Colombia",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Colombia",
+          "confidence": 0.9,
+          "ms": 3158
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Colombia",
+          "confidence": 0.8,
+          "ms": 1294
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Colombia",
+          "confidence": 0.97,
+          "ms": 56920
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Colombia",
+          "confidence": 0.99,
+          "ms": 673
+        }
+      }
+    },
+    {
+      "document_id": "3a94fabf-0587-4230-a996-52a2d2ba1e22",
+      "title": "Seizing India’s Urban Opportunity",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.85,
+          "ms": 2026
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 1259
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 7468
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 506
+        }
+      }
+    },
+    {
+      "document_id": "3b6fb2d4-9970-407e-99b9-57dbc92bf09c",
+      "title": "The Trillion Dollar Question",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2150
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1270
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.93,
+          "ms": 10267
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 3125
+        }
+      }
+    },
+    {
+      "document_id": "3d2d04e6-b0a9-4c78-b8b7-0045a051a9f0",
+      "title": "Seizing the Urban Opportunity",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 3060
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1259
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 5057
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1371
+        }
+      }
+    },
+    {
+      "document_id": "402acc57-faac-48a7-9212-f585f3dbe775",
+      "title": "Pune: Civil Society Coalitions, Policy Contradictions, and Unsteady Transformation",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.8,
+          "ms": 63180
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 61541
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 16922
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 1221
+        }
+      }
+    },
+    {
+      "document_id": "4281889f-338a-4997-88f9-36635930d447",
+      "title": "Charging Toward 2035: Policies to Accelerate Zero-Emission Heavy-Duty Trucks in China’s Regional and Long-Haul Freight",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 62313
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.96,
+          "ms": 62290
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 1199
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 986
+        }
+      }
+    },
+    {
+      "document_id": "4457e736-a988-43bb-8f36-96d953d3d88a",
+      "title": "Assessing the Environmental Impact of Shared Micromobility Services: A Guide for Cities",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.55,
+          "ms": 64735
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 61543
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.7,
+          "ms": 11606
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.75,
+          "ms": 5440
+        }
+      }
+    },
+    {
+      "document_id": "44fb1df3-9d29-4c3b-ab9a-9ab3da99a8d4",
+      "title": "Technical Note for a Dataset of U.S. School Bus Fleets",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 62900
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.96,
+          "ms": 62415
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.98,
+          "ms": 1098
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 469
+        }
+      }
+    },
+    {
+      "document_id": "48a59166-1784-48ec-b2d5-d9df052ea7d1",
+      "title": "Trinta Anos de Expansão Vertical e Horizontal em Cidades Brasileiras",
+      "gold": "WRI Brasil",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 2235
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.85,
+          "ms": 1267
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 3412
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.98,
+          "ms": 441
+        }
+      }
+    },
+    {
+      "document_id": "49a8959d-ee69-403d-8bab-14a55fc0888a",
+      "title": "Powering Cities in the Global South",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.82,
+          "ms": 3406
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1282
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.82,
+          "ms": 4241
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.87,
+          "ms": 2182
+        }
+      }
+    },
+    {
+      "document_id": "49c0b8b9-28e2-47e0-ba9f-d645ae99d208",
+      "title": "Open E-Bus Blueprint",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 2076
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 1197
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 2166
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 1361
+        }
+      }
+    },
+    {
+      "document_id": "4aabee7b-a8e0-4f6a-8297-4a8e03172b87",
+      "title": "Understanding the Impact of Bus Aggregators on Urban Mobility in India’s National Capital Region",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 2528
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1256
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 22055
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 797
+        }
+      }
+    },
+    {
+      "document_id": "4b247330-030b-4581-b031-ebc863c7e3fe",
+      "title": "交通低碳燃料的可持续性标准：全球与本土的比较研究",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 2675
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1297
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 1836
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 652
+        }
+      }
+    },
+    {
+      "document_id": "4dca417f-a8fd-43c3-8ab1-38d9db116dbd",
+      "title": "El Costo de la Expansión Urbana en México",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2258
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.93,
+          "ms": 1264
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 680
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 1,
+          "ms": 680
+        }
+      }
+    },
+    {
+      "document_id": "4fa4f491-ede3-4702-8e1a-a8d672bf9347",
+      "title": "Electric School Bus U.S. Market Study and Buyer’s Guide: A Resource for School Bus Operators Pursuing Fleet Electrification",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 2269
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 1229
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.96,
+          "ms": 1652
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 1473
+        }
+      }
+    },
+    {
+      "document_id": "5123ef1c-3236-4d4d-9be1-a640f5c366c7",
+      "title": "Seizing South Africa’s Urban Opportunity",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.8,
+          "ms": 2111
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.85,
+          "ms": 1271
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 5487
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 1170
+        }
+      }
+    },
+    {
+      "document_id": "53a6f068-0681-44b8-83ec-7fee5f03e388",
+      "title": "Morphology of Delhi National Capital Region’s Economic Geography and Its Implications for Planning",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 2013
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1185
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 5786
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 665
+        }
+      }
+    },
+    {
+      "document_id": "55d958e2-d9fb-46e8-b712-4a01de3965d4",
+      "title": "Confronting the Urban Housing Crisis in the Global South: Adequate, Secure, and Affordable Housing",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1971
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1297
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.93,
+          "ms": 28996
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 1160
+        }
+      }
+    },
+    {
+      "document_id": "581f353a-c105-41f8-bf40-9ba07d817145",
+      "title": "Ruas Completas no Brasil: Promovendo uma Mudança de Paradigma",
+      "gold": "WRI Brasil",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 2277
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 1209
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 1340
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.99,
+          "ms": 728
+        }
+      }
+    },
+    {
+      "document_id": "5928fa8b-0536-4454-95b9-a715e758ee74",
+      "title": "中国纯电动公交车运营现状分析与改善对策",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 3605
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.96,
+          "ms": 1210
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 871
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 501
+        }
+      }
+    },
+    {
+      "document_id": "5bed6c1f-674c-4d54-a9cf-0b7ca09007e0",
+      "title": "Assessing the Viability of Using Autorickshaws for Urban Freight Delivery in India",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 2067
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 1302
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 2544
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 342
+        }
+      }
+    },
+    {
+      "document_id": "5c0ee976-2300-4ad0-b524-64c3aa09aca1",
+      "title": "A “Just” Transition in the Downstream Automotive Segment: Evidence From Delhi",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 2126
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 1297
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 1,
+          "ms": 2169
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 681
+        }
+      }
+    },
+    {
+      "document_id": "5db22bba-99dc-43be-8fb4-fd21ec98f4e7",
+      "title": "Resilient and Affordable Housing for All: Lessons on House Building From Kochi and Trivandrum, India",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 2107
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1287
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 3979
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 598
+        }
+      }
+    },
+    {
+      "document_id": "5e71b477-deca-4144-aade-ef9236fc62c2",
+      "title": "Multilevel Action for Community-Led Climate Resilience in Informal Settlements",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2290
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1235
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.93,
+          "ms": 2665
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 682
+        }
+      }
+    },
+    {
+      "document_id": "6198358a-38eb-4ebb-b272-210a69d1a96e",
+      "title": "Unaffordable and Undrinkable: Rethinking Urban Water Access in the Global South",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2438
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1313
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 7130
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.85,
+          "ms": 7756
+        }
+      }
+    },
+    {
+      "document_id": "64fab4c4-c223-437c-aaf0-4adc81500b53",
+      "title": "Steering a Green, Healthy, and Inclusive Recovery Through Transport",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.86,
+          "ms": 3827
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1323
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.95,
+          "ms": 68414
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.95,
+          "ms": 1809
+        }
+      }
+    },
+    {
+      "document_id": "65da2d1f-7f28-43d1-92d0-2ae928d1bb8d",
+      "title": "Porto Alegre: Participatory Budgeting and the Challenge of Sustaining Transformative Change",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.6,
+          "ms": 4793
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.6,
+          "ms": 2429
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 2963
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.98,
+          "ms": 643
+        }
+      }
+    },
+    {
+      "document_id": "6624f19b-88ea-4e1d-9439-3526afc98d65",
+      "title": "Simulator to Quantify and Manage Electric Vehicle Load Impacts on Low-Voltage Distribution Grids",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.6,
+          "ms": 4047
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.3,
+          "ms": 2824
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.85,
+          "ms": 4382
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 8523
+        }
+      }
+    },
+    {
+      "document_id": "6864dccc-8e6e-4a02-81a1-8c6f68c66e68",
+      "title": "Accelerating Building Decarbonization: Eight Attainable Policy Pathways to Net Zero Carbon Buildings For All",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 2899
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1250
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 15868
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 13153
+        }
+      }
+    },
+    {
+      "document_id": "68a76968-e10a-4119-98af-f14f3f349e27",
+      "title": "El Costo de la Expansión Urbana en México. Resumen ejecutivo",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.93,
+          "ms": 2194
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 1245
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 1,
+          "ms": 1150
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 567
+        }
+      }
+    },
+    {
+      "document_id": "68f3b9ad-cae8-4e7f-b4c3-908f29c831a5",
+      "title": "Future Mobility Calculator: An Electric Mobility Infrastructure Tool",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 2165
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1263
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.75,
+          "ms": 49522
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 30469
+        }
+      }
+    },
+    {
+      "document_id": "6997e79b-d10b-47be-a127-e93f04304339",
+      "title": "Electrifying Ride-Hailing in the United States, Europe, and Canada: How to Enable Ride-Hailing Drivers to Switch to Electric Vehicles",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.6,
+          "ms": 5152
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.62,
+          "ms": 1140
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.9,
+          "ms": 5418
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 1287
+        }
+      }
+    },
+    {
+      "document_id": "69cd9181-0499-45bd-be87-04a9bcd19978",
+      "title": "Calculating Indicators From Global Geospatial Data Sets for Benchmarking and Tracking Change in the Urban Environment",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2087
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1286
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.88,
+          "ms": 36114
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 3649
+        }
+      }
+    },
+    {
+      "document_id": "69cff58d-508f-4bd5-a7f9-4f35fe7fa94b",
+      "title": "Motorcycle Safety and Urban Road Infrastructure",
+      "gold": "WRI Colombia",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 4428
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 1788
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 82746
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 9115
+        }
+      }
+    },
+    {
+      "document_id": "6bf845bb-fe9b-4fb8-aa5b-194ac57e483a",
+      "title": "Creating Safe, Affordable and Sustainable Housing in Cities: Lessons from EcoCasa in Hermosillo (Mexico Frontrunners)",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.8,
+          "ms": 2774
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.9,
+          "ms": 1321
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 29639
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 529
+        }
+      }
+    },
+    {
+      "document_id": "6d705c39-d2d3-4e86-9425-530dffc722e8",
+      "title": "Nature-Based Solutions in Sub-Saharan Africa for Climate and Water Resilience",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.82,
+          "ms": 2165
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.8,
+          "ms": 1253
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 23431
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 773
+        }
+      }
+    },
+    {
+      "document_id": "706049e6-fc45-4697-ab7e-936d3b66ba2c",
+      "title": "Impact-Driven Investing in New Mobility Enterprises: Perspectives from Kampala, Uganda, and Hyderabad, India",
+      "gold": "WRI Africa",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.45,
+          "ms": 4354
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.4,
+          "ms": 2180
+        },
+        "llm:glm-5.3": {
+          "label": null,
+          "confidence": null,
+          "error": "empty content (finish_reason=length)",
+          "ms": 97431
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.7,
+          "ms": 14670
+        }
+      }
+    },
+    {
+      "document_id": "7069e898-3bae-4032-9d06-a8abe6f02de5",
+      "title": "中国新能源汽车规模化 推广对电网的影响分析",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 3462
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1297
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 5243
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0,
+          "ms": 642
+        }
+      }
+    },
+    {
+      "document_id": "7170afde-396d-451d-bf61-2f59c5c35310",
+      "title": "The Economic Case for Greening the Global Recovery through Cities: 7 priorities for national governments",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2146
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1240
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 16972
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.95,
+          "ms": 953
+        }
+      }
+    },
+    {
+      "document_id": "721c2661-65ed-4078-bc08-e74da3743553",
+      "title": "城市新能源物流车推广的挑战与经验：北京的启示",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 2072
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1324
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 5417
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 615
+        }
+      }
+    },
+    {
+      "document_id": "72532f2b-ba7f-47e2-82ee-51dc15767fd5",
+      "title": "Upward and Outward Growth: Managing Urban Expansion for More Equitable Cities in the Global South",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2263
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1260
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.75,
+          "ms": 232574
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.88,
+          "ms": 7007
+        }
+      }
+    },
+    {
+      "document_id": "73ba6fdf-067d-4b0a-bd38-c7aa8a9c3d04",
+      "title": "Assessing Low-Carbon Strategies of Local Governments Through the Lens of Climate Policy Coverage",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.8,
+          "ms": 3022
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.8,
+          "ms": 1177
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.8,
+          "ms": 5043
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.75,
+          "ms": 16942
+        }
+      }
+    },
+    {
+      "document_id": "76039c19-d7e5-45f3-b543-88302b6034fa",
+      "title": "Análisis de los Mecanismos Financieros para la Sostenibilidad del Transporte Público en Ciudades Mexicanas",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2102
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 1188
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 881
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.99,
+          "ms": 838
+        }
+      }
+    },
+    {
+      "document_id": "77f1de27-60e9-4aa9-8869-c99902b61336",
+      "title": "Toward a Framework to Support Better Decision-making in India’s Mobility Planning: Supply, Demand, and Performance",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 3264
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 2168
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 15294
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 440
+        }
+      }
+    },
+    {
+      "document_id": "78bceec7-ee2c-401f-a700-95fac0b6fbe4",
+      "title": "Housing policies for sustainable and inclusive cities: How national governments can deliver affordable housing and compact urban development",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 3015
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 1740
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.45,
+          "ms": 137104
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.75,
+          "ms": 14805
+        }
+      }
+    },
+    {
+      "document_id": "7a020064-7d7a-4d9c-886e-858fbe23803e",
+      "title": "Changing the Demand Preference for Electric Vehicles in Ho Chi Minh City: Costs and Benefits From Incentives in the Early Stages of Adoption",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.5,
+          "ms": 3849
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.42,
+          "ms": 2365
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.65,
+          "ms": 4021
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Indonesia",
+          "confidence": 0.75,
+          "ms": 24036
+        }
+      }
+    },
+    {
+      "document_id": "7bc21d25-4562-4795-a6b0-257d304095d3",
+      "title": "Towards a More Equal City: Framing the Challenges and Opportunities",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2322
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.86,
+          "ms": 1713
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.92,
+          "ms": 27864
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 3367
+        }
+      }
+    },
+    {
+      "document_id": "7c980340-3d1e-42f4-a092-f45e06e4908b",
+      "title": "Adapting to Climate Change in Mountain Cities: Lessons from Xalapa, Mexico (Mexico Frontrunners)",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.88,
+          "ms": 2340
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.9,
+          "ms": 1385
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 2203
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 688
+        }
+      }
+    },
+    {
+      "document_id": "7eb680c2-db98-429a-b404-1d0324f05fcf",
+      "title": "Decarbonizing China's Road Transport Sector: Strategies Towards Carbon Neutrality",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 3636
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1195
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 2879
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 381
+        }
+      }
+    },
+    {
+      "document_id": "7f8a32fc-6de5-45de-b340-e0778bc1a595",
+      "title": "Ciencia Participativa: Acción Para un Aire Limpio",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2147
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.93,
+          "ms": 1285
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 1561
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.99,
+          "ms": 1124
+        }
+      }
+    },
+    {
+      "document_id": "82645c0f-4b9a-41fd-81c6-99b680622adf",
+      "title": "Seizing China's Urban Opportunity: Cities at the Heart of the 14th Five-Year Plan and a National Vision for Net-Zero Emissions",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.85,
+          "ms": 2345
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1277
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 3209
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 495
+        }
+      }
+    },
+    {
+      "document_id": "8372d0f5-51a0-40a2-bf15-efa6b6c144c0",
+      "title": "The Economic Case for Greening the Global Recovery Through Cities: 7 Priorities for National Governments",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.88,
+          "ms": 4124
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1207
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.82,
+          "ms": 3290
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.95,
+          "ms": 4857
+        }
+      }
+    },
+    {
+      "document_id": "8b29f8e3-a158-41ce-912e-051fbf0aec52",
+      "title": "Manual da Pesquisa de Satisfação QualiÔnibus",
+      "gold": "WRI Brasil",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 2127
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 1328
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 676
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.99,
+          "ms": 589
+        }
+      }
+    },
+    {
+      "document_id": "8ee8059c-af89-4b0d-864e-d6c561aa85a8",
+      "title": "Future Mobility Calculator: An Electric Mobility Infrastructure Tool",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 4005
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1212
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 204325
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 43627
+        }
+      }
+    },
+    {
+      "document_id": "8f6e5a61-bbfc-4e8f-ae8c-6435af4e7f5a",
+      "title": "Sustainable Urban Mobility in the NDCs: The Essential Role of Public Transport",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.82,
+          "ms": 4051
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 1298
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 7155
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.82,
+          "ms": 1405
+        }
+      }
+    },
+    {
+      "document_id": "920fa327-eb75-4a10-a895-761eabbeba50",
+      "title": "Supporting the Energy Transition by Addressing Technology Gaps of Electrolyzers",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.45,
+          "ms": 4079
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.4,
+          "ms": 3188
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.75,
+          "ms": 20409
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 593
+        }
+      }
+    },
+    {
+      "document_id": "937a7053-5118-4a80-a53b-0343a3dbf593",
+      "title": "Our Journey With the City: Deciphering WRI India Ross Center’s Influence in Bengaluru",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 2184
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 1299
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 1,
+          "ms": 1332
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 1,
+          "ms": 1012
+        }
+      }
+    },
+    {
+      "document_id": "940ce1ae-0baf-4abf-b5bd-b24275baab4f",
+      "title": "出行即服务（MAAS）实践指南介绍与案例集",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 2085
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1249
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 2424
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 1043
+        }
+      }
+    },
+    {
+      "document_id": "950b35ab-743f-41de-8212-0a1f75250453",
+      "title": "How Dockless Bike Sharing Changes Lives: An Analysis of Chinese Cities",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 2185
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 1201
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 9772
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 1112
+        }
+      }
+    },
+    {
+      "document_id": "9827ee2b-6c20-4c5f-a9fc-47c7b69493a2",
+      "title": "Pathways to Decarbonize India’s Transport Sector: Scenario Analysis Using the Energy Policy Simulator",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 2221
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1266
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 1,
+          "ms": 20083
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 740
+        }
+      }
+    },
+    {
+      "document_id": "9900e40d-453f-446e-9f36-339bca5bb1e7",
+      "title": "Seizing Indonesia’s Urban Opportunity",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Indonesia",
+          "confidence": 0.9,
+          "ms": 2140
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Indonesia",
+          "confidence": 0.85,
+          "ms": 1264
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Indonesia",
+          "confidence": 0.98,
+          "ms": 15916
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Indonesia",
+          "confidence": 1,
+          "ms": 1073
+        }
+      }
+    },
+    {
+      "document_id": "9a107830-918b-446e-b5ee-4e95f1867045",
+      "title": "Water Resilience in a Changing Urban Context: Africa's Challenge and Pathways for Action",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.88,
+          "ms": 2263
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.6,
+          "ms": 1290
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 7111
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.96,
+          "ms": 1363
+        }
+      }
+    },
+    {
+      "document_id": "9c2e2bba-649a-44b8-9d07-bfee5d13647d",
+      "title": "Developing an Electric Mobility Roadmap for Vietnam: Global Experiences From National Case Studies",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Indonesia",
+          "confidence": 0.4,
+          "ms": 5287
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.4,
+          "ms": 1933
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 44560
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.75,
+          "ms": 15498
+        }
+      }
+    },
+    {
+      "document_id": "a048729d-02bb-4a04-8fa2-a9e2782a662d",
+      "title": "Prepared Communities: Implementing the Urban Community Resilience Assessment in Vulnerable Neighborhoods of Three Cities",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 3601
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1927
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.65,
+          "ms": 8603
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.8,
+          "ms": 12419
+        }
+      }
+    },
+    {
+      "document_id": "a05fe526-9948-4023-9667-8add7988f841",
+      "title": "Accelerating the Production and Use of Green Hydrogen",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.4,
+          "ms": 5888
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1726
+        },
+        "llm:glm-5.3": {
+          "label": null,
+          "confidence": null,
+          "error": "empty content (finish_reason=length)",
+          "ms": 105883
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 37754
+        }
+      }
+    },
+    {
+      "document_id": "a10f540d-8e75-494d-9b48-fdf6212d55f9",
+      "title": "Toward Credible Transport Carbon Dioxide Emissions Accounting in China",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 33214
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1320
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 2065
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 922
+        }
+      }
+    },
+    {
+      "document_id": "a2a1b99c-7d98-4723-be7f-e6015410bb12",
+      "title": "Urban Land Value Capture in São Paulo, Addis Ababa, and Hyderabad: Differing Interpretations, Equity Impacts, and Enabling Conditions",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.55,
+          "ms": 3962
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1787
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.6,
+          "ms": 24238
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.7,
+          "ms": 6081
+        }
+      }
+    },
+    {
+      "document_id": "a4c86569-d1d8-4cf3-8c70-46d9bc9b98cb",
+      "title": "Estimating Future Local Climate Hazard Probabilities",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.5,
+          "ms": 5979
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.8,
+          "ms": 1277
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 3609
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 570
+        }
+      }
+    },
+    {
+      "document_id": "a59ea176-c0e9-4302-8a2b-b7b176f147c8",
+      "title": "Enabling the Shift to Electric Auto-Rickshaws: A Guidebook for Electrification of Auto-Rickshaw Fleets in Indian Cities",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 2200
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 1270
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 2581
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 596
+        }
+      }
+    },
+    {
+      "document_id": "a91e21e0-d7ee-4f2e-9953-b644d2a048d3",
+      "title": "Technical Note for a Dataset Modeling the Societal Health and Climate Benefits Associated With Transitioning the U.S. School Bus Fleet From Diesel to Electric",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 2160
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 1252
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 1,
+          "ms": 986
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.98,
+          "ms": 3069
+        }
+      }
+    },
+    {
+      "document_id": "aa3afd35-3fbd-40c8-af80-b1f7cd8c11ef",
+      "title": "The Evolution of Bike Sharing: 10 Questions on the Emergence of New Technologies, Opportunities, and Risks",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 4079
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1969
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.9,
+          "ms": 36361
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.82,
+          "ms": 26246
+        }
+      }
+    },
+    {
+      "document_id": "aa613e3b-9c05-4a65-ab10-8837dd2ed8ee",
+      "title": "Access to Climate Finance in Low- and Middle-Income Countries: 14 Case Studies for the Transport Sector",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 2039
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1621
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 3120
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 2152
+        }
+      }
+    },
+    {
+      "document_id": "ab5ce87d-344f-4e46-9cdc-88de18228595",
+      "title": "Untreated and Unsafe: Solving the Urban Sanitation Crisis in the Global South",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2550
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1283
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 18707
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 3683
+        }
+      }
+    },
+    {
+      "document_id": "add211a7-3919-48f6-bf21-c1b55f889dfb",
+      "title": "集装箱港集疏运体系低碳发展潜力研究：深圳港的启示",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 2184
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1390
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 66537
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 507
+        }
+      }
+    },
+    {
+      "document_id": "b297df7f-e6fa-4761-be0c-8186b5c2df23",
+      "title": "Accelerating Nature-Based Solutions in Brazilian Cities",
+      "gold": "WRI Brasil",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 2105
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.95,
+          "ms": 1365
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 929
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.98,
+          "ms": 590
+        }
+      }
+    },
+    {
+      "document_id": "b3becd32-259f-4fda-8f0c-1dc895773176",
+      "title": "Seizing Brazil’s Urban Opportunity",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.82,
+          "ms": 2136
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.8,
+          "ms": 1236
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 15635
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.99,
+          "ms": 546
+        }
+      }
+    },
+    {
+      "document_id": "b4d696aa-66c6-4a3e-b127-0978d24838e2",
+      "title": "The Projected EV Transition in the Indian Automotive Manufacturing Industry: Perceptions and Enterprise-Level Strategies",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": null,
+          "confidence": null,
+          "error": "aws cli: Error: Command failed: aws bedrock-runtime converse --region us-east-2 --model-id us.anthropic.claude-opus-5-5 --system [{\"text\":\"Which single office value is this document's primary office? Answer with exactly one of the candidate values.\"}] --messages [{\"role\":\"user\",\"content\":[{\"text\":\"India's EV",
+          "ms": 740
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 1632
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 6624
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 560
+        }
+      }
+    },
+    {
+      "document_id": "b5039121-22b1-438d-95e8-e093560747ef",
+      "title": "Global Review of Finance for Sustainable Urban Infrastructure",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 3049
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 1252
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.95,
+          "ms": 1245
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.95,
+          "ms": 1517
+        }
+      }
+    },
+    {
+      "document_id": "b5c503bc-31ce-4f79-b80d-4598be2411a3",
+      "title": "Climate Resilient Cities: Assessing Differential Vulnerability to Climate Hazards in Urban India",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 33377
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 1305
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 5409
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 528
+        }
+      }
+    },
+    {
+      "document_id": "b7048fe9-81ac-479c-bd38-93806d70e17b",
+      "title": "Global Review of Finance for Sustainable Urban Infrastructure",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2263
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1319
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 14909
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.9,
+          "ms": 2081
+        }
+      }
+    },
+    {
+      "document_id": "b927b8ab-3211-4b24-89af-5fc04600b09f",
+      "title": "Base de Datos Ajustada de la Encuesta Origen-Destino para la Zona Metropolitana del Valle de México",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2343
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.96,
+          "ms": 1257
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 2142
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 1,
+          "ms": 630
+        }
+      }
+    },
+    {
+      "document_id": "b9f983c5-f35c-49dc-a161-2de24a3854b7",
+      "title": "Financial Impact Assessment for Zero-Emission Trucks",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 2112
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1202
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 776
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 709
+        }
+      }
+    },
+    {
+      "document_id": "bb995a8b-35a5-4a97-97b5-2825122b8416",
+      "title": "Toward Credible Transport Carbon Dioxide Emissions Accounting in China",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 2354
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.96,
+          "ms": 1242
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 6552
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.94,
+          "ms": 475
+        }
+      }
+    },
+    {
+      "document_id": "bdaa103c-a2ff-432a-808b-b070a2786ed8",
+      "title": "Resilient and Affordable Housing for All: Lessons on House Building from Kochi and Trivandrum, India",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 2524
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 1341
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 3068
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 474
+        }
+      }
+    },
+    {
+      "document_id": "bdeefced-4953-4a70-a7e7-ce4252b638bc",
+      "title": "Low-Speed Zone Guide",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 3286
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1940
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.65,
+          "ms": 44076
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 8118
+        }
+      }
+    },
+    {
+      "document_id": "bf52c36f-cd63-4d01-aeb2-afd924e471f3",
+      "title": "From Mobility to Access for All: Expanding Urban Transportation Choices in the Global South",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 3549
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1547
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 35344
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.7,
+          "ms": 42268
+        }
+      }
+    },
+    {
+      "document_id": "c1c6eff7-7e9d-4d66-873a-c1d18fdfae1b",
+      "title": "The Future of Urban Mobility: The Case for Electric Bus Deployment in Bogotá, Colombia",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Colombia",
+          "confidence": 0.82,
+          "ms": 2227
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Colombia",
+          "confidence": 0.6,
+          "ms": 1224
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Colombia",
+          "confidence": 0.98,
+          "ms": 4858
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Colombia",
+          "confidence": 0.99,
+          "ms": 705
+        }
+      }
+    },
+    {
+      "document_id": "c254ed11-255f-4e85-8405-fecbc8cf5e87",
+      "title": "Exploring WRI Ross Center’s Experience in Mexico City: A Deep City-Level Engagement Approach",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.85,
+          "ms": 2189
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.9,
+          "ms": 1235
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 651
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.99,
+          "ms": 653
+        }
+      }
+    },
+    {
+      "document_id": "c3efa33f-b535-45d1-945f-6ed5e6b15152",
+      "title": "从全球百余城市低碳发展水平异同看中国城市低碳发展之道",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 3047
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1253
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 3364
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 744
+        }
+      }
+    },
+    {
+      "document_id": "c59c544a-b1db-4610-abd5-1a57f61ca362",
+      "title": "加速城市场景下新能源货车推广：北京实例分析及建议",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 2186
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.96,
+          "ms": 1250
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 7684
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 494
+        }
+      }
+    },
+    {
+      "document_id": "c722bf92-0d45-4ca8-9851-036e2b3d2a56",
+      "title": "Driving Forward on a Clean Ride for Kids",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.97,
+          "ms": 2175
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 1311
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.98,
+          "ms": 6739
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.98,
+          "ms": 1380
+        }
+      }
+    },
+    {
+      "document_id": "c761e4c8-f3ff-487c-b2bd-c5fb777d9339",
+      "title": "Rail Plus Property Development in China: The Pilot Case of Shenzhen",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 2241
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.93,
+          "ms": 1253
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 2015
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 527
+        }
+      }
+    },
+    {
+      "document_id": "c882a9fe-7349-4b1a-9a91-2fa475b17347",
+      "title": "Jobs Near Metro Rail Transit in Bengaluru: Enabling an Accessible and Productive City",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 2396
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 1246
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 1253
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 568
+        }
+      }
+    },
+    {
+      "document_id": "cbeae4dd-c970-4697-88a4-6388c069c0a5",
+      "title": "Visioning to Implementation: National Transport Decarbonization Policies That Match Climate Targets in China, India, and Vietnam",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.5,
+          "ms": 3438
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.5,
+          "ms": 1301
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 22400
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.8,
+          "ms": 40025
+        }
+      }
+    },
+    {
+      "document_id": "cc2b66d3-9aa4-4b74-ba54-80804337f15a",
+      "title": "Guide for Safe Speeds: Managing Traffic Speeds to Save Lives and Improve Livability",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2221
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1243
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 3302
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.8,
+          "ms": 19501
+        }
+      }
+    },
+    {
+      "document_id": "cc920e58-7fb8-4e5f-a68d-148f8dd8aadd",
+      "title": "Índice de Desigualdad Urbana",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2192
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.93,
+          "ms": 1258
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 22293
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 571
+        }
+      }
+    },
+    {
+      "document_id": "cd491d2f-fe3f-4f47-a985-33d1cb45e26e",
+      "title": "Acciones Federales para la Planeación Urbana: Hacia Mejores Ciudades para Todos",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2198
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.96,
+          "ms": 1290
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.97,
+          "ms": 2136
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.99,
+          "ms": 582
+        }
+      }
+    },
+    {
+      "document_id": "cde4b93f-22e4-4309-8e05-e68d713d46c0",
+      "title": "Needs Assessment for Equitable School Bus Electrification in U.S. School Districts",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 2240
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 1231
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 3168
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.98,
+          "ms": 641
+        }
+      }
+    },
+    {
+      "document_id": "ce263738-51e0-4db7-9a9f-7dfcfc461795",
+      "title": "Cities Safer by Design",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 2136
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1207
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 3889
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.82,
+          "ms": 3668
+        }
+      }
+    },
+    {
+      "document_id": "ce884819-c3c3-489a-b0e3-b7ccf1a47386",
+      "title": "Financial Analysis of Charging station (FACt): A Tool for Easy Financial Evaluation of Deploying Public Charging Infrastructure on India",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 2439
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.96,
+          "ms": 1262
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 3096
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 549
+        }
+      }
+    },
+    {
+      "document_id": "cfb24eb0-a4c6-481e-88c7-71fc140bfd93",
+      "title": "Sustainable Mobility for Sustainable Cities: Lessons From Cycling Schemes in Mexico City and Guadalajara, Mexico (Mexico Frontrunners)",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.9,
+          "ms": 2071
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.96,
+          "ms": 1236
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.97,
+          "ms": 1097
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.99,
+          "ms": 642
+        }
+      }
+    },
+    {
+      "document_id": "cfe63045-b7f5-422d-a2b9-9d8ba91abf0a",
+      "title": "Barriers to Adopting Electric Buses",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 2353
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1337
+        },
+        "llm:glm-5.3": {
+          "label": null,
+          "confidence": null,
+          "error": "empty content (finish_reason=length)",
+          "ms": 159791
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 17751
+        }
+      }
+    },
+    {
+      "document_id": "d04d0cb8-dbea-46ba-b336-18652152a47e",
+      "title": "Informal and Semiformal Services in Latin America: An Overview of Public Transportation Reforms",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.45,
+          "ms": 5610
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.4,
+          "ms": 2187
+        },
+        "llm:glm-5.3": {
+          "label": null,
+          "confidence": null,
+          "error": "empty content (finish_reason=length)",
+          "ms": 163415
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Colombia",
+          "confidence": 0.75,
+          "ms": 27638
+        }
+      }
+    },
+    {
+      "document_id": "d72662b9-75b8-4dcb-91b4-827864cefe4a",
+      "title": "Kampala: Rebuilding Public Sector Legitimacy With a New Approach to Sanitation Services",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.6,
+          "ms": 4338
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.6,
+          "ms": 1878
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 718
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 1076
+        }
+      }
+    },
+    {
+      "document_id": "d7636f3a-c93d-41f2-a5d3-bef807698902",
+      "title": "Financing the Urban Transition for Sustainable Development: Better Finance for Better Cities",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 3567
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1768
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 23139
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 4249
+        }
+      }
+    },
+    {
+      "document_id": "dc0afd89-8cee-4f11-a930-e8a4cf289c41",
+      "title": "Assessing Supply Chain Barriers to and Opportunities for Advancing Road Transport Electrification in Kenya",
+      "gold": "WRI Africa",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.9,
+          "ms": 5460
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 1248
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 21306
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 593
+        }
+      }
+    },
+    {
+      "document_id": "dd0fe27a-531b-4c1b-8cc0-6dce1fe87823",
+      "title": "ImpactAr Tool: Valuing Air Quality Health Impacts of Urban Bus Fleet Changes in Brazil",
+      "gold": "WRI Brasil",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 2598
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 1282
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 3038
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 1,
+          "ms": 563
+        }
+      }
+    },
+    {
+      "document_id": "dd5d0d19-598b-486c-b18c-324dfc99b47e",
+      "title": "Decarbonizing Hong Kong’s Roads: Pathways Towards a Net-Zero Road Transport System",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.8,
+          "ms": 5054
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.72,
+          "ms": 2002
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.86,
+          "ms": 8499
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.92,
+          "ms": 894
+        }
+      }
+    },
+    {
+      "document_id": "dd92ba27-3deb-4fb9-b503-1369bb557f93",
+      "title": "Developing Prosperous and Inclusive Cities in Africa—National Urban Policies to the Rescue?",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.85,
+          "ms": 2219
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Africa",
+          "confidence": 0.9,
+          "ms": 1237
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 9301
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Africa",
+          "confidence": 0.95,
+          "ms": 865
+        }
+      }
+    },
+    {
+      "document_id": "dfcb9c66-209a-448a-ae0a-d05bbe8b9650",
+      "title": "Climate Emergency, Urban Opportunity",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2927
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 1270
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.95,
+          "ms": 2487
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.95,
+          "ms": 2713
+        }
+      }
+    },
+    {
+      "document_id": "e107f3e6-12ff-4155-84e5-8a4031f6ddc4",
+      "title": "Electric School Bus U.S. Market Study and Buyer’s Guide: A Resource for School Bus Operators Pursuing Fleet Electrification",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 2190
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 1264
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 973
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.98,
+          "ms": 868
+        }
+      }
+    },
+    {
+      "document_id": "e45f56d8-40fe-40b1-90a2-3e6f2161cc95",
+      "title": "Guía de Entornos Caminables Seguros",
+      "gold": "WRI México",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 2562
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.93,
+          "ms": 1534
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.97,
+          "ms": 794
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.99,
+          "ms": 640
+        }
+      }
+    },
+    {
+      "document_id": "e57ff7ee-dcab-44e5-a2ac-0f25549f3802",
+      "title": "Roadmap to 100: Electrifying the Full U.S. School Bus Fleet",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 2178
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 1201
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.97,
+          "ms": 602
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.98,
+          "ms": 529
+        }
+      }
+    },
+    {
+      "document_id": "e660f3d6-bcf5-4db2-a1f1-7b465aef0e80",
+      "title": "Zero-Emission Delivery Zones: Decarbonizing Urban Freight and Goods Delivery in U.S. Cities",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.72,
+          "ms": 3776
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.72,
+          "ms": 1253
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.97,
+          "ms": 1740
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.9,
+          "ms": 1829
+        }
+      }
+    },
+    {
+      "document_id": "e68aa065-624b-4631-9778-e471a12d1aa4",
+      "title": "Improving Metro Access in India",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.95,
+          "ms": 2166
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.97,
+          "ms": 1257
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 1632
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 601
+        }
+      }
+    },
+    {
+      "document_id": "e6efadef-a9d8-4c6a-b9de-e2d486ed46db",
+      "title": "Connected Urban Growth: Public-Private Collaborations for Transforming Urban Mobility",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 3305
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1612
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 81156
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.75,
+          "ms": 3818
+        }
+      }
+    },
+    {
+      "document_id": "e762872f-f8e9-4dc6-b3e1-b8a271734028",
+      "title": "Electrifying U.S. School Bus Fleets Equitably to Reduce Air Pollution Exposure in Underserved Communities",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.88,
+          "ms": 3278
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.93,
+          "ms": 1276
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.97,
+          "ms": 2869
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.96,
+          "ms": 947
+        }
+      }
+    },
+    {
+      "document_id": "ea68cada-65af-492b-b7fb-fabd8f2e49a4",
+      "title": "The Costs and Benefits Appraisal Tool for Transit Buses",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 5073
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.5,
+          "ms": 2103
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 135916
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.8,
+          "ms": 38426
+        }
+      }
+    },
+    {
+      "document_id": "eb47ca8f-62c3-4b96-9499-3033b21b5bf0",
+      "title": "Guadalajara: Revisiting Public Space Interventions Through the Via RecreActiva",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.85,
+          "ms": 2113
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.93,
+          "ms": 1234
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 0.95,
+          "ms": 1337
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.98,
+          "ms": 653
+        }
+      }
+    },
+    {
+      "document_id": "ed7cc7fe-de63-4015-ba74-fe0cd84fe05f",
+      "title": "Panduan Pelaksanaan Inventarisasi Pohon Perkotaan",
+      "gold": "WRI Indonesia",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Indonesia",
+          "confidence": 0.97,
+          "ms": 3638
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Indonesia",
+          "confidence": 0.97,
+          "ms": 1326
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Indonesia",
+          "confidence": 1,
+          "ms": 5268
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Indonesia",
+          "confidence": 1,
+          "ms": 541
+        }
+      }
+    },
+    {
+      "document_id": "ee6bc3a5-78a9-4355-9493-ea97a68907c0",
+      "title": "10 Questions to Ask About Planning, Financing and Implementing Transit Oriented Development Strategies",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.3,
+          "ms": 5357
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.3,
+          "ms": 2435
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.5,
+          "ms": 32232
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.7,
+          "ms": 33027
+        }
+      }
+    },
+    {
+      "document_id": "f03b6e53-0a08-4b05-9c99-a9c5c3a7f8b2",
+      "title": "Accessibility to Public Green Areas: Case Study in Belo Horizonte, Brazil",
+      "gold": "WRI Brasil",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.93,
+          "ms": 2401
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 1354
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.97,
+          "ms": 1494
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.99,
+          "ms": 561
+        }
+      }
+    },
+    {
+      "document_id": "f08f0762-7ba0-4f87-b5f2-bb5c63455a91",
+      "title": "A Fare Look: Funding Urban Public Transport Operations",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.72,
+          "ms": 4649
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1873
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Brasil",
+          "confidence": 0.82,
+          "ms": 3581
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Brasil",
+          "confidence": 0.8,
+          "ms": 11755
+        }
+      }
+    },
+    {
+      "document_id": "f11de707-72ff-4b28-808d-9cd3f5342646",
+      "title": "解码中国省级交通领域 2012—2019年二氧化碳排放",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 2137
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.96,
+          "ms": 1269
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.99,
+          "ms": 1601
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 632
+        }
+      }
+    },
+    {
+      "document_id": "f1c07f09-4328-4698-a229-2f2e990f5c10",
+      "title": "建立电动汽车与电网协同的通信协议体系： 国际经验借鉴、国内外对比与对策建议",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 2152
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.8,
+          "ms": 1221
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 4182
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.98,
+          "ms": 493
+        }
+      }
+    },
+    {
+      "document_id": "f3070726-3da7-4e50-a846-895cd2188117",
+      "title": "Seven Transformations for More Equitable and Sustainable Cities",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 2779
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 1256
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.85,
+          "ms": 5767
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.92,
+          "ms": 2228
+        }
+      }
+    },
+    {
+      "document_id": "f346f47c-03f7-436a-9ae5-a0f06b175636",
+      "title": "中国道路交通2050年“净零”排放路径研究",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.9,
+          "ms": 2111
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.88,
+          "ms": 1266
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 6662
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 1,
+          "ms": 583
+        }
+      }
+    },
+    {
+      "document_id": "f47a7fde-3219-4e75-a115-1dbb819c5335",
+      "title": "Seizing Mexico’s Urban Opportunity: How Urban Transformation Can Reduce Poverty and Inequality and Build Resilience",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI México",
+          "confidence": 0.8,
+          "ms": 2496
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI México",
+          "confidence": 0.9,
+          "ms": 1423
+        },
+        "llm:glm-5.3": {
+          "label": "WRI México",
+          "confidence": 1,
+          "ms": 17815
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI México",
+          "confidence": 0.99,
+          "ms": 651
+        }
+      }
+    },
+    {
+      "document_id": "f47b4397-15e1-4802-a9a4-26f52f34a847",
+      "title": "Financing Electric and Hybrid-Electric Buses: 10 Questions City Decision-Makers Should Ask",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.55,
+          "ms": 3798
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.6,
+          "ms": 1905
+        },
+        "llm:glm-5.3": {
+          "label": null,
+          "confidence": null,
+          "error": "empty content (finish_reason=length)",
+          "ms": 135305
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.8,
+          "ms": 12158
+        }
+      }
+    },
+    {
+      "document_id": "f4916168-57da-48c1-96b6-683fe89d3e4c",
+      "title": "Pole-Mounted Electric Vehicle Charging: Preliminary Guidance for a Low-Cost and More Accessible Public Charging Solution for U.S. Cities",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.9,
+          "ms": 4480
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.8,
+          "ms": 1295
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.98,
+          "ms": 2270
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.9,
+          "ms": 630
+        }
+      }
+    },
+    {
+      "document_id": "f6c66bd5-02f0-47b3-9ef0-0dc504a1fae5",
+      "title": "Improving School Infrastructure for Healthier Students and Communities",
+      "gold": "WRI US",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 2246
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI US",
+          "confidence": 0.96,
+          "ms": 1190
+        },
+        "llm:glm-5.3": {
+          "label": "WRI US",
+          "confidence": 0.97,
+          "ms": 1311
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI US",
+          "confidence": 0.95,
+          "ms": 718
+        }
+      }
+    },
+    {
+      "document_id": "f770be16-edca-4f9e-8e41-e8ed6e2b6882",
+      "title": "从概念到应用:解析80个缔约方核心气候文件中的公正转型",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 2048
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 1288
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Global",
+          "confidence": 0.88,
+          "ms": 2788
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Global",
+          "confidence": 0.9,
+          "ms": 2653
+        }
+      }
+    },
+    {
+      "document_id": "f7dcf395-4c17-49bd-a4f2-a3bbde4695b5",
+      "title": "Surabaya: The Legacy of Participatory Upgrading of Informal Settlements",
+      "gold": "WRI Global",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Indonesia",
+          "confidence": 0.9,
+          "ms": 2388
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Indonesia",
+          "confidence": 0.8,
+          "ms": 1202
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Indonesia",
+          "confidence": 0.95,
+          "ms": 4246
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Indonesia",
+          "confidence": 0.99,
+          "ms": 504
+        }
+      }
+    },
+    {
+      "document_id": "fa8ec890-0e48-4c52-8cc1-fe3480815e16",
+      "title": "Urban Blue-Green Conundrum: A 10-City Study on the Impacts of Urbanization on Natural Infrastructure in India",
+      "gold": "WRI India",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI India",
+          "confidence": 0.93,
+          "ms": 2144
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI India",
+          "confidence": 0.9,
+          "ms": 1284
+        },
+        "llm:glm-5.3": {
+          "label": "WRI India",
+          "confidence": 0.98,
+          "ms": 2565
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI India",
+          "confidence": 0.99,
+          "ms": 599
+        }
+      }
+    },
+    {
+      "document_id": "fadb6d34-56fe-4054-97bc-b1cb26d3e5ab",
+      "title": "Las Mujeres y el transporte en Bogotá: las cuentas",
+      "gold": "WRI Colombia",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI Colombia",
+          "confidence": 0.82,
+          "ms": 2170
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI Colombia",
+          "confidence": 0.8,
+          "ms": 1313
+        },
+        "llm:glm-5.3": {
+          "label": "WRI Colombia",
+          "confidence": 0.97,
+          "ms": 935
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI Colombia",
+          "confidence": 0.99,
+          "ms": 694
+        }
+      }
+    },
+    {
+      "document_id": "fbc37c9c-86a8-4006-a886-81fd1d34c0ad",
+      "title": "株洲市街道设计导则",
+      "gold": "WRI China",
+      "picks": {
+        "bedrock:us.anthropic.claude-opus-5-5": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 2438
+        },
+        "bedrock:us.anthropic.claude-sonnet-5-5": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 1251
+        },
+        "llm:glm-5.3": {
+          "label": "WRI China",
+          "confidence": 0.95,
+          "ms": 1883
+        },
+        "llm:deepseek-4.1-flash": {
+          "label": "WRI China",
+          "confidence": 0.97,
+          "ms": 514
+        }
+      }
+    }
+  ]
+}
