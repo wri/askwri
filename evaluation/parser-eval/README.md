@@ -1,0 +1,70 @@
+# Parser evaluation tooling
+
+Scripts behind the 26 November 2026 PDF parser comparison (second edition of the
+24 November report). Findings and recommendation:
+`docs/research/2026-11-26-pdf-parser-openrouter-and-self-hosting.md`.
+
+Nothing here touches the ingestion worker, QA or production. Outputs go under
+`evaluation/results/`, which is gitignored, as the 24 November outputs were.
+
+## Setup
+
+```bash
+python3 -m venv /tmp/parser-eval-venv
+/tmp/parser-eval-venv/bin/pip install pypdf pypdfium2 langdetect pillow rapidfuzz reportlab
+```
+
+Docling, only for `run_docling.py`, in its own environment at the versions the
+first edition pinned:
+
+```bash
+python3 -m venv /tmp/docling-venv
+/tmp/docling-venv/bin/pip install docling==2.152.0 docling-core==2.108.0 docling-ibm-models==4.0.4 docling-parse==7.27.1 torch==2.15.0
+```
+
+`run_openrouter.py` needs only the Python standard library.
+
+## OpenRouter key
+
+`run_openrouter.py` reads `OPENROUTER_API_KEY`, else a login-Keychain item
+(account `askwri-parser-eval`, service `openrouter-api-key`), else asks with
+hidden input and stores the answer there. Store it once with:
+
+```bash
+python3 evaluation/parser-eval/run_openrouter.py --set-key
+```
+
+The key goes to macOS `security` on standard input, never as a process
+argument, and is never written to any output. Never paste it at a shell prompt.
+
+## Workflow
+
+| Step | Script | Does |
+|---|---|---|
+| 1 | `profile_pages.py <pdf_dir> <pages.jsonl>` | Per page: text-layer size, numbers, numeric rows, table/notes words, image cover, landscape, damaged characters, language |
+| 2 | `pick_pages.py <pages.jsonl>` | Ranks the hardest pages per language (max 2 per document) |
+| 3 | `build_set.py <pdf_dir> <set_dir> <sheet.png> <first_round_manifest.json>` | Writes a page set: single-page PDFs, text layers, manifest, contact sheet. The selection list in the file is the 26 November hard set |
+| 3b | `build_v2refs.py <recovery-v2> <set_dir>` | Page set of the eight frozen first-edition reference pages, same split PDFs and prompt |
+| 4 | `run_openrouter.py --set <set_dir> [model ...]` | Runs models in parallel; `mistral-ocr` is OpenRouter's file-parser engine. Image-only models get `renders/` at the manifest's `render_scale` |
+| 4b | `run_docling.py <set_dir>` | Docling, first-edition settings |
+| 5 | `score_text_layer.py <set_dir>` | Numbers kept, extra numbers, row keeping and word recall against each page's own text layer; flags pages whose reference is unusable |
+| 5b | `score_v2_method.py <recovery-v2> <out.json> name=dir ...` | The first edition's prose and 96-cell scoring, unchanged; re-scores the original candidates as a control |
+| 6 | `list_extra_numbers.py <set_dir> [skip ...]` | Every number a candidate wrote that is not on the page, with context, for review by eye |
+| 7 | `build_report_pdf_v3.py <out.pdf>` | The second-edition PDF |
+
+## Reading the text-layer scores
+
+These PDFs are born-digital, so each page's text layer records exactly which
+characters are printed on it: a reference for content, not for reading order or
+table structure. Three things make it lie, all handled or flagged by the scorer:
+
+- **Invisible text.** Some pages carry text nobody can see, such as a whole
+  spreadsheet under a screenshot of it. When even the best candidate keeps under
+  80% of a page's numbers, the page is excluded and listed.
+- **Damaged layers** (replacement or private-use characters): excluded.
+- **Same character, different code point**: superscript and full-width digits
+  and ligatures are folded; full-width punctuation is not, because folding
+  `３，５` to `3,5` would merge two numbers.
+
+"Extra numbers" are leads, not errors: most are HTML attributes, subscripts,
+page numbers, scale bars or axis ticks. Check them with `list_extra_numbers.py`.
