@@ -15,8 +15,12 @@ for doc in manifest["documents"]:
         if any(s in ident for s in skip):
             continue
         ref = collections.Counter(norm(n) for n in NUM.findall(pdfium.PdfDocument(str(SET / "source-pages" / f"{ident}.pdf"))[0].get_textpage().get_text_range().translate(FOLD)))
-        for cand in sorted((SET / "openrouter").glob("*")):
-            text = (cand / f"{ident}.md").read_text().translate(FOLD)
+        for cand in sorted(p for p in (SET / "openrouter").glob("*") if p.is_dir()):
+            f = cand / f"{ident}.md"
+            if not f.exists():
+                print(f"\n## {ident.split('_')[-1]} {cand.name} MISSING OUTPUT")
+                continue
+            text = f.read_text().translate(FOLD)
             found = [(m.group(), m.start()) for m in NUM.finditer(text)]
             out = collections.Counter(norm(n) for n, _ in found)
             extra = out - ref

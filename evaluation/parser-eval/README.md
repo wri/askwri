@@ -43,12 +43,12 @@ argument, and is never written to any output. Never paste it at a shell prompt.
 |---|---|---|
 | 1 | `profile_pages.py <pdf_dir> <pages.jsonl>` | Per page: text-layer size, numbers, numeric rows, table/notes words, image cover, landscape, damaged characters, language |
 | 2 | `pick_pages.py <pages.jsonl>` | Ranks the hardest pages per language (max 2 per document) |
-| 3 | `build_set.py <pdf_dir> <set_dir> <sheet.png> <first_round_manifest.json>` | Writes a page set: single-page PDFs, text layers, manifest, contact sheet. The selection list in the file is the 26 November hard set |
+| 3 | `build_set.py <pdf_dir> <set_dir> <sheet.png> <first_round_manifest.json>` | Writes a page set: single-page PDFs, text layers, 3x PNG renders for image-only models, manifest, contact sheet. The selection list in the file is the 26 November hard set |
 | 3b | `build_v2refs.py <recovery-v2> <set_dir>` | Page set of the eight frozen first-edition reference pages, same split PDFs and prompt |
 | 4 | `run_openrouter.py --set <set_dir> [model ...]` | Runs models in parallel; `mistral-ocr` is OpenRouter's file-parser engine. Image-only models get `renders/` at the manifest's `render_scale` |
 | 4b | `run_docling.py <set_dir>` | Docling, first-edition settings |
 | 5 | `score_text_layer.py <set_dir>` | Numbers kept, extra numbers, row keeping and word recall against each page's own text layer; flags pages whose reference is unusable |
-| 5b | `score_v2_method.py <recovery-v2> <out.json> name=dir ...` | The first edition's prose and 96-cell scoring, unchanged; re-scores the original candidates as a control |
+| 5b | `score_v2_method.py <recovery-v2> <out.json> name=dir ...` | The first edition's prose and 96-cell scoring, plus HTML-table conversion for candidates that write HTML; re-scores the original candidates as a control. **Needs the gitignored 24 November folder** (`evaluation/results/parser-comparison-2026-11-24/recovery-v2`): it imports the prose scorer from there and reads the frozen references |
 | 6 | `list_extra_numbers.py <set_dir> [skip ...]` | Every number a candidate wrote that is not on the page, with context, for review by eye |
 | 7 | `build_report_pdf_v3.py <out.pdf>` | The second-edition PDF |
 
@@ -60,7 +60,11 @@ table structure. Three things make it lie, all handled or flagged by the scorer:
 
 - **Invisible text.** Some pages carry text nobody can see, such as a whole
   spreadsheet under a screenshot of it. When even the best candidate keeps under
-  80% of a page's numbers, the page is excluded and listed.
+  80% of a page's numbers, the page is excluded and printed with every
+  candidate's score. The rule cannot tell invisible text from a page every parser
+  genuinely fails, so confirm each one by eye (render the page; compare what is
+  visible with `text-layer/<page>.txt`) before trusting the averages. On 26
+  November all three such pages were confirmed to carry hidden text.
 - **Damaged layers** (replacement or private-use characters): excluded.
 - **Same character, different code point**: superscript and full-width digits
   and ligatures are folded; full-width punctuation is not, because folding

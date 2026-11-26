@@ -38,6 +38,8 @@ SELECTION = [  # (doc, page, language, why)
 prompt = json.loads(first.read_text())["prompt"]
 (out / "source-pages").mkdir(parents=True, exist_ok=True)
 (out / "text-layer").mkdir(exist_ok=True)
+(out / "renders").mkdir(exist_ok=True)
+RENDER_SCALE = 3  # image-only models; at 1.5x Inkling 2 Mini misread digits
 docs, thumbs = {}, []
 for doc, page, lang, why in SELECTION:
     ident = f"{doc}--p{page}"
@@ -47,6 +49,7 @@ for doc, page, lang, why in SELECTION:
         w.write(f)
     pdf = pdfium.PdfDocument(str(out / "source-pages" / f"{ident}.pdf"))
     (out / "text-layer" / f"{ident}.txt").write_text(pdf[0].get_textpage().get_text_range())
+    pdf[0].render(scale=RENDER_SCALE).to_pil().save(out / "renders" / f"{ident}.png")
     img = pdf[0].render(scale=0.35).to_pil()
     img.thumbnail((260, 260))
     thumbs.append((img, f"{lang} {doc.split('_')[-1]} p{page}"))
@@ -55,7 +58,7 @@ for doc, page, lang, why in SELECTION:
     d["why"][str(page)] = why
     print(ident, hashlib.sha256((out / "source-pages" / f"{ident}.pdf").read_bytes()).hexdigest()[:12])
 
-manifest = {"prompt": prompt, "source": str(src), "selection": "hardest pages per language by table/number/notes/figure/landscape/damaged-text heuristics; max 2 per document; first-round pages excluded",
+manifest = {"prompt": prompt, "source": str(src), "render_scale": f"{RENDER_SCALE}x", "selection": "hardest pages per language by table/number/notes/figure/landscape/damaged-text heuristics; max 2 per document; first-round pages excluded",
             "models": ["google/gemini-3.8-flash", "google/gemini-4-hydrogen", "anthropic/claude-sonnet-5.5", "openai/gpt-6.2-astra"],
             "documents": list(docs.values())}
 (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2))

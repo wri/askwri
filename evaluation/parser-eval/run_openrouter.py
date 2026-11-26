@@ -104,7 +104,10 @@ def call(path, body=None):
         return e.code, json.loads(e.read() or b"{}")
 
 
-catalog = {m["id"]: m for m in call("/models")[1]["data"]}
+_status, _models = call("/models")
+if _status != 200 or "data" not in _models:
+    sys.exit(f"OpenRouter rejected the model-list request (HTTP {_status}); check the key. Nothing was sent.")
+catalog = {m["id"]: m for m in _models["data"]}
 
 
 MISTRAL_CARRIER = "upstage/solar-mini-4-5"  # cheapest text model; only carries the file-parser call
@@ -128,6 +131,13 @@ def run_model(model):
             print("SKIP", model, "not in OpenRouter catalog", flush=True)
         return
     takes_file = "file" in catalog[model]["architecture"]["input_modalities"]
+    if not takes_file:
+        missing = [f"{d['id']}--p{p}" for d in manifest["documents"] for p in d["selected_pdf_pages"]
+                   if not (SET / "renders" / f"{d['id']}--p{p}.png").exists()]
+        if missing:
+            with print_lock:
+                print("SKIP", model, f"is image-only and {len(missing)} page(s) have no renders/ PNG (e.g. {missing[0]})", flush=True)
+            return
     out = SET / "openrouter" / model.replace("/", "__")
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -146,7 +156,7 @@ def run_model(model):
                 png = (SET / "renders" / f"{ident}.png").read_bytes()
                 part = {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png).decode()}}
                 extra = {}
-                transport = "png-" + manifest.get("render_scale", "1.5x")
+                transport = "png-" + manifest.get("render_scale", "scale-unrecorded")
             body = {"model": model, "max_tokens": 24000, "usage": {"include": True},
                     "messages": [{"role": "user", "content": [part, {"type": "text", "text": prompt}]}], **extra}
             row = {"id": doc["id"], "page": page, "language": doc["actual_language"], "model": model,

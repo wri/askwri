@@ -1,13 +1,20 @@
-"""Score candidates on the 8 frozen v2 reference pages with the v2 method, unchanged.
+"""Score candidates on the 8 frozen v2 reference pages with the v2 method.
+
+NOT self-contained: it needs the 24 November results folder, which is gitignored
+(evaluation/results/parser-comparison-2026-11-24/recovery-v2). From there it imports
+analyze.norm and analyze.prose_score (the prose scorer, used as-is) and reads the
+frozen references and their hash.
 
 Prose: analyze.prose_score (best local span, Levenshtein edits / reference chars).
-Cells: the audited table recovery of recovery-v2/audit_tables.py (same format
-handling: collapsed repeated columns, dropped empty layout column, card pairs).
-The frozen reference hash is checked first. v2's own candidates are re-scored as
-a control: they must reproduce the published numbers before new ones are trusted.
+Cells: a copy of recovery-v2/audit_tables.py's audited table recovery (same format
+handling: collapsed repeated columns, dropped empty layout column, card pairs),
+with one addition: HTML <tr>/<td> rows are converted to pipe rows first, because
+some new candidates write HTML tables (spans are not expanded, which can only lower
+a score). The frozen reference hash is checked first. v2's own candidates are
+re-scored as a control: they must reproduce the published numbers before new
+ones are trusted.
 
 Usage: python score_v2_method.py <recovery-v2 dir> <out.json> <name=dir> [<name=dir> ...]
-recovery-v2 is the 24 November results folder (evaluation/results/parser-comparison-2026-11-24/recovery-v2).
 """
 import hashlib, json, pathlib, re, sys
 
@@ -18,7 +25,8 @@ from analyze import norm, prose_score  # noqa: E402
 from rapidfuzz import fuzz  # noqa: E402
 
 ref_bytes = (V2 / "references/reference-v2.json").read_bytes()
-assert hashlib.sha256(ref_bytes).hexdigest() == (V2 / "references/FROZEN.sha256").read_text().split()[0], "reference changed"
+if hashlib.sha256(ref_bytes).hexdigest() != (V2 / "references/FROZEN.sha256").read_text().split()[0]:
+    raise SystemExit("Frozen reference changed: reference-v2.json no longer matches FROZEN.sha256. Nothing scored.")
 refs = json.loads(ref_bytes)
 
 

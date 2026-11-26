@@ -10,7 +10,11 @@ Per page and candidate:
               or misread values, but also legitimate text inside raster images
   text_recall share of the text layer's words (CJK: character pairs) in the output
 Pages whose text layer is damaged (replacement / private-use characters) are
-flagged, because there the reference itself is wrong.
+excluded, because there the reference itself is wrong. Pages where even the best
+candidate keeps under 80% of the numbers are also excluded as 'suspect' (usually
+invisible text in the layer), but this rule cannot tell that apart from a page
+every parser genuinely fails, so excluded pages are printed with every
+candidate's score and must be confirmed by eye.
 
 Usage: python score_text_layer.py <set_dir> [extra_candidate_dir ...]
 Candidates: every folder under <set_dir>/openrouter/ plus any extra folders
@@ -175,6 +179,11 @@ for name in cands:
     print(name + "\t" + "\t".join(f"{mean(by_lang.get((name, l), [])):.3f}" for l in langs))
 damaged = sorted({(x["page"], x["damaged_ref"] if isinstance(x["damaged_ref"], str) else "damaged characters") for x in rows if x["damaged_ref"]})
 if damaged:
-    print("\nexcluded (reference not usable):")
+    # Low best-candidate recall is a symptom of invisible text, but also of a page every
+    # parser genuinely fails. Print every candidate's score so neither case is hidden;
+    # confirm each 'suspect' page by eye before trusting the averages above.
+    print("\nexcluded from the averages above (reference not usable) -- inspect each 'suspect' page by eye:")
     for page, why in damaged:
+        scores = ", ".join(f"{x['candidate']}={x['num_recall']:.2f}" for x in rows if x["page"] == page and x["num_recall"] is not None)
         print(" ", page, "-", why)
+        print("     num_recall:", scores)
