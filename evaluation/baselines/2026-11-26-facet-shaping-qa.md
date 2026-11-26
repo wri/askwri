@@ -90,23 +90,11 @@ in place of a verdict.
 
 ## Decision rule (pre-registered — do not edit after the first run)
 
-A boost replaces the filter for a type **only if all three hold, on every set that type runs
-on**:
-
-| type | sets |
-|---|---|
-| recency | cite_01 (`q10`) and cite_02 (`d5`) — both must clear |
-| office | the probe set alone — its two cases are the only office evidence there is |
+A boost replaces the filter for a type **only if all three hold, on both sets of that type**:
 
 1. the facet case's attainable recall is **higher** in arm 3 than in arm 2;
 2. MAP on that set is **not lower** in arm 3 than in arm 2 (tolerance zero);
 3. no gold document outside the facet cases is lost in arm 3 relative to arm 1.
-
-**Scope clarification (recorded before arm 3, after arms 1-2 only; no threshold changed):**
-office has one set, so "every set of that type" means that one set. A one-set verdict is
-weaker evidence than recency's two-set verdict, so an office "boost wins" is recorded as a
-**candidate for shaping** — a reason to build the next experiment — and never as a mode change
-on its own. An office "constraint" verdict carries the same caveat in the other direction.
 
 Otherwise the type is recorded as **constraint** and the filter stays.
 
@@ -140,12 +128,12 @@ _(numbers filled in as arms run; the rule above is frozen)_
 
 **Arms 1 and 2 were measured on QA at `858bbca`, before this branch merged.** That is sound
 rather than convenient: both arms run the filter path, which this branch leaves
-behaviour-identical by default (`FACET_MODE` unset). Two cross-checks, neither of them
-in-repo on this branch: the numbers match the baseline recorded on open PR #520's branch
-(`fix/450-facet-policy:evaluation/baselines/2026-11-26-facet-negation-qa.md` — 39.6 / 67.8 and
-73.7 / 86.9), and the determinism evidence is this branch's own paired runs (§ below), not
-that file. The older in-repo baseline (`2026-11-24-flag-on-vs-off-qa.md:40`, 36.4 / 65.8) was
-measured on a different evalset version and is not a comparison point here. The same runs also
+behaviour-identical by default (`FACET_MODE` unset). Two cross-checks. First, the numbers match
+`evaluation/baselines/2026-11-26-facet-negation-qa.md` (in tree since #520 merged: 39.6 / 67.8
+and 73.7 / 86.9 for its two off-arms). The older in-repo 2026-11-24 report shows 36.4 / 65.8
+for cite_01's off arm, and the gap is the build, not the harness: that arm ran before #519
+landed, so it measured a different target. Second — and independently — the determinism
+evidence is this branch's own paired runs (§ below), not any other file. The same runs also
 prove the arm evidence is honest — `facet_mode` is `null` on that deploy, because only this
 branch reports it. Arm 3 needs the deploy (`FACET_MODE=boost`), and records the image tag the
 deploy landed on.
@@ -252,3 +240,13 @@ EVAL_FACETS='{"office_q10_mexico":[{"facet":"office","value":"WRI Mexico"}],"off
 - Weight 1.0 = one RRF vote at rank 1. A sweep is a different experiment.
 - The office probe is constructed. It measures the mechanism, not whether users ask for
   offices this way.
+
+## Amendments to the pre-registration
+
+The rule above is unchanged from its first commit (`be15236`). Anything that had to change is
+recorded here with the run state at the time, so the rule's fixity is auditable.
+
+| date | run state | amendment | affects thresholds? |
+|---|---|---|---|
+| 2026-11-26 | arms 1-2 measured on `858bbca`; arm 3 not run | **Office set scope.** The frozen rule says "both sets of that type"; office has one set (the probe, two cases). "Both sets" means *every set that type runs on*: cite_01 + cite_02 for recency, the probe alone for office. A one-set verdict is recorded as a candidate for shaping, never as a mode change. | No |
+| 2026-11-26 | arms 1-2 measured on `858bbca`; arm 3 not run | **Target build.** #525 (444 item 3, one year filter) merged into this branch: recency is re-measured on the combined build, because #525 changes the year filter itself. The arms 1-2 numbers already in this document stay as the pre-#525 stepping stone. | No |
