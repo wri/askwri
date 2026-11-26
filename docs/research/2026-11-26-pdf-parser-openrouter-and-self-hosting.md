@@ -216,7 +216,8 @@ over whole documents the loss is larger and concentrated on those pages.
 ### 7.2 One hundred ordinary pages, three parsers ($1.97)
 
 `pick_ordinary_pages.py` samples content pages seeded, one or two per document, excluding the pages
-the hard set already covers: en 59, zh 20, es 15, pt 4, id 2, from 51 documents. `build_set.py`
+the hard set already covers: en 59, zh 20, es 15, pt 4, id 2, from 51 documents. The exact sample is
+committed as `evaluation/parser-eval/ordinary-100-selection.json`. `build_set.py`
 builds them (its optional selection argument), `run_openrouter.py` parses them, and Mistral's stored
 text is scored on the same pages. Per model, over the 87 pages that carry at least five numbers:
 

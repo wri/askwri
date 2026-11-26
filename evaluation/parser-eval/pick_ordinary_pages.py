@@ -74,11 +74,9 @@ for rnd in range(MAX_PER_DOC):
             picks = random.Random(f"{SEED}-{doc}").sample(candidates[doc], min(want, len(candidates[doc])))
             picked = {p for d, p, _, _ in selection if d == doc}
             fresh = [p for p in picks if p not in picked]
-            for p in candidates[doc]:
-                if len(fresh) >= want:
-                    break
-                if p not in picked and p not in fresh:
-                    fresh.append(p)
+            rest = [p for p in candidates[doc] if p not in picked and p not in fresh]
+            if len(fresh) < want and rest:
+                fresh += random.Random(f"{SEED}-{doc}-top-up").sample(rest, min(want - len(fresh), len(rest)))
             if not fresh:
                 continue
             selection += [[doc, p, lang, "ordinary content page"] for p in fresh[:want]]
