@@ -157,12 +157,21 @@ def _has_constraints(c: dict) -> bool:
             or c["program"] is not None or bool(c["languages"]) or bool(c["offices"]))
 
 
-def _matches(nws, doc: dict, md: dict, c: dict) -> bool:
+def _matches(nws, doc: dict, md: dict, c: dict, unknown_matches: bool = True) -> bool:
     """One node against the positive constraints: the single test shared by the
-    filter (drop the mismatches) and the boost (reward the matches)."""
+    filter (drop the mismatches) and the boost (reward the matches).
+
+    `unknown_matches` is the one place the two callers disagree. A filter must
+    KEEP a document whose metadata cannot be verified (it cannot exclude what
+    it cannot see), so it passes True. A boost must reward only verified
+    matches, so it passes False: an unknown office is not evidence for the
+    office the user asked for, and rewarding it would turn the boost arm into
+    "boost everything".
+    """
     year_min, year_max = c["year_min"], c["year_max"]
     date_min, date_max = c["date_min"], c["date_max"]
     program, languages, offices = c["program"], c["languages"], c["offices"]
+    unknown = False
 
     if date_min is not None or date_max is not None:
         published = doc.get("date_published")
@@ -177,11 +186,12 @@ def _matches(nws, doc: dict, md: dict, c: dict) -> bool:
                 latest = date(y, 12, 31)
             except (ValueError, TypeError):
                 earliest = latest = None
-        if earliest is not None:
-            if date_min is not None and latest < date_min:
-                return False
-            if date_max is not None and earliest > date_max:
-                return False
+        if earliest is None:
+            unknown = True
+        elif date_min is not None and latest < date_min:
+            return False
+        elif date_max is not None and earliest > date_max:
+            return False
 
     if year_min is not None or year_max is not None:
         year = doc.get("year_int")
@@ -194,11 +204,12 @@ def _matches(nws, doc: dict, md: dict, c: dict) -> bool:
                     return False  # present-but-unparseable year is excluded (legacy semantics)
         # year still None ⇒ no year metadata at all: KEPT, matching
         # apply_metadata_filters (main.py:361 falls through on None).
-        if year is not None:
-            if year_min is not None and year < year_min:
-                return False
-            if year_max is not None and year > year_max:
-                return False
+        if year is None:
+            unknown = True
+        elif year_min is not None and year < year_min:
+            return False
+        elif year_max is not None and year > year_max:
+            return False
 
     # Language is only hydrated on the postgres backend; a doc with
     # unknown language is KEPT (exclude only on a positive mismatch).
@@ -214,7 +225,9 @@ def _matches(nws, doc: dict, md: dict, c: dict) -> bool:
             doc_language.casefold() in languages
             or any(l.casefold() in languages for l in work_languages)
         )
-        if doc_language is not None and not doc_matches:
+        if doc_language is None:
+            unknown = True
+        elif not doc_matches:
             return False
 
     # Case-, accent-, dash- and whitespace-insensitive like office:
@@ -231,12 +244,12 @@ def _matches(nws, doc: dict, md: dict, c: dict) -> bool:
     # Multiple office facets are OR: keep docs matching any of them.
     if offices:
         doc_office = doc.get("office")
-        if doc_office is not None and not any(
-            _normalize_meta(doc_office) == _normalize_meta(o) for o in offices
-        ):
+        if doc_office is None:
+            unknown = True
+        elif not any(_normalize_meta(doc_office) == _normalize_meta(o) for o in offices):
             return False
 
-    return True
+    return unknown_matches or not unknown
 
 
 def apply_facet_filters(
@@ -286,7 +299,7 @@ def boost_facet_matches(
     for nws in nodes:
         md = nws.node.metadata or {}
         doc = docs_meta.get(md.get("doc_id")) or {}
-        if _matches(nws, doc, md, c):
+        if _matches(nws, doc, md, c, unknown_matches=False):
             nws.score = (nws.score or 0.0) + bonus
             if md.get("doc_id") is not None:
                 boosted.add(md["doc_id"])

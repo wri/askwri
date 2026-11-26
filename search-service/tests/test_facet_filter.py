@@ -409,3 +409,15 @@ def test_boost_tolerates_missing_metadata_and_none_score():
     out, boosted = boost_facet_matches([node], [_hard("year_min", "2000")], {}, 1.0)
     assert len(out) == 1
     assert boosted == set()
+
+
+def test_boost_rewards_only_verified_matches_not_unknown_metadata():
+    # The filter KEEPS a doc whose office is unknown (you cannot exclude what
+    # you cannot verify). The boost must not reward that same doc: an unknown
+    # office is not evidence for the office the user asked for, and rewarding
+    # it would make the boost arm close to "boost every document".
+    nodes = [_scored("known", 0.050), _scored("unknown", 0.050)]
+    meta = {"known": {"office": "WRI India"}, "unknown": {}}
+    out, boosted = boost_facet_matches(nodes, [_hard("office", "WRI India")], meta, 1.0)
+    assert boosted == {"known"}
+    assert out[0].node.metadata["doc_id"] == "known"
