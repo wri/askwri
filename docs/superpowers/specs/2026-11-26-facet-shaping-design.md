@@ -161,3 +161,19 @@ constraint.
 Lever lands on `qa` with `filter` as the default — production and QA behaviour unchanged.
 The boost arm is a temporary QA env flip for the run, reverted afterwards. Per-type verdicts
 go into #450 as a comment; no facet type changes mode on the strength of this experiment alone.
+
+## Amendments (recorded after writing, before any arm-3 run)
+
+- **The weight is a multiplier, and the code says so.** `boost_facet_matches` adds
+  `weight / (60 + 1)`, not `weight` — one RRF vote at rank 1 for `weight=1.0`. Pinned by
+  `test_boost_keeps_every_node_and_raises_only_matches`, which asserts the boosted score is
+  `0.050 + 1/61`. (Design decision 4 and the lever snippet above were always this; the
+  function name alone reads as a raw addend.)
+- **Pool admission has a hard ceiling.** A boost only reorders nodes already in the fused pool
+  (`fusion_top_k`: 500 cite, 100 answer), and in answer mode the pool and the 100-candidate
+  rerank window are the same size. A gold document outside the pool can never be admitted, so a
+  zero-admission boost result can be structural rather than evidence that the weight is too
+  weak. Recorded in the baseline's caveats and in its "inconclusive" clause.
+- **Office has one set, not two.** The decision rule's "every set of that type" is cite_01 +
+  cite_02 for recency and the probe set alone for office; a one-set verdict is a candidate for
+  shaping, never a mode change on its own.

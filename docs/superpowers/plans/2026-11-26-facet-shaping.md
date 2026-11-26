@@ -355,3 +355,20 @@ One comment: the per-type verdicts with numbers, the series row as blocked (#523
 - **Type consistency:** `_facet_constraints` → dict consumed by `_matches` (Task 1) → `boost_facet_matches` (Task 2) → Stage 1.6 (Task 3). `boosted` is a `Set[str]` everywhere; debug serialises `sorted(...)`. Case ids in Task 4 match the Task 6 manifest strings exactly.
 - **Review Focus:** missing metadata/`None` doc_id, unparseable values, empty constraint set, `None` score, negation + boost, empty pool — each has a test in Task 2 or Task 3, except the unparseable-value and empty-pool cases, which the pre-existing `test_facet_filter.py` already covers and Task 1's suite run keeps honest.
 - **Proportion:** the plan is ~1.5× the spec, and no task transcribes an implementation body.
+
+---
+
+## Amendments (recorded during execution; the steps above are unchanged history)
+
+- **Task 2's example scores were arithmetically wrong.** `0.50 + 1/61 < 0.90`, so the snippet
+  could not demonstrate a reorder. The implementation uses RRF-scale scores (0.050 / 0.060) and
+  asserts the exact boosted score; ledgered as a ruling.
+- **Task 2's helper names were illustrative.** The file has `_node` / `_hard`, not `_nws` /
+  `_facet`; the deliverable adds `_scored` for the boost tests.
+- **Task 3's placeholders resolved.** The office doc id is `DOCS_META["en_doc"]` with
+  `office = "WRI India"`; the stub's fused order puts it second, so the boosted order is
+  `[en_doc, …]`.
+- **Boost rewards verified matches only.** Task 2's "matching nodes" was ambiguous where the
+  filter keeps unknown metadata; `_matches(..., unknown_matches=False)` settles it (commit
+  "fix(522): boost rewards only verified matches").
+- **Office rule scope** is defined in the pre-registration (one set, candidate-only), not here.

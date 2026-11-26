@@ -69,17 +69,36 @@ that field; an arm that disagrees with its label is void, not an anomaly to expl
 enter the 100-candidate rerank window — **pool admission**. It is not a ranking lever and is
 not reported as one.
 
-**Tolerance: zero MAP, zero aR.** The `EVAL_EXPANSION=off` path had a repeat spread of exactly
-zero on 2026-11-24 (`2026-11-24-flag-on-vs-off-qa.md:53`). Arm 1 is therefore re-run once per
-set as a determinism check: any difference voids the run and the spread is recorded in place
-of a verdict.
+**Tolerance: zero MAP, zero aR. Measured, not assumed.** Arms 1 and 2 were each run twice per
+set against the same target: cite_01 39.6 / 67.8 twice and 40.8 / 68.7 twice; cite_02
+73.7 / 86.9 twice and 74.7 / 86.9 twice; probe 57.5 / 83.3 and 58.3 / 83.3 twice. Every
+repeat was identical, which is the basis for the zero tolerance. Two caveats that belong with
+that claim: the 2026-11-24 zero spread this originally cited was caused by the sidecar's
+`@lru_cache` replaying one draw, not by retrieval being re-measured
+(`2026-11-24-flag-on-vs-off-qa.md:53-56`) — these runs measure the path with the sidecar
+**off**, so the repeats are real retrievals; and arm 3 gets the same repeat treatment before
+any delta from it is believed. A run whose repeat differs is void, and the spread is recorded
+in place of a verdict.
 
 ## Decision rule (pre-registered — do not edit after the first run)
-A boost replaces the filter for a type **only if all three hold, on both sets of that type**:
+
+A boost replaces the filter for a type **only if all three hold, on every set that type runs
+on**:
+
+| type | sets |
+|---|---|
+| recency | cite_01 (`q10`) and cite_02 (`d5`) — both must clear |
+| office | the probe set alone — its two cases are the only office evidence there is |
 
 1. the facet case's attainable recall is **higher** in arm 3 than in arm 2;
 2. MAP on that set is **not lower** in arm 3 than in arm 2 (tolerance zero);
 3. no gold document outside the facet cases is lost in arm 3 relative to arm 1.
+
+**Scope clarification (recorded before arm 3, after arms 1-2 only; no threshold changed):**
+office has one set, so "every set of that type" means that one set. A one-set verdict is
+weaker evidence than recency's two-set verdict, so an office "boost wins" is recorded as a
+**candidate for shaping** — a reason to build the next experiment — and never as a mode change
+on its own. An office "constraint" verdict carries the same caveat in the other direction.
 
 Otherwise the type is recorded as **constraint** and the filter stays.
 
@@ -116,7 +135,12 @@ rather than convenient: both arms run the filter path, which this branch leaves
 behaviour-identical by default (`FACET_MODE` unset), and the pre-existing baseline reproduces
 exactly (39.6 / 67.8 and 73.7 / 86.9 match `2026-11-26-facet-negation-qa.md`). It also proves
 the arm evidence is honest — `facet_mode` is `null` on that deploy, because only this branch
-reports it. Arm 3 needs the deploy (`FACET_MODE=boost`).
+reports it. Arm 3 needs the deploy (`FACET_MODE=boost`), and records the image tag the deploy
+landed on.
+
+Run order, so that a determinism claim means what it says: arms 1 and 2, each run twice, on
+one deployment (above); then arm 3, twice per set, on the `FACET_MODE=boost` deployment. No
+arm's repeat may straddle a deploy.
 
 ### Determinism check (arm 1, twice)
 
@@ -126,7 +150,16 @@ reports it. Arm 3 needs the deploy (`FACET_MODE=boost`).
 | cite_02 | 73.7 / 86.9 | 73.7 / 86.9 | 0 / 0 |
 | probe | 57.5 / 83.3 | 57.5 / 83.3 | 0 / 0 |
 
-Zero, so the pre-registered zero tolerance stands and every later delta is attributable.
+### Determinism check (arm 2, twice)
+
+| set | run A MAP / aR | run B MAP / aR | spread |
+|---|---|---|---|
+| cite_01 | 40.8 / 68.7 | 40.8 / 68.7 | 0 / 0 |
+| cite_02 | 74.7 / 86.9 | 74.7 / 86.9 | 0 / 0 |
+| probe | 58.3 / 83.3 | 58.3 / 83.3 | 0 / 0 |
+
+Zero in both measured arms, so the pre-registered zero tolerance stands and every later delta
+is attributable. Arm 3's repeats are pending its deploy.
 
 ### Per set
 
@@ -195,7 +228,12 @@ EVAL_FACETS='{"office_q10_mexico":[{"facet":"office","value":"WRI Mexico"}],"off
 - Sidecar off in every arm: this says nothing about auto-detected or LLM-authored facets, and
   nothing about facets a user did not ask for.
 - A pre-rerank boost only changes window membership. A document that neither the filter nor
-  the boost surfaces is out of reach for both arms; this experiment cannot speak to it.
+  the boost surfaces is out of reach for both arms; this experiment cannot speak to it. More
+  precisely: a boost reorders nodes **already in the fused pool** (`fusion_top_k`, 500 in cite
+  mode), so a gold document outside that pool can never be admitted by a boost. In answer mode
+  the pool and the rerank window are both 100, so there is almost nothing for a boost to admit.
+  A zero-admission boost result can therefore be structural, which is why the rule below
+  separates "weight too weak" from "nothing to admit".
 - The structural caveat above: no facet case's gold can be removed by its own filter, so the
   numbers speak to window composition under a correct constraint, not to dirty-input safety.
 - Weight 1.0 = one RRF vote at rank 1. A sweep is a different experiment.
