@@ -1,0 +1,39 @@
+{
+  "name": "facet-office-probe",
+  "version": "1.0",
+  "description": "Mechanism probe for #522 (office facet: filter vs boost). Gold = the source case's gold intersected with a real office, computed against QA RDS on 2026-11-26. Not a golden set: it answers whether shaping beats filtering for an office constraint, not whether the corpus is right.",
+  "test_cases": [
+    {
+      "id": "office_q10_mexico",
+      "question": "Have we published anything from WRI's Mexico office on urban finance since 2020?",
+      "task_description": "Office probe derived from q10_urban_finance_since_2020: its gold, intersected with wri_primary_office = 'WRI Mexico'.",
+      "expected_external_ids": [
+        "2023_analisis-de-los-mecanismos-financieros-para-la_3765",
+        "2022_impactos-economicos-pandemia-covid19-transporte-publico_0070",
+        "2020_acciones-federales-planeacion-urbana_0152"
+      ],
+      "expected_document_ids": [
+        "76039c19-d7e5-45f3-b543-88302b6034fa",
+        "987353ab-9454-473f-8f00-eb767750dd24",
+        "d24f1e12-50f0-46c6-bfb7-957e779701b4"
+      ]
+    },
+    {
+      "id": "office_d7_india",
+      "question": "What has WRI India published on electric bus adoption and operations?",
+      "task_description": "Office probe derived from d7_electric-buses-excluding-school-buses: its gold, intersected with wri_primary_office = 'WRI India'.",
+      "expected_external_ids": [
+        "2022_rolling-out-electric-buses-a-guidebook-on-route_8515",
+        "2024_real-world-electric-bus-operation-trend-in_3497",
+        "2024_assessing-financing-challenges-for-implementing_4732",
+        "2024_open-e-bus-blueprint_4307"
+      ],
+      "expected_document_ids": [
+        "20e4cc09-add5-4535-91d4-79a548649b0f",
+        "011e3390-85a1-4169-9be8-4e8c5f28e95b",
+        "0ae23d7a-5801-4bf2-95c4-a6e45311fae6",
+        "49c0b8b9-28e2-47e0-ba9f-d645ae99d208"
+      ]
+    }
+  ]
+}

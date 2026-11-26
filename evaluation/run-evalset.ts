@@ -44,6 +44,7 @@ import {
   latencySummary,
 } from './lib/metrics'
 import { isAbstained, isFalseAbstention } from './lib/abstention'
+import { facetSignals, type FacetMode } from './lib/facet-signals'
 import {
   expansionArm,
   facetsForCase,
@@ -177,6 +178,18 @@ interface CaseResult {
    * reads this against retrieved_ids.
    */
   excluded_doc_ids: string[] | null
+  /**
+   * The arm the target answered in (its debug.facet_mode, #522). null when the
+   * target predates the signal. The arm comes from service env, so this field —
+   * not the run's intention — is what makes a report attributable.
+   */
+  facet_mode: FacetMode | null
+  /**
+   * Doc ids the boost rewarded (its debug.boosted_doc_ids). null outside the
+   * boost arm. Empty with facet_mode "boost" means the weight never reached a
+   * document: an inconclusive arm, not a lost one.
+   */
+  boosted_doc_ids: string[] | null
   /** The fixed facets this case was measured with ([] when the lever is off). */
   facets: FacetInput[]
   error?: string
@@ -250,6 +263,8 @@ async function queryTarget(
   serviceMs: number | null
   costUsd: number | null
   excludedDocIds: string[] | null
+  boostedDocIds: string[] | null
+  facetMode: FacetMode | null
   likelyOffTopic: boolean
 }> {
   const response = await fetch(`${TARGET}/api/llamaindex`, {
@@ -274,11 +289,14 @@ async function queryTarget(
   // The search service's off-topic verdict (P3 slice 6) passes through the
   // gateway at the top level of the response. `=== true` keeps targets that
   // predate the signal scoring the old way: no docs, no abstention.
+  const signals = facetSignals(data.debug)
   return {
     hits,
     serviceMs: data.debug?.total_ms ?? null,
     costUsd: data.usage?.total_usd ?? null,
-    excludedDocIds: data.debug?.excluded_doc_ids ?? null,
+    excludedDocIds: signals.excludedDocIds,
+    boostedDocIds: signals.boostedDocIds,
+    facetMode: signals.facetMode,
     likelyOffTopic: data.likely_off_topic === true,
   }
 }
@@ -343,8 +361,15 @@ async function runCase(
   }
 
   try {
-    const { hits, serviceMs, costUsd, excludedDocIds, likelyOffTopic } =
-      await queryTarget(tc.question, mode, facets)
+    const {
+      hits,
+      serviceMs,
+      costUsd,
+      excludedDocIds,
+      boostedDocIds,
+      facetMode,
+      likelyOffTopic,
+    } = await queryTarget(tc.question, mode, facets)
     const docs = bestPerDoc(hits)
     // URL sets score gateway urls with slug matching; id sets score doc_ids
     // exactly. expected_ids/retrieved_ids hold urls for URL sets.
@@ -381,6 +406,8 @@ async function runCase(
         service_time_ms: serviceMs,
         cost_usd: costUsd,
         excluded_doc_ids: excludedDocIds,
+        facet_mode: facetMode,
+        boosted_doc_ids: boostedDocIds,
       }
     }
 
@@ -459,6 +486,8 @@ async function runCase(
       service_time_ms: serviceMs,
       cost_usd: costUsd,
       excluded_doc_ids: excludedDocIds,
+      facet_mode: facetMode,
+      boosted_doc_ids: boostedDocIds,
       likely_off_topic: likelyOffTopic,
     }
   } catch (error: any) {
@@ -490,6 +519,8 @@ async function runCase(
       service_time_ms: null,
       cost_usd: null,
       excluded_doc_ids: null,
+      facet_mode: null,
+      boosted_doc_ids: null,
       error: error.message,
     }
   }

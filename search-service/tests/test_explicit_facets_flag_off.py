@@ -11,6 +11,7 @@ TestClient + stubs — no DB/network (pattern: test_diagnostic_parity.py).
 """
 from fastapi.testclient import TestClient
 from llama_index.core.schema import NodeWithScore, TextNode
+from llama_index.core.base.base_query_engine import QueryBundle
 
 from app import main as app_main
 
@@ -45,9 +46,11 @@ class _DenseStub:
 
 
 def _post(monkeypatch, **overrides):
-    monkeypatch.setitem(app_main.service_state, "bm25_retriever", _Retriever())
+    retriever = overrides.pop("retriever", None) or _Retriever()
+    docs_meta = overrides.pop("docs_meta", DOCS_META)
+    monkeypatch.setitem(app_main.service_state, "bm25_retriever", retriever)
     monkeypatch.setitem(app_main.service_state, "pg_dense_ready", True)
-    monkeypatch.setitem(app_main.service_state, "documents_metadata", DOCS_META)
+    monkeypatch.setitem(app_main.service_state, "documents_metadata", docs_meta)
     monkeypatch.setattr(app_main, "make_dense_retriever", lambda top_k: _DenseStub())
     # Production configuration: understanding flag off.
     monkeypatch.setattr(app_main, "understanding_active", lambda s, r: False)
@@ -78,6 +81,113 @@ def test_flag_off_invalid_facet_is_dropped_not_fatal(monkeypatch):
     payload = _post(monkeypatch, facets=[{"facet": "nonsense", "value": "x"},
                                          {"facet": "language", "value": "es"}])
     assert _doc_ids(payload) == {"es_doc", "en_with_es", "unknown_lang"}
+
+
+YEAR_DOCS_META = {
+    # DB metadata is the source of truth: it wins over the chunk's year string.
+    "db_2025_chunk_2019": {"year_int": 2025},
+    "db_2019_chunk_2025": {"year_int": 2019},
+    "db_2022": {"year_int": 2022},
+    # No DB year: the chunk's year string is the fallback.
+    "chunk_2025": {},
+    # No year anywhere: undated docs are KEPT, never dropped.
+    "undated": {},
+}
+CHUNK_YEARS = {"db_2025_chunk_2019": "2019",
+               "db_2019_chunk_2025": "2025",
+               "chunk_2025": "2025"}
+
+
+class _YearRetriever:
+    def retrieve(self, bundle):
+        return [
+            NodeWithScore(
+                node=TextNode(id_=f"c-{d}", text="t",
+                              metadata={"doc_id": d, "title": d,
+                                        "year": CHUNK_YEARS.get(d)}),
+                score=1.0 - i * 0.01,
+            )
+            for i, d in enumerate(YEAR_DOCS_META)
+        ]
+
+
+def _year_post(monkeypatch, **overrides):
+    return _post(monkeypatch, retriever=_YearRetriever(),
+                 docs_meta=YEAR_DOCS_META, **overrides)
+
+
+def test_chip_and_legacy_year_select_the_same_docs(monkeypatch):
+    # #444 item 3: the FilterPanel chip and the legacy param are the same user
+    # intent, so they must make the same decision from the same metadata.
+    chip_min = _year_post(monkeypatch, facets=[{"facet": "year_min", "value": "2025"}])
+    legacy_min = _year_post(monkeypatch, min_year=2025)
+    assert _doc_ids(chip_min) == _doc_ids(legacy_min) == {
+        "db_2025_chunk_2019", "chunk_2025", "undated"}
+
+    chip_max = _year_post(monkeypatch, facets=[{"facet": "year_max", "value": "2020"}])
+    legacy_max = _year_post(monkeypatch, max_year=2020)
+    assert _doc_ids(chip_max) == _doc_ids(legacy_max) == {
+        "db_2019_chunk_2025", "undated"}
+
+
+class _RecordingReranker:
+    seen = None
+
+    def postprocess_nodes(self, nodes, query_bundle=None, top_n=None):
+        self.seen = {n.node.metadata["doc_id"] for n in nodes}
+        # Rerank-scale scores: cite mode's relevance floor drops raw RRF scores.
+        return [NodeWithScore(node=n.node, score=0.9) for n in nodes]
+
+
+def test_legacy_year_decides_on_the_pre_rerank_pool(monkeypatch):
+    # A post-rerank year filter spends rerank slots on documents it then drops
+    # and cannot admit an in-year doc pushed out by the top_n cut.
+    reranker = _RecordingReranker()
+    monkeypatch.setitem(app_main.service_state, "reranker_cite", reranker)
+    payload = _year_post(monkeypatch, rerank=True, min_year=2025)
+    assert "db_2019_chunk_2025" not in reranker.seen
+    assert _doc_ids(payload) == {"db_2025_chunk_2019", "chunk_2025", "undated"}
+
+
+def test_chip_and_legacy_bounds_intersect(monkeypatch):
+    # A client sending both a chip and a legacy bound used to get both applied
+    # (chip at Stage 1.6, legacy at Stage 2.5). On one path they must intersect,
+    # not silently override: min 2025 + min 2020 means min 2025.
+    both = _year_post(monkeypatch, min_year=2020,
+                      facets=[{"facet": "year_min", "value": "2025"}])
+    chip_only = _year_post(monkeypatch, facets=[{"facet": "year_min", "value": "2025"}])
+    assert _doc_ids(both) == _doc_ids(chip_only) == {
+        "db_2025_chunk_2019", "chunk_2025", "undated"}
+
+    both_max = _year_post(monkeypatch, max_year=2023,
+                          facets=[{"facet": "year_max", "value": "2020"}])
+    assert _doc_ids(both_max) == {"db_2019_chunk_2025", "undated"}
+
+
+class _SeedReranker(_RecordingReranker):
+    def _select_candidates(self, nodes, k):
+        return list(nodes)[:k]
+
+    def score_documents(self, nodes, query_bundle):
+        return {n.node.node_id: 0.9 for n in nodes}
+
+
+def test_year_bound_gates_translation_seeds(monkeypatch):
+    # Answer-mode translation seeds join the rerank candidates after Stage 1.6;
+    # a seed outside the year bound would otherwise be cited for a 2019 doc
+    # that the same request's page hits were filtered out of.
+    seed = NodeWithScore(
+        node=TextNode(id_="s-2019", text="区域运输",
+                      metadata={"doc_id": "db_2019_chunk_2025", "title": "t"}),
+        score=0.5)
+    monkeypatch.setitem(app_main.service_state, "reranker_answer", _SeedReranker())
+    monkeypatch.setattr(app_main.settings, "answer_translation_enabled", True)
+    monkeypatch.setattr(app_main, "build_answer_translation",
+                        lambda *a, **k: ([QueryBundle(query_str="区域运输")], [seed]))
+    payload = _year_post(monkeypatch, mode="answer", rerank=True, min_year=2025,
+                         cite_doc_ids=["db_2019_chunk_2025"],
+                         return_intermediate_results=True)
+    assert "s-2019" not in (payload["debug"]["rerank_window_ids"] or [])
 
 
 def test_flag_off_legacy_excluded_keywords_apply(monkeypatch):
@@ -185,3 +295,38 @@ def test_citation_substitution_cannot_resurrect_excluded_original(monkeypatch):
         "facets": [{"facet": "excluded_keyword", "value": "zero emission"}]})
     assert resp.status_code == 200
     assert "o1" not in _doc_ids(resp.json())
+
+
+# --- #522: FACET_MODE=boost ------------------------------------------------
+#
+# The arm is chosen by service env, so these tests pin the request path only:
+# same facet, opposite sign. `office` is the probe facet (no set names one).
+
+DOCS_META["en_doc"]["office"] = "WRI India"
+
+def test_boost_mode_keeps_and_reorders_instead_of_filtering(monkeypatch):
+    monkeypatch.setattr(app_main.settings, "facet_mode", "boost")
+    payload = _post(monkeypatch, facets=[{"facet": "office", "value": "WRI India"}],
+                    return_intermediate_results=True)
+    assert payload["debug"]["facet_mode"] == "boost"
+    assert payload["debug"]["boosted_doc_ids"] == ["en_doc"]
+    assert _doc_ids(payload) == set(DOCS_META)      # nothing filtered out
+    assert payload["docs"][0]["doc_id"] == "en_doc"
+
+def test_boost_mode_still_applies_negation(monkeypatch):
+    # "Remove this" is never a nudge: an exclusion still drops the document,
+    # and it must not be boosted back afterwards.
+    monkeypatch.setattr(app_main.settings, "facet_mode", "boost")
+    payload = _post(monkeypatch, excluded_keywords=["coal"],
+                    return_intermediate_results=True)
+    assert "es_doc" not in _doc_ids(payload)
+    assert payload["debug"]["boosted_doc_ids"] == []
+
+def test_unknown_facet_mode_fails_at_startup():
+    # A typo must not run the filter arm and be recorded as the boost arm
+    # (same posture as the harness's EVAL_EXPANSION).
+    import pytest as _pytest
+    from pydantic import ValidationError
+    from app.config import Settings
+    with _pytest.raises(ValidationError):
+        Settings(facet_mode="boos")
