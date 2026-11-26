@@ -49,6 +49,7 @@ export function facetChipLabel(facet: string, value: string): string {
   if (facet === 'year_max') return `up to ${value}`
   if (facet === 'language') return LANGUAGE_NAMES[value] ?? value
   if (facet === 'office') return value.replace(/^WRI\s+/i, '')
+  if (facet === 'excluded_keyword') return `Exclude ${value}`
   return value
 }
 

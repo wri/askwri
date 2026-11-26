@@ -17,6 +17,12 @@ describe('facetChipLabel', () => {
     expect(facetChipLabel('language', 'es')).toBe('Spanish')
     expect(facetChipLabel('program', 'WRR')).toBe('WRR')
   })
+
+  it('labels an exclusion as Exclude <value>', () => {
+    expect(facetChipLabel('excluded_keyword', 'school buses')).toBe(
+      'Exclude school buses',
+    )
+  })
 })
 
 describe('InterpretationLine', () => {

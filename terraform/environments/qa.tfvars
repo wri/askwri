@@ -88,8 +88,8 @@ search_service_environment_variables = {
   # remove the var + redeploy.
   "EXPANSION_FACETS"                = "[\"topic\",\"geography\"]"
   # EXPANSION_LANE_WEIGHT removed 5a: it was a dead knob (not read by code).
-  # Now wired as per-mode: cite_expansion_lane_weight=1.0 (recall-first) /
-  # answer_expansion_lane_weight=0.25 (precision-first), via config defaults.
+  # Now wired as per-mode: cite_expansion_lane_weight / answer_expansion_lane_weight
+  # in search-service/app/config.py (which records the sweep that chose them).
   # The EXPANSION_LANE_WEIGHT env var remains as an override for both if set.
   "DEEP_RESCUE_MAX"                 = "10"
 }

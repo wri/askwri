@@ -114,6 +114,14 @@ class Settings(BaseSettings):
     # misspellings of rare-but-real corpus terms stop getting suggestions.
     spell_suggest_min_df: int = 2
     topic_sense_top_k: int = 3
+    # 0.30 is a QUERY→tag floor, derived 2026-11-26 over qa's 756 topic tags
+    # with the lane's own search_query embed call: 22 of 24 off-topic /
+    # corpus-scoped-no-topic sentences clear ZERO tags, while 32 of 43 on-topic
+    # eval queries clear it (top-1 median 0.352, 9 clear zero). Do NOT re-derive
+    # this from tag→tag cosine: tag labels sit at mean 0.414 to each other
+    # against a ~0.12 query→tag ambient, which makes 0.30 look like dead code
+    # (#513). Lowering it admits off-topic ("weather" 0.294); raising it drops
+    # legitimate on-topic queries.
     topic_sense_min_cosine: float = 0.30
     # P2/P2.5 multi-lane fusion (design 2026-08-19 §4.3). Dark by default;
     # active only when query_understanding_enabled is ALSO on (lanes_active()).

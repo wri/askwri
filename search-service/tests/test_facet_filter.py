@@ -3,13 +3,14 @@
 Semantics mirror the legacy apply_metadata_filters where they overlap
 (missing year is KEPT, present-but-unparseable year is EXCLUDED when a year
 filter is set; program is exact-match on node metadata; excluded_keywords
-substring on title+text). Language has no legacy counterpart: unknown
+match whole normalized words in title+text and exclude at the DOCUMENT
+level). Language has no legacy counterpart: unknown
 language is KEPT — exclusion requires a positive mismatch."""
 from types import SimpleNamespace
 from datetime import date
 from unittest.mock import MagicMock
 
-from app.facet_filter import apply_facet_filters, legacy_request_facets
+from app.facet_filter import apply_facet_filters, excluded_doc_ids, legacy_request_facets
 from app.understanding import Facet
 
 
@@ -141,6 +142,22 @@ def test_program_and_excluded_keyword():
     assert [n.node.metadata["doc_id"] for n in out] == ["d-en-2023"]
 
 
+def test_program_match_is_normalized():
+    # The chip shows canonical spacing/case; the corpus keeps its own
+    # spelling (double spaces, mixed case) for the same program series.
+    nodes = [_node("a", program="World Resources Report"), _node("b", program="WRR")]
+    out = apply_facet_filters(nodes, [_hard("program", "world  resources  report")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["a"]
+
+
+def test_program_none_metadata_is_a_mismatch_not_a_crash():
+    # An explicit program_series: None must behave like an absent value
+    # (mismatch → excluded), never raise in _normalize_meta.
+    nodes = [_node("a", program=None)]
+    out = apply_facet_filters(nodes, [_hard("program", "WRR")], {})
+    assert out == []
+
+
 def test_soft_and_suggest_facets_do_not_filter():
     nodes = [_node("d-es-2019")]
     soft = Facet(facet="language", value="en", confidence=0.5, source="llm", action="soft")
@@ -264,8 +281,80 @@ def test_language_no_work_match_excludes():
     assert out == []
 
 
+def test_every_facet_type_has_a_policy_mode():
+    from typing import get_args
+    from app.understanding import FACET_MODES, Facet
+    assert set(FACET_MODES) == set(get_args(Facet.model_fields["facet"].annotation))
+
+
+def test_hard_facet_without_a_mode_is_not_applied():
+    f = Facet.model_construct(facet="mystery", value="x", confidence=1.0,
+                              source="user", action="hard")
+    nodes = [_node("a")]
+    assert apply_facet_filters(nodes, [f], {}) is nodes
+
+
+def test_excluded_doc_ids_returns_translation_and_canonical():
+    nodes = [_node("t1", text="english text", title="t")]
+    pairs = {"t1": {"original": "o1", "original_title": "Zero-emission buses"}}
+    got = excluded_doc_ids(nodes, [_hard("excluded_keyword", "zero emission")], {}, pairs)
+    assert got == {"t1", "o1"}
+
+def test_exclusion_propagates_from_original_to_translation():
+    # pairs only maps translation → original; the ORIGINAL matching must also
+    # exclude its translation — a user excluding a topic excludes the work in
+    # every language, in both directions.
+    nodes = [_node("o1", text="coal power"), _node("t1", text="texto limpio")]
+    pairs = {"t1": {"original": "o1"}}
+    got = excluded_doc_ids(nodes, [_hard("excluded_keyword", "coal")], {}, pairs)
+    assert got == {"o1", "t1"}
+
+def test_exclusion_propagates_to_sibling_translations():
+    # o1 has two translations; only t1 matches. Excluding one version of a
+    # work excludes the whole work: o1, the matching t1, and sibling t2.
+    nodes = [
+        _node("o1", text="clean energy"),
+        _node("t1", text="coal power"),
+        _node("t2", text="texte propre"),
+    ]
+    pairs = {"t1": {"original": "o1"}, "t2": {"original": "o1"}}
+    got = excluded_doc_ids(nodes, [_hard("excluded_keyword", "coal")], {}, pairs)
+    assert got == {"o1", "t1", "t2"}
+
+def test_excluded_doc_ids_skips_docless_node():
+    # A doc-less node must be skipped, not keyed as None: a None in the set
+    # would drop every doc-less node in apply_facet_filters and make
+    # sorted(excluded) raise in the debug payload.
+    nodes = [_node("coal", text="coal power"), _node(None, text="coal power")]
+    assert excluded_doc_ids(nodes, [_hard("excluded_keyword", "coal")], {}) == {"coal"}
+
+
 def test_language_kept_when_doc_has_no_language_metadata():
     # Unknown language is still KEPT (conservative posture), siblings or not.
     nodes = [_node("mystery")]
     out = apply_facet_filters(nodes, [_hard("language", "es")], {})
     assert [n.node.metadata["doc_id"] for n in out] == ["mystery"]
+
+
+def test_exclusion_respects_word_boundaries():
+    nodes = [_node("coalition", text="coalition building"), _node("coal", text="coal power")]
+    out = apply_facet_filters(nodes, [_hard("excluded_keyword", "coal")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["coalition"]
+
+
+def test_exclusion_is_document_level():
+    nodes = [_node("doc", text="school buses are safe"), _node("doc", text="electric buses")]
+    out = apply_facet_filters(nodes, [_hard("excluded_keyword", "school buses")], {})
+    assert out == []
+
+
+def test_exclusion_normalizes_case_accents_hyphens_and_spacing():
+    nodes = [_node("mx", title="México’s zero–emission  buses", text="x")]
+    out = apply_facet_filters(nodes, [_hard("excluded_keyword", "ZERO EMISSION")], {})
+    assert out == []
+
+
+def test_blank_exclusion_never_matches():
+    nodes = [_node("a")]
+    out = apply_facet_filters(nodes, [_hard("excluded_keyword", "   ")], {})
+    assert [n.node.metadata["doc_id"] for n in out] == ["a"]
