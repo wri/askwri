@@ -10,7 +10,7 @@ Seeded: the same seed gives the same list.
 Usage: python pick_ordinary_pages.py <pdf_dir> <out.json>
 Output: [[doc, page, language, why], ...] for build_set.py's optional selection arg.
 """
-import json, pathlib, random, re, subprocess, sys
+import collections, json, pathlib, random, re, subprocess, sys
 
 import pypdfium2 as pdfium
 from langdetect import DetectorFactory, detect
@@ -21,6 +21,19 @@ QUOTA = {"en": 59, "zh": 20, "es": 15, "pt": 4, "id": 2}
 MAX_PER_DOC = 2
 SEED = 20261126
 LANG = {"zh-cn": "zh", "zh-tw": "zh", "es": "es", "pt": "pt", "id": "id", "en": "en"}
+
+if sys.argv[1:2] == ["--check"]:
+    # The committed sample is what the note and the v4 report's B table cite, so
+    # check its invariants rather than trusting the generator.
+    sel = json.loads((pathlib.Path(__file__).resolve().parent / "ordinary-100-selection.json").read_text())
+    pairs = [(d, p) for d, p, _, _ in sel]
+    counts = collections.Counter(l for _, _, l, _ in sel)
+    assert len(sel) == sum(QUOTA.values()), len(sel)
+    assert len(set(pairs)) == len(pairs), "duplicate (document, page)"
+    assert dict(counts) == QUOTA, (dict(counts), QUOTA)
+    assert len({d for d, _, _, _ in sel}) == 51
+    print(f"selection ok: {len(sel)} pages, 51 documents, {dict(counts)}")
+    sys.exit(0)
 
 pdf_dir, out_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 

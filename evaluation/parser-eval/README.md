@@ -43,7 +43,7 @@ argument, and is never written to any output. Never paste it at a shell prompt.
 
 | Step | Script | Does |
 |---|---|---|
-| 0 | `pick_ordinary_pages.py <pdf_dir> <out.json>` | Seeds one or two unremarkable content pages per document, excluding pages the hard set covers, across the corpus languages. `ordinary-100-selection.json` is the exact 100-page sample the follow-on eval used; the seed reproduces it |
+| 0 | `pick_ordinary_pages.py <pdf_dir> <out.json>` | Seeds one or two unremarkable content pages per document, excluding pages the hard set covers, across the corpus languages. `ordinary-100-selection.json` is the exact 100-page sample the follow-on eval used; the seed reproduces it, and `--check` asserts its counts and that it has no duplicate page |
 | 0b | `score_qa_text.py <pdf_dir> <set_dir> [selection.json]` | Scores the Mistral text QA already stores against each page's text layer — no API calls. Read-only; run it through `scripts/with-remote-env.sh qa` with psycopg available |
 | 1 | `profile_pages.py <pdf_dir> <pages.jsonl>` | Per page: text-layer size, numbers, numeric rows, table/notes words, image cover, landscape, damaged characters, language |
 | 2 | `pick_pages.py <pages.jsonl>` | Ranks the hardest pages per language (max 2 per document) |

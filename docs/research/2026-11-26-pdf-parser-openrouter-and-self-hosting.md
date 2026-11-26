@@ -217,7 +217,8 @@ over whole documents the loss is larger and concentrated on those pages.
 
 `pick_ordinary_pages.py` samples content pages seeded, one or two per document, excluding the pages
 the hard set already covers: en 59, zh 20, es 15, pt 4, id 2, from 51 documents. The exact sample is
-committed as `evaluation/parser-eval/ordinary-100-selection.json`. `build_set.py`
+committed as `evaluation/parser-eval/ordinary-100-selection.json`; `pick_ordinary_pages.py --check`
+asserts its 100 pages, 51 documents, per-language counts and absence of duplicate pages. `build_set.py`
 builds them (its optional selection argument), `run_openrouter.py` parses them, and Mistral's stored
 text is scored on the same pages. Per model, over the 87 pages that carry at least five numbers:
 
