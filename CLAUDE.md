@@ -42,7 +42,8 @@ release gate — the latter compares counts and is blind to content divergence.
 This has bitten twice (PR #360 on 2026-08-25 and PR #395 on 2026-09-02 — both
 merged to `main` believing it was inert code-landing, both deployed production
 unintentionally). The README's "Deploy to Production: `git push origin main`"
-section is leftover template text and does not describe this repo's release flow.
+section was leftover template text and does not describe this repo's release
+flow; it was removed in #498 and README now points at the release runbook.
 
 ## Commands
 - `npm run dev` / `npm run build` — Next.js. Local prod builds: `npx next build --webpack`

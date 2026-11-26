@@ -23,11 +23,16 @@ The search service is internal — the Next.js backend proxies all requests.
 
 ### 1. Indexing
 
-On startup, the service:
+With the `legacy` retrieval backend, on startup the service:
 1. Parses PDFs from the documents directory (400-char chunks, 80-char overlap)
 2. Generates **summary nodes** from `documents.csv` metadata (one per document)
-3. Builds a **vector index** (OpenAI embeddings) and a **BM25 index** over all nodes
+3. Builds an in-memory index over all nodes, embedding chunks with Cohere Embed v4
+   via Bedrock (`cohere-embed-v4`; `text-embedding-3-small` is the OpenAI rollback)
 4. Caches parsed nodes and embeddings to avoid reprocessing on restart
+
+With the `postgres` backend (see *Postgres-backed retrieval* below) there is no
+boot-time parsing or embedding: chunks, sparse vectors and embeddings are read
+from Postgres. Ingestion and embedding are the worker's job, not the service's.
 
 ### 2. Hybrid Retrieval
 
@@ -35,47 +40,69 @@ Queries use **Reciprocal Rank Fusion (RRF)** to combine two retrieval strategies
 
 | Parameter | Cite mode | Answer mode |
 |-----------|-----------|-------------|
-| Dense (vector) top_k | 800 | 200 |
-| Sparse (BM25) top_k | 800 | 200 |
-| Fusion top_k | 500 | 200 |
+| Dense (vector) top_k | 500 | 150 |
+| Sparse (BM25) top_k | 500 | 150 |
+| Fusion top_k | 500 | 100 |
 | Dense weight | 0.5 | 0.65 |
 | Sparse weight | 0.5 | 0.35 |
 | RRF k | 60 | 60 |
 
-BM25 queries receive **conservative query expansion** via domain-specific synonym mapping (e.g., "micromobility" → ["bike sharing", "e-bikes", "scooters"]). See `app/query_expansion.py`.
+These are the app's presets (`CITE_PRESET` / `ANSWER_PRESET` in
+`src/config/retrieval.ts`), sent with every request. The service's own
+`QueryRequest` defaults (500 / 500 / 200) apply only when a caller omits them.
+
+BM25 runs on the Postgres-resident sparse impact vectors by default
+(`KEYWORD_BACKEND=sparse`), not an in-memory index. Queries may additionally
+receive **query expansion**: semantic tag lanes and LLM-generated variants, both
+gated per environment by `QUERY_UNDERSTANDING_ENABLED` /
+`QUERY_EXPANSION_LANES_ENABLED` / `QUERY_UNDERSTANDING_LLM_ENABLED`. Where those
+lanes are off, the legacy conservative synonym mapping still applies (e.g.
+"micromobility" → ["bike sharing", "e-bikes", "scooters"]); see
+`app/query_expansion.py`. Expansion never changes the `/query` contract.
 
 ### 3. Cross-Encoder Reranking
 
-After fusion, results are reranked using `cross-encoder/ms-marco-MiniLM-L-6-v2` (22M params).
+After fusion, results are reranked using **Cohere Rerank 3.5 via AWS Bedrock**
+(`app/bedrock_rerank.py`; region from `BEDROCK_RERANK_REGION`).
 
 | Parameter | Cite mode | Answer mode |
 |-----------|-----------|-------------|
-| rerank_top_n | 250 | 120 |
-| max_results returned | — | 15 |
+| rerank_top_n | 500 | 20 |
+| max_results returned | 25 | 15 |
 
-The reranker produces raw logit scores (not probabilities). Higher = more relevant.
+Cite mode sets `rerank_top_n == fusion_top_k`, so nothing is dropped between
+fusion and rerank and the relevance floor is the sole quality gate. Its 25-doc
+cap — not the floor — bounds list length, because the UI renders every returned
+doc.
 
-### 4. Cite Mode: Logit Floor & Relevance Tiers
+Only the top `RERANK_CANDIDATES` fused candidates are sent to Bedrock; the
+un-reranked tail is dropped rather than passed through. The reranker returns
+**0–1 relevance scores** (not logits). Higher = more relevant.
 
-In cite mode, results are filtered and tiered based on calibrated logit thresholds:
+### 4. Cite Mode: Relevance Floor & Tiers
 
-| Tier | Logit threshold | Meaning |
-|------|----------------|---------|
-| **Strong** | ≥ -2.3 | Top ~30% of relevant scores (70th percentile) |
-| **Partial** | ≥ -7.8 | Middle ~45% (25th–70th percentile) |
-| **Weak** | ≥ -9.0 | Bottom ~25% of relevant scores |
-| Dropped | < -9.0 | Below floor, not returned |
+In cite mode, results are filtered and tiered on the 0–1 rerank scale:
 
-These are **universal fixed cutpoints** derived from calibration against a golden evaluation dataset. They reflect absolute reranker confidence, not position within a given query's results. A query with easy matches may return all "Strong"; a hard query may return mostly "Weak."
+| Tier | Score | Meaning |
+|------|-------|---------|
+| **Strong** | ≥ 0.70 | Top of the relevant score distribution |
+| **Partial** | ≥ 0.30 | Middle of the relevant score distribution |
+| **Weak** | ≥ 0.09 | Low relevance, still above the floor |
+| Dropped | < 0.09 | Below floor, not returned |
+
+These are **universal fixed cutpoints** derived from calibration against a golden evaluation dataset, and re-derived whenever the corpus, chunk text or embedding model changes. They reflect absolute reranker confidence, not position within a given query's results. A query with easy matches may return all "Strong"; a hard query may return mostly "Weak."
 
 Thresholds are configured in `app/config.py`:
 ```python
-cite_logit_floor: float = -9.0        # Drop docs below this raw logit
-cite_strong_threshold: float = -2.3   # 70th percentile of relevant scores
-cite_partial_threshold: float = -7.8  # 25th percentile of relevant scores
+cite_logit_floor: float = 0.09        # Drop docs below this relevance score
+cite_strong_threshold: float = 0.70
+cite_partial_threshold: float = 0.30
 ```
 
-The response includes `raw_score` (logit) and `relevance_tier` ("strong"/"partial"/"weak") per document.
+The response includes `raw_score` and `relevance_tier` ("strong"/"partial"/"weak") per document.
+
+`TODO(golden-set)`: the floor and tiers were derived on English-dominant sets and
+are pending per-language recalibration (issue #498 item 20).
 
 ### 5. Answer Mode Relevance
 
@@ -83,11 +110,11 @@ Answer mode does **not** use reranker logit thresholds to assign relevance tiers
 
 Calibration showed that cross-encoder scores cannot separate relevant from irrelevant chunks for answer-mode queries: the relevant and irrelevant score distributions overlap almost completely (relevant median 2.25, irrelevant median 2.07). The reranker is a ranking tool, not a classifier — it coarsely selects the top candidates but cannot discriminate within them.
 
-**Relevance filtering for answer mode happens in the Next.js answer route**, not the search service. After the search service returns up to 15 chunks, the answer route calls `gpt-5.4-nano` to score each chunk for relevance to the query. Only chunks passing the nano filter are passed to the synthesis LLM (GPT-5.4).
+**Relevance filtering for answer mode happens in the Next.js answer route**, not the search service. After the search service returns up to 15 chunks, the answer route can score each chunk for relevance before synthesis. That prefilter is **off by default** (`USE_NANO_FILTER=false`); its model comes from the `MODEL_PREFILTER` lever (see `src/config/models.ts`). With it off, synthesis assigns source relevance itself.
 
-**The `answer_logit_floor` experiment has been removed.** Calibration showed cross-encoder scores cannot separate relevant from irrelevant chunks for answer-mode queries (relevant median 2.25, irrelevant median 2.07). The logit floor config (`answer_use_logit_floor`, `answer_logit_floor`, etc.) has been removed from `app/config.py`.
+**The answer-mode logit floor experiment has been removed.** Calibration showed cross-encoder scores cannot separate relevant from irrelevant chunks for answer-mode queries (relevant median 2.25, irrelevant median 2.07). The logit floor config (`answer_use_logit_floor`, `answer_logit_floor`, etc.) has been removed from `app/config.py`.
 
-**Coverage assessment** uses `gpt-5.4-nano` in the Next.js layer (`/api/answer-coverage`), not the search service. It provides an absolute query-level rating (good/limited/poor) before synthesis runs.
+**The query-level overview** is produced by the Next.js `/api/alignment` route, not the search service. It rates how well the retrieved set answers the query and reports `provenance.produced`; when no model authored the rating the UI shows an explicit unavailable state rather than a rating.
 
 ### 6. Document Deduplication
 
@@ -144,7 +171,8 @@ pip install -r requirements.txt
 # Start the service
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-# Index build takes about half hour for 170 documents on first start; cached after that
+# The legacy backend builds the index on first start (slow at corpus scale, cached after that).
+# The postgres backend skips this entirely — see "Postgres-backed retrieval" below.
 ```
 
 ### API Documentation
@@ -168,7 +196,7 @@ Once running: http://localhost:8000/docs
 | `BEDROCK_RERANK_REGION` | `us-west-2` | Bedrock region hosting Cohere Rerank 3.5 |
 | `RERANK_CANDIDATES` | `100` | Fused candidates sent to the Bedrock Rerank API (cost/latency scale with count) |
 | `CITE_RERANK_PER_DOC_CAP` | `2` | Max chunks per doc in the cite-mode rerank candidate set (doc-coverage lever; answer mode uncapped) |
-| `CITE_LOGIT_FLOOR` | `0.10` | Cite-mode relevance floor on the 0–1 rerank scale (derived 2026-07-22; re-derive with `scripts/capture_cite_scores.py` + `analyze_cite_scores.py` after candidate-pool changes) |
+| `CITE_LOGIT_FLOOR` | `0.09` | Cite-mode relevance floor on the 0–1 rerank scale (re-derived after each corpus or embedding change, most recently post-Mistral-re-parse; re-derive with `scripts/capture_cite_scores.py` + `analyze_cite_scores.py` after candidate-pool changes) |
 | `CITE_SUBSTITUTE_SUMMARY_PASSAGE` | `false` | Cite mode: show a real passage for documents whose best chunk is the synthetic summary node, carrying its score and tier over (issue #233). Ranking is unchanged by construction; only `content`/`page`/`chunk_id` move, for ~1% of golden-set and ~3% of cross-lingual result rows |
 | `PARSE_BACKEND` | `pypdf` | Worker parse stage: `pypdf` (text layer, validation oracle) or `mistral` (Mistral OCR markdown, per-page; ratified for Phase C, default flips after the Phase 1 gate) |
 | `MISTRAL_API_KEY` | — | Required when `PARSE_BACKEND=mistral` |
@@ -216,7 +244,15 @@ search-service/
 ├── app/
 │   ├── main.py              # FastAPI app, retrieval pipeline, reranking
 │   ├── config.py            # Settings (thresholds, paths, ports)
-│   ├── query_expansion.py   # Domain-specific BM25 synonym expansion
+│   ├── bedrock_embed.py     # Cohere Embed v4 via Bedrock
+│   ├── bedrock_rerank.py    # Cohere Rerank 3.5 via Bedrock
+│   ├── pg_store.py          # Postgres reads: chunks, embeddings, sparse vectors
+│   ├── sparse_keyword.py    # Postgres-resident BM25 impact vectors
+│   ├── understanding.py     # Deterministic query understanding (tags, facets)
+│   ├── understanding_llm.py # LLM sidecar: core topic, variants, off-topic check
+│   ├── query_expansion.py   # Legacy synonym expansion (lanes-off path)
+│   ├── query_translate.py   # Cross-language query translation
+│   ├── indexing.py          # Legacy CSV + PDF index build
 │   └── routers/
 │       └── api.py           # API routes
 ├── data/                    # Local documents (not in git)
