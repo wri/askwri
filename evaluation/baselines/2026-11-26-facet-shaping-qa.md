@@ -14,13 +14,20 @@ The arm is chosen by **service env** (`FACET_MODE`), not by the request: the req
 are identical across arms 2 and 3. `debug.facet_mode` in each report JSON is the evidence of
 which arm actually answered.
 
-**Target build (amended before arm 3):** the measurement runs against **one combined build** —
-this branch plus #525 (444 item 3, one year filter). #525 changes the year filter itself
-(`year_int` source, pre-rerank only, intersecting bounds), which is exactly the mechanism the
-*recency* arm measures; measuring recency on the old year path would make its verdict stale
-the moment 444 shipped. The arms 1-2 numbers recorded below were taken on `858bbca`, the
-pre-#525 year filter; they are kept as a stepping stone and **superseded by a re-run on the
-combined build** (same commands, same rule).
+**Target build:** the measurement runs against **one combined build** — #526 (this branch,
+the `FACET_MODE` lever) merged with #525 (444 item 3, one year filter) as `9455752`
+(search-service task definition `askwri-app-qa-search-service:280`, image tag
+`94557521ff59584bbe1cf88a8d2334c869034f1b` — asserted live, not inferred from a green
+workflow). #525 changes the year filter itself (`year_int` source, pre-rerank only,
+intersecting bounds), which is exactly the mechanism the *recency* arm measures, so the arms
+were re-run on the combined build rather than carried over.
+
+**The re-run reproduced arms 1 and 2 exactly, value for value** — cite_01 39.6/67.8 and
+40.8/68.7, cite_02 73.7/86.9 and 74.7/86.9, probe 57.5/83.3 and 58.3/83.3, each pair identical
+across two passes on `9455752`. Every number in the tables below is therefore measured on the
+combined build, and #525 is confirmed behaviour-neutral for these cases (as its design claimed:
+the year source changes, the outcome does not, because every gold document already satisfies
+its facet). No pre-#525 number survives in the decision path.
 
 ## Question
 
@@ -126,13 +133,10 @@ limit of the answer:
 
 _(numbers filled in as arms run; the rule above is frozen)_
 
-**Arms 1 and 2 below are the pre-#525 measurement, kept for the record and superseded by the
-re-run on the combined build.** They were taken on QA at `858bbca`, before this branch merged:
-both arms run the filter path, which this branch leaves behaviour-identical by default
-(`FACET_MODE` unset), so the numbers are a valid picture of *that* build — and the wrong picture
-of the build the verdict will be taken on, because #525 changed the year filter itself. They are
-**not** input to the decision; the combined-build re-run replaces them (same commands, same
-frozen rule). Two cross-checks. First, the numbers match
+**Arms 1 and 2 below are measured on the combined build `9455752`**, twice per set, with the
+pre-#525 numbers kept only as a cross-check in the paragraph above. Both arms run the filter
+path (`FACET_MODE` unset), which this branch leaves behaviour-identical by default, and both
+passes were identical. Two cross-checks. First, the numbers match
 `evaluation/baselines/2026-11-26-facet-negation-qa.md` (in tree since #520 merged: 39.6 / 67.8
 and 73.7 / 86.9 for its two off-arms). The older in-repo 2026-11-24 report shows 36.4 / 65.8
 for cite_01's off arm, and the gap is the build, not the harness: that arm ran before #519
