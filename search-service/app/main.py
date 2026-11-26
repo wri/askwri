@@ -2021,6 +2021,8 @@ async def hybrid_query(request: QueryRequest):
                                 if request.return_intermediate_results else None),
                 "rerank_window_ids": (rerank_window_ids
                                       if request.return_intermediate_results else None),
+                "excluded_doc_ids": (sorted(excluded)
+                                     if request.return_intermediate_results else None),
                 "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,

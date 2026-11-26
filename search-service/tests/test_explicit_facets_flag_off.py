@@ -85,6 +85,12 @@ def test_flag_off_legacy_excluded_keywords_apply(monkeypatch):
     assert _doc_ids(payload) == {"en_doc", "en_with_es", "unknown_lang"}
 
 
+def test_debug_exposes_excluded_doc_ids(monkeypatch):
+    payload = _post(monkeypatch, excluded_keywords=["coal"],
+                   return_intermediate_results=True)
+    assert payload["debug"]["excluded_doc_ids"] == ["es_doc"]
+
+
 class _TwoChunkRetriever:
     def retrieve(self, bundle):
         return [
