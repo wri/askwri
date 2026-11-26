@@ -134,7 +134,7 @@ add("Limits of the follow-on", "Heading2")
 add("One run per model; 100 ordinary pages from 51 documents; agent-reviewed, like the rest of the evaluation. It measures numbers and words, "
     "not reading order or table cells, and says nothing about retrieval or answers. The hard-set sweep compares stored text with the local PDFs' "
     "layers; the content hashes matched for all 24 documents and the known invisible-text pages were checked by eye, but hidden text can still "
-    "inflate the denominator. Its scripts and every score are on the private report site under evidence/v4, not in this repository.")
+    "inflate the denominator. Its scores, cost records and outputs are on the private report site under evidence/v4; the scripts that produced them are in evaluation/parser-eval/.")
 story.append(PageBreak())
 
 add("Cost, access and limits", "Heading1")
@@ -160,7 +160,7 @@ add("Agent-reviewed references, not independent human ground truth. Single runs;
     "numbers and words, not reading order or cell placement. No full-corpus run, no cross-page table continuity and no controlled retrieval "
     "experiment. No QA index, queue, IAM or serving configuration changed.")
 add("Evidence: every output, raw response, run record, scorer and the 27 hard source pages are under evidence/v3 on the private report site "
-    "(wri-parser-evaluation-lab.bouncychess17.chatgpt.site). The follow-on eval's scores, cost records and scripts are on the private report site under evidence/v4, not in this repository.")
+    "(wri-parser-evaluation-lab.bouncychess17.chatgpt.site). The follow-on eval's scores, cost records and outputs are on the private report site under evidence/v4; the scripts are in evaluation/parser-eval/.")
 
 def footer(c, d):
     c.setFont("Helvetica", 8); c.setFillColor(colors.HexColor("#506975"))
