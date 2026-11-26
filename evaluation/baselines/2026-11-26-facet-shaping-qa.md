@@ -1,7 +1,10 @@
 # Facet shaping vs filtering — QA baseline (#522)
 
 **Status:** PRE-REGISTERED — written and committed before any run. The numbers below
-are filled in afterwards; the decision rule is not.
+are filled in afterwards; the decision rule is not. Two pre-run amendments are in the
+history, both before the first call: the harness now persists `facet_mode` and
+`boosted_doc_ids` (so the arm can be verified rather than assumed), and the structural
+caveat below records that no facet case's gold can be removed by its own filter.
 **Issue:** [wri/askwri#522](https://github.com/wri/askwri/issues/522) (parent #450)
 **Target:** `https://qa.askwri-app.org`, QA deploy of `fix/522-facet-shaping`
 **Fixtures:** `evalset_cite_01.json` v3.2 (11 cases), `evalset_cite_02.json` v4.3 (16 cases),
@@ -52,9 +55,15 @@ Deferred to #523.
 
 Per case and per set: MAP (AP per case), attainable recall, gold removed, leakage. For arm 3
 additionally `boosted_doc_ids ∩ expected` (gold the boost rewarded) and
-`boosted_doc_ids ∩ returned`, read from `debug.boosted_doc_ids`. Counts are reported next to
-every percentage: the office probe's gold is 3 and 4 documents, where one document is ~25-33
+`boosted_doc_ids ∩ returned`. Both `facet_mode` and `boosted_doc_ids` are persisted per case
+in the report JSON — the harness mirrors `excluded_doc_ids` (`evaluation/lib/facet-signals.ts`,
+commit `d054405`, landed **before** the first run). Counts are reported next to every
+percentage: the office probe's gold is 3 and 4 documents, where one document is ~25-33
 recall points.
+
+**Every run's report JSON must show `facet_mode` matching its intended arm before any number
+is read from it.** The arm comes from service env, so a report is attributable only through
+that field; an arm that disagrees with its label is void, not an anomaly to explain.
 
 **What arm 3 is, and is not.** The boost applies pre-rerank, so it changes which documents
 enter the 100-candidate rerank window — **pool admission**. It is not a ranking lever and is
@@ -66,7 +75,6 @@ set as a determinism check: any difference voids the run and the spread is recor
 of a verdict.
 
 ## Decision rule (pre-registered — do not edit after the first run)
-
 A boost replaces the filter for a type **only if all three hold, on both sets of that type**:
 
 1. the facet case's attainable recall is **higher** in arm 3 than in arm 2;
@@ -79,6 +87,25 @@ Otherwise the type is recorded as **constraint** and the filter stays.
 - If `boosted_doc_ids ∩ expected` is empty for a type, arm 3 is recorded as **inconclusive at
   weight 1.0** — the weight did not reach those documents — not as "shaping fails".
 - Nothing is built for a type whose verdict is constraint.
+
+### Structural caveat: no facet case here can lose gold to the filter
+
+Checked against QA RDS on 2026-11-26, before any run: **every document in all four facet
+cases satisfies its facet** — `q10`'s gold spans 2020-2024 (1/1/2/3/3 per year) against
+`year_min` 2020, `d5`'s spans 2022-2024 (1/1/3) against `year_min` 2022, and both office
+probe cases are gold ∩ office by construction.
+
+So the filter arm cannot remove gold in this experiment, and the comparison measures what the
+filter *does* to the candidate pool — freeing rerank-window slots — against what the boost
+does to it, promoting gold. That is the mechanism question #522 asks, and it is the honest
+limit of the answer:
+
+- A **constraint** verdict here means the boost did not beat the filter under a **correct**
+  constraint. It does **not** mean shaping loses on a dirty or loose facet value (a wrong
+  office, a year the user meant approximately), which is the case where a filter removes the
+  gold a boost would have kept. That failure mode is not touched by these numbers.
+- Gold limits: recency has 10 and 5 gold; the office probe has 3 and 4. Read counts, not
+  percentages alone.
 
 ## Results
 
@@ -143,6 +170,8 @@ EVAL_FACETS='{"office_q10_mexico":[{"facet":"office","value":"WRI Mexico"}],"off
   nothing about facets a user did not ask for.
 - A pre-rerank boost only changes window membership. A document that neither the filter nor
   the boost surfaces is out of reach for both arms; this experiment cannot speak to it.
+- The structural caveat above: no facet case's gold can be removed by its own filter, so the
+  numbers speak to window composition under a correct constraint, not to dirty-input safety.
 - Weight 1.0 = one RRF vote at rank 1. A sweep is a different experiment.
 - The office probe is constructed. It measures the mechanism, not whether users ask for
   offices this way.
