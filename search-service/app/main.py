@@ -1689,6 +1689,9 @@ async def hybrid_query(request: QueryRequest):
         # Excluded doc ids for the whole request: computed once here so the
         # cite assembly can skip excluded originals without recomputing.
         excluded = set()
+        # #522: the boost arm keeps every candidate and rewards the matches.
+        # Empty in every other request, so the debug key is always defined.
+        boosted: Set[str] = set()
         if all_facets:
             docs_meta = service_state.get("documents_metadata") or {}
             # Scan the translation seeds too: a pair's canonical original is
@@ -1698,13 +1701,24 @@ async def hybrid_query(request: QueryRequest):
                 stage1_results + translation_seed, all_facets, docs_meta,
                 translation_pairs)
             pre_facet = len(stage1_results)
-            stage1_results = apply_facet_filters(
-                stage1_results, all_facets, docs_meta,
-                translation_pairs=translation_pairs, excluded_ids=excluded)
+            if settings.facet_mode == "boost":
+                from app.facet_filter import boost_facet_matches
+                # An exclusion is never a nudge: drop first, then boost the rest.
+                stage1_results = [n for n in stage1_results
+                                  if (n.node.metadata or {}).get("doc_id") not in excluded]
+                stage1_results, boosted = boost_facet_matches(
+                    stage1_results, all_facets, docs_meta, settings.facet_boost_weight)
+                logger.info(
+                    f"Stage 1.6 (Facet Boost): {pre_facet} → {len(stage1_results)} results, "
+                    f"{len(boosted)} boosted")
+            else:
+                stage1_results = apply_facet_filters(
+                    stage1_results, all_facets, docs_meta,
+                    translation_pairs=translation_pairs, excluded_ids=excluded)
+                logger.info(f"Stage 1.6 (Facet Filters): {pre_facet} → {len(stage1_results)} results")
             if excluded and translation_seed:
                 translation_seed = [n for n in translation_seed
                                     if n.node.metadata.get("doc_id") not in excluded]
-            logger.info(f"Stage 1.6 (Facet Filters): {pre_facet} → {len(stage1_results)} results")
 
         # Stage 2: Reranking (Bedrock Cohere Rerank — 0-1 relevance scores).
         # rerank_applied gates the cite floor/tiers downstream: they are
@@ -2025,6 +2039,11 @@ async def hybrid_query(request: QueryRequest):
                                       if request.return_intermediate_results else None),
                 "excluded_doc_ids": (sorted(excluded)
                                      if request.return_intermediate_results else None),
+                # #522: which arm answered this request, and (boost arm only)
+                # the documents the boost actually rewarded.
+                "facet_mode": settings.facet_mode,
+                "boosted_doc_ids": (sorted(boosted)
+                                    if request.return_intermediate_results else None),
                 "total_ms": round((time.time() - request_start) * 1000, 1),
                 "mode_config": {
                     "dense_weight": request.dense_weight,

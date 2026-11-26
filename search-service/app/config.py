@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -173,6 +174,15 @@ class Settings(BaseSettings):
     # Re-gate at production corpus scale before any production flag-on.
     cite_expansion_lane_weight: float = 0.5
     answer_expansion_lane_weight: float = 1.0
+
+    # #522: how a positive constraint facet applies — "filter" (drop the
+    # mismatches; every environment's behaviour) or "boost" (keep everything,
+    # add one RRF vote at rank 1 — `facet_boost_weight / (60 + 1)` — to the
+    # verified matches). Boost exists to measure shaping vs filtering; a value
+    # that is neither fails at startup rather than running the filter arm and
+    # being recorded as the boost arm.
+    facet_mode: Literal["filter", "boost"] = "filter"
+    facet_boost_weight: float = 1.0
 
     # Phase 1 ingestion worker
     worker_poll_seconds: int = 10

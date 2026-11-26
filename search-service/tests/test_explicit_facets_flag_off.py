@@ -185,3 +185,38 @@ def test_citation_substitution_cannot_resurrect_excluded_original(monkeypatch):
         "facets": [{"facet": "excluded_keyword", "value": "zero emission"}]})
     assert resp.status_code == 200
     assert "o1" not in _doc_ids(resp.json())
+
+
+# --- #522: FACET_MODE=boost ------------------------------------------------
+#
+# The arm is chosen by service env, so these tests pin the request path only:
+# same facet, opposite sign. `office` is the probe facet (no set names one).
+
+DOCS_META["en_doc"]["office"] = "WRI India"
+
+def test_boost_mode_keeps_and_reorders_instead_of_filtering(monkeypatch):
+    monkeypatch.setattr(app_main.settings, "facet_mode", "boost")
+    payload = _post(monkeypatch, facets=[{"facet": "office", "value": "WRI India"}],
+                    return_intermediate_results=True)
+    assert payload["debug"]["facet_mode"] == "boost"
+    assert payload["debug"]["boosted_doc_ids"] == ["en_doc"]
+    assert _doc_ids(payload) == set(DOCS_META)      # nothing filtered out
+    assert payload["docs"][0]["doc_id"] == "en_doc"
+
+def test_boost_mode_still_applies_negation(monkeypatch):
+    # "Remove this" is never a nudge: an exclusion still drops the document,
+    # and it must not be boosted back afterwards.
+    monkeypatch.setattr(app_main.settings, "facet_mode", "boost")
+    payload = _post(monkeypatch, excluded_keywords=["coal"],
+                    return_intermediate_results=True)
+    assert "es_doc" not in _doc_ids(payload)
+    assert payload["debug"]["boosted_doc_ids"] == []
+
+def test_unknown_facet_mode_fails_at_startup():
+    # A typo must not run the filter arm and be recorded as the boost arm
+    # (same posture as the harness's EVAL_EXPANSION).
+    import pytest as _pytest
+    from pydantic import ValidationError
+    from app.config import Settings
+    with _pytest.raises(ValidationError):
+        Settings(facet_mode="boos")
