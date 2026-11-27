@@ -83,7 +83,11 @@ search_service_environment_variables = {
   # FAILED the decision rule: cite_01 MAP 38.0 -> 40.8, but cite_02 77.2 ->
   # 74.7 (-2.5 pp against a 1.0 pp tolerance) and the off-topic flag went from
   # 2/3 to 0/3 on cite_02's negatives. Restored to the all-on config.
-  "QUERY_EXPANSION_LANES_ENABLED"   = "true"
+  # 2026-11-27: A2 arm (lanes OFF, sidecar ON) of the pre-registered experiment
+  # in docs/research/2026-11-27-lane-ablation.md. A1 showed the bundle is a
+  # cite_01/cite_02 trade; A2 isolates lanes from the sidecar. Restore to
+  # "true" if the rule fails.
+  "QUERY_EXPANSION_LANES_ENABLED"   = "false"
   "QUERY_UNDERSTANDING_LLM_ENABLED" = "true"
   # EXPANSION_FACETS: which tag facets get a semantic retrieval lane. Code
   # default is topic-only (P2.5 byte-identical). Adding geography enables the
