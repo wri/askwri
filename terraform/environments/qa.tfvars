@@ -78,8 +78,13 @@ search_service_environment_variables = {
   # QA ONLY. production.tfvars is unchanged. Revert = remove these vars +
   # redeploy.
   "QUERY_UNDERSTANDING_ENABLED"      = "true"
-  "QUERY_EXPANSION_LANES_ENABLED"   = "true"
-  "QUERY_UNDERSTANDING_LLM_ENABLED" = "true"
+  # 2026-11-27: A1 arm of the pre-registered experiment in
+  # docs/research/2026-11-27-lane-ablation.md. Deterministic tier only: lanes
+  # and sidecar OFF. Lanes retire DOMAIN_EXPANSIONS (domain_expansion = not
+  # lanes_on) and the local ablation measured that swap, not the variants, as
+  # the cite_01 regression. Restore "true"/"true" when the arm is measured.
+  "QUERY_EXPANSION_LANES_ENABLED"   = "false"
+  "QUERY_UNDERSTANDING_LLM_ENABLED" = "false"
   # EXPANSION_FACETS: which tag facets get a semantic retrieval lane. Code
   # default is topic-only (P2.5 byte-identical). Adding geography enables the
   # geo_dense lane (issue #325 / geo-facet-wiring, embeddings backfilled to qa
