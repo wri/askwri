@@ -114,3 +114,50 @@ A2 is run only if A1 passes, and answers the untested variant question on the sa
 
 **What this cannot settle.** Whether the dictionary's advantage generalizes beyond the
 evalsets (finding 5). That needs fresh queries, not more arms on these 24 cases.
+
+## Part 3 — Results (run 2026-11-27, qa)
+
+A0 was measured on image `1eb671a186bf110d9aa9a6a0bfc8e9ddd4a0446c`, env
+`QUERY_UNDERSTANDING_ENABLED=true`, `QUERY_EXPANSION_LANES_ENABLED=true`,
+`QUERY_UNDERSTANDING_LLM_ENABLED=true`. A1 was measured after #531 merged, on image
+`4d590f04b4839d9dbe5e0123d085f8f147e0dd81`, env unchanged except both the lanes and
+sidecar flags `false`. Both asserted from the live task definition, not from the workflow.
+
+| metric | A0 all-on | A1 parser only | delta |
+|---|---|---|---|
+| cite_01 MAP / aR | 38.0 / 67.3 | **40.8 / 68.7** | +2.8 / +1.4 |
+| cite_02 MAP / aR | **77.2 / 88.0** | 74.7 / 86.9 | −2.5 / −1.1 |
+| gate cite_01 / cite_02 | 39.6/67.8, 73.7/86.9 PASS | same, PASS | — |
+| wall p50 / p95 (cite_01) | 2.5 / 3.0–3.7 s | **1.4 / 1.6–2.0 s** | ≈ −1.1 / −1.4 s |
+| wall p50 / p95 (cite_02) | 2.5 / 3.0 s | **1.4 / 1.6 s** | ≈ −1.1 / −1.4 s |
+| cite_02 negatives | 2/3 abstained | **0/3 abstained** (19–23 docs returned, none flagged) | −2 |
+| cost | $0.0020/query both | $0.0020/query both | — |
+
+Both repeats of every cell were identical. Per-case movement:
+
+- cite_01 gains: `q1` 18→32, `q3` 45→56, `q9` 64→72, `q10` 3→18, `q11` 11→12; loses
+  `q2` 50→45, `q4` 71→62, `q5` 41→38. This reproduces the local diagnostic.
+- cite_02 loses: `d1` 67→55, `d4` 71→59, `d12` 58→48, `d14` 83→64; gains `d2`, `d7`,
+  `d13`. With the sidecar off, `likely_off_topic` is hard-wired false, so the negative
+  cases can no longer abstain by flag.
+
+### Verdict: HOLD — A1 does not replace A0
+
+The pre-registered rule fails on criterion 2 (cite_02 −2.5 pp against a 1.0 pp
+tolerance). It passes criteria 1 (+2.8 on cite_01) and 4 (p95 lower), and the gate
+passes. **A1 is MAP-neutral across the two sets (+2.8 vs −2.5) and roughly halve the
+latency, but it loses the cite_02 cases and the off-topic abstentions.** A2 (parser +
+sidecar, lanes off) was conditional on A1 passing and was therefore not run. qa is
+restored to A0.
+
+### What the run exposed
+
+- The rule omitted **negative abstentions**, which the A1 run moved 2/3 → 0/3. Any future
+  arm must score them explicitly; MAP alone hides a product regression ("nothing
+  relevant" never fires).
+- The local diagnostic translated to QA: the flags-on bundle really is a trade between
+  cite_01's dictionary/topic cases and cite_02's variant-dependent cases, not a uniform
+  gain. Neither configuration dominates.
+- The open question is now attribution within the bundle: lanes vs sidecar. If pursued,
+  pre-register A2 (parser + sidecar, lanes off) with the abstention count as a metric,
+  and the same gate/p95 bars.
