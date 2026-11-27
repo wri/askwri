@@ -22,9 +22,11 @@ or fixtures change; otherwise these are known blind alleys, with the evidence be
 | Turn lanes off to keep the dictionary | cite_01 +2.8, cite_02 −2.5, sums equal | a real trade with no dominant side; a product weighting, not a tuning knob |
 | Mine `cite_mode_query_logs` for misses | 425 rows since March, 33 feedback rows total (none since March), 0 zero-result rows | no miss signal exists in the logs; revisit only if feedback volume returns |
 
-What is *not* ruled out: document-level recall on broad topics (the unretrieved gold in
-`q1`/`q3`/`q7`/`q11`), and whether any of this generalizes beyond these fixtures
-(#498 item 12 — `DOMAIN_EXPANSIONS` mirrors evalset topics). Neither was measured here.
+What is *not* ruled out: whether any of this generalizes beyond these fixtures
+(#498 item 12 — `DOMAIN_EXPANSIONS` mirrors evalset topics). The unretrieved gold on broad
+topics was followed up separately: `docs/research/2026-11-27-missing-gold.md` shows 44 of 50
+missing documents are already in fusion or the rerank window and only 2 have a summary chunk,
+so a document-level summary lane is not supported.
 
 ## Rig (part 1)
 
