@@ -203,3 +203,45 @@ no configuration that dominates on this eval.
 
 **What it cannot settle.** Whether any of this generalizes beyond these 24 cases, or whether
 `DOMAIN_EXPANSIONS`' advantage is the eval mirroring its own topics (#498 item 12). Unchanged.
+
+## Part 5 — A2 results
+
+A2 deployed as image `2f03b8822af9b599c85e479b8932d3eff9778442` with lanes `false`, sidecar
+`true`; env asserted from the live task definition.
+
+| metric | A0 all-on | A1 lanes+sidecar off | A2 lanes off, sidecar on | rule |
+|---|---|---|---|---|
+| cite_01 MAP / aR | 38.0 / 67.3 | 40.8 / 68.7 | 40.8 / 68.7 | ≥ 39.0 PASS |
+| cite_02 MAP / aR | 77.2 / 88.0 | 74.7 / 86.9 | 74.7 / 86.9 | ≥ 76.2 **FAIL** |
+| gate | pass | pass | pass | PASS |
+| cite_02 negatives | 2/3 | 0/3 | **2/3** | ≥ 2/3 PASS |
+| false positives | 1 (cite_01) | 0 | 1 (cite_01) | ≤ 1 PASS |
+| p95 cite_01 / cite_02 | 3.0 / 3.0 s | 1.6 / 1.6 s | 2.3–3.7 / 2.0–6.1 s | ≤ 3.7 / ≤ 3.0 **ambiguous** |
+
+Both repeats identical on MAP and aR. The p95 spread in A2 is real: the first repeat runs the
+sidecar cold (cite_02 p95 6.1 s), the second is warm (2.0 s); neither repeat may be cherry-picked.
+
+**A2's positive-case scores are byte-identical to A1's, case for case.** The sidecar changes
+`likely_off_topic` and latency, and nothing else: every d8/d9 negative abstains again, and no
+positive MAP moves. So the cite_01/cite_02 trade is **entirely lanes vs `DOMAIN_EXPANSIONS`**,
+not lanes vs sidecar.
+
+### Verdict: HOLD — A2 does not replace A0
+
+Criterion 2 fails by the same −2.5 pp as A1. qa is restored to A0.
+
+### Where that leaves the expansion bundle
+
+The trade is now fully attributed and it does not have a dominant configuration on this eval:
+
+| configuration | cite_01 | cite_02 | abstentions | p95 |
+|---|---|---|---|---|
+| lanes on (dictionary retired) | 38.0 | **77.2** | 2/3 | 3.0 |
+| lanes off (dictionary on) | **40.8** | 74.7 | 2/3 (sidecar on) | 2.0–6.1 |
+
+The sum is flat (115.2 vs 115.5 MAP) and the choice is a product weighting, not a tuning
+problem. The sidecar earns its latency only through abstention. Further knob work on this
+bundle — lane weight, lane caps, rerank window, window 200 — was measured as a no-op or a
+workaround (Parts 1, 3, 5). The only remaining honest lever is outside the bundle: document-
+level recall on broad topics (the unretrieved-gold cases q1/q3/q7/q11), and the generalization
+question (#498 item 12) that these 24 cases cannot answer.
