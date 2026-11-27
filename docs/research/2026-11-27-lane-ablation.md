@@ -161,3 +161,45 @@ restored to A0.
 - The open question is now attribution within the bundle: lanes vs sidecar. If pursued,
   pre-register A2 (parser + sidecar, lanes off) with the abstention count as a metric,
   and the same gate/p95 bars.
+
+## Part 4 — A2 pre-registration: lanes off, sidecar on
+
+**Written before the A2 deploy; the decision rule is frozen here.** A1 could not say whether the
+cite_02 loss came from turning the lanes off or from turning the sidecar off. A2 keeps the
+sidecar and the dictionary (lanes off ⇒ `domain_expansion` on), so it isolates the lanes.
+
+**Hypothesis.** The lanes are the whole trade: A2 keeps A1's cite_01 gain while recovering
+cite_02's cases and its off-topic abstentions.
+
+| arm | understanding | lanes | sidecar | dictionary | reference |
+|---|---|---|---|---|---|
+| A0 | on | on | on | off | measured 2026-11-27, image `1eb671a` |
+| A1 | on | off | off | on | measured 2026-11-27, image `4d590f0` |
+| **A2** | on | **off** | **on** | on | this arm |
+
+Configuration is `terraform/environments/qa.tfvars` only; no code. Env asserted from the live
+task definition after deploy, not from the workflow.
+
+**Runs.** cite_01 and cite_02 with the default arm, twice each, plus the A3 no-facet gate pass
+in the same run. The two A2 repeats must be identical (the sidecar is `lru_cache`d per process);
+a spread > 1 pp voids the arm.
+
+**Metrics.** cite_01/cite_02 doc MAP and attainable recall; gate (`no-facet-gate.json`, ±1 pp);
+cite_02 negatives abstained (A0 = 2/3); positives falsely flagged (A0 = 1 on cite_01, 0 on
+cite_02); wall p95; cost.
+
+**Decision rule (pre-registered).** A2 replaces A0 only if **all** hold:
+
+1. cite_01 default MAP ≥ A0 + 1.0 pp (**≥ 39.0**);
+2. cite_02 default MAP ≥ A0 − 1.0 pp (**≥ 76.2**);
+3. the no-facet gate passes for both sets;
+4. cite_02 negatives abstained **≥ 2/3**;
+5. positives falsely flagged **≤ 1** across both sets;
+6. wall p95 no higher than A0 on either set (cite_01 **≤ 3.7 s**, cite_02 **≤ 3.0 s**).
+
+A tie on any criterion is a HOLD. If A2 fails criterion 2, the lanes are not the cite_02 factor
+and the remaining explanation is the sidecar — the bundle is then a genuine two-way trade with
+no configuration that dominates on this eval.
+
+**What it cannot settle.** Whether any of this generalizes beyond these 24 cases, or whether
+`DOMAIN_EXPANSIONS`' advantage is the eval mirroring its own topics (#498 item 12). Unchanged.
