@@ -1,11 +1,30 @@
 # Query-expansion lane ablation, and the parser-vs-lanes experiment it motivates
 
 **Date:** 2026-11-27
-**Status:** part 1 measured (local diagnostic); part 2 **pre-registered, not yet run**
+**Status:** complete. Parts 1–3 measured (local diagnostic + A0/A1 on qa); Parts 4–5 the
+pre-registered A2 arm, also measured. Verdict: HOLD, no configuration dominates.
 **Context:** cite_01 regresses on the default (flags-on) arm: 38.0 MAP vs 39.6 on the
 no-facet arm, and the 2026-11-24 promotion memo returned HOLD (cite_01 −2.0 pp,
 p95 +1.39 s). This diagnostic asks *which part* of the flags-on bundle costs the points.
-Refs #498 (items 8, 9), #450, #522, #529.
+Refs #498 (items 8, 9), #450, #522, #529. PRs #530–#534.
+
+## Do not retry these
+
+Measured 2026-11-27 on the 24-case cite sets, 219-document corpus. Re-measure if the corpus
+or fixtures change; otherwise these are known blind alleys, with the evidence below.
+
+| attempt | what happened | why it cannot help |
+|---|---|---|
+| Cap lane docs per lane (20 / 40) | no change, case for case | lanes never contributed many documents; the crowding hypothesis was wrong (Part 1) |
+| Lower the lane weight (0.5 / 0.25) | `q10` +5, `q11` +2.3 at 0.25; nothing else | weight reorders the fused list but does not remove lane docs from the window |
+| Raise `RERANK_CANDIDATES` 100→200 | lanes arm 24.4→29.4 mean AP, still below off 30.8; off arm flat | compensates for lanes only; doubles rerank spend |
+| Use the LLM variants to lift MAP | A2 = A1 case for case | variants move no positive case; the sidecar only sets `likely_off_topic` (Part 5) |
+| Turn lanes off to keep the dictionary | cite_01 +2.8, cite_02 −2.5, sums equal | a real trade with no dominant side; a product weighting, not a tuning knob |
+| Mine `cite_mode_query_logs` for misses | 425 rows since March, 33 feedback rows total (none since March), 0 zero-result rows | no miss signal exists in the logs; revisit only if feedback volume returns |
+
+What is *not* ruled out: document-level recall on broad topics (the unretrieved gold in
+`q1`/`q3`/`q7`/`q11`), and whether any of this generalizes beyond these fixtures
+(#498 item 12 — `DOMAIN_EXPANSIONS` mirrors evalset topics). Neither was measured here.
 
 ## Rig (part 1)
 
@@ -245,3 +264,25 @@ bundle — lane weight, lane caps, rerank window, window 200 — was measured as
 workaround (Parts 1, 3, 5). The only remaining honest lever is outside the bundle: document-
 level recall on broad topics (the unretrieved-gold cases q1/q3/q7/q11), and the generalization
 question (#498 item 12) that these 24 cases cannot answer.
+
+## Reproduce
+
+```bash
+# QA arms (from a worktree at the qa tip; no local service or DB needed)
+npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_01.json
+EVAL_EXPANSION=off npx tsx evaluation/run-evalset.ts evaluation/evalsets/evalset_cite_01.json \
+  --gate evaluation/baselines/no-facet-gate.json
+# …same for evalset_cite_02.json; run each arm twice and require identical repeats.
+
+# Local ablation (Part 1): qa code, qa RDS, service flags flipped per arm
+cd search-service && ../../scripts/with-remote-env.sh qa bash -c '
+  cd search-service
+  DBURL="$DATABASE_URL"; set -a; . ./.env; set +a; export DATABASE_URL="$DBURL"
+  export PORT=8001 QUERY_UNDERSTANDING_ENABLED=true QUERY_EXPANSION_LANES_ENABLED=false \
+         QUERY_UNDERSTANDING_LLM_ENABLED=false
+  exec /path/to/venv/bin/python -m app.main'
+```
+
+Wait for `Postgres-backed retrieval ready` before the first query — `/health` is up earlier and a
+query in that window returns 500. Assert the arm's env from the live task definition, not from the
+deploy workflow.
